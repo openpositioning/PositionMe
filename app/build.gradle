@@ -2,13 +2,14 @@ plugins {
     id 'com.android.application'
     id 'com.google.gms.google-services'
     id 'androidx.navigation.safeargs'
+    id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
 }
 
 android {
     compileSdk 33
 
     defaultConfig {
-        applicationId "com.example.cloud"
+        applicationId "com.openpositioning.PositionMe"
         minSdk 28
         targetSdk 33
         versionCode 1
@@ -48,4 +49,19 @@ dependencies {
     def nav_version = "2.5.3"
     implementation "androidx.navigation:navigation-fragment-ktx:$nav_version"
     implementation "androidx.navigation:navigation-ui-ktx:$nav_version"
+}
+
+secrets {
+    // Optionally specify a different file name containing your secrets.
+    // The plugin defaults to "local.properties"
+    propertiesFileName = "secrets.properties"
+
+    // A properties file containing default secret values. This file can be
+    // checked in version control.
+    defaultPropertiesFileName = "local.defaults.properties"
+
+    // Configure which keys should be ignored by the plugin by providing regular expressions.
+    // "sdk.dir" is ignored by default.
+    ignoreList.add("keyToIgnore") // Ignore the key "keyToIgnore"
+    ignoreList.add("sdk.*")       // Ignore all keys matching the regexp "sdk.*"
 }

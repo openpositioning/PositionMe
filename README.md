@@ -1,4 +1,4 @@
-# CloudWalk
+# PositionMe
 Indoor poistioning data collection application created for the University of Edinburgh's Embedded Wireless course. 
 
 ## Requirements
@@ -23,7 +23,10 @@ Indoor poistioning data collection application created for the University of Edi
 
 ## Creators
 
+### Original contributors ([CloudWalk](https://github.com/openpositioning/DataCollectionTeam6))
 - Virginia Cangelosi (virginia-cangelosi)
 - Michal Dvorak (dvoramicha)
 - Mate Stodulka (stodimp)
 
+### New contributors
+- Francisco Zampella (fzampella-huawei)

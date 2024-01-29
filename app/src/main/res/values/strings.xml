@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Cloud</string>
+    <string name="app_name">PositionMe</string>
 
     <!-- Buttons -->
     <string name="done">Done</string>

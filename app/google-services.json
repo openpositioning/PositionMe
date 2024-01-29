@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:409909178850:android:711b301da3007d4b2789bb",
         "android_client_info": {
-          "package_name": "com.example.cloud"
+          "package_name": "com.openpositioning.PositionMe"
         }
       },
       "oauth_client": [

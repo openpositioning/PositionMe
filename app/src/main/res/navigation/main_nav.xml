@@ -7,7 +7,7 @@
 
     <fragment
         android:id="@+id/homeFragment"
-        android:name="com.example.cloud.fragments.HomeFragment"
+        android:name="com.openpositioning.PositionMe.fragments.HomeFragment"
         android:label="HomeFragment
 "
         tools:layout="@layout/fragment_home" >
@@ -42,7 +42,7 @@
     </fragment>
     <fragment
         android:id="@+id/settingsFragment"
-        android:name="com.example.cloud.fragments.SettingsFragment"
+        android:name="com.openpositioning.PositionMe.fragments.SettingsFragment"
         android:label="SettingsFragment" >
         <action
             android:id="@+id/action_settingsFragment_to_homeFragment"
@@ -50,7 +50,7 @@
     </fragment>
     <fragment
         android:id="@+id/startLocationFragment"
-        android:name="com.example.cloud.fragments.StartLocationFragment"
+        android:name="com.openpositioning.PositionMe.fragments.StartLocationFragment"
         android:label="fragment_startLocation"
         tools:layout="@layout/fragment_startlocation" >
         <action
@@ -63,7 +63,7 @@
     </fragment>
     <fragment
         android:id="@+id/recordingFragment"
-        android:name="com.example.cloud.fragments.RecordingFragment"
+        android:name="com.openpositioning.PositionMe.fragments.RecordingFragment"
         android:label="fragment_recording"
         tools:layout="@layout/fragment_recording" >
         <action
@@ -79,12 +79,12 @@
     </fragment>
     <fragment
         android:id="@+id/infoFragment"
-        android:name="com.example.cloud.fragments.InfoFragment"
+        android:name="com.openpositioning.PositionMe.fragments.InfoFragment"
         android:label="fragment_info"
         tools:layout="@layout/fragment_info" />
     <fragment
         android:id="@+id/correctionFragment"
-        android:name="com.example.cloud.fragments.CorrectionFragment"
+        android:name="com.openpositioning.PositionMe.fragments.CorrectionFragment"
         android:label="fragment_correction"
         tools:layout="@layout/fragment_correction" >
         <action
@@ -95,12 +95,12 @@
     </fragment>
     <fragment
         android:id="@+id/measurementsFragment"
-        android:name="com.example.cloud.fragments.MeasurementsFragment"
+        android:name="com.openpositioning.PositionMe.fragments.MeasurementsFragment"
         android:label="fragment_measurements"
         tools:layout="@layout/fragment_measurements" />
     <fragment
         android:id="@+id/filesFragment"
-        android:name="com.example.cloud.fragments.FilesFragment"
+        android:name="com.openpositioning.PositionMe.fragments.FilesFragment"
         android:label="fragment_files"
         tools:layout="@layout/fragment_files" >
         <action
@@ -113,7 +113,7 @@
     </fragment><action android:id="@+id/action_global_correctionFragment" app:destination="@id/correctionFragment"/>
     <fragment
         android:id="@+id/uploadFragment"
-        android:name="com.example.cloud.fragments.UploadFragment"
+        android:name="com.openpositioning.PositionMe.fragments.UploadFragment"
         android:label="fragment_upload"
         tools:layout="@layout/fragment_upload" />
     <action
