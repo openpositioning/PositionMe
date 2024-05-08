@@ -9,6 +9,8 @@ import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.maps.model.LatLng;
 
+import kotlin.text.MatchGroup;
+
 /**
  * Class containing utility functions which can used by other classes.
  * @see com.openpositioning.PositionMe.fragments.RecordingFragment Currently used by RecordingFragment
@@ -16,8 +18,6 @@ import com.google.android.gms.maps.model.LatLng;
 public class UtilFunctions {
     // Constant 1degree of latitiude/longitude (in m)
     private static final int  DEGREE_IN_M=111111;
-    // Scaling factor for map
-    private static final int SCALING_FACTOR=2;
     /**
      * Simple function to calculate the angle between two close points
      * @param pointA Starting point
@@ -39,22 +39,41 @@ public class UtilFunctions {
      */
     public static LatLng calculateNewPos(LatLng initialLocation,float[] pdrMoved){
         // Changes Euclidean movement into maps latitude and longitude as per WGS84 datum
-        double newLatitude=initialLocation.latitude+(pdrMoved[1]/(DEGREE_IN_M*SCALING_FACTOR));
+        double newLatitude=initialLocation.latitude+(pdrMoved[1]/(DEGREE_IN_M));
         double newLongitude=initialLocation.longitude+(pdrMoved[0]/(DEGREE_IN_M))
                 *Math.cos(Math.toRadians(initialLocation.latitude));
         return new LatLng(newLatitude, newLongitude);
     }
+    /**
+     * Converts a degree value of Latitude into meters
+     * (as per WGS84 datum)
+     * @param degreeVal Value in degrees to convert to meters
+     * @return double corresponding to the value in meters.
+     */
+    public static double degreesToMetersLat(double degreeVal) {
+        return degreeVal*DEGREE_IN_M;
+    }
+    /**
+     * Converts a degree value of Longitude into meters
+     * (as per WGS84 datum)
+     * @param degreeVal Value in degrees to convert to meters
+     * @param latitude the latitude of the current position
+     * @return double corresponding to the value in meters.
+     */
+    public static double degreesToMetersLng(double degreeVal, double latitude) {
+        return degreeVal*DEGREE_IN_M/Math.cos(Math.toRadians(latitude));
+    }
 
     /**
-     * Calculates the distance between two LatLng points A and B
+     * Calculates the distance between two LatLng points A and B (in meters)
      * (Note: approximation: for short distances)
      * @param pointA initial point
      * @param pointB final point
      * @return the distance between the two points
      */
     public static double distanceBetweenPoints(LatLng pointA, LatLng pointB){
-        return  Math.sqrt(Math.pow(pointA.latitude-pointB.latitude,2) +
-                Math.pow(pointA.longitude-pointB.longitude,2));
+        return  Math.sqrt(Math.pow(degreesToMetersLat(pointA.latitude-pointB.latitude),2) +
+                Math.pow(degreesToMetersLng(pointA.longitude-pointB.longitude,pointA.latitude),2));
     }
 
     /**

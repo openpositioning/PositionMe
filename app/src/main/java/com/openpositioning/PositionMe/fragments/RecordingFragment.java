@@ -336,7 +336,7 @@ public class RecordingFragment extends Fragment {
                     float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
                     LatLng gnssLocation = new LatLng(location[0],location[1]);
                     gnssError.setVisibility(View.VISIBLE);
-                    gnssError.setText(String.format(getString(R.string.gnss_error)+"%.4f°",
+                    gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
                             UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
                     // Set GNSS marker
                     gnssMarker=gMap.addMarker(
@@ -509,7 +509,7 @@ public class RecordingFragment extends Fragment {
             float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
             LatLng gnssLocation = new LatLng(location[0],location[1]);
             gnssError.setVisibility(View.VISIBLE);
-            gnssError.setText(String.format(getString(R.string.gnss_error)+"%.4f°",
+            gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
                     UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
             gnssMarker.setPosition(gnssLocation);
         }
