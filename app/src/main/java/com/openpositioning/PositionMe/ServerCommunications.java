@@ -4,13 +4,18 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.fragments.FilesFragment;
+import com.openpositioning.PositionMe.sensors.LocationResponse;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.google.protobuf.util.JsonFormat;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -29,6 +34,7 @@ import okhttp3.Headers;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
@@ -43,6 +49,7 @@ import okhttp3.ResponseBody;
  *
  * @author Michal Dvorak
  * @author Mate Stodulka
+ * @author Michalis Voudaskas
  */
 public class ServerCommunications implements Observable {
 
@@ -350,7 +357,7 @@ public class ServerCommunications implements Observable {
     /**
      * API request for information about submitted trajectories. If the response is successful,
      * the {@link ServerCommunications#infoResponse} field is updated and observes notified.
-     *
+     * @author Michalis Voudaskas
      */
     public void sendInfoRequest() {
         // Create a new OkHttpclient
@@ -434,6 +441,53 @@ public class ServerCommunications implements Observable {
             else if (index == 1 && o instanceof MainActivity) {
                 o.update(new Boolean[] {success});
             }
+        }
+    }
+
+    /**
+     * Sends a JSON string containing WiFi fingerprint data to a server and handles the response.
+     * If successful, it parses the response to extract and return location data.
+     * In case of errors, appropriate exceptions are thrown.
+     *
+     * @param jsonWifiFingerprint The JSON string of WiFi fingerprint data.
+     * @return LocationResponse object containing the latitude, longitude, and floor (if available).
+     * @throws IOException If there is a network or IO issue or an unexpected response code.
+     *
+     */
+    public LocationResponse sendWifiFingerprintToServer(String jsonWifiFingerprint) throws IOException {
+       // Log.d("ServerCommunications", "JSON being sent: " + jsonWifiFingerprint);
+
+        OkHttpClient client = new OkHttpClient();
+        String apiUrl = "https://openpositioning.org/api/position/fine";
+        MediaType JSON = MediaType.get("application/json; charset=utf-8");
+        RequestBody body = RequestBody.create(jsonWifiFingerprint, JSON);
+
+        Request request = new Request.Builder()
+                .url(apiUrl)
+                .post(body)
+                .addHeader("Accept", "application/json")
+                .addHeader("Content-Type", "application/json")
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                String responseData = response.body().string();
+                //Log.d("ServerCommunications", "Response received: " + responseData);
+
+                JSONObject jsonObj = new JSONObject(responseData);
+                double latitude = jsonObj.optDouble("lat", Double.NaN); // Default to NaN if not present
+                double longitude = jsonObj.optDouble("lon", Double.NaN);
+                int floor = jsonObj.optInt("floor"); // Default to null if not present
+                return new LocationResponse(latitude, longitude, floor);
+            } else {
+                // Log error and return null to indicate no WiFi coverage
+               // Log.e("ServerCommunications", "Error response received. No Wi-Fi coverage.");
+                return null;
+            }
+        } catch (Exception e) {
+            // Log error and return null to indicate no WiFi coverage
+          //  Log.e("ServerCommunications", "Error sending WiFi fingerprint", e);
+            return null;
         }
     }
 }

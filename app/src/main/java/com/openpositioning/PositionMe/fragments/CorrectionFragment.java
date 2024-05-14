@@ -36,9 +36,9 @@ import com.google.android.gms.maps.model.MarkerOptions;
  * @see HomeFragment the next fragment in the nav graph.
  *
  *
- * @author Michal Dvorak
- * @author Mate Stodulka
- * @author Virginia Cangelosi
+ * @author Batu Bayram
+ * @author Apoorv Tewari
+ * @author Michalis Voudaskas
  */
 public class CorrectionFragment extends Fragment {
 

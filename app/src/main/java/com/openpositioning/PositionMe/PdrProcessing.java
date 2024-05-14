@@ -55,8 +55,8 @@ public class PdrProcessing {
     private float startElevation;
     private int setupIndex = 0;
     private float elevation;
-    private int floorHeight;
-    private int currentFloor;
+    private float floorHeight;
+    public static int currentFloor;
 
     // Buffer of most recent elevations calculated
     private CircularFloatBuffer elevationList;
@@ -120,7 +120,7 @@ public class PdrProcessing {
         }
 
         // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", 4);
+        this.floorHeight = settings.getFloat("floor_height", 4.2f);
         // Array for holding initial values
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
@@ -276,12 +276,12 @@ public class PdrProcessing {
         // get horizontal and vertical acceleration magnitude
         float verticalAcc = (float) Math.sqrt(
                 Math.pow((acc[0] * gravity[0]/g),2) +
-                Math.pow((acc[1] * gravity[1]/g), 2) +
-                Math.pow((acc[2] * gravity[2]/g), 2));
+                        Math.pow((acc[1] * gravity[1]/g), 2) +
+                        Math.pow((acc[2] * gravity[2]/g), 2));
         float horizontalAcc = (float) Math.sqrt(
                 Math.pow((acc[0] * (1 - gravity[0]/g)), 2) +
-                Math.pow((acc[1] * (1 - gravity[1]/g)), 2) +
-                Math.pow((acc[2] * (1 - gravity[2]/g)), 2));
+                        Math.pow((acc[1] * (1 - gravity[1]/g)), 2) +
+                        Math.pow((acc[2] * (1 - gravity[2]/g)), 2));
         // Save into buffer to compare with past values
         this.verticalAccel.putNewest(verticalAcc);
         this.horizontalAccel.putNewest(horizontalAcc);
@@ -358,7 +358,7 @@ public class PdrProcessing {
         }
 
         // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", 4);
+        this.floorHeight = settings.getFloat("floor_height", 4.0f);
         // Array for holding initial values
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero

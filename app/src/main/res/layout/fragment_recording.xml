@@ -1,183 +1,479 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/drawer_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+<FrameLayout
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".fragments.RecordingFragment">
 
+
+    <fragment
+        android:id="@+id/map"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
         <Button
-            android:id="@+id/stopButton"
-            android:layout_width="150dp"
-            android:layout_height="70dp"
-            android:layout_marginEnd="32dp"
-            android:layout_marginBottom="24dp"
-            android:text="@string/stop"
-            android:textSize="24sp"
-            app:icon="@drawable/ic_baseline_stop_24"
-            app:iconGravity="start"
-            app:iconSize="30dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
-
-        <Button
-            android:id="@+id/cancelButton"
-            android:layout_width="150dp"
-            android:layout_height="70dp"
-            android:layout_marginStart="32dp"
-            android:layout_marginBottom="24dp"
-            android:text="@string/cancel"
-            android:textSize="16sp"
-            app:icon="@drawable/ic_baseline_cancel_24"
-            app:iconGravity="start"
-            app:iconSize="28dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
-
-        <ProgressBar
-            android:id="@+id/timeRemainingBar"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
+            android:id="@+id/button_add_tag"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="8dp"
-            android:elevation="2sp"
-            android:max="1800"
-            android:progress="0"
-            app:layout_constraintBottom_toTopOf="@+id/stopButton"
+            android:backgroundTint="@color/black"
+            android:color="@color/white"
+            android:onClick="onAddTagButtonClicked"
+            android:text="Add Tag"
+            app:cornerRadius="50dp"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+            app:layout_constraintHorizontal_bias="0.971"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.247" />
+
+        <ImageView
+            android:id="@+id/no_wiifi_id"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="348dp"
+            android:layout_marginTop="224dp"
+            android:src="@drawable/ic_baseline_no_wifi_24"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            android:visibility="gone"/>
 
         <androidx.cardview.widget.CardView
             android:id="@+id/currentPositionCard"
-            android:layout_width="match_parent"
-            android:layout_height="500sp"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="32dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="8dp"
-            app:cardBackgroundColor="@color/pastelBlue"
+            android:layout_width="275dp"
+            android:layout_height="133dp"
+            android:layout_marginTop="16dp"
+            android:backgroundTint="#000000"
+            app:background="@drawable/rounded_button"
+            app:cardBackgroundColor="@color/black"
             app:cardCornerRadius="20dp"
             app:cardElevation="8dp"
-            app:layout_constraintBottom_toTopOf="@+id/timeRemainingBar"
             app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.1"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" >
+            app:layout_constraintTop_toTopOf="parent">>
 
             <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent">
+                android:layout_height="match_parent"
+                android:background="@drawable/rounded_button"
+                android:backgroundTint="#000000">
 
                 <TextView
                     android:id="@+id/currentXPos"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="32dp"
-                    android:layout_marginTop="48dp"
+                    android:layout_width="43dp"
+                    android:layout_height="21dp"
+                    android:layout_marginStart="64dp"
                     android:text="@string/x"
-                    android:textColor="@color/LightYellow"
-                    android:textSize="44sp"
-                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    android:textSize="15sp"
+                    app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
-
-                <TextView
-                    android:id="@+id/currentElevation"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:layout_marginEnd="8dp"
-                    android:layout_marginBottom="48dp"
-                    android:text="@string/elevation"
-                    android:textColor="@color/LightYellow"
-                    android:textSize="34sp"
-                    android:textStyle="bold"
-                    app:layout_constraintBottom_toTopOf="@+id/distanceTravelledTitle"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent" />
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.111" />
 
                 <TextView
                     android:id="@+id/currentYPos"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="48dp"
-                    android:layout_marginEnd="32dp"
+                    android:layout_width="43dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="16dp"
                     android:text="@string/y"
-                    android:textColor="@color/LightYellow"
-                    android:textSize="44sp"
-                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    android:textSize="15sp"
+                    app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
+                    app:layout_constraintHorizontal_bias="0.0"
+                    app:layout_constraintStart_toEndOf="@+id/currentXPos"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.11" />
 
                 <TextView
                     android:id="@+id/currentDistanceTraveled"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="32dp"
-                    android:layout_marginEnd="32dp"
-                    android:layout_marginBottom="64dp"
+                    android:layout_width="42dp"
+                    android:layout_height="21dp"
+                    android:layout_marginStart="8dp"
                     android:text="@string/meter"
-                    android:textColor="@color/LightYellow"
-                    android:textSize="24sp"
-                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent" />
+                    app:layout_constraintHorizontal_bias="0.0"
+                    app:layout_constraintStart_toEndOf="@+id/distanceTravelledTitle"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.111" />
 
                 <TextView
                     android:id="@+id/distanceTravelledTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="16dp"
+                    android:layout_width="60dp"
+                    android:layout_height="21dp"
                     android:text="@string/distance_travelled"
-                    android:textColor="@color/LightYellow"
-                    android:textSize="24sp"
-                    android:textStyle="bold"
-                    app:layout_constraintBottom_toTopOf="@+id/currentDistanceTraveled"
+                    android:textColor="@color/white"
+                    android:textSize="15sp"
+                    app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent" />
-
-                <ImageView
-                    android:id="@+id/compass"
-                    android:layout_width="89dp"
-                    android:layout_height="116dp"
-                    android:src="@drawable/ic_baseline_navigation_24"
-                    app:layout_constraintBottom_toTopOf="@+id/currentElevation"
-                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="0.731"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@+id/currentXPos" />
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.101" />
 
                 <ImageView
                     android:id="@+id/elevatorImage"
-                    android:layout_width="52dp"
-                    android:layout_height="52dp"
-                    android:layout_marginStart="8dp"
+                    android:layout_width="29dp"
+                    android:layout_height="25dp"
+                    android:layout_marginStart="64dp"
                     android:elevation="2dp"
                     android:src="@drawable/ic_baseline_elevator_24"
-                    app:layout_constraintBottom_toBottomOf="@+id/currentElevation"
-                    app:layout_constraintEnd_toStartOf="@+id/currentElevation"
-                    app:layout_constraintHorizontal_bias="0.4"
+                    app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="@+id/currentElevation" />
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.351" />
+
+                <ImageView
+                    android:id="@+id/compass"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@drawable/ic_baseline_navigation_white_24"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="0.07"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.722" />
+
+                <TextView
+                    android:id="@+id/currentElevation"
+                    android:layout_width="138dp"
+                    android:layout_height="24dp"
+                    android:text="@string/elevation"
+                    android:textColor="@color/white"
+                    android:textSize="15sp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="0.781"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.357" />
+
+                <ImageView
+                    android:id="@+id/redDot"
+                    android:layout_width="37dp"
+                    android:layout_height="35dp"
+                    android:layout_marginTop="8dp"
+                    android:contentDescription="@string/recording"
+                    android:src="@drawable/ic_baseline_red_dot_24"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="0.062"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <TextView
+                    android:id="@+id/tvErrorFusedPdr"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Fused-PDR Error: N/A"
+                    android:textColor="@color/white"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="0.702"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.622" />
+
+                <TextView
+                    android:id="@+id/tvErrorFusedGnss"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Fused-GNSS Error: N/A"
+                    android:textColor="@color/white"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="0.748"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.78" />
+
+                <TextView
+                    android:id="@+id/tvErrorFusedWifi"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Fused-WiFi Error: N/A"
+                    android:textColor="@color/white"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="0.7"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.956" />
+
             </androidx.constraintlayout.widget.ConstraintLayout>
         </androidx.cardview.widget.CardView>
 
-        <ImageView
-            android:id="@+id/redDot"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="16dp"
-            android:layout_marginTop="16dp"
-            android:contentDescription="@string/recording"
-            android:src="@drawable/ic_baseline_red_dot_24"
+        <LinearLayout
+            android:layout_width="104dp"
+            android:layout_height="136dp"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentEnd="true"
+            android:layout_margin="10dp"
+            android:background="@android:color/white"
+            android:orientation="vertical"
+            android:padding="8dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="1.0"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.013">
+            <!-- PDR Location Legend Item -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/ic_baseline_green_dot_24" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="PDR Location"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <!-- GNSS Location Legend Item -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/ic_baseline_pink_dot_24" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="GNSS Location"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <!-- Wi-Fi Location Legend Item -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/ic_baseline_purple_dot_24" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Wi-Fi Location"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <!-- Outlier Location Legend Item -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/ic_baseline_black_dot_24" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Wi-Fi Outlier Location"
+                    android:textSize="10sp" />
+            </LinearLayout>
+            <!-- fused Location Legend Item -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/ic_baseline_blue_dot_24" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Fused Location"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <!-- EKF Location Legend Item -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/ic_baseline_orange_dot_24" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="EKF Location"
+                    android:textSize="10sp" />
+            </LinearLayout>
+            <!-- MapMatched Location Legend Item -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/ic_baseline_red_dot_24" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Map Matched Location"
+                    android:textSize="10sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+
+        <Spinner
+            android:id="@+id/floorSelectionSpinner"
+            android:layout_width="86dp"
+            android:layout_height="37dp"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/spinnerbutton"
+            android:backgroundTint="#B2D81E1E"
+            android:dropDownWidth="match_parent"
+            android:entries="@array/map_types"
+            android:padding="8dp"
+            android:radius="50dp"
+            android:spinnerMode="dialog"
+            android:textColor="@color/ic_launcher_simple_background"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.327" />
+
+        <Spinner
+            android:id="@+id/mapTypeSpinner"
+            android:layout_width="86dp"
+            android:layout_height="37dp"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/spinnerbutton"
+            android:backgroundTint="#B3D81E1E"
+            android:dropDownWidth="match_parent"
+            android:entries="@array/map_types"
+            android:padding="8dp"
+            android:radius="50dp"
+            android:spinnerMode="dialog"
+            android:textColor="@color/ic_launcher_simple_background"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.259" />
+
+        <Button
+            android:id="@+id/btnToggleMarkers"
+            android:layout_width="171dp"
+            android:layout_height="52dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_margin="16dp"
+            android:backgroundTint="@color/black"
+            android:text="Markers"
+            android:textSize="15sp"
+            app:cornerRadius="50dp"
+            app:icon="@drawable/ic_launcher_simple_foreground"
+            app:iconPadding="-10dp"
+            app:iconSize="48dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.976" />
+
+        <FrameLayout
+            android:id="@+id/frameLayout"
+            android:layout_width="50dp"
+            android:layout_height="51dp"
+            android:background="@drawable/circular_black_background"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.044"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/button_add_tag"
+            app:layout_constraintVertical_bias="0.905">
+
+            <ImageButton
+                android:id="@+id/rcntr"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_baseline_location_red" />
+
+        </FrameLayout>
+
+        <Button
+            android:id="@+id/open_drawer_button"
+            android:layout_width="112dp"
+            android:layout_height="49dp"
+            android:backgroundTint="@color/black"
+            android:icon="@drawable/ic_baseline_cancel_24"
+            android:text="STOP"
+            app:cornerRadius="50dp"
+            app:iconTint="#E3E0E0"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.849" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </FrameLayout>
+    <com.google.android.material.navigation.NavigationView
+        android:id="@+id/navigation_view"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        app:menu="@menu/sidebar" />
+
+
+</androidx.drawerlayout.widget.DrawerLayout>
