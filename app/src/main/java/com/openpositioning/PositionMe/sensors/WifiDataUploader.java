@@ -23,7 +23,7 @@ import java.io.OutputStream;
 public class WifiDataUploader {
 
     public interface WifiDataUploadCallback {
-        void onUploadComplete(LatLng latLng);
+        void onUploadComplete(LatLng latLng, int floor);
     }
 
     private static final String SERVER_URL = "https://openpositioning.org/api/position/fine"; // URL of the server
@@ -107,12 +107,13 @@ public class WifiDataUploader {
             // JSON contains latitude and longitude fields
             double latitude = responseObject.getDouble("lat"); // Extract latitude from the JSON response.
             double longitude = responseObject.getDouble("lon"); // Extract longitude from the JSON response.
+            int floor = responseObject.getInt("floor"); // Extract floor from the JSON response.
             LatLng NewLatLng = new LatLng(latitude, longitude); // Create a LatLng object from the latitude and longitude
             conn.disconnect();
             if (uploadCallback != null) {
                 //uploadCallback.onUploadComplete(NewLatLng);
                 new Handler(Looper.getMainLooper()).post(() -> {
-                    uploadCallback.onUploadComplete(new LatLng(latitude, longitude));
+                    uploadCallback.onUploadComplete(new LatLng(latitude, longitude), floor);
                 });
             }
             conn.disconnect(); // Disconnect the HTTP connection.
