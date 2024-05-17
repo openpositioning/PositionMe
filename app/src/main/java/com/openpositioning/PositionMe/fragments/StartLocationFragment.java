@@ -1,6 +1,8 @@
 package com.openpositioning.PositionMe.fragments;
 
+import android.graphics.Color;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,14 +16,20 @@ import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.OpenPositioningManager;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.openpositioning.PositionMe.sensors.Wifi;
+
+import java.util.List;
+
 /**
  * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
  * recording starts. This fragment displays a map in which the user can adjust their location to
@@ -45,6 +53,11 @@ public class StartLocationFragment extends Fragment {
     private float[] startPosition = new float[2];
     //Zoom of google maps
     private float zoom = 19f;
+
+    // GoogleMap instance to update the map with WiFi position
+    private GoogleMap mMap;
+    // OpenPositioningManager instance
+    private OpenPositioningManager openPositioningManager;
 
     /**
      * Public Constructor for the class.
@@ -128,6 +141,12 @@ public class StartLocationFragment extends Fragment {
                 });
             }
         });
+
+        // Initialize OpenPositioningManager and upload WiFi list
+        openPositioningManager = new OpenPositioningManager(this);
+        List<Wifi> wifiList = sensorFusion.getWifiList();
+        openPositioningManager.requestWifiPositioning(wifiList);
+
         return rootView;
     }
 
@@ -158,4 +177,25 @@ public class StartLocationFragment extends Fragment {
             }
         });
     }
+
+    @Override
+    public void onPositioningComplete(LatLng latLng, int floor) {
+        if (mMap != null) {
+            // Add a green circle marker to the map for the WiFi position
+            mMap.addCircle(new CircleOptions()
+                    .center(latLng)
+                    .radius(10) // Radius in meters
+                    .strokeColor(Color.GREEN)
+                    .fillColor(Color.argb(128, 0, 255, 0))); // Semi-transparent green fill
+
+            // Move the camera to the WiFi position
+            //mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom));
+        }
+    }
+
+    @Override
+    public void onPositioningFailure(Exception e) {
+        Log.e("StartLocationFragment", "WiFi Positioning failed", e);
+    }
+
 }
