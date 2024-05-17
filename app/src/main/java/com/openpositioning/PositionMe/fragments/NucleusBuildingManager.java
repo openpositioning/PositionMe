@@ -1,16 +1,16 @@
 package com.openpositioning.PositionMe.fragments;
 
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.LatLngBounds;
+        import com.google.android.gms.maps.GoogleMap;
+        import com.google.android.gms.maps.model.LatLng;
+        import com.google.android.gms.maps.model.LatLngBounds;
 
-import com.openpositioning.PositionMe.R;
+        import com.openpositioning.PositionMe.R;
 
 
-public class NuclearBuildingManager {
+public class NucleusBuildingManager {
     private IndoorMapManager indoorMapManager;
 
-    public NuclearBuildingManager(GoogleMap map) {
+    public NucleusBuildingManager(GoogleMap map) {
         // The nuclear building has 5 floors
         indoorMapManager = new IndoorMapManager(map, 5);
 

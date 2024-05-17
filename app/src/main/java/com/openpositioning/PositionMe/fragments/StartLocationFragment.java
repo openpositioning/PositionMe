@@ -13,6 +13,7 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -22,6 +23,9 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+
+import java.util.ArrayList;
+
 /**
  * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
  * recording starts. This fragment displays a map in which the user can adjust their location to
@@ -44,6 +48,12 @@ public class StartLocationFragment extends Fragment {
     //Start position of the user to be stored
     private float[] startPosition = new float[2];
     //Zoom of google maps
+    private NucleusBuildingManager NucleusBuildingManager;
+    // A larger area used to determine whether the indoor map should displayed when the user walks into the building.  ↓↓↓
+    private LatLngBounds Nuclear = new LatLngBounds(
+            new LatLng(55.922679, -3.174672), // SW corner
+            new LatLng(55.923316, -3.173781)  // NE corner
+    );
     private float zoom = 19f;
 
     /**
@@ -78,6 +88,22 @@ public class StartLocationFragment extends Fragment {
         SupportMapFragment supportMapFragment=(SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.startMap);
 
+        // This is just a demonstration of the automatic expansion of the indoor map.
+        // Assume that we have obtained the user's position "newPosition" from the callback function.
+        if (newPosition != null) {
+            if (Nuclear.contains(newPosition)) {
+                FloorButtons.setVisibility(View.VISIBLE);
+                InNu = 1; // Mark indoor map status
+            }
+            else {
+                //hideAllFloors();
+                NucleusBuildingManager.getIndoorMapManager().hideMap();
+                FloorButtons.setVisibility(View.GONE);
+                InNu = 0; // Mark indoor map status
+            }
+        }
+
+
         // Asynchronous map which can be configured
         supportMapFragment.getMapAsync(new OnMapReadyCallback() {
             /**
@@ -94,6 +120,13 @@ public class StartLocationFragment extends Fragment {
                 mMap.getUiSettings().setTiltGesturesEnabled(true);
                 mMap.getUiSettings().setRotateGesturesEnabled(true);
                 mMap.getUiSettings().setScrollGesturesEnabled(true);
+
+
+                if (mMap != null) {
+                    // Create NuclearBuildingManager instance
+                    NucleusBuildingManager = new NucleusBuildingManager(mMap);
+                    NucleusBuildingManager.getIndoorMapManager().hideMap();
+                }
 
                 // Add a marker in current GPS location and move the camera
                 position = new LatLng(startPosition[0], startPosition[1]);
@@ -157,5 +190,7 @@ public class StartLocationFragment extends Fragment {
                 Navigation.findNavController(view).navigate(action);
             }
         });
+
     }
+
 }
