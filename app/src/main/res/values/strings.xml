@@ -31,27 +31,6 @@
     <string name="pdr">Pedestrian Dead Reckoning</string>
     <string name="wifi">WiFi Networks</string>
 
-    <string-array name="floor_names">
-        <item>Automatic</item>
-        <item>Ground Floor</item>
-        <item>First Floor</item>
-        <item>Second Floor</item>
-        <item>Third Floor</item>
-    </string-array>
-
-    <!-- New array for map types -->
-    <string-array name="map_types">
-        <item>Map-Type</item>
-        <item>Normal</item>
-        <item>Satellite</item>
-        <item>Terrain</item>
-        <item>Hybrid</item>
-    </string-array>
-
-    <!-- Remaining strings -->
-
-
-
 
     <!-- Misc -->
     <string name="x">X: %1s</string>
@@ -130,5 +109,15 @@
     <!-- Building defaults -->
     <string name="building_def_title">Default building assumptions</string>
     <string name="floor_height">Floor height in meters</string>
+    <string name="color">Color</string>
+    <string name="gnssSwitch">GNSS</string>
+    <string name="floor_down_button">Floor Down button</string>
+    <string name="floor_up_button">Floor Up button</string>
+    <string name="choose_map">Choose Map</string>
+    <string name="auto_floor">Auto Floor</string>
+    <string name="gnss_error">GNSS error:</string>
+    <string name="satellite">Satellite</string>
+    <string name="normal">Normal</string>
+    <string name="hybrid">Hybrid</string>
 
 </resources>

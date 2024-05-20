@@ -3,15 +3,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:textAlignment="center">
+    android:layout_height="match_parent">
+
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/startMap"
         android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/mapTypeSpinner"
         tools:context=".MapsActivity" />
 
     <FrameLayout
@@ -24,75 +23,53 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent">
 
-            <androidx.constraintlayout.widget.ConstraintLayout
+            <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="40sp"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="8dp"
+                app:cardBackgroundColor="@color/pastelBlue"
+                app:cardCornerRadius="10dp"
+                app:cardElevation="8dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                tools:layout_editor_absoluteX="0dp">
+                app:layout_constraintVertical_bias="0.0">
 
-                <androidx.cardview.widget.CardView
-                    android:id="@+id/cardView2"
+                <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@color/black"
-                    app:cardCornerRadius="10dp"
-                    app:cardElevation="8dp"
-                    android:background="@color/black"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintVertical_bias="0.022"
-                    tools:layout_editor_absoluteX="0dp">
+                    android:layout_height="match_parent">
 
                     <TextView
                         android:id="@+id/locationInstructionsText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_gravity="center_vertical|start"
                         android:layout_marginStart="16dp"
-                        android:background="@color/black"
                         android:text="@string/locationInstructions"
                         android:textColor="@color/LightYellow"
-                        android:textStyle="bold" />
+                        android:textStyle="bold"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
 
-                </androidx.cardview.widget.CardView>
+                </androidx.constraintlayout.widget.ConstraintLayout>
+            </androidx.cardview.widget.CardView>
 
-                <Button
-                    android:id="@+id/startLocationDone"
-                    android:layout_width="123dp"
-                    android:layout_height="55dp"
-                    android:backgroundTint="@color/black"
-                    android:onClick="onAddTagButtonClicked"
-                    android:text="Set"
-                    app:cornerRadius="50dp"
-                    app:icon="@drawable/ic_baseline_add_location_24"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="0.948"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintVertical_bias="0.937" />
-
-                <Spinner
-                    android:id="@+id/mapTypeSpinner"
-                    android:layout_width="123dp"
-                    android:layout_height="49dp"
-                    android:background="@drawable/spinnerbutton"
-                    android:backgroundTint="#B2D81E1E"
-                    android:dropDownWidth="match_parent"
-                    android:entries="@array/map_types"
-                    android:padding="15dp"
-                    android:radius="50dp"
-                    android:spinnerMode="dialog"
-                    android:textColor="@color/ic_launcher_simple_background"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="0.948"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintVertical_bias="0.836" />
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
-
+            <Button
+                android:id="@+id/startLocationDone"
+                android:layout_width="150dp"
+                android:layout_height="70dp"
+                android:layout_marginBottom="24dp"
+                android:text="@string/setLocation"
+                android:textSize="24sp"
+                app:icon="@drawable/ic_baseline_add_location_24"
+                app:iconGravity="start"
+                app:iconSize="30dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 

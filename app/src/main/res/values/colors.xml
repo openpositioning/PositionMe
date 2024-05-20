@@ -12,9 +12,6 @@
     <color name="lightLogoBlue">#FF00A1FF</color>
     <color name="darkLogoBlue">#FF001080</color>
     <color name="primaryBlue">#FF001080</color>
-    <color name="primaryPink">#FFC0CB</color>
-    <color name="primaryGreen">#00FF00</color>
-    <color name="red">#FF0000</color>
-    <color name="orange">#FFA500</color>
+    <color name="red">#FE0000</color>
 
 </resources>

@@ -4,11 +4,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.Spinner;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -17,6 +13,8 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 
+import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -24,15 +22,18 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
-
-
+/**
+ * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
+ * recording starts. This fragment displays a map in which the user can adjust their location to
+ * correct the PDR when it is complete
+ *
+ * @see HomeFragment the previous fragment in the nav graph.
+ * @see RecordingFragment the next fragment in the nav graph.
+ * @see SensorFusion the class containing sensors and recording.
+ *
+ * @author Virginia Cangelosi
+ */
 public class StartLocationFragment extends Fragment {
-    public static LatLng StartLocation;
-
-    public static int type;
-    public static int map;
 
     //Button to go to next fragment and save the location
     private Button button;
@@ -43,9 +44,7 @@ public class StartLocationFragment extends Fragment {
     //Start position of the user to be stored
     private float[] startPosition = new float[2];
     //Zoom of google maps
-    private float zoom = 16f;
-
-    private Button startTrackingButton;
+    private float zoom = 19f;
 
     /**
      * Public Constructor for the class.
@@ -75,7 +74,6 @@ public class StartLocationFragment extends Fragment {
         else {
             zoom = 19f;
         }
-
         // Initialize map fragment
         SupportMapFragment supportMapFragment=(SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.startMap);
@@ -91,7 +89,7 @@ public class StartLocationFragment extends Fragment {
              */
             @Override
             public void onMapReady(GoogleMap mMap) {
-                mMap.setMapType(GlobalVariables.getMapType());
+                mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                 mMap.getUiSettings().setCompassEnabled(true);
                 mMap.getUiSettings().setTiltGesturesEnabled(true);
                 mMap.getUiSettings().setRotateGesturesEnabled(true);
@@ -101,41 +99,6 @@ public class StartLocationFragment extends Fragment {
                 position = new LatLng(startPosition[0], startPosition[1]);
                 mMap.addMarker(new MarkerOptions().position(position).title("Start Position")).setDraggable(true);
                 mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom ));
-
-                Spinner mapTypeSpinner = rootView.findViewById(R.id.mapTypeSpinner);
-                ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(getContext(),
-                        R.array.map_types, android.R.layout.simple_spinner_item);
-                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                mapTypeSpinner.setAdapter(adapter);
-
-                mapTypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                    @Override
-                    public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
-                        switch (position) {
-                            case 0:
-                                type = GlobalVariables.getMapType();
-                                break;
-                            case 1:
-                                type = GoogleMap.MAP_TYPE_NORMAL;
-                                break;
-                            case 2:
-                                type = GoogleMap.MAP_TYPE_SATELLITE;
-                                break;
-                            case 3:
-                                type = GoogleMap.MAP_TYPE_TERRAIN;
-                                break;
-                            case 4:
-                                type = GoogleMap.MAP_TYPE_HYBRID;
-                                break;
-                        }
-                        GlobalVariables.setMapType(type); // Save the selected map type globally
-                        mMap.setMapType(type); // Set the map type immediately for current map
-                    }
-                    @Override
-                    public void onNothingSelected(AdapterView<?> parentView) {
-                        // No action needed, but the method must be overridden
-                    }
-                });
 
                 //Drag listener for the marker to execute when the markers location is changed
                 mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener()
@@ -189,8 +152,6 @@ public class StartLocationFragment extends Fragment {
                 sensorFusion.startRecording();
                 // Set the start location obtained
                 sensorFusion.setStartGNSSLatitude(startPosition);
-
-                StartLocation = new LatLng(startPosition[0], startPosition[1]);
                 // Navigate to the RecordingFragment
                 NavDirections action = StartLocationFragmentDirections.actionStartLocationFragmentToRecordingFragment();
                 Navigation.findNavController(view).navigate(action);

@@ -16,10 +16,8 @@ import androidx.preference.PreferenceManager;
 import com.openpositioning.PositionMe.MainActivity;
 import com.openpositioning.PositionMe.PathView;
 import com.openpositioning.PositionMe.PdrProcessing;
-import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
-import com.openpositioning.PositionMe.fragments.RecordingFragment;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -47,9 +45,9 @@ import java.util.stream.Stream;
  * The class provides a number of setters and getters so that other classes can have access to the
  * sensor data and influence the behaviour of data collection.
  *
- * @author Batu Bayram
- * @author Apoorv Tewari
- * @author Michalis Voudaskas
+ * @author Michal Dvorak
+ * @author Mate Stodulka
+ * @author Virginia Cangelosi
  */
 public class SensorFusion implements SensorEventListener, Observer {
 
@@ -138,7 +136,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Trajectory displaying class
     private PathView pathView;
 
-    private RecordingFragment recordingFragment;
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -229,8 +226,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
 
         this.pathView = new PathView(context, null);
-
-        this.recordingFragment= new RecordingFragment();
 
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient =Float.parseFloat(settings.getString("accel_filter", "0.96"));
@@ -332,9 +327,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
                 if (saveRecording) {
                     // Store the PDR coordinates for plotting the trajectory
-//                    this.pathView.drawTrajectory(newCords);
-                    // Stores the fused position coordinates to plot the trejectory
-                    this.pathView.drawTrajectory(recordingFragment.trajCords);
+                    this.pathView.drawTrajectory(newCords);
                 }
                 this.accelMagnitude.clear();
                 if (saveRecording) {
@@ -401,9 +394,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
             this.trajectory.addWifiData(wifiData);
         }
-    }
-    public long getAbsoluteStartTime() {
-        return this.absoluteStartTime;
     }
 
     /**
@@ -793,19 +783,19 @@ public class SensorFusion implements SensorEventListener, Observer {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
             trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
-                            .setAccX(acceleration[0])
-                            .setAccY(acceleration[1])
-                            .setAccZ(acceleration[2])
-                            .setGyrX(angularVelocity[0])
-                            .setGyrY(angularVelocity[1])
-                            .setGyrZ(angularVelocity[2])
-                            .setGyrZ(angularVelocity[2])
-                            .setRotationVectorX(rotation[0])
-                            .setRotationVectorY(rotation[1])
-                            .setRotationVectorZ(rotation[2])
-                            .setRotationVectorW(rotation[3])
-                            .setStepCount(stepCounter))
+                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
+                    .setAccX(acceleration[0])
+                    .setAccY(acceleration[1])
+                    .setAccZ(acceleration[2])
+                    .setGyrX(angularVelocity[0])
+                    .setGyrY(angularVelocity[1])
+                    .setGyrZ(angularVelocity[2])
+                    .setGyrZ(angularVelocity[2])
+                    .setRotationVectorX(rotation[0])
+                    .setRotationVectorY(rotation[1])
+                    .setRotationVectorZ(rotation[2])
+                    .setRotationVectorW(rotation[3])
+                    .setStepCount(stepCounter))
                     .addPositionData(Traj.Position_Sample.newBuilder()
                             .setMagX(magneticField[0])
                             .setMagY(magneticField[1])
