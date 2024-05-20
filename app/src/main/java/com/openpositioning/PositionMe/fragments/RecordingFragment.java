@@ -478,6 +478,7 @@ public class RecordingFragment extends Fragment {
         @Override
         public void run() {
             // Get new position and update UI
+            performMapMatching(); //calling the map matching function
             updateUIandPosition();
             // Loop the task again to keep refreshing the data
             refreshDataHandler.postDelayed(refreshDataTask, 200);
@@ -593,6 +594,30 @@ public class RecordingFragment extends Fragment {
         blinking_rec.setRepeatCount(Animation.INFINITE);
         blinking_rec.setRepeatMode(Animation.REVERSE);
         recIcon.startAnimation(blinking_rec);
+    }
+
+    /**
+     * Conducts map matching based on the user's current fused coordinates. This method is responsible
+     * for finding the nearest point of interest within a predefined map data set that corresponds
+     * to the user's real-world location. The method retrieves the user's latitude and longitude
+     * from the fusedLocation variable and invokes the mapMatching's findNearestLocation method
+     * to locate the closest point based on the user's current floor.
+     */
+    private void performMapMatching() {
+        if (movingAverageFusedLocation !=null) {
+            double currentLatitude = movingAverageFusedLocation.latitude;
+            double currentLongitude = movingAverageFusedLocation.longitude;
+            //Log.d("MapMatching", "User Location: Latitude = " + currentLatitude + ", Longitude = " + currentLongitude + ", Floor = " + currentFloor);
+            LocationResponse nearestLocation = mapMatcher.findNearestLocation(currentLatitude, currentLongitude, currentFloor);
+            //LocationResponse nearestLocation = mapMatcher.findKNNLocation(currentLatitude, currentLongitude, currentFloor, 3);
+            if (nearestLocation != null) {
+                // Log.d("MapMatching", "Nearest Location: Latitude = " + nearestLocation.getLatitude() + ", Longitude = " + nearestLocation.getLongitude());
+
+                addMarkerToMap(nearestLocation.getLatitude(), nearestLocation.getLongitude());
+            } else {
+                // Log.d("MapMatching", "No location found on the given floor.");
+            }
+        }
     }
 
     /**
