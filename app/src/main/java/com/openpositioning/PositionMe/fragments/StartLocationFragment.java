@@ -86,23 +86,13 @@ public class StartLocationFragment extends Fragment {
 
         // This is just a demonstration of the automatic expansion of the indoor map.
         // Assume that we have obtained the user's position "newPosition" from the callback function. >>>
-
-        // Predefined building polygons
-        ArrayList<LatLng> buildingPolygon = new ArrayList<>();
-        buildingPolygon.add(new LatLng(55.922679, -3.174672));
-        buildingPolygon.add(new LatLng(55.923316, -3.173781));
-        // Add additional vertices of the building if needed
-
         if (newPosition != null) {
             // Check if the user's position is inside the defined building polygon
-            if (isPointInPolygon(newPosition, buildingPolygon)) {
-                // If inside the building, make the floor buttons visible
+            if (NucleusBuildingManager.isPointInBuilding(newPosition)) {
                 FloorButtons.setVisibility(View.VISIBLE);
-                //Display the indoor map
                 switchFloorNU(floor);
                 InNu = 1; // Mark indoor map status
             } else {
-                //hideAllFloors();
                 NucleusBuildingManager.getIndoorMapManager().hideMap();
                 FloorButtons.setVisibility(View.GONE);
                 InNu = 0; // Mark indoor map status
@@ -197,58 +187,6 @@ public class StartLocationFragment extends Fragment {
             }
         });
 
-    }
-
-    /**
-     * Determines if a given point is inside a polygon.
-     *
-     * @param point   the point to check
-     * @param polygon the list of LatLng points representing the vertices of the polygon
-     * @return true if the point is inside the polygon, false otherwise
-     */
-    private boolean isPointInPolygon(LatLng point, ArrayList<LatLng> polygon) {
-        int intersectCount = 0;
-        // Loop through each edge of the polygon
-        for (int j = 0; j < polygon.size() - 1; j++) {
-            // Check if the ray from the point intersects with the edge
-            if (rayCastIntersect(point, polygon.get(j), polygon.get(j + 1))) {
-                intersectCount++;
-            }
-        }
-        // If the number of intersections is odd, the point is inside the polygon
-        return ((intersectCount % 2) == 1); // odd = inside, even = outside;
-    }
-
-    /**
-     * Determines if a ray from a point intersects with a given edge of the polygon.
-     *
-     * @param point the point from which the ray is cast
-     * @param vertA the first vertex of the edge
-     * @param vertB the second vertex of the edge
-     * @return true if the ray intersects with the edge, false otherwise
-     */
-    private boolean rayCastIntersect(LatLng point, LatLng vertA, LatLng vertB) {
-        double aY = vertA.latitude;
-        double bY = vertB.latitude;
-        double aX = vertA.longitude;
-        double bX = vertB.longitude;
-        double pY = point.latitude;
-        double pX = point.longitude;
-
-        // Check if the point is horizontally aligned with the edge
-        if ((aY > pY && bY > pY) || (aY < pY && bY < pY) || (aX < pX && bX < pX)) {
-            return false;
-        }
-
-        // Calculate the slope of the edge
-        double m = (aY - bY) / (aX - bX);
-        // Calculate the y-intercept of the edge
-        double bee = -aX * m + aY;
-        // Calculate the x-coordinate of the intersection point of the ray and the edge
-        double x = (pY - bee) / m;
-
-        // Return true if the intersection point is to the right of the point
-        return x > pX;
     }
 
     /**
