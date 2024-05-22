@@ -80,7 +80,7 @@ public class WiFiPositioning {
      *
      * @param jsonWifiFeatures WiFi Fingerprint from device
      */
-    public void createPostRequest(JSONObject jsonWifiFeatures) {
+    public void request(JSONObject jsonWifiFeatures) {
         // Creating the POST request using WiFi fingerprint (a JSON object)
         JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(
                 Request.Method.POST, url, jsonWifiFeatures,
@@ -131,7 +131,7 @@ public class WiFiPositioning {
      * @param jsonWifiFeatures WiFi Fingerprint from device
      * @param callback callback function to allow user to use location when ready
      */
-    public void createPostRequestCallback( JSONObject jsonWifiFeatures, final VolleyCallback callback) {
+    public void request( JSONObject jsonWifiFeatures, final VolleyCallback callback) {
         // Creating the POST request using WiFi fingerprint (a JSON object)
         JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(
                 Request.Method.POST, url, jsonWifiFeatures,

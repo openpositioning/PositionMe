@@ -395,32 +395,77 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void update(Object[] wifiList) {
         // Save newest wifi values to local variable
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
-        // Creating a JSON object to store the WiFi access points
-        JSONObject wifiAccessPoints=new JSONObject();
+
         if(this.saveRecording) {
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
                     .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime);
-            // Try catch block to catch any errors and prevent app crashing
-            try {
-                for (Wifi data : this.wifiList) {
-                    wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
-                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
-                            .setMac(data.getBssid()).setRssi(data.getLevel()));
-                    wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
-                }
-                // Adding WiFi data to Trajectory
-                this.trajectory.addWifiData(wifiData);
-                // Creating POST Request
-                JSONObject wifiFingerPrint = new JSONObject();
-                wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-                this.wiFiPositioning.createPostRequest(wifiFingerPrint);
-            } catch (JSONException e) {
-                // Catching error while making JSON object, to prevent crashes
-                // Error log to keep record of errors (for secure programming and maintainability)
-                Log.e("jsonErrors","Error creating json object"+e.toString());
+            for (Wifi data : this.wifiList) {
+                wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
+                        .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
+                        .setMac(data.getBssid()).setRssi(data.getLevel()));
             }
+            // Adding WiFi data to Trajectory
+            this.trajectory.addWifiData(wifiData);
+        }
+        createWifiPositioningRequest();
+    }
+
+    /**
+     * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
+     *
+     */
+    private void createWifiPositioningRequest(){
+        // Try catch block to catch any errors and prevent app crashing
+        try {
+            // Creating a JSON object to store the WiFi access points
+            JSONObject wifiAccessPoints=new JSONObject();
+            for (Wifi data : this.wifiList){
+                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+            }
+            // Creating POST Request
+            JSONObject wifiFingerPrint = new JSONObject();
+            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+            this.wiFiPositioning.request(wifiFingerPrint);
+        } catch (JSONException e) {
+            // Catching error while making JSON object, to prevent crashes
+            // Error log to keep record of errors (for secure programming and maintainability)
+            Log.e("jsonErrors","Error creating json object"+e.toString());
         }
     }
+    // Callback Example Function
+    /**
+     * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
+     * using Volley Callback
+     */
+    private void createWifiPositionRequestCallback(){
+        try {
+            // Creating a JSON object to store the WiFi access points
+            JSONObject wifiAccessPoints=new JSONObject();
+            for (Wifi data : this.wifiList){
+                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+            }
+            // Creating POST Request
+            JSONObject wifiFingerPrint = new JSONObject();
+            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    // Handle the success response
+                }
+
+                @Override
+                public void onError(String message) {
+                    // Handle the error response
+                }
+            });
+        } catch (JSONException e) {
+            // Catching error while making JSON object, to prevent crashes
+            // Error log to keep record of errors (for secure programming and maintainability)
+            Log.e("jsonErrors","Error creating json object"+e.toString());
+        }
+
+    }
+
     /**
      * Method to get user position obtained using {@link WiFiPositioning}.
      *
