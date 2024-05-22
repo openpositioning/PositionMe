@@ -10,14 +10,19 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
 import android.os.PowerManager;
+import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
+import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.MainActivity;
 import com.openpositioning.PositionMe.PathView;
 import com.openpositioning.PositionMe.PdrProcessing;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,6 +65,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     public static final float FILTER_COEFFICIENT = 0.96f;
     //Tuning value for low pass filter
     private static final float ALPHA = 0.8f;
+    // String for creating WiFi fingerprint JSO N object
+    private static final String WIFI_FINGERPRINT= "wf";
     //endregion
 
     //region Instance variables
@@ -135,6 +142,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // Trajectory displaying class
     private PathView pathView;
+    // WiFi positioning object
+    private WiFiPositioning wiFiPositioning;
 
     //region Initialisation
     /**
@@ -226,6 +235,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
 
         this.pathView = new PathView(context, null);
+        // Initialising WiFi Positioning object
+        this.wiFiPositioning=new WiFiPositioning(context);
 
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient =Float.parseFloat(settings.getString("accel_filter", "0.96"));
@@ -384,16 +395,46 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void update(Object[] wifiList) {
         // Save newest wifi values to local variable
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
+        // Creating a JSON object to store the WiFi access points
+        JSONObject wifiAccessPoints=new JSONObject();
         if(this.saveRecording) {
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
                     .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime);
-            for(Wifi data : this.wifiList) {
-                wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
-                        .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
-                        .setMac(data.getBssid()).setRssi(data.getLevel()));
+            // Try catch block to catch any errors and prevent app crashing
+            try {
+                for (Wifi data : this.wifiList) {
+                    wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
+                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
+                            .setMac(data.getBssid()).setRssi(data.getLevel()));
+                    wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+                }
+                // Adding WiFi data to Trajectory
+                this.trajectory.addWifiData(wifiData);
+                // Creating POST Request
+                JSONObject wifiFingerPrint = new JSONObject();
+                wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+                this.wiFiPositioning.createPostRequest(wifiFingerPrint);
+            } catch (JSONException e) {
+                // Catching error while making JSON object, to prevent crashes
+                // Error log to keep record of errors (for secure programming and maintainability)
+                Log.e("jsonErrors","Error creating json object"+e.toString());
             }
-            this.trajectory.addWifiData(wifiData);
         }
+    }
+    /**
+     * Method to get user position obtained using {@link WiFiPositioning}.
+     *
+     * @return {@link LatLng} corresponding to user's position.
+     */
+    public LatLng getLatLngWifiPositioning(){return this.wiFiPositioning.getWifiLocation();}
+
+    /**
+     * Method to get current floor the user is at, obtained using WiFiPositioning
+     * @see WiFiPositioning for WiFi positioning
+     * @return Current floor user is at using WiFiPositioning
+     */
+    public int getWifiFloor(){
+        return this.wiFiPositioning.getFloor();
     }
 
     /**
