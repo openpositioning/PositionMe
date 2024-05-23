@@ -41,7 +41,7 @@ import java.util.List;
  *
  * @author Virginia Cangelosi
  */
-public class StartLocationFragment extends Fragment {
+public class StartLocationFragment extends Fragment implements OpenPositioningManager.WifiPositioningCallback {
 
     //Button to go to next fragment and save the location
     private Button button;
