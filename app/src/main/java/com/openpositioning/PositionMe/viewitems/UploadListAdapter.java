@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.viewitems;
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -69,6 +70,10 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
         String dateString = dateMatcher.find() ? dateMatcher.group(1) : "N/A";
         System.err.println("UPLOAD - Date string: " + dateString);
         holder.trajDate.setText(dateString);
+
+        // Set click listener for the delete button
+        holder.deletebutton.setOnClickListener(v -> deleteFileAtPosition(position));
+
     }
 
     /**
@@ -78,5 +83,25 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
     @Override
     public int getItemCount() {
         return uploadItems.size();
+    }
+
+    private void deleteFileAtPosition(int position)
+    {
+        if (position >= 0 && position < uploadItems.size())
+        {
+            File fileToDelete = uploadItems.get(position);
+
+            if (fileToDelete.exists() && fileToDelete.delete())
+            {
+                uploadItems.remove(position);
+                notifyItemRemoved(position);
+                notifyItemRangeChanged(position, uploadItems.size()); // Update subsequent items
+                Toast.makeText(context, "File deleted successfully", Toast.LENGTH_SHORT).show();
+            }
+            else
+            {
+                Toast.makeText(context, "Failed to delete file", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 }

@@ -4,13 +4,16 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
 
+import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.fragments.FilesFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
-import com.google.protobuf.util.JsonFormat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -106,12 +109,12 @@ public class ServerCommunications implements Observable {
         byte[] binaryTrajectory = trajectory.toByteArray();
 
         // Get the directory path for storing the file with the trajectory
-        java.io.File path = context.getFilesDir();
+        File path = context.getFilesDir();
 
         // Format the file name according to date
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
         Date date = new Date();
-        java.io.File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
+        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
 
         try {
             // Write the binary data to the file
@@ -166,7 +169,13 @@ public class ServerCommunications implements Observable {
                         // exception
                         if (!response.isSuccessful()) {
                             //file.delete();
-                            System.err.println("POST error response: " + responseBody.string());
+//                            System.err.println("POST error response: " + responseBody.string());
+
+                            String errorBody = responseBody.string();
+                            infoResponse = "Upload failed: " + errorBody;
+                            new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());//show error message to users
+
+                            System.err.println("POST error response: " + errorBody);
                             success = false;
                             notifyObservers(1);
                             throw new IOException("Unexpected code " + response);
@@ -223,10 +232,12 @@ public class ServerCommunications implements Observable {
             @Override public void onFailure(Call call, IOException e) {
                 // Print error message, set success to false and notify observers
                 e.printStackTrace();
-                localTrajectory.delete();
+//                localTrajectory.delete();
                 success = false;
                 System.err.println("UPLOAD: Failure to get response");
                 notifyObservers(1);
+                infoResponse = "Upload failed: " + e.getMessage(); // Store error message
+                new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());//show error message to users
             }
 
             @Override public void onResponse(Call call, Response response) throws IOException {
@@ -234,9 +245,13 @@ public class ServerCommunications implements Observable {
                     if (!response.isSuccessful()) {
                         // Print error message, set success to false and throw an exception
                         success = false;
-                        System.err.println("UPLOAD unsuccessful: " + responseBody.string());
+//                        System.err.println("UPLOAD unsuccessful: " + responseBody.string());
                         notifyObservers(1);
-                        localTrajectory.delete();
+//                        localTrajectory.delete();
+                        String errorBody = responseBody.string();
+                        System.err.println("UPLOAD unsuccessful: " + errorBody);
+                        infoResponse = "Upload failed: " + errorBody;
+                        new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
                         throw new IOException("UPLOAD failed with code " + response);
                     }
 
