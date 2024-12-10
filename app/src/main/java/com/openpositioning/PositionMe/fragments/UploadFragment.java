@@ -119,8 +119,8 @@ public class UploadFragment extends Fragment {
                 @Override
                 public void onPositionClicked(int position) {
                     serverCommunications.uploadLocalTrajectory(localTrajectories.get(position));
-                    localTrajectories.remove(position);
-                    listAdapter.notifyItemRemoved(position);
+//                    localTrajectories.remove(position);
+//                    listAdapter.notifyItemRemoved(position);
                 }
             });
             uploadList.setAdapter(listAdapter);

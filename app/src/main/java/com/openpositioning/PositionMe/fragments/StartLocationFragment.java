@@ -13,9 +13,6 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 
-import com.google.android.gms.maps.model.LatLngBounds;
-import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -23,8 +20,8 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-
-import java.util.ArrayList;
+import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 /**
  * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
@@ -86,18 +83,18 @@ public class StartLocationFragment extends Fragment {
 
         // This is just a demonstration of the automatic expansion of the indoor map.
         // Assume that we have obtained the user's position "newPosition" from the callback function. >>>
-        if (newPosition != null) {
-            // Check if the user's position is inside the defined building polygon
-            if (NucleusBuildingManager.isPointInBuilding(newPosition)) {
-                FloorButtons.setVisibility(View.VISIBLE);
-                switchFloorNU(floor);
-                InNu = 1; // Mark indoor map status
-            } else {
-                NucleusBuildingManager.getIndoorMapManager().hideMap();
-                FloorButtons.setVisibility(View.GONE);
-                InNu = 0; // Mark indoor map status
-            }
-        }
+//        if (newPosition != null) {
+//            // Check if the user's position is inside the defined building polygon
+//            if (NucleusBuildingManager.isPointInBuilding(newPosition)) {
+//                FloorButtons.setVisibility(View.VISIBLE);
+//                switchFloorNU(floor);
+//                InNu = 1; // Mark indoor map status
+//            } else {
+//                NucleusBuildingManager.getIndoorMapManager().hideMap();
+//                FloorButtons.setVisibility(View.GONE);
+//                InNu = 0; // Mark indoor map status
+//            }
+//        }
 
 
         // Asynchronous map which can be configured
@@ -194,12 +191,12 @@ public class StartLocationFragment extends Fragment {
      *
      * @param floorIndex the index of the floor to switch to
      */
-    private void switchFloorNU(int floorIndex) {
-        FloorNK = floorIndex; // Set the current floor index
-        if (NucleusBuildingManager != null) {
-            // Call the switchFloor method of the IndoorMapManager to switch to the specified floor
-            NucleusBuildingManager.getIndoorMapManager().switchFloor(floorIndex);
-        }
-    }
+//    private void switchFloorNU(int floorIndex) {
+//        FloorNK = floorIndex; // Set the current floor index
+//        if (NucleusBuildingManager != null) {
+//            // Call the switchFloor method of the IndoorMapManager to switch to the specified floor
+//            NucleusBuildingManager.getIndoorMapManager().switchFloor(floorIndex);
+//        }
+//    }
 
 }

@@ -119,5 +119,6 @@
     <string name="satellite">Satellite</string>
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>
+    <string name="delete_button">Delete</string>
 
 </resources>
