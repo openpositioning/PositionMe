@@ -13,9 +13,6 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 
-import com.google.android.gms.maps.model.LatLngBounds;
-import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -23,8 +20,8 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-
-import java.util.ArrayList;
+import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 /**
  * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory

@@ -5,7 +5,14 @@ plugins {
     id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('secrets.properties')
+if (localPropertiesFile.exists()) {
+    localProperties.load(new FileInputStream(localPropertiesFile))
+}
+
 android {
+    namespace ="com.openpositioning.PositionMe" //fix Namespace not specified problem
     compileSdk 33
 
     defaultConfig {
@@ -16,13 +23,29 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField "String", "MAPS_API_KEY",
+                "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
+
+        buildConfigField "String", "OPENPOSITIONING_API_KEY",
+                "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
+
+        buildConfigField "String", "OPENPOSITIONING_MASTER_KEY",
+                "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+
         }
+
+
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -52,17 +75,17 @@ dependencies {
     implementation "androidx.navigation:navigation-ui-ktx:$nav_version"
 }
 
-secrets {
-    // Optionally specify a different file name containing your secrets.
-    // The plugin defaults to "local.properties"
-    propertiesFileName = "secrets.properties"
-
-    // A properties file containing default secret values. This file can be
-    // checked in version control.
-    defaultPropertiesFileName = "local.defaults.properties"
-
-    // Configure which keys should be ignored by the plugin by providing regular expressions.
-    // "sdk.dir" is ignored by default.
-    ignoreList.add("keyToIgnore") // Ignore the key "keyToIgnore"
-    ignoreList.add("sdk.*")       // Ignore all keys matching the regexp "sdk.*"
-}
+//secrets {
+//    // Optionally specify a different file name containing your secrets.
+//    // The plugin defaults to "local.properties"
+//    propertiesFileName = "secrets.properties"
+//
+//    // A properties file containing default secret values. This file can be
+//    // checked in version control.
+//    defaultPropertiesFileName = "local.defaults.properties"
+//
+//    // Configure which keys should be ignored by the plugin by providing regular expressions.
+//    // "sdk.dir" is ignored by default.
+//    ignoreList.add("keyToIgnore") // Ignore the key "keyToIgnore"
+//    ignoreList.add("sdk.*")       // Ignore all keys matching the regexp "sdk.*"
+//}

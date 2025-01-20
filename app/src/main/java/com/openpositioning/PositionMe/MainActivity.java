@@ -576,7 +576,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private final Runnable displayToastTaskFailure = new Runnable() {
         @Override
         public void run() {
-            Toast.makeText(MainActivity.this, "Failed to complete trajectory upload", Toast.LENGTH_SHORT).show();
+//            Toast.makeText(MainActivity.this, "Failed to complete trajectory upload", Toast.LENGTH_SHORT).show();
         }
     };
 
