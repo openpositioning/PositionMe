@@ -83,18 +83,18 @@ public class StartLocationFragment extends Fragment {
 
         // This is just a demonstration of the automatic expansion of the indoor map.
         // Assume that we have obtained the user's position "newPosition" from the callback function. >>>
-//        if (newPosition != null) {
-//            // Check if the user's position is inside the defined building polygon
-//            if (NucleusBuildingManager.isPointInBuilding(newPosition)) {
-//                FloorButtons.setVisibility(View.VISIBLE);
-//                switchFloorNU(floor);
-//                InNu = 1; // Mark indoor map status
-//            } else {
-//                NucleusBuildingManager.getIndoorMapManager().hideMap();
-//                FloorButtons.setVisibility(View.GONE);
-//                InNu = 0; // Mark indoor map status
-//            }
-//        }
+        if (newPosition != null) {
+            // Check if the user's position is inside the defined building polygon
+            if (NucleusBuildingManager.isPointInBuilding(newPosition)) {
+                FloorButtons.setVisibility(View.VISIBLE);
+                switchFloorNU(floor);
+                InNu = 1; // Mark indoor map status
+            } else {
+                NucleusBuildingManager.getIndoorMapManager().hideMap();
+                FloorButtons.setVisibility(View.GONE);
+                InNu = 0; // Mark indoor map status
+            }
+        }
 
 
         // Asynchronous map which can be configured
@@ -191,12 +191,12 @@ public class StartLocationFragment extends Fragment {
      *
      * @param floorIndex the index of the floor to switch to
      */
-//    private void switchFloorNU(int floorIndex) {
-//        FloorNK = floorIndex; // Set the current floor index
-//        if (NucleusBuildingManager != null) {
-//            // Call the switchFloor method of the IndoorMapManager to switch to the specified floor
-//            NucleusBuildingManager.getIndoorMapManager().switchFloor(floorIndex);
-//        }
-//    }
+    private void switchFloorNU(int floorIndex) {
+        FloorNK = floorIndex; // Set the current floor index
+        if (NucleusBuildingManager != null) {
+            // Call the switchFloor method of the IndoorMapManager to switch to the specified floor
+            NucleusBuildingManager.getIndoorMapManager().switchFloor(floorIndex);
+        }
+    }
 
 }
