@@ -30,3 +30,8 @@ Indoor poistioning data collection application created for the University of Edi
 
 ### New contributors
 - Francisco Zampella (fzampella-huawei)
+
+
+## NEW 
+https://stackoverflow.com/questions/10065526/github-how-to-make-a-fork-of-public-repository-private
+- Steps for how to make a pull request, when we need.
