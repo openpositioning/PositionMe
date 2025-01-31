@@ -22,9 +22,11 @@ android {
         versionCode 1
         versionName "1.0"
 
+        manifestPlaceholders["MAPS_API_KEY"] = localProperties['MAPS_API_KEY'] ?: ""
+
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField "String", "MAPS_API_KEY",
-                "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
+//        buildConfigField "String", "MAPS_API_KEY",
+//                "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
 
         buildConfigField "String", "OPENPOSITIONING_API_KEY",
                 "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
