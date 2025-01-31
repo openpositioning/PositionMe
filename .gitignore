@@ -16,3 +16,4 @@ local.properties
 /.idea/
 /secrets.properties
 secrets.properties
+../secrets.properties
