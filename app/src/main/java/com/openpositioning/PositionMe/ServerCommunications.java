@@ -25,6 +25,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -280,7 +281,7 @@ public class ServerCommunications implements Observable {
      *
      * @param position the position of the trajectory in the zip file to retrieve
      */
-    public void downloadTrajectory(int position) {
+    public CompletableFuture<Traj.Trajectory> downloadTrajectory(int position) {
         // Initialise OkHttp client
         OkHttpClient client = new OkHttpClient();
 
@@ -291,9 +292,12 @@ public class ServerCommunications implements Observable {
                 .get()
                 .build();
 
+        CompletableFuture<Traj.Trajectory> trajFuture = new CompletableFuture<>();
+
         // Enqueue the GET request for asynchronous execution
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override public void onFailure(Call call, IOException e) {
+                trajFuture.completeExceptionally(e);
                 e.printStackTrace();
             }
 
@@ -330,6 +334,7 @@ public class ServerCommunications implements Observable {
                     // Convert the byte array to a protobuf object
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
+                    trajFuture.complete(receivedTrajectory);
 
                     // Convert the protobuf object to a string
                     JsonFormat.Printer printer = JsonFormat.printer();
@@ -359,7 +364,7 @@ public class ServerCommunications implements Observable {
                 }
             }
         });
-
+        return trajFuture;
     }
 
     /**

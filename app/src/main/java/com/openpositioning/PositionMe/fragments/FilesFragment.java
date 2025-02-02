@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.viewitems.TrajDownloadListAdapter;
 
@@ -35,6 +36,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 /**
  * A simple {@link Fragment} subclass. The files fragments displays a list of trajectories already
@@ -205,12 +207,24 @@ public class FilesFragment extends Fragment implements Observer {
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
         listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
+            String titleText = "";
+            String messageText = "";
             // Download the appropriate trajectory instance
-            serverCommunications.downloadTrajectory(position);
+            try {
+                Traj.Trajectory trajectory
+                        = serverCommunications.downloadTrajectory(position).get();
+                titleText = "File downloaded";
+                messageText = "Trajectory downloaded to local storage";
+            } catch (ExecutionException | InterruptedException e) {
+                System.err.println();
+                titleText = "Download failed";
+                messageText = "Could not download the file";
+            }
+
             // Display a pop-up message to direct the user to the download location if necessary.
             new AlertDialog.Builder(getContext())
-                    .setTitle("File downloaded")
-                    .setMessage("Trajectory downloaded to local storage")
+                    .setTitle(titleText)
+                    .setMessage(messageText)
                     .setPositiveButton(R.string.ok, null)
                     .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
                         @Override
