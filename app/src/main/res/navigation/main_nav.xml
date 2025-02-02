@@ -6,6 +6,11 @@
     app:startDestination="@id/homeFragment">
 
     <fragment
+        android:id="@+id/playbackFragment"
+        android:name="com.openpositioning.PositionMe.fragments.PlaybackFragment"
+        android:label="fragment_playback"
+        tools:layout="@layout/fragment_playback"/>
+    <fragment
         android:id="@+id/homeFragment"
         android:name="com.openpositioning.PositionMe.fragments.HomeFragment"
         android:label="HomeFragment
@@ -110,6 +115,9 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
+        <action
+            android:id="@+id/action_filesFragment_to_playbackFragment"
+            app:destination="@id/playbackFragment" />
     </fragment><action android:id="@+id/action_global_correctionFragment" app:destination="@id/correctionFragment"/>
     <fragment
         android:id="@+id/uploadFragment"

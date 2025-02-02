@@ -120,5 +120,6 @@
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
+    <string name="title_playback">Playback Screen!</string>
 
 </resources>
