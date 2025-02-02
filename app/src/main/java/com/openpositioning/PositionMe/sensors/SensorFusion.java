@@ -579,6 +579,14 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public void setStartGNSSLatitude(float[] startPosition){
         startLocation = startPosition;
+        trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
+                .setLatitude(startPosition[0])
+                .setLongitude(startPosition[1])
+                .setAltitude(0)  // Temporarily
+                .setAccuracy(0)
+                .setSpeed(0)
+                .setRelativeTimestamp(0)
+                .build());
     }
 
 
