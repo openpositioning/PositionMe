@@ -32,7 +32,7 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="@string/google_maps_key"/>
         <activity
-            android:name="com.openpositioning.PositionMe.MainActivity"
+            android:name="com.openpositioning.PositionMe.presentation.activity.MainActivity"
             android:exported="true"
             android:configChanges="orientation"
             android:screenOrientation="portrait">
