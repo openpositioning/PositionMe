@@ -1,11 +1,15 @@
 package com.openpositioning.PositionMe;
 
+
+import java.io.FileInputStream;
+import java.io.OutputStream;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
@@ -162,6 +166,17 @@ public class ServerCommunications implements Observable {
                     notifyObservers(1);
                 }
 
+                private void copyFile(File src, File dst) throws IOException {
+                    try (InputStream in = new FileInputStream(src);
+                         OutputStream out = new FileOutputStream(dst)) {
+                        byte[] buf = new byte[1024];
+                        int len;
+                        while ((len = in.read(buf)) > 0) {
+                            out.write(buf, 0, len);
+                        }
+                    }
+                }
+
                 // Process the server's response
                 @Override public void onResponse(Call call, Response response) throws IOException {
                     try (ResponseBody responseBody = response.body()) {
@@ -189,8 +204,23 @@ public class ServerCommunications implements Observable {
                         // Print a confirmation of a successful POST to API
                         System.out.println("Successful post response: " + responseBody.string());
 
-                        // Delete local file and set success to true
-                        success = file.delete();
+                        System.out.println("LaiGan: " + file.getName());
+                        String originalPath = file.getAbsolutePath();
+                        System.out.println("Original trajectory file saved at: " + originalPath);
+
+                        // 将文件复制到 Downloads 文件夹（注意：需要在 Manifest 里声明相关权限，并在运行时申请）
+                        File downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
+                        File downloadFile = new File(downloadsDir, file.getName());
+                        try {
+                            copyFile(file, downloadFile);
+                            System.out.println("Trajectory file copied to Downloads: " + downloadFile.getAbsolutePath());
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            System.err.println("Failed to copy file to Downloads: " + e.getMessage());
+                        }
+
+                        // 不再删除文件，直接设置成功，并通知观察者
+                        success = true;
                         notifyObservers(1);
                     }
                 }
@@ -330,7 +360,7 @@ public class ServerCommunications implements Observable {
                     // Convert the byte array to a protobuf object
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
-
+                    Log.i("DNL", "Received Traj:" + receivedTrajectory.toString());
                     // Convert the protobuf object to a string
                     JsonFormat.Printer printer = JsonFormat.printer();
                     String receivedTrajectoryString = printer.print(receivedTrajectory);
