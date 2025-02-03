@@ -55,7 +55,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     @NonNull
     @Override
     public TrajDownloadViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        return new TrajDownloadViewHolder(LayoutInflater.from(context).inflate(R.layout.item_trajectorycard_view, parent, false), listener);
+        return new TrajDownloadViewHolder(LayoutInflater.from(context)
+                .inflate(R.layout.item_trajectorycard_view, parent, false), listener);
     }
 
     /**
@@ -79,6 +80,10 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                         )
                 )
         );
+        String ownerId = responseItems.get(position).get("owner_id");  // 获取 owner_id
+        String date = responseItems.get(position).get("date_submitted");
+
+        System.out.println("owner_id: " + ownerId + " date_submitted: " + date);
     }
 
     /**
