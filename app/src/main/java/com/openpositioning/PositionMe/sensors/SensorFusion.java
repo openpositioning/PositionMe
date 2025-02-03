@@ -15,11 +15,12 @@ import android.util.Log;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.openpositioning.PositionMe.MainActivity;
-import com.openpositioning.PositionMe.PathView;
-import com.openpositioning.PositionMe.PdrProcessing;
-import com.openpositioning.PositionMe.ServerCommunications;
+import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.utils.PathView;
+import com.openpositioning.PositionMe.utils.PdrProcessing;
+import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
+import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -811,7 +812,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * the timer objects.
      *
      * @see Traj object for storing data.
-     * @see com.openpositioning.PositionMe.fragments.SettingsFragment navigation that might cancel recording.
+     * @see SettingsFragment navigation that might cancel recording.
      */
     public void stopRecording() {
         // Only cancel if we are running

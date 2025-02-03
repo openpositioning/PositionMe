@@ -16,7 +16,7 @@
 <FrameLayout
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".fragments.CorrectionFragment">
+    tools:context=".presentation.fragment.CorrectionFragment">
 
     <!-- TODO: Update blank fragment layout -->
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -121,7 +121,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
-        <com.openpositioning.PositionMe.PathView
+        <com.openpositioning.PositionMe.utils.PathView
             android:id="@+id/pathView1"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
