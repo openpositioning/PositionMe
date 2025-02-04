@@ -1,23 +1,32 @@
 package com.openpositioning.PositionMe.fragments;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.NavDirections;
+import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.viewitems.DownloadClickListener;
 import com.openpositioning.PositionMe.viewitems.UploadListAdapter;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -41,6 +50,9 @@ public class UploadFragment extends Fragment {
 
     // List of files saved locally
     private List<File> localTrajectories;
+
+    // For sharing a trajectory across fragments
+    private TrajectoryViewModel trajectoryViewModel;
 
     /**
      * Public default constructor, empty.
@@ -95,6 +107,8 @@ public class UploadFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        trajectoryViewModel = new ViewModelProvider(requireActivity()).get(TrajectoryViewModel.class);
+
         this.emptyNotice = view.findViewById(R.id.emptyUpload);
         this.uploadList = view.findViewById(R.id.uploadTrajectories);
         // Check if there are locally saved trajectories
@@ -125,8 +139,23 @@ public class UploadFragment extends Fragment {
 
                 @Override
                 public void onPlayClicked(int position) {
-                    // TODO: FIXUP THIS. EITHER IMPLEMENT REPLAY FROM OLD LOGS OR USE A DIFFERENT INTERFACE.
-                    return;
+                    try (FileInputStream inputStream = new FileInputStream(localTrajectories.get(position)))
+                    {
+                        Traj.Trajectory trajectory = Traj.Trajectory.parseFrom(inputStream);
+                        trajectoryViewModel.setTrajectory(trajectory);
+
+                        NavDirections direction = UploadFragmentDirections.actionUploadFragmentToPlaybackFragment();
+                        Navigation.findNavController(requireView()).navigate(direction);
+                    } catch (IOException e) {
+                        String errorMessage = "File opening failed: " + e.getMessage();
+                        // Ensure UI thread executes the Toast
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                Toast.makeText(getContext(), errorMessage, Toast.LENGTH_SHORT).show()
+                        );
+                        NavDirections direction = UploadFragmentDirections.actionUploadFragmentSelf();
+                        Navigation.findNavController(requireView()).navigate(direction);
+                    }
+                    ;
                 }
             });
             uploadList.setAdapter(listAdapter);

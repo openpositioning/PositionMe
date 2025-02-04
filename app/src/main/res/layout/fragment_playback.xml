@@ -36,40 +36,33 @@
             app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
 
         <!-- Stop Button -->
-        <Button
-            android:id="@+id/stopButton"
-            android:layout_width="150dp"
-            android:layout_height="70dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="4dp"
-            android:text="@string/stop"
-            android:textSize="24sp"
-            android:background="@drawable/rounded_button"
-            app:icon="@drawable/ic_baseline_stop_24"
-            app:iconGravity="start"
-            app:iconSize="30dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
 
         <!-- Cancel Button -->
-        <Button
-            android:id="@+id/cancelButton"
-            android:layout_width="150dp"
-            android:layout_height="70dp"
-            android:layout_marginStart="16dp"
-            android:layout_marginBottom="4dp"
-            android:text="@string/cancel"
-            android:textSize="16sp"
-            android:background="@drawable/rounded_button"
-            app:icon="@drawable/ic_baseline_cancel_24"
-            app:iconGravity="start"
-            app:iconSize="28dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
 
         <!-- Recording Timer ProgressBar -->
 
         <!-- Current Position Card -->
+
+        <Button
+            android:id="@+id/backButton"
+            android:layout_width="152dp"
+            android:layout_height="42dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/rounded_button"
+            android:text="@string/playback_back"
+            android:textSize="14sp"
+            app:icon="@android:drawable/ic_menu_revert"
+            app:iconGravity="start"
+            app:iconPadding="6dp"
+            app:iconSize="28dp"
+            app:iconTint="@color/ic_launcher_simple_background"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.498"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/pauseResumeButton"
+            app:layout_constraintVertical_bias="1.0" />
+
         <androidx.cardview.widget.CardView
             android:id="@+id/currentPositionCard"
             android:layout_width="411dp"
@@ -219,30 +212,12 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="244dp"
             android:layout_marginTop="2dp"
-            android:text="@string/color"
             android:background="@drawable/rounded_button_black"
             android:backgroundTint="@color/black"
+            android:text="@string/color"
             app:layout_constraintStart_toEndOf="@+id/mapSwitchSpinner"
             app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
 
-        <!-- Title TextView -->
-
-        <!-- Playback Controls -->
-        <!-- Playback ProgressBar -->
-
-        <!-- Playback SeekBar -->
-<!--        <ProgressBar-->
-<!--            android:id="@+id/playbackProgressBar"-->
-<!--            style="?android:attr/progressBarStyleHorizontal"-->
-<!--            android:layout_width="0dp"-->
-<!--            android:layout_height="wrap_content"-->
-<!--            android:layout_marginStart="16dp"-->
-<!--            android:layout_marginEnd="16dp"-->
-<!--            android:layout_marginBottom="88dp"-->
-<!--            app:layout_constraintBottom_toTopOf="@+id/playbackSeekBar"-->
-<!--            app:layout_constraintEnd_toEndOf="parent"-->
-<!--            app:layout_constraintHorizontal_bias="0.0"-->
-<!--            app:layout_constraintStart_toStartOf="parent" />-->
 
         <!-- Pause/Resume Button -->
         <SeekBar
@@ -257,32 +232,48 @@
             app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintStart_toStartOf="parent" />
 
+        <!-- Go To Beginning Button -->
+
+        <!-- Go To End Button -->
+
         <Button
             android:id="@+id/pauseResumeButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="548dp"
             android:text="Pause"
-            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintBottom_toTopOf="@+id/stopButton" />
+            app:layout_constraintHorizontal_bias="0.498"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard"
+            app:layout_constraintVertical_bias="0.0" />
 
-        <!-- Go To Beginning Button -->
         <Button
             android:id="@+id/goToBeginningButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginBottom="132dp"
             android:text="Beginning"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintBottom_toTopOf="@+id/pauseResumeButton" />
+            app:layout_constraintTop_toBottomOf="@+id/playbackSeekBar"
+            app:layout_constraintVertical_bias="1.0" />
 
-        <!-- Go To End Button -->
         <Button
             android:id="@+id/goToEndButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="30dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="132dp"
             android:text="End"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintBottom_toTopOf="@+id/pauseResumeButton" />
+            app:layout_constraintHorizontal_bias="0.873"
+            app:layout_constraintStart_toEndOf="@+id/goToBeginningButton"
+            app:layout_constraintTop_toBottomOf="@+id/playbackSeekBar" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

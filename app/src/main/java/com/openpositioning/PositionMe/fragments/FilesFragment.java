@@ -10,7 +10,6 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -60,8 +59,6 @@ public class FilesFragment extends Fragment implements Observer {
 
     // Class handling HTTP communication
     private ServerCommunications serverCommunications;
-
-    private Button go_playback;
 
     private TrajectoryViewModel trajectoryViewModel;
 
@@ -113,17 +110,9 @@ public class FilesFragment extends Fragment implements Observer {
         filesList = view.findViewById(R.id.filesList);
         // Get clickable card view
         uploadCard = view.findViewById(R.id.uploadCard);
-        go_playback = view.findViewById(R.id.button);
 
         trajectoryViewModel = new ViewModelProvider(requireActivity()).get(TrajectoryViewModel.class);
 
-        go_playback.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                NavDirections action = FilesFragmentDirections.actionFilesFragmentToPlaybackFragment();
-                Navigation.findNavController(view).navigate(action);
-            }
-        });
         uploadCard.setOnClickListener(new View.OnClickListener() {
             /**
              * {@inheritDoc}

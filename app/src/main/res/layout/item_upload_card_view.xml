@@ -26,13 +26,13 @@
 
             <TextView
                 android:id="@+id/trajectoryIdItem"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
+                android:layout_width="86dp"
+                android:layout_height="93dp"
                 android:layout_marginStart="8dp"
                 android:gravity="center"
                 android:text="99"
                 android:textColor="@color/white"
-                android:textSize="65dp"
+                android:textSize="20sp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -52,7 +52,7 @@
                 android:textSize="18dp"
                 android:textStyle="bold"
                 app:layout_constraintEnd_toStartOf="@+id/uploadTrajectoryButton"
-                app:layout_constraintHorizontal_bias="0.152"
+                app:layout_constraintHorizontal_bias="0.0"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
                 app:layout_constraintTop_toTopOf="parent" />
 
@@ -81,20 +81,32 @@
                 android:textColorHint="@color/lightLogoBlue"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/uploadTrajectoryButton"
-                app:layout_constraintHorizontal_bias="0.258"
+                app:layout_constraintHorizontal_bias="0.0"
                 app:layout_constraintStart_toEndOf="@+id/trajectoryIdItem"
                 app:layout_constraintTop_toBottomOf="@+id/trajectoryDateItem"
                 app:layout_constraintVertical_bias="0.0" />
 
             <ImageButton
-                android:id="@+id/imageButton"
-                android:layout_width="37dp"
-                android:layout_height="33dp"
-                android:layout_marginBottom="32dp"
-                android:background="@color/teal_700"
+                android:id="@+id/replay_upload"
+                android:layout_width="66dp"
+                android:layout_height="62dp"
+                android:layout_marginEnd="12dp"
+                android:background="@drawable/round__lighblue_button"
+                android:backgroundTint="@color/teal_700"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:srcCompat="@drawable/ic_baseline_play_arrow_24"
-                tools:layout_editor_absoluteX="252dp" />
+                app:layout_constraintEnd_toStartOf="@+id/uploadTrajectoryButton"
+                app:layout_constraintHorizontal_bias="0.75"
+                app:layout_constraintStart_toEndOf="@+id/deletebutton"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.483"
+                app:srcCompat="@drawable/ic_baseline_play_arrow_24" />
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.cardview.widget.CardView>
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline3"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_begin="260dp" />
 </androidx.constraintlayout.widget.ConstraintLayout>

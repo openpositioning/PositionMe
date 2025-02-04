@@ -64,8 +64,7 @@ import java.util.List;
 public class PlaybackFragment extends Fragment {
 
     // UI components for recording/live view
-    private Button stopButton;
-    private Button cancelButton;
+    private Button backButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation;
@@ -211,25 +210,14 @@ public class PlaybackFragment extends Fragment {
         previousPosX = 0f;
         previousPosY = 0f;
 
-        stopButton = getView().findViewById(R.id.stopButton);
-        stopButton.setOnClickListener(new View.OnClickListener() {
+        backButton = getView().findViewById(R.id.backButton);
+        backButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 if(autoStop != null) autoStop.cancel();
                 sensorFusion.stopRecording();
-                NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
+                NavDirections action = PlaybackFragmentDirections.actionPlaybackFragmentToFilesFragment();
                 Navigation.findNavController(view).navigate(action);
-            }
-        });
-
-        cancelButton = getView().findViewById(R.id.cancelButton);
-        cancelButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                sensorFusion.stopRecording();
-                NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToHomeFragment();
-                Navigation.findNavController(view).navigate(action);
-                if(autoStop != null) autoStop.cancel();
             }
         });
 
@@ -298,29 +286,6 @@ public class PlaybackFragment extends Fragment {
         // Blinking recording indicator
         blinkingRecording();
 
-        // (Optional) Setup autoStop if split_trajectory is enabled.
-        if (settings.getBoolean("split_trajectory", false)) {
-            long limit = settings.getInt("split_duration", 30) * 60000L;
-            timeRemaining.setMax((int) (limit/1000));
-            timeRemaining.setScaleY(3f);
-            autoStop = new CountDownTimer(limit, 1000) {
-                @Override
-                public void onTick(long l) {
-                    timeRemaining.incrementProgressBy(1);
-                    updateUIandPosition();
-                }
-                @Override
-                public void onFinish() {
-                    sensorFusion.stopRecording();
-                    NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
-                    Navigation.findNavController(view).navigate(action);
-                }
-            }.start();
-        } else {
-            refreshDataHandler.postDelayed(refreshDataTask, 500);
-        }
-
-        // ---------------
         // Now set up the playback functionality:
         // Convert the list of PDR samples (relative x,y values) to TimedLatLng points relative to the starting point.
         pdrSamples = trajectory.getPdrDataList();

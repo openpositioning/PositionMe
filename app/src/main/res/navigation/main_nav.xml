@@ -9,7 +9,11 @@
         android:id="@+id/playbackFragment"
         android:name="com.openpositioning.PositionMe.fragments.PlaybackFragment"
         android:label="fragment_playback"
-        tools:layout="@layout/fragment_playback"/>
+        tools:layout="@layout/fragment_playback">
+        <action
+            android:id="@+id/action_playbackFragment_to_filesFragment"
+            app:destination="@id/filesFragment" />
+    </fragment>
     <fragment
         android:id="@+id/homeFragment"
         android:name="com.openpositioning.PositionMe.fragments.HomeFragment"
@@ -123,7 +127,14 @@
         android:id="@+id/uploadFragment"
         android:name="com.openpositioning.PositionMe.fragments.UploadFragment"
         android:label="fragment_upload"
-        tools:layout="@layout/fragment_upload" />
+        tools:layout="@layout/fragment_upload" >
+        <action
+            android:id="@+id/action_uploadFragment_to_playbackFragment"
+            app:destination="@id/playbackFragment" />
+        <action
+            android:id="@+id/action_uploadFragment_self"
+            app:destination="@id/uploadFragment" />
+    </fragment>
     <action
         android:id="@+id/action_global_settingsFragment"
         app:destination="@id/settingsFragment"
