@@ -1,22 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".fragments.RecordingFragment">
+
+    <!-- Map Fragment -->
     <androidx.fragment.app.FragmentContainerView
-        android:id="@+id/RecordingMap"
+        android:id="@+id/PlaybackMap"
         android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         tools:context=".MapsActivity" />
 
+    <!-- Main UI overlay -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         tools:ignore="ExtraText">
 
+        <!-- Example: Auto Floor Switch -->
         <Switch
             android:id="@+id/autoFloor"
             android:layout_width="wrap_content"
@@ -30,6 +35,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
 
+        <!-- Stop Button -->
         <Button
             android:id="@+id/stopButton"
             android:layout_width="150dp"
@@ -45,6 +51,7 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Cancel Button -->
         <Button
             android:id="@+id/cancelButton"
             android:layout_width="150dp"
@@ -60,21 +67,9 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
-        <ProgressBar
-            android:id="@+id/timeRemainingBar"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="8dp"
-            android:elevation="2sp"
-            android:max="1800"
-            android:progress="0"
-            app:layout_constraintBottom_toTopOf="@+id/stopButton"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+        <!-- Recording Timer ProgressBar -->
 
+        <!-- Current Position Card -->
         <androidx.cardview.widget.CardView
             android:id="@+id/currentPositionCard"
             android:layout_width="411dp"
@@ -160,10 +155,9 @@
                 android:contentDescription="@string/recording"
                 android:src="@drawable/ic_baseline_red_dot_24" />
 
-
         </androidx.cardview.widget.CardView>
 
-
+        <!-- Map Type Spinner -->
         <Spinner
             android:id="@+id/mapSwitchSpinner"
             android:layout_width="wrap_content"
@@ -176,6 +170,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
+        <!-- Floor Up Button -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
@@ -189,6 +184,7 @@
             app:layout_constraintHorizontal_bias="0.954"
             app:layout_constraintStart_toStartOf="parent" />
 
+        <!-- Floor Down Button -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton"
             android:layout_width="wrap_content"
@@ -202,6 +198,7 @@
             app:layout_constraintHorizontal_bias="0.954"
             app:layout_constraintStart_toStartOf="parent" />
 
+        <!-- GNSS Switch -->
         <Switch
             android:id="@+id/gnssSwitch"
             android:layout_width="wrap_content"
@@ -215,6 +212,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
 
+        <!-- Line Color Button -->
         <Button
             android:id="@+id/lineColorButton"
             android:layout_width="wrap_content"
@@ -227,14 +225,64 @@
             app:layout_constraintStart_toEndOf="@+id/mapSwitchSpinner"
             app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
 
-        <TextView
-            android:id="@+id/textView"
+        <!-- Title TextView -->
+
+        <!-- Playback Controls -->
+        <!-- Playback ProgressBar -->
+
+        <!-- Playback SeekBar -->
+<!--        <ProgressBar-->
+<!--            android:id="@+id/playbackProgressBar"-->
+<!--            style="?android:attr/progressBarStyleHorizontal"-->
+<!--            android:layout_width="0dp"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_marginStart="16dp"-->
+<!--            android:layout_marginEnd="16dp"-->
+<!--            android:layout_marginBottom="88dp"-->
+<!--            app:layout_constraintBottom_toTopOf="@+id/playbackSeekBar"-->
+<!--            app:layout_constraintEnd_toEndOf="parent"-->
+<!--            app:layout_constraintHorizontal_bias="0.0"-->
+<!--            app:layout_constraintStart_toStartOf="parent" />-->
+
+        <!-- Pause/Resume Button -->
+        <SeekBar
+            android:id="@+id/playbackSeekBar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="88dp"
+            app:layout_constraintBottom_toTopOf="@+id/pauseResumeButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <Button
+            android:id="@+id/pauseResumeButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/title_playback"
-            tools:layout_editor_absoluteX="143dp"
-            tools:layout_editor_absoluteY="111dp" />
+            android:text="Pause"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/stopButton" />
 
+        <!-- Go To Beginning Button -->
+        <Button
+            android:id="@+id/goToBeginningButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Beginning"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/pauseResumeButton" />
+
+        <!-- Go To End Button -->
+        <Button
+            android:id="@+id/goToEndButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="End"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/pauseResumeButton" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

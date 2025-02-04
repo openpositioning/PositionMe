@@ -122,6 +122,12 @@ public class UploadFragment extends Fragment {
 //                    localTrajectories.remove(position);
 //                    listAdapter.notifyItemRemoved(position);
                 }
+
+                @Override
+                public void onPlayClicked(int position) {
+                    // TODO: FIXUP THIS. EITHER IMPLEMENT REPLAY FROM OLD LOGS OR USE A DIFFERENT INTERFACE.
+                    return;
+                }
             });
             uploadList.setAdapter(listAdapter);
         }

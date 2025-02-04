@@ -28,7 +28,7 @@
                 android:id="@+id/trajectoryIdItem"
                 android:layout_width="100dp"
                 android:layout_height="100dp"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="4dp"
                 android:gravity="center"
                 android:text="999"
                 android:textColor="@color/lightLogoBlue"
@@ -36,27 +36,32 @@
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.0" />
 
             <TextView
                 android:id="@+id/trajectoryDateItem"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="102dp"
+                android:layout_height="47dp"
                 android:layout_marginStart="8dp"
                 android:layout_marginEnd="8dp"
+                android:gravity="center"
+                android:lines="2"
                 android:text="1998-05-19 05:28:42"
                 android:textColor="@color/LightYellow"
                 android:textSize="18dp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                app:layout_constraintHorizontal_bias="0.0"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.509" />
 
             <ImageButton
                 android:id="@+id/downloadTrajectoryButton"
-                android:layout_width="75dp"
-                android:layout_height="75dp"
+                android:layout_width="63dp"
+                android:layout_height="62dp"
                 android:layout_marginTop="8dp"
                 android:layout_marginEnd="8dp"
                 android:layout_marginBottom="8dp"
@@ -67,6 +72,19 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:srcCompat="@drawable/ic_baseline_download_24" />
+
+            <ImageButton
+                android:id="@+id/replayButton"
+                android:layout_width="60dp"
+                android:layout_height="48dp"
+                android:background="@color/teal_700"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                app:layout_constraintHorizontal_bias="0.411"
+                app:layout_constraintStart_toEndOf="@+id/trajectoryDateItem"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.519"
+                app:srcCompat="@drawable/ic_baseline_play_arrow_24" />
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.cardview.widget.CardView>
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -28,7 +28,6 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
     public Button deletebutton;
-
     /**
      * {@inheritDoc}
      * Assign TextView fields corresponding to Trajectory file metadata.
@@ -46,7 +45,7 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
         this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
         this.uploadButton = itemView.findViewById(R.id.uploadTrajectoryButton);
 
-        this.uploadButton.setOnClickListener(this);
+        this.uploadButton.setOnClickListener(v -> listener.onPositionClicked(getAdapterPosition()));
         this.deletebutton = itemView.findViewById(R.id.deletebutton);
     }
 

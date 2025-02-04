@@ -19,13 +19,14 @@ import java.lang.ref.WeakReference;
  *
  * @author Mate Stodulka
  */
-public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener{
+public class TrajDownloadViewHolder extends RecyclerView.ViewHolder{
 
     TextView trajId;
     TextView trajDate;
     ImageButton downloadButton;
-    // Weak reference to the click listener to enable garbage collection on recyclerview items
-    private WeakReference<DownloadClickListener> listenerReference;
+
+    ImageButton replayButton;
+
 
     /**
      * {@inheritDoc}
@@ -38,21 +39,11 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
      */
     public TrajDownloadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
         super(itemView);
-        this.listenerReference = new WeakReference<>(listener);
         this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
         this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
         this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
-
-        this.downloadButton.setOnClickListener(this);
-    }
-
-
-    /**
-     * {@inheritDoc}
-     * Calls the onPositionClick function on the listenerReference object.
-     */
-    @Override
-    public void onClick(View view) {
-        listenerReference.get().onPositionClicked(getAdapterPosition());
+        this.replayButton = itemView.findViewById(R.id.replayButton);
+        this.downloadButton.setOnClickListener(v -> listener.onPositionClicked(getAdapterPosition()));
+        this.replayButton.setOnClickListener(v -> listener.onPlayClicked(getAdapterPosition()));
     }
 }

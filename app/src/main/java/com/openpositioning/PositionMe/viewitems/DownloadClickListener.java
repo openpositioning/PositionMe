@@ -14,4 +14,10 @@ public interface DownloadClickListener {
      */
     void onPositionClicked(int position);
 
+    /**
+     * Function executed when play button clicked
+     * @param position integer position of item in the list.
+     */
+    void onPlayClicked(int position);
+
 }

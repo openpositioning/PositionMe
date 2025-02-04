@@ -16,6 +16,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.cardview.widget.CardView;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -25,6 +26,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.viewitems.DownloadClickListener;
 import com.openpositioning.PositionMe.viewitems.TrajDownloadListAdapter;
 
 import org.json.JSONArray;
@@ -60,6 +62,8 @@ public class FilesFragment extends Fragment implements Observer {
     private ServerCommunications serverCommunications;
 
     private Button go_playback;
+
+    private TrajectoryViewModel trajectoryViewModel;
 
     /**
      * Default public constructor, empty.
@@ -110,6 +114,8 @@ public class FilesFragment extends Fragment implements Observer {
         // Get clickable card view
         uploadCard = view.findViewById(R.id.uploadCard);
         go_playback = view.findViewById(R.id.button);
+
+        trajectoryViewModel = new ViewModelProvider(requireActivity()).get(TrajectoryViewModel.class);
 
         go_playback.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -206,34 +212,51 @@ public class FilesFragment extends Fragment implements Observer {
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
-        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
-            String titleText = "";
-            String messageText = "";
-            // Download the appropriate trajectory instance
-            try {
-                Traj.Trajectory trajectory
-                        = serverCommunications.downloadTrajectory(position).get();
-                titleText = "File downloaded";
-                messageText = "Trajectory downloaded to local storage";
-            } catch (ExecutionException | InterruptedException e) {
-                System.err.println();
-                titleText = "Download failed";
-                messageText = "Could not download the file";
-            }
+        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, new DownloadClickListener() {
+            @Override
+            public void onPositionClicked(int position) {
+                String titleText = "";
+                String messageText = "";
+                // Download the appropriate trajectory instance
+                try {
+                    Traj.Trajectory trajectory
+                            = serverCommunications.downloadTrajectory(position).get();
+                    titleText = "File downloaded";
+                    messageText = "Trajectory downloaded to local storage";
+                } catch (ExecutionException | InterruptedException e) {
+                    System.err.println();
+                    titleText = "Download failed";
+                    messageText = "Could not download the file";
+                }
 
-            // Display a pop-up message to direct the user to the download location if necessary.
-            new AlertDialog.Builder(getContext())
-                    .setTitle(titleText)
-                    .setMessage(messageText)
-                    .setPositiveButton(R.string.ok, null)
-                    .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-                        }
-                    })
-                    .setIcon(R.drawable.ic_baseline_download_24)
-                    .show();
+                // Display a pop-up message to direct the user to the download location if necessary.
+                new AlertDialog.Builder(getContext())
+                        .setTitle(titleText)
+                        .setMessage(messageText)
+                        .setPositiveButton(R.string.ok, null)
+                        .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
+                            }
+                        })
+                        .setIcon(R.drawable.ic_baseline_download_24)
+                        .show();
+            }
+            @Override
+            public void onPlayClicked(int position) {
+                try {
+                    Traj.Trajectory trajectory
+                            = serverCommunications.downloadTrajectory(position).get();
+                    trajectoryViewModel.setTrajectory(trajectory);
+                } catch (ExecutionException | InterruptedException e) {
+                    e.printStackTrace();
+                }
+                NavDirections action = FilesFragmentDirections.actionFilesFragmentToPlaybackFragment();
+                Navigation.findNavController(requireView()).navigate(action);
+
+
+            }
         });
         filesList.setAdapter(listAdapter);
     }

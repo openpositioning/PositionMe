@@ -19,6 +19,7 @@ import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -27,6 +28,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
@@ -44,171 +46,148 @@ import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A simple {@link Fragment} subclass. The recording fragment is displayed while the app is actively
- * saving data, with UI elements and a map with a marker indicating current PDR location and
- * direction of movement status. The user's PDR trajectory/path being recorded
- * is drawn on the map as well.
- * An overlay of indoor maps for the building is achieved when the user is in the Nucleus
- * and Library buildings to allow for a better user experience.
+ * A Fragment that not only shows the live recording but also integrates playback controls
+ * (play bar, seek bar, pause/resume, go to beginning/end) to replay the recorded trajectory.
  *
- * @see HomeFragment the previous fragment in the nav graph.
- * @see CorrectionFragment the next fragment in the nav graph.
- * @see SensorFusion the class containing sensors and recording.
- * @see IndoorMapManager responsible for overlaying the indoor floor maps
- *
- * @author Mate Stodulka
- * @author Arun Gopalakrishnan
+ * In this version, we embed the timestamp from each PDR sample into the trajectory points list
+ * by using the TimedLatLng helper class.
  */
 public class PlaybackFragment extends Fragment {
 
-    //Button to end PDR recording
+    // UI components for recording/live view
     private Button stopButton;
     private Button cancelButton;
-    //Recording icon to show user recording is in progress
     private ImageView recIcon;
-    //Loading bar to show time remaining before recording automatically ends
     private ProgressBar timeRemaining;
-    //Text views to display distance travelled and elevation since beginning of recording
-
     private TextView elevation;
     private TextView distanceTravelled;
-    // Text view to show the error between current PDR and current GNSS
     private TextView gnssError;
 
-    //App settings
+    // Playback control UI components
+   // private ProgressBar playbackProgressBar;
+    private SeekBar playbackSeekBar;
+    private Button pauseResumeButton;
+    private Button goToBeginningButton;
+    private Button goToEndButton;
+
+    // App settings and sensor fusion
     private SharedPreferences settings;
-    //Singleton class to collect all sensor data
     private SensorFusion sensorFusion;
-    //Timer to end recording
     private CountDownTimer autoStop;
-    // Responsible for updating UI in Loop
     private Handler refreshDataHandler;
 
-    //variables to store data of the trajectory
+    // Variables for trajectory/live updates
     private float distance;
     private float previousPosX;
     private float previousPosY;
 
-    // Starting point coordinates
+    // Map-related variables
     private static LatLng start;
-    // Storing the google map object
     private GoogleMap gMap;
-    //Switch Map Dropdown
     private Spinner switchMapSpinner;
-    //Map Marker
     private Marker orientationMarker;
-    // Current Location coordinates
     private LatLng currentLocation;
-    // Next Location coordinates
     private LatLng nextLocation;
-    // Stores the polyline object for plotting path
     private Polyline polyline;
-    // Manages overlaying of the indoor maps
     public IndoorMapManager indoorMapManager;
-    // Floor Up button
     public FloatingActionButton floorUpButton;
-    // Floor Down button
     public FloatingActionButton floorDownButton;
-    // GNSS Switch
     private Switch gnss;
-    // GNSS marker
     private Marker gnssMarker;
-    // Button used to switch colour
     private Button switchColor;
-    // Current color of polyline
-    private boolean isRed=true;
-    // Switch used to set auto floor
+    private boolean isRed = true;
     private Switch autoFloor;
+    private TrajectoryViewModel trajectoryViewModel;
 
-    /**
-     * Public Constructor for the class.
-     * Left empty as not required
-     */
+    private Traj.Trajectory trajectory;
+    private List<Traj.Pdr_Sample> pdrSamples;
+
+    // ----------------------------
+    // Fields for playback functionality
+    private Handler playbackHandler = new Handler();
+    private int playbackCurrentIndex = 0;
+    private boolean playbackIsPaused = false;
+    // Instead of a List<LatLng>, we use a List<TimedLatLng> to store timestamps as well.
+    private List<TimedLatLng> trajectoryPointsTimed;
+    // ----------------------------
+
+    // Helper class to hold both a LatLng and its timestamp.
+    private static class TimedLatLng {
+        public final LatLng latLng;
+        public final long timestamp;
+
+        public TimedLatLng(LatLng latLng, long timestamp) {
+            this.latLng = latLng;
+            this.timestamp = timestamp;
+        }
+    }
+
     public PlaybackFragment() {
         // Required empty public constructor
     }
 
-    /**
-     * {@inheritDoc}
-     * Gets an instance of the {@link SensorFusion} class, and initialises the context and settings.
-     * Creates a handler for periodically updating the displayed data.
-     *
-     */
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        this.sensorFusion = SensorFusion.getInstance();
+        sensorFusion = SensorFusion.getInstance();
         Context context = getActivity();
-        this.settings = PreferenceManager.getDefaultSharedPreferences(context);
-        this.refreshDataHandler = new Handler();
+        settings = PreferenceManager.getDefaultSharedPreferences(context);
+        refreshDataHandler = new Handler();
     }
 
-    /**
-     * {@inheritDoc}
-     * Set title in action bar to "Recording"
-     */
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
+        trajectoryViewModel = new ViewModelProvider(requireActivity()).get(TrajectoryViewModel.class);
+        trajectory = trajectoryViewModel.getTrajectory().getValue();
+
+        // Inflate the layout for this fragment (ensure it contains the playback UI elements)
         View rootView = inflater.inflate(R.layout.fragment_playback, container, false);
-        // Inflate the layout for this fragment
         ((AppCompatActivity)getActivity()).getSupportActionBar().hide();
         getActivity().setTitle("Recording...");
-        //Obtain start position set in the startLocation fragment
-        float[] startPosition = sensorFusion.getGNSSLatitude(true);
+
+        // Obtain start position from the first GNSS sample of the trajectory.
+        // (This assumes that trajectory.getGnssData(0) returns an object with getLatitude() and getLongitude())
+        Traj.GNSS_Sample startingSample = trajectory.getGnssData(0);
+        start = new LatLng(startingSample.getLatitude(), startingSample.getLongitude());
 
         // Initialize map fragment
-        SupportMapFragment supportMapFragment=(SupportMapFragment)
-                getChildFragmentManager().findFragmentById(R.id.RecordingMap);
-        // Asynchronous map which can be configured
+        SupportMapFragment supportMapFragment = (SupportMapFragment)
+                getChildFragmentManager().findFragmentById(R.id.PlaybackMap);
         supportMapFragment.getMapAsync(new OnMapReadyCallback() {
-            /**
-             * {@inheritDoc}
-             * Controls to allow scrolling, tilting, rotating and a compass view of the
-             * map are enabled. A marker is added to the map with the start position and
-             * the compass indicating user direction. A polyline object is initialised
-             * to plot user direction.
-             * Initialises the manager to control indoor floor map overlays.
-             *
-             * @param map      Google map to be configured
-             */
             @Override
             public void onMapReady(GoogleMap map) {
-                gMap=map;
-                //Initialising the indoor map manager object
-                indoorMapManager =new IndoorMapManager(map);
-                // Setting map attributes
+                gMap = map;
+                indoorMapManager = new IndoorMapManager(map);
                 map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                 map.getUiSettings().setCompassEnabled(true);
                 map.getUiSettings().setTiltGesturesEnabled(true);
                 map.getUiSettings().setRotateGesturesEnabled(true);
                 map.getUiSettings().setScrollGesturesEnabled(true);
 
-                // Add a marker at the start position and move the camera
-                start = new LatLng(startPosition[0], startPosition[1]);
-                currentLocation=start;
-                orientationMarker=map.addMarker(new MarkerOptions().position(start).title("Current Position")
+                // Set start and current location
+                currentLocation = start;
+                orientationMarker = map.addMarker(new MarkerOptions().position(start)
+                        .title("Current Position")
                         .flat(true)
                         .icon(BitmapDescriptorFactory.fromBitmap(
-                                UtilFunctions.getBitmapFromVector(getContext(),R.drawable.ic_baseline_navigation_24))));
-                //Center the camera
-                map.moveCamera(CameraUpdateFactory.newLatLngZoom(start, (float) 19f));
-                // Adding polyline to map to plot real-time trajectory
-                PolylineOptions polylineOptions=new PolylineOptions()
+                                UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_24))));
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(start, 19f));
+
+                PolylineOptions polylineOptions = new PolylineOptions()
                         .color(Color.RED)
                         .add(currentLocation);
                 polyline = gMap.addPolyline(polylineOptions);
-                // Setting current location to set Ground Overlay for indoor map (if in building)
                 indoorMapManager.setCurrentLocation(currentLocation);
-                //Showing an indication of available indoor maps using PolyLines
                 indoorMapManager.setIndicationOfIndoorMap();
             }
         });
@@ -216,46 +195,24 @@ public class PlaybackFragment extends Fragment {
         return rootView;
     }
 
-    /**
-     * {@inheritDoc}
-     * Text Views and Icons initialised to display the current PDR to the user. A Button onClick
-     * listener is enabled to detect when to go to next fragment and allow the user to correct PDR.
-     * Other onClick, onCheckedChange and onSelectedItem Listeners for buttons, switch and spinner
-     * are defined to allow user to change UI and functionality of the recording page as wanted
-     * by the user.
-     * A runnable thread is called to update the UI every 0.2 seconds.
-     */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Set autoStop to null for repeat recordings
-        this.autoStop = null;
+        // Live recording UI initialization
+        timeRemaining = getView().findViewById(R.id.timeRemainingBar);
+        elevation = getView().findViewById(R.id.currentElevation);
+        distanceTravelled = getView().findViewById(R.id.currentDistanceTraveled);
+        gnssError = getView().findViewById(R.id.gnssError);
+        gnssError.setVisibility(View.GONE);
+        elevation.setText(getString(R.string.elevation, "0"));
+        distanceTravelled.setText(getString(R.string.meter, "0"));
+        distance = 0f;
+        previousPosX = 0f;
+        previousPosY = 0f;
 
-        //Initialise UI components
-        this.elevation = getView().findViewById(R.id.currentElevation);
-        this.distanceTravelled = getView().findViewById(R.id.currentDistanceTraveled);
-        this.gnssError =getView().findViewById(R.id.gnssError);
-
-
-        //Set default text of TextViews to 0
-        this.gnssError.setVisibility(View.GONE);
-        this.elevation.setText(getString(R.string.elevation, "0"));
-        this.distanceTravelled.setText(getString(R.string.meter, "0"));
-
-        //Reset variables to 0
-        this.distance = 0f;
-        this.previousPosX = 0f;
-        this.previousPosY = 0f;
-
-        // Stop button to save trajectory and move to corrections
-        this.stopButton = getView().findViewById(R.id.stopButton);
-        this.stopButton.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * OnClick listener for button to go to next fragment.
-             * When button clicked the PDR recording is stopped and the {@link CorrectionFragment} is loaded.
-             */
+        stopButton = getView().findViewById(R.id.stopButton);
+        stopButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 if(autoStop != null) autoStop.cancel();
@@ -265,15 +222,8 @@ public class PlaybackFragment extends Fragment {
             }
         });
 
-        // Cancel button to discard trajectory and return to Home
-        this.cancelButton = getView().findViewById(R.id.cancelButton);
-        this.cancelButton.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * OnClick listener for button to go to home fragment.
-             * When button clicked the PDR recording is stopped and the {@link HomeFragment} is loaded.
-             * The trajectory is not saved.
-             */
+        cancelButton = getView().findViewById(R.id.cancelButton);
+        cancelButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 sensorFusion.stopRecording();
@@ -282,167 +232,189 @@ public class PlaybackFragment extends Fragment {
                 if(autoStop != null) autoStop.cancel();
             }
         });
-        // Configuring dropdown for switching map types
+
         mapDropdown();
-        // Setting listener for the switching map types dropdown
         switchMap();
-        // Floor changer Buttons
-        this.floorUpButton=getView().findViewById(R.id.floorUpButton);
-        this.floorDownButton=getView().findViewById(R.id.floorDownButton);
-        // Auto-floor switch
-        this.autoFloor=getView().findViewById(R.id.autoFloor);
+
+        floorUpButton = getView().findViewById(R.id.floorUpButton);
+        floorDownButton = getView().findViewById(R.id.floorDownButton);
+        autoFloor = getView().findViewById(R.id.autoFloor);
         autoFloor.setChecked(true);
-        // Hiding floor changing buttons and auto-floor switch
         setFloorButtonVisibility(View.GONE);
-        this.floorUpButton.setOnClickListener(new View.OnClickListener() {
-            /**
-             *{@inheritDoc}
-             * Listener for increasing the floor for the indoor map
-             */
+        floorUpButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // Setting off auto-floor as manually changed
                 autoFloor.setChecked(false);
                 indoorMapManager.increaseFloor();
             }
         });
-        this.floorDownButton.setOnClickListener(new View.OnClickListener() {
-            /**
-             *{@inheritDoc}
-             * Listener for decreasing the floor for the indoor map
-             */
+        floorDownButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // Setting off auto-floor as manually changed
                 autoFloor.setChecked(false);
                 indoorMapManager.decreaseFloor();
             }
         });
-        //Obtain the GNSS toggle switch
-        this.gnss= getView().findViewById(R.id.gnssSwitch);
 
-        this.gnss.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            /**
-             * {@inheritDoc}
-             * Listener to set GNSS marker and show GNSS vs PDR error.
-             */
+        gnss = getView().findViewById(R.id.gnssSwitch);
+        gnss.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
-                if (isChecked){
-                    // Show GNSS eror
+                if (isChecked) {
                     float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-                    LatLng gnssLocation = new LatLng(location[0],location[1]);
+                    LatLng gnssLocation = new LatLng(location[0], location[1]);
                     gnssError.setVisibility(View.VISIBLE);
-                    gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
-                            UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
-                    // Set GNSS marker
-                    gnssMarker=gMap.addMarker(
+                    gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
+                            UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
+                    gnssMarker = gMap.addMarker(
                             new MarkerOptions().title("GNSS position")
                                     .position(gnssLocation)
                                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-                }else {
-                    gnssMarker.remove();
+                } else {
+                    if (gnssMarker != null) {
+                        gnssMarker.remove();
+                    }
                     gnssError.setVisibility(View.GONE);
                 }
             }
         });
-        // Switch colour button
-        this.switchColor=getView().findViewById(R.id.lineColorButton);
-        this.switchColor.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Listener to button to switch the colour of the polyline
-             * to red/black
-             */
+
+        switchColor = getView().findViewById(R.id.lineColorButton);
+        switchColor.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (isRed){
+                if (isRed) {
                     switchColor.setBackgroundColor(Color.BLACK);
                     polyline.setColor(Color.BLACK);
-                    isRed=false;
-                }
-                else {
+                    isRed = false;
+                } else {
                     switchColor.setBackgroundColor(Color.RED);
                     polyline.setColor(Color.RED);
-                    isRed=true;
+                    isRed = true;
                 }
             }
         });
 
-        // Display the progress of the recording when a max record length is set
-        this.timeRemaining = getView().findViewById(R.id.timeRemainingBar);
-
-        // Display a blinking red dot to show recording is in progress
+        // Blinking recording indicator
         blinkingRecording();
 
-        // Check if there is manually set time limit:
-        if(this.settings.getBoolean("split_trajectory", false)) {
-            // If that time limit has been reached:
-            long limit = this.settings.getInt("split_duration", 30) * 60000L;
-            // Set progress bar
-            this.timeRemaining.setMax((int) (limit/1000));
-            this.timeRemaining.setScaleY(3f);
-
-            // Create a CountDownTimer object to adhere to the time limit
-            this.autoStop = new CountDownTimer(limit, 1000) {
-                /**
-                 * {@inheritDoc}
-                 * Increment the progress bar to display progress and remaining time. Update the
-                 * observed PDR values, and animate icons based on the data.
-                 */
+        // (Optional) Setup autoStop if split_trajectory is enabled.
+        if (settings.getBoolean("split_trajectory", false)) {
+            long limit = settings.getInt("split_duration", 30) * 60000L;
+            timeRemaining.setMax((int) (limit/1000));
+            timeRemaining.setScaleY(3f);
+            autoStop = new CountDownTimer(limit, 1000) {
                 @Override
                 public void onTick(long l) {
-                    // increment progress bar
                     timeRemaining.incrementProgressBy(1);
-                    // Get new position and update UI
                     updateUIandPosition();
                 }
-
-                /**
-                 * {@inheritDoc}
-                 * Finish recording and move to the correction fragment.
-                 * @see CorrectionFragment
-                 */
                 @Override
                 public void onFinish() {
-                    // Timer done, move to next fragment automatically - will stop recording
                     sensorFusion.stopRecording();
                     NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
                     Navigation.findNavController(view).navigate(action);
                 }
             }.start();
+        } else {
+            refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
-        else {
-            // No time limit - use a repeating task to refresh UI.
-            this.refreshDataHandler.post(refreshDataTask);
+
+        // ---------------
+        // Now set up the playback functionality:
+        // Convert the list of PDR samples (relative x,y values) to TimedLatLng points relative to the starting point.
+        pdrSamples = trajectory.getPdrDataList();
+        trajectoryPointsTimed = new ArrayList<>();
+        for (Traj.Pdr_Sample sample : pdrSamples) {
+            LatLng point = convertRelativeXYToLatLng(start, sample.getX(), sample.getY());
+            // Create a TimedLatLng instance with the point and its timestamp.
+            trajectoryPointsTimed.add(new TimedLatLng(point, sample.getRelativeTimestamp()));
         }
+
+        // Initialize playback UI elements.
+        //playbackProgressBar = getView().findViewById(R.id.playbackProgressBar);
+        playbackSeekBar = getView().findViewById(R.id.playbackSeekBar);
+        pauseResumeButton = getView().findViewById(R.id.pauseResumeButton);
+        goToBeginningButton = getView().findViewById(R.id.goToBeginningButton);
+        goToEndButton = getView().findViewById(R.id.goToEndButton);
+
+        // Set max values based on trajectoryPointsTimed size.
+       // playbackProgressBar.setMax(trajectoryPointsTimed.size());
+        playbackSeekBar.setMax(trajectoryPointsTimed.size() - 1);
+
+        // Start playback (gradually drawing the trajectory on the map).
+        drawTrajectoryGradually(trajectoryPointsTimed);
+
+        // Set up pause/resume button.
+        pauseResumeButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (playbackIsPaused) {
+                    resumePlayback(trajectoryPointsTimed);
+                } else {
+                    pausePlayback();
+                }
+            }
+        });
+
+        // Set up "Go to Beginning" and "Go to End" buttons.
+        goToBeginningButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                goToBeginning(trajectoryPointsTimed);
+            }
+        });
+        goToEndButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                goToEnd(trajectoryPointsTimed);
+            }
+        });
+
+        // SeekBar listener to allow user-controlled playback navigation.
+        playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    playbackCurrentIndex = progress;
+                    updatePlaybackPolyline(trajectoryPointsTimed, playbackCurrentIndex);
+                }
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                pausePlayback();
+            }
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                resumePlayback(trajectoryPointsTimed);
+            }
+        });
+        // ---------------
     }
 
     /**
-     * Creates a dropdown for Changing maps
+     * Converts relative x,y offsets (in meters) into a LatLng coordinate based on a given start.
      */
+    private LatLng convertRelativeXYToLatLng(LatLng start, float offsetX, float offsetY) {
+        double deltaLat = offsetY / 111320.0;
+        double cosLat = Math.cos(Math.toRadians(start.latitude));
+        if (Math.abs(cosLat) < 1e-6) {
+            cosLat = 1e-6; // safeguard against division by zero
+        }
+        double metersPerDegreeLongitude = 111320.0 * cosLat;
+        double deltaLng = offsetX / metersPerDegreeLongitude;
+        return new LatLng(start.latitude + deltaLat, start.longitude + deltaLng);
+    }
+
     private void mapDropdown(){
-        // Creating and Initialising options for Map's Dropdown Menu
-        switchMapSpinner = (Spinner) getView().findViewById(R.id.mapSwitchSpinner);
-        // Different Map Types
+        switchMapSpinner = getView().findViewById(R.id.mapSwitchSpinner);
         String[] maps = new String[]{getString(R.string.hybrid), getString(R.string.normal), getString(R.string.satellite)};
         ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_spinner_dropdown_item, maps);
-        // Set the Dropdowns menu adapter
         switchMapSpinner.setAdapter(adapter);
     }
 
-    /**
-     * Spinner listener to change map bap based on user input
-     */
     private void switchMap(){
-        // Switch between map type based on user input
-        this.switchMapSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            /**
-             * {@inheritDoc}
-             * OnItemSelected listener to switch maps.
-             * The map switches between MAP_TYPE_NORMAL, MAP_TYPE_SATELLITE
-             * and MAP_TYPE_HYBRID based on user selection.
-             */
+        switchMapSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 switch (position){
@@ -457,135 +429,86 @@ public class PlaybackFragment extends Fragment {
                         break;
                 }
             }
-            /**
-             * {@inheritDoc}
-             * When Nothing is selected set to MAP_TYPE_HYBRID (NORMAL and SATELLITE)
-             */
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
                 gMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
             }
         });
     }
-    /**
-     * Runnable task used to refresh UI elements with live data.
-     * Has to be run through a Handler object to be able to alter UI elements
-     */
+
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
-            // Get new position and update UI
             updateUIandPosition();
-            // Loop the task again to keep refreshing the data
             refreshDataHandler.postDelayed(refreshDataTask, 200);
         }
     };
 
-    /**
-     * Updates the UI, traces PDR Position on the map
-     * and also updates marker representing the current location and direction on the map
-     */
     private void updateUIandPosition(){
-        // Get new position
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
-        // Calculate distance travelled
         distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2) + Math.pow(pdrValues[1] - previousPosY, 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
-        // Net pdr movement
-        float[] pdrMoved={pdrValues[0]-previousPosX,pdrValues[1]-previousPosY};
-        // if PDR has changed plot new line to indicate user movement
-        if (pdrMoved[0]!=0 ||pdrMoved[1]!=0) {
+        float[] pdrMoved = {pdrValues[0]-previousPosX, pdrValues[1]-previousPosY};
+        if (pdrMoved[0]!=0 || pdrMoved[1]!=0) {
             plotLines(pdrMoved);
         }
-        // If not initialized, initialize
         if (indoorMapManager == null) {
-            indoorMapManager =new IndoorMapManager(gMap);
+            indoorMapManager = new IndoorMapManager(gMap);
         }
-        //Show GNSS marker and error if user enables it
-        if (gnss.isChecked() && gnssMarker!=null){
+        if (gnss.isChecked() && gnssMarker != null) {
             float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-            LatLng gnssLocation = new LatLng(location[0],location[1]);
+            LatLng gnssLocation = new LatLng(location[0], location[1]);
             gnssError.setVisibility(View.VISIBLE);
-            gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
-                    UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
+            gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
+                    UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
             gnssMarker.setPosition(gnssLocation);
         }
-        //  Updates current location of user to show the indoor floor map (if applicable)
         indoorMapManager.setCurrentLocation(currentLocation);
         float elevationVal = sensorFusion.getElevation();
-        // Display buttons to allow user to change floors if indoor map is visible
-        if(indoorMapManager.getIsIndoorMapSet()){
+        if (indoorMapManager.getIsIndoorMapSet()){
             setFloorButtonVisibility(View.VISIBLE);
-            // Auto-floor logic
-            if(autoFloor.isChecked()){
-                indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-                ,true);
+            if (autoFloor.isChecked()){
+                indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight()), true);
             }
-        }else{
-            // Hide the buttons and switch used to change floor if indoor map is not visible
+        } else {
             setFloorButtonVisibility(View.GONE);
         }
-        // Store previous PDR values for next call
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
-        // Display elevation
-//        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
         elevation.setText("PLAYBACK FRAGMENT");
-
-        //Rotate compass Marker according to direction of movement
-        if (orientationMarker!=null) {
+        if (orientationMarker != null) {
             orientationMarker.setRotation((float) Math.toDegrees(sensorFusion.passOrientation()));
         }
     }
-    /**
-     * Plots the users location based on movement in Real-time
-     * @param pdrMoved Contains the change in PDR in X and Y directions
-     */
+
     private void plotLines(float[] pdrMoved){
-        if (currentLocation!=null){
-            // Calculate new position based on net PDR movement
-            nextLocation=UtilFunctions.calculateNewPos(currentLocation,pdrMoved);
-                //Try catch to prevent exceptions from crashing the app
-                try{
-                    // Adds new location to polyline to plot the PDR path of user
-                    List<LatLng> pointsMoved = polyline.getPoints();
-                    pointsMoved.add(nextLocation);
-                    polyline.setPoints(pointsMoved);
-                    // Change current location to new location and zoom there
-                    orientationMarker.setPosition(nextLocation);
-                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
-                }
-                catch (Exception ex){
-                    Log.e("PlottingPDR","Exception: "+ex);
-                }
-                currentLocation=nextLocation;
-        }
-        else{
-            //Initialise the starting location
+        if (currentLocation != null) {
+            nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
+            try{
+                List<LatLng> pointsMoved = polyline.getPoints();
+                pointsMoved.add(nextLocation);
+                polyline.setPoints(pointsMoved);
+                orientationMarker.setPosition(nextLocation);
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, 19f));
+            } catch (Exception ex){
+                Log.e("PlottingPDR","Exception: " + ex);
+            }
+            currentLocation = nextLocation;
+        } else {
             float[] location = sensorFusion.getGNSSLatitude(true);
-            currentLocation=new LatLng(location[0],location[1]);
-            nextLocation=currentLocation;
+            currentLocation = new LatLng(location[0], location[1]);
+            nextLocation = currentLocation;
         }
     }
 
-    /**
-     * Function to set change visibility of the floor up and down buttons
-     * @param visibility the visibility of floor buttons should be set to
-     */
     private void setFloorButtonVisibility(int visibility){
         floorUpButton.setVisibility(visibility);
         floorDownButton.setVisibility(visibility);
         autoFloor.setVisibility(visibility);
     }
-    /**
-     * Displays a blinking red dot to signify an ongoing recording.
-     *
-     * @see Animation for makin the red dot blink.
-     */
+
     private void blinkingRecording() {
-        //Initialise Image View
-        this.recIcon = getView().findViewById(R.id.redDot);
-        //Configure blinking animation
+        recIcon = getView().findViewById(R.id.redDot);
         Animation blinking_rec = new AlphaAnimation(1, 0);
         blinking_rec.setDuration(800);
         blinking_rec.setInterpolator(new LinearInterpolator());
@@ -594,25 +517,96 @@ public class PlaybackFragment extends Fragment {
         recIcon.startAnimation(blinking_rec);
     }
 
-    /**
-     * {@inheritDoc}
-     * Stops ongoing refresh task, but not the countdown timer which stops automatically
-     */
     @Override
     public void onPause() {
         refreshDataHandler.removeCallbacks(refreshDataTask);
+        playbackHandler.removeCallbacksAndMessages(null);
         super.onPause();
     }
 
-    /**
-     * {@inheritDoc}
-     * Restarts UI refreshing task when no countdown task is in progress
-     */
     @Override
     public void onResume() {
-        if(!this.settings.getBoolean("split_trajectory", false)) {
+        if (!settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
         super.onResume();
     }
+
+    // ---------------
+    // Playback functionality methods:
+
+    /**
+     * Gradually draws the playback trajectory by updating the polyline one point at a time.
+     * @param trajectoryPoints The full list of TimedLatLng points to be drawn.
+     */
+    private void drawTrajectoryGradually(final List<TimedLatLng> trajectoryPoints) {
+        playbackHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (playbackCurrentIndex < trajectoryPoints.size()) {
+                    if (!playbackIsPaused) {
+                        // Update the polyline with the current point
+                        updatePlaybackPolyline(trajectoryPoints, playbackCurrentIndex);
+
+                        // Default delay in case there is no previous timestamp
+                        long delayTime = 1000;
+
+                        // Calculate the time difference between the current and previous point if possible
+                        if (playbackCurrentIndex > 0) {
+                            long currentTimestamp = trajectoryPoints.get(playbackCurrentIndex).timestamp;
+                            long previousTimestamp = trajectoryPoints.get(playbackCurrentIndex - 1).timestamp;
+                            long timeDifference = currentTimestamp - previousTimestamp;
+                            delayTime = timeDifference;
+                        }
+
+                        playbackCurrentIndex++;
+                        // Use the computed delayTime for the next update
+                        playbackHandler.postDelayed(this, delayTime);
+                    }
+                }
+            }
+        }, 1000);
+    }
+
+    /**
+     * Updates the polyline and UI controls based on the current playback index.
+     * This method extracts the LatLng coordinates from each TimedLatLng.
+     */
+    private void updatePlaybackPolyline(List<TimedLatLng> trajectoryPoints, int pointCount) {
+        List<LatLng> currentPoints = new ArrayList<>();
+        for (int i = 0; i <= pointCount && i < trajectoryPoints.size(); i++) {
+            currentPoints.add(trajectoryPoints.get(i).latLng);
+        }
+        polyline.setPoints(currentPoints);
+        //playbackProgressBar.setProgress(pointCount + 1);
+        playbackSeekBar.setProgress(pointCount);
+        if (!currentPoints.isEmpty()) {
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(currentPoints.get(currentPoints.size() - 1)));
+        }
+    }
+
+    private void pausePlayback() {
+        playbackIsPaused = true;
+        pauseResumeButton.setText("Resume");
+        playbackHandler.removeCallbacksAndMessages(null);
+    }
+
+    private void resumePlayback(List<TimedLatLng> trajectoryPoints) {
+        playbackIsPaused = false;
+        pauseResumeButton.setText("Pause");
+        drawTrajectoryGradually(trajectoryPoints);
+    }
+
+    private void goToBeginning(List<TimedLatLng> trajectoryPoints) {
+        pausePlayback();
+        playbackCurrentIndex = 0;
+        updatePlaybackPolyline(trajectoryPoints, playbackCurrentIndex);
+    }
+
+    private void goToEnd(List<TimedLatLng> trajectoryPoints) {
+        pausePlayback();
+        playbackCurrentIndex = trajectoryPoints.size() - 1;
+        updatePlaybackPolyline(trajectoryPoints, playbackCurrentIndex);
+    }
+    // ---------------
 }
