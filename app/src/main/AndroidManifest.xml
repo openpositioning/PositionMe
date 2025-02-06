@@ -28,9 +28,21 @@
         android:roundIcon="@mipmap/ic_launcher_icon_map_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Cloud">
+        <!-- Google Maps API key injected via manifest placeholder -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="<google.api.key>"/>
+            android:value="${googleMapsKey}" />
+
+        <!-- OpenPositioning API key -->
+        <meta-data
+            android:name="com.openpositioning.api.API_KEY"
+            android:value="${openPositioningApiKey}" />
+
+        <!-- OpenPositioning Master key -->
+        <meta-data
+            android:name="com.openpositioning.master.API_KEY"
+            android:value="${openPositioningMasterKey}" />
+
         <activity
             android:name="com.openpositioning.PositionMe.MainActivity"
             android:exported="true"
