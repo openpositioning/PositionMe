@@ -56,6 +56,6 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
      */
     @Override
     public void onClick(View view) {
-        listenerReference.get().onPositionClicked(getAdapterPosition());
+        listenerReference.get().onDownloadClicked(getAdapterPosition());
     }
 }
