@@ -43,3 +43,4 @@ Indoor poistioning data collection application created for the University of Edi
     F: Add if statement to give accelMagnitude 0 value if it is undefined.
 
 
+### Here is a test for merging and switching branches
