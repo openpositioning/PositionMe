@@ -182,8 +182,10 @@ public class PlaybackFragment extends Fragment {
                                 UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_24))));
                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(start, 19f));
 
+                // Index is set so that it is above the floor map.
                 PolylineOptions polylineOptions = new PolylineOptions()
                         .color(Color.RED)
+                        .zIndex(10f)
                         .add(currentLocation);
                 polyline = gMap.addPolyline(polylineOptions);
                 indoorMapManager.setCurrentLocation(currentLocation);
@@ -455,9 +457,6 @@ public class PlaybackFragment extends Fragment {
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
         elevation.setText("PLAYBACK FRAGMENT");
-        if (orientationMarker != null) {
-            orientationMarker.setRotation((float) Math.toDegrees(sensorFusion.passOrientation()));
-        }
     }
 
     private void plotLines(float[] pdrMoved){
@@ -584,6 +583,7 @@ public class PlaybackFragment extends Fragment {
     /**
      * Updates the polyline and UI controls based on the current playback index.
      * This method extracts the LatLng coordinates from each TimedLatLng.
+     * The orientation is also updated.
      */
     private void updatePlaybackPolyline(List<TimedLatLng> trajectoryPoints, int pointCount) {
         List<LatLng> currentPoints = new ArrayList<>();
@@ -592,6 +592,7 @@ public class PlaybackFragment extends Fragment {
         }
         polyline.setPoints(currentPoints);
 
+
         int progress = getProgressByTime(trajectoryPoints.get(pointCount).timestamp,
                 trajectoryPoints.get(0).timestamp,
                 trajectoryPoints.get(trajectoryPoints.size() - 1).timestamp,
@@ -599,9 +600,54 @@ public class PlaybackFragment extends Fragment {
 
         playbackSeekBar.setProgress(progress);
         if (!currentPoints.isEmpty()) {
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(currentPoints.get(currentPoints.size() - 1)));
+            // Get the current point (the last one in the list)
+            LatLng currentPoint = currentPoints.get(currentPoints.size() - 1);
+
+            // Update the marker’s position if it has changed.
+            if (!currentPoint.equals(orientationMarker.getPosition())) {
+                orientationMarker.setPosition(currentPoint);
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(currentPoint));
+            }
+
+            // Bearing is computed if there is a next point available.
+            if (pointCount < trajectoryPoints.size() - 1) {
+                LatLng nextPoint = trajectoryPoints.get(pointCount + 1).latLng;
+                float newBearing = (float) calculateBearing(currentPoint, nextPoint);
+
+                // Compare the current rotation with the new bearing by rounding to the nearest integer.
+                // Rounding happens to change only when significant difference in bearing has been made.
+                int currentRotationInt = Math.round(orientationMarker.getRotation());
+                int newBearingInt = Math.round(newBearing);
+
+                // Only update the rotation if there is a significant difference. Can avoid flicker.
+                if (currentRotationInt != newBearingInt) {
+                    orientationMarker.setRotation(newBearing);
+                }
+            }
         }
     }
+
+    /**
+     * Calculates the bearing between two LatLng points.
+     * Y and X are derived from spherical laws of sines and cosines.
+     * Bearing is normalized.
+     */
+
+    private double calculateBearing(LatLng from, LatLng to) {
+        double lat1 = Math.toRadians(from.latitude);
+        double lon1 = Math.toRadians(from.longitude);
+        double lat2 = Math.toRadians(to.latitude);
+        double lon2 = Math.toRadians(to.longitude);
+        double dLon = lon2 - lon1;
+        double y = Math.sin(dLon) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+        double bearing = Math.atan2(y, x);
+        bearing = Math.toDegrees(bearing);
+        return (bearing + 360) % 360;
+    }
+
+
+
 
     private void pausePlayback() {
         playbackIsPaused = true;
