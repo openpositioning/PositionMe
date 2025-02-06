@@ -24,6 +24,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.viewitems.TrajDownloadListAdapter;
+import com.openpositioning.PositionMe.viewitems.DownloadClickListener;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -192,23 +193,35 @@ public class FilesFragment extends Fragment implements Observer {
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
-        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
-            // Download the appropriate trajectory instance
-            serverCommunications.downloadTrajectory(position);
-            // Display a pop-up message to direct the user to the download location if necessary.
-            new AlertDialog.Builder(getContext())
-                    .setTitle("File downloaded")
-                    .setMessage("Trajectory downloaded to local storage")
-                    .setPositiveButton(R.string.ok, null)
-                    .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
+
+        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, new DownloadClickListener() {
+            @Override
+            public void onDownloadClicked(int position) {
+                serverCommunications.downloadTrajectory(position);
+                new AlertDialog.Builder(getContext())
+                        .setTitle("File downloaded")
+                        .setMessage("Trajectory downloaded to local storage")
+                        .setPositiveButton(R.string.ok, null)
+                        .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
                             startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-                        }
-                    })
-                    .setIcon(R.drawable.ic_baseline_download_24)
-                    .show();
+                        })
+                        .setIcon(R.drawable.ic_baseline_download_24)
+                        .show();
+            }
+
+            @Override
+            public void onPlaybackClicked(int position) {
+                // Here, we get the trajectory ID or related info from responseItems
+                String trajectoryId = entryList.get(position).get("id");
+
+                // Then we use Navigation to jump to PlaybackFragment, passing this ID
+                FilesFragmentDirections.ActionFilesFragmentToPlaybackFragment action =
+                        FilesFragmentDirections.actionFilesFragmentToPlaybackFragment(trajectoryId);
+
+                Navigation.findNavController(requireView()).navigate(action);
+            }
         });
+
         filesList.setAdapter(listAdapter);
     }
 }

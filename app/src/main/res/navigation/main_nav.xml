@@ -99,6 +99,15 @@
         android:label="fragment_measurements"
         tools:layout="@layout/fragment_measurements" />
     <fragment
+        android:id="@+id/playbackFragment"
+        android:name="com.openpositioning.PositionMe.fragments.PlaybackFragment"
+        android:label="PlaybackFragment"
+        tools:layout="@layout/fragment_playback">
+        <argument
+            android:name="trajectoryId"
+            app:argType="string" />
+    </fragment>
+    <fragment
         android:id="@+id/filesFragment"
         android:name="com.openpositioning.PositionMe.fragments.FilesFragment"
         android:label="fragment_files"
@@ -106,6 +115,13 @@
         <action
             android:id="@+id/action_filesFragment_to_uploadFragment"
             app:destination="@id/uploadFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right"/>
+        <action
+            android:id="@+id/action_filesFragment_to_playbackFragment"
+            app:destination="@id/playbackFragment"
             app:enterAnim="@anim/slide_in_right"
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"

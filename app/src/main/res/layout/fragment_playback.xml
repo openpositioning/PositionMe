@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/replayContainer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Google Map FragmentContainerView -->
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/replayMap"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Top-level ConstraintLayout overlay for UI controls -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- Map type spinner (Hybrid, Normal, Satellite, etc.) -->
+        <Spinner
+            android:id="@+id/mapSwitchSpinner_playback"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="8dp"
+
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <!-- Auto floor switch -->
+        <Switch
+            android:id="@+id/autoFloorSwitch_playback"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AutoFloor"
+            android:layout_marginTop="8dp"
+
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner_playback" />
+
+        <!-- Floor up button -->
+
+        <!-- Floor down button -->
+
+        <!-- Playback progress bar at the very bottom -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorUpButton_playback"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:src="@android:drawable/arrow_up_float"
+
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorDownButton_playback"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:src="@android:drawable/arrow_down_float"
+
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/floorUpButton_playback"
+            app:layout_constraintVertical_bias="0.0" />
+
+        <ProgressBar
+            android:id="@+id/playbackProgressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="0"
+
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+        <!-- Play/Pause button -->
+        <Button
+            android:id="@+id/playPauseButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Play"
+
+            app:layout_constraintBottom_toTopOf="@+id/playbackProgressBar"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <!-- Restart button -->
+        <Button
+            android:id="@+id/restartButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Restart"
+
+            app:layout_constraintBottom_toTopOf="@+id/playbackProgressBar"
+            app:layout_constraintStart_toEndOf="@+id/playPauseButton" />
+
+        <!-- End button -->
+        <Button
+            android:id="@+id/goToEndButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="End"
+
+            app:layout_constraintBottom_toTopOf="@+id/playbackProgressBar"
+            app:layout_constraintStart_toEndOf="@+id/restartButton" />
+
+        <!-- Exit button -->
+        <Button
+            android:id="@+id/exitButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Exit"
+
+            app:layout_constraintBottom_toTopOf="@+id/playbackProgressBar"
+            app:layout_constraintStart_toEndOf="@+id/goToEndButton"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</FrameLayout>

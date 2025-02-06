@@ -255,7 +255,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
         else{
             // Check other permissions if present
-            askStoragePermission();
+            askMotionPermissions();
         }
     }
 
