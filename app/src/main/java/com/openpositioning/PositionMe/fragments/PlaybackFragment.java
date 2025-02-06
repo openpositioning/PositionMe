@@ -109,6 +109,7 @@ public class PlaybackFragment extends Fragment {
 
     private Traj.Trajectory trajectory;
     private List<Traj.Pdr_Sample> pdrSamples;
+    private List<Traj.GNSS_Sample> gnssSamples;
 
     // ----------------------------
     // Fields for playback functionality
@@ -117,6 +118,7 @@ public class PlaybackFragment extends Fragment {
     private boolean playbackIsPaused = false;
     // Instead of a List<LatLng>, we use a List<TimedLatLng> to store timestamps as well.
     private List<TimedLatLng> trajectoryPointsTimed;
+    private List<TimedLatLng> gnssPointsTimed;
     // ----------------------------
 
     // Helper class to hold both a LatLng and its timestamp.
@@ -158,6 +160,7 @@ public class PlaybackFragment extends Fragment {
         // (This assumes that trajectory.getGnssData(0) returns an object with getLatitude() and getLongitude())
         Traj.GNSS_Sample startingSample = trajectory.getGnssData(0);
         start = new LatLng(startingSample.getLatitude(), startingSample.getLongitude());
+
 
         // Initialize map fragment
         SupportMapFragment supportMapFragment = (SupportMapFragment)
@@ -296,6 +299,18 @@ public class PlaybackFragment extends Fragment {
             trajectoryPointsTimed.add(new TimedLatLng(point, sample.getRelativeTimestamp()));
         }
 
+        gnssSamples = trajectory.getGnssDataList();
+
+        gnssPointsTimed = new ArrayList<>();
+        for (Traj.GNSS_Sample sample : gnssSamples) {
+            // Create a LatLng from the sample's latitude and longitude
+            LatLng point = new LatLng(sample.getLatitude(), sample.getLongitude());
+            // Create a TimedLatLng with the point and its relative timestamp, then add it to the list
+            gnssPointsTimed.add(new TimedLatLng(point, sample.getRelativeTimestamp()));
+        }
+
+
+
         // Initialize playback UI elements.
         //playbackProgressBar = getView().findViewById(R.id.playbackProgressBar);
         playbackSeekBar = getView().findViewById(R.id.playbackSeekBar);
@@ -338,23 +353,19 @@ public class PlaybackFragment extends Fragment {
 
         // SeekBar listener to allow user-controlled playback navigation.
         playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            private int getPlaybackIdx(int progress) {
-                long lastTimestamp = trajectoryPointsTimed.get(trajectoryPointsTimed.size() - 1)
-                        .timestamp;
-                long firstTimestamp = trajectoryPointsTimed.get(0).timestamp;
-                double progressRatio = ((double) progress) / trajectoryPointsTimed.size();
-                long targetTimestamp = (long) (progressRatio * (lastTimestamp - firstTimestamp))
-                        + firstTimestamp;
-                return getTrajectoryPointIndex(trajectoryPointsTimed,
-                        targetTimestamp);
-            }
+
+
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    int playbackIdx = getPlaybackIdx(progress);
+                    long targetTimestamp = getTargetTimestamp(progress);
+                    int gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
+                    int playbackIdx = getTrajectoryPointIndex(trajectoryPointsTimed,targetTimestamp);
                     if (playbackIdx >= trajectoryPointsTimed.size()) {
                         return;
                     }
+
+                    plotGnssSamples(gnssIdx);
                     playbackCurrentIndex = playbackIdx;
                     updatePlaybackPolyline(trajectoryPointsTimed, playbackCurrentIndex);
                 }
@@ -368,6 +379,14 @@ public class PlaybackFragment extends Fragment {
                 resumePlayback(trajectoryPointsTimed);
             }
         });
+//        // Schedule plotting of GNSS samples once the map is ready, after a short delay.
+//        new Handler().postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                plotGnssSamples();
+//            }
+//        }, 5000); // Delay in milliseconds (2 seconds)
+
         // ---------------
     }
 
@@ -538,6 +557,11 @@ public class PlaybackFragment extends Fragment {
                             delayTime = timeDifference;
                         }
 
+                        long targetTimestamp = getTargetTimestamp(playbackCurrentIndex);
+                        int gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
+                        plotGnssSamples(gnssIdx);
+
+
                         playbackCurrentIndex++;
                         // Use the computed delayTime for the next update
                         playbackHandler.postDelayed(this, delayTime);
@@ -626,5 +650,72 @@ public class PlaybackFragment extends Fragment {
         playbackCurrentIndex = trajectoryPoints.size() - 1;
         updatePlaybackPolyline(trajectoryPoints, playbackCurrentIndex);
     }
+
+    // Add this helper method to plot GNSS samples as dots on the map.
+//    private void plotGnssSamples(int idx) {
+//        // Check that the map and GNSS samples are available.
+//        if (gMap == null || gnssSamples == null || gnssSamples.isEmpty()) {
+//            return;
+//        }
+//        for (int i =0; i <= idx; i++){
+//            // Assume each sample has getLatitude(), getLongitude(), and getRelativeTimestamp() methods.
+//            LatLng pos = new LatLng(gnssSamples.get(i).getLatitude(), gnssSamples.get(i).getLongitude());
+//
+//            // Option 1: Plot a marker with a dot-like icon.
+//            gMap.addMarker(new MarkerOptions()
+//                    .position(pos)
+//                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW))
+//                    .anchor(0.5f, 0.5f)
+//                    .title("GNSS Sample @" + gnssSamples.get(i).getRelativeTimestamp())
+//                    .visible(true));
+//        }
+//    }
+    private List<Marker> gnssMarkers = new ArrayList<>();
+
+    private void plotGnssSamples(int idx) {
+        // Check that the map and GNSS samples are available.
+        if (gMap == null || gnssSamples == null || gnssSamples.isEmpty()) {
+            return;
+        }
+
+        // Initialize the GNSS markers if they haven't been created already.
+        if (gnssMarkers.isEmpty()) {
+            for (Traj.GNSS_Sample sample : gnssSamples) {
+                // Create the LatLng position from the sample.
+                LatLng pos = new LatLng(sample.getLatitude(), sample.getLongitude());
+                // Create a marker with the desired properties, setting it as not visible initially.
+                Marker marker = gMap.addMarker(new MarkerOptions()
+                        .position(pos)
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW))
+                        .anchor(0.5f, 0.5f)
+                        .title("GNSS Sample @" + sample.getRelativeTimestamp())
+                        .visible(false));
+                gnssMarkers.add(marker);
+            }
+        }
+
+        // Loop through the marker list: show markers for indices <= idx, hide the rest.
+        for (int i = 1; i < gnssMarkers.size(); i++) {
+            if (i <= idx) {
+                gnssMarkers.get(i).setVisible(true);
+            } else {
+                gnssMarkers.get(i).setVisible(false);
+            }
+        }
+    }
+
+    private long getTargetTimestamp(int progress){
+        long lastTimestamp = trajectoryPointsTimed.get(trajectoryPointsTimed.size() - 1)
+                .timestamp;
+        long firstTimestamp = trajectoryPointsTimed.get(0).timestamp;
+        double progressRatio = ((double) progress) / trajectoryPointsTimed.size();
+        long targetTimestamp = (long) (progressRatio * (lastTimestamp - firstTimestamp))
+                + firstTimestamp;
+        return targetTimestamp;
+    }
+
+
+
+
     // ---------------
 }
