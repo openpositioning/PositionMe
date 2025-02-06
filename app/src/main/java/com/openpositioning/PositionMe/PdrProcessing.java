@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.SensorManager;
+import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
@@ -220,14 +221,24 @@ public class PdrProcessing {
      * @return                  float stride length in meters.
      */
     private float weibergMinMax(List<Double> accelMagnitude) {
-        double maxAccel = Collections.max(accelMagnitude);
-        double minAccel = Collections.min(accelMagnitude);
-        float bounce = (float) Math.pow((maxAccel-minAccel), 0.25);
-        if(this.settings.getBoolean("overwrite_constants", false)) {
-            return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
-        }
-        return bounce*K*2;
+
+        if (accelMagnitude.isEmpty()) {
+            Log.w("PdrProcessing", "List is empty in weibergMinMax()");
+            return 0.0f;
+        }else {
+
+
+
+
+            double maxAccel = Collections.max(accelMagnitude);
+            double minAccel = Collections.min(accelMagnitude);
+            float bounce = (float) Math.pow((maxAccel-minAccel), 0.25);
+            if(this.settings.getBoolean("overwrite_constants", false)) {
+                return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
+            }
+            return bounce*K*2;}
     }
+
 
     /**
      * Get the current X and Y coordinates from the PDR processing class.
