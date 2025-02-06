@@ -12,7 +12,7 @@ if (localPropertiesFile.exists()) {
 }
 
 android {
-    namespace ="com.openpositioning.PositionMe" //fix Namespace not specified problem
+    namespace "com.openpositioning.PositionMe" // Fix Namespace not specified problem
     compileSdk 33
 
     defaultConfig {
@@ -25,10 +25,8 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "MAPS_API_KEY",
                 "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
-
         buildConfigField "String", "OPENPOSITIONING_API_KEY",
                 "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
-
         buildConfigField "String", "OPENPOSITIONING_MASTER_KEY",
                 "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
     }
@@ -41,12 +39,9 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-
-
         }
-
-
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -54,21 +49,25 @@ android {
 }
 
 dependencies {
-
     implementation 'androidx.appcompat:appcompat:1.4.1'
-    implementation 'com.google.android.material:material:1.6.0'
+    // Updated Material Components dependency to a version that supports Material 3 design.
+    implementation 'com.google.android.material:material:1.9.0'
+
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.preference:preference:1.2.0'
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
     implementation 'com.android.volley:volley:1.2.1'
+
     testImplementation 'junit:junit:4.+'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+
     implementation 'com.google.protobuf:protobuf-java:3.0.0'
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
     implementation "com.google.protobuf:protobuf-java-util:3.0.0"
     implementation "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava"
     implementation 'com.google.android.gms:play-services-maps:18.1.0'
+
     // Navigation components
     def nav_version = "2.5.3"
     implementation "androidx.navigation:navigation-fragment-ktx:$nav_version"

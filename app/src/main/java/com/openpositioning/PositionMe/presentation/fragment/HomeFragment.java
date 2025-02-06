@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -16,6 +17,7 @@ import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.R;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 // import com.openpositioning.PositionMe.fragments.HomeFragmentDirections;
 
 
@@ -95,16 +97,11 @@ public class HomeFragment extends Fragment {
         start.setEnabled(!PreferenceManager.getDefaultSharedPreferences(getContext())
                 .getBoolean("permanentDeny", false));
         this.start.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Navigate to the {@link StartLocationFragment} using AndroidX Jetpack. Hides the
-             * action bar so the map appears on the full screen.
-             */
             @Override
             public void onClick(View view) {
-                NavDirections action = HomeFragmentDirections.actionHomeFragmentToStartLocationFragment();
-                Navigation.findNavController(view).navigate(action);
-                //Show action bar
+                // Launch RecordingActivity directly
+                Intent intent = new Intent(requireContext(), RecordingActivity.class);
+                startActivity(intent);
                 ((AppCompatActivity)getActivity()).getSupportActionBar().hide();
             }
         });
