@@ -338,10 +338,24 @@ public class PlaybackFragment extends Fragment {
 
         // SeekBar listener to allow user-controlled playback navigation.
         playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            private int getPlaybackIdx(int progress) {
+                long lastTimestamp = trajectoryPointsTimed.get(trajectoryPointsTimed.size() - 1)
+                        .timestamp;
+                long firstTimestamp = trajectoryPointsTimed.get(0).timestamp;
+                double progressRatio = ((double) progress) / trajectoryPointsTimed.size();
+                long targetTimestamp = (long) (progressRatio * (lastTimestamp - firstTimestamp))
+                        + firstTimestamp;
+                return getTrajectoryPointIndex(trajectoryPointsTimed,
+                        targetTimestamp);
+            }
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    playbackCurrentIndex = progress;
+                    int playbackIdx = getPlaybackIdx(progress);
+                    if (playbackIdx >= trajectoryPointsTimed.size()) {
+                        return;
+                    }
+                    playbackCurrentIndex = playbackIdx;
                     updatePlaybackPolyline(trajectoryPointsTimed, playbackCurrentIndex);
                 }
             }
@@ -534,6 +548,40 @@ public class PlaybackFragment extends Fragment {
     }
 
     /**
+     * Returns the trajectory point recorded the closes to the timestamp
+     * @param trajectoryPoints
+     * @param timestampMillis
+     * @return index in trajectoryPoints
+     */
+    private int getTrajectoryPointIndex(final List<TimedLatLng> trajectoryPoints,
+                                        long timestampMillis) {
+        int idx = 0;
+        while (idx < trajectoryPoints.size() &&
+                trajectoryPoints.get(idx).timestamp < timestampMillis) { idx++; }
+
+        if (idx == trajectoryPoints.size()) {
+            return trajectoryPoints.size() - 1;
+        }
+
+        // idx points to the first element with timestamp greater than timestampMillis
+        if (idx > 0) {
+            if (timestampMillis - trajectoryPoints.get(idx - 1).timestamp <
+                    trajectoryPoints.get(idx).timestamp - timestampMillis) {
+                idx--;
+            }
+        }
+
+        return idx;
+    }
+
+    private int getProgressByTime(long timestamp, long minTimestamp, long maxTimestamp, int barSize) {
+        // Between 0 and 1
+        double timeProgress = ((double) timestamp - minTimestamp) / (maxTimestamp - minTimestamp);
+
+        return (int) (timeProgress * barSize);
+    }
+
+    /**
      * Updates the polyline and UI controls based on the current playback index.
      * This method extracts the LatLng coordinates from each TimedLatLng.
      */
@@ -543,8 +591,13 @@ public class PlaybackFragment extends Fragment {
             currentPoints.add(trajectoryPoints.get(i).latLng);
         }
         polyline.setPoints(currentPoints);
-        //playbackProgressBar.setProgress(pointCount + 1);
-        playbackSeekBar.setProgress(pointCount);
+
+        int progress = getProgressByTime(trajectoryPoints.get(pointCount).timestamp,
+                trajectoryPoints.get(0).timestamp,
+                trajectoryPoints.get(trajectoryPoints.size() - 1).timestamp,
+                trajectoryPoints.size());
+
+        playbackSeekBar.setProgress(progress);
         if (!currentPoints.isEmpty()) {
             gMap.moveCamera(CameraUpdateFactory.newLatLng(currentPoints.get(currentPoints.size() - 1)));
         }
