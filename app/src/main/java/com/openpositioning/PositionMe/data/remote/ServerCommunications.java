@@ -4,12 +4,18 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.BuildConfig;
 import com.openpositioning.PositionMe.Traj;
@@ -18,9 +24,13 @@ import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,6 +49,12 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.openpositioning.PositionMe.data.remote.TrajectoryFileHandler;
 /**
  * This class handles communications with the server through HTTPs. The class uses an
  * {@link OkHttpClient} for making requests to the server. The class includes methods for sending
@@ -343,9 +359,17 @@ public class ServerCommunications implements Observable {
                     // Save the received trajectory to a file in the Downloads folder
                     //String storagePath = Environment.getExternalStoragePublicDirectory(Environment
                            // .DIRECTORY_DOWNLOADS).toString();
-                    String storagePath = context.getFilesDir().toString();
+                    //String storagePath = context.getFilesDir().toString();
+                    //change the download path to the app's file directory //CL
+                    String storagePath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).toString();
+                    // using timestamp to create unique file name//cl
+                    long uploadTimestamp = receivedTrajectory.getStartTimestamp();
+                    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
+                    String formattedTime = dateFormat.format(new Date(uploadTimestamp));
+                    File file = new File(storagePath, "trajectory_" + formattedTime + ".txt");
 
-                    File file = new File(storagePath, "received_trajectory.txt");
+
+                    // File file = new File(storagePath, "received_trajectory.txt");
                     try (FileWriter fileWriter = new FileWriter(file)) {
                         fileWriter.write(receivedTrajectoryString);
                         fileWriter.flush();
@@ -359,6 +383,21 @@ public class ServerCommunications implements Observable {
                         zipInputStream.close();
                         inputStream.close();
                     }
+                    // 示例调用//cl
+                    String filePath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/trajectory_20250201_182010.txt";
+                    long searchTimestamp = 177;  //
+                    String TAG = "ServerCommunications";
+                    try {
+                        JsonObject imuData = TrajectoryFileHandler.getSmoothedImuData(filePath, searchTimestamp);
+                        if (imuData != null) {
+                            Log.d(TAG, " IMU Data: " + imuData.toString());
+                        } else {
+                            Log.w(TAG, " No data found for timestamp: " + searchTimestamp);
+                        }
+                    } catch (IOException e) {
+                        Log.e(TAG, " Error reading trajectory file", e);
+                    }
+
                 }
             }
         });
@@ -454,4 +493,7 @@ public class ServerCommunications implements Observable {
             }
         }
     }
+
+
+
 }
