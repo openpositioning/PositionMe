@@ -108,6 +108,7 @@ public class PlaybackFragment extends Fragment {
     private boolean isRed = true;
     private Switch autoFloor;
     private TrajectoryViewModel trajectoryViewModel;
+
     private Traj.Trajectory trajectory;
     private List<Traj.Pdr_Sample> pdrSamples;
     private List<Traj.GNSS_Sample> gnssSamples;
@@ -118,10 +119,12 @@ public class PlaybackFragment extends Fragment {
     private int playbackCurrentIndex = 0;
     private int currentPressureIdx = 0;
     private int gnssIdx = 0;
+    private long playbackCurrentTimestamp = 0;
     private boolean playbackIsPaused = false;
     // Instead of a List<LatLng>, we use a List<TimedLatLng> to store timestamps as well.
     private List<TimedLatLng> trajectoryPointsTimed;
     private List<TimedLatLng> gnssPointsTimed;
+    private final int SEEKBAR_SIZE = 200;
     private List<TimedLatLng> timedAltitude;
     // ----------------------------
 
@@ -304,6 +307,7 @@ public class PlaybackFragment extends Fragment {
             // Create a TimedLatLng instance with the point and its timestamp.
             trajectoryPointsTimed.add(new TimedLatLng(point, sample.getRelativeTimestamp()));
         }
+        playbackCurrentTimestamp = trajectoryPointsTimed.get(0).timestamp;
 
         gnssSamples = trajectory.getGnssDataList();
 
@@ -342,9 +346,7 @@ public class PlaybackFragment extends Fragment {
         goToBeginningButton = getView().findViewById(R.id.goToBeginningButton);
         goToEndButton = getView().findViewById(R.id.goToEndButton);
 
-        // Set max values based on trajectoryPointsTimed size.
-       // playbackProgressBar.setMax(trajectoryPointsTimed.size());
-        playbackSeekBar.setMax(trajectoryPointsTimed.size() - 1);
+        playbackSeekBar.setMax(SEEKBAR_SIZE);
 
         // Start playback (gradually drawing the trajectory on the map).
         drawTrajectoryGradually(trajectoryPointsTimed);
@@ -380,17 +382,19 @@ public class PlaybackFragment extends Fragment {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    long targetTimestamp = getTargetTimestamp(progress);
-                    gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
-                    int playbackIdx = getTrajectoryPointIndex(trajectoryPointsTimed,targetTimestamp);
-                    if (playbackIdx >= trajectoryPointsTimed.size()) {
-                        return;
-                    }
+                    long targetTimestamp = getTargetTimestamp(
+                            progress,
+                            trajectoryPointsTimed.get(0).timestamp,
+                            trajectoryPointsTimed.get(trajectoryPointsTimed.size() - 1).timestamp,
+                            SEEKBAR_SIZE);
+                    int gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
                     plotGnssSamples(gnssIdx);
-                    playbackCurrentIndex = playbackIdx;
+                    playbackCurrentIndex = getPlaybackCurrentIdx(trajectoryPointsTimed, targetTimestamp);
+                    playbackCurrentTimestamp = targetTimestamp;
+                    updatePlaybackPolyline(trajectoryPointsTimed, targetTimestamp);
                     currentPressureIdx = getTrajectoryPointIndex(timedAltitude, targetTimestamp);
-                    currentLocation = trajectoryPointsTimed.get(playbackIdx);
-                    updatePlaybackPolyline(trajectoryPointsTimed, playbackCurrentIndex);
+                    gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
+                    currentLocation = trajectoryPointsTimed.get(playbackCurrentIndex);
                 }
             }
             @Override
@@ -533,31 +537,36 @@ public class PlaybackFragment extends Fragment {
         playbackHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                if (playbackCurrentIndex < trajectoryPoints.size()) {
+                if (playbackCurrentTimestamp
+                        < trajectoryPoints.get(trajectoryPoints.size() - 1).timestamp) {
                     if (!playbackIsPaused) {
-                        // Update the polyline with the current point
-                        updatePlaybackPolyline(trajectoryPoints, playbackCurrentIndex);
+                        updatePlaybackPolyline(trajectoryPoints, playbackCurrentTimestamp);
+                        long startTimestamp = trajectoryPoints.get(0).timestamp;
+                        long lastTimestamp = trajectoryPoints.get(trajectoryPoints.size() - 1)
+                                .timestamp;
 
-                        // Default delay in case there is no previous timestamp
-                        long delayTime = 1000;
-
-                        // Calculate the time difference between the current and previous point if possible
-                        if (playbackCurrentIndex > 0) {
-                            long currentTimestamp = trajectoryPoints.get(playbackCurrentIndex).timestamp;
-                            long previousTimestamp = trajectoryPoints.get(playbackCurrentIndex - 1).timestamp;
-                            long timeDifference = currentTimestamp - previousTimestamp;
-                            delayTime = timeDifference;
-                        }
-
-                        long targetTimestamp = getTargetTimestamp(playbackCurrentIndex);
-                        gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
-                        currentLocation = trajectoryPointsTimed.get(playbackCurrentIndex);
-                        currentPressureIdx = getTrajectoryPointIndex(timedAltitude, targetTimestamp);
+                        int gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, playbackCurrentTimestamp);
                         plotGnssSamples(gnssIdx);
 
-                        playbackCurrentIndex++;
-                        // Use the computed delayTime for the next update
-                        playbackHandler.postDelayed(this, delayTime);
+                        // time until the next seekbar step
+                        long deltaT = (lastTimestamp - startTimestamp) / SEEKBAR_SIZE;
+
+                        if (playbackCurrentIndex < trajectoryPoints.size() - 1) {
+                            long currentTimestamp = trajectoryPoints.get(playbackCurrentIndex).timestamp;
+                            long nextTimestamp = trajectoryPoints.get(playbackCurrentIndex + 1).timestamp;
+
+                            // If the next sample appears sooner than the seekbar's deltaT
+                            if (nextTimestamp - currentTimestamp <= deltaT) {
+                                deltaT = nextTimestamp - currentTimestamp;
+                                playbackCurrentIndex++;
+                            }
+                        currentLocation = trajectoryPointsTimed.get(playbackCurrentIndex);
+                        currentPressureIdx = getTrajectoryPointIndex(timedAltitude, playbackCurrentTimestamp);
+                        plotGnssSamples(gnssIdx);
+                        }
+
+                        playbackCurrentTimestamp += deltaT;
+                        playbackHandler.postDelayed(this, deltaT);
                     }
                 }
             }
@@ -602,24 +611,23 @@ public class PlaybackFragment extends Fragment {
      * This method extracts the LatLng coordinates from each TimedLatLng.
      * The orientation is also updated.
      */
-    private void updatePlaybackPolyline(List<TimedLatLng> trajectoryPoints, int pointCount) {
-        if(pointCount < 0 || pointCount >= trajectoryPoints.size()) {
-            Log.e("PlaybackFragment", "Invalid array access in updatepolyline");
-            return;
-        }
+    private void updatePlaybackPolyline(List<TimedLatLng> trajectoryPoints, long currentTimestamp) {
         List<LatLng> currentPoints = new ArrayList<>();
-        for (int i = 0; i <= pointCount && i < trajectoryPoints.size(); i++) {
+        for (int i = 0;
+             i < trajectoryPoints.size() && trajectoryPoints.get(i).timestamp <= currentTimestamp;
+             i++) {
             currentPoints.add(trajectoryPoints.get(i).latLng);
         }
-        polyline.setPoints(currentPoints);
+
         updateUIandPosition();
 
-        int progress = getProgressByTime(trajectoryPoints.get(pointCount).timestamp,
+        polyline.setPoints(currentPoints);
+        int seekbarProgress = getProgressByTime(
+                currentTimestamp,
                 trajectoryPoints.get(0).timestamp,
                 trajectoryPoints.get(trajectoryPoints.size() - 1).timestamp,
-                trajectoryPoints.size());
-
-        playbackSeekBar.setProgress(progress);
+                SEEKBAR_SIZE);
+        playbackSeekBar.setProgress(seekbarProgress);
         if (!currentPoints.isEmpty()) {
             // Get the current point (the last one in the list)
             LatLng currentPoint = currentPoints.get(currentPoints.size() - 1);
@@ -631,8 +639,8 @@ public class PlaybackFragment extends Fragment {
             }
 
             // Bearing is computed if there is a next point available.
-            if (pointCount < trajectoryPoints.size() - 1) {
-                LatLng nextPoint = trajectoryPoints.get(pointCount + 1).latLng;
+            if (currentPoints.size() < trajectoryPoints.size()) {
+                LatLng nextPoint = trajectoryPoints.get(currentPoints.size()).latLng;
                 float newBearing = (float) calculateBearing(currentPoint, nextPoint);
 
                 // Compare the current rotation with the new bearing by rounding to the nearest integer.
@@ -667,9 +675,6 @@ public class PlaybackFragment extends Fragment {
         return (bearing + 360) % 360;
     }
 
-
-
-
     private void pausePlayback() {
         playbackIsPaused = true;
         pauseResumeButton.setText("Resume");
@@ -685,13 +690,15 @@ public class PlaybackFragment extends Fragment {
     private void goToBeginning(List<TimedLatLng> trajectoryPoints) {
         pausePlayback();
         playbackCurrentIndex = 0;
-        updatePlaybackPolyline(trajectoryPoints, playbackCurrentIndex);
+        playbackCurrentTimestamp = trajectoryPoints.get(0).timestamp;
+        updatePlaybackPolyline(trajectoryPoints, playbackCurrentTimestamp);
     }
 
     private void goToEnd(List<TimedLatLng> trajectoryPoints) {
         pausePlayback();
         playbackCurrentIndex = trajectoryPoints.size() - 1;
-        updatePlaybackPolyline(trajectoryPoints, playbackCurrentIndex);
+        playbackCurrentTimestamp = trajectoryPoints.get(trajectoryPoints.size() - 1).timestamp;
+        updatePlaybackPolyline(trajectoryPoints, playbackCurrentTimestamp);
     }
     private List<Marker> gnssMarkers = new ArrayList<>();
 
@@ -725,12 +732,24 @@ public class PlaybackFragment extends Fragment {
         }
     }
 
-    private long getTargetTimestamp(int progress){
-        long lastTimestamp = trajectoryPointsTimed.get(trajectoryPointsTimed.size() - 1)
-                .timestamp;
-        long firstTimestamp = trajectoryPointsTimed.get(0).timestamp;
-        double progressRatio = ((double) progress) / trajectoryPointsTimed.size();
-        return (long) (progressRatio * (lastTimestamp - firstTimestamp))
-                + firstTimestamp;
+    private long getTargetTimestamp(int progress, long firstTimestamp, long lastTimestamp,
+                                    int seekbarSize){
+        double progressRatio = ((double) progress) / seekbarSize;
+        return (long) (progressRatio * (lastTimestamp - firstTimestamp)) + firstTimestamp;
+    }
+
+    /**
+     * @param trajectoryPoints
+     * @param timestamp
+     * @return integer i such that all timestamps from 0 to i inclusive are less or equal
+     * `timestamp`
+     */
+    private int getPlaybackCurrentIdx(List<TimedLatLng> trajectoryPoints, long timestamp) {
+        int i = 0;
+        while (i < trajectoryPoints.size() && trajectoryPoints.get(i).timestamp <= timestamp) i++;
+        if (i > 0) {
+            i--;
+        }
+        return i;
     }
 }
