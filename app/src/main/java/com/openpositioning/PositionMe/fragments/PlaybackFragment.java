@@ -3,6 +3,8 @@ package com.openpositioning.PositionMe.fragments;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
@@ -85,16 +87,16 @@ public class PlaybackFragment extends Fragment {
     private Handler refreshDataHandler;
 
     // Variables for trajectory/live updates
-    private float distance;
-    private float previousPosX;
-    private float previousPosY;
+    private double distance;
+    private double previousPosX;
+    private double previousPosY;
 
     // Map-related variables
-    private static LatLng start;
+    private static TimedLatLng start;
     private GoogleMap gMap;
     private Spinner switchMapSpinner;
     private Marker orientationMarker;
-    private LatLng currentLocation;
+    private TimedLatLng currentLocation;
     private LatLng nextLocation;
     private Polyline polyline;
     public IndoorMapManager indoorMapManager;
@@ -106,7 +108,6 @@ public class PlaybackFragment extends Fragment {
     private boolean isRed = true;
     private Switch autoFloor;
     private TrajectoryViewModel trajectoryViewModel;
-
     private Traj.Trajectory trajectory;
     private List<Traj.Pdr_Sample> pdrSamples;
     private List<Traj.GNSS_Sample> gnssSamples;
@@ -115,10 +116,12 @@ public class PlaybackFragment extends Fragment {
     // Fields for playback functionality
     private Handler playbackHandler = new Handler();
     private int playbackCurrentIndex = 0;
+    private int currentPressureIdx = 0;
     private boolean playbackIsPaused = false;
     // Instead of a List<LatLng>, we use a List<TimedLatLng> to store timestamps as well.
     private List<TimedLatLng> trajectoryPointsTimed;
     private List<TimedLatLng> gnssPointsTimed;
+    private List<TimedLatLng> timedAltitude;
     // ----------------------------
 
     // Helper class to hold both a LatLng and its timestamp.
@@ -159,7 +162,8 @@ public class PlaybackFragment extends Fragment {
         // Obtain start position from the first GNSS sample of the trajectory.
         // (This assumes that trajectory.getGnssData(0) returns an object with getLatitude() and getLongitude())
         Traj.GNSS_Sample startingSample = trajectory.getGnssData(0);
-        start = new LatLng(startingSample.getLatitude(), startingSample.getLongitude());
+        start = new TimedLatLng(new LatLng(startingSample.getLatitude(), startingSample.getLongitude()),
+                                startingSample.getRelativeTimestamp());
 
 
         // Initialize map fragment
@@ -178,20 +182,20 @@ public class PlaybackFragment extends Fragment {
 
                 // Set start and current location
                 currentLocation = start;
-                orientationMarker = map.addMarker(new MarkerOptions().position(start)
+                orientationMarker = map.addMarker(new MarkerOptions().position(start.latLng)
                         .title("Current Position")
                         .flat(true)
                         .icon(BitmapDescriptorFactory.fromBitmap(
                                 UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_24))));
-                map.moveCamera(CameraUpdateFactory.newLatLngZoom(start, 19f));
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(start.latLng, 19f));
 
                 // Index is set so that it is above the floor map.
                 PolylineOptions polylineOptions = new PolylineOptions()
                         .color(Color.RED)
                         .zIndex(10f)
-                        .add(currentLocation);
+                        .add(currentLocation.latLng);
                 polyline = gMap.addPolyline(polylineOptions);
-                indoorMapManager.setCurrentLocation(currentLocation);
+                indoorMapManager.setCurrentLocation(currentLocation.latLng);
                 indoorMapManager.setIndicationOfIndoorMap();
             }
         });
@@ -257,7 +261,7 @@ public class PlaybackFragment extends Fragment {
                     LatLng gnssLocation = new LatLng(location[0], location[1]);
                     gnssError.setVisibility(View.VISIBLE);
                     gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
-                            UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
+                            UtilFunctions.distanceBetweenPoints(currentLocation.latLng, gnssLocation)));
                     gnssMarker = gMap.addMarker(
                             new MarkerOptions().title("GNSS position")
                                     .position(gnssLocation)
@@ -295,7 +299,7 @@ public class PlaybackFragment extends Fragment {
         pdrSamples = trajectory.getPdrDataList();
         trajectoryPointsTimed = new ArrayList<>();
         for (Traj.Pdr_Sample sample : pdrSamples) {
-            LatLng point = convertRelativeXYToLatLng(start, sample.getX(), sample.getY());
+            LatLng point = convertRelativeXYToLatLng(start.latLng, sample.getX(), sample.getY());
             // Create a TimedLatLng instance with the point and its timestamp.
             trajectoryPointsTimed.add(new TimedLatLng(point, sample.getRelativeTimestamp()));
         }
@@ -308,6 +312,26 @@ public class PlaybackFragment extends Fragment {
             LatLng point = new LatLng(sample.getLatitude(), sample.getLongitude());
             // Create a TimedLatLng with the point and its relative timestamp, then add it to the list
             gnssPointsTimed.add(new TimedLatLng(point, sample.getRelativeTimestamp()));
+        }
+
+        timedAltitude = new ArrayList<>();
+        double initialElevation = 0;
+        List<Traj.Pressure_Sample> pressureSamples = trajectory.getPressureDataList();
+        for (int i = 0; i < trajectory.getPressureDataCount(); i++){
+            double elevation = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE,
+                    pressureSamples.get(i).getPressure());
+            if(i == 0) initialElevation = elevation;
+
+            LatLng altitude = new LatLng(-1, elevation - initialElevation);
+            // TODO: HACK - reuse functions by using longitude of LatLng to store elevation
+            timedAltitude.add(new TimedLatLng(altitude,
+                    pressureSamples.get(i).getRelativeTimestamp()));
+
+
+        }
+
+        for (Traj.Pressure_Sample pressureSample : trajectory.getPressureDataList()){
+
         }
 
         // Initialize playback UI elements.
@@ -363,6 +387,8 @@ public class PlaybackFragment extends Fragment {
                     }
                     plotGnssSamples(gnssIdx);
                     playbackCurrentIndex = playbackIdx;
+                    currentPressureIdx = getTrajectoryPointIndex(timedAltitude, targetTimestamp);
+                    currentLocation = trajectoryPointsTimed.get(playbackIdx);
                     updatePlaybackPolyline(trajectoryPointsTimed, playbackCurrentIndex);
                 }
             }
@@ -424,32 +450,38 @@ public class PlaybackFragment extends Fragment {
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
-            updateUIandPosition();
-            refreshDataHandler.postDelayed(refreshDataTask, 200);
+//            updateUIandPosition();
+//            refreshDataHandler.postDelayed(refreshDataTask, 200);
         }
     };
 
     private void updateUIandPosition(){
-        float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2) + Math.pow(pdrValues[1] - previousPosY, 2));
-        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
-        float[] pdrMoved = {pdrValues[0]-previousPosX, pdrValues[1]-previousPosY};
-        if (pdrMoved[0]!=0 || pdrMoved[1]!=0) {
-            plotLines(pdrMoved);
-        }
+        // TODO: STILL RELIES ON OLD SENSOR FUSION. SEE IF WE CAN RETAIN FUNCTIONALITY WITH OUR NEW IMPLEMENTATION
+//        float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
+//        Traj.Pdr_Sample currentPdrVal = pdrSamples.get(playbackCurrentIndex);
+//        distance += Math.sqrt(Math.pow(currentPdrVal.getX() - previousPosX, 2) +
+//                    Math.pow(currentPdrVal.getY() - previousPosY, 2));
+//        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
+//        float[] pdrMoved = {pdrValues[0]-previousPosX, pdrValues[1]-previousPosY};
+//        if (pdrMoved[0]!=0 || pdrMoved[1]!=0) {
+////            plotLines(pdrMoved);
+//        }
         if (indoorMapManager == null) {
             indoorMapManager = new IndoorMapManager(gMap);
         }
-        if (gnss.isChecked() && gnssMarker != null) {
-            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-            LatLng gnssLocation = new LatLng(location[0], location[1]);
-            gnssError.setVisibility(View.VISIBLE);
-            gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
-                    UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
-            gnssMarker.setPosition(gnssLocation);
-        }
-        indoorMapManager.setCurrentLocation(currentLocation);
-        float elevationVal = sensorFusion.getElevation();
+        // TODO: GNSS CHANGED
+//        if (gnss.isChecked() && gnssMarker != null) {
+//            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+//            LatLng gnssLocation = new LatLng(location[0], location[1]);
+//            gnssError.setVisibility(View.VISIBLE);
+//            gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
+//                    UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
+//            gnssMarker.setPosition(gnssLocation);
+//        }
+        indoorMapManager.setCurrentLocation(currentLocation.latLng);
+        double elevationVal = timedAltitude.get(currentPressureIdx).latLng.longitude;
+        this.elevation.setText(String.format("Elevation: %.2f",elevationVal));
+
         if (indoorMapManager.getIsIndoorMapSet()){
             setFloorButtonVisibility(View.VISIBLE);
             if (autoFloor.isChecked()){
@@ -458,30 +490,29 @@ public class PlaybackFragment extends Fragment {
         } else {
             setFloorButtonVisibility(View.GONE);
         }
-        previousPosX = pdrValues[0];
-        previousPosY = pdrValues[1];
-        elevation.setText("PLAYBACK FRAGMENT");
+//        previousPosX = currentPdrVal.getX();
+//        previousPosY = currentPdrVal.getY();
     }
 
-    private void plotLines(float[] pdrMoved){
-        if (currentLocation != null) {
-            nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
-            try{
-                List<LatLng> pointsMoved = polyline.getPoints();
-                pointsMoved.add(nextLocation);
-                polyline.setPoints(pointsMoved);
-                orientationMarker.setPosition(nextLocation);
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, 19f));
-            } catch (Exception ex){
-                Log.e("PlottingPDR","Exception: " + ex);
-            }
-            currentLocation = nextLocation;
-        } else {
-            float[] location = sensorFusion.getGNSSLatitude(true);
-            currentLocation = new LatLng(location[0], location[1]);
-            nextLocation = currentLocation;
-        }
-    }
+//    private void plotLines(float[] pdrMoved){
+//        if (currentLocation != null) {
+//            nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
+//            try{
+//                List<LatLng> pointsMoved = polyline.getPoints();
+//                pointsMoved.add(nextLocation);
+//                polyline.setPoints(pointsMoved);
+//                orientationMarker.setPosition(nextLocation);
+//                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, 19f));
+//            } catch (Exception ex){
+//                Log.e("PlottingPDR","Exception: " + ex);
+//            }
+//            currentLocation = nextLocation;
+//        } else {
+//            float[] location = sensorFusion.getGNSSLatitude(true);
+//            currentLocation = new LatLng(location[0], location[1]);
+//            nextLocation = currentLocation;
+//        }
+//    }
 
     private void setFloorButtonVisibility(int visibility){
         floorUpButton.setVisibility(visibility);
@@ -501,16 +532,16 @@ public class PlaybackFragment extends Fragment {
 
     @Override
     public void onPause() {
-        refreshDataHandler.removeCallbacks(refreshDataTask);
-        playbackHandler.removeCallbacksAndMessages(null);
+//        refreshDataHandler.removeCallbacks(refreshDataTask);
+//        playbackHandler.removeCallbacksAndMessages(null);
         super.onPause();
     }
 
     @Override
     public void onResume() {
-        if (!settings.getBoolean("split_trajectory", false)) {
-            refreshDataHandler.postDelayed(refreshDataTask, 500);
-        }
+//        if (!settings.getBoolean("split_trajectory", false)) {
+//            refreshDataHandler.postDelayed(refreshDataTask, 500);
+//        }
         super.onResume();
     }
 
@@ -543,6 +574,8 @@ public class PlaybackFragment extends Fragment {
 
                         long targetTimestamp = getTargetTimestamp(playbackCurrentIndex);
                         int gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
+                        currentLocation = trajectoryPointsTimed.get(playbackCurrentIndex);
+                        currentPressureIdx = getTrajectoryPointIndex(timedAltitude, targetTimestamp);
                         plotGnssSamples(gnssIdx);
 
                         playbackCurrentIndex++;
@@ -593,12 +626,16 @@ public class PlaybackFragment extends Fragment {
      * The orientation is also updated.
      */
     private void updatePlaybackPolyline(List<TimedLatLng> trajectoryPoints, int pointCount) {
+        if(pointCount < 0 || pointCount >= trajectoryPoints.size()) {
+            Log.e("PlaybackFragment", "Invalid array access in updatepolyline");
+            return;
+        }
         List<LatLng> currentPoints = new ArrayList<>();
         for (int i = 0; i <= pointCount && i < trajectoryPoints.size(); i++) {
             currentPoints.add(trajectoryPoints.get(i).latLng);
         }
         polyline.setPoints(currentPoints);
-
+        updateUIandPosition();
 
         int progress = getProgressByTime(trajectoryPoints.get(pointCount).timestamp,
                 trajectoryPoints.get(0).timestamp,
@@ -716,8 +753,7 @@ public class PlaybackFragment extends Fragment {
                 .timestamp;
         long firstTimestamp = trajectoryPointsTimed.get(0).timestamp;
         double progressRatio = ((double) progress) / trajectoryPointsTimed.size();
-        long targetTimestamp = (long) (progressRatio * (lastTimestamp - firstTimestamp))
+        return (long) (progressRatio * (lastTimestamp - firstTimestamp))
                 + firstTimestamp;
-        return targetTimestamp;
     }
 }

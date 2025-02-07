@@ -10,6 +10,7 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -238,11 +239,17 @@ public class FilesFragment extends Fragment implements Observer {
                     Traj.Trajectory trajectory
                             = serverCommunications.downloadTrajectory(position).get();
                     trajectoryViewModel.setTrajectory(trajectory);
-                } catch (ExecutionException | InterruptedException e) {
+                    NavDirections action = FilesFragmentDirections.actionFilesFragmentToPlaybackFragment();
+                    Navigation.findNavController(requireView()).navigate(action);
+                }
+                catch (ExecutionException | InterruptedException e) {
                     e.printStackTrace();
                 }
-                NavDirections action = FilesFragmentDirections.actionFilesFragmentToPlaybackFragment();
-                Navigation.findNavController(requireView()).navigate(action);
+                catch (IllegalArgumentException e){
+                    Toast.makeText(requireContext(), e.getMessage(),
+                            Toast.LENGTH_SHORT).show();
+                }
+
 
 
             }
