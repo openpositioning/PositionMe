@@ -50,6 +50,8 @@ public class UploadFragment extends Fragment {
     }
 
 
+
+
     /**
      * {@inheritDoc}
      * Initialises new Server Communication instance with the context, and finds all the files that

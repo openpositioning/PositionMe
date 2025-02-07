@@ -13,7 +13,7 @@ if (localPropertiesFile.exists()) {
 
 android {
     namespace ="com.openpositioning.PositionMe" //fix Namespace not specified problem
-    compileSdk 33
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.openpositioning.PositionMe"
@@ -76,6 +76,7 @@ dependencies {
     implementation 'androidx.preference:preference:1.2.0'
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
     implementation 'com.android.volley:volley:1.2.1'
+    implementation 'androidx.activity:activity:1.10.0'
     testImplementation 'junit:junit:4.+'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'

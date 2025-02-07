@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.viewitems;
 
 import android.content.Context;
+import android.content.Intent;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 import android.widget.Toast;
@@ -9,6 +10,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.fragments.Replay;
 
 import java.io.File;
 import java.util.List;
@@ -73,6 +75,17 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
 
         // Set click listener for the delete button
         holder.deletebutton.setOnClickListener(v -> deleteFileAtPosition(position));
+
+        // 绑定 Replay 按钮
+        holder.replay_button.setOnClickListener(v -> {
+            int adapterPosition = holder.getAdapterPosition();
+            if (adapterPosition != RecyclerView.NO_POSITION) {
+                Intent intent = new Intent(context, Replay.class);
+                intent.putExtra("fileName", uploadItems.get(adapterPosition).getName()); // 传递文件名
+                intent.putExtra("filePath", uploadItems.get(adapterPosition).getAbsolutePath()); // 传递文件路径
+                context.startActivity(intent);
+            }
+        });
 
     }
 
