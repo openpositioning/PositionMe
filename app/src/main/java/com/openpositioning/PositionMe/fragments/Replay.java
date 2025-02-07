@@ -100,8 +100,14 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         }
 
         // 按钮事件
-        playButton.setOnClickListener(v -> startPlayback());
-        fastRewind.setOnClickListener(v -> pausePlayback());
+        playButton.setOnClickListener(v -> {
+            if (isPlaying) {
+                pausePlayback();
+            } else {
+                startPlayback();
+            }
+        });
+        fastRewind.setOnClickListener(v -> fastRewind());
         fastForward.setOnClickListener(v -> fastForward());
 
         // 进度条拖动监听
@@ -126,6 +132,8 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             return insets;
         });
     }
+
+
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
@@ -199,7 +207,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
 
             // 添加起始点标记
             currentMarker = mMap.addMarker(new MarkerOptions().position(trackPoints.get(0)).title("起点"));
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(trackPoints.get(0), 15));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(trackPoints.get(0), 20));
         }
     }
 
@@ -207,6 +215,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     private void startPlayback() {
         if (trackPoints.isEmpty()) return;
         isPlaying = true;
+        playButton.setImageResource(R.drawable.baseline_pause_24);
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -222,6 +231,8 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
 
     private void pausePlayback() {
         isPlaying = false;
+        handler.removeCallbacksAndMessages(null);
+        playButton.setImageResource(R.drawable.baseline_play_arrow_24);
     }
 
     private void fastForward() {
@@ -231,6 +242,15 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             seekBar.setProgress(currentIndex);
         }
     }
+
+    private void fastRewind() {
+        if (currentIndex - 5 >= 0) {
+            currentIndex -= 5;
+            updateMapPosition();
+            seekBar.setProgress(currentIndex);
+        }
+    }
+
 
     private void updateMapPosition() {
         if (mMap != null && currentIndex < trackPoints.size()) {
