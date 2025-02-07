@@ -12,6 +12,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.OptionalDouble;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Processes data recorded in the {@link SensorFusion} class and calculates live PDR estimates.
@@ -220,13 +222,32 @@ public class PdrProcessing {
      * @return                  float stride length in meters.
      */
     private float weibergMinMax(List<Double> accelMagnitude) {
-        double maxAccel = Collections.max(accelMagnitude);
-        double minAccel = Collections.min(accelMagnitude);
-        float bounce = (float) Math.pow((maxAccel-minAccel), 0.25);
-        if(this.settings.getBoolean("overwrite_constants", false)) {
+        // if the list itself is null or empty, return 0 (or return other default values as needed)
+        if (accelMagnitude == null || accelMagnitude.isEmpty()) {
+            return 0f;
+        }
+
+        // filter out null values from the list
+        List<Double> validAccel = accelMagnitude.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        if (validAccel.isEmpty()) {
+            return 0f;
+        }
+
+        // calculate max and min values
+        double maxAccel = Collections.max(validAccel);
+        double minAccel = Collections.min(validAccel);
+
+        // calculate bounce
+        float bounce = (float) Math.pow((maxAccel - minAccel), 0.25);
+
+        // determine which constant to use based on settings
+        if (this.settings.getBoolean("overwrite_constants", false)) {
             return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
         }
-        return bounce*K*2;
+
+        return bounce * K * 2;
     }
 
     /**
