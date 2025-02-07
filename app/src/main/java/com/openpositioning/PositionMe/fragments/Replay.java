@@ -141,7 +141,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             Log.e(TAG, "文件不存在");
         }
 
-
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] data = new byte[(int) file.length()];
             fis.read(data);
@@ -157,11 +156,31 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     // 轨迹转换方法
     private List<LatLng> convertTrajectoryToLatLng(Traj.Trajectory trajectory) {
         List<LatLng> points = new ArrayList<>();
+        // 常量定义
+        double R = 6378137;  // 地球半径（米）
+        double lat0 = 0;
+        double lon0 = 0;
+        if (!trajectory.getGnssDataList().isEmpty()) {
+            Traj.GNSS_Sample firstGnss = trajectory.getGnssDataList().get(0);
+            lat0 = firstGnss.getLatitude();
+            lon0 = firstGnss.getLongitude();
+        }
 
-        for (Traj.GNSS_Sample gnssSample : trajectory.getGnssDataList()) {
-            double latitude = gnssSample.getLatitude();
-            double longitude = gnssSample.getLongitude();
-            points.add(new LatLng(latitude, longitude));
+
+        for (Traj.Pdr_Sample PdrSample : trajectory.getPdrDataList()) {
+
+            double trackX = PdrSample.getX();
+            double trackY = PdrSample.getY();
+
+            double dLat = trackX / R; // 计算纬度增量
+            double dLon = trackY / (R * Math.cos(Math.toRadians(lat0))); // 计算经度增量
+
+            // 计算新经纬度
+            double lat = lat0 + Math.toDegrees(dLat);
+            double lon = lon0 + Math.toDegrees(dLon);
+
+
+            points.add(new LatLng(lat, lon));
         }
 
         return points;
@@ -174,7 +193,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             PolylineOptions polylineOptions = new PolylineOptions()
                     .addAll(trackPoints)
                     .width(10)
-                    .color(0xFF0000FF) // 蓝色轨迹
+                    .color(0xFFFF00FF) // 蓝色轨迹
                     .geodesic(true);
             polyline = mMap.addPolyline(polylineOptions);
 
@@ -195,10 +214,10 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                     updateMapPosition();
                     seekBar.setProgress(currentIndex);
                     currentIndex++;
-                    handler.postDelayed(this, 1000); // 1秒播放一个点
+                    handler.postDelayed(this, 300); // 1秒播放一个点
                 }
             }
-        }, 1000);
+        }, 300);
     }
 
     private void pausePlayback() {
@@ -221,7 +240,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
 
             // Avoid crash if progressText is null
             if (progressText != null) {
-                progressText.setText("进度：" + (currentIndex + 1) + "/" + trackPoints.size());
+                progressText.setText("Progress：" + (currentIndex + 1) + "/" + trackPoints.size());
             } else {
                 Log.e(TAG, "progressText is null! Make sure it is properly initialized in onCreate().");
             }
