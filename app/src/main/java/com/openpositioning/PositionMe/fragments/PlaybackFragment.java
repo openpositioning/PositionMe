@@ -17,6 +17,7 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
@@ -74,7 +75,9 @@ public class PlaybackFragment extends Fragment {
     // Playback control UI components
    // private ProgressBar playbackProgressBar;
     private SeekBar playbackSeekBar;
-    private Button pauseResumeButton;
+
+    // Changed to Image button so that it can show drawable.
+    private ImageButton pauseResumeButton;
     private Button goToBeginningButton;
     private Button goToEndButton;
 
@@ -659,18 +662,19 @@ public class PlaybackFragment extends Fragment {
         return (bearing + 360) % 360;
     }
 
+    // When pausing, show the play drawable.
     private void pausePlayback() {
         playbackIsPaused = true;
-        pauseResumeButton.setText("Resume");
+        pauseResumeButton.setImageResource(R.drawable.ic_play);
         playbackHandler.removeCallbacksAndMessages(null);
     }
 
+    // When resuming, show the resume drawable.
     private void resumePlayback(List<TimedLatLng> trajectoryPoints) {
         playbackIsPaused = false;
-        pauseResumeButton.setText("Pause");
+        pauseResumeButton.setImageResource(R.drawable.ic_pause);
         drawTrajectoryGradually(trajectoryPoints);
     }
-
     private void goToBeginning(List<TimedLatLng> trajectoryPoints) {
         pausePlayback();
         playbackCurrentIndex = 0;
