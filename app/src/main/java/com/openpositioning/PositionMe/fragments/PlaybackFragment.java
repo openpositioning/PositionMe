@@ -379,15 +379,6 @@ public class PlaybackFragment extends Fragment {
                 resumePlayback(trajectoryPointsTimed);
             }
         });
-//        // Schedule plotting of GNSS samples once the map is ready, after a short delay.
-//        new Handler().postDelayed(new Runnable() {
-//            @Override
-//            public void run() {
-//                plotGnssSamples();
-//            }
-//        }, 5000); // Delay in milliseconds (2 seconds)
-
-        // ---------------
     }
 
     /**
@@ -561,7 +552,6 @@ public class PlaybackFragment extends Fragment {
                         int gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
                         plotGnssSamples(gnssIdx);
 
-
                         playbackCurrentIndex++;
                         // Use the computed delayTime for the next update
                         playbackHandler.postDelayed(this, delayTime);
@@ -594,7 +584,6 @@ public class PlaybackFragment extends Fragment {
                 idx--;
             }
         }
-
         return idx;
     }
 
@@ -650,26 +639,6 @@ public class PlaybackFragment extends Fragment {
         playbackCurrentIndex = trajectoryPoints.size() - 1;
         updatePlaybackPolyline(trajectoryPoints, playbackCurrentIndex);
     }
-
-    // Add this helper method to plot GNSS samples as dots on the map.
-//    private void plotGnssSamples(int idx) {
-//        // Check that the map and GNSS samples are available.
-//        if (gMap == null || gnssSamples == null || gnssSamples.isEmpty()) {
-//            return;
-//        }
-//        for (int i =0; i <= idx; i++){
-//            // Assume each sample has getLatitude(), getLongitude(), and getRelativeTimestamp() methods.
-//            LatLng pos = new LatLng(gnssSamples.get(i).getLatitude(), gnssSamples.get(i).getLongitude());
-//
-//            // Option 1: Plot a marker with a dot-like icon.
-//            gMap.addMarker(new MarkerOptions()
-//                    .position(pos)
-//                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW))
-//                    .anchor(0.5f, 0.5f)
-//                    .title("GNSS Sample @" + gnssSamples.get(i).getRelativeTimestamp())
-//                    .visible(true));
-//        }
-//    }
     private List<Marker> gnssMarkers = new ArrayList<>();
 
     private void plotGnssSamples(int idx) {
@@ -713,9 +682,4 @@ public class PlaybackFragment extends Fragment {
                 + firstTimestamp;
         return targetTimestamp;
     }
-
-
-
-
-    // ---------------
 }
