@@ -193,7 +193,6 @@ public class PlaybackFragment extends Fragment {
                 indoorMapManager.setIndicationOfIndoorMap();
             }
         });
-
         return rootView;
     }
 
@@ -309,8 +308,6 @@ public class PlaybackFragment extends Fragment {
             gnssPointsTimed.add(new TimedLatLng(point, sample.getRelativeTimestamp()));
         }
 
-
-
         // Initialize playback UI elements.
         //playbackProgressBar = getView().findViewById(R.id.playbackProgressBar);
         playbackSeekBar = getView().findViewById(R.id.playbackSeekBar);
@@ -353,8 +350,6 @@ public class PlaybackFragment extends Fragment {
 
         // SeekBar listener to allow user-controlled playback navigation.
         playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-
-
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
@@ -364,7 +359,6 @@ public class PlaybackFragment extends Fragment {
                     if (playbackIdx >= trajectoryPointsTimed.size()) {
                         return;
                     }
-
                     plotGnssSamples(gnssIdx);
                     playbackCurrentIndex = playbackIdx;
                     updatePlaybackPolyline(trajectoryPointsTimed, playbackCurrentIndex);
@@ -646,7 +640,6 @@ public class PlaybackFragment extends Fragment {
         if (gMap == null || gnssSamples == null || gnssSamples.isEmpty()) {
             return;
         }
-
         // Initialize the GNSS markers if they haven't been created already.
         if (gnssMarkers.isEmpty()) {
             for (Traj.GNSS_Sample sample : gnssSamples) {
@@ -662,7 +655,6 @@ public class PlaybackFragment extends Fragment {
                 gnssMarkers.add(marker);
             }
         }
-
         // Loop through the marker list: show markers for indices <= idx, hide the rest.
         for (int i = 1; i < gnssMarkers.size(); i++) {
             if (i <= idx) {
