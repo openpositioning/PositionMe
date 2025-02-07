@@ -117,6 +117,7 @@ public class PlaybackFragment extends Fragment {
     private Handler playbackHandler = new Handler();
     private int playbackCurrentIndex = 0;
     private int currentPressureIdx = 0;
+    private int gnssIdx = 0;
     private boolean playbackIsPaused = false;
     // Instead of a List<LatLng>, we use a List<TimedLatLng> to store timestamps as well.
     private List<TimedLatLng> trajectoryPointsTimed;
@@ -380,7 +381,7 @@ public class PlaybackFragment extends Fragment {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
                     long targetTimestamp = getTargetTimestamp(progress);
-                    int gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
+                    gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
                     int playbackIdx = getTrajectoryPointIndex(trajectoryPointsTimed,targetTimestamp);
                     if (playbackIdx >= trajectoryPointsTimed.size()) {
                         return;
@@ -458,26 +459,25 @@ public class PlaybackFragment extends Fragment {
     private void updateUIandPosition(){
         // TODO: STILL RELIES ON OLD SENSOR FUSION. SEE IF WE CAN RETAIN FUNCTIONALITY WITH OUR NEW IMPLEMENTATION
 //        float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
-//        Traj.Pdr_Sample currentPdrVal = pdrSamples.get(playbackCurrentIndex);
-//        distance += Math.sqrt(Math.pow(currentPdrVal.getX() - previousPosX, 2) +
-//                    Math.pow(currentPdrVal.getY() - previousPosY, 2));
-//        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
-//        float[] pdrMoved = {pdrValues[0]-previousPosX, pdrValues[1]-previousPosY};
-//        if (pdrMoved[0]!=0 || pdrMoved[1]!=0) {
-////            plotLines(pdrMoved);
-//        }
+        distance = 0;
+        for (int i = 1; i <= playbackCurrentIndex; i++) {
+            distance += Math.hypot(
+                    pdrSamples.get(i).getX() - pdrSamples.get(i - 1).getX(),
+                    pdrSamples.get(i).getY() - pdrSamples.get(i - 1).getY()
+            );
+        }
+        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
         if (indoorMapManager == null) {
             indoorMapManager = new IndoorMapManager(gMap);
         }
         // TODO: GNSS CHANGED
-//        if (gnss.isChecked() && gnssMarker != null) {
-//            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-//            LatLng gnssLocation = new LatLng(location[0], location[1]);
-//            gnssError.setVisibility(View.VISIBLE);
-//            gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
-//                    UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
-//            gnssMarker.setPosition(gnssLocation);
-//        }
+        if (gnss.isChecked()) {
+            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+            gnssError.setVisibility(View.VISIBLE);
+            gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
+                    UtilFunctions.distanceBetweenPoints(trajectoryPointsTimed.get(playbackCurrentIndex).latLng,
+                            gnssPointsTimed.get(gnssIdx).latLng)));
+        }
         indoorMapManager.setCurrentLocation(currentLocation.latLng);
         double elevationVal = timedAltitude.get(currentPressureIdx).latLng.longitude;
         this.elevation.setText(String.format("Elevation: %.2f",elevationVal));
@@ -490,30 +490,7 @@ public class PlaybackFragment extends Fragment {
         } else {
             setFloorButtonVisibility(View.GONE);
         }
-//        previousPosX = currentPdrVal.getX();
-//        previousPosY = currentPdrVal.getY();
     }
-
-//    private void plotLines(float[] pdrMoved){
-//        if (currentLocation != null) {
-//            nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
-//            try{
-//                List<LatLng> pointsMoved = polyline.getPoints();
-//                pointsMoved.add(nextLocation);
-//                polyline.setPoints(pointsMoved);
-//                orientationMarker.setPosition(nextLocation);
-//                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, 19f));
-//            } catch (Exception ex){
-//                Log.e("PlottingPDR","Exception: " + ex);
-//            }
-//            currentLocation = nextLocation;
-//        } else {
-//            float[] location = sensorFusion.getGNSSLatitude(true);
-//            currentLocation = new LatLng(location[0], location[1]);
-//            nextLocation = currentLocation;
-//        }
-//    }
-
     private void setFloorButtonVisibility(int visibility){
         floorUpButton.setVisibility(visibility);
         floorDownButton.setVisibility(visibility);
@@ -573,7 +550,7 @@ public class PlaybackFragment extends Fragment {
                         }
 
                         long targetTimestamp = getTargetTimestamp(playbackCurrentIndex);
-                        int gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
+                        gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
                         currentLocation = trajectoryPointsTimed.get(playbackCurrentIndex);
                         currentPressureIdx = getTrajectoryPointIndex(timedAltitude, targetTimestamp);
                         plotGnssSamples(gnssIdx);
