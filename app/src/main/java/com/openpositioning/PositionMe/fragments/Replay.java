@@ -161,40 +161,40 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         return null;
     }
 
-    // 轨迹转换方法
+    // Method to convert trajectory to latitude and longitude
     private List<LatLng> convertTrajectoryToLatLng(Traj.Trajectory trajectory) {
         List<LatLng> points = new ArrayList<>();
-        // 常量定义
-        double R = 6378137;  // 地球半径（米）
+
+        // Earth's radius in meters
+        double R = 6378137;
+
+        // Initial latitude and longitude
         double lat0 = 0;
         double lon0 = 0;
+
         if (!trajectory.getGnssDataList().isEmpty()) {
             Traj.GNSS_Sample firstGnss = trajectory.getGnssDataList().get(0);
             lat0 = firstGnss.getLatitude();
             lon0 = firstGnss.getLongitude();
         }
 
-
         for (Traj.Pdr_Sample PdrSample : trajectory.getPdrDataList()) {
+            double trackX = PdrSample.getX();  // Forward displacement (meters)
+            double trackY = PdrSample.getY();  // Side displacement (meters)
 
-            double trackX = PdrSample.getX();
-            double trackY = PdrSample.getY();
+            // Fix coordinate transformation
+            double dLat = trackY / R;  // Latitude should be affected by Y displacement
+            double dLon = trackX / (R * Math.cos(Math.toRadians(lat0)));  // Longitude should be affected by X displacement
 
-            double dLat = trackX / R; // 计算纬度增量
-            double dLon = trackY / (R * Math.cos(Math.toRadians(lat0))); // 计算经度增量
-
-            // 计算新经纬度
+            // Calculate new latitude and longitude
             double lat = lat0 + Math.toDegrees(dLat);
             double lon = lon0 + Math.toDegrees(dLon);
-
 
             points.add(new LatLng(lat, lon));
         }
 
         return points;
     }
-
-
 
     private void drawTrack() {
         if (mMap != null && !trackPoints.isEmpty()) {
