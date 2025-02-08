@@ -47,6 +47,7 @@ import okhttp3.ResponseBody;
  * @author Michal Dvorak
  * @author Mate Stodulka
  */
+//这个用来通信
 public class ServerCommunications implements Observable {
 
     // Application context for handling permissions and devices

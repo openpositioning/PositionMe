@@ -6,6 +6,9 @@ import android.hardware.SensorManager;
 
 import androidx.preference.PreferenceManager;
 
+import android.util.Log;
+
+
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.util.Arrays;
@@ -68,6 +71,9 @@ public class PdrProcessing {
     // Step sum and length aggregation variables
     private float sumStepLength = 0;
     private int stepCount = 0;
+
+    private static final String TAG = "PdrProcessing";
+
     //endregion
 
     /**
@@ -143,10 +149,16 @@ public class PdrProcessing {
 
         // Calculate step length
         if(!useManualStep) {
-            //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
-            // Estimate stride
+            if(accelMagnitudeOvertime == null || accelMagnitudeOvertime.isEmpty()){
+                Log.w(TAG,"AccelMagnitude is null or empty");
+                this.stepLength =0.0f;
+            }
+            else {
+                //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
+                // Estimate stride
 
-            this.stepLength = weibergMinMax(accelMagnitudeOvertime);
+                this.stepLength = weibergMinMax(accelMagnitudeOvertime);
+            }
             // System.err.println("Step Length" + stepLength);
         }
 
@@ -221,6 +233,10 @@ public class PdrProcessing {
      * @return                  float stride length in meters.
      */
     private float weibergMinMax(List<Double> accelMagnitude) {
+    if(accelMagnitude == null || accelMagnitude.isEmpty()) {
+        Log.w(TAG,"AccelMagnitude is null or empty");
+        return 0.0f;
+    }
         double maxAccel = Collections.max(accelMagnitude);
         double minAccel = Collections.min(accelMagnitude);
         float bounce = (float) Math.pow((maxAccel-minAccel), 0.25);
@@ -373,6 +389,9 @@ public class PdrProcessing {
      */
     public float getAverageStepLength(){
         //Calculate average step length
+        if (stepCount == 0) {
+            return 0f;
+        }
         float averageStepLength = sumStepLength/(float) stepCount;
 
         //Reset sum and number of steps
