@@ -68,9 +68,9 @@
                     android:id="@+id/totalTime"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="02:30"
-                    android:textSize="12sp"
-                    android:textColor="@color/black"/>
+                    android:text="00:00"
+                    android:textColor="@color/black"
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <!-- 播放控制按钮 -->
