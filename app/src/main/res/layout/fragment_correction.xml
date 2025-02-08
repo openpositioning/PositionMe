@@ -30,6 +30,7 @@
             android:layout_marginStart="8dp"
             android:layout_marginTop="8dp"
             android:layout_marginEnd="8dp"
+            android:layout_marginBottom="70dp"
             app:cardBackgroundColor="@color/pastelBlue"
             app:cardCornerRadius="10dp"
             app:cardElevation="8dp"
@@ -132,18 +133,19 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintVertical_bias="0.0" />
 
-        <Button
-            android:id="@+id/kcalibutton"
-            android:layout_width="118dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="50dp"
-            android:text="Cal K"
-            app:layout_constraintBottom_toBottomOf="parent"
+        <TextView
+            android:id="@+id/Newkey_View"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#8BC34A"
+            android:textSize="18sp"
+            android:background= "#D3D3D3"
+            app:layout_constraintBottom_toBottomOf="@+id/pathView1"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.921"
+            app:layout_constraintHorizontal_bias="0.498"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="0.114" />
+            app:layout_constraintVertical_bias="0.126" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
