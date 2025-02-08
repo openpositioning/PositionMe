@@ -2,13 +2,18 @@ package com.openpositioning.PositionMe.fragments;
 
 import static android.content.ContentValues.TAG;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.CompoundButton;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
+import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 
@@ -62,6 +67,10 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     // 用於室內地圖顯示的管理器
     private IndoorMapManager indoorMapManager;
 
+    // Added: 用于切换地图类型的 Spinner
+    private Spinner mapTypeSpinner;
+
+    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -81,6 +90,10 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         progressText = findViewById(R.id.currentTime);
         totaltimetext = findViewById(R.id.totalTime);
         switch1 = findViewById(R.id.switch1);  // 請確保 layout 中存在此 Switch 控件
+
+        // Added: 获取 Spinner 控件（确保布局文件中有该控件）
+        mapTypeSpinner = findViewById(R.id.mapTypeSpinner);
+        setupMapTypeSpinner(); // Added: 设置 Spinner 的监听
 
         // 當使用者切換 switch1 時，立即更新路徑顯示模式
         switch1.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -339,7 +352,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             // 格式化時間顯示（mm:ss / mm:ss）
             int seconds = currentTime / 1000;
             int minutes = seconds / 60;
-            seconds = seconds % 60;
+            //seconds = seconds % 60;
             int totalSeconds = totalDuration / 1000;
             int totalMinutes = totalSeconds / 60;
             totalSeconds = totalSeconds % 60;
@@ -348,5 +361,40 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                 totaltimetext.setText(String.format("%02d:%02d", totalMinutes, totalSeconds));
             }
         }
+    }
+
+    // Added: 设置 Spinner 监听以切换地图类型
+    private void setupMapTypeSpinner() {
+        // 使用 ArrayAdapter 从资源文件加载字符串数组（请确保在 res/values/strings.xml 中定义了 map_types 字符数组）
+        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
+                this, R.array.map_types, android.R.layout.simple_spinner_item);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        mapTypeSpinner.setAdapter(adapter);
+        mapTypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (mMap == null) return; // 如果地图未初始化则不处理
+                switch (position) {
+                    case 0:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                        break;
+                    case 1:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+                        break;
+                    case 2:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
+                        break;
+                    default:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                        break;
+                }
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                if (mMap != null) {
+                    mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                }
+            }
+        });
     }
 }

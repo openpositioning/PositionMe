@@ -122,4 +122,11 @@
     <string name="delete_button">Delete</string>
     <string name="replay_button">REPLAY</string>
 
+    <string-array name="map_types">
+        <item>@string/hybrid</item>
+        <item>@string/normal</item>
+        <item>@string/satellite</item>
+    </string-array>
+
+
 </resources>
