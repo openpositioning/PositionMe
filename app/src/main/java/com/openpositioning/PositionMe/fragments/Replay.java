@@ -3,17 +3,10 @@ package com.openpositioning.PositionMe.fragments;
 import static android.content.ContentValues.TAG;
 
 import android.content.Context;
-<<<<<<< Updated upstream
-import android.content.Intent;
-import android.os.Bundle;
-import android.os.Handler;
-import android.util.Log;
-=======
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 import android.widget.CompoundButton;
->>>>>>> Stashed changes
 import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.Switch;
@@ -38,6 +31,7 @@ import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
+import com.openpositioning.PositionMe.IndoorMapManager;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -57,12 +51,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
 
     private SeekBar seekBar;
     private ImageButton playButton, fastRewind, fastForward, gotoStartButton, gotoEndButon;
-<<<<<<< Updated upstream
-    private TextView progressText;
-    private Switch switch1;  // 新增 Switch 用來切換顯示全部軌跡
-    private String filePath;
-
-=======
     private TextView progressText, totaltimetext;
     private Switch switch1; // 用於控制軌跡顯示模式
     private String filePath;
@@ -74,7 +62,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     // 用於室內地圖顯示的管理器
     private IndoorMapManager indoorMapManager;
 
->>>>>>> Stashed changes
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -92,33 +79,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         gotoStartButton = findViewById(R.id.goToStartButton);
         gotoEndButon = findViewById(R.id.goToEndButton);
         progressText = findViewById(R.id.currentTime);
-<<<<<<< Updated upstream
-        switch1 = findViewById(R.id.switch1); // 請確認 layout 中有此 ID 的 Switch
-
-        // 設定 switch1 的監聽器，切換軌跡顯示模式
-        switch1.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (mMap == null || polyline == null || trackPoints.isEmpty()) return;
-            if (isChecked) {
-                // 開啟：直接顯示完整軌跡
-                polyline.setPoints(trackPoints);
-            } else {
-                // 關閉：若正在播放則顯示已播放段落；若未播放則僅顯示起點
-                if (isPlaying && currentIndex > 0) {
-                    polyline.setPoints(new ArrayList<>(trackPoints.subList(0, currentIndex)));
-                } else {
-                    ArrayList<LatLng> startOnly = new ArrayList<>();
-                    startOnly.add(trackPoints.get(0));
-                    polyline.setPoints(startOnly);
-                }
-            }
-        });
-
-        // 初始化 Google Map
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
-        mapFragment.getMapAsync(this);
-
-        // 讀取軌跡資料（protobuf 格式）
-=======
         totaltimetext = findViewById(R.id.totalTime);
         switch1 = findViewById(R.id.switch1);  // 請確保 layout 中存在此 Switch 控件
 
@@ -143,11 +103,11 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         mapFragment.getMapAsync(this);
 
         // 讀取軌跡資料
->>>>>>> Stashed changes
         Traj.Trajectory trajectory = readTrajectoryFromFile(this, filePath);
         if (trajectory != null) {
             trackPoints = convertTrajectoryToLatLng(trajectory);
-            seekBar.setMax(trackPoints.size());
+            totalDuration = trackPoints.size() * playbackSpeed;
+            seekBar.setMax(totalDuration);
         } else {
             Log.e(TAG, "軌跡文件解析失敗！");
         }
@@ -170,17 +130,12 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    currentIndex = progress;
-                    updateMapPosition();
-                    // 如果 switch1 為關閉狀態，也更新 polyline 只顯示播放到的部分
-                    if (!switch1.isChecked() && polyline != null) {
-                        ArrayList<LatLng> playedPoints = new ArrayList<>();
-                        playedPoints.add(trackPoints.get(0));
-                        if (currentIndex > 0) {
-                            playedPoints = new ArrayList<>(trackPoints.subList(0, currentIndex));
-                        }
-                        polyline.setPoints(playedPoints);
+                    currentTime = progress;
+                    currentIndex = currentTime / playbackSpeed;
+                    if (currentIndex >= trackPoints.size()) {
+                        currentIndex = trackPoints.size() - 1;
                     }
+                    updateMapPosition();
                 }
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) { }
@@ -197,15 +152,12 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
-<<<<<<< Updated upstream
-=======
         // 設置地圖類型為混合模式
         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
         // 初始化室內地圖管理器，並在內部請確保覆蓋層的 z-index 設為低於路徑（例如 500）
         indoorMapManager = new IndoorMapManager(mMap);
         indoorMapManager.setIndicationOfIndoorMap();
         // 接著畫出路徑，路徑會以 z-index 1000 顯示在室內覆蓋層之上
->>>>>>> Stashed changes
         drawTrack();
     }
 
@@ -230,13 +182,9 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     // 將軌跡資料轉換為 LatLng 點集合
     private List<LatLng> convertTrajectoryToLatLng(Traj.Trajectory trajectory) {
         List<LatLng> points = new ArrayList<>();
-<<<<<<< Updated upstream
-        double R = 6378137; // 地球半徑（公尺）
-=======
         // 地球半徑（公尺）
         double R = 6378137;
         // 初始經緯度
->>>>>>> Stashed changes
         double lat0 = 0;
         double lon0 = 0;
         if (!trajectory.getGnssDataList().isEmpty()) {
@@ -247,14 +195,9 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         for (Traj.Pdr_Sample pdrSample : trajectory.getPdrDataList()) {
             double trackX = pdrSample.getX();  // 前進位移（公尺）
             double trackY = pdrSample.getY();  // 側向位移（公尺）
-<<<<<<< Updated upstream
-            double dLat = trackY / R;
-            double dLon = trackX / (R * Math.cos(Math.toRadians(lat0)));
-=======
             // 坐標轉換
             double dLat = trackY / R;  // Y 對緯度影響
             double dLon = trackX / (R * Math.cos(Math.toRadians(lat0)));  // X 對經度影響
->>>>>>> Stashed changes
             double lat = lat0 + Math.toDegrees(dLat);
             double lon = lon0 + Math.toDegrees(dLon);
             points.add(new LatLng(lat, lon));
@@ -262,9 +205,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         return points;
     }
 
-<<<<<<< Updated upstream
-    // 畫出軌跡：依據 switch1 的狀態決定初始時繪製全部或僅起點
-=======
     /**
      * 畫出軌跡：
      * 若 switch1 為選中狀態，則顯示完整路徑；
@@ -272,25 +212,11 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
      * 這裡 PolylineOptions 中設定 .zIndex(1000) 確保路徑顯示在室內覆蓋層之上，
      * Marker 設定 .zIndex(1100) 則確保起點標記在路徑上方。
      */
->>>>>>> Stashed changes
     private void drawTrack() {
         if (mMap != null && !trackPoints.isEmpty()) {
             PolylineOptions polylineOptions = new PolylineOptions()
                     .width(10)
                     .color(0xFFFF00FF) // 軌跡顏色
-<<<<<<< Updated upstream
-                    .geodesic(true);
-            if (switch1 != null && switch1.isChecked()) {
-                // 開關打開時，直接顯示完整軌跡
-                polylineOptions.addAll(trackPoints);
-            } else {
-                // 否則僅顯示起點
-                polylineOptions.add(trackPoints.get(0));
-            }
-            polyline = mMap.addPolyline(polylineOptions);
-            // 添加起點標記
-            currentMarker = mMap.addMarker(new MarkerOptions().position(trackPoints.get(0)).title("起點"));
-=======
                     .geodesic(true)
                     .zIndex(1000);    // 設定路徑 z-index 為 1000
             if (switch1 != null && switch1.isChecked()) {
@@ -307,48 +233,35 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                     .position(trackPoints.get(0))
                     .title("起點")
                     .zIndex(1100));
->>>>>>> Stashed changes
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(trackPoints.get(0), 20));
         }
     }
 
-<<<<<<< Updated upstream
-=======
     /**
      * 開始回放：根據時間累加控制進度更新
      */
->>>>>>> Stashed changes
     private void startPlayback() {
         if (trackPoints.isEmpty()) return;
         isPlaying = true;
         playButton.setImageResource(R.drawable.baseline_pause_24);
-
-        // 若 switch1 為關閉狀態，重置 polyline 只顯示起點；如果開啟則已顯示完整軌跡，不用變更
-        if (!switch1.isChecked() && polyline != null) {
-            List<LatLng> currentPath = new ArrayList<>();
-            currentPath.add(trackPoints.get(0));
-            polyline.setPoints(currentPath);
-        }
-
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                if (currentIndex < trackPoints.size() && isPlaying) {
-                    updateMapPosition();
-                    // 若開關為關閉狀態，則逐步更新 polyline 顯示已播放的段落
-                    if (!switch1.isChecked() && polyline != null) {
-                        List<LatLng> points = new ArrayList<>(polyline.getPoints());
-                        points.add(trackPoints.get(currentIndex));
-                        polyline.setPoints(points);
+                if (isPlaying && currentTime < totalDuration) {
+                    currentIndex = currentTime / playbackSpeed;
+                    if (currentIndex >= trackPoints.size()) {
+                        currentIndex = trackPoints.size() - 1;
                     }
-                    seekBar.setProgress(currentIndex);
-                    currentIndex++;
-                    handler.postDelayed(this, 300);  // 每 300 毫秒更新一次
+                    updateMapPosition();
+                    seekBar.setProgress(currentTime);
+                    currentTime += playbackSpeed;
+                    handler.postDelayed(this, playbackSpeed);
                 } else {
-                    pausePlayback();
+                    isPlaying = false;
+                    playButton.setImageResource(R.drawable.baseline_play_arrow_24);
                 }
             }
-        }, 300);
+        }, playbackSpeed);
     }
 
     private void pausePlayback() {
@@ -357,68 +270,43 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         playButton.setImageResource(R.drawable.baseline_play_arrow_24);
     }
 
-<<<<<<< Updated upstream
-=======
     // 快進5秒
->>>>>>> Stashed changes
     private void fastForward() {
-        if (currentIndex + 5 < trackPoints.size()) {
-            currentIndex += 5;
-            updateMapPosition();
-            seekBar.setProgress(currentIndex);
-            // 若 switch1 為關閉狀態，更新已播放的部分
-            if (!switch1.isChecked() && polyline != null) {
-                polyline.setPoints(new ArrayList<>(trackPoints.subList(0, currentIndex)));
-            }
-        } else {
-            gotoEnd();
+        int jumpTime = 5000;
+        currentTime = Math.min(currentTime + jumpTime, totalDuration);
+        currentIndex = currentTime / playbackSpeed;
+        if (currentIndex >= trackPoints.size()) {
+            currentIndex = trackPoints.size() - 1;
         }
+        updateMapPosition();
+        seekBar.setProgress(currentTime);
     }
 
+    // 快退5秒
     private void fastRewind() {
-        if (currentIndex - 5 >= 0) {
-            currentIndex -= 5;
-            updateMapPosition();
-            seekBar.setProgress(currentIndex);
-            if (!switch1.isChecked() && polyline != null) {
-                polyline.setPoints(new ArrayList<>(trackPoints.subList(0, currentIndex)));
-            }
-        } else {
-            gotoStart();
-        }
+        int jumpTime = 5000;
+        currentTime = Math.max(currentTime - jumpTime, 0);
+        currentIndex = currentTime / playbackSpeed;
+        updateMapPosition();
+        seekBar.setProgress(currentTime);
     }
 
-<<<<<<< Updated upstream
-=======
     // 跳轉到起始位置
->>>>>>> Stashed changes
     private void gotoStart() {
+        currentTime = 0;
         currentIndex = 0;
         updateMapPosition();
-        seekBar.setProgress(currentIndex);
-        if (!switch1.isChecked() && polyline != null) {
-            ArrayList<LatLng> startOnly = new ArrayList<>();
-            startOnly.add(trackPoints.get(0));
-            polyline.setPoints(startOnly);
-        }
+        seekBar.setProgress(currentTime);
     }
 
-<<<<<<< Updated upstream
-=======
     // 跳轉到結束位置
->>>>>>> Stashed changes
     private void gotoEnd() {
+        currentTime = totalDuration;
         currentIndex = trackPoints.size() - 1;
         updateMapPosition();
-        seekBar.setProgress(currentIndex);
-        if (!switch1.isChecked() && polyline != null) {
-            // 顯示已播放部分：整個軌跡播放完即只顯示全部已播放段落
-            polyline.setPoints(new ArrayList<>(trackPoints.subList(0, currentIndex + 1)));
-        }
+        seekBar.setProgress(currentTime);
     }
 
-<<<<<<< Updated upstream
-=======
     /**
      * 更新地圖位置：
      * 1. 移動相機並更新 Marker 位置
@@ -426,7 +314,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
      * 3. 更新室內地圖顯示（請確保 IndoorMapManager 內覆蓋層的 z-index 低於 1000）
      * 4. 更新時間顯示
      */
->>>>>>> Stashed changes
     private void updateMapPosition() {
         if (mMap != null && currentIndex < trackPoints.size()) {
             LatLng point = trackPoints.get(currentIndex);
@@ -434,12 +321,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             if (currentMarker != null) {
                 currentMarker.setPosition(point);
             }
-<<<<<<< Updated upstream
-            if (progressText != null) {
-                progressText.setText("Progress：" + (currentIndex + 1) + "/" + trackPoints.size());
-            } else {
-                Log.e(TAG, "progressText is null! 請確認在 onCreate() 中正確初始化。");
-=======
             // 更新室內地圖顯示
             if (indoorMapManager != null) {
                 indoorMapManager.setCurrentLocation(point);
@@ -465,7 +346,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             if (progressText != null) {
                 progressText.setText(String.format("%02d:%02d", minutes, seconds));
                 totaltimetext.setText(String.format("%02d:%02d", totalMinutes, totalSeconds));
->>>>>>> Stashed changes
             }
         }
     }
