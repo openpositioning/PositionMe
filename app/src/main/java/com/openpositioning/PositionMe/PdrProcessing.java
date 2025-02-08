@@ -145,6 +145,7 @@ public class PdrProcessing {
         if(!useManualStep) {
             //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
             // Estimate stride
+
             this.stepLength = weibergMinMax(accelMagnitudeOvertime);
             // System.err.println("Step Length" + stepLength);
         }
