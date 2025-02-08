@@ -47,7 +47,6 @@
             android:id="@+id/backButton"
             android:layout_width="152dp"
             android:layout_height="42dp"
-            android:layout_marginBottom="16dp"
             android:background="@drawable/rounded_button"
             android:text="@string/playback_back"
             android:textSize="14sp"
@@ -60,8 +59,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.498"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/pauseResumeButton"
-            app:layout_constraintVertical_bias="1.0" />
+            app:layout_constraintTop_toBottomOf="@+id/constraintLayout" />
 
         <androidx.cardview.widget.CardView
             android:id="@+id/currentPositionCard"
@@ -146,7 +144,7 @@
                 android:layout_marginStart="350dp"
                 android:layout_marginTop="6dp"
                 android:contentDescription="@string/recording"
-                android:src="@drawable/ic_baseline_red_dot_24" />
+                android:src="@drawable/playback" />
 
         </androidx.cardview.widget.CardView>
 
@@ -220,60 +218,75 @@
 
 
         <!-- Pause/Resume Button -->
-        <SeekBar
-            android:id="@+id/playbackSeekBar"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="88dp"
-            app:layout_constraintBottom_toTopOf="@+id/pauseResumeButton"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.0"
-            app:layout_constraintStart_toStartOf="parent" />
 
         <!-- Go To Beginning Button -->
 
         <!-- Go To End Button -->
 
-        <Button
-            android:id="@+id/pauseResumeButton"
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/constraintLayout"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="548dp"
-            android:text="Pause"
+            android:layout_height="80dp"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="10dp"
+            android:background="@drawable/rounded_transparent_black"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.498"
+            app:layout_constraintHorizontal_bias="0.5"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard"
-            app:layout_constraintVertical_bias="0.0" />
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.89">
 
-        <Button
-            android:id="@+id/goToBeginningButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginBottom="132dp"
-            android:text="Beginning"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/playbackSeekBar"
-            app:layout_constraintVertical_bias="1.0" />
+            <SeekBar
+                android:id="@+id/playbackSeekBar"
+                android:layout_width="379dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintHorizontal_bias="0.533"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.258" />
 
-        <Button
-            android:id="@+id/goToEndButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="30dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="132dp"
-            android:text="End"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.873"
-            app:layout_constraintStart_toEndOf="@+id/goToBeginningButton"
-            app:layout_constraintTop_toBottomOf="@+id/playbackSeekBar" />
+            <ImageButton
+                android:id="@+id/pauseResumeButton"
+                android:layout_width="35dp"
+                android:layout_height="35dp"
+                android:layout_marginTop="3dp"
+                android:background="@null"
+                android:scaleType="fitXY"
+                android:src="@drawable/ic_pause"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/playbackSeekBar"
+                app:layout_constraintVertical_bias="0.0" />
+
+            <Button
+                android:id="@+id/goToBeginningButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Beginning"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/pauseResumeButton"
+                app:layout_constraintHorizontal_bias="0.2"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/playbackSeekBar"
+                app:layout_constraintVertical_bias="0.865" />
+
+            <Button
+                android:id="@+id/goToEndButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="End"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintHorizontal_bias="0.8"
+                app:layout_constraintStart_toEndOf="@+id/pauseResumeButton"
+                app:layout_constraintTop_toBottomOf="@+id/playbackSeekBar"
+                app:layout_constraintVertical_bias="0.865" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
