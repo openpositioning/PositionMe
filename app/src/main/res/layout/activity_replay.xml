@@ -81,28 +81,51 @@
                 android:gravity="center">
 
                 <ImageButton
+                    android:id="@+id/goToStartButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="#00FFFFFF"
+                    android:scaleX="1.5"
+                    android:scaleY="1.5"
+                    app:srcCompat="@drawable/baseline_fast_rewind_24" />
+
+                <ImageButton
                     android:id="@+id/fastRewindButton"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/baseline_fast_rewind_24"
-                    android:tint="@color/black"/>
+                    android:src="@drawable/baseline_replay_5_24"
+                    android:tint="@color/black" />
 
                 <ImageButton
                     android:id="@+id/playPauseButton"
                     android:layout_width="64dp"
                     android:layout_height="64dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
+                    android:scaleX="1.5"
+                    android:scaleY="1.5"
                     android:src="@drawable/baseline_play_arrow_24"
-                    android:tint="@color/black"/>
+                    android:tint="@color/black" />
 
                 <ImageButton
                     android:id="@+id/fastForwardButton"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/baseline_fast_forward_24"
-                    android:tint="@color/black"/>
+                    android:src="@drawable/baseline_forward_5_24"
+                    android:tint="@color/black" />
+
+                <ImageButton
+                    android:id="@+id/goToEndButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="#00FFFFFF"
+                    android:scaleX="1.5"
+                    android:scaleY="1.5"
+                    app:srcCompat="@drawable/baseline_fast_forward_24" />
+
             </LinearLayout>
         </LinearLayout>
     </androidx.cardview.widget.CardView>

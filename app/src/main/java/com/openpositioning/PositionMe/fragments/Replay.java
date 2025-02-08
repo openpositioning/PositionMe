@@ -53,7 +53,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     private Handler handler = new Handler();
 
     private SeekBar seekBar;
-    private ImageButton playButton, fastRewind, fastForward;
+    private ImageButton playButton, fastRewind, fastForward, gotoStartButton, gotoEndButon;
     private TextView progressText;
     private String filePath;
 
@@ -83,6 +83,8 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         playButton = findViewById(R.id.playPauseButton);
         fastRewind = findViewById(R.id.fastRewindButton);
         fastForward = findViewById(R.id.fastForwardButton);
+        gotoStartButton = findViewById(R.id.goToStartButton);
+        gotoEndButon = findViewById(R.id.goToEndButton);
         progressText = findViewById(R.id.currentTime);
 
 
@@ -109,6 +111,8 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         });
         fastRewind.setOnClickListener(v -> fastRewind());
         fastForward.setOnClickListener(v -> fastForward());
+        gotoStartButton.setOnClickListener(v -> gotoStart());
+        gotoEndButon.setOnClickListener(v -> gotoEnd());
 
         // 进度条拖动监听
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -240,6 +244,8 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             currentIndex += 5;
             updateMapPosition();
             seekBar.setProgress(currentIndex);
+        } else {
+            gotoEnd();
         }
     }
 
@@ -248,7 +254,22 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             currentIndex -= 5;
             updateMapPosition();
             seekBar.setProgress(currentIndex);
+        } else {
+            gotoStart();
         }
+    }
+
+    private void gotoStart() {
+        currentIndex = 0;
+        updateMapPosition();
+        seekBar.setProgress(currentIndex);
+
+    }
+
+    private void gotoEnd() {
+        currentIndex = trackPoints.size() - 1;
+        updateMapPosition();
+        seekBar.setProgress(currentIndex);
     }
 
 
