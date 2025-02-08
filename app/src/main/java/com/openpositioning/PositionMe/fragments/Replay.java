@@ -144,8 +144,11 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
+        // set the map type to hybrid
+        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
         // 初始化室内地图管理器（IndoorMapManager），将在播放过程中根据当前位置显示室内地图覆盖层
         indoorMapManager = new IndoorMapManager(mMap);
+        indoorMapManager.setIndicationOfIndoorMap();
         drawTrack();
     }
 
