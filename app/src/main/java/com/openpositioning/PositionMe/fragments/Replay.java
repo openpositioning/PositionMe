@@ -33,6 +33,7 @@ import com.google.ar.core.Point;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
+import com.openpositioning.PositionMe.IndoorMapManager;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -60,6 +61,9 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     private int totalDuration = 0; // 轨迹总时长（ms）
     private int playbackSpeed = 300; // 每个点的播放间隔（ms）
     private int currentTime = 0; // 当前回放时间（ms）
+
+    // 用于室内地图显示的管理器
+    private IndoorMapManager indoorMapManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -140,6 +144,8 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
+        // 初始化室内地图管理器（IndoorMapManager），将在播放过程中根据当前位置显示室内地图覆盖层
+        indoorMapManager = new IndoorMapManager(mMap);
         drawTrack();
     }
 
@@ -290,6 +296,10 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             mMap.moveCamera(CameraUpdateFactory.newLatLng(point));
             if (currentMarker != null) {
                 currentMarker.setPosition(point);
+            }
+            // Modified: 更新室内地图显示，将当前回放位置传给 IndoorMapManager
+            if (indoorMapManager != null) {
+                indoorMapManager.setCurrentLocation(point);
             }
             // 格式化时间显示（mm:ss / mm:ss）
             int seconds = currentTime / 1000;
