@@ -54,5 +54,12 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
     @Override
     public void onClick(View view) {
         listenerReference.get().onPositionClicked(getAdapterPosition());
+        DownloadClickListener listener = listenerReference.get();
+        if (listener != null) {
+            listener.onPositionClicked(getAdapterPosition());
+            System.out.println("✅ Click detected at position: " + getAdapterPosition());
+        } else {
+            System.err.println("❌ Listener reference is null.");
+        }
     }
 }
