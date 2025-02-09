@@ -3,10 +3,10 @@ package com.openpositioning.PositionMe.fragments;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -16,7 +16,6 @@ import android.view.animation.LinearInterpolator;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
@@ -49,16 +48,12 @@ import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.UtilFunctions;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
-import com.openpositioning.PositionMe.sensors.SensorTypes;
-
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * A Fragment that not only shows the live recording but also integrates playback controls
  * (play bar, seek bar, pause/resume, go to beginning/end) to replay the recorded trajectory.
- *
  * In this version, we embed the timestamp from each PDR sample into the trajectory points list
  * by using the TimedLatLng helper class.
  */
@@ -81,30 +76,23 @@ public class PlaybackFragment extends Fragment {
     private Button goToBeginningButton;
     private Button goToEndButton;
 
-    // App settings and sensor fusion
     private SharedPreferences settings;
-    private SensorFusion sensorFusion;
     private CountDownTimer autoStop;
-    private Handler refreshDataHandler;
 
     // Variables for trajectory/live updates
-    private float distance;
-    private float previousPosX;
-    private float previousPosY;
+    private double distance;
 
     // Map-related variables
-    private static LatLng start;
+    private static TimedLatLng start;
     private GoogleMap gMap;
     private Spinner switchMapSpinner;
     private Marker orientationMarker;
-    private LatLng currentLocation;
-    private LatLng nextLocation;
+    private TimedLatLng currentLocation;
     private Polyline polyline;
     public IndoorMapManager indoorMapManager;
     public FloatingActionButton floorUpButton;
     public FloatingActionButton floorDownButton;
     private Switch gnss;
-    private Marker gnssMarker;
     private Button switchColor;
     private boolean isRed = true;
     private Switch autoFloor;
@@ -114,16 +102,22 @@ public class PlaybackFragment extends Fragment {
     private List<Traj.Pdr_Sample> pdrSamples;
     private List<Traj.GNSS_Sample> gnssSamples;
 
+    private List<Marker> gnssMarkers = new ArrayList<>();
+
+
     // ----------------------------
     // Fields for playback functionality
     private Handler playbackHandler = new Handler();
     private int playbackCurrentIndex = 0;
+    private int currentPressureIdx = 0;
+    private int gnssIdx = 0;
     private long playbackCurrentTimestamp = 0;
     private boolean playbackIsPaused = false;
     // Instead of a List<LatLng>, we use a List<TimedLatLng> to store timestamps as well.
     private List<TimedLatLng> trajectoryPointsTimed;
     private List<TimedLatLng> gnssPointsTimed;
-    private final int SEEKBAR_SIZE = 200;
+    private final int SEEKBAR_SIZE = 2000;
+    private List<TimedLatLng> timedAltitude;
     // ----------------------------
 
     // Helper class to hold both a LatLng and its timestamp.
@@ -144,10 +138,8 @@ public class PlaybackFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        sensorFusion = SensorFusion.getInstance();
         Context context = getActivity();
         settings = PreferenceManager.getDefaultSharedPreferences(context);
-        refreshDataHandler = new Handler();
     }
 
     @Override
@@ -159,12 +151,12 @@ public class PlaybackFragment extends Fragment {
         // Inflate the layout for this fragment (ensure it contains the playback UI elements)
         View rootView = inflater.inflate(R.layout.fragment_playback, container, false);
         ((AppCompatActivity)getActivity()).getSupportActionBar().hide();
-        getActivity().setTitle("Recording...");
 
         // Obtain start position from the first GNSS sample of the trajectory.
         // (This assumes that trajectory.getGnssData(0) returns an object with getLatitude() and getLongitude())
         Traj.GNSS_Sample startingSample = trajectory.getGnssData(0);
-        start = new LatLng(startingSample.getLatitude(), startingSample.getLongitude());
+        start = new TimedLatLng(new LatLng(startingSample.getLatitude(), startingSample.getLongitude()),
+                                startingSample.getRelativeTimestamp());
 
 
         // Initialize map fragment
@@ -183,20 +175,20 @@ public class PlaybackFragment extends Fragment {
 
                 // Set start and current location
                 currentLocation = start;
-                orientationMarker = map.addMarker(new MarkerOptions().position(start)
+                orientationMarker = map.addMarker(new MarkerOptions().position(start.latLng)
                         .title("Current Position")
                         .flat(true)
                         .icon(BitmapDescriptorFactory.fromBitmap(
                                 UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_24))));
-                map.moveCamera(CameraUpdateFactory.newLatLngZoom(start, 19f));
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(start.latLng, 19f));
 
                 // Index is set so that it is above the floor map.
                 PolylineOptions polylineOptions = new PolylineOptions()
                         .color(Color.RED)
                         .zIndex(10f)
-                        .add(currentLocation);
+                        .add(currentLocation.latLng);
                 polyline = gMap.addPolyline(polylineOptions);
-                indoorMapManager.setCurrentLocation(currentLocation);
+                indoorMapManager.setCurrentLocation(currentLocation.latLng);
                 indoorMapManager.setIndicationOfIndoorMap();
             }
         });
@@ -215,16 +207,12 @@ public class PlaybackFragment extends Fragment {
         gnssError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
-        distance = 0f;
-        previousPosX = 0f;
-        previousPosY = 0f;
 
         backButton = getView().findViewById(R.id.backButton);
         backButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 if(autoStop != null) autoStop.cancel();
-                sensorFusion.stopRecording();
                 NavDirections action = PlaybackFragmentDirections.actionPlaybackFragmentToFilesFragment();
                 Navigation.findNavController(view).navigate(action);
             }
@@ -254,27 +242,6 @@ public class PlaybackFragment extends Fragment {
         });
 
         gnss = getView().findViewById(R.id.gnssSwitch);
-        gnss.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
-                if (isChecked) {
-                    float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-                    LatLng gnssLocation = new LatLng(location[0], location[1]);
-                    gnssError.setVisibility(View.VISIBLE);
-                    gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
-                            UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
-                    gnssMarker = gMap.addMarker(
-                            new MarkerOptions().title("GNSS position")
-                                    .position(gnssLocation)
-                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-                } else {
-                    if (gnssMarker != null) {
-                        gnssMarker.remove();
-                    }
-                    gnssError.setVisibility(View.GONE);
-                }
-            }
-        });
 
         switchColor = getView().findViewById(R.id.lineColorButton);
         switchColor.setOnClickListener(new View.OnClickListener() {
@@ -300,7 +267,7 @@ public class PlaybackFragment extends Fragment {
         pdrSamples = trajectory.getPdrDataList();
         trajectoryPointsTimed = new ArrayList<>();
         for (Traj.Pdr_Sample sample : pdrSamples) {
-            LatLng point = convertRelativeXYToLatLng(start, sample.getX(), sample.getY());
+            LatLng point = convertRelativeXYToLatLng(start.latLng, sample.getX(), sample.getY());
             // Create a TimedLatLng instance with the point and its timestamp.
             trajectoryPointsTimed.add(new TimedLatLng(point, sample.getRelativeTimestamp()));
         }
@@ -316,6 +283,22 @@ public class PlaybackFragment extends Fragment {
             gnssPointsTimed.add(new TimedLatLng(point, sample.getRelativeTimestamp()));
         }
 
+        timedAltitude = new ArrayList<>();
+        double initialElevation = 0;
+        List<Traj.Pressure_Sample> pressureSamples = trajectory.getPressureDataList();
+        for (int i = 0; i < trajectory.getPressureDataCount(); i++){
+            double elevation = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE,
+                    pressureSamples.get(i).getPressure());
+            if(i == 0) initialElevation = elevation;
+
+            LatLng altitude = new LatLng(-1, elevation - initialElevation);
+            // TODO: HACK - reuse functions by using longitude of LatLng to store elevation
+            timedAltitude.add(new TimedLatLng(altitude,
+                    pressureSamples.get(i).getRelativeTimestamp()));
+
+
+        }
+
         // Initialize playback UI elements.
         //playbackProgressBar = getView().findViewById(R.id.playbackProgressBar);
         playbackSeekBar = getView().findViewById(R.id.playbackSeekBar);
@@ -329,30 +312,17 @@ public class PlaybackFragment extends Fragment {
         drawTrajectoryGradually(trajectoryPointsTimed);
 
         // Set up pause/resume button.
-        pauseResumeButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (playbackIsPaused) {
-                    resumePlayback(trajectoryPointsTimed);
-                } else {
-                    pausePlayback();
-                }
+        pauseResumeButton.setOnClickListener(v -> {
+            if (playbackIsPaused) {
+                resumePlayback(trajectoryPointsTimed);
+            } else {
+                pausePlayback();
             }
         });
 
         // Set up "Go to Beginning" and "Go to End" buttons.
-        goToBeginningButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                goToBeginning(trajectoryPointsTimed);
-            }
-        });
-        goToEndButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                goToEnd(trajectoryPointsTimed);
-            }
-        });
+        goToBeginningButton.setOnClickListener(v -> goToBeginning(trajectoryPointsTimed));
+        goToEndButton.setOnClickListener(v -> goToEnd(trajectoryPointsTimed));
 
         // SeekBar listener to allow user-controlled playback navigation.
         playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -364,11 +334,10 @@ public class PlaybackFragment extends Fragment {
                             trajectoryPointsTimed.get(0).timestamp,
                             trajectoryPointsTimed.get(trajectoryPointsTimed.size() - 1).timestamp,
                             SEEKBAR_SIZE);
-                    int gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, targetTimestamp);
-                    plotGnssSamples(gnssIdx);
                     playbackCurrentIndex = getPlaybackCurrentIdx(trajectoryPointsTimed, targetTimestamp);
                     playbackCurrentTimestamp = targetTimestamp;
                     updatePlaybackPolyline(trajectoryPointsTimed, targetTimestamp);
+                    currentLocation = trajectoryPointsTimed.get(playbackCurrentIndex);
                 }
             }
             @Override
@@ -426,68 +395,6 @@ public class PlaybackFragment extends Fragment {
         });
     }
 
-    private final Runnable refreshDataTask = new Runnable() {
-        @Override
-        public void run() {
-            updateUIandPosition();
-            refreshDataHandler.postDelayed(refreshDataTask, 200);
-        }
-    };
-
-    private void updateUIandPosition(){
-        float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2) + Math.pow(pdrValues[1] - previousPosY, 2));
-        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
-        float[] pdrMoved = {pdrValues[0]-previousPosX, pdrValues[1]-previousPosY};
-        if (pdrMoved[0]!=0 || pdrMoved[1]!=0) {
-            plotLines(pdrMoved);
-        }
-        if (indoorMapManager == null) {
-            indoorMapManager = new IndoorMapManager(gMap);
-        }
-        if (gnss.isChecked() && gnssMarker != null) {
-            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-            LatLng gnssLocation = new LatLng(location[0], location[1]);
-            gnssError.setVisibility(View.VISIBLE);
-            gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
-                    UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
-            gnssMarker.setPosition(gnssLocation);
-        }
-        indoorMapManager.setCurrentLocation(currentLocation);
-        float elevationVal = sensorFusion.getElevation();
-        if (indoorMapManager.getIsIndoorMapSet()){
-            setFloorButtonVisibility(View.VISIBLE);
-            if (autoFloor.isChecked()){
-                indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight()), true);
-            }
-        } else {
-            setFloorButtonVisibility(View.GONE);
-        }
-        previousPosX = pdrValues[0];
-        previousPosY = pdrValues[1];
-        elevation.setText("PLAYBACK FRAGMENT");
-    }
-
-    private void plotLines(float[] pdrMoved){
-        if (currentLocation != null) {
-            nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
-            try{
-                List<LatLng> pointsMoved = polyline.getPoints();
-                pointsMoved.add(nextLocation);
-                polyline.setPoints(pointsMoved);
-                orientationMarker.setPosition(nextLocation);
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, 19f));
-            } catch (Exception ex){
-                Log.e("PlottingPDR","Exception: " + ex);
-            }
-            currentLocation = nextLocation;
-        } else {
-            float[] location = sensorFusion.getGNSSLatitude(true);
-            currentLocation = new LatLng(location[0], location[1]);
-            nextLocation = currentLocation;
-        }
-    }
-
     private void setFloorButtonVisibility(int visibility){
         floorUpButton.setVisibility(visibility);
         floorDownButton.setVisibility(visibility);
@@ -506,22 +413,45 @@ public class PlaybackFragment extends Fragment {
 
     @Override
     public void onPause() {
-        refreshDataHandler.removeCallbacks(refreshDataTask);
+        // Necessary to prevent the code from trying to continue the replay!
         playbackHandler.removeCallbacksAndMessages(null);
         super.onPause();
     }
 
     @Override
     public void onResume() {
-        if (!settings.getBoolean("split_trajectory", false)) {
-            refreshDataHandler.postDelayed(refreshDataTask, 500);
-        }
         super.onResume();
     }
 
+
+    // When pausing, show the play drawable.
+    private void pausePlayback() {
+        playbackIsPaused = true;
+        pauseResumeButton.setImageResource(R.drawable.ic_play);
+        playbackHandler.removeCallbacksAndMessages(null);
+    }
+
+    // When resuming, show the resume drawable.
+    private void resumePlayback(List<TimedLatLng> trajectoryPoints) {
+        playbackIsPaused = false;
+        pauseResumeButton.setImageResource(R.drawable.ic_pause);
+        drawTrajectoryGradually(trajectoryPoints);
+    }
+    private void goToBeginning(List<TimedLatLng> trajectoryPoints) {
+        pausePlayback();
+        playbackCurrentIndex = 0;
+        playbackCurrentTimestamp = trajectoryPoints.get(0).timestamp;
+        updatePlaybackPolyline(trajectoryPoints, playbackCurrentTimestamp);
+    }
+
+    private void goToEnd(List<TimedLatLng> trajectoryPoints) {
+        pausePlayback();
+        playbackCurrentIndex = trajectoryPoints.size() - 1;
+        playbackCurrentTimestamp = trajectoryPoints.get(trajectoryPoints.size() - 1).timestamp;
+        updatePlaybackPolyline(trajectoryPoints, playbackCurrentTimestamp);
+    }
     // ---------------
     // Playback functionality methods:
-
     /**
      * Gradually draws the playback trajectory by updating the polyline one point at a time.
      * @param trajectoryPoints The full list of TimedLatLng points to be drawn.
@@ -533,13 +463,11 @@ public class PlaybackFragment extends Fragment {
                 if (playbackCurrentTimestamp
                         < trajectoryPoints.get(trajectoryPoints.size() - 1).timestamp) {
                     if (!playbackIsPaused) {
+                        playbackCurrentIndex = getPlaybackCurrentIdx(trajectoryPointsTimed, playbackCurrentTimestamp);
                         updatePlaybackPolyline(trajectoryPoints, playbackCurrentTimestamp);
                         long startTimestamp = trajectoryPoints.get(0).timestamp;
                         long lastTimestamp = trajectoryPoints.get(trajectoryPoints.size() - 1)
                                 .timestamp;
-
-                        int gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, playbackCurrentTimestamp);
-                        plotGnssSamples(gnssIdx);
 
                         // time until the next seekbar step
                         long deltaT = (lastTimestamp - startTimestamp) / SEEKBAR_SIZE;
@@ -553,8 +481,8 @@ public class PlaybackFragment extends Fragment {
                                 deltaT = nextTimestamp - currentTimestamp;
                                 playbackCurrentIndex++;
                             }
+                        currentLocation = trajectoryPointsTimed.get(playbackCurrentIndex);
                         }
-
                         playbackCurrentTimestamp += deltaT;
                         playbackHandler.postDelayed(this, deltaT);
                     }
@@ -589,13 +517,30 @@ public class PlaybackFragment extends Fragment {
         return idx;
     }
 
-    private int getProgressByTime(long timestamp, long minTimestamp, long maxTimestamp, int barSize) {
+    private int getProgressByTime(long timestamp, long minTimestamp, long maxTimestamp, final int barSize) {
         // Between 0 and 1
         double timeProgress = ((double) timestamp - minTimestamp) / (maxTimestamp - minTimestamp);
 
         return (int) (timeProgress * barSize);
     }
 
+    /**
+     * Calculates the bearing between two LatLng points.
+     * Y and X are derived from spherical laws of sines and cosines.
+     * Bearing is normalized.
+     */
+    private double calculateBearing(LatLng from, LatLng to) {
+        double lat1 = Math.toRadians(from.latitude);
+        double lon1 = Math.toRadians(from.longitude);
+        double lat2 = Math.toRadians(to.latitude);
+        double lon2 = Math.toRadians(to.longitude);
+        double dLon = lon2 - lon1;
+        double y = Math.sin(dLon) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+        double bearing = Math.atan2(y, x);
+        bearing = Math.toDegrees(bearing);
+        return (bearing + 360) % 360;
+    }
     /**
      * Updates the polyline and UI controls based on the current playback index.
      * This method extracts the LatLng coordinates from each TimedLatLng.
@@ -608,6 +553,13 @@ public class PlaybackFragment extends Fragment {
              i++) {
             currentPoints.add(trajectoryPoints.get(i).latLng);
         }
+        // Update UI, position and GNSS data
+        updateUIandPosition();
+        gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, currentTimestamp);
+        plotGnssSamples(gnssIdx);
+        currentPressureIdx = getTrajectoryPointIndex(timedAltitude, currentTimestamp);
+
+
         polyline.setPoints(currentPoints);
         int seekbarProgress = getProgressByTime(
                 currentTimestamp,
@@ -642,54 +594,37 @@ public class PlaybackFragment extends Fragment {
             }
         }
     }
+    private void updateUIandPosition(){
+        distance = 0;
+        for (int i = 1; i <= playbackCurrentIndex; i++) {
+            distance += Math.hypot(
+                    pdrSamples.get(i).getX() - pdrSamples.get(i - 1).getX(),
+                    pdrSamples.get(i).getY() - pdrSamples.get(i - 1).getY()
+            );
+        }
+        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
+        if (indoorMapManager == null) {
+            indoorMapManager = new IndoorMapManager(gMap);
+        }
+        if (gnss.isChecked()) {
+            gnssError.setVisibility(View.VISIBLE);
+            gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
+                    UtilFunctions.distanceBetweenPoints(trajectoryPointsTimed.get(playbackCurrentIndex).latLng,
+                            gnssPointsTimed.get(gnssIdx).latLng)));
+        }
+        indoorMapManager.setCurrentLocation(currentLocation.latLng);
+        double elevationVal = timedAltitude.get(currentPressureIdx).latLng.longitude;
+        this.elevation.setText(String.format("Elevation: %.2f",elevationVal));
 
-    /**
-     * Calculates the bearing between two LatLng points.
-     * Y and X are derived from spherical laws of sines and cosines.
-     * Bearing is normalized.
-     */
-
-    private double calculateBearing(LatLng from, LatLng to) {
-        double lat1 = Math.toRadians(from.latitude);
-        double lon1 = Math.toRadians(from.longitude);
-        double lat2 = Math.toRadians(to.latitude);
-        double lon2 = Math.toRadians(to.longitude);
-        double dLon = lon2 - lon1;
-        double y = Math.sin(dLon) * Math.cos(lat2);
-        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-        double bearing = Math.atan2(y, x);
-        bearing = Math.toDegrees(bearing);
-        return (bearing + 360) % 360;
+        if (indoorMapManager.getIsIndoorMapSet()){
+            setFloorButtonVisibility(View.VISIBLE);
+            if (autoFloor.isChecked()){
+                indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight()), true);
+            }
+        } else {
+            setFloorButtonVisibility(View.GONE);
+        }
     }
-
-    // When pausing, show the play drawable.
-    private void pausePlayback() {
-        playbackIsPaused = true;
-        pauseResumeButton.setImageResource(R.drawable.ic_play);
-        playbackHandler.removeCallbacksAndMessages(null);
-    }
-
-    // When resuming, show the resume drawable.
-    private void resumePlayback(List<TimedLatLng> trajectoryPoints) {
-        playbackIsPaused = false;
-        pauseResumeButton.setImageResource(R.drawable.ic_pause);
-        drawTrajectoryGradually(trajectoryPoints);
-    }
-    private void goToBeginning(List<TimedLatLng> trajectoryPoints) {
-        pausePlayback();
-        playbackCurrentIndex = 0;
-        playbackCurrentTimestamp = trajectoryPoints.get(0).timestamp;
-        updatePlaybackPolyline(trajectoryPoints, playbackCurrentTimestamp);
-    }
-
-    private void goToEnd(List<TimedLatLng> trajectoryPoints) {
-        pausePlayback();
-        playbackCurrentIndex = trajectoryPoints.size() - 1;
-        playbackCurrentTimestamp = trajectoryPoints.get(trajectoryPoints.size() - 1).timestamp;
-        updatePlaybackPolyline(trajectoryPoints, playbackCurrentTimestamp);
-    }
-    private List<Marker> gnssMarkers = new ArrayList<>();
-
     private void plotGnssSamples(int idx) {
         // Check that the map and GNSS samples are available.
         if (gMap == null || gnssSamples == null || gnssSamples.isEmpty()) {
@@ -712,7 +647,7 @@ public class PlaybackFragment extends Fragment {
         }
         // Loop through the marker list: show markers for indices <= idx, hide the rest.
         for (int i = 1; i < gnssMarkers.size(); i++) {
-            if (i <= idx) {
+            if (i <= idx && gnss.isChecked()) {
                 gnssMarkers.get(i).setVisible(true);
             } else {
                 gnssMarkers.get(i).setVisible(false);
@@ -721,7 +656,7 @@ public class PlaybackFragment extends Fragment {
     }
 
     private long getTargetTimestamp(int progress, long firstTimestamp, long lastTimestamp,
-                                    int seekbarSize){
+                                    final int seekbarSize){
         double progressRatio = ((double) progress) / seekbarSize;
         return (long) (progressRatio * (lastTimestamp - firstTimestamp)) + firstTimestamp;
     }

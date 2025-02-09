@@ -12,7 +12,15 @@ public class TrajectoryViewModel extends ViewModel {
         return trajectory;
     }
 
-    public void setTrajectory(Traj.Trajectory trajectory){
+    public void setTrajectory(Traj.Trajectory trajectory) throws IllegalArgumentException{
+        if(!checkTrajectoryValidity(trajectory)) {
+            throw new IllegalArgumentException("Trajectory is invalid");
+        }
         this.trajectory.setValue(trajectory);
+
+    }
+
+    private boolean checkTrajectoryValidity(Traj.Trajectory trajectory){
+        return (!trajectory.getPdrDataList().isEmpty());
     }
 }

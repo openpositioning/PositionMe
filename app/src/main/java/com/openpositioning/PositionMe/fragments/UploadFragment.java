@@ -154,9 +154,11 @@ public class UploadFragment extends Fragment {
                         );
                         NavDirections direction = UploadFragmentDirections.actionUploadFragmentSelf();
                         Navigation.findNavController(requireView()).navigate(direction);
+                    } catch (IllegalArgumentException e) {
+                            Toast.makeText(requireContext(), e.getMessage(),
+                                    Toast.LENGTH_SHORT).show();
+                        }
                     }
-                    ;
-                }
             });
             uploadList.setAdapter(listAdapter);
         }
