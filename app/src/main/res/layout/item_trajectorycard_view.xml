@@ -24,6 +24,11 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent">
 
+            <!-- 轨迹 ID -->
+
+            <!-- 日期 -->
+
+            <!-- Play 按钮 -->
             <TextView
                 android:id="@+id/trajectoryIdItem"
                 android:layout_width="100dp"
@@ -36,7 +41,8 @@
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.0" />
 
             <TextView
                 android:id="@+id/trajectoryDateItem"
@@ -49,16 +55,33 @@
                 android:textSize="18dp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                app:layout_constraintEnd_toStartOf="@+id/playTrajectoryButton"
+                app:layout_constraintHorizontal_bias="0.533"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
                 app:layout_constraintTop_toTopOf="parent" />
 
+            <!-- Download 按钮 -->
             <ImageButton
-                android:id="@+id/downloadTrajectoryButton"
-                android:layout_width="75dp"
-                android:layout_height="75dp"
+                android:id="@+id/playTrajectoryButton"
+                android:layout_width="48dp"
+                android:layout_height="50dp"
                 android:layout_marginTop="8dp"
                 android:layout_marginEnd="8dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/rounded_corner_lightblue"
+                android:contentDescription="@string/play"
+                android:scaleType="fitXY"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/downloadTrajectoryButton"
+                app:layout_constraintTop_toTopOf="parent"
+                app:srcCompat="@drawable/ic_baseline_play_arrow_24" />
+
+            <ImageButton
+                android:id="@+id/downloadTrajectoryButton"
+                android:layout_width="49dp"
+                android:layout_height="50dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="4dp"
                 android:layout_marginBottom="8dp"
                 android:background="@drawable/rounded_corner_lightblue"
                 android:contentDescription="@string/download"

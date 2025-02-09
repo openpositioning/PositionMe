@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
@@ -338,9 +339,9 @@ public class ServerCommunications implements Observable {
                             + receivedTrajectoryString.substring(0, 100));
 
                     // Save the received trajectory to a file in the Downloads folder
-                    //String storagePath = Environment.getExternalStoragePublicDirectory(Environment
-                           // .DIRECTORY_DOWNLOADS).toString();
-                    String storagePath = context.getFilesDir().toString();
+                    String storagePath = Environment.getExternalStoragePublicDirectory(Environment
+                           .DIRECTORY_DOWNLOADS).toString();
+                    //String storagePath = context.getFilesDir().toString();
 
                     File file = new File(storagePath, "received_trajectory.txt");
                     try (FileWriter fileWriter = new FileWriter(file)) {

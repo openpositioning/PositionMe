@@ -110,6 +110,9 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
+        <action
+            android:id="@+id/action_filesFragment_to_replayFragment"
+            app:destination="@id/replayFragment" />
     </fragment><action android:id="@+id/action_global_correctionFragment" app:destination="@id/correctionFragment"/>
     <fragment
         android:id="@+id/uploadFragment"
@@ -123,4 +126,9 @@
         app:exitAnim="@anim/slide_out_bottom"
         app:popEnterAnim="@anim/slide_in_bottom"
         app:popExitAnim="@anim/slide_in_top" />
+    <fragment
+        android:id="@+id/replayFragment"
+        android:name="com.openpositioning.PositionMe.fragments.ReplayFragment"
+        android:label="Replay" />
+
 </navigation>

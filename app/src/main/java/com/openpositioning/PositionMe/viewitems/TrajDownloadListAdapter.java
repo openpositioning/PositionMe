@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.viewitems;
 
 import android.content.Context;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
@@ -9,85 +10,76 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Adapter used for displaying Trajectory metadata in a RecyclerView list.
+ * Adapter for the RecyclerView displaying trajectory recordings.
  *
- * @see TrajDownloadViewHolder the corresponding view holder.
- * @see com.openpositioning.PositionMe.fragments.FilesFragment on how the data is generated
- * @see com.openpositioning.PositionMe.ServerCommunications on where the response items are received.
- *
- * @author Mate Stodulka
+ * This adapter is responsible for binding trajectory metadata to each list item in the RecyclerView.
+ * It includes functionality for both downloading and replaying trajectories.
  */
-public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder>{
-
-    // Date-time formatting object
-    private static final DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder> {
 
     private final Context context;
-    private final List<Map<String, String>>  responseItems;
-    private final DownloadClickListener listener;
+    private final List<Map<String, String>> trajectoryList;
+    private final DownloadClickListener downloadListener;
+    private final ReplayClickListener replayListener;  //  Added ReplayClickListener
 
     /**
-     * Default public constructor with context for inflating views and list to be displayed.
+     * Constructor for the list adapter.
      *
-     * @param context       application context to enable inflating views used in the list.
-     * @param responseItems List of Maps, where each map is a response item from the server.
-     * @param listener      clickListener to download trajectories when clicked.
-     *
-     * @see com.openpositioning.PositionMe.Traj protobuf objects exchanged with the server.
+     * @param context The application context
+     * @param trajectoryList The list of trajectory metadata
+     * @param downloadListener Click listener for the download button
+     * @param replayListener Click listener for the replay button (NEW)
      */
-    public TrajDownloadListAdapter(Context context, List<Map<String, String>> responseItems, DownloadClickListener listener) {
+    public TrajDownloadListAdapter(Context context, List<Map<String, String>> trajectoryList,
+                                   DownloadClickListener downloadListener, ReplayClickListener replayListener) {
         this.context = context;
-        this.responseItems = responseItems;
-        this.listener = listener;
+        this.trajectoryList = trajectoryList;
+        this.downloadListener = downloadListener;
+        this.replayListener = replayListener;  //  Store the replayListener
     }
 
     /**
-     * {@inheritDoc}
+     * Called when RecyclerView needs a new ViewHolder.
      *
-     * @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view xml layout file
+     * @param parent The parent view group
+     * @param viewType The view type
+     * @return A new TrajDownloadViewHolder
      */
     @NonNull
     @Override
     public TrajDownloadViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        return new TrajDownloadViewHolder(LayoutInflater.from(context).inflate(R.layout.item_trajectorycard_view, parent, false), listener);
+        // Inflate the layout for each trajectory item
+        View view = LayoutInflater.from(context).inflate(R.layout.item_trajectorycard_view, parent, false);
+        return new TrajDownloadViewHolder(view, downloadListener, replayListener);  //  Pass replayListener
     }
 
     /**
-     * {@inheritDoc}
-     * Formats and assigns the data fields from the Trajectory metadata object to the TextView fields.
+     * Binds data to each ViewHolder.
      *
-     * @see com.openpositioning.PositionMe.fragments.FilesFragment generating the data from server response.
-     * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file.
+     * @param holder The ViewHolder
+     * @param position The position of the item in the list
      */
     @Override
     public void onBindViewHolder(@NonNull TrajDownloadViewHolder holder, int position) {
-        String id = responseItems.get(position).get("id");
-        holder.trajId.setText(id);
-        if(id.length() > 2) holder.trajId.setTextSize(58);
-        else holder.trajId.setTextSize(65);
-        holder.trajDate.setText(
-                dateFormat.format(
-                        LocalDateTime.parse(
-                                responseItems.get(position)
-                                        .get("date_submitted").split("\\.")[0]
-                        )
-                )
-        );
+        // Get the trajectory metadata
+        Map<String, String> trajectory = trajectoryList.get(position);
+
+        // Set the trajectory ID and date in the list item
+        holder.trajId.setText("ID: " + trajectory.get("id"));
+        holder.trajDate.setText("Date: " + trajectory.get("date_submitted"));
     }
 
     /**
-     * {@inheritDoc}
-     * Number of response maps.
+     * Returns the total number of items in the list.
+     *
+     * @return The number of trajectories
      */
     @Override
     public int getItemCount() {
-        return responseItems.size();
+        return trajectoryList.size();
     }
 }
-
