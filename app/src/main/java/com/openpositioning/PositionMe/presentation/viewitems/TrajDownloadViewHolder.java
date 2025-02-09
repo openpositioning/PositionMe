@@ -24,7 +24,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
 
     private final TextView trajId;
     private final TextView trajDate;
-    private final ImageButton downloadButton;
+    final ImageButton downloadButton;
     private final WeakReference<DownloadClickListener> listenerReference;
 
     /**

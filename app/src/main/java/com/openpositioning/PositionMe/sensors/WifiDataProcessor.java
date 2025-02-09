@@ -80,14 +80,17 @@ public class WifiDataProcessor implements Observable {
         this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
         this.scanWifiDataTimer = new Timer();
         this.observers = new ArrayList<>();
+
+        // Decreapted method after API 29
         // Turn on wifi if it is currently disabled
-        if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
-            wifiManager.setWifiEnabled(true);
-        }
+        // TODO - turn it to a notification toward user
+//      //  if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
+//      //      wifiManager.setWifiEnabled(true);
+//      //  }
 
         // Start wifi scan and return results via broadcast
         if(permissionsGranted) {
-            this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, scanInterval);
+            this.scanWifiDataTimer.schedule(new scheduledWifiScan(), 0, scanInterval);
         }
 
         //Inform the user if wifi throttling is enabled on their device

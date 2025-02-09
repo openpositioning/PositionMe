@@ -1,4 +1,6 @@
 package com.openpositioning.PositionMe.presentation.viewitems;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import org.json.JSONObject;  // ✅ 导入 JSON 处理类
 import android.os.Handler;
@@ -10,20 +12,22 @@ import java.io.File;               // ✅ 导入 File 类
 import java.io.FileReader;         // ✅ 导入 FileReader 类
 import java.io.BufferedReader;     // ✅ 导入 BufferedReader 类
 import java.util.Iterator;  // 确保已经导入 Iterator
+
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import android.content.Context;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -53,7 +57,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
      * @param responseItems List of Maps, where each map is a response item from the server.
      * @param listener      clickListener to download trajectories when clicked.
      *
-     * @see com.openpositioning.PositionMe.Traj protobuf objects exchanged with the server.
+     * @see Traj protobuf objects exchanged with the server.
      */
     public TrajDownloadListAdapter(Context context, List<Map<String, String>> responseItems, DownloadClickListener listener) {
         this.context = context;
@@ -99,7 +103,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     /**
      * {@inheritDoc}
      *
-     * @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view xml layout file
+     * @see R.layout#item_trajectorycard_view xml layout file
      */
     @NonNull
     @Override
@@ -112,13 +116,14 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
      * {@inheritDoc}
      * Formats and assigns the data fields from the Trajectory metadata object to the TextView fields.
      *
-     * @see com.openpositioning.PositionMe.fragments.FilesFragment generating the data from server response.
-     * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file.
+     * @see FilesFragment generating the data from server response.
+     * @see R.layout#item_sensorinfo_card_view xml layout file.
      */
     @Override
     public void onBindViewHolder(@NonNull TrajDownloadViewHolder holder, int position) {
         String id = responseItems.get(position).get("id");
         holder.getTrajId().setText(id);
+        assert id != null;
         if (id.length() > 2) {
             holder.getTrajId().setTextSize(58);
         } else {
@@ -126,6 +131,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         }
 
         String dateSubmittedStr = responseItems.get(position).get("date_submitted");
+        assert dateSubmittedStr != null;
         holder.getTrajDate().setText(
                 dateFormat.format(
                         LocalDateTime.parse(dateSubmittedStr.split("\\.")[0])
@@ -178,31 +184,52 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         return responseItems.size();
     }
 
-    // 在适配器中新增一个方法，轮询检测文件更新时间
+    // 在适配器中新增一个方法，轮询检测文件更新时间，适配 Android 13+
     private void startPollingForFileUpdate() {
-        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
-        if (!file.exists()) {
-            System.out.println("⚠️ 文件不存在，取消轮询。");
+        // 注意：确保你有一个 Context 对象，比如通过构造函数传入 adapter 的 context，
+        // 或者使用 itemView.getContext() 等方式获得上下文。
+        Context context = this.context; /* 获取你的上下文，例如：this.context 或 itemView.getContext() */;
+
+        // 对于非媒体文件（如 JSON 文件），仍需要 READ_EXTERNAL_STORAGE 权限
+        PackageManager PackageManager = context.getPackageManager();
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.i("FileUpdate", "⚠️ 未获得 READ_EXTERNAL_STORAGE 权限，无法访问下载目录。");
             return;
         }
+
+        // 获取公共下载目录
+        // 注：Environment.getExternalStoragePublicDirectory() 从 API 29 起已被弃用，但在 Android 13 仍可使用
+        File downloadsFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        File file = new File(downloadsFolder, "download_records.json");
+
+        if (!file.exists()) {
+            Log.i("FileUpdate", "⚠️ 文件不存在，取消轮询。");
+            return;
+        }
+
         final long initialModified = file.lastModified();
         final Handler handler = new Handler(Looper.getMainLooper());
+
         Runnable pollRunnable = new Runnable() {
             int attempts = 0; // 尝试次数
+
             @Override
             public void run() {
                 attempts++;
                 if (file.lastModified() > initialModified) {
-                    System.out.println("🎉 文件更新成功！尝试次数：" + attempts);
-                    loadDownloadRecords();  // 读取新数据并刷新UI
+                    Log.i("FileUpdate", "🎉 文件更新成功！尝试次数：" + attempts);
+                    loadDownloadRecords();  // 读取新数据并刷新 UI
                 } else if (attempts < 10) { // 最多轮询 10 次（约2秒）
                     handler.postDelayed(this, 200);
                 } else {
-                    System.out.println("⏰ 轮询超时，文件更新检测失败。");
+                    Log.i("FileUpdate", "⏰ 轮询超时，文件更新检测失败。");
                 }
             }
         };
+
         handler.postDelayed(pollRunnable, 200);
     }
+
 }
 

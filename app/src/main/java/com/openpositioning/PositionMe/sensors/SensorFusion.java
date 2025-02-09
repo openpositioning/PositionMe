@@ -73,6 +73,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     //region Instance variables
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
+    private Context appContext;
 
     // Settings
     private SharedPreferences settings;
@@ -205,7 +206,9 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see WifiDataProcessor for network data processing.
      */
     public void setContext(Context context) {
-        // Initialise data collection devices
+        this.appContext = context.getApplicationContext(); // store app context for later use
+
+        // Initialise data collection devices (unchanged)...
         this.accelerometerSensor = new MovementSensor(context, Sensor.TYPE_ACCELEROMETER);
         this.barometerSensor = new MovementSensor(context, Sensor.TYPE_PRESSURE);
         this.gyroscopeSensor = new MovementSensor(context, Sensor.TYPE_GYROSCOPE);
@@ -219,36 +222,33 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Listener based devices
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(this);
-        this.gnssProcessor = new GNSSDataProcessor(context,locationListener);
+        this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
         // Create object handling HTTPS communication
         this.serverCommunications = new ServerCommunications(context);
         // Save absolute and relative start time
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = android.os.SystemClock.uptimeMillis();
-        // Initialise saveRecording to false - only record when explicitly started.
+        // Initialise saveRecording to false
         this.saveRecording = false;
 
-        // Over time data holder
+        // Other initialisations...
         this.accelMagnitude = new ArrayList<>();
-        // PDR
         this.pdrProcessing = new PdrProcessing(context);
-        //Settings
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
-
         this.pathView = new PathView(context, null);
-        // Initialising WiFi Positioning object
-        this.wiFiPositioning=new WiFiPositioning(context);
+        this.wiFiPositioning = new WiFiPositioning(context);
 
         if(settings.getBoolean("overwrite_constants", false)) {
-            this.filter_coefficient =Float.parseFloat(settings.getString("accel_filter", "0.96"));
+            this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
+        } else {
+            this.filter_coefficient = FILTER_COEFFICIENT;
         }
-        else {this.filter_coefficient = FILTER_COEFFICIENT;}
 
-        // Keep app awake during the recording
-        PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
-                "MyApp::MyWakelockTag");
+        // Keep app awake during the recording (using stored appContext)
+        PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
     }
+
     //endregion
 
     //region Sensor processing
@@ -779,8 +779,13 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see Traj object for storing data.
      */
     public void startRecording() {
-        // Acquire wakelock so the phone will record with a locked screen. Timeout after 31 minutes.
-        this.wakeLock.acquire(31*60*1000L /*31 minutes*/);
+        // If wakeLock is null (e.g. not initialized or was cleared), reinitialize it.
+        if (wakeLock == null) {
+            PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
+        }
+        wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
+
         this.saveRecording = true;
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();
@@ -789,20 +794,19 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
                 .setStartTimestamp(absoluteStartTime)
-                /*.addApsData(Traj.AP_Data.newBuilder().setMac(example_mac).setSsid(example_ssid)
-                        .setFrequency(example_frequency))*/
                 .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
                 .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
                 .setLightSensorInfo(createInfoBuilder(lightSensor));
         this.storeTrajectoryTimer = new Timer();
-        this.storeTrajectoryTimer.scheduleAtFixedRate(new storeDataInTrajectory(), 0, TIME_CONST);
+        this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
         this.pdrProcessing.resetPDR();
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
+        } else {
+            this.filter_coefficient = FILTER_COEFFICIENT;
         }
-        else {this.filter_coefficient = FILTER_COEFFICIENT;}
     }
 
     /**
