@@ -123,4 +123,11 @@
     <string name="title_playback">Playback Screen!</string>
     <string name="playback_back">Go Back</string>
 
+    <string-array name="playback_speed_array">
+        <item>0.5x</item>
+        <item>1x</item>
+        <item>2x</item>
+        <item>4x</item>
+    </string-array>
+
 </resources>

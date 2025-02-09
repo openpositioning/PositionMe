@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp"
+    android:height="28dp"
+    android:viewportWidth="28"
+    android:viewportHeight="28">
+
+    <!-- 270° Arc with a radius of 12 (mirrored to end at the left side) -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:pathData="M14,26 A12,12 0 1,0 2,14" />
+
+    <!-- Mirrored Arrowhead at the arc endpoint (2,14) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M4,14 L0,14 L2,18 Z" />
+</vector>
