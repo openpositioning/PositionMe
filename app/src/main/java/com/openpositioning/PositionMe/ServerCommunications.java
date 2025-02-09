@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -281,7 +282,7 @@ public class ServerCommunications implements Observable {
      *
      * @param position the position of the trajectory in the zip file to retrieve
      */
-    public CompletableFuture<Traj.Trajectory> downloadTrajectory(int position) {
+    public CompletableFuture<Traj.Trajectory> downloadTrajectory(int position, Consumer<Integer> progressCallback) {
         // Initialise OkHttp client
         OkHttpClient client = new OkHttpClient();
 
@@ -308,6 +309,7 @@ public class ServerCommunications implements Observable {
 
                     // Create input streams to process the response
                     InputStream inputStream = responseBody.byteStream();
+                    long fileLength = responseBody.contentLength();
                     ZipInputStream zipInputStream = new ZipInputStream(inputStream);
 
                     // Get the nth entry in the zip file
@@ -327,8 +329,12 @@ public class ServerCommunications implements Observable {
                     // Read the zipped data and write it to the byte array output stream
                     byte[] buffer = new byte[1024];
                     int bytesRead;
+                    long totalRead = 0;
                     while ((bytesRead = zipInputStream.read(buffer)) != -1) {
                         byteArrayOutputStream.write(buffer, 0, bytesRead);
+                        totalRead+=bytesRead;
+                        int progress = (int) ((totalRead * 100) / fileLength);
+                        progressCallback.accept(progress);
                     }
 
                     // Convert the byte array to a protobuf object
@@ -344,7 +350,7 @@ public class ServerCommunications implements Observable {
 
                     // Save the received trajectory to a file in the Downloads folder
                     //String storagePath = Environment.getExternalStoragePublicDirectory(Environment
-                           // .DIRECTORY_DOWNLOADS).toString();
+                    // .DIRECTORY_DOWNLOADS).toString();
                     String storagePath = context.getFilesDir().toString();
 
                     File file = new File(storagePath, "received_trajectory.txt");

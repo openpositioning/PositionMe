@@ -10,6 +10,7 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -62,6 +63,7 @@ public class FilesFragment extends Fragment implements Observer {
     private ServerCommunications serverCommunications;
 
     private TrajectoryViewModel trajectoryViewModel;
+    private ProgressBar progressBar;
 
     /**
      * Default public constructor, empty.
@@ -111,6 +113,11 @@ public class FilesFragment extends Fragment implements Observer {
         filesList = view.findViewById(R.id.filesList);
         // Get clickable card view
         uploadCard = view.findViewById(R.id.uploadCard);
+        progressBar = view.findViewById(R.id.progressBar);
+        progressBar.setVisibility(View.GONE);
+        progressBar.setMax(100);
+        progressBar.setProgress(0);
+
 
         trajectoryViewModel = new ViewModelProvider(requireActivity()).get(TrajectoryViewModel.class);
 
@@ -205,24 +212,33 @@ public class FilesFragment extends Fragment implements Observer {
         listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, new DownloadClickListener() {
             @Override
             public void onPositionClicked(int position) {
-                String titleText = "";
-                String messageText = "";
+                final String[] titleText = {"File Downloaded"};
+                final String[] messageText = {"Trajectory downloaded to local storage"};
                 // Download the appropriate trajectory instance
-                try {
-                    Traj.Trajectory trajectory
-                            = serverCommunications.downloadTrajectory(position).get();
-                    titleText = "File downloaded";
-                    messageText = "Trajectory downloaded to local storage";
-                } catch (ExecutionException | InterruptedException e) {
+                serverCommunications.downloadTrajectory(position, progress -> {
+                    getActivity().runOnUiThread(() -> {
+                        progressBar.setVisibility(View.VISIBLE);
+                        progressBar.setProgress(progress);
+                    });
+                }).thenAccept(trajectory -> {
+                    getActivity().runOnUiThread(() -> {
+                        // Hide the progress bar when the download is complete
+                        progressBar.setVisibility(View.GONE);
+                    });
+                }).exceptionally(e -> {
+                    getActivity().runOnUiThread(() -> {
+                        // Hide the progress bar when the download is complete
+                        progressBar.setVisibility(View.GONE);
+                    });
                     System.err.println();
-                    titleText = "Download failed";
-                    messageText = "Could not download the file";
-                }
-
+                    titleText[0] = "Download failed";
+                    messageText[0] = "Could not download the file";
+                    return null;
+                });
                 // Display a pop-up message to direct the user to the download location if necessary.
                 new AlertDialog.Builder(getContext())
-                        .setTitle(titleText)
-                        .setMessage(messageText)
+                        .setTitle(titleText[0])
+                        .setMessage(messageText[0])
                         .setPositiveButton(R.string.ok, null)
                         .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
                             @Override
@@ -232,26 +248,33 @@ public class FilesFragment extends Fragment implements Observer {
                         })
                         .setIcon(R.drawable.ic_baseline_download_24)
                         .show();
+                getActivity().runOnUiThread(() -> {
+                    progressBar.setVisibility(View.GONE);
+                });
             }
             @Override
             public void onPlayClicked(int position) {
-                try {
-                    Traj.Trajectory trajectory
-                            = serverCommunications.downloadTrajectory(position).get();
-                    trajectoryViewModel.setTrajectory(trajectory);
-                    NavDirections action = FilesFragmentDirections.actionFilesFragmentToPlaybackFragment();
-                    Navigation.findNavController(requireView()).navigate(action);
-                }
-                catch (ExecutionException | InterruptedException e) {
-                    e.printStackTrace();
-                }
-                catch (IllegalArgumentException e){
-                    Toast.makeText(requireContext(), e.getMessage(),
-                            Toast.LENGTH_SHORT).show();
-                }
-
-
-
+                serverCommunications.downloadTrajectory(position, progress ->{
+                    getActivity().runOnUiThread(() -> {
+                        progressBar.setVisibility(View.VISIBLE);
+                        progressBar.setProgress(progress);
+                    });
+                }).thenAccept(trajectory -> {
+                    getActivity().runOnUiThread(() -> {
+                        // Hide the progress bar when the download is complete
+                        progressBar.setVisibility(View.GONE);
+                        // Update the ViewModel with the trajectory
+                        try {
+                            trajectoryViewModel.setTrajectory(trajectory);
+                            // Navigate to the next fragment
+                            NavDirections action = FilesFragmentDirections.actionFilesFragmentToPlaybackFragment();
+                            Navigation.findNavController(requireView()).navigate(action);
+                        } catch (IllegalArgumentException e){
+                            Toast.makeText(requireContext(), e.getMessage(),
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                });
             }
         });
         filesList.setAdapter(listAdapter);
