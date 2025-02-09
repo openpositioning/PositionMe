@@ -42,8 +42,8 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
         super(itemView);
 
         this.listenerReference = new WeakReference<>(listener);
-        this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
-        this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
+        this.trajId = itemView.findViewById(R.id.uploadIdItem);
+        this.trajDate = itemView.findViewById(R.id.uploadDateItem);
         this.uploadButton = itemView.findViewById(R.id.uploadTrajectoryButton);
 
         this.uploadButton.setOnClickListener(this);

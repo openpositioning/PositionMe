@@ -39,8 +39,8 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
     public TrajDownloadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
         super(itemView);
         this.listenerReference = new WeakReference<>(listener);
-        this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
-        this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
+        this.trajId = itemView.findViewById(R.id.downloadIdItem);
+        this.trajDate = itemView.findViewById(R.id.downloadDateItem);
         this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
 
         this.downloadButton.setOnClickListener(this);

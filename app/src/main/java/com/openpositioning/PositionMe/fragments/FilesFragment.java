@@ -52,6 +52,7 @@ public class FilesFragment extends Fragment implements Observer {
     private RecyclerView filesList;
     private TrajDownloadListAdapter listAdapter;
     private CardView uploadCard;
+    private CardView replayCard;
 
     // Class handling HTTP communication
     private ServerCommunications serverCommunications;
@@ -102,7 +103,8 @@ public class FilesFragment extends Fragment implements Observer {
         super.onViewCreated(view, savedInstanceState);
         // Get recyclerview
         filesList = view.findViewById(R.id.filesList);
-        // Get clickable card view
+
+        // Get clickable card view for upload
         uploadCard = view.findViewById(R.id.uploadCard);
         uploadCard.setOnClickListener(new View.OnClickListener() {
             /**
@@ -115,8 +117,24 @@ public class FilesFragment extends Fragment implements Observer {
                 Navigation.findNavController(view).navigate(action);
             }
         });
+
+        // Get clickable card view for replay
+        replayCard = view.findViewById(R.id.replayCard);
+        replayCard.setOnClickListener(new View.OnClickListener() {
+            /**
+             * {@inheritDoc}
+             * Navigates to {@link UploadFragment}.
+             */
+            @Override
+            public void onClick(View view) {
+                NavDirections action = FilesFragmentDirections.actionFilesFragmentToReplayFragment();
+                Navigation.findNavController(view).navigate(action);
+            }
+        });
+
         // Request list of uploaded trajectories from the server.
         serverCommunications.sendInfoRequest();
+
     }
 
     /**

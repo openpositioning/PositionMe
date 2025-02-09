@@ -66,6 +66,7 @@
     <string name="recording">Recording in progress</string>
     <string name="distance_travelled">Distance travelled:</string>
     <string name="uploadTitle">Manual upload</string>
+    <string name="replayTitle">Replay</string>
     <string name="emptyUploadTitle">No trajectories to upload</string>
 
     <!-- Units only -->
@@ -120,5 +121,9 @@
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
+    <string name="dummy_button">Dummy Button</string>
+    <string name="dummy_content">DUMMY\nCONTENT</string>
+    <string name="replay">Replay</string>
+    <string name="emptyReplayTitle">No local files found</string>
 
 </resources>

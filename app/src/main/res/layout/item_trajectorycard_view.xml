@@ -25,7 +25,7 @@
             android:layout_height="match_parent">
 
             <TextView
-                android:id="@+id/trajectoryIdItem"
+                android:id="@+id/downloadIdItem"
                 android:layout_width="100dp"
                 android:layout_height="100dp"
                 android:layout_marginStart="8dp"
@@ -39,7 +39,7 @@
                 app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
-                android:id="@+id/trajectoryDateItem"
+                android:id="@+id/downloadDateItem"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
@@ -50,7 +50,7 @@
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
-                app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
+                app:layout_constraintStart_toEndOf="@id/downloadIdItem"
                 app:layout_constraintTop_toTopOf="parent" />
 
             <ImageButton

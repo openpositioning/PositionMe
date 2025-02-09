@@ -220,9 +220,20 @@ public class PdrProcessing {
      * @return                  float stride length in meters.
      */
     private float weibergMinMax(List<Double> accelMagnitude) {
-        double maxAccel = Collections.max(accelMagnitude);
-        double minAccel = Collections.min(accelMagnitude);
-        float bounce = (float) Math.pow((maxAccel-minAccel), 0.25);
+
+        double maxAccel;
+        double minAccel;
+        float bounce;
+
+        if (accelMagnitude.isEmpty()) {
+            bounce = 0.0F;
+        }
+        else {
+            maxAccel = Collections.max(accelMagnitude);
+            minAccel = Collections.min(accelMagnitude);
+            bounce = (float) Math.pow((maxAccel-minAccel), 0.25);
+        }
+
         if(this.settings.getBoolean("overwrite_constants", false)) {
             return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
         }

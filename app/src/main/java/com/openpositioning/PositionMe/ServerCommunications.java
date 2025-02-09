@@ -190,7 +190,7 @@ public class ServerCommunications implements Observable {
                         System.out.println("Successful post response: " + responseBody.string());
 
                         // Delete local file and set success to true
-                        success = file.delete();
+                        //success = file.delete();
                         notifyObservers(1);
                     }
                 }
@@ -265,7 +265,7 @@ public class ServerCommunications implements Observable {
                     System.out.println("UPLOAD SUCCESSFUL: " + responseBody.string());
 
                     // Delete local file, set success to true and notify observers
-                    success = localTrajectory.delete();
+                    // success = localTrajectory.delete();
                     notifyObservers(1);
                 }
             }
