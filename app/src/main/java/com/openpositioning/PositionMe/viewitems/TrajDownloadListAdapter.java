@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.viewitems;
 
 import android.content.Context;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -10,74 +11,73 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Adapter for the RecyclerView displaying trajectory recordings.
- *
- * This adapter is responsible for binding trajectory metadata to each list item in the RecyclerView.
- * It includes functionality for both downloading and replaying trajectories.
- */
 public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder> {
+
+    private static final DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final Context context;
     private final List<Map<String, String>> trajectoryList;
     private final DownloadClickListener downloadListener;
-    private final ReplayClickListener replayListener;  //  Added ReplayClickListener
+    private final ReplayClickListener replayListener;
 
-    /**
-     * Constructor for the list adapter.
-     *
-     * @param context The application context
-     * @param trajectoryList The list of trajectory metadata
-     * @param downloadListener Click listener for the download button
-     * @param replayListener Click listener for the replay button (NEW)
-     */
+    // Constructor using external interfaces
     public TrajDownloadListAdapter(Context context, List<Map<String, String>> trajectoryList,
                                    DownloadClickListener downloadListener, ReplayClickListener replayListener) {
         this.context = context;
         this.trajectoryList = trajectoryList;
         this.downloadListener = downloadListener;
-        this.replayListener = replayListener;  //  Store the replayListener
+        this.replayListener = replayListener;
     }
 
-    /**
-     * Called when RecyclerView needs a new ViewHolder.
-     *
-     * @param parent The parent view group
-     * @param viewType The view type
-     * @return A new TrajDownloadViewHolder
-     */
     @NonNull
     @Override
     public TrajDownloadViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        // Inflate the layout for each trajectory item
         View view = LayoutInflater.from(context).inflate(R.layout.item_trajectorycard_view, parent, false);
-        return new TrajDownloadViewHolder(view, downloadListener, replayListener);  //  Pass replayListener
+        // Directly pass external interfaces to ViewHolder
+        return new TrajDownloadViewHolder(view, downloadListener, replayListener);
     }
 
-    /**
-     * Binds data to each ViewHolder.
-     *
-     * @param holder The ViewHolder
-     * @param position The position of the item in the list
-     */
     @Override
     public void onBindViewHolder(@NonNull TrajDownloadViewHolder holder, int position) {
-        // Get the trajectory metadata
         Map<String, String> trajectory = trajectoryList.get(position);
+        String rawId = trajectory.get("id");
+        String rawDate = trajectory.get("date_submitted");
 
-        // Set the trajectory ID and date in the list item
-        holder.trajId.setText("ID: " + trajectory.get("id"));
-        holder.trajDate.setText("Date: " + trajectory.get("date_submitted"));
+        // Display only the last 4 digits of the ID (to prevent UI display issues with long numbers)
+        String formattedId = rawId.length() > 4 ? rawId.substring(rawId.length() - 4) : rawId;
+        holder.trajId.setText("ID: " + formattedId);
+
+        // Parse the date (assuming the server returns the date in ISO format)
+        try {
+            LocalDateTime dateTime = LocalDateTime.parse(rawDate, DateTimeFormatter.ISO_DATE_TIME);
+            String formattedDate = dateTime.format(dateFormat);
+            holder.trajDate.setText("Date: " + formattedDate);
+        } catch (DateTimeParseException e) {
+            Log.e("TrajDownloadListAdapter", "Date parsing error: " + rawDate, e);
+            holder.trajDate.setText("Invalid Date");
+        }
+
+        // Set the play button click event: call replayListener.onReplayClick(position)
+        holder.playButton.setOnClickListener(v -> {
+            if (replayListener != null) {
+                replayListener.onReplayClick(position);
+            }
+        });
+
+        // Set the download button click event: call downloadListener.onDownloadClick(position)
+        holder.downloadButton.setOnClickListener(v -> {
+            if (downloadListener != null) {
+                downloadListener.onPositionClicked(position);
+            }
+        });
     }
 
-    /**
-     * Returns the total number of items in the list.
-     *
-     * @return The number of trajectories
-     */
     @Override
     public int getItemCount() {
         return trajectoryList.size();

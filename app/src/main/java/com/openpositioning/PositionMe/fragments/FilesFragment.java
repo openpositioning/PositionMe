@@ -22,8 +22,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.viewitems.ReplayClickListener;
 import com.openpositioning.PositionMe.viewitems.TrajDownloadListAdapter;
-import com.openpositioning.PositionMe.viewitems.ReplayClickListener;  //   Updated interface name
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -35,25 +35,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Fragment displaying uploaded trajectories. Users can download and replay trajectories.
- *
- * @author Mate Stodulka
- */
-public class FilesFragment extends Fragment implements Observer, ReplayClickListener {  //   Implementing ReplayClickListener
+public class FilesFragment extends Fragment implements Observer, ReplayClickListener {
+
+    private static final String TAG = "FilesFragment";
 
     // UI elements
     private RecyclerView filesList;
     private TrajDownloadListAdapter listAdapter;
     private CardView uploadCard;
-    private List<Map<String, String>> entryList = new ArrayList<>();  //   Stores trajectory metadata
 
-    // Class handling HTTP communication
+    // List to store trajectory metadata
+    private List<Map<String, String>> entryList = new ArrayList<>();
+
+    // Instance handling server communications
     private ServerCommunications serverCommunications;
 
-    /**
-     * Default public constructor.
-     */
+    // Default public constructor (required)
     public FilesFragment() {
         // Required empty public constructor
     }
@@ -76,37 +73,38 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Initialize RecyclerView
+        // Initialize RecyclerView and upload button
         filesList = view.findViewById(R.id.filesList);
         uploadCard = view.findViewById(R.id.uploadCard);
 
-        // Set up Upload button navigation
+        // Set the upload button click listener to navigate to the UploadFragment
         uploadCard.setOnClickListener(v -> {
             NavDirections action = FilesFragmentDirections.actionFilesFragmentToUploadFragment();
             Navigation.findNavController(view).navigate(action);
         });
 
-        //   Request list of trajectories from server
+        // Request the list of trajectories from the server
         serverCommunications.sendInfoRequest();
     }
 
     /**
-     * Handles the server's response and updates the RecyclerView with trajectory data.
+     * Observer interface method:
+     * Handles the server response and updates the RecyclerView with trajectory data.
      */
     @Override
     public void update(Object[] singletonStringList) {
         String infoString = (String) singletonStringList[0];
-
         if (infoString != null && !infoString.isEmpty()) {
             entryList = processInfoResponse(infoString);
-
-            // Update UI from the main thread
             new Handler(Looper.getMainLooper()).post(() -> updateView(entryList));
         }
     }
 
     /**
      * Parses the JSON response from the server and extracts trajectory metadata.
+     *
+     * @param infoString JSON string returned from the server.
+     * @return A list of maps containing trajectory metadata.
      */
     private List<Map<String, String>> processInfoResponse(String infoString) {
         List<Map<String, String>> parsedList = new ArrayList<>();
@@ -123,30 +121,33 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
         } catch (JSONException e) {
             System.err.println("JSON parsing failed: " + e.getMessage());
         }
-
+        // Sort the list by "id" (adjust sorting rules as needed)
         parsedList.sort(Comparator.comparing(m -> Integer.parseInt(m.get("id")), Comparator.nullsLast(Comparator.naturalOrder())));
         return parsedList;
     }
 
     /**
-     * Updates the RecyclerView with trajectory data.
+     * Updates the RecyclerView with the trajectory metadata.
+     *
+     * @param entryList List of trajectory metadata.
      */
     private void updateView(List<Map<String, String>> entryList) {
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
-
-        //   Added ReplayClickListener for handling play button clicks
-        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, this::onDownloadClicked, this);
+        // Create adapter using external interfaces for download and replay actions.
+        // "this" is valid here because FilesFragment implements ReplayClickListener.
+        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, this::onDownloadClick, this);
         filesList.setAdapter(listAdapter);
     }
 
     /**
-     * Handles the Download button click event.
+     * Handles the download button click event.
+     *
+     * @param position The position of the item that was clicked.
      */
-    private void onDownloadClicked(int position) {
+    private void onDownloadClick(int position) {
         serverCommunications.downloadTrajectory(position);
-
         new AlertDialog.Builder(getContext())
                 .setTitle("File Downloaded")
                 .setMessage("Trajectory downloaded to local storage.")
@@ -158,21 +159,17 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
     }
 
     /**
-     *   Handles the Play button click event, launching the ReplayFragment.
+     * Implementation of the ReplayClickListener interface method.
+     * Handles the play button click event, navigates to the ReplayFragment.
+     *
+     * @param position The position of the item that was clicked.
      */
     @Override
-    public void onPlayClicked(int position) {
+    public void onReplayClick(int position) {
         Map<String, String> selectedEntry = entryList.get(position);
         String trajectoryId = selectedEntry.get("id");
-
-        //  Pass the trajectory ID to the ReplayFragment
         Bundle args = new Bundle();
         args.putString("trajectoryId", trajectoryId);
-
-        // Create and launch ReplayFragment
-        Fragment replayFragment = new ReplayFragment();
-        replayFragment.setArguments(args);
-
-        Navigation.findNavController(getView()).navigate(R.id.action_filesFragment_to_replayFragment);
-
-    }}
+        Navigation.findNavController(getView()).navigate(R.id.action_filesFragment_to_replayFragment, args);
+    }
+}

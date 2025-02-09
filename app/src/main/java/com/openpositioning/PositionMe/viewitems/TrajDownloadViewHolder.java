@@ -63,7 +63,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         } else if (view.getId() == R.id.playTrajectoryButton) {
             //   Handle replay button click safely.
             if (replayListenerReference.get() != null) {
-                replayListenerReference.get().onPlayClicked(getAdapterPosition());
+                replayListenerReference.get().onReplayClick(getAdapterPosition());
             }
         }
     }
