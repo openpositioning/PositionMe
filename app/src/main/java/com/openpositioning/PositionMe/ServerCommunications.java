@@ -12,6 +12,8 @@ import android.os.Environment;
 
 import java.io.FileInputStream;
 import java.io.OutputStream;
+
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
@@ -394,12 +396,15 @@ public class ServerCommunications implements Observable {
         loadDownloadRecords();  // 加载已有记录
 
         OkHttpClient client = new OkHttpClient();
+
+        // Create GET request with required header
         okhttp3.Request request = new okhttp3.Request.Builder()
                 .url(downloadURL)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .get()
                 .build();
 
+        // Enqueue the GET request for asynchronous execution
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -411,9 +416,11 @@ public class ServerCommunications implements Observable {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
+                    // Create input streams to process the response
                     InputStream inputStream = responseBody.byteStream();
                     ZipInputStream zipInputStream = new ZipInputStream(inputStream);
 
+                    // Get the nth entry in the zip file
                     java.util.zip.ZipEntry zipEntry;
                     int zipCount = 0;
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
@@ -421,13 +428,17 @@ public class ServerCommunications implements Observable {
                         zipCount++;
                     }
 
+                    // Initialise a byte array output stream
                     ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+
+                    // Read the zipped data and write it to the byte array output stream
                     byte[] buffer = new byte[1024];
                     int bytesRead;
                     while ((bytesRead = zipInputStream.read(buffer)) != -1) {
                         byteArrayOutputStream.write(buffer, 0, bytesRead);
                     }
 
+                    // Convert the byte array to a protobuf object
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
 
@@ -447,9 +458,11 @@ public class ServerCommunications implements Observable {
                         String receivedTrajectoryString = printer.print(receivedTrajectory);
                         fileWriter.write(receivedTrajectoryString);
                         fileWriter.flush();
+                        System.err.println("Received trajectory stored in: " + storagePath);
                     } catch (IOException ee) {
                         System.err.println("Trajectory download failed");
                     } finally {
+                        // Close all streams and entries to release resources
                         zipInputStream.closeEntry();
                         byteArrayOutputStream.close();
                         zipInputStream.close();
@@ -462,6 +475,7 @@ public class ServerCommunications implements Observable {
                 }
             }
         });
+
     }
 
     /**
