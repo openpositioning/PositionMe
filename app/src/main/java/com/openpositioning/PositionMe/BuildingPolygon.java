@@ -5,7 +5,7 @@ import com.google.android.gms.maps.model.LatLng;
 
 import java.util.ArrayList;
 import java.util.List;
-
+//sb
 /**
  * Class used to check for a pre-defined set of coordinates if it is in a Building (Nucleus, Library)
  * (Can be used to add more buildings by adding the coordinates of the buildings and adding methods)
