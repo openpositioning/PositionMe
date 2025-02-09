@@ -6,7 +6,7 @@ public final class Traj {
   public static void registerAllExtensions(
       com.google.protobuf.ExtensionRegistryLite registry) {
   }
-
+//@formatter:off
   public static void registerAllExtensions(
       com.google.protobuf.ExtensionRegistry registry) {
     registerAllExtensions(
