@@ -28,6 +28,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
     private final WeakReference<DownloadClickListener> listenerReference;
 
     /**
+     * {@inheritDoc}
      * Assign TextView fields corresponding to Trajectory metadata.
      *
      * @param listener DownloadClickListener to enable acting on clicks on items.
@@ -62,8 +63,13 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
      */
     @Override
     public void onClick(View view) {
-        if (listenerReference.get() != null) {
-            listenerReference.get().onPositionClicked(getAdapterPosition());
+        listenerReference.get().onPositionClicked(getAdapterPosition());
+        DownloadClickListener listener = listenerReference.get();
+        if (listener != null) {
+            listener.onPositionClicked(getAdapterPosition());
+            System.out.println("✅ Click detected at position: " + getAdapterPosition());
+        } else {
+            System.err.println("❌ Listener reference is null.");
         }
     }
 }

@@ -119,6 +119,13 @@ public class FilesFragment extends Fragment implements Observer {
         });
         // Request list of uploaded trajectories from the server.
         serverCommunications.sendInfoRequest();
+        // ✅ 强制 RecyclerView 刷新，以确保图标状态正确
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (filesList.getAdapter() != null) {
+                filesList.getAdapter().notifyDataSetChanged();
+                System.out.println("✅ RecyclerView refreshed after page load.");
+            }
+        }, 500);
     }
 
     /**
@@ -195,22 +202,25 @@ public class FilesFragment extends Fragment implements Observer {
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
         listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
-            // Download the appropriate trajectory instance
-            serverCommunications.downloadTrajectory(position);
-            // Display a pop-up message to direct the user to the download location if necessary.
+            Map<String, String> selectedItem = entryList.get(position);
+            String id = selectedItem.get("id");
+            String dateSubmitted = selectedItem.get("date_submitted");
+
+            // 传入 ID 和 date_submitted
+            serverCommunications.downloadTrajectory(position, id, dateSubmitted);
+
             new AlertDialog.Builder(getContext())
                     .setTitle("File downloaded")
                     .setMessage("Trajectory downloaded to local storage")
                     .setPositiveButton(R.string.ok, null)
-                    .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-                        }
+                    .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
+                        startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
                     })
                     .setIcon(R.drawable.ic_baseline_download_24)
                     .show();
         });
         filesList.setAdapter(listAdapter);
+        // ✅ 强制刷新 RecyclerView，确保 downloadRecords 变化能被检测到
+        listAdapter.notifyDataSetChanged();
     }
 }

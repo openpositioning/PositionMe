@@ -1,5 +1,19 @@
 package com.openpositioning.PositionMe.data.remote;
 
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import org.json.JSONObject;
+
+import android.os.Environment;
+
+
+import java.io.FileInputStream;
+import java.io.OutputStream;
+
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
@@ -67,6 +81,9 @@ import com.openpositioning.PositionMe.data.remote.TrajectoryFileHandler;
  * @author Mate Stodulka
  */
 public class ServerCommunications implements Observable {
+    public static Map<Long, String> downloadRecords = new HashMap<>();
+    private final File recordsFile = new File(Environment.getExternalStoragePublicDirectory
+            (Environment.DIRECTORY_DOWNLOADS), "downloaded_files.json");
 
     // Application context for handling permissions and devices
     private final Context context;
@@ -181,6 +198,17 @@ public class ServerCommunications implements Observable {
                     notifyObservers(1);
                 }
 
+                private void copyFile(File src, File dst) throws IOException {
+                    try (InputStream in = new FileInputStream(src);
+                         OutputStream out = new FileOutputStream(dst)) {
+                        byte[] buf = new byte[1024];
+                        int len;
+                        while ((len = in.read(buf)) > 0) {
+                            out.write(buf, 0, len);
+                        }
+                    }
+                }
+
                 // Process the server's response
                 @Override public void onResponse(Call call, Response response) throws IOException {
                     try (ResponseBody responseBody = response.body()) {
@@ -208,8 +236,23 @@ public class ServerCommunications implements Observable {
                         // Print a confirmation of a successful POST to API
                         System.out.println("Successful post response: " + responseBody.string());
 
-                        // Delete local file and set success to true
-                        success = file.delete();
+                        System.out.println("LaiGan: " + file.getName());
+                        String originalPath = file.getAbsolutePath();
+                        System.out.println("Original trajectory file saved at: " + originalPath);
+
+                        // 将文件复制到 Downloads 文件夹（注意：需要在 Manifest 里声明相关权限，并在运行时申请）
+                        File downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
+                        File downloadFile = new File(downloadsDir, file.getName());
+                        try {
+                            copyFile(file, downloadFile);
+                            System.out.println("Trajectory file copied to Downloads: " + downloadFile.getAbsolutePath());
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            System.err.println("Failed to copy file to Downloads: " + e.getMessage());
+                        }
+
+                        // 不再删除文件，直接设置成功，并通知观察者
+                        success = true;
                         notifyObservers(1);
                     }
                 }
@@ -291,6 +334,74 @@ public class ServerCommunications implements Observable {
         });
     }
 
+    private void loadDownloadRecords() {
+        File recordsFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
+        if (recordsFile.exists()) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(recordsFile))) {
+                StringBuilder json = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    json.append(line);
+                }
+
+                JSONObject jsonObject = new JSONObject(json.toString());
+                for (Iterator<String> it = jsonObject.keys(); it.hasNext(); ) {
+                    String key = it.next();
+                    long timestamp = Long.parseLong(key);
+                    String record = jsonObject.getJSONObject(key).toString();
+                    downloadRecords.put(timestamp, record);
+                }
+
+                // ✅ 检查是否成功加载
+                System.out.println("LaiGan Loaded downloadRecords: " + downloadRecords);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("LaiGan download_records.json not found.");
+        }
+    }
+
+
+    private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
+        try {
+            File recordsFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
+
+            JSONObject jsonObject;
+            if (recordsFile.exists()) {
+                StringBuilder json = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new FileReader(recordsFile))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        json.append(line);
+                    }
+                }
+                jsonObject = json.length() > 0 ? new JSONObject(json.toString()) : new JSONObject();
+            } else {
+                jsonObject = new JSONObject();
+            }
+
+            JSONObject recordDetails = new JSONObject();
+            recordDetails.put("file_name", fileName);
+            recordDetails.put("id", id);
+            recordDetails.put("date_submitted", dateSubmitted);
+
+            jsonObject.put(String.valueOf(startTimestamp), recordDetails);
+            try (FileWriter writer = new FileWriter(recordsFile)) {
+                writer.write(jsonObject.toString(4));
+                writer.flush();
+            }
+
+            System.out.println("✅ Download record saved successfully.");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
     /**
      * Perform API request for downloading a Trajectory uploaded to the server. The trajectory is
      * retrieved from a zip file, with the method accepting a position argument specifying the
@@ -299,8 +410,9 @@ public class ServerCommunications implements Observable {
      *
      * @param position the position of the trajectory in the zip file to retrieve
      */
-    public void downloadTrajectory(int position) {
-        // Initialise OkHttp client
+    public void downloadTrajectory(int position, String id, String dateSubmitted) {
+        loadDownloadRecords();  // 加载已有记录
+
         OkHttpClient client = new OkHttpClient();
 
         // Create GET request with required header
@@ -312,14 +424,15 @@ public class ServerCommunications implements Observable {
 
         // Enqueue the GET request for asynchronous execution
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override public void onFailure(Call call, IOException e) {
+            @Override
+            public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }
 
-            @Override public void onResponse(Call call, Response response) throws IOException {
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful()) throw new IOException("Unexpected code "
-                            + response);
+                    if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
                     // Create input streams to process the response
                     InputStream inputStream = responseBody.byteStream();
@@ -329,10 +442,7 @@ public class ServerCommunications implements Observable {
                     java.util.zip.ZipEntry zipEntry;
                     int zipCount = 0;
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                        if (zipCount == position) {
-                            // break if zip entry position matches the desired position
-                            break;
-                        }
+                        if (zipCount == position) break;
                         zipCount++;
                     }
 
@@ -350,27 +460,22 @@ public class ServerCommunications implements Observable {
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
 
-                    // Convert the protobuf object to a string
-                    JsonFormat.Printer printer = JsonFormat.printer();
-                    String receivedTrajectoryString = printer.print(receivedTrajectory);
-                    System.out.println("Successful download: "
-                            + receivedTrajectoryString.substring(0, 100));
-
-                    // Save the received trajectory to a file in the Downloads folder
-                    //String storagePath = Environment.getExternalStoragePublicDirectory(Environment
-                           // .DIRECTORY_DOWNLOADS).toString();
-                    //String storagePath = context.getFilesDir().toString();
-                    //change the download path to the app's file directory //CL
-                    String storagePath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).toString();
-                    // using timestamp to create unique file name//cl
-                    long uploadTimestamp = receivedTrajectory.getStartTimestamp();
-                    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
-                    String formattedTime = dateFormat.format(new Date(uploadTimestamp));
-                    File file = new File(storagePath, "trajectory_" + formattedTime + ".txt");
 
 
-                    // File file = new File(storagePath, "received_trajectory.txt");
+                    long startTimestamp = receivedTrajectory.getStartTimestamp();
+                    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy_MM_dd_HH_mm_ss");
+                    String formattedDate = dateFormat.format(new Date(startTimestamp));
+                    String fileName = "trajectory_" + formattedDate + ".txt";
+
+                    File storagePath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    if (!storagePath.exists()) {
+                        storagePath.mkdirs();
+                    }
+
+                    File file = new File(storagePath, fileName);
                     try (FileWriter fileWriter = new FileWriter(file)) {
+                        JsonFormat.Printer printer = JsonFormat.printer();
+                        String receivedTrajectoryString = printer.print(receivedTrajectory);
                         fileWriter.write(receivedTrajectoryString);
                         fileWriter.flush();
                         System.err.println("Received trajectory stored in: " + storagePath);
@@ -383,20 +488,9 @@ public class ServerCommunications implements Observable {
                         zipInputStream.close();
                         inputStream.close();
                     }
-                    // 示例调用//cl
-                    String filePath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/trajectory_20250201_182010.txt";
-                    long searchTimestamp = 177;  //
-                    String TAG = "ServerCommunications";
-                    try {
-                        JsonObject imuData = TrajectoryFileHandler.getSmoothedImuData(filePath, searchTimestamp);
-                        if (imuData != null) {
-                            Log.d(TAG, " IMU Data: " + imuData.toString());
-                        } else {
-                            Log.w(TAG, " No data found for timestamp: " + searchTimestamp);
-                        }
-                    } catch (IOException e) {
-                        Log.e(TAG, " Error reading trajectory file", e);
-                    }
+
+                    // 保存下载记录，包含 ID 和 date_submitted
+                    saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
 
                 }
             }
