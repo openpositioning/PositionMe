@@ -7,6 +7,7 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -48,8 +49,11 @@ import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.UtilFunctions;
+
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A Fragment that not only shows the live recording but also integrates playback controls
@@ -108,6 +112,7 @@ public class PlaybackFragment extends Fragment {
     private Spinner speedSpinner;
     // Text displaying speed
     private TextView speedPlayed;
+    private final String[] SPEED_PLAYED_VALUES = {"0.5x", "1x", "2x", "4x"};
     // Text for time elapsed
     private TextView timeElapsed;
     // Plus 10 seconds button
@@ -121,6 +126,8 @@ public class PlaybackFragment extends Fragment {
     private Handler playbackHandler = new Handler();
     private int playbackCurrentIndex = 0;
     private int currentPressureIdx = 0;
+    private float playbackSpeed = 1.f;
+    private float[] SPINNER_SPEEDS = {0.5f, 1.f, 2.f, 4.f};
     private int gnssIdx = 0;
     private long playbackCurrentTimestamp = 0;
     private boolean playbackIsPaused = false;
@@ -209,6 +216,43 @@ public class PlaybackFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
+        speedSpinner = getView().findViewById(R.id.speedSpinner);
+        speedPlayed = getView().findViewById(R.id.speedPlayed);
+        timeElapsed = getView().findViewById(R.id.timeElapsed);
+        plus10Button = getView().findViewById(R.id.plus10Button);
+        minus10Button = getView().findViewById(R.id.minus10Button);
+
+        speedSpinner.setSelection(1);
+
+        speedSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                if (i >= 0 && i < SPINNER_SPEEDS.length)
+                    playbackSpeed = SPINNER_SPEEDS[i];
+                if (i < SPEED_PLAYED_VALUES.length)
+                    speedPlayed.setText(SPEED_PLAYED_VALUES[i]);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {}
+        });
+
+        plus10Button.setOnClickListener(v -> {
+            long lastTimestamp =
+                    trajectoryPointsTimed.get(trajectoryPointsTimed.size() - 1).timestamp;
+            playbackCurrentTimestamp = Long.min(lastTimestamp, playbackCurrentTimestamp + 10000);
+            playbackCurrentIndex = getPlaybackCurrentIdx(trajectoryPointsTimed,
+                    playbackCurrentTimestamp);
+        });
+
+        minus10Button.setOnClickListener(v -> {
+            long firstTimestamp = trajectoryPointsTimed.get(0).timestamp;
+            playbackCurrentTimestamp =
+                    Long.max(firstTimestamp, playbackCurrentTimestamp - 10000);
+            playbackCurrentIndex = getPlaybackCurrentIdx(trajectoryPointsTimed,
+                    playbackCurrentTimestamp);
+        });
 
 
 
@@ -350,6 +394,8 @@ public class PlaybackFragment extends Fragment {
                     playbackCurrentIndex = getPlaybackCurrentIdx(trajectoryPointsTimed, targetTimestamp);
                     playbackCurrentTimestamp = targetTimestamp;
                     updatePlaybackPolyline(trajectoryPointsTimed, targetTimestamp);
+                    updateTimeElapsed(
+                            playbackCurrentTimestamp - trajectoryPointsTimed.get(0).timestamp);
                     currentLocation = trajectoryPointsTimed.get(playbackCurrentIndex);
                 }
             }
@@ -475,6 +521,8 @@ public class PlaybackFragment extends Fragment {
             public void run() {
                 if (playbackCurrentTimestamp
                         < trajectoryPoints.get(trajectoryPoints.size() - 1).timestamp) {
+                    updateTimeElapsed(
+                            playbackCurrentTimestamp - trajectoryPoints.get(0).timestamp);
                     if (!playbackIsPaused) {
                         playbackCurrentIndex = getPlaybackCurrentIdx(trajectoryPointsTimed, playbackCurrentTimestamp);
                         updatePlaybackPolyline(trajectoryPoints, playbackCurrentTimestamp);
@@ -483,7 +531,8 @@ public class PlaybackFragment extends Fragment {
                                 .timestamp;
 
                         // time until the next seekbar step
-                        long deltaT = (lastTimestamp - startTimestamp) / SEEKBAR_SIZE;
+                        long deltaT = (long) (
+                                (lastTimestamp - startTimestamp) / SEEKBAR_SIZE);
 
                         if (playbackCurrentIndex < trajectoryPoints.size() - 1) {
                             long currentTimestamp = trajectoryPoints.get(playbackCurrentIndex).timestamp;
@@ -497,7 +546,7 @@ public class PlaybackFragment extends Fragment {
                         currentLocation = trajectoryPointsTimed.get(playbackCurrentIndex);
                         }
                         playbackCurrentTimestamp += deltaT;
-                        playbackHandler.postDelayed(this, deltaT);
+                        playbackHandler.postDelayed(this, (long) (((float) deltaT) / playbackSpeed));
                     }
                 }
             }
@@ -571,7 +620,6 @@ public class PlaybackFragment extends Fragment {
         gnssIdx = getTrajectoryPointIndex(gnssPointsTimed, currentTimestamp);
         plotGnssSamples(gnssIdx);
         currentPressureIdx = getTrajectoryPointIndex(timedAltitude, currentTimestamp);
-
 
         polyline.setPoints(currentPoints);
         int seekbarProgress = getProgressByTime(
@@ -687,5 +735,13 @@ public class PlaybackFragment extends Fragment {
             i--;
         }
         return i;
+    }
+
+    private void updateTimeElapsed(long timestamp) {
+        long hours = TimeUnit.MILLISECONDS.toHours(timestamp);
+        long minutes = TimeUnit.MILLISECONDS.toMinutes(timestamp) % 60;
+        long seconds = TimeUnit.MILLISECONDS.toSeconds(timestamp) % 60;
+        long millis = timestamp % 1000;
+        timeElapsed.setText(String.format("%02d:%02d", minutes, seconds));
     }
 }
