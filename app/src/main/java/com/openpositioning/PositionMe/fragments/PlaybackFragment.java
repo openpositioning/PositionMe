@@ -33,6 +33,11 @@ import com.openpositioning.PositionMe.R;
 import java.util.ArrayList;
 import java.util.List;
 
+
+import com.openpositioning.PositionMe.dataParser.GnssData;
+import com.openpositioning.PositionMe.dataParser.TrajectoryData;
+import com.openpositioning.PositionMe.dataParser.TrajectoryParser;
+
 /**
  * ReplayFragment 用于回放先前录制的轨迹数据，
  * 根据录制时保存的轨迹点生成回放轨迹，并在地图上动态显示。
@@ -301,17 +306,22 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
      * 实际可以从本地数据库、文件或服务器获取 proto 后再解析成 LatLng 列表
      */
     private void loadRecordedTrajectory(String trajectoryId) {
-        // TODO: 真正实现：例如用ServerCommunications下载proto或从本地文件解析
-        // 这里为演示，仅伪造一组坐标
-        if (trajectoryId == null) return;
-
+        // Clear any existing trajectory data
         recordedTrajectory.clear();
-        // Mock data
-        recordedTrajectory.add(new LatLng(55.9229, -3.1745));
-        recordedTrajectory.add(new LatLng(55.9230, -3.1744));
-        recordedTrajectory.add(new LatLng(55.9231, -3.1743));
-        recordedTrajectory.add(new LatLng(55.9232, -3.1742));
-        // ...
+
+        // Parse the trajectory file from internal storage
+        // (Ensure that your parser and model classes are in the package com.openpositioning.PositionMe.playback)
+        TrajectoryData trajectoryData = TrajectoryParser.parseTrajectoryFile(getContext());
+
+        // Retrieve the list of GNSS samples from the parsed data
+        List<GnssData> gnssSamples = trajectoryData.getGnssData();
+
+        // For each GNSS sample, create a LatLng point using the latitude and longitude values,
+        // and add it to the recordedTrajectory list.
+        for (GnssData sample : gnssSamples) {
+            LatLng point = new LatLng(sample.getLatitude(), sample.getLongitude());
+            recordedTrajectory.add(point);
+        }
     }
 
     /**

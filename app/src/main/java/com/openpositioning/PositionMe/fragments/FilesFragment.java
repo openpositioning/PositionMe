@@ -213,6 +213,7 @@ public class FilesFragment extends Fragment implements Observer {
             public void onPlaybackClicked(int position) {
                 // Here, we get the trajectory ID or related info from responseItems
                 String trajectoryId = entryList.get(position).get("id");
+                serverCommunications.downloadTrajectory(position);
 
                 // Then we use Navigation to jump to PlaybackFragment, passing this ID
                 FilesFragmentDirections.ActionFilesFragmentToPlaybackFragment action =
