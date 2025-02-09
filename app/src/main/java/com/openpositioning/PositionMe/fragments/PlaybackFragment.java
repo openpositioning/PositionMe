@@ -104,6 +104,17 @@ public class PlaybackFragment extends Fragment {
 
     private List<Marker> gnssMarkers = new ArrayList<>();
 
+    // Dropdown for speed
+    private Spinner speedSpinner;
+    // Text displaying speed
+    private TextView speedPlayed;
+    // Text for time elapsed
+    private TextView timeElapsed;
+    // Plus 10 seconds button
+    private Button plus10Button;
+    // Minus 10 seconds Button
+    private Button minus10Button;
+
 
     // ----------------------------
     // Fields for playback functionality
@@ -198,6 +209,8 @@ public class PlaybackFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
+
 
         // Live recording UI initialization
         timeRemaining = getView().findViewById(R.id.timeRemainingBar);
