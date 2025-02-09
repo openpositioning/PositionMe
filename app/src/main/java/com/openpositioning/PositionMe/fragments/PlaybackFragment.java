@@ -244,6 +244,8 @@ public class PlaybackFragment extends Fragment {
             playbackCurrentTimestamp = Long.min(lastTimestamp, playbackCurrentTimestamp + 10000);
             playbackCurrentIndex = getPlaybackCurrentIdx(trajectoryPointsTimed,
                     playbackCurrentTimestamp);
+            updatePlaybackPolyline(trajectoryPointsTimed, playbackCurrentTimestamp);
+            updateTimeElapsed(playbackCurrentTimestamp - trajectoryPointsTimed.get(0).timestamp);
         });
 
         minus10Button.setOnClickListener(v -> {
@@ -252,6 +254,8 @@ public class PlaybackFragment extends Fragment {
                     Long.max(firstTimestamp, playbackCurrentTimestamp - 10000);
             playbackCurrentIndex = getPlaybackCurrentIdx(trajectoryPointsTimed,
                     playbackCurrentTimestamp);
+            updatePlaybackPolyline(trajectoryPointsTimed, playbackCurrentTimestamp);
+            updateTimeElapsed(playbackCurrentTimestamp - trajectoryPointsTimed.get(0).timestamp);
         });
 
 
