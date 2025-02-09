@@ -8,8 +8,7 @@
     <fragment
         android:id="@+id/homeFragment"
         android:name="com.openpositioning.PositionMe.fragments.HomeFragment"
-        android:label="HomeFragment
-"
+        android:label="HomeFragment"
         tools:layout="@layout/fragment_home" >
         <action
             android:id="@+id/action_homeFragment_to_startLocationFragment"
@@ -110,7 +109,17 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
-    </fragment><action android:id="@+id/action_global_correctionFragment" app:destination="@id/correctionFragment"/>
+        <action
+            android:id="@+id/action_filesFragment_to_replayFragment"
+            app:destination="@id/replayFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right"/>
+    </fragment>
+    <action
+        android:id="@+id/action_global_correctionFragment"
+        app:destination="@id/correctionFragment"/>
     <fragment
         android:id="@+id/uploadFragment"
         android:name="com.openpositioning.PositionMe.fragments.UploadFragment"
@@ -123,4 +132,10 @@
         app:exitAnim="@anim/slide_out_bottom"
         app:popEnterAnim="@anim/slide_in_bottom"
         app:popExitAnim="@anim/slide_in_top" />
+
+    <fragment
+        android:id="@+id/replayFragment"
+        android:name="com.openpositioning.PositionMe.fragments.ReplayFragment"
+        android:label="ReplayFragment"
+        tools:layout="@layout/fragment_replay" />
 </navigation>

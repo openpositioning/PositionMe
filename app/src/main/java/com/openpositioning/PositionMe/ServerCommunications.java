@@ -339,7 +339,7 @@ public class ServerCommunications implements Observable {
 
                     // Save the received trajectory to a file in the Downloads folder
                     //String storagePath = Environment.getExternalStoragePublicDirectory(Environment
-                           // .DIRECTORY_DOWNLOADS).toString();
+                    // .DIRECTORY_DOWNLOADS).toString();
                     String storagePath = context.getFilesDir().toString();
 
                     File file = new File(storagePath, "received_trajectory.txt");

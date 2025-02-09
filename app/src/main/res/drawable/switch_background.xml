@@ -1,0 +1,7 @@
+<!-- res/drawable/switch_background.xml -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <!-- Use a light grey color. You can use a theme attribute like ?attr/colorSurface if your theme resolves it appropriately,
+         or specify a concrete color (e.g., @color/grey_200 if defined in your colors.xml) -->
+    <solid android:color="?attr/colorSurface" />
+    <corners android:radius="16dp" />
+</shape>

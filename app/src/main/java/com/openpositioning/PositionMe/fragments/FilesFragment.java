@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.viewitems.DownloadClickListener;
 import com.openpositioning.PositionMe.viewitems.TrajDownloadListAdapter;
 
 import org.json.JSONArray;
@@ -46,6 +47,7 @@ import java.util.Map;
  *
  * @author Mate Stodulka
  */
+
 public class FilesFragment extends Fragment implements Observer {
 
     // UI elements
@@ -192,22 +194,33 @@ public class FilesFragment extends Fragment implements Observer {
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
-        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
-            // Download the appropriate trajectory instance
-            serverCommunications.downloadTrajectory(position);
-            // Display a pop-up message to direct the user to the download location if necessary.
-            new AlertDialog.Builder(getContext())
-                    .setTitle("File downloaded")
-                    .setMessage("Trajectory downloaded to local storage")
-                    .setPositiveButton(R.string.ok, null)
-                    .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-                        }
-                    })
-                    .setIcon(R.drawable.ic_baseline_download_24)
-                    .show();
+        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, new DownloadClickListener() {
+            @Override
+            public void onDownloadClicked(int position) {
+                // Download the appropriate trajectory instance
+                serverCommunications.downloadTrajectory(position);
+                // Display a pop-up message to direct the user to the download location if necessary.
+                new AlertDialog.Builder(getContext())
+                        .setTitle("File downloaded")
+                        .setMessage("Trajectory downloaded to local storage")
+                        .setPositiveButton(R.string.ok, null)
+                        .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
+                            }
+                        })
+                        .setIcon(R.drawable.ic_baseline_download_24)
+                        .show();
+            }
+
+            @Override
+            public void onReplayClicked(int position) {
+                // Navigate to ReplayFragment (you could pass data here if needed)
+                NavDirections action = FilesFragmentDirections.actionFilesFragmentToReplayFragment();
+                Navigation.findNavController(requireView()).navigate(action);
+            }
+
         });
         filesList.setAdapter(listAdapter);
     }

@@ -116,11 +116,15 @@ public class UploadFragment extends Fragment {
                  * Upload the trajectory at the clicked position, remove it from the recycler view
                  * and the local list.
                  */
+
                 @Override
-                public void onPositionClicked(int position) {
+                public void onDownloadClicked(int position) {
                     serverCommunications.uploadLocalTrajectory(localTrajectories.get(position));
-//                    localTrajectories.remove(position);
-//                    listAdapter.notifyItemRemoved(position);
+                }
+
+                @Override // Add the missing method
+                public void onReplayClicked(int position) {
+                    // Intentionally left empty.  UploadFragment doesn't handle replay.
                 }
             });
             uploadList.setAdapter(listAdapter);
