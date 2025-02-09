@@ -28,6 +28,15 @@
         android:roundIcon="@mipmap/ic_launcher_icon_map_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Cloud">
+
+        <activity
+            android:name=".presentation.activity.ReplayActivity"
+            android:exported="false" />
+        <activity
+            android:name=".presentation.activity.RecordingActivity"
+            android:exported="false" />
+
+        
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="@string/google_maps_key"/>
