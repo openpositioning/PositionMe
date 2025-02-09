@@ -1,0 +1,8 @@
+<!-- res/drawable/plus_10_button_background.xml -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <bitmap
+            android:src="@drawable/plus_10_sec"
+            android:gravity="center" />
+    </item>
+</layer-list>

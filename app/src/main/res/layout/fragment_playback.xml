@@ -227,7 +227,7 @@
         <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/constraintLayout"
             android:layout_width="wrap_content"
-            android:layout_height="90dp"
+            android:layout_height="100dp"
             android:layout_marginStart="10dp"
             android:layout_marginEnd="10dp"
             android:background="@drawable/rounded_transparent_black"
@@ -236,7 +236,7 @@
             app:layout_constraintHorizontal_bias="0.5"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="0.89">
+            app:layout_constraintVertical_bias="0.881">
 
             <SeekBar
                 android:id="@+id/playbackSeekBar"
@@ -307,9 +307,9 @@
                 android:id="@+id/speedPlayed"
                 android:layout_width="25dp"
                 android:layout_height="19dp"
+                android:layout_marginStart="10dp"
                 android:text="x1"
                 android:textColor="#FFFFFF"
-                android:layout_marginStart="10dp"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/speedSpinner"
                 app:layout_constraintHorizontal_bias="1.0"
@@ -324,34 +324,67 @@
                 android:layout_height="19dp"
                 android:text="00:00"
                 android:textColor="#FFFFFF"
-
                 app:layout_constraintBottom_toTopOf="@+id/playbackSeekBar"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
+            <Button
+                android:id="@+id/plus10Button"
+                android:layout_width="60dp"
+                android:layout_height="35dp"
+                android:background="@android:color/transparent"
+                android:src="@drawable/playback"
+                android:text="+10"
+                android:textSize="6sp"
+                app:layout_constraintBottom_toTopOf="@+id/playbackSeekBar"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintHorizontal_bias="0.500"
+                app:layout_constraintStart_toEndOf="@+id/timeElapsed"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.3" />
+
+            <ImageView
+                android:id="@+id/plus_10_arrow"
+                android:layout_width="42dp"
+                android:layout_height="38dp"
+                android:scaleType="center"
+                android:src="@drawable/plus_10_sec"
+                app:layout_constraintStart_toEndOf="@id/timeElapsed"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                android:translationY="-36dp" />
+
+            <ImageView
+                android:id="@+id/minus_10_arrow"
+                android:layout_width="42dp"
+                android:layout_height="38dp"
+                android:scaleType="center"
+                android:src="@drawable/minus_10_sec"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/timeElapsed"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                android:translationY="-36dp" />
+
+            <Button
+                android:id="@+id/minus10Button"
+                android:layout_width="60dp"
+                android:layout_height="35dp"
+                android:background="@android:color/transparent"
+                android:text="-10"
+                android:textSize="6sp"
+                app:layout_constraintBottom_toTopOf="@+id/playbackSeekBar"
+                app:layout_constraintEnd_toStartOf="@+id/timeElapsed"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintHorizontal_bias="0.500"
+                app:layout_constraintVertical_bias="0.3"
+                />
+
 
         </androidx.constraintlayout.widget.ConstraintLayout>
-
-        <Button
-            android:id="@+id/plus10Button"
-            android:layout_width="77dp"
-            android:layout_height="35dp"
-            android:text="+10"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@+id/minus10Button"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
-        <Button
-            android:id="@+id/minus10Button"
-            android:layout_width="77dp"
-            android:layout_height="35dp"
-            android:text="-10"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
 
 
     </androidx.constraintlayout.widget.ConstraintLayout>
