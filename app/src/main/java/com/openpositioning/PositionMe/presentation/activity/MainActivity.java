@@ -75,6 +75,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private PermissionManager permissionManager;
 
     private static final int PERMISSION_REQUEST_CODE = 100;
+
     //endregion
 
     //region Activity Lifecycle
@@ -122,13 +123,14 @@ public class MainActivity extends AppCompatActivity implements Observer {
                 allPermissionsObtained();
             }
         });
+        // Check and request permissions
+        checkAndRequestPermissions();
 
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();
-
-        // Check and request permissions
-        checkAndRequestPermissions();
     }
+
+
 
     private void checkAndRequestPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -167,7 +169,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
             }
         }
     }
-
     /**
      * {@inheritDoc}
      */
@@ -196,7 +197,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
             if (permissionManager != null) {
                 permissionManager.checkAndRequestPermissions();
             }
-        }, 300); // 300 ms delay to ensure the Activity is fully in the foreground
+        }, 3000); // 300 ms delay to ensure the Activity is fully in the foreground
         if (sensorFusion != null) {
             sensorFusion.resumeListening();
         }
