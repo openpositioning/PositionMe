@@ -3,7 +3,6 @@ package com.openpositioning.PositionMe.fragments;
 import static android.content.ContentValues.TAG;
 
 import android.annotation.SuppressLint;
-
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -14,7 +13,6 @@ import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.view.View;
 import android.widget.CompoundButton;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
@@ -57,35 +55,58 @@ import java.util.List;
 public class Replay extends AppCompatActivity implements OnMapReadyCallback {
 
     private GoogleMap mMap;
-    private List<LatLng> trackPoints = new ArrayList<>();
+    // 使用 TimedLatLng 来存储 PDR 样本的坐标和对应时间戳（用 long 表示时间戳）
+    private List<TimedLatLng> trackPoints = new ArrayList<>();
     private Polyline polyline;
-    private Marker currentMarker;
-    private int currentIndex = 0;
+    private Marker currentMarker;  // 用于显示 PDR 轨迹的指针（当前用户位置）
+    private Marker gnssMarker;     // 用于显示 GNSS 的位置
+
+    // 播放控制变量
     private boolean isPlaying = false;
     private Handler handler = new Handler();
 
     private SeekBar seekBar;
     private ImageButton playButton, fastRewind, fastForward, gotoStartButton, gotoEndButon;
     private TextView progressText, totaltimetext;
-    private Switch switch1; // 用於控制軌跡顯示模式
+    private Switch switch1; // 控制是否显示完整轨迹
     private String filePath;
 
-    private int totalDuration = 0; // 軌跡總時長（ms）
-    private int playbackSpeed = 300; // 每個點的播放間隔（ms）
-    private int currentTime = 0;     // 當前回放時間（ms）
+    // 播放相关的时间参数（单位：毫秒），这里将总时长和当前播放时间改为 long 类型
+    private long totalDuration = 0; // 轨迹总时长，根据所有 PDR 样本中最大的 relativeTimestamp 决定
+    // currentTime 表示当前播放到的时间戳（ms）
+    private long currentTime = 0;
 
-    // 用於室內地圖顯示的管理器
+    // 播放控制：使用当前播放样本的下一个样本的时间戳差来计算延时，
+    // playbackSpeedFactor 为播放速度因子（1.0 表示真实录制时间播放，可根据需要加速播放）
+    private double playbackSpeedFactor = 1.0;
+
+    // 用于室内地图显示的管理器
     private IndoorMapManager indoorMapManager;
 
-    // Switch used to set auto floor
+    // 保存解析后的 Trajectory 数据，用于获取 GNSS 数据
+    private Traj.Trajectory trajectoryData;
+
+    // Switch 用于自动楼层切换及楼层切换按钮
     private Switch autoFloor;
-
     public FloatingActionButton floorUpButton;
-    // Floor Down button
     public FloatingActionButton floorDownButton;
-
-    // Added: 用于切换地图类型的 Spinner
     private Spinner mapTypeSpinner;
+
+    // 当前播放到的 pdr 样本索引（用于遍历 trackPoints）
+    private int currentIndex = 0;
+
+    /**
+     * 内部类，用于存储 PDR 计算得到的地理位置及其对应的时间戳（relativeTimestamp，单位 ms）
+     */
+    public static class TimedLatLng {
+        public LatLng point;
+        public long relativeTimestamp; // 使用 long 表示毫秒时间戳
+
+        public TimedLatLng(LatLng point, long relativeTimestamp) {
+            this.point = point;
+            this.relativeTimestamp = relativeTimestamp;
+        }
+    }
 
     @SuppressLint("MissingInflatedId")
     @Override
@@ -94,10 +115,10 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_replay);
 
-        // 取得 Intent 傳遞的檔案路徑
+        // 从 Intent 获取文件路径
         filePath = getIntent().getStringExtra("filePath");
 
-        // 初始化 UI 元件
+        // 初始化 UI 控件
         seekBar = findViewById(R.id.seekBar);
         playButton = findViewById(R.id.playPauseButton);
         fastRewind = findViewById(R.id.fastRewindButton);
@@ -106,74 +127,87 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         gotoEndButon = findViewById(R.id.goToEndButton);
         progressText = findViewById(R.id.currentTime);
         totaltimetext = findViewById(R.id.totalTime);
-        switch1 = findViewById(R.id.switch1);  // 請確保 layout 中存在此 Switch 控件
-        // Auto-floor switch
+        switch1 = findViewById(R.id.switch1);  // 请确保 layout 中存在此 Switch 控件
         autoFloor = findViewById(R.id.autoFloor2);
         autoFloor.setChecked(false);
-
-        // Floor changer Buttons
         floorUpButton = findViewById(R.id.floorUpButton2);
         floorDownButton = findViewById(R.id.floorDownButton2);
 
-        // Floor changer Buttons listener
         floorUpButton.setOnClickListener(new View.OnClickListener() {
-                                             @Override
-                                             public void onClick(View view) {
-                                                 autoFloor.setChecked(false);
-                                                 indoorMapManager.increaseFloor();
-                                             }
-                                         });
+            @Override
+            public void onClick(View view) {
+                autoFloor.setChecked(false);
+                indoorMapManager.increaseFloor();
+            }
+        });
 
         floorDownButton.setOnClickListener(new View.OnClickListener() {
-                                               @Override
-                                               public void onClick(View view) {
-                                                   autoFloor.setChecked(false);
-                                                   indoorMapManager.decreaseFloor();
-                                               }
-                                           });
+            @Override
+            public void onClick(View view) {
+                autoFloor.setChecked(false);
+                indoorMapManager.decreaseFloor();
+            }
+        });
 
-
-
-        // Added: 获取 Spinner 控件（确保布局文件中有该控件）
         mapTypeSpinner = findViewById(R.id.mapTypeSpinner);
-        setupMapTypeSpinner(); // Added: 设置 Spinner 的监听
+        setupMapTypeSpinner();
 
-        // 當使用者切換 switch1 時，立即更新路徑顯示模式
+        // 当用户切换 switch1 时，更新轨迹显示模式
         switch1.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (polyline == null) return;
                 if (isChecked) {
-                    // 開啟狀態：顯示完整路徑
-                    polyline.setPoints(trackPoints);
+                    // 显示完整轨迹
+                    List<LatLng> allPoints = new ArrayList<>();
+                    for (TimedLatLng tl : trackPoints) {
+                        allPoints.add(tl.point);
+                    }
+                    polyline.setPoints(allPoints);
                 } else {
-                    // 關閉狀態：只顯示播放進度內的部分
-                    int end = Math.min(currentIndex + 1, trackPoints.size());
-                    polyline.setPoints(new ArrayList<>(trackPoints.subList(0, end)));
+                    // 只显示当前播放时间之前的轨迹
+                    List<LatLng> partial = new ArrayList<>();
+                    for (TimedLatLng tl : trackPoints) {
+                        if (tl.relativeTimestamp <= currentTime) {
+                            partial.add(tl.point);
+                        } else {
+                            break;
+                        }
+                    }
+                    if (partial.isEmpty() && !trackPoints.isEmpty()) {
+                        partial.add(trackPoints.get(0).point);
+                    }
+                    polyline.setPoints(partial);
                 }
             }
         });
 
-        // 初始化地圖
+        // 初始化地图 fragment
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        // 讀取軌跡資料
+        // 读取轨迹数据
         Traj.Trajectory trajectory = readTrajectoryFromFile(this, filePath);
         if (trajectory != null) {
-            trackPoints = convertTrajectoryToLatLng(trajectory);
-//            elevations = convertTrajectoryToElevation(trajectory);
-            totalDuration = trackPoints.size() * playbackSpeed;
-            seekBar.setMax(totalDuration);
+            trajectoryData = trajectory;
+            trackPoints = convertTrajectoryToTimedLatLng(trajectory);
+            if (!trackPoints.isEmpty()) {
+                // 将轨迹总时长设置为最后一个 PDR 样本的 relativeTimestamp
+                totalDuration = trackPoints.get(trackPoints.size() - 1).relativeTimestamp;
+                // 进度条最大值为 totalDuration（注意：seekBar.setMax 接受 int，所以这里假设时间戳不会超过 int 范围）
+                seekBar.setMax((int) totalDuration);
+            }
         } else {
-            Log.e(TAG, "軌跡文件解析失敗！");
+            Log.e(TAG, "轨迹文件解析失败！");
         }
 
-        // 按鈕事件
+        // 按钮点击事件
         playButton.setOnClickListener(v -> {
             if (isPlaying) {
                 pausePlayback();
             } else {
+                // 播放时将 currentIndex 重置为 0
+                currentIndex = 0;
                 startPlayback();
             }
         });
@@ -182,15 +216,18 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         gotoStartButton.setOnClickListener(v -> gotoStart());
         gotoEndButon.setOnClickListener(v -> gotoEnd());
 
-        // 進度條拖動監聽
+        // 进度条拖动监听
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    currentTime = progress;
-                    currentIndex = currentTime / playbackSpeed;
-                    if (currentIndex >= trackPoints.size()) {
-                        currentIndex = trackPoints.size() - 1;
+                    currentTime = progress; // progress 是 int，可以直接赋值给 long
+                    // 更新当前播放样本索引：取第一个 sample 的 relativeTimestamp >= currentTime
+                    for (int i = 0; i < trackPoints.size(); i++) {
+                        if (trackPoints.get(i).relativeTimestamp >= currentTime) {
+                            currentIndex = i;
+                            break;
+                        }
                     }
                     updateMapPosition();
                 }
@@ -209,17 +246,14 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
-        // 設置地圖類型為混合模式
         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-        // 初始化室內地圖管理器，並在內部請確保覆蓋層的 z-index 設為低於路徑（例如 500）
         indoorMapManager = new IndoorMapManager(mMap);
         indoorMapManager.setIndicationOfIndoorMap();
-        // 接著畫出軌跡，軌跡會以 z-index 1000 顯示在室內覆蓋層之上
         drawTrack();
         setFloorButtonVisibility(View.GONE);
     }
 
-    // 解析 Protobuf 軌跡文件
+    // 解析 Protobuf 轨迹文件
     public static Traj.Trajectory readTrajectoryFromFile(Context context, String filePath) {
         File file = new File(filePath);
         if (!file.exists()) {
@@ -230,20 +264,20 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             fis.read(data);
             return Traj.Trajectory.parseFrom(data);
         } catch (InvalidProtocolBufferException e) {
-            Log.e(TAG, "Protobuf 解析失敗", e);
+            Log.e(TAG, "Protobuf 解析失败", e);
         } catch (IOException e) {
-            Log.e(TAG, "文件讀取失敗", e);
+            Log.e(TAG, "文件读取失败", e);
         }
         return null;
     }
 
-    // 將軌跡資料轉換為 LatLng 點集合
-    private List<LatLng> convertTrajectoryToLatLng(Traj.Trajectory trajectory) {
-        List<LatLng> points = new ArrayList<>();
-        double R = 6378137; // 地球半径
+    // 将轨迹数据转换为 TimedLatLng 列表（基于 PDR 数据，并保存每个样本的相对时间戳）
+    private List<TimedLatLng> convertTrajectoryToTimedLatLng(Traj.Trajectory trajectory) {
+        List<TimedLatLng> points = new ArrayList<>();
+        double R = 6378137; // 地球半径（米）
         double lat0 = 0;
         double lon0 = 0;
-        // 尝试找到第一个有效的 GNSS 样本（例如经纬度均不为 0）
+        // 尝试找到第一个有效的 GNSS 样本（经纬度不为 0）
         for (Traj.GNSS_Sample sample : trajectory.getGnssDataList()) {
             if (sample.getLatitude() != 0 && sample.getLongitude() != 0) {
                 lat0 = sample.getLatitude();
@@ -251,7 +285,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                 break;
             }
         }
-        // 如果所有 GNSS 样本都无效，则你可能需要给出一个提示或使用一个默认起点
         if (lat0 == 0 && lon0 == 0) {
             Log.e(TAG, "未找到有效的 GNSS 数据，使用默认起点 (0,0)！");
         }
@@ -262,75 +295,80 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             double dLon = trackX / (R * Math.cos(Math.toRadians(lat0)));
             double lat = lat0 + Math.toDegrees(dLat);
             double lon = lon0 + Math.toDegrees(dLon);
-            points.add(new LatLng(lat, lon));
+            long timestamp = pdrSample.getRelativeTimestamp();  // 注意：使用 long 类型
+            points.add(new TimedLatLng(new LatLng(lat, lon), timestamp));
         }
         return points;
     }
 
-    // for auto floor switching
-//    private List<float> convertTrajectoryToElevation(Traj.Trajectory trajectory) {
-////        List<Float> elevations = new ArrayList<>();
-////        for (Traj.Pdr_Sample pdrSample : trajectory.get) {
-////            elevations.add(pdrSample.getElevation());
-////        }
-////        return elevations;
-//        if (!trajectory.getGnssDataList().isEmpty()) {
-//            Traj.GNSS_Sample firstGnss = trajectory.getGnssDataList().get(0);
-//            double elevation0 = firstGnss.getAltitude();
-//        }
-//        for (Traj.Pdr_Sample pdrSample : trajectory.getPdrDataList()) {
-//            double pressure = pdrSample.;  // 前進位移（公尺）
-//
-//            // 坐標轉換
-//            double dLat = trackY / R;  // Y 對緯度影響
-//            double dLon = trackX / (R * Math.cos(Math.toRadians(lat0)));  // X 對經度影響
-//            double lat = lat0 + Math.toDegrees(dLat);
-//            double lon = lon0 + Math.toDegrees(dLon);
-//            points.add(new LatLng(lat, lon));
-//        }
-//        return points;
-//    }
+    // 根据当前播放时间，从 trajectoryData 的 GNSS 样本中选取最后一个 relativeTimestamp <= currentTime 的样本
+    private LatLng getCurrentGnssPosition(long currentTime, Traj.Trajectory trajectoryData) {
+        Traj.GNSS_Sample bestSample = null;
+        for (Traj.GNSS_Sample sample : trajectoryData.getGnssDataList()) {
+            Log.d(TAG, "检查 GNSS 样本：relativeTimestamp = " + sample.getRelativeTimestamp() + ", currentTime = " + currentTime);
+            if (sample.getRelativeTimestamp() <= currentTime) {
+                bestSample = sample;
+            } else {
+                break;
+            }
+        }
+        if (bestSample == null && trajectoryData.getGnssDataCount() > 0) {
+            bestSample = trajectoryData.getGnssData(0);
+        }
+        if (bestSample != null) {
+            Log.d(TAG, "选定 GNSS 样本：lat = " + bestSample.getLatitude() + ", lon = " + bestSample.getLongitude());
+            return new LatLng(bestSample.getLatitude(), bestSample.getLongitude());
+        }
+        return null;
+    }
 
-    /**
-     * 畫出軌跡：
-     * 若 switch1 為選中狀態，則顯示完整軌跡；
-     * 否則只先顯示起點，待播放時根據播放進度逐步更新。
-     * 這裡 PolylineOptions 中設定 .zIndex(1000) 確保軌跡顯示在室內覆蓋層之上，
-     * Marker 設定 .zIndex(1100) 並設置 flat(true) 則確保指針顯示在軌跡上方且能正確旋轉。
-     */
+    // 绘制轨迹及添加 Marker（包括用于 GNSS 地址显示的 Marker）
     private void drawTrack() {
         if (mMap != null && !trackPoints.isEmpty()) {
             PolylineOptions polylineOptions = new PolylineOptions()
                     .width(10)
-                    .color(0xFFFF00FF) // 軌跡顏色
+                    .color(0xFFFF00FF) // 轨迹颜色
                     .geodesic(true)
-                    .zIndex(1000);    // 設定軌跡 z-index 為 1000
+                    .zIndex(1000);
             if (switch1 != null && switch1.isChecked()) {
-                // 若 switch1 打開，顯示完整軌跡
-                polylineOptions.addAll(trackPoints);
+                // 显示完整轨迹：转换所有 TimedLatLng 到 LatLng
+                List<LatLng> allPoints = new ArrayList<>();
+                for (TimedLatLng tl : trackPoints) {
+                    allPoints.add(tl.point);
+                }
+                polylineOptions.addAll(allPoints);
             } else {
-                // 否則只顯示起點
-                polylineOptions.add(trackPoints.get(0));
+                polylineOptions.add(trackPoints.get(0).point);
             }
             polyline = mMap.addPolyline(polylineOptions);
 
-            // 添加起點指針 Marker，設置 flat(true) 以便旋轉
+            // 添加起点 Marker（用于显示 PDR 轨迹）
             currentMarker = mMap.addMarker(new MarkerOptions()
-                    .position(trackPoints.get(0))
-                    .title("起點")
-                    .flat(true)  // 使 Marker 平貼地圖，便於旋轉
-                    // 使用 ic_baseline_navigation_24 作為指針圖標（轉換 vector 為 bitmap）
+                    .position(trackPoints.get(0).point)
+                    .title("起点")
+                    .flat(true)
                     .icon(bitmapDescriptorFromVector(this, R.drawable.ic_baseline_navigation_24))
                     .zIndex(1100));
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(trackPoints.get(0), 18));
+
+            // 添加 GNSS Marker（使用 baseline_location_gnss 作为图标），初始位置取第一个 GNSS 样本
+            if (trajectoryData != null && trajectoryData.getGnssDataCount() > 0) {
+                Traj.GNSS_Sample firstSample = trajectoryData.getGnssData(0);
+                LatLng gnssLatLng = new LatLng(firstSample.getLatitude(), firstSample.getLongitude());
+                gnssMarker = mMap.addMarker(new MarkerOptions()
+                        .position(gnssLatLng)
+                        .title("GNSS")
+                        .icon(bitmapDescriptorFromVector(this, R.drawable.baseline_location_gnss))
+                        .zIndex(1200));
+            }
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(trackPoints.get(0).point, 20));
         }
     }
 
     /**
-     * 將 vector drawable 轉換成 BitmapDescriptor
+     * 将 vector drawable 转换成 BitmapDescriptor
      * @param context Context
-     * @param vectorResId vector drawable 資源 id
-     * @return BitmapDescriptor 對象
+     * @param vectorResId vector drawable 资源 id
+     * @return BitmapDescriptor 对象
      */
     private BitmapDescriptor bitmapDescriptorFromVector(Context context, @DrawableRes int vectorResId) {
         Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
@@ -346,31 +384,39 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         return BitmapDescriptorFactory.fromBitmap(bitmap);
     }
 
-    /**
-     * 開始回放：根據時間累加控制進度更新
-     */
+    // 开始回放：按每个 PDR 样本的时间戳间隔更新播放进度
     private void startPlayback() {
         if (trackPoints.isEmpty()) return;
+        // 初始化播放索引和时间
+        currentIndex = 0;
+        currentTime = trackPoints.get(0).relativeTimestamp;
         isPlaying = true;
         playButton.setImageResource(R.drawable.baseline_pause_24);
-        handler.postDelayed(new Runnable() {
+        handler.post(new Runnable() {
             @Override
             public void run() {
-                if (isPlaying && currentTime < totalDuration) {
-                    currentIndex = currentTime / playbackSpeed;
-                    if (currentIndex >= trackPoints.size()) {
-                        currentIndex = trackPoints.size() - 1;
-                    }
+                if (isPlaying && currentIndex < trackPoints.size()) {
+                    TimedLatLng currentTimedPoint = trackPoints.get(currentIndex);
+                    currentTime = currentTimedPoint.relativeTimestamp;
                     updateMapPosition();
-                    seekBar.setProgress(currentTime);
-                    currentTime += playbackSpeed;
-                    handler.postDelayed(this, playbackSpeed);
+                    seekBar.setProgress((int) currentTime);
+                    currentIndex++;
+                    if (currentIndex < trackPoints.size()) {
+                        // 根据相邻样本的时间戳差计算延时，并可乘以 playbackSpeedFactor 以调整播放速度
+                        long diff = trackPoints.get(currentIndex).relativeTimestamp - currentTimedPoint.relativeTimestamp;
+                        long delay = (long) (diff / playbackSpeedFactor);
+                        if (delay < 1) delay = 1;
+                        handler.postDelayed(this, delay);
+                    } else {
+                        isPlaying = false;
+                        playButton.setImageResource(R.drawable.baseline_play_arrow_24);
+                    }
                 } else {
                     isPlaying = false;
                     playButton.setImageResource(R.drawable.baseline_play_arrow_24);
                 }
             }
-        }, playbackSpeed);
+        });
     }
 
     private void pausePlayback() {
@@ -379,106 +425,132 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         playButton.setImageResource(R.drawable.baseline_play_arrow_24);
     }
 
-    // 快進5秒
+    // 快进 5 秒：在 recorded 时间尺度上跳转
     private void fastForward() {
-        int jumpTime = 5000;
+        int jumpTime = 5000; // 单位：ms
         currentTime = Math.min(currentTime + jumpTime, totalDuration);
-        currentIndex = currentTime / playbackSpeed;
-        if (currentIndex >= trackPoints.size()) {
-            currentIndex = trackPoints.size() - 1;
+        // 更新当前播放索引：找第一个 sample 的 relativeTimestamp >= currentTime
+        for (int i = 0; i < trackPoints.size(); i++) {
+            if (trackPoints.get(i).relativeTimestamp >= currentTime) {
+                currentIndex = i;
+                break;
+            }
         }
         updateMapPosition();
-        seekBar.setProgress(currentTime);
+        seekBar.setProgress((int) currentTime);
     }
 
-    // 快退5秒
+    // 快退 5 秒
     private void fastRewind() {
-        int jumpTime = 5000;
+        int jumpTime = 5000; // 单位：ms
         currentTime = Math.max(currentTime - jumpTime, 0);
-        currentIndex = currentTime / playbackSpeed;
+        // 更新当前播放索引：找第一个 sample 的 relativeTimestamp >= currentTime
+        for (int i = 0; i < trackPoints.size(); i++) {
+            if (trackPoints.get(i).relativeTimestamp >= currentTime) {
+                currentIndex = i;
+                break;
+            }
+        }
         updateMapPosition();
-        seekBar.setProgress(currentTime);
+        seekBar.setProgress((int) currentTime);
     }
 
-    // 跳轉到起始位置
+    // 跳转到起始位置
     private void gotoStart() {
         currentTime = 0;
         currentIndex = 0;
         updateMapPosition();
-        seekBar.setProgress(currentTime);
+        seekBar.setProgress((int) currentTime);
     }
 
-    // 跳轉到結束位置
+    // 跳转到结束位置
     private void gotoEnd() {
         currentTime = totalDuration;
         currentIndex = trackPoints.size() - 1;
         updateMapPosition();
-        seekBar.setProgress(currentTime);
+        seekBar.setProgress((int) currentTime);
     }
 
     /**
-     * Function to set change visibility of the floor up and down buttons
-     * @param visibility the visibility of floor buttons should be set to
-     */
-    private void setFloorButtonVisibility(int visibility){
-        floorUpButton.setVisibility(visibility);
-        floorDownButton.setVisibility(visibility);
-        autoFloor.setVisibility(visibility);
-    }
-
-    /**
-     * 更新地圖位置：
-     * 1. 移動相機並更新 Marker 位置與方向
-     * 2. 若 switch1 為關閉狀態，則依據播放進度更新 Polyline（只顯示已播放軌跡部分）
-     * 3. 更新室內地圖顯示（請確保 IndoorMapManager 內覆蓋層的 z-index 低於 1000）
-     * 4. 更新時間顯示
+     * 更新地图位置：
+     * 1. 根据当前播放时间查找对应的 PDR 样本（TimedLatLng），更新相机和 Marker 的位置与方向
+     * 2. 根据 switch1 状态更新 Polyline（只显示当前播放时间之前的轨迹或完整轨迹）
+     * 3. 更新时间显示
+     * 4. 根据当前播放时间更新 GNSS Marker
      */
     private void updateMapPosition() {
-        if (mMap != null && currentIndex < trackPoints.size()) {
-            LatLng point = trackPoints.get(currentIndex);
+        if (mMap != null && !trackPoints.isEmpty()) {
+            // 找到最后一个 relativeTimestamp <= currentTime 的 PDR 样本
+            TimedLatLng currentTimedPoint = trackPoints.get(0);
+            for (TimedLatLng tl : trackPoints) {
+                if (tl.relativeTimestamp <= currentTime) {
+                    currentTimedPoint = tl;
+                } else {
+                    break;
+                }
+            }
+            LatLng point = currentTimedPoint.point;
             mMap.moveCamera(CameraUpdateFactory.newLatLng(point));
             if (currentMarker != null) {
                 currentMarker.setPosition(point);
-                // 計算朝向：若有上一個點則以前一點到當前點的方位作為指針旋轉角度
-                if (currentIndex > 0) {
-                    LatLng prevPoint = trackPoints.get(currentIndex - 1);
+                // 若不是第一个样本，计算方向
+                int idx = trackPoints.indexOf(currentTimedPoint);
+                if (idx > 0) {
+                    LatLng prevPoint = trackPoints.get(idx - 1).point;
                     float bearing = computeBearing(prevPoint, point);
                     currentMarker.setRotation(bearing);
                 }
             }
-            // 更新室內地圖顯示
             if (indoorMapManager != null) {
                 indoorMapManager.setCurrentLocation(point);
             }
-            // 根據 switch1 狀態更新 Polyline
             if (polyline != null) {
                 if (switch1 != null && switch1.isChecked()) {
-                    // 顯示完整軌跡
-                    polyline.setPoints(trackPoints);
+                    // 显示完整轨迹
+                    List<LatLng> allPoints = new ArrayList<>();
+                    for (TimedLatLng tl : trackPoints) {
+                        allPoints.add(tl.point);
+                    }
+                    polyline.setPoints(allPoints);
                 } else {
-                    // 只顯示從起點到當前播放點的軌跡
-                    int end = Math.min(currentIndex + 1, trackPoints.size());
-                    polyline.setPoints(new ArrayList<>(trackPoints.subList(0, end)));
+                    // 只显示当前播放时间之前的轨迹
+                    List<LatLng> partial = new ArrayList<>();
+                    for (TimedLatLng tl : trackPoints) {
+                        if (tl.relativeTimestamp <= currentTime) {
+                            partial.add(tl.point);
+                        } else {
+                            break;
+                        }
+                    }
+                    if (partial.isEmpty() && !trackPoints.isEmpty()) {
+                        partial.add(trackPoints.get(0).point);
+                    }
+                    polyline.setPoints(partial);
                 }
             }
-            // 格式化時間顯示（mm:ss / mm:ss）
-            int seconds = currentTime / 1000;
+            int seconds = (int) (currentTime / 1000);
             int minutes = seconds / 60;
-            //seconds = seconds % 60;
-            int totalSeconds = totalDuration / 1000;
+            int totalSeconds = (int) (totalDuration / 1000);
             int totalMinutes = totalSeconds / 60;
             totalSeconds = totalSeconds % 60;
             if (progressText != null) {
                 progressText.setText(String.format("%02d:%02d", minutes, seconds));
                 totaltimetext.setText(String.format("%02d:%02d", totalMinutes, totalSeconds));
             }
+            // 更新 GNSS Marker：根据当前播放时间从 trajectoryData 中选取最近的 GNSS 样本
+            if (trajectoryData != null && trajectoryData.getGnssDataCount() > 0 && gnssMarker != null) {
+                LatLng currentGnss = getCurrentGnssPosition(currentTime, trajectoryData);
+                if (currentGnss != null) {
+                    gnssMarker.setPosition(currentGnss);
+                    gnssMarker.setTitle(String.format("GNSS: %.6f, %.6f", currentGnss.latitude, currentGnss.longitude));
+                }
+            }
         }
+        // 更新室内地图显示（此处省略具体逻辑，可根据需要调用 indoorMapManager 的相关方法）
         float elevationVal = 0;
-//        elevationVal = 0
-
         if (indoorMapManager.getIsIndoorMapSet()) {
             setFloorButtonVisibility(View.VISIBLE);
-            if(autoFloor.isChecked()){
+            if (autoFloor.isChecked()){
                 int currentFloor = (int)(elevationVal / indoorMapManager.getFloorHeight());
                 indoorMapManager.setCurrentFloor(currentFloor, true);
             }
@@ -487,9 +559,36 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         }
     }
 
-    // Added: 设置 Spinner 监听以切换地图类型
+    /**
+     * 设置楼层按钮的可见性
+     * @param visibility 可见性（例如 View.VISIBLE 或 View.GONE）
+     */
+    private void setFloorButtonVisibility(int visibility) {
+        floorUpButton.setVisibility(visibility);
+        floorDownButton.setVisibility(visibility);
+        autoFloor.setVisibility(visibility);
+    }
+
+    /**
+     * 根据两个 LatLng 计算方位角（bearing）
+     * @param from 起点
+     * @param to 终点
+     * @return 方位角，单位度（0~360）
+     */
+    private float computeBearing(LatLng from, LatLng to) {
+        double lat1 = Math.toRadians(from.latitude);
+        double lon1 = Math.toRadians(from.longitude);
+        double lat2 = Math.toRadians(to.latitude);
+        double lon2 = Math.toRadians(to.longitude);
+        double dLon = lon2 - lon1;
+        double y = Math.sin(dLon) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+        double bearing = Math.toDegrees(Math.atan2(y, x));
+        return (float)((bearing + 360) % 360);
+    }
+
+    // 设置 Spinner 监听以切换地图类型
     private void setupMapTypeSpinner() {
-        // 使用 ArrayAdapter 从资源文件加载字符串数组（请确保在 res/values/strings.xml 中定义了 map_types 字符数组）
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
                 this, R.array.map_types, android.R.layout.simple_spinner_item);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -497,7 +596,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         mapTypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (mMap == null) return; // 如果地图未初始化则不处理
+                if (mMap == null) return;
                 switch (position) {
                     case 0:
                         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
@@ -521,24 +620,4 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             }
         });
     }
-
-    /**
-     * 根據兩個 LatLng 計算方位角（bearing）
-     * @param from 起點
-     * @param to 終點
-     * @return 方位角，單位度（0~360）
-     */
-    private float computeBearing(LatLng from, LatLng to) {
-        double lat1 = Math.toRadians(from.latitude);
-        double lon1 = Math.toRadians(from.longitude);
-        double lat2 = Math.toRadians(to.latitude);
-        double lon2 = Math.toRadians(to.longitude);
-        double dLon = lon2 - lon1;
-        double y = Math.sin(dLon) * Math.cos(lat2);
-        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-        double bearing = Math.toDegrees(Math.atan2(y, x));
-        // 將結果正規化到 0-360 度之間
-        return (float)((bearing + 360) % 360);
-    }
 }
-
