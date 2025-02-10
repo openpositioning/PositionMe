@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.presentation.activity;
 
 import android.os.Bundle;
+import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -25,6 +26,9 @@ public class RecordingActivity extends AppCompatActivity {
         if (savedInstanceState == null) {
             showStartLocationScreen(); // Start with the user selecting the start location
         }
+
+        // Keep screen on
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     /**
@@ -61,6 +65,7 @@ public class RecordingActivity extends AppCompatActivity {
      */
     public void finishFlow() {
         // Option 1: Just finish this activity
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         finish();
 
         // Option 2: If you want to navigate somewhere else or show a "HomeFragment",
