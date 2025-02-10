@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.fragments;
 import static android.content.ContentValues.TAG;
 
 import android.annotation.SuppressLint;
+
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
@@ -10,6 +11,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.view.View;
 import android.widget.CompoundButton;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
@@ -33,6 +35,7 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
@@ -67,6 +70,13 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     // 用於室內地圖顯示的管理器
     private IndoorMapManager indoorMapManager;
 
+    // Switch used to set auto floor
+    private Switch autoFloor;
+
+    public FloatingActionButton floorUpButton;
+    // Floor Down button
+    public FloatingActionButton floorDownButton;
+
     // Added: 用于切换地图类型的 Spinner
     private Spinner mapTypeSpinner;
 
@@ -90,6 +100,32 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         progressText = findViewById(R.id.currentTime);
         totaltimetext = findViewById(R.id.totalTime);
         switch1 = findViewById(R.id.switch1);  // 請確保 layout 中存在此 Switch 控件
+        // Auto-floor switch
+        autoFloor = findViewById(R.id.autoFloor2);
+        autoFloor.setChecked(false);
+
+        // Floor changer Buttons
+        floorUpButton = findViewById(R.id.floorUpButton2);
+        floorDownButton = findViewById(R.id.floorDownButton2);
+
+        // Floor changer Buttons listener
+        floorUpButton.setOnClickListener(new View.OnClickListener() {
+                                             @Override
+                                             public void onClick(View view) {
+                                                 autoFloor.setChecked(false);
+                                                 indoorMapManager.increaseFloor();
+                                             }
+                                         });
+
+        floorDownButton.setOnClickListener(new View.OnClickListener() {
+                                               @Override
+                                               public void onClick(View view) {
+                                                   autoFloor.setChecked(false);
+                                                   indoorMapManager.decreaseFloor();
+                                               }
+                                           });
+
+
 
         // Added: 获取 Spinner 控件（确保布局文件中有该控件）
         mapTypeSpinner = findViewById(R.id.mapTypeSpinner);
@@ -119,6 +155,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         Traj.Trajectory trajectory = readTrajectoryFromFile(this, filePath);
         if (trajectory != null) {
             trackPoints = convertTrajectoryToLatLng(trajectory);
+//            elevations = convertTrajectoryToElevation(trajectory);
             totalDuration = trackPoints.size() * playbackSpeed;
             seekBar.setMax(totalDuration);
         } else {
@@ -217,6 +254,30 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         }
         return points;
     }
+
+    // for auto floor switching
+//    private List<float> convertTrajectoryToElevation(Traj.Trajectory trajectory) {
+////        List<Float> elevations = new ArrayList<>();
+////        for (Traj.Pdr_Sample pdrSample : trajectory.get) {
+////            elevations.add(pdrSample.getElevation());
+////        }
+////        return elevations;
+//        if (!trajectory.getGnssDataList().isEmpty()) {
+//            Traj.GNSS_Sample firstGnss = trajectory.getGnssDataList().get(0);
+//            double elevation0 = firstGnss.getAltitude();
+//        }
+//        for (Traj.Pdr_Sample pdrSample : trajectory.getPdrDataList()) {
+//            double pressure = pdrSample.;  // 前進位移（公尺）
+//
+//            // 坐標轉換
+//            double dLat = trackY / R;  // Y 對緯度影響
+//            double dLon = trackX / (R * Math.cos(Math.toRadians(lat0)));  // X 對經度影響
+//            double lat = lat0 + Math.toDegrees(dLat);
+//            double lon = lon0 + Math.toDegrees(dLon);
+//            points.add(new LatLng(lat, lon));
+//        }
+//        return points;
+//    }
 
     /**
      * 畫出軌跡：
@@ -321,6 +382,16 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     /**
+     * Function to set change visibility of the floor up and down buttons
+     * @param visibility the visibility of floor buttons should be set to
+     */
+    private void setFloorButtonVisibility(int visibility){
+        floorUpButton.setVisibility(visibility);
+        floorDownButton.setVisibility(visibility);
+        autoFloor.setVisibility(visibility);
+    }
+
+    /**
      * 更新地圖位置：
      * 1. 移動相機並更新 Marker 位置
      * 2. 若 switch1 為關閉狀態，則依據播放進度更新 Polyline（只顯示已播放路徑部分）
@@ -361,6 +432,18 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                 totaltimetext.setText(String.format("%02d:%02d", totalMinutes, totalSeconds));
             }
         }
+        float elevationVal = 0;
+//        elevationVal = 0
+
+        if (indoorMapManager.getIsIndoorMapSet()) {
+            setFloorButtonVisibility(View.VISIBLE);
+            if(autoFloor.isChecked()){
+                int currentFloor = (int)(elevationVal / indoorMapManager.getFloorHeight());
+                indoorMapManager.setCurrentFloor(currentFloor, true);
+            }
+        } else {
+            setFloorButtonVisibility(View.GONE);
+        }
     }
 
     // Added: 设置 Spinner 监听以切换地图类型
@@ -398,3 +481,4 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         });
     }
 }
+
