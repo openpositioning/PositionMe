@@ -11,6 +11,9 @@
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true"/>
     <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="true"/>
 
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+
+
     <!--
          2. Permissions.
             a) For Android 10 and above, if your app needs to do background location,
