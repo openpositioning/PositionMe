@@ -216,6 +216,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         indoorMapManager.setIndicationOfIndoorMap();
         // 接著畫出軌跡，軌跡會以 z-index 1000 顯示在室內覆蓋層之上
         drawTrack();
+        setFloorButtonVisibility(View.GONE);
     }
 
     // 解析 Protobuf 軌跡文件
@@ -321,7 +322,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                     // 使用 ic_baseline_navigation_24 作為指針圖標（轉換 vector 為 bitmap）
                     .icon(bitmapDescriptorFromVector(this, R.drawable.ic_baseline_navigation_24))
                     .zIndex(1100));
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(trackPoints.get(0), 20));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(trackPoints.get(0), 18));
         }
     }
 
