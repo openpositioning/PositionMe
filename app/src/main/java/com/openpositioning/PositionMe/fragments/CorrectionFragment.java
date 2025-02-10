@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import androidx.preference.PreferenceManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -27,6 +28,10 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+
+import android.content.SharedPreferences;
+
+import com.openpositioning.PositionMe.fragments.StartLocationFragment;
 
 /**
  * A simple {@link Fragment} subclass. Corrections Fragment is displayed after a recording session
@@ -50,6 +55,9 @@ public class CorrectionFragment extends Fragment {
     private SensorFusion sensorFusion = SensorFusion.getInstance();
     //TextView to display user instructions
     private TextView averageStepLengthText;
+
+    private SharedPreferences settings;
+    private TextView newkey;
     //Text Input to edit step length
     private EditText stepLengthInput;
     //Average step length obtained from SensorFusion class
@@ -66,6 +74,8 @@ public class CorrectionFragment extends Fragment {
     private static LatLng start;
     //Path view on screen
     private PathView pathView;
+
+
 
     /**
      * Public Constructor for the class.
@@ -97,6 +107,9 @@ public class CorrectionFragment extends Fragment {
         // Initialize map fragment
         SupportMapFragment supportMapFragment=(SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.map);
+
+
+
 
         // Asynchronous map which can be configured
         supportMapFragment.getMapAsync(new OnMapReadyCallback() {
@@ -143,6 +156,7 @@ public class CorrectionFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        this.newkey = (TextView) getView().findViewById(R.id.Newkey_View);
         //Instantiate text view to show average step length
         this.averageStepLengthText = (TextView) getView().findViewById(R.id.averageStepView);
         //Instantiate input text view to edit average step length
@@ -161,6 +175,29 @@ public class CorrectionFragment extends Fragment {
                 if(keyCode == KeyEvent.KEYCODE_ENTER){
                     //Convert entered string to a float
                     newStepLength = Float.parseFloat(changedText.toString());
+
+                    SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+                    String weibergKValue = sharedPreferences.getString("weiberg_k", "N/A");
+
+                    float weibergKFloat;
+
+                    try {
+                        weibergKFloat = Float.parseFloat(weibergKValue);
+                    } catch (NumberFormatException e) {
+                        weibergKFloat = 0.234f;
+                    }
+
+                    float newK = weibergKFloat * (newStepLength/averageStepLength);
+
+
+                    newkey.setText(String.format("Previous K factor = %.3f", weibergKFloat)+ String.format("\n") + String.format("Calibrated K factor = %.3f", newK));
+                    SharedPreferences.Editor editor = sharedPreferences.edit();
+                    editor.putString("weiberg_k", String.valueOf(newK));
+                    editor.apply();
+                    
+
+
+
                     //Rescale the path and call function to redraw
                     //scalingRatio = newStepLength/averageStepLength;
                     sensorFusion.redrawPath(newStepLength/averageStepLength);
@@ -176,6 +213,10 @@ public class CorrectionFragment extends Fragment {
                         averageStepLength = newStepLength;
                         secondPass = 0;
                     }
+
+
+
+
                 }
 
                 return false;
