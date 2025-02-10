@@ -6,6 +6,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
@@ -95,6 +96,7 @@ public class ServerCommunications implements Observable {
 
         this.observers = new ArrayList<>();
     }
+
 
     /**
      * Outgoing communication request with a {@link Traj trajectory} object. The recorded
@@ -293,14 +295,15 @@ public class ServerCommunications implements Observable {
 
         // Enqueue the GET request for asynchronous execution
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override public void onFailure(Call call, IOException e) {
+            @Override
+            public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }
 
-            @Override public void onResponse(Call call, Response response) throws IOException {
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful()) throw new IOException("Unexpected code "
-                            + response);
+                    if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
                     // Create input streams to process the response
                     InputStream inputStream = responseBody.byteStream();
@@ -311,8 +314,7 @@ public class ServerCommunications implements Observable {
                     int zipCount = 0;
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
                         if (zipCount == position) {
-                            // break if zip entry position matches the desired position
-                            break;
+                            break; // Found the desired zip entry
                         }
                         zipCount++;
                     }
@@ -331,21 +333,15 @@ public class ServerCommunications implements Observable {
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
 
-                    // Convert the protobuf object to a string
-                    JsonFormat.Printer printer = JsonFormat.printer();
-                    String receivedTrajectoryString = printer.print(receivedTrajectory);
-                    System.out.println("Successful download: "
-                            + receivedTrajectoryString.substring(0, 100));
-
-                    // Save the received trajectory to a file in the Downloads folder
-                    //String storagePath = Environment.getExternalStoragePublicDirectory(Environment
-                           // .DIRECTORY_DOWNLOADS).toString();
+                    // Get the app's private storage path
                     String storagePath = context.getFilesDir().toString();
 
+                    // Define the file name with `.txt` extension
                     File file = new File(storagePath, "received_trajectory.txt");
-                    try (FileWriter fileWriter = new FileWriter(file)) {
-                        fileWriter.write(receivedTrajectoryString);
-                        fileWriter.flush();
+
+                    // Write protobuf binary data to file (but keep `.txt` extension)
+                    try (FileOutputStream fileOutputStream = new FileOutputStream(file)) {
+                        receivedTrajectory.writeTo(fileOutputStream);
                         System.err.println("Received trajectory stored in: " + storagePath);
                     } catch (IOException ee) {
                         System.err.println("Trajectory download failed");
@@ -359,7 +355,17 @@ public class ServerCommunications implements Observable {
                 }
             }
         });
+    }
 
+    public String getDownloadedTrajectoryPath(int position) {
+        File storageDir = context.getFilesDir();
+        File file = new File(storageDir, "received_trajectory.txt");
+
+        if (file.exists()) {
+            return file.getAbsolutePath();
+        } else {
+            return null; // 如果文件不存在，返回 null
+        }
     }
 
     /**

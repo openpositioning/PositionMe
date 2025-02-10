@@ -1,14 +1,25 @@
 package com.openpositioning.PositionMe.viewitems;
 
+import static android.content.ContentValues.TAG;
+
 import android.content.Context;
+import android.content.Intent;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.fragments.Replay;
+import com.openpositioning.PositionMe.ServerCommunications;
 
+import java.io.File;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -32,6 +43,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     private final List<Map<String, String>>  responseItems;
     private final DownloadClickListener listener;
 
+    private ServerCommunications serverCommunications;
+
     /**
      * Default public constructor with context for inflating views and list to be displayed.
      *
@@ -45,6 +58,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         this.context = context;
         this.responseItems = responseItems;
         this.listener = listener;
+        this.serverCommunications = new ServerCommunications(context); // 确保初始化
     }
 
     /**
@@ -79,6 +93,64 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                         )
                 )
         );
+        holder.replay_button2.setOnClickListener(v -> {
+            int adapterPosition = holder.getAdapterPosition();
+            if (adapterPosition != RecyclerView.NO_POSITION) {
+                Toast.makeText(context, "Downloading trajectory...", Toast.LENGTH_SHORT).show();
+
+                new Thread(() -> {
+                    File storageDir = context.getFilesDir();
+                    File file = new File(storageDir, "received_trajectory.txt");
+
+                    // **删除已有文件**
+                    if (file.exists()) {
+                        boolean deleted = file.delete();
+                        if (deleted) {
+                            Log.d(TAG, "Old file deleted successfully.");
+                        } else {
+                            Log.e(TAG, "Failed to delete old file.");
+                        }
+                    }
+
+                    // **调用下载方法**
+                    serverCommunications.downloadTrajectory(adapterPosition);
+
+                    // **轮询检查文件是否成功下载**
+                    boolean fileDownloaded = false;
+                    int attempts = 0;
+                    while (attempts < 20) { // 最长尝试 10 秒（20 * 500ms）
+                        if (file.exists()) {
+                            fileDownloaded = true;
+                            break;
+                        }
+                        try {
+                            Thread.sleep(500); // 每 500ms 检测一次
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        attempts++;
+                    }
+
+                    // **根据下载结果执行相应操作**
+                    if (fileDownloaded) {
+                        holder.downloadedFilePath = file.getAbsolutePath();
+                        Log.d(TAG, "Download complete: File path -> " + holder.downloadedFilePath);
+
+                        if (holder.downloadedFilePath != null) {
+                            Intent intent = new Intent(context, Replay.class);
+                            intent.putExtra("filePath", holder.downloadedFilePath);
+                            context.startActivity(intent);
+                        }
+
+
+                    } else {
+                        new Handler(Looper.getMainLooper()).post(() -> {
+                            Toast.makeText(context, "Download failed, please try again", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                }).start();
+            }
+        });
     }
 
     /**
@@ -90,4 +162,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         return responseItems.size();
     }
 }
+
+
 

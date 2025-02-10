@@ -50,15 +50,17 @@
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                app:layout_constraintHorizontal_bias="0.333"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.21" />
 
             <ImageButton
                 android:id="@+id/downloadTrajectoryButton"
                 android:layout_width="75dp"
                 android:layout_height="75dp"
                 android:layout_marginTop="8dp"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="4dp"
                 android:layout_marginBottom="8dp"
                 android:background="@drawable/rounded_corner_lightblue"
                 android:contentDescription="@string/download"
@@ -66,7 +68,20 @@
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.888"
                 app:srcCompat="@drawable/ic_baseline_download_24" />
+
+            <Button
+                android:id="@+id/button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/replay_button2"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                app:layout_constraintHorizontal_bias="0.468"
+                app:layout_constraintStart_toEndOf="@+id/trajectoryIdItem"
+                app:layout_constraintTop_toBottomOf="@+id/trajectoryDateItem"
+                app:layout_constraintVertical_bias="1.0" />
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.cardview.widget.CardView>
 </androidx.constraintlayout.widget.ConstraintLayout>
