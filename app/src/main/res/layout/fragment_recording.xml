@@ -97,20 +97,19 @@
 
                 <ImageView
                     android:id="@+id/redDot"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:layout_below="@+id/currentElevation"
-                    android:layout_centerHorizontal="true"
-                    android:layout_marginTop="4dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="21dp"
+                    android:layout_toStartOf="@+id/currentDistanceTraveled"
                     android:src="@drawable/ic_baseline_red_dot_24" />
 
                 <TextView
                     android:id="@+id/gnssError"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
                     android:layout_below="@+id/redDot"
                     android:layout_centerHorizontal="true"
+                    android:layout_marginTop="4dp"
                     android:text="@string/gnss_error"
                     android:textColor="@color/LightYellow"
                     android:textSize="14sp"
