@@ -68,11 +68,20 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         // ✅ 加载本地下载记录
         loadDownloadRecords();
     }
+    private long lastFileSize = -1;
 
     private void loadDownloadRecords() {
         try {
             File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
             if (file.exists()) {
+                long currentSize = file.length();
+                // 如果文件大小没变，认为内容也没有改变，不刷新
+                if (currentSize == lastFileSize) {
+                    System.out.println("文件大小未变化，不刷新UI。");
+                    return;
+                }
+                lastFileSize = currentSize;
+
                 StringBuilder jsonBuilder = new StringBuilder();
                 try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
                     String line;
@@ -219,19 +228,13 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     }
 
 
-    // 在适配器中新增一个方法，轮询检测文件更新时间，适配 Android 13+
-    private void startPollingForFileUpdate() {
-        // 注意：确保你有一个 Context 对象，比如通过构造函数传入 adapter 的 context，
-        // 或者使用 itemView.getContext() 等方式获得上下文。
-        Context context = this.context; /* 获取你的上下文，例如：this.context 或 itemView.getContext() */;
+    private boolean isPolling = false;
 
-        // 对于非媒体文件（如 JSON 文件），仍需要 READ_EXTERNAL_STORAGE 权限
-        PackageManager PackageManager = context.getPackageManager();
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-            Log.i("FileUpdate", "⚠️ 未获得 READ_EXTERNAL_STORAGE 权限，无法访问下载目录。");
+    private void startPollingForFileUpdate() {
+        if (isPolling) {
             return;
         }
+        isPolling = true;
 
         // 获取公共下载目录
         // 注：Environment.getExternalStoragePublicDirectory() 从 API 29 起已被弃用，但在 Android 13 仍可使用
@@ -240,6 +243,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
         if (!file.exists()) {
             Log.i("FileUpdate", "⚠️ 文件不存在，取消轮询。");
+            isPolling = false;
             return;
         }
 
@@ -247,18 +251,20 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         final Handler handler = new Handler(Looper.getMainLooper());
 
         Runnable pollRunnable = new Runnable() {
-            int attempts = 0; // 尝试次数
+            int attempts = 0;
 
             @Override
             public void run() {
                 attempts++;
                 if (file.lastModified() > initialModified) {
                     Log.i("FileUpdate", "🎉 文件更新成功！尝试次数：" + attempts);
-                    loadDownloadRecords();  // 读取新数据并刷新 UI
-                } else if (attempts < 20) { // 最多轮询 10 次（约2秒）
+                    loadDownloadRecords();
+                    isPolling = false;
+                } else if (attempts < 100) {  // 尝试 10 次后停止
                     handler.postDelayed(this, 200);
                 } else {
                     Log.i("FileUpdate", "⏰ 轮询超时，文件更新检测失败。");
+                    isPolling = false;
                 }
             }
         };
