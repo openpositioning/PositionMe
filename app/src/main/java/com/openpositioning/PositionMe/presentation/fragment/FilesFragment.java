@@ -22,7 +22,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
-// import com.openpositioning.PositionMe.fragments.FilesFragmentDirections;
 import com.openpositioning.PositionMe.presentation.viewitems.TrajDownloadViewHolder;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.presentation.viewitems.TrajDownloadListAdapter;
@@ -119,11 +118,11 @@ public class FilesFragment extends Fragment implements Observer {
         });
         // Request list of uploaded trajectories from the server.
         serverCommunications.sendInfoRequest();
-        // ✅ 强制 RecyclerView 刷新，以确保图标状态正确
+        // Force RecyclerView refresh to ensure icon states are correct
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             if (filesList.getAdapter() != null) {
                 filesList.getAdapter().notifyDataSetChanged();
-                System.out.println("✅ RecyclerView refreshed after page load.");
+                System.out.println("RecyclerView refreshed after page load.");
             }
         }, 500);
     }
@@ -206,7 +205,7 @@ public class FilesFragment extends Fragment implements Observer {
             String id = selectedItem.get("id");
             String dateSubmitted = selectedItem.get("date_submitted");
 
-            // 传入 ID 和 date_submitted
+            // Pass ID and date_submitted
             serverCommunications.downloadTrajectory(position, id, dateSubmitted);
 
             new AlertDialog.Builder(getContext())
@@ -220,7 +219,7 @@ public class FilesFragment extends Fragment implements Observer {
                     .show();
         });
         filesList.setAdapter(listAdapter);
-        // ✅ 强制刷新 RecyclerView，确保 downloadRecords 变化能被检测到
+        // Force refresh RecyclerView to ensure downloadRecords changes are detected
         listAdapter.notifyDataSetChanged();
     }
 }
