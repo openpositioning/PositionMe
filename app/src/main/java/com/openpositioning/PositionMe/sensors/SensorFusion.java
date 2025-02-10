@@ -10,8 +10,10 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
@@ -121,6 +123,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Variables to help with timed events
     private long absoluteStartTime;
     private long bootTime;
+    long lastStepTime = 0;
     // Timer object for scheduling data recording
     private Timer storeTrajectoryTimer;
     // Counters for dividing timer to record data every 1 second/ every 5 seconds
@@ -242,7 +245,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.serverCommunications = new ServerCommunications(context);
         // Save absolute and relative start time
         this.absoluteStartTime = System.currentTimeMillis();
-        this.bootTime = android.os.SystemClock.uptimeMillis();
+        this.bootTime = SystemClock.uptimeMillis();
         // Initialise saveRecording to false
         this.saveRecording = false;
 
@@ -306,7 +309,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastKalmanUpdateMillis = currentTime;
 
 
-        // Proceed with sensor-specific processing
         switch (sensorType) {
             case Sensor.TYPE_ACCELEROMETER:
                 acceleration[0] = sensorEvent.values[0];
@@ -317,8 +319,9 @@ public class SensorFusion implements SensorEventListener, Observer {
             case Sensor.TYPE_PRESSURE:
                 pressure = (1 - ALPHA) * pressure + ALPHA * sensorEvent.values[0];
                 if (saveRecording) {
-                    this.elevation = pdrProcessing.updateElevation(SensorManager.getAltitude(
-                            SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure));
+                    this.elevation = pdrProcessing.updateElevation(
+                            SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
+                    );
                 }
                 break;
 
@@ -326,10 +329,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                 angularVelocity[0] = sensorEvent.values[0];
                 angularVelocity[1] = sensorEvent.values[1];
                 angularVelocity[2] = sensorEvent.values[2];
-                // === KALMAN PREDICTION STEP ===
-                // Use angularVelocity[2] if z-axis as primary yaw.
-                // If phone orientation differs, pick the correct axis.
+
+                // Kalman predict step, if needed...
                 if (isKalmanInitialized) {
+                    dtMillis = currentTime - lastKalmanUpdateMillis;
+                    dtSec = dtMillis / 1000.0;
+                    lastKalmanUpdateMillis = currentTime;
+
                     double gyroZ = angularVelocity[2];
                     kalmanFilter.predict(dtSec, gyroZ);
                 }
@@ -339,9 +345,20 @@ public class SensorFusion implements SensorEventListener, Observer {
                 filteredAcc[0] = sensorEvent.values[0];
                 filteredAcc[1] = sensorEvent.values[1];
                 filteredAcc[2] = sensorEvent.values[2];
-                double accelMagFiltered = Math.sqrt(Math.pow(acceleration[0], 2) +
-                        Math.pow(acceleration[1], 2) + Math.pow(acceleration[2], 2));
+
+                // Compute magnitude & add to accelMagnitude
+                double accelMagFiltered = Math.sqrt(
+                        Math.pow(filteredAcc[0], 2) +
+                                Math.pow(filteredAcc[1], 2) +
+                                Math.pow(filteredAcc[2], 2)
+                );
                 this.accelMagnitude.add(accelMagFiltered);
+
+                // Debug logging
+                Log.v("SensorFusion",
+                        "Added new linear accel magnitude: " + accelMagFiltered
+                                + "; accelMagnitude size = " + accelMagnitude.size());
+
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
 
@@ -349,6 +366,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 gravity[0] = sensorEvent.values[0];
                 gravity[1] = sensorEvent.values[1];
                 gravity[2] = sensorEvent.values[2];
+
+                // Possibly log gravity values if needed
+                //Log.v("SensorFusion", "Gravity: " + Arrays.toString(gravity));
+
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
 
@@ -374,35 +395,56 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
-                long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
-                float[] newCords = this.pdrProcessing.updatePdr(
-                        stepTime,
-                        this.accelMagnitude,
-                        this.orientation[0]  // or orientation from rotationVector
-                );
-                this.accelMagnitude.clear();
+                long stepTime = SystemClock.uptimeMillis() - bootTime;
 
-                // === KALMAN UPDATE STEP (POSITION) ===
-                if (isKalmanInitialized) {
-                    // Suppose the pdrProcessing gives displacement from last step
-                    // newCords is absolute (x, y). If it is incremental, handle accordingly.
-                    double newX = newCords[0];
-                    double newY = newCords[1];
-                    // Example measurement noise (adjust as needed).
-                    double posNoise = 0.25;
-                    kalmanFilter.updateStep(newX, newY, posNoise);
+
+                if (currentTime - lastStepTime < 20) {
+                    Log.e("SensorFusion", "Ignoring step event, too soon after last step event:" + (currentTime - lastStepTime) + " ms");
+                    // Ignore rapid successive step events
+                    break;
                 }
 
-                // Draw path and store in trajectory as before
-                if (saveRecording) {
-                    this.pathView.drawTrajectory(newCords);
-                    stepCounter++;
-                    trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
-                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
-                            .setX(newCords[0])
-                            .setY(newCords[1]));
+                else {
+                    lastStepTime = currentTime;
+                    // Log if accelMagnitude is empty
+                    if (accelMagnitude.isEmpty()) {
+                        Log.e("SensorFusion",
+                                "stepDetection triggered, but accelMagnitude is empty! " +
+                                        "This can cause updatePdr(...) to fail or return bad results.");
+                    } else {
+                        Log.d("SensorFusion",
+                                "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
+                    }
+
+                    float[] newCords = this.pdrProcessing.updatePdr(
+                            stepTime,
+                            this.accelMagnitude,
+                            this.orientation[0]
+                    );
+
+                    // Clear the accelMagnitude after using it
+                    this.accelMagnitude.clear();
+
+                    // Kalman update
+                    if (isKalmanInitialized) {
+                        double newX = newCords[0];
+                        double newY = newCords[1];
+                        // Example measurement noise
+                        double posNoise = 0.25;
+                        kalmanFilter.updateStep(newX, newY, posNoise);
+                    }
+
+                    if (saveRecording) {
+                        this.pathView.drawTrajectory(newCords);
+                        stepCounter++;
+                        trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+                                .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                                .setX(newCords[0])
+                                .setY(newCords[1]));
+                    }
+                    break;
                 }
-                break;
+
         }
         //read out the updated Kalman states:
         if (isKalmanInitialized) {
@@ -432,25 +474,23 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     class myLocationListener implements LocationListener{
         @Override
-        public void onLocationChanged(Location location) {
-            if(location != null){
-                //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
-                latitude = (float) location.getLatitude();
-                longitude = (float) location.getLongitude();
-                float altitude = (float) location.getAltitude();
-                float accuracy = (float) location.getAccuracy();
-                float speed = (float) location.getSpeed();
-                String provider = location.getProvider();
-                if(saveRecording) {
-                    trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
-                            .setAccuracy(accuracy)
-                            .setAltitude(altitude)
-                            .setLatitude(latitude)
-                            .setLongitude(longitude)
-                            .setSpeed(speed)
-                            .setProvider(provider)
-                            .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
-                }
+        public void onLocationChanged(@NonNull Location location) {
+            //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
+            latitude = (float) location.getLatitude();
+            longitude = (float) location.getLongitude();
+            float altitude = (float) location.getAltitude();
+            float accuracy = (float) location.getAccuracy();
+            float speed = (float) location.getSpeed();
+            String provider = location.getProvider();
+            if(saveRecording) {
+                trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
+                        .setAccuracy(accuracy)
+                        .setAltitude(altitude)
+                        .setLatitude(latitude)
+                        .setLongitude(longitude)
+                        .setSpeed(speed)
+                        .setProvider(provider)
+                        .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
             }
         }
     }
@@ -469,10 +509,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         if(this.saveRecording) {
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
-                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime);
+                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
             for (Wifi data : this.wifiList) {
                 wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
-                        .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
+                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                         .setMac(data.getBssid()).setRssi(data.getLevel()));
             }
             // Adding WiFi data to Trajectory
@@ -800,7 +840,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         lightSensor.sensorManager.registerListener(this, lightSensor.sensor, (int) 1e6);
         proximitySensor.sensorManager.registerListener(this, proximitySensor.sensor, (int) 1e6);
         magnetometerSensor.sensorManager.registerListener(this, magnetometerSensor.sensor, 10000, (int) maxReportLatencyNs);
-        stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_FASTEST);
+        stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
         rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, (int) 1e6);
         wifiProcessor.startListening();
         gnssProcessor.startLocationUpdates();
@@ -859,7 +899,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.saveRecording = true;
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();
-        this.bootTime = android.os.SystemClock.uptimeMillis();
+        this.bootTime = SystemClock.uptimeMillis();
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
@@ -958,7 +998,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
             trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
+                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
                     .setAccX(acceleration[0])
                     .setAccY(acceleration[1])
                     .setAccZ(acceleration[2])
@@ -975,7 +1015,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setMagX(magneticField[0])
                             .setMagY(magneticField[1])
                             .setMagZ(magneticField[2])
-                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime));
+                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime));
 
             // Divide timer with a counter for storing data every 1 second
             if (counter == 99) {
@@ -984,10 +1024,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 if (barometerSensor.sensor != null) {
                     trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
                                     .setPressure(pressure)
-                                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime))
+                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
                             .addLightData(Traj.Light_Sample.newBuilder()
                                     .setLight(light)
-                                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
+                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                     .build());
                 }
 
