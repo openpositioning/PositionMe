@@ -121,6 +121,7 @@
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
     <string name="replay_button">REPLAY</string>
+    <string name="replay_button2">REPLAY</string>
 
     <string-array name="map_types">
         <item>@string/hybrid</item>

@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.viewitems;
 
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -24,8 +25,12 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
     TextView trajId;
     TextView trajDate;
     ImageButton downloadButton;
+
+    public Button replay_button2;
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
+
+    String downloadedFilePath;
 
     /**
      * {@inheritDoc}
@@ -44,6 +49,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
 
         this.downloadButton.setOnClickListener(this);
+        this.replay_button2 = itemView.findViewById(R.id.button);
     }
 
 
