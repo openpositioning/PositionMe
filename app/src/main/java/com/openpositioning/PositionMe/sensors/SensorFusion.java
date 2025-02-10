@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
+import static android.content.ContentValues.TAG;
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.Sensor;
@@ -579,6 +581,25 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public void setStartGNSSLatitude(float[] startPosition){
         startLocation = startPosition;
+        latitude = (float) startPosition[0];
+        longitude = (float) startPosition[1];
+        float altitude = (float) 0;
+        float accuracy = (float) -1;
+        float speed = (float) -1;
+        String provider = "initial setting";
+        Log.d(TAG, "initial gnss set");
+        if(saveRecording) {
+            Log.d(TAG, "initial gnss saved");
+            trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
+                    .setAccuracy(accuracy)
+                    .setAltitude(altitude)
+                    .setLatitude(latitude)
+                    .setLongitude(longitude)
+                    .setSpeed(speed)
+                    .setProvider(provider)
+                    .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
+        }
+
     }
 
 
