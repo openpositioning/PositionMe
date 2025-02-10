@@ -72,14 +72,14 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
     private void loadDownloadRecords() {
         try {
-            File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
+            File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
             if (file.exists()) {
                 long currentSize = file.length();
                 // 如果文件大小没变，认为内容也没有改变，不刷新
-                if (currentSize == lastFileSize) {
-                    System.out.println("文件大小未变化，不刷新UI。");
-                    return;
-                }
+//                if (currentSize == lastFileSize) {
+//                    System.out.println("文件大小未变化，不刷新UI。");
+//                    return;
+//                }
                 lastFileSize = currentSize;
 
                 StringBuilder jsonBuilder = new StringBuilder();
@@ -163,7 +163,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                     String fileName = recordDetails.optString("file_name", null);
                     // 如果 file_name 不为 null，则构造实际的文件路径
                     if (fileName != null) {
-                        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName);
+                        File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
                         filePath = file.getAbsolutePath();
                     }
                     holder.downloadButton.setImageResource(R.drawable.ic_baseline_play_circle_filled_24);
@@ -236,9 +236,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         }
         isPolling = true;
 
-        // 获取公共下载目录
-        // 注：Environment.getExternalStoragePublicDirectory() 从 API 29 起已被弃用，但在 Android 13 仍可使用
-        File downloadsFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        // Use the app-specific Downloads directory.
+        File downloadsFolder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File file = new File(downloadsFolder, "download_records.json");
 
         if (!file.exists()) {
@@ -252,7 +251,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
         Runnable pollRunnable = new Runnable() {
             int attempts = 0;
-
             @Override
             public void run() {
                 attempts++;
@@ -260,7 +258,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                     Log.i("FileUpdate", "🎉 文件更新成功！尝试次数：" + attempts);
                     loadDownloadRecords();
                     isPolling = false;
-                } else if (attempts < 100) {  // 尝试 10 次后停止
+                } else if (attempts < 100) {  // Try up to 100 times
                     handler.postDelayed(this, 200);
                 } else {
                     Log.i("FileUpdate", "⏰ 轮询超时，文件更新检测失败。");
@@ -271,6 +269,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
         handler.postDelayed(pollRunnable, 200);
     }
+
 
 }
 

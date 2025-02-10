@@ -52,13 +52,17 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
+import okhttp3.OkHttp;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
@@ -82,11 +86,9 @@ import com.openpositioning.PositionMe.data.remote.TrajectoryFileHandler;
  */
 public class ServerCommunications implements Observable {
     public static Map<Long, String> downloadRecords = new HashMap<>();
-    private final File recordsFile = new File(Environment.getExternalStoragePublicDirectory
-            (Environment.DIRECTORY_DOWNLOADS), "downloaded_files.json");
-
     // Application context for handling permissions and devices
     private final Context context;
+
     // Network status checking
     private ConnectivityManager connMgr;
     private boolean isWifiConn;
@@ -122,6 +124,7 @@ public class ServerCommunications implements Observable {
      * @param context   application context for handling permissions and devices.
      */
     public ServerCommunications(Context context) {
+
         this.context = context;
         this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
@@ -181,12 +184,12 @@ public class ServerCommunications implements Observable {
                     .build();
 
             // Create a POST request with the required headers
-            okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
+            Request request = new Request.Builder().url(uploadURL).post(requestBody)
                     .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                     .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
 
             // Enqueue the request to be executed asynchronously and handle the response
-            client.newCall(request).enqueue(new okhttp3.Callback() {
+            client.newCall(request).enqueue(new Callback() {
 
                 // Handle failure to get response from the server
                 @Override public void onFailure(Call call, IOException e) {
@@ -241,7 +244,7 @@ public class ServerCommunications implements Observable {
                         System.out.println("Original trajectory file saved at: " + originalPath);
 
                         // 将文件复制到 Downloads 文件夹（注意：需要在 Manifest 里声明相关权限，并在运行时申请）
-                        File downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
+                        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                         File downloadFile = new File(downloadsDir, file.getName());
                         try {
                             copyFile(file, downloadFile);
@@ -270,7 +273,7 @@ public class ServerCommunications implements Observable {
 
     /**
      * Uploads a local trajectory file to the API server in the specified format.
-     * {@link okhttp3.OkHttp} library is used for the asynchronous POST request.
+     * {@link OkHttp} library is used for the asynchronous POST request.
      *
      * @param localTrajectory the File object of the local trajectory to be uploaded
      */
@@ -285,12 +288,12 @@ public class ServerCommunications implements Observable {
                 .build();
 
         // Create a POST request with the required headers
-        okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
+        Request request = new Request.Builder().url(uploadURL).post(requestBody)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
 
         // Enqueue the request to be executed asynchronously and handle the response
-        client.newCall(request).enqueue(new okhttp3.Callback() {
+        client.newCall(request).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
                 // Print error message, set success to false and notify observers
                 e.printStackTrace();
@@ -335,7 +338,10 @@ public class ServerCommunications implements Observable {
     }
 
     private void loadDownloadRecords() {
-        File recordsFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
+        // Point to the app-specific Downloads folder
+        File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        File recordsFile = new File(recordsDir, "download_records.json");
+
         if (recordsFile.exists()) {
             try (BufferedReader reader = new BufferedReader(new FileReader(recordsFile))) {
                 StringBuilder json = new StringBuilder();
@@ -352,53 +358,75 @@ public class ServerCommunications implements Observable {
                     downloadRecords.put(timestamp, record);
                 }
 
-                // ✅ 检查是否成功加载
-                System.out.println("LaiGan Loaded downloadRecords: " + downloadRecords);
+                System.out.println("Loaded downloadRecords: " + downloadRecords);
 
             } catch (Exception e) {
                 e.printStackTrace();
             }
         } else {
-            System.out.println("LaiGan download_records.json not found.");
+            System.out.println("Download_records.json not found in app-specific directory.");
         }
     }
 
 
-    private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
-        try {
-            File recordsFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
 
-            JSONObject jsonObject;
-            if (recordsFile.exists()) {
-                StringBuilder json = new StringBuilder();
+    private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
+        File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        File recordsFile = new File(recordsDir, "download_records.json");
+        JSONObject jsonObject;
+
+        try {
+            // Ensure the directory exists
+            if (recordsDir != null && !recordsDir.exists()) {
+                recordsDir.mkdirs();
+            }
+
+            // If the file does not exist, create it
+            if (!recordsFile.exists()) {
+                if (recordsFile.createNewFile()) {
+                    jsonObject = new JSONObject();
+                } else {
+                    System.err.println("Failed to create file: " + recordsFile.getAbsolutePath());
+                    return;
+                }
+            } else {
+                // Read the existing contents
+                StringBuilder jsonBuilder = new StringBuilder();
                 try (BufferedReader reader = new BufferedReader(new FileReader(recordsFile))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        json.append(line);
+                        jsonBuilder.append(line);
                     }
                 }
-                jsonObject = json.length() > 0 ? new JSONObject(json.toString()) : new JSONObject();
-            } else {
-                jsonObject = new JSONObject();
+                // If file is empty or invalid JSON, use a fresh JSONObject
+                jsonObject = jsonBuilder.length() > 0
+                        ? new JSONObject(jsonBuilder.toString())
+                        : new JSONObject();
             }
 
+            // Create the new record details
             JSONObject recordDetails = new JSONObject();
             recordDetails.put("file_name", fileName);
             recordDetails.put("id", id);
             recordDetails.put("date_submitted", dateSubmitted);
 
+            // Insert or update in the main JSON
             jsonObject.put(String.valueOf(startTimestamp), recordDetails);
+
+            // Write updated JSON to file
             try (FileWriter writer = new FileWriter(recordsFile)) {
                 writer.write(jsonObject.toString(4));
                 writer.flush();
             }
 
-            System.out.println("Download record saved successfully.");
+            System.out.println("Download record saved successfully at: " + recordsFile.getAbsolutePath());
 
         } catch (Exception e) {
             e.printStackTrace();
+            System.err.println("Error saving download record: " + e.getMessage());
         }
     }
+
 
 
 
@@ -411,18 +439,15 @@ public class ServerCommunications implements Observable {
      * @param position the position of the trajectory in the zip file to retrieve
      */
     public void downloadTrajectory(int position, String id, String dateSubmitted) {
-        loadDownloadRecords();  // 加载已有记录
+        loadDownloadRecords();  // Load existing records from app-specific directory
 
         OkHttpClient client = new OkHttpClient();
-
-        // Create GET request with required header
         okhttp3.Request request = new okhttp3.Request.Builder()
                 .url(downloadURL)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .get()
                 .build();
 
-        // Enqueue the GET request for asynchronous execution
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -434,11 +459,9 @@ public class ServerCommunications implements Observable {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
-                    // Create input streams to process the response
+                    // Extract the nth entry from the zip
                     InputStream inputStream = responseBody.byteStream();
                     ZipInputStream zipInputStream = new ZipInputStream(inputStream);
-
-                    // Get the nth entry in the zip file
                     java.util.zip.ZipEntry zipEntry;
                     int zipCount = 0;
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
@@ -446,57 +469,50 @@ public class ServerCommunications implements Observable {
                         zipCount++;
                     }
 
-                    // Initialise a byte array output stream
                     ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-
-                    // Read the zipped data and write it to the byte array output stream
                     byte[] buffer = new byte[1024];
                     int bytesRead;
                     while ((bytesRead = zipInputStream.read(buffer)) != -1) {
                         byteArrayOutputStream.write(buffer, 0, bytesRead);
                     }
+                    zipInputStream.closeEntry();
 
-                    // Convert the byte array to a protobuf object
+                    // Convert the byte array to protobuf
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
-
-
 
                     long startTimestamp = receivedTrajectory.getStartTimestamp();
                     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy_MM_dd_HH_mm_ss");
                     String formattedDate = dateFormat.format(new Date(startTimestamp));
                     String fileName = "trajectory_" + formattedDate + ".txt";
 
-                    File storagePath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                    if (!storagePath.exists()) {
-                        storagePath.mkdirs();
+                    // Place the file in your app-specific "Downloads" folder
+                    File appSpecificDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                    if (appSpecificDownloads != null && !appSpecificDownloads.exists()) {
+                        appSpecificDownloads.mkdirs();
                     }
 
-                    File file = new File(storagePath, fileName);
+                    File file = new File(appSpecificDownloads, fileName);
                     try (FileWriter fileWriter = new FileWriter(file)) {
-                        JsonFormat.Printer printer = JsonFormat.printer();
-                        String receivedTrajectoryString = printer.print(receivedTrajectory);
+                        String receivedTrajectoryString = JsonFormat.printer().print(receivedTrajectory);
                         fileWriter.write(receivedTrajectoryString);
                         fileWriter.flush();
-                        System.err.println("Received trajectory stored in: " + storagePath);
+                        System.err.println("Received trajectory stored in: " + file.getAbsolutePath());
                     } catch (IOException ee) {
                         System.err.println("Trajectory download failed");
                     } finally {
-                        // Close all streams and entries to release resources
-                        zipInputStream.closeEntry();
                         byteArrayOutputStream.close();
                         zipInputStream.close();
                         inputStream.close();
                     }
 
-                    // 保存下载记录，包含 ID 和 date_submitted
+                    // Save the download record
                     saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
-
                 }
             }
         });
-
     }
+
 
     /**
      * API request for information about submitted trajectories. If the response is successful,
@@ -508,14 +524,14 @@ public class ServerCommunications implements Observable {
         OkHttpClient client = new OkHttpClient();
 
         // Create GET info request with appropriate URL and header
-        okhttp3.Request request = new okhttp3.Request.Builder()
+        Request request = new Request.Builder()
                 .url(infoRequestURL)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .get()
                 .build();
 
         // Enqueue the GET request for asynchronous execution
-        client.newCall(request).enqueue(new okhttp3.Callback() {
+        client.newCall(request).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }
