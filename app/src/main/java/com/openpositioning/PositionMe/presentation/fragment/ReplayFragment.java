@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.data.remote.TrajectoryFileHandler.getReplayPointByTimestamp;
+
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -8,56 +10,102 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.SeekBar;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-
 import com.google.android.gms.maps.model.LatLng;
+import com.google.gson.JsonObject;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.data.remote.TrajectoryFileHandler;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
-
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Fragment to replay a previously recorded trajectory and show it on the map.
- */
 public class ReplayFragment extends Fragment {
 
-    // Child map fragment
+    // 地图子Fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
-    // UI
-    private Button playPauseButton;
-    private Button restartButton;
-    private Button exitButton;
-    private Button goEndButton;
+    // UI 控件
+    private Button playPauseButton, restartButton, exitButton, goEndButton;
     private SeekBar playbackSeekBar;
 
-    // Playback logic
+    // 播放逻辑
     private final Handler playbackHandler = new Handler();
-    private final long PLAYBACK_INTERVAL_MS = 500; // or 200ms, etc.
-
-    private List<ReplayPoint> replayData; // entire path from the proto file
+    private final long PLAYBACK_INTERVAL_MS = 500; // 每帧时间间隔
+    private List<ReplayPoint> replayData; // 轨迹数据帧列表
     private int currentIndex = 0;
     private boolean isPlaying = false;
 
-    // Simpler struct for each data point
-    // In real code, you'll have orientation, floor, GNSS, timestamps, etc.
-    private static class ReplayPoint {
-        LatLng pdrLocation;  // user’s location from PDR
-        LatLng gnssLocation; // optional GNSS location
-        float orientation;   // heading
-        long timestamp;      // for advanced time-based playback
+    // 用于统一传递轨迹文件路径
+    private String filePath;
 
-        ReplayPoint(LatLng pdr, LatLng gnss, float orientation, long ts) {
+    // ReplayPoint 用于保存每一帧数据
+    public static class ReplayPoint {
+        LatLng pdrLocation;  // 用户位置（例如 PDR 得到的位置）
+        LatLng gnssLocation; // GNSS 位置（可选）
+        float orientation;   // 方向（单位：度）
+        long timestamp;      // 时间戳
+
+        public ReplayPoint(LatLng pdr, LatLng gnss, float orientation, long ts) {
             this.pdrLocation = pdr;
             this.gnssLocation = gnss;
             this.orientation = orientation;
             this.timestamp = ts;
         }
     }
+
+    /**
+     * 根据 IMU 数据（JsonObject）转换为 ReplayPoint 对象。
+     * 这里暂时使用固定示例数据，实际开发中请根据数据计算真实位置和方向。
+     */
+    private ReplayPoint convertImuDataToReplayPoint(JsonObject imuData) {
+        double dummyLat = 37.4219999;
+        double dummyLng = -122.0840575;
+        // TODO: 根据 imuData 中的旋转向量或其它数据计算实际的 orientation
+        float orientation = 0f;
+        long timestamp = imuData.get("relativeTimestamp").getAsLong();
+        LatLng gnssLocation = null;
+        return new ReplayPoint(new LatLng(dummyLat, dummyLng), gnssLocation, orientation, timestamp);
+    }
+
+    /**
+     * 利用 TrajectoryFileHandler.getSmoothedImuData() 解析轨迹文件，
+     * 按固定时间步长生成每一帧数据，并返回 ReplayPoint 列表。
+     */
+    private List<ReplayPoint> loadTrajectoryFromProto(String filePath) {
+        List<ReplayPoint> replayPoints = new ArrayList<>();
+
+        try {
+            // 1. 获取时间范围
+            long[] range = TrajectoryFileHandler.getTimeRange(filePath);
+            long minTimestamp = range[0];
+            long maxTimestamp = range[1];
+
+            // 2. 按时间步长逐帧解析
+            final long PLAYBACK_INTERVAL_MS = 500;
+
+            for (long ts = minTimestamp; ts <= maxTimestamp; ts += PLAYBACK_INTERVAL_MS) {
+                try {
+                    // 调用 `getReplayPointByTimestamp`
+                    ReplayPoint point = getReplayPointByTimestamp(filePath, String.valueOf(ts));
+
+                    if (point != null) {
+                        replayPoints.add(point);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return replayPoints;
+    }
+
+
 
     private final Runnable playbackRunnable = new Runnable() {
         @Override
@@ -66,30 +114,28 @@ public class ReplayFragment extends Fragment {
 
             updateMapForIndex(currentIndex);
             currentIndex++;
-
-            // Update SeekBar
             playbackSeekBar.setProgress(currentIndex);
-
-            // If we haven't reached the end, schedule next step
             if (currentIndex < replayData.size()) {
                 playbackHandler.postDelayed(this, PLAYBACK_INTERVAL_MS);
             } else {
-                // Reached end
                 isPlaying = false;
                 playPauseButton.setText("Play");
             }
         }
     };
 
-    public ReplayFragment() {
-        // Required empty constructor
-    }
-
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // 1) Load the trajectory data from proto file (placeholder)
-        replayData = loadTrajectoryFromProto("placeholder-path");
+        // 从传入参数中获取轨迹文件路径
+        if (getArguments() != null) {
+            filePath = getArguments().getString(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, "placeholder-path");
+        } else {
+            filePath = "placeholder-path";
+        }
+        Log.i("ReplayFragment", "Loading trajectory from file: " + filePath);
+        // 根据实际文件路径加载轨迹数据
+        replayData = loadTrajectoryFromProto(filePath);
     }
 
     @Nullable
@@ -97,7 +143,6 @@ public class ReplayFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-
         return inflater.inflate(R.layout.fragment_replay, container, false);
     }
 
@@ -106,10 +151,9 @@ public class ReplayFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // 2) Child fragment for the map
+        // 1. 获取地图子Fragment
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.replayMapFragmentContainer);
-
         if (trajectoryMapFragment == null) {
             trajectoryMapFragment = new TrajectoryMapFragment();
             getChildFragmentManager()
@@ -118,30 +162,27 @@ public class ReplayFragment extends Fragment {
                     .commit();
         }
 
-        // 3) UI references
-        playPauseButton   = view.findViewById(R.id.playPauseButton);
-        restartButton     = view.findViewById(R.id.restartButton);
-        exitButton        = view.findViewById(R.id.exitButton);
-        goEndButton       = view.findViewById(R.id.goEndButton);
-        playbackSeekBar   = view.findViewById(R.id.playbackSeekBar);
+        // 2. 获取 UI 控件引用
+        playPauseButton = view.findViewById(R.id.playPauseButton);
+        restartButton = view.findViewById(R.id.restartButton);
+        exitButton = view.findViewById(R.id.exitButton);
+        goEndButton = view.findViewById(R.id.goEndButton);
+        playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
 
-        // 4) Setup the SeekBar max
+        // 3. 设置 SeekBar 最大值
         if (replayData != null && !replayData.isEmpty()) {
             playbackSeekBar.setMax(replayData.size() - 1);
         }
 
-        // 5) Listeners
+        // 4. 设置各按钮监听器
         playPauseButton.setOnClickListener(v -> {
             if (replayData == null || replayData.isEmpty()) return;
             if (isPlaying) {
-                // Pause
                 isPlaying = false;
                 playPauseButton.setText("Play");
             } else {
-                // Start/Resume
                 isPlaying = true;
                 playPauseButton.setText("Pause");
-                // If at end, restart from beginning
                 if (currentIndex >= replayData.size()) {
                     currentIndex = 0;
                 }
@@ -151,7 +192,6 @@ public class ReplayFragment extends Fragment {
 
         restartButton.setOnClickListener(v -> {
             if (replayData == null) return;
-            // Immediately reset to first point
             currentIndex = 0;
             playbackSeekBar.setProgress(0);
             updateMapForIndex(0);
@@ -159,7 +199,6 @@ public class ReplayFragment extends Fragment {
 
         goEndButton.setOnClickListener(v -> {
             if (replayData == null || replayData.isEmpty()) return;
-            // Jump to end
             currentIndex = replayData.size() - 1;
             playbackSeekBar.setProgress(currentIndex);
             updateMapForIndex(currentIndex);
@@ -168,7 +207,6 @@ public class ReplayFragment extends Fragment {
         });
 
         exitButton.setOnClickListener(v -> {
-            // Done with replay, close activity or pop back stack
             if (getActivity() instanceof ReplayActivity) {
                 ((ReplayActivity) getActivity()).finishFlow();
             } else {
@@ -176,7 +214,6 @@ public class ReplayFragment extends Fragment {
             }
         });
 
-        // SeekBar dragging (optional): let user jump to a time index
         playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
@@ -188,51 +225,20 @@ public class ReplayFragment extends Fragment {
             @Override public void onStopTrackingTouch(SeekBar seekBar) { }
         });
 
-        // If we already have data, place the first point
+        // 初始显示第一帧
         if (replayData != null && !replayData.isEmpty()) {
             updateMapForIndex(0);
         }
     }
 
     /**
-     * Placeholder method to load the recorded trajectory from a .proto file.
-     * In real implementation, parse the proto and build up the list of points.
-     */
-    private List<ReplayPoint> loadTrajectoryFromProto(String filePath) {
-        // TODO: parse your .proto and fill in real data
-        // For now, we return a small dummy list
-        List<ReplayPoint> data = new ArrayList<>();
-        data.add(new ReplayPoint(new LatLng(37.4219999, -122.0840575),  // pdr
-                new LatLng(37.4219983, -122.0840000),  // gnss
-                0f,
-                0L));
-        data.add(new ReplayPoint(new LatLng(37.4220005, -122.0840550),
-                new LatLng(37.4220017, -122.0840050),
-                45f,
-                1000L));
-        data.add(new ReplayPoint(new LatLng(37.4220020, -122.0840520),
-                new LatLng(37.4220035, -122.0840100),
-                90f,
-                2000L));
-        // ... etc ...
-        return data;
-    }
-
-    /**
-     * Update the map to show the point at replayData[index],
-     * including PDR location, orientation, and GNSS location if available.
+     * 根据当前帧索引更新地图显示。
      */
     private void updateMapForIndex(int index) {
         if (replayData == null || index < 0 || index >= replayData.size()) return;
-
         ReplayPoint point = replayData.get(index);
-
-        // Update user position + orientation on the trajectory map
         if (trajectoryMapFragment != null) {
             trajectoryMapFragment.updateUserLocation(point.pdrLocation, point.orientation);
-
-            // Show GNSS if user toggles it in the UI (TrajectoryMapFragment has a switch)
-            // For example, we always call updateGNSS() anyway:
             if (point.gnssLocation != null) {
                 trajectoryMapFragment.updateGNSS(point.gnssLocation);
             }
@@ -242,7 +248,6 @@ public class ReplayFragment extends Fragment {
     @Override
     public void onPause() {
         super.onPause();
-        // Pause playback
         isPlaying = false;
         playbackHandler.removeCallbacks(playbackRunnable);
         if (playPauseButton != null) {

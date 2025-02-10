@@ -73,6 +73,9 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private Handler httpResponseHandler;
 
     private PermissionManager permissionManager;
+
+    private static final int PERMISSION_REQUEST_CODE = 100;
+
     //endregion
 
     //region Activity Lifecycle
@@ -126,7 +129,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
     }
 
 
-
     /**
      * {@inheritDoc}
      */
@@ -155,7 +157,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
             if (permissionManager != null) {
                 permissionManager.checkAndRequestPermissions();
             }
-        }, 300); // 300 ms delay to ensure the Activity is fully in the foreground
+        }, 5000); // 5000 ms delay to ensure the Activity is fully in the foreground
         if (sensorFusion != null) {
             sensorFusion.resumeListening();
         }

@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.viewitems;
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import org.json.JSONObject;  // ✅ 导入 JSON 处理类
@@ -25,6 +26,7 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 
 import java.time.LocalDateTime;
@@ -66,11 +68,20 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         // ✅ 加载本地下载记录
         loadDownloadRecords();
     }
+    private long lastFileSize = -1;
 
     private void loadDownloadRecords() {
         try {
-            File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
+            File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
             if (file.exists()) {
+                long currentSize = file.length();
+                // 如果文件大小没变，认为内容也没有改变，不刷新
+//                if (currentSize == lastFileSize) {
+//                    System.out.println("文件大小未变化，不刷新UI。");
+//                    return;
+//                }
+                lastFileSize = currentSize;
+
                 StringBuilder jsonBuilder = new StringBuilder();
                 try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
                     String line;
@@ -138,16 +149,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 )
         );
 
-        // ✅ 点击事件
-        holder.downloadButton.setOnClickListener(v -> {
-            listener.onPositionClicked(position);
-            // 启动轮询检测文件更新
-            startPollingForFileUpdate();
-            System.out.println("📥 点击下载，启动轮询检测文件更新。");
-        });
-
         // ✅ 检查本地下载记录
         boolean matched = false;
+        String filePath = null;
         for (Map.Entry<Long, String> entry : ServerCommunications.downloadRecords.entrySet()) {
             try {
                 JSONObject recordDetails = new JSONObject(entry.getValue());
@@ -155,9 +159,16 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
                 if (recordId.equals(id.trim())) {
                     matched = true;
+                    // 获取 file_name 字段
+                    String fileName = recordDetails.optString("file_name", null);
+                    // 如果 file_name 不为 null，则构造实际的文件路径
+                    if (fileName != null) {
+                        File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
+                        filePath = file.getAbsolutePath();
+                    }
                     holder.downloadButton.setImageResource(R.drawable.ic_baseline_play_circle_filled_24);
                     holder.downloadButton.setBackgroundColor(Color.GREEN);
-                    System.out.println("✅ Matched ID: " + id);
+                    System.out.println("✅ Matched ID: " + id + ", filePath: " + filePath);
                     break;
                 }
             } catch (Exception e) {
@@ -165,46 +176,73 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             }
         }
 
-        // ❌ 未匹配时，恢复默认状态
+// ❌ 未匹配时，恢复默认状态
         if (!matched) {
             holder.downloadButton.setImageResource(R.drawable.ic_baseline_download_24);
             holder.downloadButton.setBackgroundResource(R.drawable.rounded_corner_lightblue);
             System.out.println("❌ Not matched ID: " + id);
         }
 
+// 将 matched 和 filePath 复制到 final 变量中供 lambda 使用
+        final boolean finalMatched = matched;
+        final String finalFilePath = filePath;
+
+// 设置按钮点击事件，根据 matched 状态判断行为
+        holder.downloadButton.setOnClickListener(v -> {
+            if (finalMatched) {
+                // 当为 replay 状态时，直接启动 ReplayActivity
+                if (finalFilePath != null) {
+                    Intent intent = new Intent(context, ReplayActivity.class);
+                    intent.putExtra(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, finalFilePath);
+                    context.startActivity(intent);
+                    System.out.println("▶️ 启动 ReplayActivity，传入文件路径：" + finalFilePath);
+                } else {
+                    System.out.println("⚠️ replay 状态下未找到文件路径！");
+                }
+            } else {
+                // 原下载逻辑
+                listener.onPositionClicked(position);
+                // 启动轮询检测文件更新
+                startPollingForFileUpdate();
+                System.out.println("📥 点击下载，启动轮询检测文件更新。");
+            }
+        });
+
         holder.downloadButton.invalidate();
     }
 
-    /**
-     * {@inheritDoc}
-     * Number of response maps.
-     */
+
+
+
+
+        /**
+         * {@inheritDoc}
+         * Number of response maps.
+         */
     @Override
     public int getItemCount() {
         return responseItems.size();
     }
+    public void refreshDownloadRecords() {
+        loadDownloadRecords();
+    }
 
-    // 在适配器中新增一个方法，轮询检测文件更新时间，适配 Android 13+
+
+    private boolean isPolling = false;
+
     private void startPollingForFileUpdate() {
-        // 注意：确保你有一个 Context 对象，比如通过构造函数传入 adapter 的 context，
-        // 或者使用 itemView.getContext() 等方式获得上下文。
-        Context context = this.context; /* 获取你的上下文，例如：this.context 或 itemView.getContext() */;
-
-        // 对于非媒体文件（如 JSON 文件），仍需要 READ_EXTERNAL_STORAGE 权限
-        PackageManager PackageManager = context.getPackageManager();
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-            Log.i("FileUpdate", "⚠️ 未获得 READ_EXTERNAL_STORAGE 权限，无法访问下载目录。");
+        if (isPolling) {
             return;
         }
+        isPolling = true;
 
-        // 获取公共下载目录
-        // 注：Environment.getExternalStoragePublicDirectory() 从 API 29 起已被弃用，但在 Android 13 仍可使用
-        File downloadsFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        // Use the app-specific Downloads directory.
+        File downloadsFolder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File file = new File(downloadsFolder, "download_records.json");
 
         if (!file.exists()) {
             Log.i("FileUpdate", "⚠️ 文件不存在，取消轮询。");
+            isPolling = false;
             return;
         }
 
@@ -212,24 +250,26 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         final Handler handler = new Handler(Looper.getMainLooper());
 
         Runnable pollRunnable = new Runnable() {
-            int attempts = 0; // 尝试次数
-
+            int attempts = 0;
             @Override
             public void run() {
                 attempts++;
                 if (file.lastModified() > initialModified) {
                     Log.i("FileUpdate", "🎉 文件更新成功！尝试次数：" + attempts);
-                    loadDownloadRecords();  // 读取新数据并刷新 UI
-                } else if (attempts < 10) { // 最多轮询 10 次（约2秒）
+                    loadDownloadRecords();
+                    isPolling = false;
+                } else if (attempts < 100) {  // Try up to 100 times
                     handler.postDelayed(this, 200);
                 } else {
                     Log.i("FileUpdate", "⏰ 轮询超时，文件更新检测失败。");
+                    isPolling = false;
                 }
             }
         };
 
         handler.postDelayed(pollRunnable, 200);
     }
+
 
 }
 

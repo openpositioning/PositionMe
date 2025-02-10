@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.data.remote;
 
+import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -8,6 +9,9 @@ import com.openpositioning.PositionMe.Traj;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import com.google.android.gms.maps.model.LatLng;
+
+import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 
 public class TrajectoryFileHandler {
 
@@ -49,8 +53,8 @@ public class TrajectoryFileHandler {
      * @return The matching `imuData` object as a JsonObject.
      * @throws IOException If file reading fails.
      */
-    public static JsonObject getImuDataByTimestamp(String filename, String targetTimestamp) throws IOException {
-        // read file
+    public static ReplayFragment.ReplayPoint getReplayPointByTimestamp(String filename, String targetTimestamp) throws IOException {
+        // 读取文件
         StringBuilder fileContent = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
             String line;
@@ -59,22 +63,83 @@ public class TrajectoryFileHandler {
             }
         }
 
-        //  JSON
+        // 解析 JSON
         Gson gson = new Gson();
         JsonObject jsonObject = gson.fromJson(fileContent.toString(), JsonObject.class);
 
-        // get imuData
+        // 获取 imuData
         JsonArray imuDataArray = jsonObject.getAsJsonArray("imuData");
 
-        // match timestamp
+        // 遍历查找目标时间戳的数据
         for (JsonElement element : imuDataArray) {
             JsonObject imuObject = element.getAsJsonObject();
             if (imuObject.get("relativeTimestamp").getAsString().equals(targetTimestamp)) {
-                return imuObject;  //
+                // 解析时间戳
+                long timestamp = imuObject.get("relativeTimestamp").getAsLong();
+                float orientation = imuObject.has("orientation") ? imuObject.get("orientation").getAsFloat() : 0.0f;
+
+                // 解析 PDR 位置
+                LatLng pdrLocation = null;
+                if (imuObject.has("pdrLat") && imuObject.has("pdrLng")) {
+                    double lat = imuObject.get("pdrLat").getAsDouble();
+                    double lng = imuObject.get("pdrLng").getAsDouble();
+                    pdrLocation = new LatLng(lat, lng);
+                }
+
+                // 解析 GNSS 位置（可选）
+                LatLng gnssLocation = null;
+                if (imuObject.has("gnssLat") && imuObject.has("gnssLng")) {
+                    double lat = imuObject.get("gnssLat").getAsDouble();
+                    double lng = imuObject.get("gnssLng").getAsDouble();
+                    gnssLocation = new LatLng(lat, lng);
+                }
+
+                // 返回 `ReplayPoint` 对象
+                return new ReplayFragment.ReplayPoint(pdrLocation, gnssLocation, orientation, timestamp);
             }
         }
 
-        return null;  //
+        // 如果找不到匹配的时间戳，返回 `null`
+        return null;
+    }
+
+
+
+    public static long[] getTimeRange(String filename) throws IOException {
+
+        StringBuilder fileContent = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                fileContent.append(line);
+            }
+        }
+
+        // 2. 使用 Gson 解析 JSON 数据
+        Gson gson = new Gson();
+        JsonObject jsonObject = gson.fromJson(fileContent.toString(), JsonObject.class);
+
+        if (jsonObject == null || !jsonObject.has("imuData")) {
+            throw new IOException("Invalid file format: missing imuData array");
+        }
+
+        // 3. 获取 imuData 数组并遍历确定最小和最大时间戳
+        JsonArray imuDataArray = jsonObject.getAsJsonArray("imuData");
+        long minTimestamp = Long.MAX_VALUE;
+        long maxTimestamp = Long.MIN_VALUE;
+
+        for (JsonElement element : imuDataArray) {
+            JsonObject imu = element.getAsJsonObject();
+            long t = imu.get("relativeTimestamp").getAsLong();
+            if (t < minTimestamp) {
+                minTimestamp = t;
+            }
+            if (t > maxTimestamp) {
+                maxTimestamp = t;
+            }
+        }
+
+        return new long[]{minTimestamp, maxTimestamp};
     }
 
     /**
