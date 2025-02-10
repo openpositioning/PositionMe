@@ -411,8 +411,6 @@ public class ServerCommunications implements Observable {
      * @param position the position of the trajectory in the zip file to retrieve
      */
     public void downloadTrajectory(int position, String id, String dateSubmitted) {
-        loadDownloadRecords();  // 加载已有记录
-
         OkHttpClient client = new OkHttpClient();
 
         // Create GET request with required header
@@ -492,10 +490,10 @@ public class ServerCommunications implements Observable {
                     // 保存下载记录，包含 ID 和 date_submitted
                     saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
 
+                    loadDownloadRecords();  // 加载已有记录
                 }
             }
         });
-
     }
 
     /**
