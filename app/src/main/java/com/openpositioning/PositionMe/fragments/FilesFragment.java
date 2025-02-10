@@ -115,7 +115,7 @@ public class FilesFragment extends Fragment implements Observer {
                 Navigation.findNavController(view).navigate(action);
             }
         });
-        // Request list of uploaded trajectories from the server.
+        // Request list of uploaded trajectories from the server
         serverCommunications.sendInfoRequest();
     }
 
