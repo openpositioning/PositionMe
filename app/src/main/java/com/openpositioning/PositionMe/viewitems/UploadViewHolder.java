@@ -56,6 +56,11 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
      */
     @Override
     public void onClick(View view) {
-        listenerReference.get().onPositionClicked(getAdapterPosition());
+        DownloadClickListener listener = listenerReference.get();
+        if (listener != null) {
+            if (view.getId() == R.id.uploadTrajectoryButton) {
+                listener.onDownloadClicked(getAdapterPosition());
+            } // No else if.  Upload doesn't handle replay.
+        }
     }
 }

@@ -25,33 +25,36 @@
             android:layout_height="match_parent">
 
             <TextView
-                android:id="@+id/downloadIdItem"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:layout_marginStart="8dp"
+                android:id="@+id/trajectoryIdItem"
+                android:layout_width="31dp"
+                android:layout_height="75dp"
+                android:layout_marginStart="12dp"
                 android:gravity="center"
                 android:text="999"
                 android:textColor="@color/lightLogoBlue"
-                android:textSize="65dp"
+                android:textSize="21sp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.47" />
 
             <TextView
-                android:id="@+id/downloadDateItem"
+                android:id="@+id/trajectoryDateItem"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_marginEnd="8dp"
                 android:text="1998-05-19 05:28:42"
                 android:textColor="@color/LightYellow"
-                android:textSize="18dp"
+                android:textSize="15sp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
-                app:layout_constraintStart_toEndOf="@id/downloadIdItem"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintHorizontal_bias="0.0"
+                app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.492" />
 
             <ImageButton
                 android:id="@+id/downloadTrajectoryButton"
@@ -62,11 +65,31 @@
                 android:layout_marginBottom="8dp"
                 android:background="@drawable/rounded_corner_lightblue"
                 android:contentDescription="@string/download"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
                 android:scaleType="fitXY"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:srcCompat="@drawable/ic_baseline_download_24" />
+
+            <ImageButton
+                android:id="@+id/replayTrajectoryButton"
+                android:layout_width="75dp"
+                android:layout_height="75dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="8dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/rounded_corner"
+                android:contentDescription="Replay Trajectory"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:scaleType="fitXY"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.0"
+                app:srcCompat="@drawable/ic_baseline_play_arrow_24" />
+
+
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.cardview.widget.CardView>
 </androidx.constraintlayout.widget.ConstraintLayout>
