@@ -174,27 +174,27 @@ public class CorrectionFragment extends Fragment {
                 //Check if enter key has been pressed
                 if(keyCode == KeyEvent.KEYCODE_ENTER){
                     //Convert entered string to a float
-                    newStepLength = Float.parseFloat(changedText.toString());
-
-                    SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
-                    String weibergKValue = sharedPreferences.getString("weiberg_k", "N/A");
-
-                    float weibergKFloat;
-
-                    try {
-                        weibergKFloat = Float.parseFloat(weibergKValue);
-                    } catch (NumberFormatException e) {
-                        weibergKFloat = 0.234f;
-                    }
-
-                    float newK = weibergKFloat * (newStepLength/averageStepLength);
-
-
-                    newkey.setText(String.format("Previous K factor = %.3f", weibergKFloat)+ String.format("\n") + String.format("Calibrated K factor = %.3f", newK));
-                    SharedPreferences.Editor editor = sharedPreferences.edit();
-                    editor.putString("weiberg_k", String.valueOf(newK));
-                    editor.apply();
-                    
+//                    newStepLength = Float.parseFloat(changedText.toString());
+//
+//                    SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+//                    String weibergKValue = sharedPreferences.getString("weiberg_k",null);
+//
+//                    float weibergKFloat = Float.parseFloat(weibergKValue);
+//
+////                    try {
+////                        weibergKFloat = Float.parseFloat(weibergKValue);
+////                    } catch (NumberFormatException e) {
+////                        weibergKFloat = 0.234f;
+////                    }
+//
+//                    float newK = weibergKFloat * (newStepLength/averageStepLength);
+//
+//
+//                    newkey.setText(String.format("Previous K factor = %.3f", weibergKFloat)+ String.format("\n") + String.format("Calibrated K factor = %.3f", newK));
+//                    SharedPreferences.Editor editor = sharedPreferences.edit();
+//                    editor.putString("weiberg_k", String.valueOf(newK));
+//                    editor.apply();
+//
 
 
 
