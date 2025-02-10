@@ -120,58 +120,12 @@ public class MainActivity extends AppCompatActivity implements Observer {
                 allPermissionsObtained();
             }
         });
-        // Check and request permissions
-        checkAndRequestPermissions();
 
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();
     }
 
 
-
-    private void checkAndRequestPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13 and above
-            List<String> permissionsNeeded = new ArrayList<>();
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
-                    != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(Manifest.permission.READ_MEDIA_IMAGES);
-            }
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO)
-                    != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(Manifest.permission.READ_MEDIA_VIDEO);
-            }
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO)
-                    != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(Manifest.permission.READ_MEDIA_AUDIO);
-            }
-            if (!permissionsNeeded.isEmpty()) {
-                ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]),
-                        PERMISSION_REQUEST_CODE);
-            }
-        } else {
-            // Below Android 13
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, PERMISSION_REQUEST_CODE);
-            }
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            for (int i = 0; i < permissions.length; i++) {
-                if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
-                    // Permission granted, proceed with accessing the storage
-                } else {
-                    // Permission denied, handle accordingly
-                }
-            }
-        }
-    }
     /**
      * {@inheritDoc}
      */
@@ -200,7 +154,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
             if (permissionManager != null) {
                 permissionManager.checkAndRequestPermissions();
             }
-        }, 5000); // 300 ms delay to ensure the Activity is fully in the foreground
+        }, 5000); // 5000 ms delay to ensure the Activity is fully in the foreground
         if (sensorFusion != null) {
             sensorFusion.resumeListening();
         }

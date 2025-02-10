@@ -52,13 +52,17 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
+import okhttp3.OkHttp;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
@@ -87,6 +91,7 @@ public class ServerCommunications implements Observable {
 
     // Application context for handling permissions and devices
     private final Context context;
+
     // Network status checking
     private ConnectivityManager connMgr;
     private boolean isWifiConn;
@@ -122,6 +127,7 @@ public class ServerCommunications implements Observable {
      * @param context   application context for handling permissions and devices.
      */
     public ServerCommunications(Context context) {
+
         this.context = context;
         this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
@@ -364,6 +370,7 @@ public class ServerCommunications implements Observable {
     }
 
 
+
     private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
         try {
             File recordsFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
@@ -382,12 +389,16 @@ public class ServerCommunications implements Observable {
                 jsonObject = new JSONObject();
             }
 
+            // Create the new record details
             JSONObject recordDetails = new JSONObject();
             recordDetails.put("file_name", fileName);
             recordDetails.put("id", id);
             recordDetails.put("date_submitted", dateSubmitted);
 
+            // Insert or update in the main JSON
             jsonObject.put(String.valueOf(startTimestamp), recordDetails);
+
+            // Write updated JSON to file
             try (FileWriter writer = new FileWriter(recordsFile)) {
                 writer.write(jsonObject.toString(4));
                 writer.flush();
@@ -397,8 +408,10 @@ public class ServerCommunications implements Observable {
 
         } catch (Exception e) {
             e.printStackTrace();
+            System.err.println("Error saving download record: " + e.getMessage());
         }
     }
+
 
 
 
@@ -487,13 +500,14 @@ public class ServerCommunications implements Observable {
                         inputStream.close();
                     }
 
-                    // 保存下载记录，包含 ID 和 date_submitted
+                    // Save the download record
                     saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
 
                     loadDownloadRecords();  // 加载已有记录
                 }
             }
         });
+
     }
 
     /**

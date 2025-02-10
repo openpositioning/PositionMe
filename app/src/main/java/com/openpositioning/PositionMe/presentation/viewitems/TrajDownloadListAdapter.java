@@ -116,9 +116,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     /**
      * {@inheritDoc}
      *
-     * @param parent   The ViewGroup into which the new View will be added after it is bound to an adapter position.
-     * @param viewType The view type of the new View.
-     * @return A new TrajDownloadViewHolder that holds a View of the given view type.
+     * @see R.layout#item_trajectorycard_view xml layout file
      */
     @NonNull
     @Override
