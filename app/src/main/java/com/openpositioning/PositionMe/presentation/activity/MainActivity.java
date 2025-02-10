@@ -136,7 +136,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
         //Ensure sensorFusion has been initialised before unregistering listeners
         if(sensorFusion != null) {
-            sensorFusion.stopListening();
+//            sensorFusion.stopListening();
         }
     }
 
@@ -170,7 +170,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
     @Override
     protected void onDestroy() {
         if (sensorFusion != null) {
-            sensorFusion.stopListening();
+//            sensorFusion.stopListening(); // suspended due to the need to record data with
+//                                             a locked screen or cross activity
         }
         super.onDestroy();
     }

@@ -35,6 +35,7 @@ public class PdrProcessing {
     private static final float movementThreshold = 0.3f; // m/s^2
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
+    private static final int MIN_REQUIRED_SAMPLES = 2;
     //endregion
 
     //region Instance variables
@@ -137,6 +138,10 @@ public class PdrProcessing {
      * @param headingRad                heading relative to magnetic north in radians.
      */
     public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
+        if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.size() < MIN_REQUIRED_SAMPLES) {
+            return new float[]{this.positionX, this.positionY};  // Return current position without update
+                                                                // - TODO - temporary solution of the empty list issue
+        }
 
         // Change angle so zero rad is east
         float adaptedHeading = (float) (Math.PI/2 - headingRad);

@@ -13,7 +13,7 @@ if (localPropertiesFile.exists()) {
 
 android {
     namespace "com.openpositioning.PositionMe" // Fix Namespace not specified problem
-    compileSdk 33
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.openpositioning.PositionMe"
