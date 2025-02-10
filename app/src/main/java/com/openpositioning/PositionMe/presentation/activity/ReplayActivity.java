@@ -1,6 +1,5 @@
 package com.openpositioning.PositionMe.presentation.activity;
 
-import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -19,10 +18,10 @@ public class ReplayActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_replay);
 
-        // 从 Intent 中获取传入的轨迹文件路径
+        // Get the trajectory file path from the Intent
         String filePath = getIntent().getStringExtra(EXTRA_TRAJECTORY_FILE_PATH);
         if (filePath == null || filePath.isEmpty()) {
-            // 如果没有传入，则设置一个默认路径（或显示错误提示）
+            // If not provided, set a default path (or show an error message)
             filePath = "/storage/emulated/0/Download/trajectory_default.txt";
 
             Log.e("ReplayActivity", "No trajectory file path provided");
@@ -34,12 +33,12 @@ public class ReplayActivity extends AppCompatActivity {
     }
 
     /**
-     * 显示 ReplayFragment，并将轨迹文件路径作为参数传递过去。
+     * Displays the ReplayFragment and passes the trajectory file path as an argument.
      */
     public void showReplayFragment(String filePath) {
         FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
         ReplayFragment replayFragment = new ReplayFragment();
-        // 通过 Bundle 传递文件路径
+        // Pass the file path through a Bundle
         Bundle args = new Bundle();
         args.putString(EXTRA_TRAJECTORY_FILE_PATH, filePath);
         replayFragment.setArguments(args);
@@ -48,7 +47,7 @@ public class ReplayActivity extends AppCompatActivity {
     }
 
     /**
-     * 完成回放流程时调用
+     * Called when the replay process is completed.
      */
     public void finishFlow() {
         finish();

@@ -229,7 +229,7 @@ public class ServerCommunications implements Observable {
                             System.err.println("Failed to copy file to Downloads: " + e.getMessage());
                         }
 
-
+                        // Delete local file and set success to true
                         success = file.delete();
                         notifyObservers(1);
                     }

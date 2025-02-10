@@ -9,7 +9,6 @@ import com.openpositioning.PositionMe.Traj;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
-import com.google.android.gms.maps.model.LatLng;
 
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 
@@ -33,10 +32,8 @@ public class TrajectoryFileHandler {
             }
         }
 
-
         Gson gson = new Gson();
         Traj.Trajectory trajectory = gson.fromJson(fileContent.toString(), Traj.Trajectory.class);
-
 
         if (trajectory.getStartTimestamp() == targetTimestamp) {
             return trajectory;
@@ -54,7 +51,7 @@ public class TrajectoryFileHandler {
      * @throws IOException If file reading fails.
      */
     public static ReplayFragment.ReplayPoint getReplayPointByTimestamp(String filename, String targetTimestamp) throws IOException {
-        // 读取文件
+        // Read file
         StringBuilder fileContent = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
             String line;
@@ -63,22 +60,22 @@ public class TrajectoryFileHandler {
             }
         }
 
-        // 解析 JSON
+        // Parse JSON
         Gson gson = new Gson();
         JsonObject jsonObject = gson.fromJson(fileContent.toString(), JsonObject.class);
 
-        // 获取 imuData
+        // Get imuData
         JsonArray imuDataArray = jsonObject.getAsJsonArray("imuData");
 
-        // 遍历查找目标时间戳的数据
+        // Iterate to find the target timestamp data
         for (JsonElement element : imuDataArray) {
             JsonObject imuObject = element.getAsJsonObject();
             if (imuObject.get("relativeTimestamp").getAsString().equals(targetTimestamp)) {
-                // 解析时间戳
+                // Parse timestamp
                 long timestamp = imuObject.get("relativeTimestamp").getAsLong();
                 float orientation = imuObject.has("orientation") ? imuObject.get("orientation").getAsFloat() : 0.0f;
 
-                // 解析 PDR 位置
+                // Parse PDR location
                 LatLng pdrLocation = null;
                 if (imuObject.has("pdrLat") && imuObject.has("pdrLng")) {
                     double lat = imuObject.get("pdrLat").getAsDouble();
@@ -86,7 +83,7 @@ public class TrajectoryFileHandler {
                     pdrLocation = new LatLng(lat, lng);
                 }
 
-                // 解析 GNSS 位置（可选）
+                // Parse GNSS location (optional)
                 LatLng gnssLocation = null;
                 if (imuObject.has("gnssLat") && imuObject.has("gnssLng")) {
                     double lat = imuObject.get("gnssLat").getAsDouble();
@@ -94,17 +91,22 @@ public class TrajectoryFileHandler {
                     gnssLocation = new LatLng(lat, lng);
                 }
 
-                // 返回 `ReplayPoint` 对象
+                // Return `ReplayPoint` object
 //                return new ReplayFragment.ReplayPoint(pdrLocation, gnssLocation, orientation, timestamp);
             }
         }
 
-        // 如果找不到匹配的时间戳，返回 `null`
+        // If no matching timestamp is found, return `null`
         return null;
     }
 
-
-
+    /**
+     * Gets the time range (min and max timestamps) from a trajectory file.
+     *
+     * @param filename The trajectory file path.
+     * @return An array with min and max timestamps.
+     * @throws IOException If file reading fails.
+     */
     public static long[] getTimeRange(String filename) throws IOException {
 
         StringBuilder fileContent = new StringBuilder();
@@ -115,7 +117,7 @@ public class TrajectoryFileHandler {
             }
         }
 
-        // 2. 使用 Gson 解析 JSON 数据
+        // Parse JSON data using Gson
         Gson gson = new Gson();
         JsonObject jsonObject = gson.fromJson(fileContent.toString(), JsonObject.class);
 
@@ -123,7 +125,7 @@ public class TrajectoryFileHandler {
             throw new IOException("Invalid file format: missing imuData array");
         }
 
-        // 3. 获取 imuData 数组并遍历确定最小和最大时间戳
+        // Get imuData array and determine min and max timestamps
         JsonArray imuDataArray = jsonObject.getAsJsonArray("imuData");
         long minTimestamp = Long.MAX_VALUE;
         long maxTimestamp = Long.MIN_VALUE;
@@ -308,7 +310,5 @@ public class TrajectoryFileHandler {
 
             return sum / count;
         }
-
-
 
 }
