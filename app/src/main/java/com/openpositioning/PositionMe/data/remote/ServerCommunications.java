@@ -393,7 +393,7 @@ public class ServerCommunications implements Observable {
                 writer.flush();
             }
 
-            System.out.println("✅ Download record saved successfully.");
+            System.out.println("Download record saved successfully.");
 
         } catch (Exception e) {
             e.printStackTrace();

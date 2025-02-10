@@ -77,6 +77,43 @@ public class TrajectoryFileHandler {
         return null;  //
     }
 
+    public static long[] getTimeRange(String filename) throws IOException {
+
+        StringBuilder fileContent = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                fileContent.append(line);
+            }
+        }
+
+        // 2. 使用 Gson 解析 JSON 数据
+        Gson gson = new Gson();
+        JsonObject jsonObject = gson.fromJson(fileContent.toString(), JsonObject.class);
+
+        if (jsonObject == null || !jsonObject.has("imuData")) {
+            throw new IOException("Invalid file format: missing imuData array");
+        }
+
+        // 3. 获取 imuData 数组并遍历确定最小和最大时间戳
+        JsonArray imuDataArray = jsonObject.getAsJsonArray("imuData");
+        long minTimestamp = Long.MAX_VALUE;
+        long maxTimestamp = Long.MIN_VALUE;
+
+        for (JsonElement element : imuDataArray) {
+            JsonObject imu = element.getAsJsonObject();
+            long t = imu.get("relativeTimestamp").getAsLong();
+            if (t < minTimestamp) {
+                minTimestamp = t;
+            }
+            if (t > maxTimestamp) {
+                maxTimestamp = t;
+            }
+        }
+
+        return new long[]{minTimestamp, maxTimestamp};
+    }
+
     /**
      * Reads IMU data from a JSON trajectory file.
      *
