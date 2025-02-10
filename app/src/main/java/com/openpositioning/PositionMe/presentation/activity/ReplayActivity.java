@@ -2,6 +2,8 @@ package com.openpositioning.PositionMe.presentation.activity;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
+
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.FragmentTransaction;
@@ -22,6 +24,8 @@ public class ReplayActivity extends AppCompatActivity {
         if (filePath == null || filePath.isEmpty()) {
             // 如果没有传入，则设置一个默认路径（或显示错误提示）
             filePath = "/storage/emulated/0/Download/trajectory_default.txt";
+
+            Log.e("ReplayActivity", "No trajectory file path provided");
         }
 
         if (savedInstanceState == null) {

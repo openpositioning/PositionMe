@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.data.remote.TrajectoryFileHandler.getReplayPointByTimestamp;
+
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -40,13 +42,13 @@ public class ReplayFragment extends Fragment {
     private String filePath;
 
     // ReplayPoint 用于保存每一帧数据
-    private static class ReplayPoint {
+    public static class ReplayPoint {
         LatLng pdrLocation;  // 用户位置（例如 PDR 得到的位置）
         LatLng gnssLocation; // GNSS 位置（可选）
         float orientation;   // 方向（单位：度）
         long timestamp;      // 时间戳
 
-        ReplayPoint(LatLng pdr, LatLng gnss, float orientation, long ts) {
+        public ReplayPoint(LatLng pdr, LatLng gnss, float orientation, long ts) {
             this.pdrLocation = pdr;
             this.gnssLocation = gnss;
             this.orientation = orientation;
@@ -76,23 +78,24 @@ public class ReplayFragment extends Fragment {
         List<ReplayPoint> replayPoints = new ArrayList<>();
 
         try {
-            // 1. 先获取时间范围
+            // 1. 获取时间范围
             long[] range = TrajectoryFileHandler.getTimeRange(filePath);
             long minTimestamp = range[0];
             long maxTimestamp = range[1];
 
-            // 2. 定义播放的时间步长（单位：毫秒）
+            // 2. 按时间步长逐帧解析
             final long PLAYBACK_INTERVAL_MS = 500;
 
-            // 3. 遍历整个时间范围，根据每个目标时间戳获取平滑数据
             for (long ts = minTimestamp; ts <= maxTimestamp; ts += PLAYBACK_INTERVAL_MS) {
                 try {
-                    JsonObject smoothedImu = TrajectoryFileHandler.getSmoothedImuData(filePath, ts);
-                    ReplayPoint point = convertImuDataToReplayPoint(smoothedImu);
-                    replayPoints.add(point);
+                    // 调用 `getReplayPointByTimestamp`
+                    ReplayPoint point = getReplayPointByTimestamp(filePath, String.valueOf(ts));
+
+                    if (point != null) {
+                        replayPoints.add(point);
+                    }
                 } catch (IOException e) {
                     e.printStackTrace();
-                    // 出错时跳过当前帧
                 }
             }
         } catch (IOException e) {
@@ -101,6 +104,7 @@ public class ReplayFragment extends Fragment {
 
         return replayPoints;
     }
+
 
 
     private final Runnable playbackRunnable = new Runnable() {
