@@ -26,17 +26,18 @@
 
             <TextView
                 android:id="@+id/trajectoryIdItem"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:layout_marginStart="8dp"
+                android:layout_width="62dp"
+                android:layout_height="78dp"
+                android:layout_marginStart="12dp"
                 android:gravity="center"
                 android:text="999"
                 android:textColor="@color/lightLogoBlue"
-                android:textSize="65dp"
+                android:textSize="34sp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.0" />
 
             <TextView
                 android:id="@+id/trajectoryDateItem"
@@ -44,21 +45,24 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_marginEnd="8dp"
-                android:text="1998-05-19 05:28:42"
+                android:text="1998 - 05 - 19 05:28:42"
                 android:textColor="@color/LightYellow"
                 android:textSize="18dp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                app:layout_constraintHorizontal_bias="0.0"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.492" />
 
+            <!-- 新增的播放按钮 -->
             <ImageButton
                 android:id="@+id/downloadTrajectoryButton"
-                android:layout_width="75dp"
-                android:layout_height="75dp"
+                android:layout_width="50dp"
+                android:layout_height="60dp"
                 android:layout_marginTop="8dp"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="12dp"
                 android:layout_marginBottom="8dp"
                 android:background="@drawable/rounded_corner_lightblue"
                 android:contentDescription="@string/download"
@@ -66,7 +70,23 @@
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.0"
                 app:srcCompat="@drawable/ic_baseline_download_24" />
+
+            <ImageButton
+                android:id="@+id/play_button_item"
+                android:layout_width="51dp"
+                android:layout_height="59dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/rounded_corner_lightblue"
+                android:contentDescription="play"
+                android:scaleType="fitXY"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/downloadTrajectoryButton"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.0"
+                app:srcCompat="@drawable/ic_baseline_play_arrow_24" />
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.cardview.widget.CardView>
 </androidx.constraintlayout.widget.ConstraintLayout>

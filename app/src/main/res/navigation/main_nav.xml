@@ -117,10 +117,18 @@
         android:label="fragment_upload"
         tools:layout="@layout/fragment_upload" />
     <action
+        android:id="@+id/action_uploadFragment_to_mapsFragment"
+        app:destination="@id/mapsFragment" />
+    <action
         android:id="@+id/action_global_settingsFragment"
         app:destination="@id/settingsFragment"
         app:enterAnim="@anim/slide_in_top"
         app:exitAnim="@anim/slide_out_bottom"
         app:popEnterAnim="@anim/slide_in_bottom"
         app:popExitAnim="@anim/slide_in_top" />
+    <fragment
+        android:id="@+id/mapsFragment"
+        android:name="com.openpositioning.PositionMe.fragments.MapsFragment"
+        android:label="Maps Fragment">
+    </fragment>
 </navigation>
