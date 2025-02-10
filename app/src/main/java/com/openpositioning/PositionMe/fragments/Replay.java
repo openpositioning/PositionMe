@@ -3,6 +3,9 @@ package com.openpositioning.PositionMe.fragments;
 import static android.content.ContentValues.TAG;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -13,8 +16,10 @@ import android.widget.Switch;
 import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
+import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -23,6 +28,8 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -157,7 +164,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         // 初始化室內地圖管理器，並在內部請確保覆蓋層的 z-index 設為低於路徑（例如 500）
         indoorMapManager = new IndoorMapManager(mMap);
         indoorMapManager.setIndicationOfIndoorMap();
-        // 接著畫出路徑，路徑會以 z-index 1000 顯示在室內覆蓋層之上
+        // 接著畫出軌跡，軌跡會以 z-index 1000 顯示在室內覆蓋層之上
         drawTrack();
     }
 
@@ -182,22 +189,26 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     // 將軌跡資料轉換為 LatLng 點集合
     private List<LatLng> convertTrajectoryToLatLng(Traj.Trajectory trajectory) {
         List<LatLng> points = new ArrayList<>();
-        // 地球半徑（公尺）
-        double R = 6378137;
-        // 初始經緯度
+        double R = 6378137; // 地球半径
         double lat0 = 0;
         double lon0 = 0;
-        if (!trajectory.getGnssDataList().isEmpty()) {
-            Traj.GNSS_Sample firstGnss = trajectory.getGnssDataList().get(0);
-            lat0 = firstGnss.getLatitude();
-            lon0 = firstGnss.getLongitude();
+        // 尝试找到第一个有效的 GNSS 样本（例如经纬度均不为 0）
+        for (Traj.GNSS_Sample sample : trajectory.getGnssDataList()) {
+            if (sample.getLatitude() != 0 && sample.getLongitude() != 0) {
+                lat0 = sample.getLatitude();
+                lon0 = sample.getLongitude();
+                break;
+            }
+        }
+        // 如果所有 GNSS 样本都无效，则你可能需要给出一个提示或使用一个默认起点
+        if (lat0 == 0 && lon0 == 0) {
+            Log.e(TAG, "未找到有效的 GNSS 数据，使用默认起点 (0,0)！");
         }
         for (Traj.Pdr_Sample pdrSample : trajectory.getPdrDataList()) {
-            double trackX = pdrSample.getX();  // 前進位移（公尺）
-            double trackY = pdrSample.getY();  // 側向位移（公尺）
-            // 坐標轉換
-            double dLat = trackY / R;  // Y 對緯度影響
-            double dLon = trackX / (R * Math.cos(Math.toRadians(lat0)));  // X 對經度影響
+            double trackX = pdrSample.getX();  // 前进位移（米）
+            double trackY = pdrSample.getY();  // 侧向位移（米）
+            double dLat = trackY / R;
+            double dLon = trackX / (R * Math.cos(Math.toRadians(lat0)));
             double lat = lat0 + Math.toDegrees(dLat);
             double lon = lon0 + Math.toDegrees(dLon);
             points.add(new LatLng(lat, lon));
@@ -205,12 +216,13 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         return points;
     }
 
+
     /**
      * 畫出軌跡：
-     * 若 switch1 為選中狀態，則顯示完整路徑；
+     * 若 switch1 為選中狀態，則顯示完整軌跡；
      * 否則只先顯示起點，待播放時根據播放進度逐步更新。
-     * 這裡 PolylineOptions 中設定 .zIndex(1000) 確保路徑顯示在室內覆蓋層之上，
-     * Marker 設定 .zIndex(1100) 則確保起點標記在路徑上方。
+     * 這裡 PolylineOptions 中設定 .zIndex(1000) 確保軌跡顯示在室內覆蓋層之上，
+     * Marker 設定 .zIndex(1100) 並設置 flat(true) 則確保指針顯示在軌跡上方且能正確旋轉。
      */
     private void drawTrack() {
         if (mMap != null && !trackPoints.isEmpty()) {
@@ -218,9 +230,9 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                     .width(10)
                     .color(0xFFFF00FF) // 軌跡顏色
                     .geodesic(true)
-                    .zIndex(1000);    // 設定路徑 z-index 為 1000
+                    .zIndex(1000);    // 設定軌跡 z-index 為 1000
             if (switch1 != null && switch1.isChecked()) {
-                // 若 switch1 打開，顯示完整路徑
+                // 若 switch1 打開，顯示完整軌跡
                 polylineOptions.addAll(trackPoints);
             } else {
                 // 否則只顯示起點
@@ -228,13 +240,36 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             }
             polyline = mMap.addPolyline(polylineOptions);
 
-            // 添加起點標記，並設定 z-index 為 1100（確保標記顯示在路徑之上）
+            // 添加起點指針 Marker，設置 flat(true) 以便旋轉
             currentMarker = mMap.addMarker(new MarkerOptions()
                     .position(trackPoints.get(0))
                     .title("起點")
+                    .flat(true)  // 使 Marker 平貼地圖，便於旋轉
+                    // 使用 ic_baseline_navigation_24 作為指針圖標（轉換 vector 為 bitmap）
+                    .icon(bitmapDescriptorFromVector(this, R.drawable.ic_baseline_navigation_24))
                     .zIndex(1100));
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(trackPoints.get(0), 20));
         }
+    }
+
+    /**
+     * 將 vector drawable 轉換成 BitmapDescriptor
+     * @param context Context
+     * @param vectorResId vector drawable 資源 id
+     * @return BitmapDescriptor 對象
+     */
+    private BitmapDescriptor bitmapDescriptorFromVector(Context context, @DrawableRes int vectorResId) {
+        Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
+        if (vectorDrawable == null) {
+            Log.e(TAG, "Resource not found: " + vectorResId);
+            return null;
+        }
+        vectorDrawable.setBounds(0, 0, vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight());
+        Bitmap bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight(),
+                Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        vectorDrawable.draw(canvas);
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
     }
 
     /**
@@ -309,8 +344,8 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
 
     /**
      * 更新地圖位置：
-     * 1. 移動相機並更新 Marker 位置
-     * 2. 若 switch1 為關閉狀態，則依據播放進度更新 Polyline（只顯示已播放路徑部分）
+     * 1. 移動相機並更新 Marker 位置與方向
+     * 2. 若 switch1 為關閉狀態，則依據播放進度更新 Polyline（只顯示已播放軌跡部分）
      * 3. 更新室內地圖顯示（請確保 IndoorMapManager 內覆蓋層的 z-index 低於 1000）
      * 4. 更新時間顯示
      */
@@ -320,6 +355,12 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             mMap.moveCamera(CameraUpdateFactory.newLatLng(point));
             if (currentMarker != null) {
                 currentMarker.setPosition(point);
+                // 計算朝向：若有上一個點則以前一點到當前點的方位作為指針旋轉角度
+                if (currentIndex > 0) {
+                    LatLng prevPoint = trackPoints.get(currentIndex - 1);
+                    float bearing = computeBearing(prevPoint, point);
+                    currentMarker.setRotation(bearing);
+                }
             }
             // 更新室內地圖顯示
             if (indoorMapManager != null) {
@@ -328,10 +369,10 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             // 根據 switch1 狀態更新 Polyline
             if (polyline != null) {
                 if (switch1 != null && switch1.isChecked()) {
-                    // 顯示完整路徑
+                    // 顯示完整軌跡
                     polyline.setPoints(trackPoints);
                 } else {
-                    // 只顯示從起點到當前播放點的路徑
+                    // 只顯示從起點到當前播放點的軌跡
                     int end = Math.min(currentIndex + 1, trackPoints.size());
                     polyline.setPoints(new ArrayList<>(trackPoints.subList(0, end)));
                 }
@@ -348,5 +389,24 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                 totaltimetext.setText(String.format("%02d:%02d", totalMinutes, totalSeconds));
             }
         }
+    }
+
+    /**
+     * 根據兩個 LatLng 計算方位角（bearing）
+     * @param from 起點
+     * @param to 終點
+     * @return 方位角，單位度（0~360）
+     */
+    private float computeBearing(LatLng from, LatLng to) {
+        double lat1 = Math.toRadians(from.latitude);
+        double lon1 = Math.toRadians(from.longitude);
+        double lat2 = Math.toRadians(to.latitude);
+        double lon2 = Math.toRadians(to.longitude);
+        double dLon = lon2 - lon1;
+        double y = Math.sin(dLon) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+        double bearing = Math.toDegrees(Math.atan2(y, x));
+        // 將結果正規化到 0-360 度之間
+        return (float)((bearing + 360) % 360);
     }
 }
