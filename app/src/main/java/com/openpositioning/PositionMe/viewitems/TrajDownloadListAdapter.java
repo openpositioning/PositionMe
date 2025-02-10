@@ -23,7 +23,7 @@ import java.util.Map;
  *
  * @author Mate Stodulka
  */
-public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder>{
+public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder>{//继承自 RecyclerView.Adapter<TrajDownloadViewHolder>，负责管理整个列表的数据、创建和绑定每个列表项的视图。
 
     // Date-time formatting object
     private static final DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -55,7 +55,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     @NonNull
     @Override
     public TrajDownloadViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        return new TrajDownloadViewHolder(LayoutInflater.from(context).inflate(R.layout.item_trajectorycard_view, parent, false), listener);
+        return new TrajDownloadViewHolder(LayoutInflater.from(context).inflate(R.layout.item_trajectorycard_view, parent, false), listener);//绑定 item_trajectorycard_view.xml 布局，创建 TrajDownloadViewHolder
     }
 
     /**

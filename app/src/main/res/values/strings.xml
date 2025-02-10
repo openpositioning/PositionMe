@@ -10,6 +10,7 @@
     <string name="info_description">See sensor hardware information</string>
     <string name="refresh_read">Refresh readings</string>
     <string name="download">Download</string>
+    <string name="replay">replay</string>
     <string name="grant">Grant permissions</string>
     <string name="exit">Exit application</string>
     <string name="ok">Ok</string>
