@@ -95,7 +95,7 @@ public class TrajectoryFileHandler {
                 }
 
                 // 返回 `ReplayPoint` 对象
-                return new ReplayFragment.ReplayPoint(pdrLocation, gnssLocation, orientation, timestamp);
+//                return new ReplayFragment.ReplayPoint(pdrLocation, gnssLocation, orientation, timestamp);
             }
         }
 
