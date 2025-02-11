@@ -190,7 +190,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             if (!trackPoints.isEmpty()) {
                 // 将轨迹总时长设置为最后一个 PDR 样本的归一化时间戳
                 totalDuration = trackPoints.get(trackPoints.size() - 1).relativeTimestamp;
-                // 注意：SeekBar 的最大值是 int 类型（假设总时长在 int 范围内）
+                // 进度条最大值为 totalDuration（假设总时长在 int 范围内）
                 seekBar.setMax((int) totalDuration);
             }
         } else {
@@ -202,9 +202,9 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             if (isPlaying) {
                 pausePlayback();
             } else {
-                currentIndex = 0;
-                // 将 currentTime 初始化为第一个 PDR 样本的归一化时间（应为 0）
-                currentTime = trackPoints.get(0).relativeTimestamp;
+                // 当播放时，不重置 currentTime 和 currentIndex，
+                // 而是根据当前 seekBar 上的值继续播放
+                playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
                 startPlayback();
             }
         });
@@ -213,7 +213,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         gotoStartButton.setOnClickListener(v -> gotoStart());
         gotoEndButon.setOnClickListener(v -> gotoEnd());
 
-        // 进度条拖动监听
+        // 进度条拖动监听：在拖动时暂停自动更新，在拖动结束后更新 playbackStartTime 以从新位置开始播放
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -229,8 +229,21 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                     updateMapPosition();
                 }
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) { }
-            @Override public void onStopTrackingTouch(SeekBar seekBar) { }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // 如果正在播放，暂停自动播放
+                if (isPlaying) {
+                    handler.removeCallbacks(playbackRunnable);
+                }
+            }
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // 如果播放状态仍然有效，更新 playbackStartTime 以从当前进度继续播放
+                if (isPlaying) {
+                    playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
+                    handler.post(playbackRunnable);
+                }
+            }
         });
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
@@ -391,28 +404,24 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     // 开始回放：使用固定定时任务每秒更新播放进度和当前播放时间
     private void startPlayback() {
         if (trackPoints.isEmpty()) return;
-        // 初始化播放：从第一个样本开始，currentTime 应为 0
-        currentIndex = 0;
-        currentTime = trackPoints.get(0).relativeTimestamp; // 应该为 0
-        // 记录播放开始时的系统时间
-        playbackStartTime = System.currentTimeMillis();
+        // 初始化播放：不要重置 currentTime（以用户拖动的时间为准），只更新 playbackStartTime
+        playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
         isPlaying = true;
         playButton.setImageResource(R.drawable.baseline_pause_24);
         handler.post(playbackRunnable);
     }
 
-    // 每秒更新一次播放进度的 Runnable——基于系统时间而不是仅依赖PDR更新
+    // 每秒更新一次播放进度的 Runnable —— 基于系统时间更新播放进度
     private final Runnable playbackRunnable = new Runnable() {
         @Override
         public void run() {
             if (!isPlaying) return;
-            // 根据系统时间计算经过的时间（乘以播放速度因子）
             long elapsed = System.currentTimeMillis() - playbackStartTime;
             currentTime = (long)(elapsed * playbackSpeedFactor);
             if (currentTime > totalDuration) {
                 currentTime = totalDuration;
             }
-            // 更新当前播放样本索引：取第一个样本的归一化时间戳 >= currentTime
+            // 根据 currentTime 查找当前播放样本索引
             for (int i = 0; i < trackPoints.size(); i++) {
                 if (trackPoints.get(i).relativeTimestamp >= currentTime) {
                     currentIndex = i;
@@ -422,7 +431,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             updateMapPosition();
             seekBar.setProgress((int) currentTime);
             if (currentTime < totalDuration) {
-                // 每隔 1000 毫秒更新一次
                 handler.postDelayed(this, 1000);
             } else {
                 isPlaying = false;
@@ -439,7 +447,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
 
     // 快进 5 秒：在录制时间尺度上跳转
     private void fastForward() {
-        int jumpTime = 5000; // 单位：ms
+        int jumpTime = 5000; // ms
         currentTime = Math.min(currentTime + jumpTime, totalDuration);
         for (int i = 0; i < trackPoints.size(); i++) {
             if (trackPoints.get(i).relativeTimestamp >= currentTime) {
@@ -453,7 +461,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
 
     // 快退 5 秒
     private void fastRewind() {
-        int jumpTime = 5000; // 单位：ms
+        int jumpTime = 5000; // ms
         currentTime = Math.max(currentTime - jumpTime, 0);
         for (int i = 0; i < trackPoints.size(); i++) {
             if (trackPoints.get(i).relativeTimestamp >= currentTime) {
@@ -483,14 +491,13 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
 
     /**
      * 更新地图位置：
-     * 1. 根据当前播放时间查找对应的 PDR 样本，更新相机和 Marker 的位置与方向（方向由当前样本与前一个样本计算）
+     * 1. 根据当前播放时间查找对应的 PDR 样本，更新相机和 Marker 的位置与方向（由当前样本与前一个样本计算）
      * 2. 根据 switch1 状态更新 Polyline（显示当前时间之前的轨迹或完整轨迹）
      * 3. 更新时间显示
      * 4. 根据当前播放时间更新 GNSS Marker
      */
     private void updateMapPosition() {
         if (mMap != null && !trackPoints.isEmpty()) {
-            // 找到最后一个归一化时间戳 <= currentTime 的 PDR 样本
             TimedLatLng currentTimedPoint = trackPoints.get(0);
             int idx = 0;
             for (int i = 0; i < trackPoints.size(); i++) {
@@ -547,7 +554,6 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                 progressText.setText(String.format("%02d:%02d", minutes, seconds));
                 totaltimetext.setText(String.format("%02d:%02d", totalMinutes, totalSeconds));
             }
-            // 更新 GNSS Marker：根据当前播放时间选取最近的 GNSS 样本
             if (trajectoryData != null && trajectoryData.getGnssDataCount() > 0 && gnssMarker != null) {
                 LatLng currentGnss = getCurrentGnssPosition(currentTime, trajectoryData);
                 if (currentGnss != null) {
