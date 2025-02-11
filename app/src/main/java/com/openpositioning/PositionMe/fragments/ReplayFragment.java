@@ -86,8 +86,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     private TimerTask replayTimerTask;
     private int currentPointIndex = 0;
     private boolean replayActive = false;
-    private FloatingActionButton floorUpButton; // Floor Up button
-    private FloatingActionButton floorDownButton; // Floor Down button
+    private ImageButton floorUpButton; // Floor Up button
+    private ImageButton floorDownButton; // Floor Down button
 
     //==============================================================================================
     // File Processing Members

@@ -18,32 +18,43 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
+        <!-- Floor Up Button: play icon rotated 90 degrees -->
+
+        <!-- Floor Down Button: play icon rotated 270 degrees -->
+
+        <!-- Other UI elements remain unchanged -->
+
+        <!-- Floor Up Button: play icon rotated 90 degrees -->
+
+        <!-- Floor Down Button: play icon rotated 270 degrees -->
+        <ImageButton
             android:id="@+id/floorUpButtonReplay"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="32dp"
-            android:clickable="true"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginBottom="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/floor_up_button"
-            android:src="@android:drawable/arrow_up_float"
-            app:backgroundTint="@color/ic_launcher_simple_background"
+            android:rotation="270"
+            android:scaleType="fitCenter"
+            android:src="@android:drawable/ic_media_play"
             app:layout_constraintBottom_toTopOf="@+id/floorDownButtonReplay"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.954"
+            app:layout_constraintHorizontal_bias="0.953"
             app:layout_constraintStart_toStartOf="parent" />
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
+        <ImageButton
             android:id="@+id/floorDownButtonReplay"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="296dp"
-            android:clickable="true"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginBottom="136dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/floor_down_button"
-            android:src="@android:drawable/arrow_down_float"
-            app:backgroundTint="@color/ic_launcher_simple_background"
+            android:rotation="90"
+            android:scaleType="fitCenter"
+            android:src="@android:drawable/ic_media_play"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.954"
+            app:layout_constraintHorizontal_bias="0.953"
             app:layout_constraintStart_toStartOf="parent" />
 
         <com.google.android.material.chip.ChipGroup
@@ -74,7 +85,6 @@
 
         </com.google.android.material.chip.ChipGroup>
 
-
         <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/indoorMapSwitch"
             android:layout_width="wrap_content"
@@ -97,9 +107,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent">
 
-
-
-            <!-- Horizontal row for replay playback controls-->
+            <!-- Horizontal row for replay playback controls -->
             <LinearLayout
                 android:id="@+id/playbackButtonsContainer"
                 android:layout_width="match_parent"
@@ -107,8 +115,6 @@
                 android:layout_marginBottom="8dp"
                 android:gravity="center"
                 android:orientation="horizontal">
-
-
 
                 <ImageButton
                     android:id="@+id/restartButton"
