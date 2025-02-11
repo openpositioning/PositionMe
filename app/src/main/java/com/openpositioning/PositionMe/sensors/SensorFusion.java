@@ -131,6 +131,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Location values
     private float latitude;
     private float longitude;
+    Location locationData;
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
@@ -368,6 +369,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
                 latitude = (float) location.getLatitude();
                 longitude = (float) location.getLongitude();
+                locationData = location;
                 float altitude = (float) location.getAltitude();
                 float accuracy = (float) location.getAccuracy();
                 float speed = (float) location.getSpeed();
@@ -583,11 +585,23 @@ public class SensorFusion implements SensorEventListener, Observer {
         startLocation = startPosition;
         latitude = (float) startPosition[0];
         longitude = (float) startPosition[1];
-        float altitude = (float) 0;
-        float accuracy = (float) -1;
-        float speed = (float) -1;
-        String provider = "initial setting";
-        Log.d(TAG, "initial gnss set");
+        float altitude;
+        float accuracy;
+        float speed;
+        String provider;
+        if(locationData != null) {
+            altitude = (float) locationData.getAltitude();
+            accuracy = (float) locationData.getAccuracy();
+            speed = (float) locationData.getSpeed();
+            provider = locationData.getProvider();
+            Log.d(TAG, "gnss data set");
+        } else {
+            altitude = 0;
+            accuracy = (float) -1;
+            speed = (float) -1;
+            provider = "initial setting";
+            Log.d(TAG, "default gnss data set");
+        }
         if(saveRecording) {
             Log.d(TAG, "initial gnss saved");
             trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
