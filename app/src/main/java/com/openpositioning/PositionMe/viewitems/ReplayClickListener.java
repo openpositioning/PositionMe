@@ -1,5 +1,5 @@
 package com.openpositioning.PositionMe.viewitems;
 
 public interface ReplayClickListener {
-    void onPlayClicked(int position);
+    void onReplayClick(int position);
 }
