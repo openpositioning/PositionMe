@@ -18,9 +18,33 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorUpButtonReplay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="32dp"
+            android:clickable="true"
+            android:contentDescription="@string/floor_up_button"
+            android:src="@android:drawable/arrow_up_float"
+            app:backgroundTint="@color/ic_launcher_simple_background"
+            app:layout_constraintBottom_toTopOf="@+id/floorDownButtonReplay"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.954"
+            app:layout_constraintStart_toStartOf="parent" />
 
-
-
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorDownButtonReplay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="296dp"
+            android:clickable="true"
+            android:contentDescription="@string/floor_down_button"
+            android:src="@android:drawable/arrow_down_float"
+            app:backgroundTint="@color/ic_launcher_simple_background"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.954"
+            app:layout_constraintStart_toStartOf="parent" />
 
         <com.google.android.material.chip.ChipGroup
             android:id="@+id/mapTypeChipGroup"

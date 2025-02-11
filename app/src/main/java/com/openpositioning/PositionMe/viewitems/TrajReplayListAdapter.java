@@ -11,6 +11,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
 
 import java.io.File;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,6 +23,8 @@ import java.util.regex.Pattern;
  */
 public class TrajReplayListAdapter extends RecyclerView.Adapter<TrajReplayViewHolder>{
 
+    private static final SimpleDateFormat initDateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
+    private static final SimpleDateFormat finDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     private final Context context;
     private final List<File> replayItems;
@@ -53,7 +59,16 @@ public class TrajReplayListAdapter extends RecyclerView.Adapter<TrajReplayViewHo
         Matcher dateMatcher = datePattern.matcher(replayItems.get(position).getName());
         String dateString = dateMatcher.find() ? dateMatcher.group(1) : "N/A";
         System.err.println("REPLAY - Date string: " + dateString);
-        holder.replayDate.setText(dateString);
+
+        try {
+            holder.replayDate.setText(
+                    finDateFormat.format(
+                            initDateFormat.parse(dateString)
+                    )
+            );
+        } catch (ParseException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override

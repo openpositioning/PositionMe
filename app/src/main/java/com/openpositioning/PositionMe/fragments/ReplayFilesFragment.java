@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -38,6 +39,7 @@ public class ReplayFilesFragment extends Fragment {
     private TextView emptyNotice;
     private RecyclerView replayList;
     private TrajReplayListAdapter listAdapter;
+    private ImageButton DemoCard;
 
     // List of files saved locally
     private List<File> localTrajectories;
@@ -60,7 +62,7 @@ public class ReplayFilesFragment extends Fragment {
 
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        getActivity().setTitle("Replay");
+        getActivity().setTitle("Replay Files");
         // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_replay_files, container, false);
     }
@@ -83,6 +85,21 @@ public class ReplayFilesFragment extends Fragment {
 
         this.emptyNotice = view.findViewById(R.id.emptyReplay);
         this.replayList = view.findViewById(R.id.replayTrajectories);
+
+        // Demo button
+        this.DemoCard = view.findViewById(R.id.demoTrajectoryButton);
+        this.DemoCard.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View view) {
+                ReplayFilesFragmentDirections.ActionReplayFilesFragmentToReplayFragment action =
+                        ReplayFilesFragmentDirections.actionReplayFilesFragmentToReplayFragment();
+
+                action.setPosition(-1);
+                Navigation.findNavController(requireView()).navigate(action);
+            }
+        });
+
         // Check if there are locally saved trajectories
         if (localTrajectories.isEmpty()) {
             replayList.setVisibility(View.GONE);
@@ -99,17 +116,17 @@ public class ReplayFilesFragment extends Fragment {
 
                 @Override
                 public void onDownloadClicked(int position) {
-                    // Intentionally left empty
-                }
-
-                @Override
-                public void onReplayClicked(int position) {
                     ReplayFilesFragmentDirections.ActionReplayFilesFragmentToReplayFragment action =
                             ReplayFilesFragmentDirections.actionReplayFilesFragmentToReplayFragment();
 
                     action.setPosition(position);
                     Navigation.findNavController(requireView()).navigate(action);
                 }
+
+                //@Override
+                //public void onReplayClicked(int position) {
+
+                //}
             });
             replayList.setAdapter(listAdapter);
         }

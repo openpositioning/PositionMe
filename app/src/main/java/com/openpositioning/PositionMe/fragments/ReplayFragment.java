@@ -35,6 +35,7 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.BuildingPolygon;
 import com.openpositioning.PositionMe.IndoorMapManager;
@@ -85,6 +86,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     private TimerTask replayTimerTask;
     private int currentPointIndex = 0;
     private boolean replayActive = false;
+    private FloatingActionButton floorUpButton; // Floor Up button
+    private FloatingActionButton floorDownButton; // Floor Down button
 
     //==============================================================================================
     // File Processing Members
@@ -214,6 +217,34 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         mapTypeChipGroup = view.findViewById(R.id.mapTypeChipGroup);
         chipNormal = view.findViewById(R.id.chipNormal);
         chipHybrid = view.findViewById(R.id.chipHybrid);
+
+        // Floor changer Buttons
+        floorUpButton = view.findViewById(R.id.floorUpButtonReplay);
+        floorDownButton = view.findViewById(R.id.floorDownButtonReplay);
+
+        // Manually increase-decrease floor
+        this.floorUpButton.setOnClickListener(new View.OnClickListener() {
+            /**
+             *{@inheritDoc}
+             * Listener for increasing the floor for the indoor map
+             */
+            @Override
+            public void onClick(View view) {
+                // Setting off auto-floor as manually changed
+                indoorMapManager.increaseFloor();
+            }
+        });
+        this.floorDownButton.setOnClickListener(new View.OnClickListener() {
+            /**
+             *{@inheritDoc}
+             * Listener for decreasing the floor for the indoor map
+             */
+            @Override
+            public void onClick(View view) {
+                // Setting off auto-floor as manually changed
+                indoorMapManager.decreaseFloor();
+            }
+        });
 
         // Set initial map type chip based on currentMapTypeIndex
         if (currentMapTypeIndex == 0) {

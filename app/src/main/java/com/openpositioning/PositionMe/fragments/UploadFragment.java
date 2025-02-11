@@ -122,10 +122,10 @@ public class UploadFragment extends Fragment {
                     serverCommunications.uploadLocalTrajectory(localTrajectories.get(position));
                 }
 
-                @Override // Add the missing method
-                public void onReplayClicked(int position) {
-                    // Intentionally left empty.  UploadFragment doesn't handle replay.
-                }
+                //@Override // Add the missing method
+                //public void onReplayClicked(int position) {
+                //    // Intentionally left empty.  UploadFragment doesn't handle replay.
+                //}
             });
             uploadList.setAdapter(listAdapter);
         }

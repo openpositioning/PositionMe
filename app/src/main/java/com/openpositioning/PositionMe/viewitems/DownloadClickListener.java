@@ -13,6 +13,6 @@ public interface DownloadClickListener {
      * @param position  integer position of the item in the list.
      */
     void onDownloadClicked(int position);
-    void onReplayClicked(int position);
+    //void onReplayClicked(int position);
 
 }

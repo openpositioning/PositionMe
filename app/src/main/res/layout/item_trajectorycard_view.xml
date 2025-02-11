@@ -26,9 +26,9 @@
 
             <TextView
                 android:id="@+id/trajectoryIdItem"
-                android:layout_width="31dp"
-                android:layout_height="75dp"
-                android:layout_marginStart="12dp"
+                android:layout_width="100dp"
+                android:layout_height="100dp"
+                android:layout_marginStart="8dp"
                 android:gravity="center"
                 android:text="999"
                 android:textColor="@color/lightLogoBlue"
@@ -72,7 +72,11 @@
                 app:layout_constraintTop_toTopOf="parent"
                 app:srcCompat="@drawable/ic_baseline_download_24" />
 
-            <ImageButton
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.cardview.widget.CardView>
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+<!--             <ImageButton
                 android:id="@+id/replayTrajectoryButton"
                 android:layout_width="75dp"
                 android:layout_height="75dp"
@@ -87,9 +91,4 @@
                 app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintVertical_bias="0.0"
-                app:srcCompat="@drawable/ic_baseline_play_arrow_24" />
-
-
-        </androidx.constraintlayout.widget.ConstraintLayout>
-    </androidx.cardview.widget.CardView>
-</androidx.constraintlayout.widget.ConstraintLayout>
+                app:srcCompat="@drawable/ic_baseline_play_arrow_24" /> !-->
