@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.fragments;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,7 +13,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ProgressBar;
-import android.widget.SeekBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -23,6 +23,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.GroundOverlay;
 import com.google.android.gms.maps.model.GroundOverlayOptions;
 import com.google.android.gms.maps.model.LatLng;
@@ -30,18 +31,15 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.Tile;
 import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.maps.model.TileOverlayOptions;
 import com.google.android.gms.maps.model.TileProvider;
+import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.Traj.Trajectory;
 import com.openpositioning.PositionMe.UtilFunctions;
-import com.openpositioning.PositionMe.IndoorMapManager;
-
-import android.graphics.Color;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -49,12 +47,12 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
 
-public class ReplayFragment extends Fragment implements OnMapReadyCallback {//它实现了 OnMapReadyCallback 接口，用于在Google Map准备好时执行相关操作。
+public class ReplayFragment_backup extends Fragment implements OnMapReadyCallback {//它实现了 OnMapReadyCallback 接口，用于在Google Map准备好时执行相关操作。
 
     private MapView mapView;//用于在界面上显示 Google 地图的视图组件。
     private GoogleMap mMap;//对应 MapView 中的地图对象，用于添加标记、多边线、移动摄像头等操作。
     private Button btnPlayPause, btnRestart, btnGoToEnd, btnExit;
-    private SeekBar progressBar;
+    private ProgressBar progressBar;
 
     // 播放控制
     private boolean isPlaying = false;//表示是否正在回放
@@ -64,7 +62,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
     private Runnable playbackRunnable;//用于实现周期性更新轨迹标记位置的任务。
 
     // 轨迹数据：这里分别使用 Traj.Trajectory 解析得到的 GNSS 和 PDR 数据
-    private Traj.Trajectory trajectory;//从文件中解析得到的轨迹数据对象。
+    private Trajectory trajectory;//从文件中解析得到的轨迹数据对象。
     private List<Traj.GNSS_Sample> gnssPositions;//存储解析后的 GNSS 数据列表（每个数据包含纬度、经度）。
     private List<Traj.Pdr_Sample> pdrPositions;//存储解析后的 PDR 数据列表（每个数据通常包含相对位移信息，如 x、y 偏移量）。
 
@@ -112,7 +110,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
             byte[] data = new byte[(int) file.length()];//file.length() 返回文件的大小（以字节为单位）。(int) file.length() 将文件大小转换为 int 类型。
             fis.read(data);
             fis.close();
-            trajectory = Traj.Trajectory.parseFrom(data);
+            trajectory = Trajectory.parseFrom(data);
             // 分别获取 GNSS 数据列表和 PDR 数据列表
             gnssPositions = trajectory.getGnssDataList();
             pdrPositions = trajectory.getPdrDataList();
@@ -141,67 +139,6 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
                     pdrPositions != null ? pdrPositions.size() : 0);
             progressBar.setMax(maxCount);
         }
-
-        progressBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (fromUser) {
-                    // 将拖动进度映射为回放的索引
-                    currentGnssIndex = progress;
-                    currentPdrIndex = progress;
-                    updateMarkersForProgress();
-                }
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-                // 可选：拖动开始时暂停自动播放，防止与自动更新冲突
-                pauseReplay();
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                // 可选：拖动结束后是否恢复自动播放由需求决定
-            }
-        });
-    }
-    private void updateMarkersForProgress() {
-        if (mMap == null) {
-            // 地图还没有准备好，直接返回或做其他处理
-            return;
-        }
-        // 更新 GNSS 标记
-        if (gnssPositions != null && !gnssPositions.isEmpty()) {
-            int index = Math.min(currentGnssIndex, gnssPositions.size() - 1);
-            Traj.GNSS_Sample sample = gnssPositions.get(index);
-            LatLng latLng = new LatLng(sample.getLatitude(), sample.getLongitude());
-            if (gnssMarker != null) {
-                gnssMarker.setPosition(latLng);
-            } else {
-                gnssMarker = mMap.addMarker(new MarkerOptions()
-                        .position(latLng)
-                        .title("GNSS Position")
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
-            }
-        }
-        // 更新 PDR 标记
-        if (pdrPositions != null && !pdrPositions.isEmpty()) {
-            int index = Math.min(currentPdrIndex, pdrPositions.size() - 1);
-            Traj.Pdr_Sample sample = pdrPositions.get(index);
-            LatLng pdrStart = (gnssPositions != null && !gnssPositions.isEmpty())
-                    ? new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude())
-                    : new LatLng(0, 0);
-            float[] pdrOffset = new float[]{ sample.getX(), sample.getY() };
-            LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
-            if (pdrMarker != null) {
-                pdrMarker.setPosition(latLng);
-            } else {
-                pdrMarker = mMap.addMarker(new MarkerOptions()
-                        .position(latLng)
-                        .title("PDR Position")
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
-            }
-        }
     }
 
     @Override
@@ -214,8 +151,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
         mMap.getUiSettings().setScrollGesturesEnabled(true);
         // 绘制 GNSS 轨迹（蓝色）
 
-
-        // 根据需要加载并显示室内覆盖图
+        // 根据需要加载
         if (gnssPositions != null && !gnssPositions.isEmpty()) {
             PolylineOptions gnssOptions = new PolylineOptions().color(Color.BLUE);
             for (Traj.GNSS_Sample sample : gnssPositions) {
@@ -228,7 +164,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(gnssStart, 18f));
             // 创建 GNSS 动态标记
             gnssMarker = mMap.addMarker(new MarkerOptions().position(gnssStart).title("GNSS Position")
-                    .icon(com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_BLUE)));
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
 
             //inner buildings
             LatLng Nucleus_building_inner = new LatLng(55.923089201509164, -3.17426605622692);
@@ -266,16 +202,14 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
             // 创建 PDR 动态标记（初始位置取第一个 PDR 转换后的点）
             if (!pdrOptions.getPoints().isEmpty()) {
                 pdrMarker = mMap.addMarker(new MarkerOptions().position(pdrOptions.getPoints().get(0)).title("PDR Position")
-                        .icon(com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_RED)));
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
             }
         }
     }
 
-
-
     private TileOverlay tileOverlay;
     private void addTileOverlay() {
-        ReplayFragment_backup.LocalTileProvider tileProvider = new ReplayFragment_backup.LocalTileProvider(getActivity());
+        LocalTileProvider tileProvider = new LocalTileProvider(getActivity());
         tileOverlay = mMap.addTileOverlay(new TileOverlayOptions().tileProvider(tileProvider) .transparency(0.85f));
     }
 
@@ -335,11 +269,9 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
     }
 
 
-
     // 开始回放：每隔一定时间更新两个轨迹的动态标记位置
     private void startReplay() {
-        if ((gnssPositions == null || gnssPositions.isEmpty()) &&
-                (pdrPositions == null || pdrPositions.isEmpty()))
+        if ((gnssPositions == null || gnssPositions.isEmpty()) && (pdrPositions == null || pdrPositions.isEmpty()))
             return;
         isPlaying = true;
         btnPlayPause.setText("Pause");
@@ -355,7 +287,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
                         gnssMarker.setPosition(latLng);
                     } else {
                         gnssMarker = mMap.addMarker(new MarkerOptions().position(latLng).title("GNSS Position")
-                                .icon(com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_BLUE)));
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
                     }
                     currentGnssIndex++;
                 }
@@ -375,7 +307,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
                         pdrMarker.setPosition(latLng);
                     } else {
                         pdrMarker = mMap.addMarker(new MarkerOptions().position(latLng).title("PDR Position")
-                                .icon(com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_RED)));
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
                     }
                     currentPdrIndex++;
                 }

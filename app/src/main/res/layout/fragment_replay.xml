@@ -69,9 +69,7 @@
     </LinearLayout>
 
 
-    <!-- 进度条 -->
-    <!-- SeekBar（替换原先的 ProgressBar，用于拖动回放进度） -->
-    <ProgressBar
+    <SeekBar
         android:id="@+id/progressBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
