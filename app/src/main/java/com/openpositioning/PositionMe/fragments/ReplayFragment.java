@@ -9,6 +9,10 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -18,11 +22,19 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.GroundOverlay;
+import com.google.android.gms.maps.model.GroundOverlayOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.gms.maps.model.Tile;
+import com.google.android.gms.maps.model.TileProvider;
+import com.google.android.gms.maps.model.TileOverlay;
+import com.google.android.gms.maps.model.TileOverlayOptions;
+
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.Traj.Trajectory;
@@ -34,6 +46,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 
 public class ReplayFragment extends Fragment implements OnMapReadyCallback {//它实现了 OnMapReadyCallback 接口，用于在Google Map准备好时执行相关操作。
 
@@ -139,7 +154,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
         mMap.getUiSettings().setScrollGesturesEnabled(true);
         // 绘制 GNSS 轨迹（蓝色）
 
-        // 根据需要加载并显示室内覆盖图
+        // 根据需要加载
         if (gnssPositions != null && !gnssPositions.isEmpty()) {
             PolylineOptions gnssOptions = new PolylineOptions().color(Color.BLUE);
             for (Traj.GNSS_Sample sample : gnssPositions) {
@@ -153,6 +168,24 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
             // 创建 GNSS 动态标记
             gnssMarker = mMap.addMarker(new MarkerOptions().position(gnssStart).title("GNSS Position")
                     .icon(com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_BLUE)));
+
+            //inner buildings
+            LatLng Nucleus_building_inner = new LatLng(55.923089201509164, -3.17426605622692);
+            GroundOverlayOptions Nucleus_building_inner_ = new GroundOverlayOptions()
+                    .image(BitmapDescriptorFactory.fromResource(R.drawable.floor_1))
+                    .position(Nucleus_building_inner, 48f, 53f);
+            mMap.addGroundOverlay(Nucleus_building_inner_);
+            // Add an overlay to the map, retaining a handle to the GroundOverlay object.
+            GroundOverlay Nucleus_building_inner_imageOverlay = mMap.addGroundOverlay(Nucleus_building_inner_);
+
+            LatLng Murray_library_inner = new LatLng(55.922947075165695, -3.174960196013571);
+            GroundOverlayOptions Murray_library_inner_ = new GroundOverlayOptions()
+                    .image(BitmapDescriptorFactory.fromResource(R.drawable.library1))
+                    .position(Murray_library_inner, 27f, 27f);
+            mMap.addGroundOverlay(Murray_library_inner_);
+            GroundOverlay Murray_library_inner_imageOverlay = mMap.addGroundOverlay(Murray_library_inner_);
+
+            //addTileOverlay(); //when there is a huge amount of inner maps
         }
         // 绘制 PDR 轨迹（红色）
         if (pdrPositions != null && !pdrPositions.isEmpty()) {
@@ -177,10 +210,71 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
         }
     }
 
+    private TileOverlay tileOverlay;
+    private void addTileOverlay() {
+        LocalTileProvider tileProvider = new LocalTileProvider(getActivity());
+        tileOverlay = mMap.addTileOverlay(new TileOverlayOptions().tileProvider(tileProvider) .transparency(0.85f));
+    }
+
+    public static class LocalTileProvider implements TileProvider {
+        private static final int TILE_SIZE = 256; // Tile size in pixels
+        private final Context context;
+
+        public LocalTileProvider(Context context) {
+            this.context = context;
+        }
+
+        @Override
+        public Tile getTile(int x, int y, int zoom) {
+            byte[] image = getTileImage(x, y, zoom);
+            if (image == null) {
+                return NO_TILE; // Return empty tile if not found
+            }
+            return new Tile(TILE_SIZE, TILE_SIZE, image);
+        }
+
+        private byte[] getTileImage(int x, int y, int zoom) {
+            //String filePath = String.format("tiles/%d/%d/%d.png", zoom, x, y);
+            //String filePath = "res/drawable/floor_1.png";
+            if(zoom > 15) {
+                try {
+                    //InputStream inputStream = context.getAssets().open(filePath);
+                    //Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
+                    //inputStream.close();
+                    Bitmap bitmap = BitmapFactory.decodeResource(context.getResources(), R.drawable.floor_1);
+                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+                    return stream.toByteArray();
+                    //return bitmapToByteArray(bitmap);
+                } catch (Exception e) {//IOException e
+                    //Log.e("LocalTileProvider", "Tile not found: " + filePath);
+                    Log.e("LocalTileProvider", "Error loading tile image", e);
+                    return null;
+                }
+            } else {
+                return null;
+            }
+        }
+
+        private byte[] bitmapToByteArray(Bitmap bitmap) {
+            java.io.ByteArrayOutputStream stream = new java.io.ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+            return stream.toByteArray();
+        }
+    }
+
+    private TileOverlay tileOverlayTransparent;
+    // Switch between 0.0f and 0.5f transparency.
+    public void toggleTileOverlayTransparency() {
+        if (tileOverlayTransparent != null) {
+            tileOverlayTransparent.setTransparency(0.5f - tileOverlayTransparent.getTransparency());
+        }
+    }
+
+
     // 开始回放：每隔一定时间更新两个轨迹的动态标记位置
     private void startReplay() {
-        if ((gnssPositions == null || gnssPositions.isEmpty()) &&
-                (pdrPositions == null || pdrPositions.isEmpty()))
+        if ((gnssPositions == null || gnssPositions.isEmpty()) && (pdrPositions == null || pdrPositions.isEmpty()))
             return;
         isPlaying = true;
         btnPlayPause.setText("Pause");
