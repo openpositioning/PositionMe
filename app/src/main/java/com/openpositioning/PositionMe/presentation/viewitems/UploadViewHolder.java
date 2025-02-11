@@ -8,6 +8,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.UploadFragment;
 
@@ -25,7 +26,7 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
 
     TextView trajId;
     TextView trajDate;
-    ImageButton uploadButton;
+    MaterialButton uploadButton;  // Correct reference to MaterialButton
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
     public Button deletebutton;

@@ -10,6 +10,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.NavDirections;
+import androidx.navigation.Navigation;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -24,8 +26,14 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
 
 /**
- * A simple {@link Fragment} subclass. The StartLocationFragment is displayed before the trajectory
- * recording starts.
+ * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
+ * recording starts. This fragment displays a map in which the user can adjust their location to
+ * correct the PDR when it is complete
+ *
+ * @author Virginia Cangelosi
+ * @see HomeFragment the previous fragment in the nav graph.
+ * @see RecordingFragment the next fragment in the nav graph.
+ * @see SensorFusion the class containing sensors and recording.
  */
 public class StartLocationFragment extends Fragment {
 
@@ -44,10 +52,18 @@ public class StartLocationFragment extends Fragment {
     // Dummy variable for floor index
     private int FloorNK;
 
+    /**
+     * Public Constructor for the class.
+     * Left empty as not required
+     */
     public StartLocationFragment() {
         // Required empty public constructor
     }
 
+    /**
+     * {@inheritDoc}
+     * The map is loaded and configured so that it displays a draggable marker for the start location
+     */
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
@@ -71,6 +87,13 @@ public class StartLocationFragment extends Fragment {
                 getChildFragmentManager().findFragmentById(R.id.startMap);
 
         supportMapFragment.getMapAsync(new OnMapReadyCallback() {
+            /**
+             * {@inheritDoc}
+             * Controls to allow scrolling, tilting, rotating and a compass view of the
+             * map are enabled. A marker is added to the map with the start position and a marker
+             * drag listener is generated to detect when the marker has moved to obtain the new
+             * location.
+             */
             @Override
             public void onMapReady(GoogleMap mMap) {
                 // Set map type and UI settings
@@ -97,15 +120,25 @@ public class StartLocationFragment extends Fragment {
 
                 // Drag listener for the marker to update the start position when dragged
                 mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
+                    /**
+                     * {@inheritDoc}
+                     */
                     @Override
                     public void onMarkerDragStart(Marker marker) {}
 
+                    /**
+                     * {@inheritDoc}
+                     * Updates the start position of the user.
+                     */
                     @Override
                     public void onMarkerDragEnd(Marker marker) {
                         startPosition[0] = (float) marker.getPosition().latitude;
                         startPosition[1] = (float) marker.getPosition().longitude;
                     }
 
+                    /**
+                     * {@inheritDoc}
+                     */
                     @Override
                     public void onMarkerDrag(Marker marker) {}
                 });
@@ -116,7 +149,8 @@ public class StartLocationFragment extends Fragment {
     }
 
     /**
-     * Instead of using NavDirections, we call RecordingActivity directly.
+     * {@inheritDoc}
+     * Button onClick listener enabled to detect when to go to next fragment and start PDR recording.
      */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
@@ -124,6 +158,11 @@ public class StartLocationFragment extends Fragment {
 
         this.button = view.findViewById(R.id.startLocationDone);
         this.button.setOnClickListener(new View.OnClickListener() {
+            /**
+             * {@inheritDoc}
+             * When button clicked the PDR recording can start and the start position is stored for
+             * the {@link CorrectionFragment} to display. The {@link RecordingFragment} is loaded.
+             */
             @Override
             public void onClick(View view) {
                 // Start sensor recording and set the start location
@@ -136,9 +175,15 @@ public class StartLocationFragment extends Fragment {
         });
     }
 
+    /**
+     * Switches the indoor map to the specified floor.
+     *
+     * @param floorIndex the index of the floor to switch to
+     */
     private void switchFloorNU(int floorIndex) {
-        FloorNK = floorIndex;
+        FloorNK = floorIndex; // Set the current floor index
         if (nucleusBuildingManager != null) {
+            // Call the switchFloor method of the IndoorMapManager to switch to the specified floor
             nucleusBuildingManager.getIndoorMapManager().switchFloor(floorIndex);
         }
     }

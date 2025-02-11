@@ -7,6 +7,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 
@@ -24,7 +25,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
 
     private final TextView trajId;
     private final TextView trajDate;
-    final ImageButton downloadButton;
+    final MaterialButton downloadButton;
     private final WeakReference<DownloadClickListener> listenerReference;
 
     /**
