@@ -87,6 +87,9 @@ public class MainActivity extends AppCompatActivity implements Observer {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         setContentView(R.layout.activity_main);
 
+        //check wifi throttling
+        checkWifiThrottling();
+
         // Set up navigation and fragments
         NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager().findFragmentById(R.id.nav_host_fragment);
         navController = navHostFragment.getNavController();
@@ -127,6 +130,12 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();
+    }
+
+    private void checkWifiThrottling() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {  // Android 9 (Pie) and above
+            Toast.makeText(this, "⚠\uFE0F TURN OFF: Developer Options -> Wi-Fi scan throttling!", Toast.LENGTH_LONG).show();
+        }
     }
 
     /**
