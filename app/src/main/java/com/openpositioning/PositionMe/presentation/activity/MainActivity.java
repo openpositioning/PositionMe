@@ -20,6 +20,8 @@ import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.drawable.DrawableCompat;
+import android.graphics.drawable.Drawable;
 import androidx.navigation.NavController;
 import androidx.navigation.NavOptions;
 import androidx.navigation.fragment.NavHostFragment;
@@ -100,10 +102,13 @@ public class MainActivity extends AppCompatActivity implements Observer {
         Toolbar toolbar = findViewById(R.id.main_toolbar);
         setSupportActionBar(toolbar);
         toolbar.showOverflowMenu();
-        toolbar.setBackgroundColor(ContextCompat.getColor(getApplicationContext(), R.color.primaryBlue));
-        toolbar.setTitleTextColor(ContextCompat.getColor(getApplicationContext(), R.color.white));
+        toolbar.setBackgroundColor(ContextCompat.getColor(getApplicationContext(), R.color.md_theme_light_surface));
+        toolbar.setTitleTextColor(ContextCompat.getColor(getApplicationContext(), R.color.black));
 
-        // Set up back action
+        // Set the custom back button with the desired tint
+        toolbar.setNavigationIcon(R.drawable.back_arrow);
+
+        // Set up back action with NavigationUI
         AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(navController.getGraph()).build();
         NavigationUI.setupWithNavController(toolbar, navController, appBarConfiguration);
 
@@ -153,6 +158,11 @@ public class MainActivity extends AppCompatActivity implements Observer {
     @Override
     public void onResume() {
         super.onResume();
+
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().show();
+        }
+
         new Handler().postDelayed(() -> {
             if (permissionManager != null) {
                 permissionManager.checkAndRequestPermissions();
