@@ -10,11 +10,13 @@ public class TrajectoryData {
     private List<GnssData> gnssData;
     private List<PdrData> pdrData;
     private List<PositionData> positionData;
+    private List<PressureData> pressureData;
 
     public TrajectoryData() {
         gnssData = new ArrayList<>();
         pdrData = new ArrayList<>();
         positionData = new ArrayList<>();
+        pressureData = new ArrayList<>();
     }
 
     public List<GnssData> getGnssData() {
@@ -39,5 +41,13 @@ public class TrajectoryData {
 
     public void setPositionData(List<PositionData> positionData) {
         this.positionData = positionData;
+    }
+
+    public List<PressureData> getPressureData() {
+        return pressureData;
+    }
+
+    public void setPressureData(List<PressureData> pressureData) {
+        this.pressureData = pressureData;
     }
 }

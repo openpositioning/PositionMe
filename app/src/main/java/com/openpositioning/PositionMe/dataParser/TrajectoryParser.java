@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.dataParser;
 
 import android.content.Context;
+import android.hardware.SensorManager;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -15,18 +16,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Utility class to parse a JSON-formatted trajectory file from internal storage.
- * It extracts GNSS data, PDR data, and Position data.
+ * Utility class to parse a JSON-formatted trajectory file.
  */
 public class TrajectoryParser {
     private static final String TAG = "TrajectoryParser";
 
-    /**
-     * Reads the "received_trajectory.txt" file from internal storage and parses its JSON content.
-     *
-     * @param context the application context
-     * @return a TrajectoryData object containing the parsed GNSS, PDR, and Position data
-     */
     public static TrajectoryData parseTrajectoryFile(Context context) {
         TrajectoryData trajectoryData = new TrajectoryData();
         File file = new File(context.getFilesDir(), "received_trajectory.txt");
@@ -47,7 +41,7 @@ public class TrajectoryParser {
         try {
             JSONObject jsonTrajectory = new JSONObject(fileContent);
 
-            // --- Parse GNSS data ---
+            // --- Parse GNSS data (existing code) ---
             JSONArray gnssArray = jsonTrajectory.optJSONArray("gnssData");
             List<GnssData> gnssDataList = new ArrayList<>();
             if (gnssArray != null) {
@@ -65,7 +59,7 @@ public class TrajectoryParser {
             }
             trajectoryData.setGnssData(gnssDataList);
 
-            // --- Parse PDR data ---
+            // --- Parse PDR data (existing code) ---
             JSONArray pdrArray = jsonTrajectory.optJSONArray("pdrData");
             List<PdrData> pdrDataList = new ArrayList<>();
             if (pdrArray != null) {
@@ -80,7 +74,7 @@ public class TrajectoryParser {
             }
             trajectoryData.setPdrData(pdrDataList);
 
-            // --- Parse Position data ---
+            // --- Parse Position data (existing code) ---
             JSONArray posArray = jsonTrajectory.optJSONArray("positionData");
             List<PositionData> positionDataList = new ArrayList<>();
             if (posArray != null) {
@@ -95,6 +89,41 @@ public class TrajectoryParser {
                 }
             }
             trajectoryData.setPositionData(positionDataList);
+
+            // --- Parse Pressure data ---
+            JSONArray pressureArray = jsonTrajectory.optJSONArray("pressureData");
+            List<PressureData> pressureDataList = new ArrayList<>();
+            float baselineAltitude = 0;
+            if (pressureArray != null && pressureArray.length() > 0) {
+                // Process the first three samples to determine the baseline altitude.
+                int baselineCount = Math.min(3, pressureArray.length());
+                float[] baselineAltitudes = new float[baselineCount];
+                for (int i = 0; i < baselineCount; i++) {
+                    JSONObject pressObj = pressureArray.getJSONObject(i);
+                    float pressure = (float) pressObj.getDouble("pressure");
+                    // Convert pressure to absolute altitude (meters)
+                    float altitude = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure);
+                    baselineAltitudes[i] = altitude;
+                }
+                // Compute the average of the first three altitudes as the baseline
+                float sum = 0;
+                for (float alt : baselineAltitudes) {
+                    sum += alt;
+                }
+                baselineAltitude = sum / baselineCount;
+
+                // Now process all pressure samples to compute relative altitude.
+                for (int i = 0; i < pressureArray.length(); i++) {
+                    JSONObject pressObj = pressureArray.getJSONObject(i);
+                    long relativeTimestamp = Long.parseLong(pressObj.getString("relativeTimestamp"));
+                    float pressure = (float) pressObj.getDouble("pressure");
+                    float absoluteAltitude = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure);
+                    float relativeAltitude = absoluteAltitude - baselineAltitude;
+                    PressureData sample = new PressureData(relativeTimestamp, relativeAltitude);
+                    pressureDataList.add(sample);
+                }
+            }
+            trajectoryData.setPressureData(pressureDataList);
 
         } catch (JSONException e) {
             Log.e(TAG, "Error parsing JSON: " + e.getMessage());

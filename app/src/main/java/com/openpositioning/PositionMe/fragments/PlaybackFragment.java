@@ -29,19 +29,27 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.dataParser.GnssData;
+import com.openpositioning.PositionMe.dataParser.PressureData;
+import com.openpositioning.PositionMe.dataParser.TrajectoryData;
+import com.openpositioning.PositionMe.dataParser.TrajectoryParser;
+import com.openpositioning.PositionMe.fragments.NucleusBuildingManager;
+// IMPORTANT: Import the IndoorMapManager from the com.openpositioning.PositionMe package (auto floor version)
+import com.openpositioning.PositionMe.IndoorMapManager;
 
 import java.util.ArrayList;
 import java.util.List;
 
-
-import com.openpositioning.PositionMe.dataParser.GnssData;
-import com.openpositioning.PositionMe.dataParser.TrajectoryData;
-import com.openpositioning.PositionMe.dataParser.TrajectoryParser;
-
 /**
- * ReplayFragment 用于回放先前录制的轨迹数据，
- * 根据录制时保存的轨迹点生成回放轨迹，并在地图上动态显示。
- * 当回放点进入建筑区域时，将利用 NucleusBuildingManager 显示对应的室内楼层图。
+ * PlaybackFragment for replaying recorded trajectories.
+ * <p>
+ * This fragment uses a master playback clock (in ms) to trigger events from different sensor streams
+ * (GNSS and Pressure for elevation/auto-floor updates) based on their relative timestamps.
+ * PDR events are left as a placeholder.
+ * <p>
+ * When playback points enter a building (as determined by NucleusBuildingManager), the auto floor
+ * manager updates the floor (if the auto-floor switch is enabled), while manual floor changes via buttons
+ * disable auto-floor.
  */
 public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
 
@@ -52,45 +60,61 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
     private FloatingActionButton floorUpBtn, floorDownBtn;
     private ProgressBar playbackProgressBar;
     private Button playPauseBtn, restartBtn, goToEndBtn, exitBtn;
-    // endregion
-
-    // region Trajectory playback
-    private List<LatLng> recordedTrajectory = new ArrayList<>();
     private Polyline replayPolyline;
     private Marker replayMarker;
-
-    private Handler replayHandler;
-    private Runnable playbackRunnable;
-    private int currentIndex = 0;
-    private boolean isPlaying = false; // for Play/Pause
-    private static final long PLAYBACK_INTERVAL_MS = 500;
-
-    // For indoor map
-    private NucleusBuildingManager nucleusBuildingManager;
-
-    // If you pass "trajectoryId" from FilesFragment
-    private String trajectoryId;
-
     // endregion
 
+    // region Playback event data
+    // List of LatLng points created from GNSS samples (used for drawing the polyline)
+    private List<LatLng> recordedTrajectory = new ArrayList<>();
+    // Separate list of raw GNSS data (with relative timestamps) for synchronizing events.
+    private List<GnssData> recordedGnssData = new ArrayList<>();
+    // List of PressureData samples (for elevation/auto-floor switching)
+    private List<PressureData> recordedPressureData = new ArrayList<>();
+    // (Placeholder) List for PDR events if needed in the future.
+    // private List<PdrData> recordedPdrData = new ArrayList<>();
+    // endregion
+
+    // Playback control variables
+    private Handler replayHandler;
+    private Runnable playbackRunnable;
+    private boolean isPlaying = false;
+    // Master playback clock: record the system time when playback starts.
+    private long playbackStartTime = 0;
+    // Indices to track the next event to process in each sensor stream.
+    private int currentGnssIndex = 0;
+    private int currentPressureIndex = 0;
+    // You can add an index for PDR if needed:
+    // private int currentPdrIndex = 0;
+
+    // This constant defines how frequently (in ms) we update the playback.
+    private static final long PLAYBACK_INTERVAL_MS = 200; // use a shorter interval for smoother sync
+
+    // Building-related managers:
+    // For checking if a point is inside a building (and for manual floor switching)
+    private NucleusBuildingManager nucleusBuildingManager;
+    // For auto-floor switching (used in both auto and manual modes)
+    private IndoorMapManager autoFloorMapManager;
+
+    // Passed trajectoryId (if applicable)
+    private String trajectoryId;
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        // inflate the fragment_playback layout
         return inflater.inflate(R.layout.fragment_playback, container, false);
     }
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        // 1) Get arguments from Navigation
+        // 1) Get arguments (if any)
         if (getArguments() != null) {
             PlaybackFragmentArgs args = PlaybackFragmentArgs.fromBundle(getArguments());
             trajectoryId = args.getTrajectoryId();
         }
 
-        // 2) Init UI references
+        // 2) Initialize UI references
         mapSpinner = view.findViewById(R.id.mapSwitchSpinner_playback);
         autoFloorSwitch = view.findViewById(R.id.autoFloorSwitch_playback);
         floorUpBtn = view.findViewById(R.id.floorUpButton_playback);
@@ -101,93 +125,97 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
         goToEndBtn = view.findViewById(R.id.goToEndButton);
         exitBtn = view.findViewById(R.id.exitButton);
 
-        // 3) Handler for playback
+        // 3) Initialize the playback handler.
         replayHandler = new Handler(Looper.getMainLooper());
 
-        // 4) Get the Map Fragment
+        // 4) Get the Map Fragment and set callback.
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.replayMap);
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
 
-        // 5) Setup button listeners
+        // 5) Set up control buttons and map spinner.
         setupControlButtons();
         setupMapSpinner();
     }
 
     /**
-     * Setup the controlling buttons: Play/Pause, Restart, End, Exit
+     * Set up the control buttons: Play/Pause, Restart, Go-To-End, and Exit.
      */
     private void setupControlButtons() {
-        // Play / Pause
         playPauseBtn.setOnClickListener(v -> {
             if (!isPlaying) {
-                // Start or resume
+                // Starting playback: reset indices and record the start time.
                 isPlaying = true;
                 playPauseBtn.setText("Pause");
+                playbackStartTime = System.currentTimeMillis();
+                // Reset event indices and polyline marker if needed.
+                currentGnssIndex = 0;
+                currentPressureIndex = 0;
+                // Optionally clear the polyline so that playback starts from scratch.
+                if (replayPolyline != null) {
+                    replayPolyline.setPoints(new ArrayList<>());
+                }
+                // Start the playback runnable.
                 replayHandler.post(playbackRunnable);
             } else {
-                // Pause
+                // Pause playback.
                 isPlaying = false;
                 playPauseBtn.setText("Play");
                 replayHandler.removeCallbacks(playbackRunnable);
             }
         });
 
-        // Restart
         restartBtn.setOnClickListener(v -> {
-            // Stop the current run
+            // Stop playback, reset indices, clear polyline, and update UI.
             isPlaying = false;
             replayHandler.removeCallbacks(playbackRunnable);
-
-            // Reset
-            currentIndex = 0;
             playPauseBtn.setText("Play");
-            playbackProgressBar.setProgress(0);
-            // clear polyline
+            currentGnssIndex = 0;
+            currentPressureIndex = 0;
             if (replayPolyline != null) {
                 replayPolyline.setPoints(new ArrayList<>());
             }
-            if (replayMarker != null && !recordedTrajectory.isEmpty()) {
-                replayMarker.setPosition(recordedTrajectory.get(0));
-            }
-        });
-
-        // Go to end
-        goToEndBtn.setOnClickListener(v -> {
+            // Reset marker to the first GNSS point (if available).
             if (!recordedTrajectory.isEmpty()) {
-                // Stop
-                isPlaying = false;
-                replayHandler.removeCallbacks(playbackRunnable);
-
-                // Jump to last
-                currentIndex = recordedTrajectory.size() - 1;
-                // update map
-                List<LatLng> newPoints = new ArrayList<>(recordedTrajectory);
-                replayPolyline.setPoints(newPoints);
-                replayMarker.setPosition(recordedTrajectory.get(currentIndex));
-                playbackProgressBar.setProgress(100);
+                replayMarker.setPosition(recordedTrajectory.get(0));
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(recordedTrajectory.get(0), 19f));
             }
+            // Reset progress bar.
+            playbackProgressBar.setProgress(0);
         });
 
-        // Exit
-        exitBtn.setOnClickListener(v -> {
-            // 假设直接导航回上一级
-            // or getActivity().onBackPressed();
-            NavHostFragment.findNavController(this).popBackStack();
+        goToEndBtn.setOnClickListener(v -> {
+            // Skip playback to the end.
+            isPlaying = false;
+            replayHandler.removeCallbacks(playbackRunnable);
+            // Process all remaining GNSS events.
+            while (currentGnssIndex < recordedGnssData.size()) {
+                GnssData event = recordedGnssData.get(currentGnssIndex);
+                LatLng point = new LatLng(event.getLatitude(), event.getLongitude());
+                List<LatLng> points = replayPolyline.getPoints();
+                points.add(point);
+                replayPolyline.setPoints(points);
+                replayMarker.setPosition(point);
+                currentGnssIndex++;
+            }
+            // Update progress bar to max.
+            playbackProgressBar.setProgress((int)getPlaybackDuration());
+            playPauseBtn.setText("Play");
         });
+
+        exitBtn.setOnClickListener(v -> NavHostFragment.findNavController(this).popBackStack());
     }
 
     /**
-     * Setup the map spinner to switch map type (Hybrid, Normal, Satellite).
+     * Set up the map spinner to choose map type (Hybrid, Normal, Satellite).
      */
     private void setupMapSpinner() {
         String[] maps = new String[]{"Hybrid", "Normal", "Satellite"};
         ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
                 android.R.layout.simple_spinner_dropdown_item, maps);
         mapSpinner.setAdapter(adapter);
-
         mapSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view,
@@ -207,7 +235,6 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
             }
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
-                // default
                 if (mMap != null) {
                     mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                 }
@@ -217,83 +244,91 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
 
     /**
      * Called when the GoogleMap is ready.
-     * We do the main setup: load the recorded trajectory, prepare polyline, etc.
+     * <p>
+     * Sets up the map, initializes building managers, the auto floor manager, loads trajectory data,
+     * and defines the playback runnable.
      */
     @Override
     public void onMapReady(GoogleMap googleMap) {
         this.mMap = googleMap;
-        // set default map type
-        googleMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-        googleMap.getUiSettings().setCompassEnabled(true);
+        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+        mMap.getUiSettings().setCompassEnabled(true);
 
-        // Initialize the NucleusBuildingManager to handle indoor maps
+        // Initialize the NucleusBuildingManager for building boundary checks and manual floor switching.
         nucleusBuildingManager = new NucleusBuildingManager(googleMap);
 
-        // (可选) 如果你要测试自动楼层切换 / 手动楼层切换:
+        // Initialize the auto floor manager (from com.openpositioning.PositionMe) for auto-floor switching.
+        autoFloorMapManager = new com.openpositioning.PositionMe.IndoorMapManager(googleMap);
+
+        // Set up the floor buttons to allow manual floor switching.
         setupFloorButtons();
 
-        // 载入轨迹 (根据 trajectoryId 来加载)
+        // Load trajectory data (both GNSS and Pressure) from file.
         loadRecordedTrajectory(trajectoryId);
 
-        // 如果有数据，初始化回放
+        // Initialize polyline and marker if there is trajectory data.
         if (!recordedTrajectory.isEmpty()) {
-            // init polyline
             PolylineOptions polylineOptions = new PolylineOptions()
                     .color(getResources().getColor(R.color.pastelBlue))
                     .add(recordedTrajectory.get(0));
             replayPolyline = mMap.addPolyline(polylineOptions);
-
-            // init marker
             replayMarker = mMap.addMarker(new MarkerOptions()
                     .position(recordedTrajectory.get(0))
                     .title("Playback Marker"));
-
-            // camera move to start
-            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(recordedTrajectory.get(0),19f));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(recordedTrajectory.get(0), 19f));
         }
+        // Set the progress bar max value based on the overall playback duration.
+        playbackProgressBar.setMax((int)getPlaybackDuration());
 
-        // 设置进度条
-        playbackProgressBar.setMax(recordedTrajectory.size());
-
-        // 定义 playbackRunnable，用于每隔 PLAYBACK_INTERVAL_MS 回放下一个点
+        // Define the playback runnable with the master clock and event triggering.
         playbackRunnable = new Runnable() {
             @Override
             public void run() {
-                if (!isPlaying) return; // 如果被暂停，则不继续
+                // Calculate elapsed playback time (in ms) since playbackStartTime.
+                long elapsedTime = System.currentTimeMillis() - playbackStartTime;
 
-                if (currentIndex < recordedTrajectory.size()) {
-                    LatLng point = recordedTrajectory.get(currentIndex);
-
-                    // 向折线里添加当前点
-                    List<LatLng> currentPoints = replayPolyline.getPoints();
-                    currentPoints.add(point);
-                    replayPolyline.setPoints(currentPoints);
-
-                    // 移动 marker
+                // --- Process GNSS Events ---
+                // Trigger all GNSS events whose relative timestamp is <= elapsedTime.
+                while (currentGnssIndex < recordedGnssData.size() &&
+                        recordedGnssData.get(currentGnssIndex).getRelativeTimestamp() <= elapsedTime) {
+                    GnssData gnssEvent = recordedGnssData.get(currentGnssIndex);
+                    LatLng point = new LatLng(gnssEvent.getLatitude(), gnssEvent.getLongitude());
+                    // Update the polyline: add this point.
+                    List<LatLng> points = replayPolyline.getPoints();
+                    points.add(point);
+                    replayPolyline.setPoints(points);
+                    // Update marker position and animate camera.
                     replayMarker.setPosition(point);
                     mMap.animateCamera(CameraUpdateFactory.newLatLng(point));
+                    currentGnssIndex++;
+                }
 
-                    // 如果点在大楼内，显示对应楼层图
-                    if (nucleusBuildingManager.isPointInBuilding(point)) {
+                // --- Process Pressure Events for Elevation / Auto-Floor ---
+                while (currentPressureIndex < recordedPressureData.size() &&
+                        recordedPressureData.get(currentPressureIndex).getRelativeTimestamp() <= elapsedTime) {
+                    PressureData pressureEvent = recordedPressureData.get(currentPressureIndex);
+                    int calculatedFloor = calculateFloorFromPressure(pressureEvent);
+                    // If the current playback point is within the building, update the indoor overlay.
+                    if (nucleusBuildingManager.isPointInBuilding(currentPlaybackPoint())) {
                         if (autoFloorSwitch.isChecked()) {
-                            // 根据高度或其他逻辑自动算楼层
-                            // 这里仅演示固定切到 2 楼
-                            nucleusBuildingManager.getIndoorMapManager().switchFloor(2);
+                            autoFloorMapManager.setCurrentFloor(calculatedFloor, true);
                         }
-                    } else {
-                        nucleusBuildingManager.getIndoorMapManager().hideMap();
                     }
+                    // (Optional) Update elevation display here if desired.
+                    currentPressureIndex++;
+                }
 
-                    // 更新进度条
-                    playbackProgressBar.setProgress(currentIndex);
+                // --- (Placeholder) Process PDR Events ---
+                // If you add PDR data later, process events similarly using their relative timestamps.
 
-                    // 索引+1
-                    currentIndex++;
-                    // 再次延迟调用
+                // Update the progress bar based on elapsed time.
+                playbackProgressBar.setProgress((int) elapsedTime);
+
+                // Check if we have reached the end of playback.
+                if (elapsedTime < getPlaybackDuration()) {
                     replayHandler.postDelayed(this, PLAYBACK_INTERVAL_MS);
-
                 } else {
-                    // 播放结束
+                    // Playback finished.
                     isPlaying = false;
                     playPauseBtn.setText("Play");
                 }
@@ -302,56 +337,113 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
     }
 
     /**
-     * (示例) 根据 trajectoryId 载入记录好的坐标点
-     * 实际可以从本地数据库、文件或服务器获取 proto 后再解析成 LatLng 列表
+     * Load the recorded trajectory data from file.
+     * <p>
+     * This method parses the trajectory file and populates:
+     * - recordedTrajectory (List&lt;LatLng&gt;) for polyline drawing (from GNSS samples)
+     * - recordedGnssData (List&lt;GnssData&gt;) for event synchronization
+     * - recordedPressureData (List&lt;PressureData&gt;) for elevation/auto-floor switching.
+     *
+     * @param trajectoryId (not used here, data is loaded from file)
      */
     private void loadRecordedTrajectory(String trajectoryId) {
-        // Clear any existing trajectory data
         recordedTrajectory.clear();
+        recordedGnssData.clear();
+        recordedPressureData.clear();
 
-        // Parse the trajectory file from internal storage
-        // (Ensure that your parser and model classes are in the package com.openpositioning.PositionMe.playback)
+        // Parse the trajectory file.
         TrajectoryData trajectoryData = TrajectoryParser.parseTrajectoryFile(getContext());
 
-        // Retrieve the list of GNSS samples from the parsed data
+        // Load GNSS samples.
         List<GnssData> gnssSamples = trajectoryData.getGnssData();
+        if (gnssSamples != null) {
+            for (GnssData sample : gnssSamples) {
+                LatLng point = new LatLng(sample.getLatitude(), sample.getLongitude());
+                recordedTrajectory.add(point);
+                recordedGnssData.add(sample);
+            }
+        }
 
-        // For each GNSS sample, create a LatLng point using the latitude and longitude values,
-        // and add it to the recordedTrajectory list.
-        for (GnssData sample : gnssSamples) {
-            LatLng point = new LatLng(sample.getLatitude(), sample.getLongitude());
-            recordedTrajectory.add(point);
+        // Load pressure data.
+        if (trajectoryData.getPressureData() != null) {
+            recordedPressureData.addAll(trajectoryData.getPressureData());
         }
     }
 
     /**
-     * Setup floor up/down button and autoFloor switch
+     * Set up floor up/down buttons for manual switching.
+     * <p>
+     * Manual switching calls the autoFloorMapManager’s increaseFloor() or decreaseFloor()
+     * methods and disables auto-floor (by unchecking the switch).
      */
     private void setupFloorButtons() {
         floorUpBtn.setOnClickListener(v -> {
-            // 如果手动点楼层按钮，则关掉autoFloor
             autoFloorSwitch.setChecked(false);
-            nucleusBuildingManager.getIndoorMapManager().switchFloor(
-                    // floorIndex + 1
-                    // 这里自行获取 currentFloor 并 +1
-                    2
-            );
+            autoFloorMapManager.increaseFloor();
         });
-
         floorDownBtn.setOnClickListener(v -> {
             autoFloorSwitch.setChecked(false);
-            nucleusBuildingManager.getIndoorMapManager().switchFloor(
-                    // floorIndex - 1
-                    0
-            );
+            autoFloorMapManager.decreaseFloor();
         });
     }
 
     @Override
     public void onPause() {
         super.onPause();
-        // 暂停回放
         isPlaying = false;
         replayHandler.removeCallbacks(playbackRunnable);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+    }
+
+    /**
+     * Helper method to return the current playback point.
+     * Here we return the last point added to the polyline (or the first if none added).
+     */
+    private LatLng currentPlaybackPoint() {
+        if (replayPolyline != null && !replayPolyline.getPoints().isEmpty()) {
+            List<LatLng> points = replayPolyline.getPoints();
+            return points.get(points.size() - 1);
+        } else if (!recordedTrajectory.isEmpty()) {
+            return recordedTrajectory.get(0);
+        }
+        return null;
+    }
+
+    /**
+     * Calculate the current floor based on a PressureData sample.
+     * <p>
+     * This method divides the relative altitude by the floor height (from autoFloorMapManager)
+     * and returns an integer floor value.
+     *
+     * @param pressureSample a PressureData sample
+     * @return the calculated floor (e.g., 0 for baseline floor)
+     */
+    private int calculateFloorFromPressure(PressureData pressureSample) {
+        if (pressureSample == null) {
+            return 0;
+        }
+        float relativeAltitude = pressureSample.getRelativeAltitude();
+        // Use the floor height from autoFloorMapManager if available, or default to 4 meters.
+        int floorHeight = autoFloorMapManager.getFloorHeight() > 0 ? (int) autoFloorMapManager.getFloorHeight() : 4;
+        return (int) (relativeAltitude / floorHeight);
+    }
+
+    /**
+     * Returns the overall playback duration in milliseconds.
+     * In this example, we assume the last pressure data entry marks the end of the recording.
+     */
+    private long getPlaybackDuration() {
+        if (!recordedPressureData.isEmpty()) {
+            return recordedPressureData.get(recordedPressureData.size() - 1).getRelativeTimestamp();
+        }
+        // Fallback: if no pressure data, use last GNSS event timestamp.
+        if (!recordedGnssData.isEmpty()) {
+            return recordedGnssData.get(recordedGnssData.size() - 1).getRelativeTimestamp();
+        }
+        return 0;
     }
 }
