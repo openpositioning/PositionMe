@@ -16,40 +16,58 @@
         android:layout_weight="1" />
 
 
-    <!-- 播放控制按钮区域 -->
     <LinearLayout
         android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center"
-        android:layout_height="wrap_content">
+        android:gravity="center">
 
         <Button
             android:id="@+id/btnPlayPause"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Play" />
+            android:text="Play"
+            android:textSize="13sp"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:layout_marginStart="2dp" />
 
         <Button
             android:id="@+id/btnRestart"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="Restart"
-            android:layout_marginStart="8dp" />
+            android:textSize="13sp"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:layout_marginStart="2dp" />
 
         <Button
             android:id="@+id/btnGoToEnd"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Go To End"
-            android:layout_marginStart="8dp" />
+            android:text="To End"
+            android:textSize="13sp"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:layout_marginStart="2dp" />
 
         <Button
             android:id="@+id/btnExit"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="Exit"
-            android:layout_marginStart="8dp" />
+            android:textSize="13sp"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"/>
     </LinearLayout>
+
 
     <!-- 进度条 -->
     <!-- SeekBar（替换原先的 ProgressBar，用于拖动回放进度） -->
