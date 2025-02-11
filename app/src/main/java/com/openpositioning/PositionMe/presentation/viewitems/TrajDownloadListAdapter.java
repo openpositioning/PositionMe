@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.viewitems;
 
+import android.Manifest;
 import android.content.Intent;
 import android.graphics.Color;
 import org.json.JSONObject;
@@ -23,6 +24,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
@@ -48,6 +50,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     private final Context context;
     private final List<Map<String, String>> responseItems;
     private final DownloadClickListener listener;
+    private long lastFileSize = -1;
 
     /**
      * Default public constructor with context for inflating views and list to be displayed.
@@ -65,7 +68,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         // Load local download records
         loadDownloadRecords();
     }
-    private long lastFileSize = -1;
 
     /**
      * Loads download records from a JSON file and updates the UI if necessary.
@@ -136,8 +138,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     public void onBindViewHolder(@NonNull TrajDownloadViewHolder holder, int position) {
         String id = responseItems.get(position).get("id");
         holder.getTrajId().setText(id);
-        assert id != null;
-        if (id.length() > 2) {
+
+        if (id != null && id.length() > 2) {
             holder.getTrajId().setTextSize(58);
         } else {
             holder.getTrajId().setTextSize(65);
@@ -168,9 +170,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                         File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName);
                         filePath = file.getAbsolutePath();
                     }
-                    holder.downloadButton.setImageResource(R.drawable.ic_baseline_play_circle_filled_24);
-                    holder.downloadButton.setBackgroundResource(R.drawable.rounded_corner);
-                    System.out.println("Matched ID: " + id + ", filePath: " + filePath);
+                    setButtonState(holder.downloadButton, true);
                     break;
                 }
             } catch (Exception e) {
@@ -180,9 +180,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
         // Restore default state if not matched
         if (!matched) {
-            holder.downloadButton.setImageResource(R.drawable.ic_baseline_download_24);
-            holder.downloadButton.setBackgroundResource(R.drawable.rounded_corner_lightblue);
-            System.out.println("Not matched ID: " + id);
+            setButtonState(holder.downloadButton, false);
         }
 
         // Copy matched and filePath to final variables for use in lambda
@@ -220,6 +218,22 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     @Override
     public int getItemCount() {
         return responseItems.size();
+    }
+
+    public void refreshDownloadRecords() {
+        loadDownloadRecords();
+    }
+
+    private void setButtonState(MaterialButton button, boolean isMatched) {
+        if (isMatched) {
+            button.setIconResource(R.drawable.ic_baseline_play_circle_filled_24);
+            button.setIconTintResource(R.color.md_theme_onPrimary);
+            button.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.md_theme_primary));
+        } else {
+            button.setIconResource(R.drawable.ic_baseline_download_24);
+            button.setIconTintResource(R.color.md_theme_onSecondary);
+            button.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.md_theme_light_primary));
+        }
     }
 
     private boolean isPolling = false;

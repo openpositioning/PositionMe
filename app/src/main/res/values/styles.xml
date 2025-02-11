@@ -1,0 +1,43 @@
+<resources>
+    <!-- Base theme for the app -->
+    <style name="Theme.Material3" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize Material Design 3 properties -->
+        <item name="colorPrimary">@color/md_theme_light_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_light_onPrimary</item>
+        <item name="colorSecondary">@color/md_theme_light_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_light_onSecondary</item>
+        <item name="android:windowBackground">@color/md_theme_light_background</item>
+        <item name="android:statusBarColor">@color/md_theme_light_primary</item>
+        <item name="android:navigationBarColor">@color/md_theme_light_surface</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+
+    <!-- Material 3 Typography Definitions -->
+    <style name="Material3Typography.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textColor">@color/md_theme_light_primary</item>
+    </style>
+
+    <style name="Material3Typography.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">@color/md_theme_light_secondary</item>
+    </style>
+
+    <!-- Filled Button Style -->
+    <style name="Material3.Button.Filled" parent="Widget.Material3.Button">
+        <item name="android:backgroundTint">@color/md_theme_light_primary</item>
+        <item name="android:textColor">@color/md_theme_light_onPrimary</item>
+        <item name="materialButtonStyle">@style/Widget.Material3.Button</item>
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">16dp</item>
+    </style>
+
+    <!-- Outlined Button Style -->
+    <style name="Material3.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:strokeColor">@color/md_theme_light_primary</item>
+        <item name="android:textColor">@color/md_theme_light_primary</item>
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">16dp</item>
+    </style>
+
+
+</resources>
