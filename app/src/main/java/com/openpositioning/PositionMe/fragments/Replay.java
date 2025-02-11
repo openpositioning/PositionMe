@@ -91,7 +91,11 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     public FloatingActionButton floorDownButton;
     private Spinner mapTypeSpinner;
 
-    // 当前播放到的 PDR 样本索引（用于遍历 trackPoints）
+    private int currentFloor;
+
+    float elevationVal;
+
+    // 当前播放到的 pdr 样本索引（用于遍历 trackPoints）
     private int currentIndex = 0;
 
     // 记录播放开始的系统时间（ms）
@@ -347,7 +351,8 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             // 添加起点 Marker（用于显示 PDR 轨迹）
             currentMarker = mMap.addMarker(new MarkerOptions()
                     .position(trackPoints.get(0).point)
-                    .title("起点")
+                    .title(String.format("Altitude: %s", trajectoryData.getGnssData(0).getAltitude()))
+
                     .flat(true)
                     .icon(bitmapDescriptorFromVector(this, R.drawable.ic_baseline_navigation_24))
                     .zIndex(1100));
@@ -500,6 +505,8 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             mMap.moveCamera(CameraUpdateFactory.newLatLng(point));
             if (currentMarker != null) {
                 currentMarker.setPosition(point);
+                currentMarker.setTitle(String.format("Elevation: %s", elevationVal));
+                // 若不是第一个样本，计算方向
                 if (idx > 0) {
                     LatLng prevPoint = trackPoints.get(idx - 1).point;
                     float bearing = computeBearing(prevPoint, point);
@@ -548,18 +555,56 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                     gnssMarker.setTitle(String.format("GNSS: %.6f, %.6f", currentGnss.latitude, currentGnss.longitude));
                 }
             }
-        }
-        // 更新室内地图显示（此处省略具体逻辑，可根据需要调用 indoorMapManager 的相关方法）
-        float elevationVal = 0;
-        if (indoorMapManager.getIsIndoorMapSet()) {
-            setFloorButtonVisibility(View.VISIBLE);
-            if (autoFloor.isChecked()){
-                int currentFloor = (int)(elevationVal / indoorMapManager.getFloorHeight());
-                indoorMapManager.setCurrentFloor(currentFloor, true);
+            // 更新室内地图显示
+            if (indoorMapManager.getIsIndoorMapSet()) {
+                if (autoFloor.isChecked()){
+                    if (trajectoryData != null && trajectoryData.getPressureDataCount() > 0) {
+                        Traj.Pressure_Sample initialPressure = trajectoryData.getPressureData(0);
+                        Traj.Pressure_Sample currentPressureData = getCurrentPressuretrajectoryData(currentTime, trajectoryData);
+                        if (currentPressureData != null) {
+                            elevationVal = (float) calculateAltitudeDifference(initialPressure.getPressure(), currentPressureData.getPressure(), 298.15);
+                            currentFloor = (int)(elevationVal / indoorMapManager.getFloorHeight());
+                            indoorMapManager.setCurrentFloor(currentFloor, true);
+                        }
+                    }
+                } else {
+                    setFloorButtonVisibility(View.VISIBLE);
+                }
+            } else {
+                setFloorButtonVisibility(View.GONE);
             }
-        } else {
-            setFloorButtonVisibility(View.GONE);
         }
+
+    }
+
+    private Traj.Pressure_Sample getCurrentPressuretrajectoryData(long currentTime, Traj.Trajectory trajectoryData) {
+        Traj.Pressure_Sample bestSample = null;
+        for (Traj.Pressure_Sample sample : trajectoryData.getPressureDataList()) {
+            Log.d(TAG, "检查 pressure 样本：relativeTimestamp = " + sample.getRelativeTimestamp() + ", currentTime = " + currentTime);
+            if (sample.getRelativeTimestamp() <= currentTime) {
+                bestSample = sample;
+            } else {
+                break;
+            }
+        }
+        if (bestSample == null && trajectoryData.getPressureDataCount() > 0) {
+            bestSample = trajectoryData.getPressureData(0);
+        }
+        if (bestSample != null) {
+            Log.d(TAG, "选定 pressure 样本：pressure = " + bestSample.getPressure());
+            return bestSample;
+        }
+        return null;
+    }
+
+
+    public static double calculateAltitudeDifference(double P0, double P, double T) {
+        // 将 mbar 转换为 Pa (1 mbar = 100 Pa)
+        double P0Pa = P0 * 100;
+        double PPa = P * 100;
+        // 使用公式： Δh = (R * T) / (M * g) * ln(P0 / P)
+        // 其中 R = 8.314 J/(mol·K), M = 0.029 kg/mol, g = 9.81 m/s²
+        return (8.314 * T) / (0.029 * 9.81) * Math.log(P0Pa / PPa);
     }
 
     /**
