@@ -134,5 +134,19 @@
         android:id="@+id/replayFilesFragment"
         android:name="com.openpositioning.PositionMe.fragments.ReplayFilesFragment"
         android:label="fragment_replay_files"
-        tools:layout="@layout/fragment_replay_files" />
+        tools:layout="@layout/fragment_replay_files" >
+        <action
+            android:id="@+id/action_replayFilesFragment_to_replayFragment"
+            app:destination="@id/replayFragment" />
+    </fragment>
+    <fragment
+        android:id="@+id/replayFragment"
+        android:name="com.openpositioning.PositionMe.fragments.ReplayFragment"
+        android:label="fragment_replay"
+        tools:layout="@layout/fragment_replay" >
+        <argument
+            android:name="position"
+            app:argType="integer"
+            android:defaultValue="-1" />
+    </fragment>
 </navigation>

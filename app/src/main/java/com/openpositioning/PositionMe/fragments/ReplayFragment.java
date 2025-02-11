@@ -14,6 +14,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -38,11 +39,18 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.BuildingPolygon;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.ServerCommunications;
+import com.openpositioning.PositionMe.Traj;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import java.lang.Float;
 
 /**
  * Fragment that replays a hardcoded trajectory on a Google Map.
@@ -79,6 +87,13 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     private boolean replayActive = false;
 
     //==============================================================================================
+    // File Processing Members
+    //==============================================================================================
+    private int position;
+    private ServerCommunications serverCommunications;
+    private List<File> localTrajectories;
+
+    //==============================================================================================
     // UI Components
     //==============================================================================================
     // Changed from ProgressBar to SeekBar so that users can scrub the progress.
@@ -100,6 +115,19 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     //==============================================================================================
     // Lifecycle Methods
     //==============================================================================================
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // Retrieve position of the file
+        position = ReplayFragmentArgs.fromBundle(getArguments()).getPosition();
+        // Get communication class
+        serverCommunications = new ServerCommunications(getActivity());
+        // Load local trajectories
+        localTrajectories = Stream.of(getActivity().getFilesDir().listFiles((file, name) -> name.contains("trajectory_") && name.endsWith(".txt")))
+                .filter(file -> !file.isDirectory())
+                .collect(Collectors.toList());
+    }
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -114,8 +142,11 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         initUI(view);
-        createHardcodedTrajectory();
-
+        if (position == -1) {
+            createHardcodedTrajectory();
+        } else {
+            trajectoryPoints = serverCommunications.retrieveLocalTrajectory(localTrajectories.get(position));
+        }
         SupportMapFragment mapFragment =
                 (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.replayMap);
         if (mapFragment != null) {

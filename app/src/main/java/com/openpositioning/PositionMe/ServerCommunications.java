@@ -10,6 +10,8 @@ import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
 
+import com.google.android.gms.maps.model.LatLng;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.fragments.FilesFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
@@ -21,17 +23,22 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
+import okhttp3.OkHttp;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
@@ -145,12 +152,12 @@ public class ServerCommunications implements Observable {
                     .build();
 
             // Create a POST request with the required headers
-            okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
+            Request request = new Request.Builder().url(uploadURL).post(requestBody)
                     .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                     .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
 
             // Enqueue the request to be executed asynchronously and handle the response
-            client.newCall(request).enqueue(new okhttp3.Callback() {
+            client.newCall(request).enqueue(new Callback() {
 
                 // Handle failure to get response from the server
                 @Override public void onFailure(Call call, IOException e) {
@@ -206,9 +213,62 @@ public class ServerCommunications implements Observable {
 
     }
 
+    public List<LatLng> retrieveLocalTrajectory(File localTrajectory) {
+
+        // Initialize variables
+        byte[] binaryTrajectory;
+        Traj.Trajectory receivedTrajectory;
+        List<LatLng> positionTraj = new ArrayList<>();
+
+        ArrayList<Float> xVals = new ArrayList<Float>();
+        ArrayList<Float> yVals = new ArrayList<Float>();
+        List<Float> Timestamp = new ArrayList<Float>();
+
+        try {
+            // Retrieve byte stream from file
+            binaryTrajectory = Files.readAllBytes(localTrajectory.toPath());
+            receivedTrajectory = Traj.Trajectory.parseFrom(binaryTrajectory);
+
+            // Retrieve PDR data from protobuf message
+            List<Traj.Pdr_Sample> PdrTraj = receivedTrajectory.getPdrDataList();
+            PdrTraj.forEach((PdrElement) -> xVals.add(PdrElement.getX()));
+            PdrTraj.forEach((PdrElement) -> yVals.add(PdrElement.getY()));
+            //PdrTraj.forEach((PdrElement) -> Timestamp.add(PdrElement.getY()));
+
+            // Retrieve GNSS data
+            List<Traj.GNSS_Sample> dataGNSS = receivedTrajectory.getGnssDataList();
+            LatLng currentLocation = new LatLng(dataGNSS.get(0).getLatitude(), dataGNSS.get(0).getLongitude());
+            LatLng nextLocation;
+            // Define starting position
+            positionTraj.add(currentLocation);
+
+            // Generate Position data
+            if (xVals.size() == yVals.size()) {
+                for (int i = 1; i < xVals.size(); i++) {
+
+                    float[] pdrMoved={xVals.get(i) - xVals.get(i - 1), yVals.get(i) - yVals.get(i - 1)};
+
+                    nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
+
+                    positionTraj.add(nextLocation);
+                }
+            }
+
+            System.err.println("Data retrieval successful");
+
+        } catch (IOException ee) {
+            // Catch and print if file retrieval fails
+            System.err.println("Data retrieval failed: " + ee.getMessage());
+
+        }
+
+
+        return positionTraj;
+    }
+
     /**
      * Uploads a local trajectory file to the API server in the specified format.
-     * {@link okhttp3.OkHttp} library is used for the asynchronous POST request.
+     * {@link OkHttp} library is used for the asynchronous POST request.
      *
      * @param localTrajectory the File object of the local trajectory to be uploaded
      */
@@ -223,12 +283,12 @@ public class ServerCommunications implements Observable {
                 .build();
 
         // Create a POST request with the required headers
-        okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
+        Request request = new Request.Builder().url(uploadURL).post(requestBody)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
 
         // Enqueue the request to be executed asynchronously and handle the response
-        client.newCall(request).enqueue(new okhttp3.Callback() {
+        client.newCall(request).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
                 // Print error message, set success to false and notify observers
                 e.printStackTrace();
@@ -285,14 +345,14 @@ public class ServerCommunications implements Observable {
         OkHttpClient client = new OkHttpClient();
 
         // Create GET request with required header
-        okhttp3.Request request = new okhttp3.Request.Builder()
+        Request request = new Request.Builder()
                 .url(downloadURL)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .get()
                 .build();
 
         // Enqueue the GET request for asynchronous execution
-        client.newCall(request).enqueue(new okhttp3.Callback() {
+        client.newCall(request).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }
@@ -307,7 +367,7 @@ public class ServerCommunications implements Observable {
                     ZipInputStream zipInputStream = new ZipInputStream(inputStream);
 
                     // Get the nth entry in the zip file
-                    java.util.zip.ZipEntry zipEntry;
+                    ZipEntry zipEntry;
                     int zipCount = 0;
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
                         if (zipCount == position) {
@@ -372,14 +432,14 @@ public class ServerCommunications implements Observable {
         OkHttpClient client = new OkHttpClient();
 
         // Create GET info request with appropriate URL and header
-        okhttp3.Request request = new okhttp3.Request.Builder()
+        Request request = new Request.Builder()
                 .url(infoRequestURL)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .get()
                 .build();
 
         // Enqueue the GET request for asynchronous execution
-        client.newCall(request).enqueue(new okhttp3.Callback() {
+        client.newCall(request).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }

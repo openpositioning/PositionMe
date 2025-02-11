@@ -8,7 +8,10 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.cardview.widget.CardView;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.NavDirections;
+import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -93,9 +96,19 @@ public class ReplayFilesFragment extends Fragment {
             replayList.setLayoutManager(manager);
             replayList.setHasFixedSize(true);
             listAdapter = new TrajReplayListAdapter(getActivity(), localTrajectories, new DownloadClickListener() {
+
                 @Override
-                public void onPositionClicked(int position) {
-                    // Add replay method connection
+                public void onDownloadClicked(int position) {
+                    // Intentionally left empty
+                }
+
+                @Override
+                public void onReplayClicked(int position) {
+                    ReplayFilesFragmentDirections.ActionReplayFilesFragmentToReplayFragment action =
+                            ReplayFilesFragmentDirections.actionReplayFilesFragmentToReplayFragment();
+
+                    action.setPosition(position);
+                    Navigation.findNavController(requireView()).navigate(action);
                 }
             });
             replayList.setAdapter(listAdapter);

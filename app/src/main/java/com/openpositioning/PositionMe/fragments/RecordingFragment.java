@@ -502,7 +502,7 @@ public class RecordingFragment extends Fragment {
         }
         // If not initialized, initialize
         if (indoorMapManager == null) {
-            indoorMapManager =new IndoorMapManager(gMap);
+            indoorMapManager = new IndoorMapManager(gMap);
         }
         //Show GNSS marker and error if user enables it
         if (gnss.isChecked() && gnssMarker!=null){

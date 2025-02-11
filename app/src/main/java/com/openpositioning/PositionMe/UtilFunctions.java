@@ -94,5 +94,4 @@ public class UtilFunctions {
         vectorDrawable.draw(canvas);
         return bitmap;
     }
-
 }

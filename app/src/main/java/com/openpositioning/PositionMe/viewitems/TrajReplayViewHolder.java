@@ -48,7 +48,7 @@ public class TrajReplayViewHolder extends RecyclerView.ViewHolder implements Vie
 
     @Override
     public void onClick(View view) {
-        listenerReference.get().onPositionClicked(getAdapterPosition());
+        listenerReference.get().onReplayClicked(getAdapterPosition());
     }
 
 
