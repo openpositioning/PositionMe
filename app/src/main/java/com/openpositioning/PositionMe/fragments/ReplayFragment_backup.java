@@ -166,7 +166,7 @@ public class ReplayFragment_backup extends Fragment implements OnMapReadyCallbac
             gnssMarker = mMap.addMarker(new MarkerOptions().position(gnssStart).title("GNSS Position")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
 
-            //inner buildings
+
             LatLng Nucleus_building_inner = new LatLng(55.923089201509164, -3.17426605622692);
             GroundOverlayOptions Nucleus_building_inner_ = new GroundOverlayOptions()
                     .image(BitmapDescriptorFactory.fromResource(R.drawable.floor_1))
@@ -182,7 +182,7 @@ public class ReplayFragment_backup extends Fragment implements OnMapReadyCallbac
             mMap.addGroundOverlay(Murray_library_inner_);
             GroundOverlay Murray_library_inner_imageOverlay = mMap.addGroundOverlay(Murray_library_inner_);
 
-            //addTileOverlay(); //when there is a huge amount of inner maps
+            addTileOverlay(); //when there is a huge amount of inner maps
         }
         // 绘制 PDR 轨迹（红色）
         if (pdrPositions != null && !pdrPositions.isEmpty()) {
@@ -311,12 +311,12 @@ public class ReplayFragment_backup extends Fragment implements OnMapReadyCallbac
                     }
                     currentPdrIndex++;
                 }
+
                 // 更新进度条，取两者的平均进度（或根据实际需求修改）
                 int progress = (currentGnssIndex + currentPdrIndex) / 2;
                 progressBar.setProgress(progress);
 
-                if ((gnssPositions != null && currentGnssIndex < gnssPositions.size()) ||
-                        (pdrPositions != null && currentPdrIndex < pdrPositions.size())) {
+                if ((gnssPositions != null && currentGnssIndex < gnssPositions.size()) || (pdrPositions != null && currentPdrIndex < pdrPositions.size())) {
                     playbackHandler.postDelayed(this, 500); // 每500毫秒更新一次
                 } else {
                     pauseReplay();
