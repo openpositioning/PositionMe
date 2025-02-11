@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.fragments;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -171,74 +172,51 @@ public class CorrectionFragment extends Fragment {
         this.stepLengthInput.setOnKeyListener(new View.OnKeyListener() {
             @Override
             public boolean onKey(View v, int keyCode, KeyEvent event) {
-                //Check if enter key has been pressed
-                if(keyCode == KeyEvent.KEYCODE_ENTER){
-                    //Convert entered string to a float
-//                    newStepLength = Float.parseFloat(changedText.toString());
-//
-//                    SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
-//                    String weibergKValue = sharedPreferences.getString("weiberg_k",null);
-//
-//                    float weibergKFloat = Float.parseFloat(weibergKValue);
-//
-////                    try {
-////                        weibergKFloat = Float.parseFloat(weibergKValue);
-////                    } catch (NumberFormatException e) {
-////                        weibergKFloat = 0.234f;
-////                    }
-//
-//                    float newK = weibergKFloat * (newStepLength/averageStepLength);
-//
-//
-//                    newkey.setText(String.format("Previous K factor = %.3f", weibergKFloat)+ String.format("\n") + String.format("Calibrated K factor = %.3f", newK));
-//                    SharedPreferences.Editor editor = sharedPreferences.edit();
-//                    editor.putString("weiberg_k", String.valueOf(newK));
-//                    editor.apply();
-//
-
-
-
-                    //Rescale the path and call function to redraw
-                    //scalingRatio = newStepLength/averageStepLength;
-                    sensorFusion.redrawPath(newStepLength/averageStepLength);
-                    //Show user new average step value
-                    averageStepLengthText.setText(getActivity().getResources().
-                            getString(R.string.averageStepLgn) + ": " + String.format("%.2f", newStepLength));
-                    //redraw the path
-                    pathView.invalidate();
-                    //OnKew is called twice (once on press and release of button so the previous
-                    // step count is updated only the second time)
-                    secondPass++;
-                    if(secondPass == 2) {
-                        averageStepLength = newStepLength;
-                        secondPass = 0;
+                // 只在按下事件时处理，避免重复执行
+                if (keyCode == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN) {
+                    // 从输入框中直接获取文本
+                    String inputStr = stepLengthInput.getText().toString().trim();
+                    if (inputStr.isEmpty()) {
+                        Log.w("CorrectionFragment", "请输入实际步长。");
+                        return true;
+                    }
+                    try {
+                        newStepLength = Float.parseFloat(inputStr);
+                    } catch (NumberFormatException e) {
+                        Log.w("CorrectionFragment", "输入的步长格式错误");
+                        e.printStackTrace();
+                        return true;
                     }
 
+                    SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+                    String weibergKValue = sharedPreferences.getString("weiberg_k", "0.364");  // 使用默认值 "0.364"
+                    float weibergKFloat;
+                    try {
+                        weibergKFloat = Float.parseFloat(weibergKValue);
+                    } catch (NumberFormatException e) {
+                        e.printStackTrace();
+                        weibergKFloat = 0.364f;
+                    }
 
+                    // 计算新的 K 值，只执行一次
+                    float newK = weibergKFloat * (newStepLength / averageStepLength);
 
+                    newkey.setText(String.format("Previous K factor = %.3f", weibergKFloat) + "\n" +
+                            String.format("Calibrated K factor = %.3f", newK));
 
+                    SharedPreferences.Editor editor = sharedPreferences.edit();
+                    editor.putString("weiberg_k", String.valueOf(newK));
+                    editor.apply();
+
+                    sensorFusion.redrawPath(newStepLength / averageStepLength);
+
+                    averageStepLengthText.setText(getActivity().getResources().getString(R.string.averageStepLgn)
+                            + ": " + String.format("%.2f", newStepLength));
+
+                    // 移除了 secondPass 逻辑，确保只执行一次校准
+                    return true; // 表示事件已处理
                 }
-
                 return false;
-            }
-        });
-
-        //Detect changes in the text editor. Call all default methods and store final string
-        this.stepLengthInput.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                //store string when user has finished changing the text
-                changedText = s;
             }
         });
 
