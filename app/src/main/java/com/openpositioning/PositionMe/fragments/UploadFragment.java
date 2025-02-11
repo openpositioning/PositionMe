@@ -122,6 +122,11 @@ public class UploadFragment extends Fragment {
 //                    localTrajectories.remove(position);
 //                    listAdapter.notifyItemRemoved(position);
                 }
+                @Override
+                public void onReplayClicked(int position) {
+                    // 在 UploadFragment 中没有 replay 操作，不需要处理
+                }
+
             });
             uploadList.setAdapter(listAdapter);
         }

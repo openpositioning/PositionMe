@@ -19,11 +19,14 @@ import java.lang.ref.WeakReference;
  *
  * @author Mate Stodulka
  */
+// 就是用来保存每个卡片里的控件（比如显示ID、日期、按钮）的，它让我们不用每次都去找这些控件（省时间又省力）。
 public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener{
 
     TextView trajId;
     TextView trajDate;
     ImageButton downloadButton;
+
+    ImageButton replayButton;
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
 
@@ -42,17 +45,17 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
         this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
         this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
-
-        this.downloadButton.setOnClickListener(this);
+        this.replayButton = itemView.findViewById(R.id.replayTrajectoryButton);
+        this.downloadButton.setOnClickListener(this);//绑定点击事件
+        this.replayButton.setOnClickListener(this);
     }
-
-
-    /**
-     * {@inheritDoc}
-     * Calls the onPositionClick function on the listenerReference object.
-     */
     @Override
     public void onClick(View view) {
-        listenerReference.get().onPositionClicked(getAdapterPosition());
+        int id = view.getId();
+        if (id == R.id.downloadTrajectoryButton) {
+            listenerReference.get().onPositionClicked(getAdapterPosition());
+        } else if (id == R.id.replayTrajectoryButton) {
+            listenerReference.get().onReplayClicked(getAdapterPosition());
+        }
     }
 }

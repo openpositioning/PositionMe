@@ -3,9 +3,11 @@ package com.openpositioning.PositionMe;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.SensorManager;
-import android.util.Log;
 
 import androidx.preference.PreferenceManager;
+
+import android.util.Log;
+
 
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
@@ -69,8 +71,10 @@ public class PdrProcessing {
     // Step sum and length aggregation variables
     private float sumStepLength = 0;
     private int stepCount = 0;
-    //endregion
+
     private static final String TAG = "PdrProcessing";
+
+    //endregion
 
     /**
      * Public constructor for the PDR class.
@@ -145,12 +149,14 @@ public class PdrProcessing {
 
         // Calculate step length
         if(!useManualStep) {
-            if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.isEmpty()) {
-                Log.w(TAG, "accelMagnitudeOvertime 列表为空，无法计算步长，返回默认步长 0.0f");
-                this.stepLength = 0.0f;  // 或者设置为其它默认值
-            } else {
+            if(accelMagnitudeOvertime == null || accelMagnitudeOvertime.isEmpty()){
+                Log.w(TAG,"AccelMagnitude is null or empty");
+                this.stepLength =0.0f;
+            }
+            else {
                 //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
                 // Estimate stride
+
                 this.stepLength = weibergMinMax(accelMagnitudeOvertime);
             }
             // System.err.println("Step Length" + stepLength);
@@ -227,10 +233,10 @@ public class PdrProcessing {
      * @return                  float stride length in meters.
      */
     private float weibergMinMax(List<Double> accelMagnitude) {
-        if (accelMagnitude == null || accelMagnitude.isEmpty()) {
-            Log.w(TAG, "accelMagnitude 列表为空，weibergMinMax 返回默认值 0.0f");
-            return 0.0f; // 根据算法需求返回一个默认值
-        }
+    if(accelMagnitude == null || accelMagnitude.isEmpty()) {
+        Log.w(TAG,"AccelMagnitude is null or empty");
+        return 0.0f;
+    }
         double maxAccel = Collections.max(accelMagnitude);
         double minAccel = Collections.min(accelMagnitude);
         float bounce = (float) Math.pow((maxAccel-minAccel), 0.25);
@@ -383,6 +389,9 @@ public class PdrProcessing {
      */
     public float getAverageStepLength(){
         //Calculate average step length
+        if (stepCount == 0) {
+            return 0f;
+        }
         float averageStepLength = sumStepLength/(float) stepCount;
 
         //Reset sum and number of steps

@@ -47,6 +47,7 @@ import okhttp3.ResponseBody;
  * @author Michal Dvorak
  * @author Mate Stodulka
  */
+//这个用来通信
 public class ServerCommunications implements Observable {
 
     // Application context for handling permissions and devices
@@ -280,6 +281,79 @@ public class ServerCommunications implements Observable {
      *
      * @param position the position of the trajectory in the zip file to retrieve
      */
+    public void downloadTrajectoryToTempFile(int position, TrajectoryFileCallback callback) {
+        // 初始化 OkHttp 客户端
+        OkHttpClient client = new OkHttpClient();
+
+        // 构造 GET 请求，使用 downloadURL 常量
+        okhttp3.Request request = new okhttp3.Request.Builder()
+                .url(downloadURL)
+                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+                .get()
+                .build();
+
+        // 异步执行请求
+        client.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
+                // 在主线程中通知回调出错
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    callback.onError(e.getMessage());
+                });
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful()) {
+                        throw new IOException("Unexpected code " + response);
+                    }
+
+                    // 从响应获取输入流
+                    InputStream inputStream = responseBody.byteStream();
+                    // 使用 ZipInputStream 处理返回的 zip 数据
+                    ZipInputStream zipInputStream = new ZipInputStream(inputStream);
+                    java.util.zip.ZipEntry zipEntry;
+                    int zipCount = 0;
+                    // 遍历 zip 条目，直到找到指定位置的轨迹
+                    while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                        if (zipCount == position) {
+                            break;
+                        }
+                        zipCount++;
+                    }
+                    if (zipEntry == null) {
+                        throw new IOException("No zip entry found at position: " + position);
+                    }
+
+                    // 在缓存目录中创建一个临时文件用于保存下载的数据
+                    File tempFile = new File(context.getCacheDir(), "temp_downloaded_trajectory.txt");
+                    try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                        byte[] buffer = new byte[1024];
+                        int bytesRead;
+                        while ((bytesRead = zipInputStream.read(buffer)) != -1) {
+                            fos.write(buffer, 0, bytesRead);
+                        }
+                    }
+                    // 关闭输入流
+                    zipInputStream.close();
+                    inputStream.close();
+
+                    // 在主线程中调用回调，传递临时文件的引用
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        callback.onFileReady(tempFile);
+                    });
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        callback.onError(e.getMessage());
+                    });
+                }
+            }
+        });
+    }
+
     public void downloadTrajectory(int position) {
         // Initialise OkHttp client
         OkHttpClient client = new OkHttpClient();
@@ -395,7 +469,7 @@ public class ServerCommunications implements Observable {
                     infoResponse =  responseBody.string();
                     // Print a message in the console and notify observers
                     System.out.println("Response received");
-                    notifyObservers(0);
+                    notifyObservers(0);// 触发所有注册的 observer 调用 update()
                 }
             }
         });
