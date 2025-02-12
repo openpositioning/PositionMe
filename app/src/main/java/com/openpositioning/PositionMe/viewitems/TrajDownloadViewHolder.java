@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
 
 import java.lang.ref.WeakReference;
+import android.widget.ProgressBar;
 
 /**
  * View holder class for the RecyclerView displaying Trajectory download data.
@@ -27,6 +28,8 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
     //ImageButton downloadButton;
 
     ImageButton replayButton;
+    // 声明 ProgressBar 为 private，不直接暴露控件
+    private ProgressBar progressBarLoading;
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
 
@@ -47,6 +50,8 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         //this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
         this.replayButton = itemView.findViewById(R.id.replayTrajectoryButton);
         //this.downloadButton.setOnClickListener(this);//绑定点击事件
+        // 绑定 ProgressBar 控件，注意布局中要有此 id
+        this.progressBarLoading = itemView.findViewById(R.id.progressBarLoading);
         this.replayButton.setOnClickListener(this);
     }
     @Override
@@ -55,7 +60,21 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         //if (id == R.id.downloadTrajectoryButton) {
             //listenerReference.get().onPositionClicked(getAdapterPosition());
         if (id == R.id.replayTrajectoryButton) {
+            // 显示加载进度条
+            showLoading();
             listenerReference.get().onReplayClicked(getAdapterPosition());
+        }
+    }
+    public void showLoading() {
+        if (progressBarLoading != null) {
+            progressBarLoading.setVisibility(View.VISIBLE);
+        }
+    }
+
+    // 提供公共方法用于隐藏 ProgressBar
+    public void hideLoading() {
+        if (progressBarLoading != null) {
+            progressBarLoading.setVisibility(View.GONE);
         }
     }
 }

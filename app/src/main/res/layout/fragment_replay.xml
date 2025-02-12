@@ -97,7 +97,7 @@
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:text="To End"
+                android:text="End"
                 android:textSize="13sp" />
 
             <Button
