@@ -6,9 +6,11 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.provider.Settings;
 import android.widget.Toast;
 
+import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -47,6 +49,7 @@ public class PermissionManager {
     // The list of dangerous permissions needed by this app.
     private final List<String> requiredPermissions = new ArrayList<>();
 
+    @RequiresApi(api = Build.VERSION_CODES.Q)
     public PermissionManager(Activity activity, PermissionCallback callback) {
         this.activity = activity;
         this.callback = callback;

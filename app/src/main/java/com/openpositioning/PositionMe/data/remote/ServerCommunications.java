@@ -18,7 +18,6 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -26,10 +25,6 @@ import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.BuildConfig;
 import com.openpositioning.PositionMe.Traj;
@@ -38,13 +33,9 @@ import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,7 +43,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -67,11 +57,6 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import com.google.protobuf.InvalidProtocolBufferException;
 /**
  * This class handles communications with the server through HTTPs. The class uses an
  * {@link OkHttpClient} for making requests to the server. The class includes methods for sending

@@ -12,7 +12,7 @@
     <string name="download">Download</string>
     <string name="grant">Grant permissions</string>
     <string name="exit">Exit application</string>
-    <string name="ok">Ok</string>
+    <string name="ok">OK</string>
     <string name="show_storage">Show locally</string>
     <string name="setLocation">Set</string>
     <string name="cancel">Cancel</string>
@@ -126,5 +126,15 @@
     <string name="start_recording">Record</string>
     <string name="floor_up">Floor up button</string>
     <string name="floor_down">Floor down button</string>
+    <string name="red_dot_description_text">Recording In Progress</string>
+    <string name="correct_your_step">Correct your own avg step length:</string>
+    <string name="correct_step_hint">...</string>
+    <string name="path_drawing_descritpion">Path drawing</string>
+    <string name="position_me">Position Me</string>
+    <string name="gnss_disabled">GNSS is disabled</string>
+    <string name="replay_frag_restart">Restart</string>
+    <string name="replay_frag_play">Play</string>
+    <string name="replay_frag_end">End</string>
+    <string name="replay_frag_exit">Exit</string>
 
 </resources>

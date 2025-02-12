@@ -7,7 +7,7 @@
     android:layout_height="match_parent">
 
     <!-- The actual map container -->
-    <fragment
+    <androidx.fragment.app.FragmentContainerView
         android:id="@+id/trajectoryMap"
         android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"

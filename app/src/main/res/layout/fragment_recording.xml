@@ -32,6 +32,7 @@
                 android:id="@+id/redDot"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
+                android:contentDescription="@string/red_dot_description_text"
                 android:src="@drawable/ic_baseline_red_dot_24"
                 android:layout_marginEnd="8dp" />
 

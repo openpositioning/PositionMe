@@ -188,27 +188,20 @@ public class WifiDataProcessor implements Observable {
      * @return  boolean true if all permissions are granted for wifi access, false otherwise.
      */
     private boolean checkWifiPermissions() {
-        if (Build.VERSION.SDK_INT >= 23) {
+        int wifiAccessPermission = ActivityCompat.checkSelfPermission(this.context,
+                Manifest.permission.ACCESS_WIFI_STATE);
+        int wifiChangePermission = ActivityCompat.checkSelfPermission(this.context,
+                Manifest.permission.CHANGE_WIFI_STATE);
+        int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
+                Manifest.permission.ACCESS_COARSE_LOCATION);
+        int fineLocationPermission = ActivityCompat.checkSelfPermission(this.context,
+                Manifest.permission.ACCESS_FINE_LOCATION);
 
-            int wifiAccessPermission = ActivityCompat.checkSelfPermission(this.context,
-                    Manifest.permission.ACCESS_WIFI_STATE);
-            int wifiChangePermission = ActivityCompat.checkSelfPermission(this.context,
-                    Manifest.permission.CHANGE_WIFI_STATE);
-            int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
-                    Manifest.permission.ACCESS_COARSE_LOCATION);
-            int fineLocationPermission = ActivityCompat.checkSelfPermission(this.context,
-                    Manifest.permission.ACCESS_FINE_LOCATION);
-
-            // Return missing permissions
-            return wifiAccessPermission == PackageManager.PERMISSION_GRANTED &&
-                    wifiChangePermission == PackageManager.PERMISSION_GRANTED &&
-                    coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
-                    fineLocationPermission == PackageManager.PERMISSION_GRANTED;
-        }
-        else {
-            // Permissions are granted by default
-            return true;
-        }
+        // Return missing permissions
+        return wifiAccessPermission == PackageManager.PERMISSION_GRANTED &&
+                wifiChangePermission == PackageManager.PERMISSION_GRANTED &&
+                coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
+                fineLocationPermission == PackageManager.PERMISSION_GRANTED;
     }
 
     /**
