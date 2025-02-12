@@ -4,23 +4,29 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".fragment.RecordingFragment"
+    tools:context=".fragments.RecordingFragment"
     android:background="@android:color/white">
 
     <!-- 🟦 顶部消息栏 -->
+
+    <!-- 🗺️ Google Map -->
+
+    <!-- 📌 左侧控件：地图模式切换 & GNSS 开关 -->
     <LinearLayout
         android:id="@+id/status_bar"
         android:layout_width="match_parent"
         android:layout_height="60dp"
+
         android:background="@android:color/holo_blue_dark"
-        android:padding="10dp"
+        android:backgroundTint="#F0A6E8"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:padding="10dp">
 
         <LinearLayout
-            android:layout_width="0dp"
-            android:layout_weight="1"
+            android:layout_width="351dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:orientation="vertical">
 
             <TextView
@@ -29,7 +35,7 @@
                 android:layout_height="wrap_content"
                 android:text="Elevation: %1s"
                 android:textColor="@android:color/white"
-                android:textStyle="bold"/>
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/tv_distance"
@@ -37,7 +43,7 @@
                 android:layout_height="wrap_content"
                 android:text="Distance travelled:%1s"
                 android:textColor="@android:color/white"
-                android:textStyle="bold"/>
+                android:textStyle="bold" />
         </LinearLayout>
 
         <TextView
@@ -46,19 +52,19 @@
             android:layout_height="wrap_content"
             android:text="GNSS error:%1s"
             android:textColor="@android:color/white"
-            android:textStyle="bold"/>
+            android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- 🗺️ Google Map -->
     <fragment
         android:id="@+id/map_fragment"
         android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_above="@id/control_panel"
         android:layout_below="@id/status_bar"
-        android:layout_above="@id/control_panel" />
+        android:layout_marginTop="0dp"
+        android:layout_marginBottom="0dp" />
 
-    <!-- 📌 左侧控件：地图模式切换 & GNSS 开关 -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -71,8 +77,9 @@
             android:id="@+id/spinner_map_type"
             android:layout_width="150dp"
             android:layout_height="40dp"
-            android:background="@android:color/white"
-            android:padding="5dp"/>
+            android:background="@drawable/button_background"
+            android:backgroundTint="#F0A6E8"
+            android:padding="5dp" />
 
         <Switch
             android:id="@+id/switch_gnss"
@@ -132,7 +139,7 @@
         android:id="@+id/control_panel"
         android:layout_width="match_parent"
         android:layout_height="80dp"
-        android:layout_marginBottom="80dp"
+        android:layout_marginBottom="100dp"
         android:layout_alignParentBottom="true"
         android:gravity="center"
         android:orientation="horizontal"

@@ -12,21 +12,22 @@
         android:id="@+id/wifi_header"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
         android:background="@android:color/holo_blue_dark"
-        android:padding="10dp"
+        android:backgroundTint="#F0A6E8"
         android:gravity="center"
-        app:layout_constraintTop_toTopOf="parent"
+        android:orientation="horizontal"
+        android:padding="10dp"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintTop_toTopOf="parent">
 
         <ImageView
             android:id="@+id/wifi_icon"
             android:layout_width="24dp"
             android:layout_height="24dp"
-            android:src="@drawable/wifi"
             android:layout_gravity="center_vertical"
-            android:layout_marginEnd="8dp"/>
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/wifi" />
 
         <TextView
             android:id="@+id/wifi_title"
@@ -35,7 +36,7 @@
             android:text="WiFi Networks"
             android:textColor="@android:color/white"
             android:textSize="18sp"
-            android:textStyle="bold"/>
+            android:textStyle="bold" />
     </LinearLayout>
 
     <!-- WiFi 列表 -->

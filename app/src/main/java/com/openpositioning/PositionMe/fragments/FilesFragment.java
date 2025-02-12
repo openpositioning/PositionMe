@@ -22,6 +22,7 @@ import androidx.fragment.app.FragmentTransaction;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ReplayDataProcessor;
 import com.openpositioning.PositionMe.ServerCommunications;
@@ -80,6 +81,16 @@ public class FilesFragment extends Fragment implements Observer {
         super.onCreate(savedInstanceState);
         serverCommunications = new ServerCommunications(getActivity());
         serverCommunications.registerObserver(this);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // 获取主界面的 BottomNavigationView，并隐藏它
+        BottomNavigationView bottomNav = getActivity().findViewById(R.id.bottom_navigation);
+        if (bottomNav != null) {
+            bottomNav.setVisibility(View.VISIBLE);
+        }
     }
 
     /**

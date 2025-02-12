@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.fragments;
 
+
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -41,6 +42,7 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -57,6 +59,7 @@ public class RecordingFragment extends Fragment {
     private TextView distanceTravelled;
     // Text view to show the error between current PDR and current GNSS
     private TextView gnssError;
+    private static final DecimalFormat df = new DecimalFormat("#.####");
 
     //Singleton class to collect all sensor data
     private SensorFusion sensorFusion;
@@ -402,7 +405,9 @@ public class RecordingFragment extends Fragment {
                         }
                         // 可在界面上显示一个提示，告诉用户两者非常接近
                         gnssError.setVisibility(View.VISIBLE);
-                        gnssError.setText("GNSS error: " + String.format("%.2f", distance) + " m (位置接近)");
+                        String GnssErrorRound = df.format(distance);
+                        gnss.setText("GNSS error: " + GnssErrorRound + " m");
+//                        gnssError.setText("GNSS error: " + String.format("%.2f", distance) + " m (位置接近)");
                     } else {
                         // 如果距离大于阈值，则在地图上显示一个 GNSS Marker，
                         // 以便用户可以比较 orientationMarker 与 GNSS Marker 之间的距离

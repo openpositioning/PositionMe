@@ -13,24 +13,25 @@
         android:layout_width="200dp"
         android:layout_height="50dp"
         android:background="@drawable/tab_background"
+        android:backgroundTint="#F0A6E8"
+        app:tabGravity="fill"
+        app:tabIndicator="@null"
         app:tabIndicatorHeight="0dp"
         app:tabMode="fixed"
-        app:tabGravity="fill"
-        app:tabTextColor="@color/tab_unselected"
         app:tabSelectedTextColor="@color/tab_selected"
-        app:tabIndicator="@null">
+        app:tabTextColor="@color/tab_unselected">
 
         <com.google.android.material.tabs.TabItem
             android:id="@+id/tab_sensors"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Sensors"/>
+            android:text="Sensors" />
 
         <com.google.android.material.tabs.TabItem
             android:id="@+id/tab_wifi"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="WIFI"/>
+            android:text="WIFI" />
     </com.google.android.material.tabs.TabLayout>
 
     <!-- ViewPager2 (用于滑动切换内容) -->

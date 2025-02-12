@@ -19,6 +19,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.openpositioning.PositionMe.ReplayDataProcessor;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
@@ -107,6 +108,16 @@ public class ReplayTrajFragment extends Fragment {
         this.trajProcessor = ReplayDataProcessor.TrajRecorder.getInstance();
         this.trajectory = trajProcessor.getReplayTraj();
         readPdrTimer = new Timer();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // 获取主界面的 BottomNavigationView，并隐藏它
+        BottomNavigationView bottomNav = getActivity().findViewById(R.id.bottom_navigation);
+        if (bottomNav != null) {
+            bottomNav.setVisibility(View.GONE);
+        }
     }
 
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
