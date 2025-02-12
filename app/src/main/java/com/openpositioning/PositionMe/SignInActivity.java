@@ -24,6 +24,8 @@ public class SignInActivity extends AppCompatActivity {
     private EditText emailEditText, passwordEditText;
     private Button signInButton;
     private FirebaseAuth mAuth;
+    // 声明 ServerCommunications 对象
+    private ServerCommunications serverCommunications;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,6 +33,7 @@ public class SignInActivity extends AppCompatActivity {
         setContentView(R.layout.activity_sign_in);
 
         // 绑定 UI 组件
+        // Bind UI components
         emailEditText = findViewById(R.id.email);
         passwordEditText = findViewById(R.id.password);
         signInButton = findViewById(R.id.sign_in);
@@ -38,12 +41,15 @@ public class SignInActivity extends AppCompatActivity {
         TextView forgotPasswordText = findViewById(R.id.forgot_password);
 
         // 初始化 Firebase Auth
+        // Initialize Firebase Auth
         mAuth = FirebaseAuth.getInstance();
 
         // 登录按钮点击事件
+        // Login button click event
         signInButton.setOnClickListener(v -> loginUser());
 
         // 设置 Sign Up 可点击跳转
+        // Set Sign Up to jump to clickable
         String text = "Don't have an account? Sign Up";
         SpannableString spannableString = new SpannableString(text);
         ClickableSpan clickableSpan = new ClickableSpan() {
@@ -56,15 +62,15 @@ public class SignInActivity extends AppCompatActivity {
             @Override
             public void updateDrawState(@NonNull TextPaint ds) {
                 super.updateDrawState(ds);
-                ds.setColor(Color.BLUE); // 点击后颜色
-                ds.setUnderlineText(true); // 添加下划线
+                ds.setColor(Color.BLUE); // 点击后颜色 Click Color
+                ds.setUnderlineText(true); // 添加下划线 Add underline
             }
         };
         spannableString.setSpan(clickableSpan, text.indexOf("Sign Up"), text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         signupText.setText(spannableString);
-        signupText.setMovementMethod(LinkMovementMethod.getInstance()); // 让文本可点击
+        signupText.setMovementMethod(LinkMovementMethod.getInstance()); // 让文本可点击 Make text clickable
 
-        // 设置 "Forgot your password?" 可点击跳转
+        // 设置 "Forgot your password?" 可点击跳转 Set "Forgot your password?" to jump to the next page
         String forgotText = "Forgot your password?";
         SpannableString forgotSpannable = new SpannableString(forgotText);
         ClickableSpan forgotClickableSpan = new ClickableSpan() {
@@ -87,6 +93,7 @@ public class SignInActivity extends AppCompatActivity {
     }
 
     private void loginUser() {
+        // 获取输入的邮箱和密码
         String email = emailEditText.getText().toString().trim();
         String password = passwordEditText.getText().toString().trim();
 
@@ -100,19 +107,29 @@ public class SignInActivity extends AppCompatActivity {
             return;
         }
 
-        // Firebase 登录
+        // 调用 Firebase API 登录
         mAuth.signInWithEmailAndPassword(email, password)
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
                             if (user.isEmailVerified()) {
-                                // 登录成功，跳转到 MainActivity
-                                Toast.makeText(SignInActivity.this, "Login Successful!", Toast.LENGTH_SHORT).show();
-                                Intent intent = new Intent(SignInActivity.this, MainActivity.class);
-                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                                startActivity(intent);
-                                finish();
+                                // 登录成功后创建 ServerCommunications 实例
+                                serverCommunications = new ServerCommunications(SignInActivity.this);
+                                // 设置回调，等待 Firebase 获取 userKey 并初始化 URL 完成
+                                serverCommunications.setURLInitializedListener(new ServerCommunications.URLInitializedListener() {
+                                    @Override
+                                    public void onURLInitialized() {
+                                        // 当 userKey 获取并初始化完成后，回调被触发
+                                        runOnUiThread(() -> {
+                                            Toast.makeText(SignInActivity.this, "Login Successful!", Toast.LENGTH_SHORT).show();
+                                            Intent intent = new Intent(SignInActivity.this, MainActivity.class);
+                                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                                            startActivity(intent);
+                                            finish();
+                                        });
+                                    }
+                                });
                             } else {
                                 Toast.makeText(SignInActivity.this, "Please verify your email before logging in.", Toast.LENGTH_LONG).show();
                             }

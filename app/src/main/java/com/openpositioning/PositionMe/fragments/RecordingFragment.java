@@ -116,31 +116,38 @@ public class RecordingFragment extends Fragment {
         super.onCreate(savedInstanceState);
 
         // 检查 Android 版本，只有 Android 10（API 29）及以上需要运行时权限
+        // Check Android version, only Android 10 (API 29) and above require runtime permissions
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACTIVITY_RECOGNITION)
                     != PackageManager.PERMISSION_GRANTED) {
                 // 请求权限
+                // Request permissions
                 requestPermissions(new String[]{Manifest.permission.ACTIVITY_RECOGNITION},
                         REQUEST_ACTIVITY_RECOGNITION_PERMISSION_CODE);
             } else {
                 // 已经拥有权限，可以继续后续操作
+                // Already have permission, you can continue with the subsequent operations
                 Log.d("RecordingFragment", "✅ 已授予活动识别权限");
             }
         } else {
             // Android 9 以下不需要额外申请权限
+            // No additional permissions are required for Android 9 and below
             Log.d("RecordingFragment", "✅ Android 9 以下无需活动识别权限");
         }
 
         // ✅ 确保 SensorFusion 正确初始化
+        // ✅ Make sure SensorFusion is initialized correctly
         this.sensorFusion = SensorFusion.getInstance();
         // 设置应用程序上下文
+        // Set up the application context
         sensorFusion.setContext(getActivity().getApplicationContext());
         if (this.sensorFusion == null) {
             Log.e("SensorFusion", "❌ SensorFusion is NULL! Retrying initialization...");
-            this.sensorFusion = SensorFusion.getInstance(); // 重新获取实例
+            this.sensorFusion = SensorFusion.getInstance(); // 重新获取实例 Re-obtain the instance
         }
 
         // ✅ 初始化 `Handler`（用于定期更新 UI）
+        // ✅ Initialize `Handler` (used to update UI regularly)
         this.refreshDataHandler = new Handler();
     }
 
@@ -149,6 +156,7 @@ public class RecordingFragment extends Fragment {
         View rootView = inflater.inflate(R.layout.fragment_recording, container, false);
 
         // ✅ **从 Bundle 里获取传递的数据**
+        //✅ **Get the passed data from the Bundle**
         if (getArguments() != null) {
             zoneName = getArguments().getString("zone_name");
             markerLatitude = getArguments().getDouble("marker_latitude", 0.0);
@@ -158,10 +166,11 @@ public class RecordingFragment extends Fragment {
         }
 
         // ✅ 获取 GNSS 初始位置（确保包含纬度 & 经度）
+        // ✅ Get the initial GNSS position (make sure to include latitude & longitude)
         if (markerLatitude != 0.0 && markerLongitude != 0.0) {
             start = new LatLng(markerLatitude, markerLongitude);
         } else {
-            start = new LatLng(55.953251, -3.188267); // 💡 默认位置（爱丁堡）
+            start = new LatLng(55.953251, -3.188267); // 💡 默认位置（爱丁堡）Default location (Edinburgh)
         }
 
         float[] sendStartLocation = new float[2];
@@ -169,9 +178,10 @@ public class RecordingFragment extends Fragment {
         sendStartLocation[1] = (float) start.longitude;
         sensorFusion.setStartGNSSLatitude(sendStartLocation);
 
-        currentLocation = start; // 🔥 确保 currentLocation 也初始化
+        currentLocation = start; // 🔥 确保 currentLocation 也初始化 Make sure currentLocation is also initialized
 
         // ✅ 初始化地图
+        //✅ Initialize the map
         SupportMapFragment supportMapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.map_fragment);
         if (supportMapFragment != null) {
@@ -179,11 +189,13 @@ public class RecordingFragment extends Fragment {
                 gMap = map;
 
                 // ✅ 初始化室内地图（先检查是否需要）
+                // ✅ Initialize indoor map (check if needed first)
                 if (indoorMapManager == null) {
                     indoorMapManager = new com.openpositioning.PositionMe.IndoorMapManager(gMap);
                 }
 
                 // ✅ 配置 Google Map UI
+                // ✅ Configure Google Map UI
                 map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                 map.getUiSettings().setCompassEnabled(true);
                 map.getUiSettings().setTiltGesturesEnabled(true);
@@ -191,6 +203,7 @@ public class RecordingFragment extends Fragment {
                 map.getUiSettings().setScrollGesturesEnabled(true);
 
                 // ✅ 添加起始点 Marker（带有方向指示）
+                // ✅ Add a starting point marker (with direction indication)
                 orientationMarker = map.addMarker(new MarkerOptions()
                         .position(start)
                         .title("Current Position")
@@ -201,12 +214,14 @@ public class RecordingFragment extends Fragment {
                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(start, 19f));
 
                 // ✅ 初始化 PDR 轨迹（Polyline）
+                // ✅ Initialize PDR track (Polyline)
                 polyline = gMap.addPolyline(new PolylineOptions()
                         .color(Color.RED)
                         .add(currentLocation)
                         .zIndex(6));
 
                 // ✅ 设置室内地图（如适用）
+                // ✅ Set up indoor maps (if applicable)
                 indoorMapManager.setCurrentLocation(currentLocation);
                 indoorMapManager.setIndicationOfIndoorMap();
             });
@@ -222,6 +237,7 @@ public class RecordingFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         // 🛑 **删除旧 Marker，避免重复**
+        // 🛑 **Delete old Marker to avoid duplication**
         if (orientationMarker != null) {
             orientationMarker.remove();
             orientationMarker = null;
@@ -235,6 +251,7 @@ public class RecordingFragment extends Fragment {
         }
 
         // ✅ 初始化 UI 组件（避免 `getView()` 多次调用）
+        // ✅ Initialize UI components (avoid multiple calls to `getView()`)
         this.elevation = view.findViewById(R.id.tv_elevation);
         this.distanceTravelled = view.findViewById(R.id.tv_distance);
         this.gnssError = view.findViewById(R.id.tv_gnss_error);
@@ -242,38 +259,45 @@ public class RecordingFragment extends Fragment {
         this.stopButton = view.findViewById(R.id.button_stop);
 
         // ✅ **设置默认 UI 值**
+        // ✅ **Set default UI values**
         this.gnssError.setVisibility(View.GONE);
         this.elevation.setText("Elevation: 0.0 m");
         this.distanceTravelled.setText("Distance: 0.0 m");
 
         // ✅ **重置轨迹计算变量**
+        //✅ **Reset trajectory calculation variables**
         this.distance = 0f;
         this.previousPosX = 0f;
         this.previousPosY = 0f;
 
         // ✅ **Start 按钮（开始录制）**
+        // ✅ **Start button (start recording)**
         this.startButton.setOnClickListener(view1 -> {
             ifstart = true;
 
             // 停止之前的录制、传感器监听和定时任务
+            // Stop previous recording, sensor monitoring and scheduled tasks
             sensorFusion.stopRecording();
             sensorFusion.stopListening();
             refreshDataHandler.removeCallbacks(refreshDataTask);
             // 第一次调用 resetMap()，立即重置地图
+            // The first call to resetMap() resets the map immediately
             resetMap();
             // 延迟一定时间后，再自动调用一次 resetMap() 模拟第二次点击
+            // After a certain delay, automatically call resetMap() again to simulate the second click
             new Handler().postDelayed(() -> {
                 resetMap();
-            }, 100); // 延迟100毫秒，你可以根据实际情况调整延迟时间
+            }, 100); // 延迟100毫秒，你可以根据实际情况调整延迟时间 The delay is 100 milliseconds. You can adjust the delay time according to the actual situation.
 
             if (sensorFusion != null) {
                 sensorFusion.setContext(getActivity().getApplicationContext());
-                sensorFusion.resumeListening();  // 注册所有传感器监听器
+                sensorFusion.resumeListening();  // 注册所有传感器监听器 Register all sensor listeners
                 sensorFusion.startRecording();
                 Toast.makeText(getContext(), "Recording Started", Toast.LENGTH_SHORT).show();
                 Log.d("RecordingFragment", "🚀 SensorFusion 录制已启动");
-                isRecording = true; // 标记正在录制
+                isRecording = true; // 标记正在录制 Mark recording
                 // 开始更新 UI
+                // Start updating the UI
                 refreshDataHandler.post(refreshDataTask);
 
             } else {
@@ -282,6 +306,7 @@ public class RecordingFragment extends Fragment {
         });
 
         // ✅ **Stop 按钮（结束录制 & 跳转）**
+        // ✅ **Stop button (stop recording & jump)**
         this.stopButton.setOnClickListener(view1 -> {
             if (ifstart){
                 if (sensorFusion != null) {
@@ -294,11 +319,13 @@ public class RecordingFragment extends Fragment {
                 }
 
                 // 停止 UI 更新任务
+                // Stop UI update task
                 if (refreshDataHandler != null) {
                     refreshDataHandler.removeCallbacks(refreshDataTask);
                 }
 
                 // ✅ **跳转至 FilesFragment**
+                //✅ **Jump to FilesFragment**
                 if (isAdded()) {
 
                     //Send trajectory data to the cloud
@@ -317,21 +344,25 @@ public class RecordingFragment extends Fragment {
         });
 
         // ✅ **初始化 UI 组件**
+        //✅ **Initialize UI components**
         this.floorUpButton = view.findViewById(R.id.floorUpButton);
         this.floorDownButton = view.findViewById(R.id.floorDownButton);
         this.autoFloor = view.findViewById(R.id.switch_auto_floor);
 
         // ✅ **设置默认状态**
-        autoFloor.setChecked(true); // 🚀 默认开启自动楼层
-        setFloorButtonVisibility(View.GONE); // 🚀 初始隐藏楼层切换按钮
+        //✅ **Set default state**
+        autoFloor.setChecked(true); // 🚀 默认开启自动楼层 Automatic floor is enabled by default
+        setFloorButtonVisibility(View.GONE); // 🚀 初始隐藏楼层切换按钮 Initially hide the floor switch button
 
         // ✅ **地图类型切换**
+        //✅ **Map type switch**
         mapDropdown();
         switchMap();
 
         // ✅ **楼层上升按钮**
+        //✅ **Floor up button**
         this.floorUpButton.setOnClickListener(view1 -> {
-            autoFloor.setChecked(false); // 🚀 关闭 Auto Floor
+            autoFloor.setChecked(false); // 🚀 关闭 Auto Floor Turn off Auto Floor
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
                 Log.d("FloorControl", "📈 楼层上升");
@@ -341,8 +372,9 @@ public class RecordingFragment extends Fragment {
         });
 
         // ✅ **楼层下降按钮**
+        //✅ **Floor down button**
         this.floorDownButton.setOnClickListener(view1 -> {
-            autoFloor.setChecked(false); // 🚀 关闭 Auto Floor
+            autoFloor.setChecked(false); // 🚀 关闭 Auto Floor Turn off Auto Floor
             if (indoorMapManager != null) {
                 indoorMapManager.decreaseFloor();
                 Log.d("FloorControl", "📉 楼层下降");
@@ -352,6 +384,7 @@ public class RecordingFragment extends Fragment {
         });
 
         // ✅ **自动楼层切换**
+        //✅ **Automatic floor switching**
         this.autoFloor.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) {
                 Log.d("FloorControl", "✅ Auto Floor 已启用");
@@ -361,12 +394,15 @@ public class RecordingFragment extends Fragment {
         });
 
         // ✅ **绑定 GNSS 开关**
+        //✅ **Bind GNSS switch**
         this.gnss = view.findViewById(R.id.switch_gnss);
 
         // GNSS 开关监听器
+        //GNSS switch listener
         this.gnss.setOnCheckedChangeListener((compoundButton, isChecked) -> {
             if (isChecked) {
                 // 获取所有传感器数据（其中 GNSS 数据不依赖 pdrProcessing）
+                // Get all sensor data (GNSS data does not depend on pdrProcessing)
                 Map<SensorTypes, float[]> sensorData = sensorFusion.getSensorValueMap();
                 if (sensorData == null) {
                     Toast.makeText(getContext(), "传感器数据不可用", Toast.LENGTH_SHORT).show();
@@ -375,6 +411,7 @@ public class RecordingFragment extends Fragment {
                 }
 
                 // 获取 GNSS 数据
+                // Get GNSS data
                 float[] gnssData = sensorData.get(SensorTypes.GNSSLATLONG);
                 if (gnssData == null || gnssData.length < 2) {
                     Toast.makeText(getContext(), "GNSS 数据不可用", Toast.LENGTH_SHORT).show();
@@ -383,29 +420,38 @@ public class RecordingFragment extends Fragment {
                 }
 
                 // 将 GNSS 数据转换为 LatLng 对象
+                // Convert GNSS data to LatLng object
                 LatLng gnssLocation = new LatLng(gnssData[0], gnssData[1]);
 
                 // 判断 orientationMarker 是否存在
+                // Determine whether orientationMarker exists
                 if (orientationMarker != null) {
                     LatLng orientationPos = orientationMarker.getPosition();
                     // 计算 orientationMarker 与 GNSS 数据之间的距离（单位：米）
+                    // Calculate the distance between orientationMarker and GNSS data (unit: meters)
                     double distance = UtilFunctions.distanceBetweenPoints(orientationPos, gnssLocation);
                     // 设置一个距离阈值，判断两者是否“特别接近”
-                    final double THRESHOLD_DISTANCE = 1.0; // 阈值为1米，可根据需要调整
+                    // Set a distance threshold to determine whether the two are "particularly close"
+                    final double THRESHOLD_DISTANCE = 1.0; // 阈值为1米，可根据需要调整 The threshold is 1 meter and can be adjusted as needed
 
                     if (distance < THRESHOLD_DISTANCE) {
                         // 如果两者非常接近，则只保留 orientationMarker，
                         // 同时确保删除之前可能存在的 GNSS Marker
+                        // If the two are very close, only keep the orientationMarker,
+                        // Also make sure to delete any GNSS Marker that may have existed before
                         if (gnssMarker != null) {
                             gnssMarker.remove();
                             gnssMarker = null;
                         }
                         // 可在界面上显示一个提示，告诉用户两者非常接近
+                        // A prompt can be displayed on the interface to tell the user that the two are very close
                         gnssError.setVisibility(View.VISIBLE);
                         gnssError.setText("GNSS error: " + String.format("%.2f", distance) + " m (位置接近)");
                     } else {
                         // 如果距离大于阈值，则在地图上显示一个 GNSS Marker，
                         // 以便用户可以比较 orientationMarker 与 GNSS Marker 之间的距离
+                        // If the distance is greater than the threshold, display a GNSS Marker on the map,
+                        // so that the user can compare the distance between the orientationMarker and the GNSS Marker
                         if (gnssMarker == null) {
                             gnssMarker = gMap.addMarker(new MarkerOptions()
                                     .title("GNSS Position")
@@ -419,6 +465,7 @@ public class RecordingFragment extends Fragment {
                     }
                 } else {
                     // 如果 orientationMarker 尚未创建（这种情况比较少见），直接显示 GNSS Marker
+                    // If orientationMarker has not been created (this is rare), display GNSS Marker directly
                     if (gnssMarker == null) {
                         gnssMarker = gMap.addMarker(new MarkerOptions()
                                 .title("GNSS Position")
@@ -432,6 +479,7 @@ public class RecordingFragment extends Fragment {
                 }
             } else {
                 // 当 GNSS 关闭时，只保留 orientationMarker，将 GNSS Marker 移除
+                // When GNSS is turned off, only orientationMarker is kept and GNSS Marker is removed
                 if (gnssMarker != null) {
                     gnssMarker.remove();
                     gnssMarker = null;
@@ -445,17 +493,21 @@ public class RecordingFragment extends Fragment {
 
     private void resetMap() {
         // 如果地图对象 gMap 不为 null，则清除所有覆盖物
+        // If the map object gMap is not null, clear all overlays
         if (gMap != null) {
             orientationMarker.remove();
             polyline.remove();
         }
         // 重置当前位置信息为初始位置（假设 start 是你的初始位置）
+        // Reset the current location information to the initial location (assuming start is your initial location)
         currentLocation = new LatLng(start.latitude, start.longitude);
 
         // 重置摄像机视角（例如 zoom 为 19f）
+        // Reset the camera perspective (e.g. zoom to 19f)
         gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 19f));
 
         // 重新添加 orientationMarker 到初始位置
+        // Re-add orientationMarker to the initial position
         orientationMarker = gMap.addMarker(new MarkerOptions()
                 .position(currentLocation)
                 .title("Current Position")
@@ -465,6 +517,7 @@ public class RecordingFragment extends Fragment {
                 )));
 
         // 重新创建轨迹 Polyline，以初始位置为起点
+        // Recreate the trajectory Polyline, starting from the initial position
         polyline = gMap.addPolyline(new PolylineOptions()
                 .color(Color.RED)
                 .add(currentLocation)
@@ -477,9 +530,11 @@ public class RecordingFragment extends Fragment {
         if (requestCode == REQUEST_ACTIVITY_RECOGNITION_PERMISSION_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 // 权限授予，可以继续录制
+                // Permission granted, you can continue recording
                 Log.d("RecordingFragment", "✅ 已授予活动识别权限");
             } else {
                 // 权限被拒绝，提示用户
+                // Permission denied, prompt the user
                 Log.w("RecordingFragment", "⚠️ 未授予活动识别权限");
             }
         }
@@ -490,6 +545,7 @@ public class RecordingFragment extends Fragment {
      */
     private void mapDropdown() {
         // ✅ 获取 Spinner 控件
+        //✅ Get the Spinner control
         switchMapSpinner = getView().findViewById(R.id.spinner_map_type);
 
         if (switchMapSpinner == null) {
@@ -498,6 +554,7 @@ public class RecordingFragment extends Fragment {
         }
 
         // ✅ 定义地图类型选项
+        // ✅ Define map type options
         String[] maps = new String[]{
                 "Hybrid",
                 "Normal",
@@ -505,6 +562,7 @@ public class RecordingFragment extends Fragment {
         };
 
         // ✅ 创建适配器
+        //✅ Create an adapter
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
                 requireContext(),
                 android.R.layout.simple_spinner_dropdown_item,
@@ -512,10 +570,12 @@ public class RecordingFragment extends Fragment {
         );
 
         // ✅ 设置适配器
+        // ✅ Set up the adapter
         switchMapSpinner.setAdapter(adapter);
 
         // ✅ 设置默认选项（如 Hybrid）
-        switchMapSpinner.setSelection(0); // 默认选项为第一个（Hybrid）
+        // ✅ Set default options (such as Hybrid)
+        switchMapSpinner.setSelection(0); // 默认选项为第一个（Hybrid）The default option is the first one (Hybrid)
 
         Log.d("MapDropdown", "✅ Map dropdown initialized with default selection: Hybrid");
     }
@@ -538,6 +598,7 @@ public class RecordingFragment extends Fragment {
                 }
 
                 // ✅ **使用 HashMap 代替硬编码索引**
+                // ✅ **Use HashMap instead of hard-coded index**
                 Map<Integer, Integer> mapTypeMap = new HashMap<>();
                 mapTypeMap.put(0, GoogleMap.MAP_TYPE_HYBRID);
                 mapTypeMap.put(1, GoogleMap.MAP_TYPE_NORMAL);
@@ -580,10 +641,16 @@ public class RecordingFragment extends Fragment {
      * - 处理 GNSS 误差
      * - 更新室内地图楼层
      * - 旋转方向箭头
+     * 🔄 Update UI and calculate PDR trajectory
+     * - Calculate user walking trajectory & distance
+     * - Handle GNSS error
+     * - Update indoor map floor
+     * - Rotate direction arrow
      */
     private void updateUIandPosition() {
 //        Log.d("updateUI", "更新UI和位置...");
         // ✅ **获取 PDR 数据**（检查是否为 null）
+        //✅ **Get PDR data** (check if it is null)
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null || pdrValues.length < 2) {
 //            Log.e("updateUI", "❌ PDR Data is NULL or Incomplete!");
@@ -591,6 +658,7 @@ public class RecordingFragment extends Fragment {
         }
 
         // ✅ **计算移动距离**
+        //✅ **Calculate moving distance**
         float deltaX = pdrValues[0] - previousPosX;
         float deltaY = pdrValues[1] - previousPosY;
         float stepDistance = (float) Math.sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -599,31 +667,37 @@ public class RecordingFragment extends Fragment {
 //        Log.d("updateUI", "🚶‍♂️ Step Distance: " + stepDistance);
 
         // ✅ **避免误差累积（例如 < 0.001m 变化忽略）**
+        // ✅ **Avoid error accumulation (e.g. changes < 0.001m are ignored)**
         if (stepDistance > 0.001f) {
             distance += stepDistance;
             distanceTravelled.setText("Distance: " + String.format("%.2f", distance) + " m");
 
             // ✅ **绘制轨迹（只在用户真正移动时）**
+            // ✅ **Draw the track (only when the user actually moves)**
             plotLines(new float[]{deltaX, deltaY});
         }
 
         // ✅ **检查室内地图管理器**
+        //✅ **Check out the indoor map manager**
         if (indoorMapManager == null) {
             indoorMapManager = new IndoorMapManager(gMap);
         }
 
         // ✅ **GNSS 误差计算 & GNSS Marker 位置更新**
+        // ✅ **GNSS error calculation & GNSS Marker position update**
         if (gnss != null && gnss.isChecked()) {
             float[] gnssData = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
             if (gnssData != null && gnssData.length >= 2) {
                 LatLng gnssLocation = new LatLng(gnssData[0], gnssData[1]);
 
                 // 计算 GNSS 和 PDR 位置的误差
+                // Calculate the error between GNSS and PDR positions
                 double error = UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation);
                 gnssError.setVisibility(View.VISIBLE);
                 gnssError.setText("GNSS error: " + error + " m");
 
                 // 更新 GNSS Marker 位置
+                // Update GNSS Marker position
                 if (gnssMarker != null) {
                     gnssMarker.setPosition(gnssLocation);
                 } else {
@@ -642,14 +716,17 @@ public class RecordingFragment extends Fragment {
         }
 
         // ✅ **室内地图管理**
+        //✅ **Indoor map management**
         indoorMapManager.setCurrentLocation(currentLocation);
         float elevationVal = sensorFusion.getElevation();
 
         // ✅ **检查是否在室内地图**
+        //✅ **Check if you are in an indoor map**
         if (indoorMapManager.getIsIndoorMapSet()) {
             setFloorButtonVisibility(View.VISIBLE);
 
             // **Auto Floor 功能**
+            // **Auto Floor Function**
             if (autoFloor != null && autoFloor.isChecked()) {
                 int estimatedFloor = (int) (elevationVal / indoorMapManager.getFloorHeight());
                 indoorMapManager.setCurrentFloor(estimatedFloor, true);
@@ -659,13 +736,16 @@ public class RecordingFragment extends Fragment {
         }
 
         // ✅ **存储上一次的 PDR 位置**
+        //✅ **Store the last PDR position**
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
 
         // ✅ **更新 UI Elevation**
+        //✅ **Update UI Elevation**
         elevation.setText("Elevation: " + String.format("%.2f", elevationVal) + " m");
 
         // ✅ **旋转方向箭头**
+        //✅ **Rotation direction arrow**
         if (orientationMarker != null) {
             float heading = (float) Math.toDegrees(sensorFusion.passOrientation());
             orientationMarker.setRotation(heading);
@@ -678,6 +758,11 @@ public class RecordingFragment extends Fragment {
      * - 更新轨迹折线（Polyline）
      * - 调整地图视角
      * @param pdrMoved 包含 X/Y 方向上的 PDR 变化量
+     * 🔄 Calculate and draw PDR trajectory
+     * - Calculate user location
+     * - Update trajectory polyline
+     * ​​- Adjust map perspective
+     * @param pdrMoved contains the PDR change in X/Y direction
      */
     private void plotLines(float[] pdrMoved) {
         if (pdrMoved == null || pdrMoved.length < 2) {
@@ -687,6 +772,7 @@ public class RecordingFragment extends Fragment {
 
         if (currentLocation != null) {
             // ✅ **计算新位置**
+            //✅ **Calculate new position**
             LatLng nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
             if (nextLocation == null) {
                 Log.e("PlottingPDR", "❌ nextLocation is NULL!");
@@ -695,16 +781,19 @@ public class RecordingFragment extends Fragment {
 
             try {
                 // ✅ **更新 PDR 轨迹**
-                List<LatLng> points = new ArrayList<>(polyline.getPoints()); // 🔥 避免 GC 频繁回收
+                //✅ **Update PDR tracks**
+                List<LatLng> points = new ArrayList<>(polyline.getPoints()); // 🔥 避免 GC 频繁回收 Avoid frequent GC collection
                 points.add(nextLocation);
                 polyline.setPoints(points);
 
                 // ✅ **移动方向指示 Marker**
+                //✅ **Moving direction indicator Marker**
                 if (orientationMarker != null) {
                     orientationMarker.setPosition(nextLocation);
                 }
 
                 // ✅ **平滑移动摄像机**
+                //✅ **Smooth camera movement**
                 gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, 19f));
 
             } catch (Exception ex) {
@@ -712,9 +801,11 @@ public class RecordingFragment extends Fragment {
             }
 
             // ✅ **更新当前位置**
+            //✅ **Update current location**
             currentLocation = nextLocation;
         } else {
             // **初始化起始位置**
+            // **Initialize the starting position**
             float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
             if (location != null && location.length >= 2) {
                 currentLocation = new LatLng(location[0], location[1]);
@@ -727,6 +818,7 @@ public class RecordingFragment extends Fragment {
 
     /**
      * 🔄 设置楼层按钮（Floor Up/Down & Auto-Floor）的可见性
+     * 🔄 Set visibility of floor buttons (Floor Up/Down & Auto-Floor)
      * @param visibility 可见性（View.VISIBLE / View.INVISIBLE / View.GONE）
      */
     private void setFloorButtonVisibility(int visibility) {
@@ -753,6 +845,7 @@ public class RecordingFragment extends Fragment {
     public void onResume() {
         super.onResume();
         // 如果当前处于录制状态，则恢复 UI 更新任务
+        // If you are currently in recording state, resume the UI update task
         if (isRecording && refreshDataHandler != null) {
             refreshDataHandler.post(refreshDataTask);
             Log.d("RecordingFragment", "✅ onResume: 恢复 UI 刷新任务");
@@ -763,17 +856,19 @@ public class RecordingFragment extends Fragment {
     public void onPause() {
         super.onPause();
         // 离开页面时停止 UI 更新任务，避免后台执行
+        // Stop UI update task when leaving the page to avoid background execution
         if (refreshDataHandler != null) {
             refreshDataHandler.removeCallbacks(refreshDataTask);
             Log.d("RecordingFragment", "⏹ onPause: 停止 UI 刷新任务");
         }
-        sensorFusion.stopListening(); // 停止所有传感器监听器
+        sensorFusion.stopListening(); // 停止所有传感器监听器 Stop all sensor listeners
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
         // 清除所有 Handler 回调，防止内存泄漏
+        // Clear all Handler callbacks to prevent memory leaks
         if (refreshDataHandler != null) {
             refreshDataHandler.removeCallbacksAndMessages(null);
             Log.d("RecordingFragment", "🔥 onDestroy: 清理所有 Handler 回调");

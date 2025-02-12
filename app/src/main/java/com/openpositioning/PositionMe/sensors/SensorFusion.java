@@ -652,12 +652,53 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public List<SensorInfo> getSensorInfos() {
         List<SensorInfo> sensorInfoList = new ArrayList<>();
-        sensorInfoList.add(this.accelerometerSensor.sensorInfo);
-        sensorInfoList.add(this.barometerSensor.sensorInfo);
-        sensorInfoList.add(this.gyroscopeSensor.sensorInfo);
-        sensorInfoList.add(this.lightSensor.sensorInfo);
-        sensorInfoList.add(this.proximitySensor.sensorInfo);
-        sensorInfoList.add(this.magnetometerSensor.sensorInfo);
+        if (this.accelerometerSensor == null) {
+            Log.e("SensorFusion", "accelerometerSensor is null");
+        } else if (this.accelerometerSensor.sensorInfo == null) {
+            Log.e("SensorFusion", "accelerometerSensor.sensorInfo is null");
+        } else {
+            sensorInfoList.add(this.accelerometerSensor.sensorInfo);
+        }
+
+        if (this.barometerSensor == null) {
+            Log.e("SensorFusion", "barometerSensor is null");
+        } else if (this.barometerSensor.sensorInfo == null) {
+            Log.e("SensorFusion", "barometerSensor.sensorInfo is null");
+        } else {
+            sensorInfoList.add(this.barometerSensor.sensorInfo);
+        }
+
+        if (this.gyroscopeSensor == null) {
+            Log.e("SensorFusion", "gyroscopeSensor is null");
+        } else if (this.gyroscopeSensor.sensorInfo == null) {
+            Log.e("SensorFusion", "gyroscopeSensor.sensorInfo is null");
+        } else {
+            sensorInfoList.add(this.gyroscopeSensor.sensorInfo);
+        }
+
+        if (this.lightSensor == null) {
+            Log.e("SensorFusion", "lightSensor is null");
+        } else if (this.lightSensor.sensorInfo == null) {
+            Log.e("SensorFusion", "lightSensor.sensorInfo is null");
+        } else {
+            sensorInfoList.add(this.lightSensor.sensorInfo);
+        }
+
+        if (this.proximitySensor == null) {
+            Log.e("SensorFusion", "proximitySensor is null");
+        } else if (this.proximitySensor.sensorInfo == null) {
+            Log.e("SensorFusion", "proximitySensor.sensorInfo is null");
+        } else {
+            sensorInfoList.add(this.proximitySensor.sensorInfo);
+        }
+
+        if (this.magnetometerSensor == null) {
+            Log.e("SensorFusion", "magnetometerSensor is null");
+        } else if (this.magnetometerSensor.sensorInfo == null) {
+            Log.e("SensorFusion", "magnetometerSensor.sensorInfo is null");
+        } else {
+            sensorInfoList.add(this.magnetometerSensor.sensorInfo);
+        }
         return sensorInfoList;
     }
 
