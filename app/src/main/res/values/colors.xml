@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="tab_background">#F287E0</color> <!-- 浅灰色背景 -->
+    <color name="tab_border">#0D0C0C</color> <!-- 细灰色边框 -->
+    <color name="tab_selected">#69169B</color> <!-- 紫色选中背景 -->
+    <color name="tab_unselected">#FAF9F9</color> <!-- 浅灰色未选中背景 -->
+
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
     <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
     <color name="pastelBlue">#3F51B5</color>
     <color name="goldYellow">#D1B000</color>
     <color name="LightYellow">#FFFFE0</color>
@@ -13,5 +18,4 @@
     <color name="darkLogoBlue">#FF001080</color>
     <color name="primaryBlue">#FF001080</color>
     <color name="red">#FE0000</color>
-
 </resources>

@@ -14,4 +14,6 @@ public interface DownloadClickListener {
      */
     void onPositionClicked(int position);
 
+    void onReplayClicked(int position);
+
 }

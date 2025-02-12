@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+
 /**
  * The WifiDataProcessor class is the Wi-Fi data gathering and processing class of the application.
  * It implements the wifi scanning and broadcasting design to identify a list of nearby Wi-Fis as

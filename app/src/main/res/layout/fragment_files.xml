@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".fragments.FilesFragment">
+    tools:context=".fragment.FilesFragment">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -19,7 +19,7 @@
             android:layout_marginTop="15dp"
             android:layout_marginEnd="8dp"
             android:layout_marginBottom="5dp"
-            app:cardBackgroundColor="@color/primaryBlue"
+            app:cardBackgroundColor="@android:color/holo_blue_dark"
             app:cardCornerRadius="20dp"
             app:cardElevation="8dp"
             app:layout_constraintBottom_toTopOf="@id/filesList"
@@ -50,7 +50,7 @@
                     android:layout_marginStart="24dp"
                     android:layout_marginTop="8dp"
                     android:layout_marginBottom="8dp"
-                    android:text="@string/uploadTitle"
+                    android:text="Manual upload"
                     android:textColor="@color/white"
                     android:textSize="20sp"
                     android:textStyle="bold"

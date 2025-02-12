@@ -1,21 +1,16 @@
 package com.openpositioning.PositionMe;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 
-import androidx.preference.PreferenceManager;
-
 import com.google.protobuf.util.JsonFormat;
-import com.openpositioning.PositionMe.fragments.FilesFragment;
-import com.openpositioning.PositionMe.sensors.Observable;
-import com.openpositioning.PositionMe.sensors.Observer;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -23,13 +18,13 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import java.nio.file.Files;
 
 import okhttp3.Call;
 import okhttp3.Headers;
@@ -40,6 +35,18 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
+import com.openpositioning.PositionMe.sensors.Observable;
+import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.fragments.FilesFragment;
+
 /**
  * This class handles communications with the server through HTTPs. The class uses an
  * {@link OkHttpClient} for making requests to the server. The class includes methods for sending
@@ -47,9 +54,6 @@ import okhttp3.ResponseBody;
  * server and requesting information about the uploaded trajectories.
  *
  * Keys and URLs are hardcoded strings, given the simple and academic nature of the project.
- *
- * @author Michal Dvorak
- * @author Mate Stodulka
  */
 public class ServerCommunications implements Observable {
 
@@ -59,24 +63,19 @@ public class ServerCommunications implements Observable {
     private ConnectivityManager connMgr;
     private boolean isWifiConn;
     private boolean isMobileConn;
-    private SharedPreferences settings;
 
     private String infoResponse;
     private boolean success;
     private List<Observer> observers;
 
     // Static constants necessary for communications
-    private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
-    private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
-    private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
-                    + "/?key=" + masterKey;
-    private static final String downloadURL =
-            "https://openpositioning.org/api/live/trajectory/download/" + userKey
-                    + "?skip=0&limit=30&key=" + masterKey;
-    private static final String infoRequestURL =
-            "https://openpositioning.org/api/live/users/trajectories/" + userKey
-                    + "?key=" + masterKey;
+    private static String userKey = null;
+    private final FirebaseAuth mAuth;
+    private final DatabaseReference databaseReference;
+    private static final String masterKey = "ewireless";
+    private static String uploadURL;
+    private static String downloadURL;
+    private static String infoRequestURL;
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
 
@@ -90,14 +89,74 @@ public class ServerCommunications implements Observable {
      * @param context   application context for handling permissions and devices.
      */
     public ServerCommunications(Context context) {
+
+        mAuth = FirebaseAuth.getInstance();
+        databaseReference = FirebaseDatabase.getInstance().getReference();
+
+//        // 同步获取 userKey，赋值给 final 变量
+//        fetchUserKey();
+
+        // use the default key and URL
+        userKey = "9H8m_SU8K3xojnCD4iPobg";
+        uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
+        downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=30&key=" + masterKey;
+        infoRequestURL = "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
+
         this.context = context;
         this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        this.settings = PreferenceManager.getDefaultSharedPreferences(context);
+
         this.isWifiConn = false;
         this.isMobileConn = false;
         checkNetworkStatus();
 
         this.observers = new ArrayList<>();
+
+        Log.e("userKey", userKey);
+    }
+
+    // 获取 userKey 并更新 URL
+    private void fetchUserKey() {
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user != null) {
+            String uid = user.getUid();
+            DatabaseReference userRef = databaseReference.child("users").child(uid).child("userKey");
+
+            userRef.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(DataSnapshot snapshot) {
+                    if (snapshot.exists()) {
+                        userKey = snapshot.getValue(String.class);
+                        initializeURLs(); // userKey 获取到后，初始化 URL
+                    } else {
+                        // use the default key and URL
+                        userKey = "9H8m_SU8K3xojnCD4iPobg";
+                        uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
+                        downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=30&key=" + masterKey;
+                        infoRequestURL = "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
+                        System.out.println("userKey 不存在, 使用默认 key: " + userKey);
+                    }
+                }
+
+                @Override
+                public void onCancelled(DatabaseError error) {
+                    System.err.println("获取 userKey 失败: " + error.getMessage());
+                }
+            });
+        } else {
+            System.err.println("用户未登录");
+        }
+    }
+
+    // 当 userKey 获取到后，初始化 URL
+    private static void initializeURLs() {
+        if (userKey != null) {
+            uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
+            downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=30&key=" + masterKey;
+            infoRequestURL = "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
+            System.out.println("URL 初始化完成");
+        } else {
+            System.err.println("userKey 为空，URL 无法初始化");
+        }
     }
 
     /**
@@ -146,13 +205,13 @@ public class ServerCommunications implements Observable {
 
         // Check if user preference allows for syncing with mobile data
         // ODO: add sync delay and enforce settings
-        boolean enableMobileData = this.settings.getBoolean("mobile_sync", false);
+        boolean enableMobileData = false;
         // Check if device is connected to WiFi or to mobile data with enabled preference
         if(this.isWifiConn || (enableMobileData && isMobileConn)) {
             // Instantiate client for HTTP requests
             OkHttpClient client = new OkHttpClient();
 
-            // Creaet a request body with a file to upload in multipart/form-data format
+            // Creaet a equest body with a file to upload in multipart/form-data format
             RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", file.getName(),
                             RequestBody.create(MediaType.parse("text/plain"), file))
@@ -221,12 +280,6 @@ public class ServerCommunications implements Observable {
 
     }
 
-    /**
-     * Uploads a local trajectory file to the API server in the specified format.
-     * {@link okhttp3.OkHttp} library is used for the asynchronous POST request.
-     *
-     * @param localTrajectory the File object of the local trajectory to be uploaded
-     */
     /**
      * Uploads a local trajectory file to the API server in the specified format.
      * {@link okhttp3.OkHttp} library is used for the asynchronous POST request.
@@ -316,6 +369,7 @@ public class ServerCommunications implements Observable {
     public interface DownloadResultCallback {
         void onResult(boolean success);
     }
+
 
     /**
      * Perform API request for downloading a Trajectory uploaded to the server. The trajectory is
@@ -407,6 +461,14 @@ public class ServerCommunications implements Observable {
                         fileWriter.flush();
                         System.out.println("Received trajectory stored in: " + storageDir.getAbsolutePath());
 
+                        // === Test decoding of received trajectory start ===
+                        try {
+                            ReplayDataProcessor.protoDecoder(file);
+                        } catch (Exception e) {
+                            System.err.println("Error decoding received trajectory");
+                        }
+                        // === Test decoding of received trajectory end ===
+
                         success = true;// Set success to true
                     } catch (IOException ee) {
                         System.err.println("Trajectory download failed");
@@ -437,6 +499,11 @@ public class ServerCommunications implements Observable {
         // Create a new OkHttpclient
         OkHttpClient client = new OkHttpClient();
 
+        if (infoRequestURL == null) {
+            System.err.println("infoRequestURL 尚未初始化，无法发送请求");
+            return;
+        }
+
         // Create GET info request with appropriate URL and header
         okhttp3.Request request = new okhttp3.Request.Builder()
                 .url(infoRequestURL)
@@ -461,10 +528,17 @@ public class ServerCommunications implements Observable {
                     infoResponse =  responseBody.string();
                     // Print a message in the console and notify observers
                     System.out.println("Response received");
+                    System.out.println(infoResponse);
                     notifyObservers(0);
                 }
             }
         });
+
+        Log.d("userKey", userKey);
+    }
+
+    public boolean isInfoRequestURLInitialized() {
+        return infoRequestURL != null;
     }
 
     /**

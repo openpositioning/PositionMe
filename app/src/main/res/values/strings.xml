@@ -1,5 +1,6 @@
 <resources>
-    <string name="app_name">PositionMe</string>
+    <string name="app_name">Livelink</string>
+    <string name="signup_text">Don\'t have an account? <u>Sign Up</u></string>
 
     <!-- Buttons -->
     <string name="done">Done</string>
@@ -120,5 +121,7 @@
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
-
+    <string name="replay_button">replay_button</string>
+    <string name="GNSSposition">GNSS Position</string>
+    <string name="ElevationPres">Elevation</string>
 </resources>

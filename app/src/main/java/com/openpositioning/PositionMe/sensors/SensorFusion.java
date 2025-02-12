@@ -14,12 +14,12 @@ import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
-import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.MainActivity;
 import com.openpositioning.PositionMe.PathView;
 import com.openpositioning.PositionMe.PdrProcessing;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
+import com.google.android.gms.maps.model.LatLng;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -328,7 +328,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // Save values
                 this.rotation = sensorEvent.values.clone();
                 float[] rotationVectorDCM = new float[9];
+                // Convert rotation vector to a 3*3 DCM
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM,this.rotation);
+                // Convert DCM to euler angles [0] = yaw(azimuth), [1] = pitch, [2] = roll
                 SensorManager.getOrientation(rotationVectorDCM, this.orientation);
                 break;
 
@@ -794,7 +796,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
                 .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
-                .setLightSensorInfo(createInfoBuilder(lightSensor));
+                .setLightSensorInfo(createInfoBuilder(lightSensor))
+                .setStartPosition(createLatLongBuilder(sensorFusion.getGNSSLatitude(true)));
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.scheduleAtFixedRate(new storeDataInTrajectory(), 0, TIME_CONST);
         this.pdrProcessing.resetPDR();
@@ -811,7 +814,6 @@ public class SensorFusion implements SensorEventListener, Observer {
      * the timer objects.
      *
      * @see Traj object for storing data.
-     * @see com.openpositioning.PositionMe.fragments.SettingsFragment navigation that might cancel recording.
      */
     public void stopRecording() {
         // Only cancel if we are running
@@ -860,6 +862,20 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
+     * Creates a {@link Traj.Lat_Long_Position} object from the specified position.
+     *
+     * @param latlongposition position argument in float[2] containing latitude([0]) and longitude([1])
+     * @return Traj.Lat_Long_Position object to be used in building the trajectory
+     *
+     * @see Traj            Trajectory object used for communication with the server
+     */
+    private Traj.Lat_Long_Position.Builder createLatLongBuilder(float[] latlongposition) {
+        return Traj.Lat_Long_Position.newBuilder()
+                .setLat(latlongposition[0])
+                .setLong(latlongposition[1]);
+    }
+
+    /**
      * Timer task to record data with the desired frequency in the trajectory class.
      *
      * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
@@ -869,19 +885,22 @@ public class SensorFusion implements SensorEventListener, Observer {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
             trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
-                    .setAccX(acceleration[0])
-                    .setAccY(acceleration[1])
-                    .setAccZ(acceleration[2])
-                    .setGyrX(angularVelocity[0])
-                    .setGyrY(angularVelocity[1])
-                    .setGyrZ(angularVelocity[2])
-                    .setGyrZ(angularVelocity[2])
-                    .setRotationVectorX(rotation[0])
-                    .setRotationVectorY(rotation[1])
-                    .setRotationVectorZ(rotation[2])
-                    .setRotationVectorW(rotation[3])
-                    .setStepCount(stepCounter))
+                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
+                            .setAccX(acceleration[0])
+                            .setAccY(acceleration[1])
+                            .setAccZ(acceleration[2])
+                            .setGyrX(angularVelocity[0])
+                            .setGyrY(angularVelocity[1])
+                            .setGyrZ(angularVelocity[2])
+                            .setGyrZ(angularVelocity[2])
+                            .setRotationVectorX(rotation[0])
+                            .setRotationVectorY(rotation[1])
+                            .setRotationVectorZ(rotation[2])
+                            .setRotationVectorW(rotation[3])
+                            .setStepCount(stepCounter) // seems int value 0 won't be explicitly saved
+                            .setAzimuth(orientation[0])) // new attribute to store azimuth of user
+//                    .setStepCount(stepCounter))
+
                     .addPositionData(Traj.Position_Sample.newBuilder()
                             .setMagX(magneticField[0])
                             .setMagY(magneticField[1])
@@ -895,6 +914,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 if (barometerSensor.sensor != null) {
                     trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
                                     .setPressure(pressure)
+                                    .setEstimatedElevation(elevation)
                                     .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime))
                             .addLightData(Traj.Light_Sample.newBuilder()
                                     .setLight(light)

@@ -1,91 +1,51 @@
 plugins {
-    id 'com.android.application'
-    id 'com.google.gms.google-services'
-    id 'androidx.navigation.safeargs'
-    id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
-}
-
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('secrets.properties')
-if (localPropertiesFile.exists()) {
-    localProperties.load(new FileInputStream(localPropertiesFile))
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.google.gms.google.services)
 }
 
 android {
-    namespace ="com.openpositioning.PositionMe" //fix Namespace not specified problem
-    compileSdk 33
+    namespace 'com.openpositioning.PositionMe'
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.openpositioning.PositionMe"
         minSdk 28
-        targetSdk 33
+        targetSdk 35
         versionCode 1
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField "String", "MAPS_API_KEY",
-                "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
-
-        buildConfigField "String", "OPENPOSITIONING_API_KEY",
-                "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
-
-        buildConfigField "String", "OPENPOSITIONING_MASTER_KEY",
-                "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
-    }
-
-    buildFeatures {
-        buildConfig true
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-
-
         }
-
-
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 }
 
 dependencies {
 
-    implementation 'androidx.appcompat:appcompat:1.4.1'
-    implementation 'com.google.android.material:material:1.6.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'androidx.preference:preference:1.2.0'
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation 'com.android.volley:volley:1.2.1'
-    testImplementation 'junit:junit:4.+'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-    implementation 'com.google.protobuf:protobuf-java:3.0.0'
+    implementation libs.appcompat
+    implementation libs.material
+    implementation libs.activity
+    implementation libs.constraintlayout
+    implementation libs.firebase.auth
+    implementation libs.firebase.database
+    implementation libs.navigation.fragment
+    implementation libs.navigation.ui
+    testImplementation libs.junit
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
-    implementation "com.google.protobuf:protobuf-java-util:3.0.0"
-    implementation "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava"
     implementation 'com.google.android.gms:play-services-maps:18.1.0'
-    // Navigation components
-    def nav_version = "2.5.3"
-    implementation "androidx.navigation:navigation-fragment-ktx:$nav_version"
-    implementation "androidx.navigation:navigation-ui-ktx:$nav_version"
+    implementation 'androidx.preference:preference:1.2.0'
+    implementation 'com.google.protobuf:protobuf-java:3.21.7'
+    implementation "com.google.protobuf:protobuf-java-util:3.21.7"
+    implementation 'com.android.volley:volley:1.2.1'
 }
-
-//secrets {
-//    // Optionally specify a different file name containing your secrets.
-//    // The plugin defaults to "local.properties"
-//    propertiesFileName = "secrets.properties"
-//
-//    // A properties file containing default secret values. This file can be
-//    // checked in version control.
-//    defaultPropertiesFileName = "local.defaults.properties"
-//
-//    // Configure which keys should be ignored by the plugin by providing regular expressions.
-//    // "sdk.dir" is ignored by default.
-//    ignoreList.add("keyToIgnore") // Ignore the key "keyToIgnore"
-//    ignoreList.add("sdk.*")       // Ignore all keys matching the regexp "sdk.*"
-//}

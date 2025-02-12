@@ -37,8 +37,8 @@ public class IndoorMapManager {
     private float floorHeight;
     //Images of the Nucleus Building and Library indoor floor maps
     private final List<Integer> NUCLEUS_MAPS =Arrays.asList(
-            R.drawable.nucleuslg, R.drawable.nucleusg, R.drawable.nucleus1,
-            R.drawable.nucleus2,R.drawable.nucleus3);
+            R.drawable.floor_lg, R.drawable.floor_ug, R.drawable.floor_1,
+            R.drawable.floor_2,R.drawable.floor_3);
     private final List<Integer> LIBRARY_MAPS =Arrays.asList(
             R.drawable.libraryg, R.drawable.library1, R.drawable.library2,
             R.drawable.library3);
@@ -103,10 +103,10 @@ public class IndoorMapManager {
                 newFloor += 1;
             }
             // If within bounds and different from floor map currently being shown
-             if (newFloor>=0 && newFloor<NUCLEUS_MAPS.size() && newFloor!=this.currentFloor) {
-                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
-                 this.currentFloor=newFloor;
-             }
+            if (newFloor>=0 && newFloor<NUCLEUS_MAPS.size() && newFloor!=this.currentFloor) {
+                groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
+                this.currentFloor=newFloor;
+            }
         }
         else if (BuildingPolygon.inLibrary(currentLocation)){
             // If within bounds and different from floor map currently being shown
@@ -142,22 +142,24 @@ public class IndoorMapManager {
         try {
             // Setting overlay if in Nucleus and not already set
             if (BuildingPolygon.inNucleus(currentLocation) && !isIndoorMapSet) {
-                    groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
-                            .image(BitmapDescriptorFactory.fromResource(R.drawable.nucleusg))
-                            .positionFromBounds(NUCLEUS));
-                    isIndoorMapSet = true;
-                    // Nucleus has an LG floor so G floor is at index 1
-                    currentFloor=1;
-                    floorHeight=NUCLEUS_FLOOR_HEIGHT;
+                groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
+                        .image(BitmapDescriptorFactory.fromResource(R.drawable.floor_ug))
+                        .positionFromBounds(NUCLEUS)
+                        .zIndex(0f));
+                isIndoorMapSet = true;
+                // Nucleus has an LG floor so G floor is at index 1
+                currentFloor=1;
+                floorHeight=NUCLEUS_FLOOR_HEIGHT;
             }
             // Setting overlay if in Library and not already set
             else if (BuildingPolygon.inLibrary(currentLocation) && !isIndoorMapSet) {
-                    groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
-                            .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
-                            .positionFromBounds(LIBRARY));
-                    isIndoorMapSet = true;
-                    currentFloor=0;
-                    floorHeight=LIBRARY_FLOOR_HEIGHT;
+                groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
+                        .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
+                        .positionFromBounds(LIBRARY)
+                        .zIndex(0f));
+                isIndoorMapSet = true;
+                currentFloor=0;
+                floorHeight=LIBRARY_FLOOR_HEIGHT;
             }
             // Removing overlay if user no longer in area with indoor maps available
             else if (!BuildingPolygon.inLibrary(currentLocation) &&
@@ -165,7 +167,7 @@ public class IndoorMapManager {
                 groundOverlay.remove();
                 isIndoorMapSet = false;
                 currentFloor=0;
-            }   
+            }
         } catch (Exception ex) {
             Log.e("Error with overlay, Exception:", ex.toString());
         }

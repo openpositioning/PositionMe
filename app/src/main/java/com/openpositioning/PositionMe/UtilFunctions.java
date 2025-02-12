@@ -4,94 +4,125 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
-
 import androidx.core.content.ContextCompat;
-
 import com.google.android.gms.maps.model.LatLng;
-
-import kotlin.text.MatchGroup;
+import android.util.Log;
 
 /**
- * Class containing utility functions which can used by other classes.
- * @see com.openpositioning.PositionMe.fragments.RecordingFragment Currently used by RecordingFragment
+ * UtilFunctions: 包含常用工具方法，如计算 PDR 新位置
  */
 public class UtilFunctions {
-    // Constant 1degree of latitiude/longitude (in m)
-    private static final int  DEGREE_IN_M=111111;
-    /**
-     * Simple function to calculate the angle between two close points
-     * @param pointA Starting point
-     * @param pointB Ending point
-     * @return Angle between the points
-     */
-    public static double calculateAngleSimple(LatLng pointA, LatLng pointB) {
-        // Simple formula for close-by points
-        return Math.toDegrees( Math.atan2(pointB.latitude-pointA.latitude,
-                (pointB.longitude- pointA.longitude)*Math.cos(Math.toRadians(pointA.latitude))));
-    }
+    // 1° 纬度/经度 对应的米数（WGS84 椭球模型下）
+    private static final double DEGREE_IN_M = 111111.0;
+    private static final int MAX_SIZE = 512;  // 限制最大 Bitmap 尺寸，防止 OOM
 
     /**
-     * Calculate new coordinates based on net distance moved in PDR
-     * (as per WGS84 datum)
-     * @param initialLocation Current Location of user
-     * @param pdrMoved Amount of movement along X and Y
-     * @return new Coordinates based on the movement
+     * 根据 PDR（行人航位推算）计算新的地理位置
+     *
+     * @param initialLocation 用户当前的 GPS 位置
+     * @param pdrMoved PDR 计算的 (X, Y) 移动量（单位: 米）
+     * @return 计算后的新坐标 `LatLng`
+     * @throws IllegalArgumentException 如果 `initialLocation` 为空，或者 `pdrMoved` 长度不足 2
      */
-    public static LatLng calculateNewPos(LatLng initialLocation,float[] pdrMoved){
-        // Changes Euclidean movement into maps latitude and longitude as per WGS84 datum
-        double newLatitude=initialLocation.latitude+(pdrMoved[1]/(DEGREE_IN_M));
-        double newLongitude=initialLocation.longitude+(pdrMoved[0]/(DEGREE_IN_M))
-                *Math.cos(Math.toRadians(initialLocation.latitude));
+    public static LatLng calculateNewPos(final LatLng initialLocation, final float[] pdrMoved) {
+        // 检查输入参数合法性
+        if (initialLocation == null)
+            throw new IllegalArgumentException("Initial location cannot be null");
+        if (pdrMoved == null || pdrMoved.length < 2)
+            throw new IllegalArgumentException("pdrMoved must be a float array of length 2");
+
+        // 计算新的纬度
+        double newLatitude = initialLocation.latitude + (pdrMoved[1] / DEGREE_IN_M);
+
+        // 计算新的经度（纬度越高，经度变化对实际距离影响越大，需要调整）
+        double newLongitude = initialLocation.longitude + (pdrMoved[0] / DEGREE_IN_M)
+                * Math.cos(Math.toRadians(initialLocation.latitude));
+
+        // 记录日志（可选）
+//        Log.d("UtilFunctions", "Moved from (" + initialLocation.latitude + ", " + initialLocation.longitude + ")"
+//                + " to (" + newLatitude + ", " + newLongitude + ")");
+
         return new LatLng(newLatitude, newLongitude);
     }
+
     /**
-     * Converts a degree value of Latitude into meters
-     * (as per WGS84 datum)
-     * @param degreeVal Value in degrees to convert to meters
-     * @return double corresponding to the value in meters.
+     * 将纬度的度数转换为米
+     * @param degreeVal 纬度值（单位：度）
+     * @return 对应的米数
      */
     public static double degreesToMetersLat(double degreeVal) {
-        return degreeVal*DEGREE_IN_M;
+        return degreeVal * DEGREE_IN_M;
     }
+
     /**
-     * Converts a degree value of Longitude into meters
-     * (as per WGS84 datum)
-     * @param degreeVal Value in degrees to convert to meters
-     * @param latitude the latitude of the current position
-     * @return double corresponding to the value in meters.
+     * 将经度的度数转换为米（需考虑纬度影响）
+     * @param degreeVal 经度值（单位：度）
+     * @param latitude 当前纬度
+     * @return 对应的米数
      */
     public static double degreesToMetersLng(double degreeVal, double latitude) {
-        return degreeVal*DEGREE_IN_M/Math.cos(Math.toRadians(latitude));
+        return degreeVal * DEGREE_IN_M / Math.cos(Math.toRadians(latitude));
     }
 
     /**
-     * Calculates the distance between two LatLng points A and B (in meters)
-     * (Note: approximation: for short distances)
-     * @param pointA initial point
-     * @param pointB final point
-     * @return the distance between the two points
+     * 计算两点之间的球面距离（单位：米）
+     * 使用 Haversine 公式以获得更高精度
+     * @param pointA 起始点
+     * @param pointB 终点
+     * @return 两点之间的球面距离（单位：米）
+     * @throws IllegalArgumentException 如果 `pointA` 或 `pointB` 为空
      */
-    public static double distanceBetweenPoints(LatLng pointA, LatLng pointB){
-        return  Math.sqrt(Math.pow(degreesToMetersLat(pointA.latitude-pointB.latitude),2) +
-                Math.pow(degreesToMetersLng(pointA.longitude-pointB.longitude,pointA.latitude),2));
+    public static double distanceBetweenPoints(LatLng pointA, LatLng pointB) {
+        if (pointA == null || pointB == null)
+            throw new IllegalArgumentException("LatLng points cannot be null");
+
+        final double R = 6371000; // 地球半径（单位：米）
+        double lat1 = Math.toRadians(pointA.latitude);
+        double lat2 = Math.toRadians(pointB.latitude);
+        double deltaLat = Math.toRadians(pointB.latitude - pointA.latitude);
+        double deltaLon = Math.toRadians(pointB.longitude - pointA.longitude);
+
+        double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+                Math.cos(lat1) * Math.cos(lat2) *
+                        Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c; // 返回距离（单位：米）
     }
 
     /**
-     * Creates a bitmap from a vector
-     * @param context Context of activity being used
-     * @param vectorResourceID Resource id whose vector get converted to a Bitmap
-     * @return Bitmap of the resource vector
+     * 将 Vector Drawable 转换为 Bitmap
+     * @param context 应用的 `Context`
+     * @param vectorResourceID 矢量资源 ID
+     * @return 转换后的 `Bitmap`
+     * @throws IllegalArgumentException 如果 `context` 为空，或 `vectorResourceID` 无效
      */
     public static Bitmap getBitmapFromVector(Context context, int vectorResourceID) {
-        // Get drawable vector
+        // 检查参数合法性
+        if (context == null)
+            throw new IllegalArgumentException("Context cannot be null");
+
         Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResourceID);
-        // Bitmap created to draw the vector in
-        Bitmap bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
-        // Canvas to draw the bitmap on
+        if (vectorDrawable == null)
+            throw new IllegalArgumentException("Invalid vector resource ID: " + vectorResourceID);
+
+        // 确保 `width` 和 `height` 为正值
+        int width = vectorDrawable.getIntrinsicWidth() > 0 ? vectorDrawable.getIntrinsicWidth() : 100;
+        int height = vectorDrawable.getIntrinsicHeight() > 0 ? vectorDrawable.getIntrinsicHeight() : 100;
+
+        // 限制最大尺寸，防止 OOM
+        width = Math.min(width, MAX_SIZE);
+        height = Math.min(height, MAX_SIZE);
+
+        // 创建 Bitmap 并绘制矢量图
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        // Drawing on canvas
-        vectorDrawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        vectorDrawable.setBounds(0, 0, width, height);
         vectorDrawable.draw(canvas);
+
+        Log.d("UtilFunctions", "Bitmap created from vector ID: " + vectorResourceID +
+                " (Size: " + width + "x" + height + ")");
+
         return bitmap;
     }
 

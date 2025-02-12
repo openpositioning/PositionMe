@@ -6,15 +6,15 @@ import android.hardware.SensorManager;
 
 import androidx.preference.PreferenceManager;
 
-import com.openpositioning.PositionMe.sensors.SensorFusion;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.OptionalDouble;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
- * Processes data recorded in the {@link SensorFusion} class and calculates live PDR estimates.
+ * Processes data recorded in the {SensorFusion} class and calculates live PDR estimates.
  * It calculates the position from the steps and directions detected, using either estimated values
  * (eg. stride length from the Weiberg algorithm) or provided constants, calculates the elevation
  * and attempts to estimate the current floor as well as elevators.
@@ -220,14 +220,34 @@ public class PdrProcessing {
      * @return                  float stride length in meters.
      */
     private float weibergMinMax(List<Double> accelMagnitude) {
-        double maxAccel = Collections.max(accelMagnitude);
-        double minAccel = Collections.min(accelMagnitude);
-        float bounce = (float) Math.pow((maxAccel-minAccel), 0.25);
-        if(this.settings.getBoolean("overwrite_constants", false)) {
+        // if the list itself is null or empty, return 0 (or return other default values as needed)
+        if (accelMagnitude == null || accelMagnitude.isEmpty()) {
+            return 0f;
+        }
+
+        // filter out null values from the list
+        List<Double> validAccel = accelMagnitude.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        if (validAccel.isEmpty()) {
+            return 0f;
+        }
+
+        // calculate max and min values
+        double maxAccel = Collections.max(validAccel);
+        double minAccel = Collections.min(validAccel);
+
+        // calculate bounce
+        float bounce = (float) Math.pow((maxAccel - minAccel), 0.25);
+
+        // determine which constant to use based on settings
+        if (this.settings.getBoolean("overwrite_constants", false)) {
             return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
         }
-        return bounce*K*2;
+
+        return bounce * K * 2;
     }
+
 
     /**
      * Get the current X and Y coordinates from the PDR processing class.
@@ -276,12 +296,12 @@ public class PdrProcessing {
         // get horizontal and vertical acceleration magnitude
         float verticalAcc = (float) Math.sqrt(
                 Math.pow((acc[0] * gravity[0]/g),2) +
-                Math.pow((acc[1] * gravity[1]/g), 2) +
-                Math.pow((acc[2] * gravity[2]/g), 2));
+                        Math.pow((acc[1] * gravity[1]/g), 2) +
+                        Math.pow((acc[2] * gravity[2]/g), 2));
         float horizontalAcc = (float) Math.sqrt(
                 Math.pow((acc[0] * (1 - gravity[0]/g)), 2) +
-                Math.pow((acc[1] * (1 - gravity[1]/g)), 2) +
-                Math.pow((acc[2] * (1 - gravity[2]/g)), 2));
+                        Math.pow((acc[1] * (1 - gravity[1]/g)), 2) +
+                        Math.pow((acc[2] * (1 - gravity[2]/g)), 2));
         // Save into buffer to compare with past values
         this.verticalAccel.putNewest(verticalAcc);
         this.horizontalAccel.putNewest(horizontalAcc);
@@ -339,6 +359,8 @@ public class PdrProcessing {
         this.positionX = 0f;
         this.positionY = 0f;
         this.elevation = 0f;
+
+        this.setupIndex = 0; // to reset the elevation to 0, otherwise buffer would be full
 
         if(this.settings.getBoolean("overwrite_constants", false)) {
             // Capacity - pressure is read with 1Hz - store values of past 10 seconds

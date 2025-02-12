@@ -2,33 +2,39 @@ package com.openpositioning.PositionMe.fragments;
 
 import android.app.AlertDialog;
 import android.app.DownloadManager;
-import android.content.DialogInterface;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.cardview.widget.CardView;
 import androidx.fragment.app.Fragment;
-import androidx.navigation.NavDirections;
-import androidx.navigation.Navigation;
+
+import androidx.fragment.app.FragmentTransaction;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.ReplayDataProcessor;
 import com.openpositioning.PositionMe.ServerCommunications;
-import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.viewitems.TrajDownloadListAdapter;
+import com.openpositioning.PositionMe.viewitems.DownloadClickListener;
+import com.openpositioning.PositionMe.sensors.Observer;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -56,6 +62,7 @@ public class FilesFragment extends Fragment implements Observer {
     // Class handling HTTP communication
     private ServerCommunications serverCommunications;
 
+    private View view;
     /**
      * Default public constructor, empty.
      */
@@ -100,6 +107,7 @@ public class FilesFragment extends Fragment implements Observer {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        this.view = view;
         // Get recyclerview
         filesList = view.findViewById(R.id.filesList);
         // Get clickable card view
@@ -111,8 +119,12 @@ public class FilesFragment extends Fragment implements Observer {
              */
             @Override
             public void onClick(View view) {
-                NavDirections action = FilesFragmentDirections.actionFilesFragmentToUploadFragment();
-                Navigation.findNavController(view).navigate(action);
+                // Jump to UploadFragment
+                FragmentTransaction transaction = getParentFragmentManager().beginTransaction();
+                transaction.replace(R.id.fragment_container, new UploadFragment());
+                transaction.addToBackStack(null);
+                transaction.commit();
+
             }
         });
         // Request list of uploaded trajectories from the server.
@@ -174,6 +186,7 @@ public class FilesFragment extends Fragment implements Observer {
         }
         // Sort the list by the ID fields of the maps
         entryList.sort(Comparator.comparing(m -> Integer.parseInt(m.get("id")), Comparator.nullsLast(Comparator.naturalOrder())));
+        System.out.println("Entry list: " + entryList);
         return entryList;
     }
 
@@ -193,49 +206,111 @@ public class FilesFragment extends Fragment implements Observer {
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
 
-        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
-            System.out.println("Position: " + position);
-            Map targetFile = entryList.get(position);
-            int id = Integer.parseInt(targetFile.get("id").toString());
+        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, new DownloadClickListener() {
+            @Override
+            public void onPositionClicked(int position) {
+                // original button logic
+                System.out.println("Position: " + position);
+                Map targetFile = entryList.get(position);
+                int id = Integer.parseInt(targetFile.get("id").toString());
 
-            // Create and show a progress dialog using AlertDialog
-            AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-            builder.setTitle("Downloading");
-            builder.setMessage("Please wait while the trajectory is being downloaded...");
-            builder.setCancelable(false); // Prevent user from dismissing the dialog manually
+                // display download progress dialog
+                AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+                builder.setTitle("Downloading");
+                builder.setMessage("Please wait while the trajectory is being downloaded...");
+                builder.setCancelable(false);
+                AlertDialog progressDialog = builder.create();
+                progressDialog.show();
 
-            AlertDialog progressDialog = builder.create();
-            progressDialog.show(); // Show the progress dialog
+                serverCommunications.downloadTrajectory(id, new ServerCommunications.DownloadResultCallback() {
+                    @Override
+                    public void onResult(boolean success) {
+                        getActivity().runOnUiThread(() -> {
+                            progressDialog.dismiss();
+                            if (success) {
+                                new AlertDialog.Builder(getContext())
+                                        .setTitle("File downloaded")
+                                        .setMessage("Trajectory downloaded to local storage")
+                                        .setPositiveButton(R.string.ok, null)
+                                        .setNegativeButton(R.string.show_storage, (dialog, which) ->
+                                                startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)))
+                                        .setIcon(R.drawable.ic_baseline_download_24)
+                                        .show();
+                            } else {
+                                new AlertDialog.Builder(getContext())
+                                        .setTitle("Download Failed")
+                                        .setMessage("Trajectory download failed. Please try again.")
+                                        .setPositiveButton(R.string.ok, null)
+                                        .show();
+                            }
+                        });
+                    }
+                });
+            }
 
-            // Call downloadTrajectory with a callback
-            serverCommunications.downloadTrajectory(id, new ServerCommunications.DownloadResultCallback() {
-                @Override
-                public void onResult(boolean success) {
-                    // Run UI updates on the main thread
-                    getActivity().runOnUiThread(() -> {
-                        // Dismiss the progress dialog now that the download is complete
-                        progressDialog.dismiss();
+            @Override
+            public void onReplayClicked(int position) {
+                Map targetFile = entryList.get(position);
+                int id = Integer.parseInt(targetFile.get("id").toString());
+                System.out.println("Position: " + position);
 
-                        // Show the appropriate dialog based on the download result
-                        if (success) { // If the download was successful
-                            new AlertDialog.Builder(getContext())
-                                    .setTitle("File downloaded")
-                                    .setMessage("Trajectory downloaded to local storage")
-                                    .setPositiveButton(R.string.ok, null)
-                                    .setNegativeButton(R.string.show_storage, (dialog, which) ->
-                                            startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)))
-                                    .setIcon(R.drawable.ic_baseline_download_24)
-                                    .show();
-                        } else { // If the download failed
-                            new AlertDialog.Builder(getContext())
-                                    .setTitle("Download Failed")
-                                    .setMessage("Trajectory download failed. Please try again.")
-                                    .setPositiveButton(R.string.ok, null)
-                                    .show();
-                        }
-                    });
-                }
-            });
+                // display download progress dialog
+                AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+                builder.setTitle("Downloading");
+                builder.setMessage("Please wait while the trajectory is being downloaded...");
+                builder.setCancelable(false);
+                AlertDialog progressDialog = builder.create();
+                progressDialog.show();
+
+                serverCommunications.downloadTrajectory(id, new ServerCommunications.DownloadResultCallback() {
+                    @Override
+                    public void onResult(boolean success) {
+                        getActivity().runOnUiThread(() -> {
+                            progressDialog.dismiss();
+                            if (success) {
+                                // Determine storage directory (for Android versions)
+                                File storageDir = null;
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    storageDir = requireContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                                    if (storageDir == null) {
+                                        storageDir = requireContext().getFilesDir();
+                                    }
+                                } else {
+                                    storageDir = requireContext().getFilesDir();
+                                }
+                                File localFile = new File(storageDir, "received_trajectory" + ".txt");
+                                String path = localFile.getAbsolutePath();
+                                System.out.println("Replaying trajectory with path: " + path);
+                                Traj.Trajectory trajectory = ReplayDataProcessor.protoDecoder(localFile);
+                                if (trajectory == null) {
+                                    System.out.println("Replaying failed");
+                                    Toast.makeText(getContext(), "Trajectory empty, cannot invoke replay!", Toast.LENGTH_SHORT).show();
+                                    return;
+                                }
+
+                                Toast.makeText(getContext(), "file downloaded, initiating replay", Toast.LENGTH_SHORT).show();
+                                ReplayDataProcessor.TrajRecorder replayTraj =
+                                        ReplayDataProcessor.TrajRecorder.getInstance();
+
+                                replayTraj.setReplayFile(trajectory);
+
+                                // Jump to ReplayTrajFragment
+                                FragmentTransaction transaction = getParentFragmentManager().beginTransaction();
+                                transaction.replace(R.id.fragment_container, new ReplayTrajFragment());
+                                transaction.addToBackStack(null);
+                                transaction.commit();
+                            } else {
+                                new AlertDialog.Builder(getContext())
+                                        .setTitle("Download Failed")
+                                        .setMessage("Trajectory download failed, cannot replay trajectory. Please try again.")
+                                        .setPositiveButton(R.string.ok, null)
+                                        .show();
+                            }
+                        });
+                    }
+                });
+
+            }
         });
 
         filesList.setAdapter(listAdapter);

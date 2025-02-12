@@ -1,180 +1,102 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".fragments.RecordingFragment">
-    <androidx.fragment.app.FragmentContainerView
-        android:id="@+id/RecordingMap"
+    tools:context=".fragment.RecordingFragment"
+    android:background="@android:color/white">
+
+    <!-- 🟦 顶部消息栏 -->
+    <LinearLayout
+        android:id="@+id/status_bar"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="@android:color/holo_blue_dark"
+        android:padding="10dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_elevation"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Elevation: %1s"
+                android:textColor="@android:color/white"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:id="@+id/tv_distance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Distance travelled:%1s"
+                android:textColor="@android:color/white"
+                android:textStyle="bold"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_gnss_error"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="GNSS error:%1s"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"/>
+    </LinearLayout>
+
+    <!-- 🗺️ Google Map -->
+    <fragment
+        android:id="@+id/map_fragment"
         android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        tools:context=".MapsActivity" />
+        android:layout_height="0dp"
+        android:layout_below="@id/status_bar"
+        android:layout_above="@id/control_panel" />
 
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        tools:ignore="ExtraText">
-
-        <Switch
-            android:id="@+id/autoFloor"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginStart="292dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/rounded_corner_pastel_blue"
-            android:buttonTint="@android:color/holo_green_dark"
-            android:text="@string/auto_floor"
-            android:textColor="@color/black"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
-
-        <Button
-            android:id="@+id/stopButton"
-            android:layout_width="150dp"
-            android:layout_height="70dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="4dp"
-            android:text="@string/stop"
-            android:textSize="24sp"
-            android:background="@drawable/rounded_button"
-            app:icon="@drawable/ic_baseline_stop_24"
-            app:iconGravity="start"
-            app:iconSize="30dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
-
-        <Button
-            android:id="@+id/cancelButton"
-            android:layout_width="150dp"
-            android:layout_height="70dp"
-            android:layout_marginStart="16dp"
-            android:layout_marginBottom="4dp"
-            android:text="@string/cancel"
-            android:textSize="16sp"
-            android:background="@drawable/rounded_button"
-            app:icon="@drawable/ic_baseline_cancel_24"
-            app:iconGravity="start"
-            app:iconSize="28dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
-
-        <ProgressBar
-            android:id="@+id/timeRemainingBar"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="8dp"
-            android:elevation="2sp"
-            android:max="1800"
-            android:progress="0"
-            app:layout_constraintBottom_toTopOf="@+id/stopButton"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
-
-        <androidx.cardview.widget.CardView
-            android:id="@+id/currentPositionCard"
-            android:layout_width="411dp"
-            android:layout_height="60dp"
-            android:layout_marginTop="2dp"
-            app:cardBackgroundColor="@color/pastelBlue"
-            app:cardCornerRadius="20dp"
-            app:cardElevation="8dp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent">
-
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:layout_width="357dp"
-                android:layout_height="81dp"
-                android:layout_marginTop="4dp"
-                android:layout_marginEnd="52dp"
-                app:layout_constraintEnd_toEndOf="@+id/currentPositionCard"
-                app:layout_constraintTop_toTopOf="parent">
-
-                <TextView
-                    android:id="@+id/currentElevation"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginTop="2dp"
-                    android:text="@string/elevation"
-                    android:textColor="@color/LightYellow"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
-
-                <TextView
-                    android:id="@+id/currentDistanceTraveled"
-                    android:layout_width="wrap_content"
-                    android:layout_height="24dp"
-                    android:layout_marginStart="4dp"
-                    android:layout_marginTop="20dp"
-                    android:text="@string/meter"
-                    android:textColor="@color/LightYellow"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    app:layout_constraintStart_toEndOf="@+id/distanceTravelledTitle"
-                    app:layout_constraintTop_toTopOf="parent" />
-
-                <TextView
-                    android:id="@+id/distanceTravelledTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:text="@string/distance_travelled"
-                    android:textColor="@color/LightYellow"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="0.05"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="@+id/currentElevation" />
-
-                <TextView
-                    android:id="@+id/gnssError"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="16dp"
-                    android:layout_marginBottom="28dp"
-                    android:text="@string/gnss_error"
-                    android:textColor="@color/LightYellow"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    app:layout_constraintBottom_toBottomOf="@+id/currentDistanceTraveled"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="1.0"
-                    app:layout_constraintStart_toEndOf="@+id/currentElevation" />
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
-
-            <ImageView
-                android:id="@+id/redDot"
-                android:layout_width="48dp"
-                android:layout_height="43dp"
-                android:layout_marginStart="350dp"
-                android:layout_marginTop="6dp"
-                android:contentDescription="@string/recording"
-                android:src="@drawable/ic_baseline_red_dot_24" />
-
-
-        </androidx.cardview.widget.CardView>
-
+    <!-- 📌 左侧控件：地图模式切换 & GNSS 开关 -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_below="@id/status_bar"
+        android:orientation="vertical"
+        android:layout_marginTop="10dp">
 
         <Spinner
-            android:id="@+id/mapSwitchSpinner"
+            android:id="@+id/spinner_map_type"
+            android:layout_width="150dp"
+            android:layout_height="40dp"
+            android:background="@android:color/white"
+            android:padding="5dp"/>
+
+        <Switch
+            android:id="@+id/switch_gnss"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="68dp"
-            android:background="@color/white"
-            android:spinnerMode="dropdown"
-            android:text="@string/choose_map"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            android:layout_height="wrap_content"
+            android:text="GNSS"/>
+    </LinearLayout>
+
+    <!-- 📌 右侧控件：Auto Floor 开关 & 楼层增减按钮 -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_below="@id/status_bar"
+        android:layout_marginEnd="10dp"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <Switch
+            android:id="@+id/switch_auto_floor"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Auto Floor"
+            android:visibility="gone"/>
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
@@ -182,12 +104,13 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="32dp"
             android:clickable="true"
-            android:contentDescription="@string/floor_up_button"
+            android:contentDescription="floor_up_button"
             android:src="@android:drawable/arrow_up_float"
             app:layout_constraintBottom_toTopOf="@+id/floorDownButton"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.954"
-            app:layout_constraintStart_toStartOf="parent" />
+            app:layout_constraintStart_toStartOf="parent"
+            android:visibility="gone"/>
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton"
@@ -195,39 +118,50 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="296dp"
             android:clickable="true"
-            android:contentDescription="@string/floor_down_button"
+            android:contentDescription="floor_down_button"
             android:src="@android:drawable/arrow_down_float"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.954"
-            app:layout_constraintStart_toStartOf="parent" />
-
-        <Switch
-            android:id="@+id/gnssSwitch"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/rounded_corner_pastel_blue"
-            android:buttonTint="@android:color/holo_green_dark"
-            android:text="@string/gnssSwitch"
-            android:textColor="@color/black"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
+            android:visibility="gone"/>
+    </LinearLayout>
+
+    <!-- 🎮 底部控制面板 -->
+    <LinearLayout
+        android:id="@+id/control_panel"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:layout_marginBottom="80dp"
+        android:layout_alignParentBottom="true"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:background="@android:color/white"
+        android:padding="10dp">
 
         <Button
-            android:id="@+id/lineColorButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="244dp"
-            android:layout_marginTop="2dp"
-            android:text="@string/color"
-            android:background="@drawable/rounded_button_black"
-            android:backgroundTint="@color/black"
-            app:layout_constraintStart_toEndOf="@+id/mapSwitchSpinner"
-            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
+            android:id="@+id/button_start"
+            android:layout_width="150dp"
+            android:layout_height="match_parent"
+            android:text="START"
+            android:background="@android:color/holo_blue_dark"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:drawableLeft="@drawable/start" />
 
+        <View
+            android:layout_width="20dp"
+            android:layout_height="match_parent"/>
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+        <Button
+            android:id="@+id/button_stop"
+            android:layout_width="150dp"
+            android:layout_height="60dp"
+            android:text="STOP"
+            android:background="@android:color/holo_blue_dark"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:drawableLeft="@drawable/stop" />
+    </LinearLayout>
+</RelativeLayout>
 
-</FrameLayout>
