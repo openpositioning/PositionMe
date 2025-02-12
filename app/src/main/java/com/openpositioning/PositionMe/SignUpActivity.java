@@ -43,6 +43,7 @@ public class SignUpActivity extends AppCompatActivity {
         setContentView(R.layout.activity_sign_up);
 
         // 绑定 UI 组件
+        // Bind UI components
         usernameEditText = findViewById(R.id.username);
         emailEditText = findViewById(R.id.email);
         passwordEditText = findViewById(R.id.password);
@@ -50,12 +51,14 @@ public class SignUpActivity extends AppCompatActivity {
         signUpButton = findViewById(R.id.create);
 
         // 初始化 Firebase Authentication 和 Database
+        // Initialize Firebase Authentication and Database
         mAuth = FirebaseAuth.getInstance();
         databaseReference = FirebaseDatabase.getInstance(
                 "https://livelink-f37f6-default-rtdb.europe-west1.firebasedatabase.app"
         ).getReference("Users");
 
         // 注册按钮点击事件
+        // Register button click event
         signUpButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -92,12 +95,14 @@ public class SignUpActivity extends AppCompatActivity {
         }
 
         // **先在 Firebase 认证创建用户**
+        // **Create a user in Firebase authentication first**
         mAuth.createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
                             // 发送 Email 验证邮件
+                            //Send Email verification email
                             user.sendEmailVerification()
                                     .addOnCompleteListener(emailTask -> {
                                         if (emailTask.isSuccessful()) {
@@ -108,6 +113,7 @@ public class SignUpActivity extends AppCompatActivity {
                                     });
 
                             // **Firebase 账号创建成功后，调用 `signUpUser()` 获取 `userKey`**
+                            // **After the Firebase account is successfully created, call `signUpUser()` to get `userKey`**
                             signUpUser(user.getUid(), username, email, mobile, password);
                         }
                     } else {
@@ -122,6 +128,7 @@ public class SignUpActivity extends AppCompatActivity {
 
     /**
      * 发送 `signup` API 请求，并获取 `userKey`
+     * Send a `signup` API request and get `userKey`
      */
     private void signUpUser(String userId, String username, String email, String mobile, String password) {
         OkHttpClient client = new OkHttpClient();
@@ -176,27 +183,31 @@ public class SignUpActivity extends AppCompatActivity {
 
     /**
      * 存储完整用户信息 (username, email, mobile, userKey) 到 Firebase
+     * Store complete user information (username, email, mobile, userKey) to Firebase
      */
     private void saveUserData(String userId, String username, String email, String mobile, String userKey) {
         if (userKey == null) {
             Log.e("SignUpActivity", "UserKey is null!");
-            userKey = "9H8m_SU8K3xojnCD4iPobg";  // 默认值
+            userKey = BuildConfig.OPENPOSITIONING_API_KEY;
             return;
         }
         // 创建 User 对象
+        // Create a User object
         User user = new User(username, email, mobile, userKey);
 
         // 存储数据到 Firebase
+        // Store data in Firebase
         databaseReference.child(userId).setValue(user)
                 .addOnCompleteListener(task -> {
                     if (task.isSuccessful()) {
                         Log.d("SignUpActivity", "User data and userKey saved to Firebase.");
 
                         // **存储成功后，再跳转 SignInActivity**
+                        // **After successful storage, jump to SignInActivity**
                         Intent intent = new Intent(SignUpActivity.this, SignInActivity.class);
                         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                         startActivity(intent);
-                        finish();  // 关闭当前 Activity
+                        finish();  // 关闭当前 Activity Close the current Activity
                     } else {
                         Log.e("SignUpActivity", "Failed to save user data: " + task.getException().getMessage());
                     }

@@ -18,4 +18,7 @@
     <color name="darkLogoBlue">#FF001080</color>
     <color name="primaryBlue">#FF001080</color>
     <color name="red">#FE0000</color>
+    <color name="dark_red">#8B0000</color>
+    <color name="green">#00FF00</color>
+    <color name="unified_purple">#F0A6E8</color>
 </resources>

@@ -69,17 +69,43 @@ public class ServerCommunications implements Observable {
     private List<Observer> observers;
 
     // Static constants necessary for communications
-    private static String userKey = null;
     private final FirebaseAuth mAuth;
     private final DatabaseReference databaseReference;
-    private static final String masterKey = "ewireless";
+
+//    private static final String masterKey = "ewireless";
+    private static String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
     private static String uploadURL;
     private static String downloadURL;
     private static String infoRequestURL;
+
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
 
+    // 用于存储 userKey 的静态变量（如果你希望 userKey 在多个实例间共享）
+    // Static variable for storing userKey (if you want userKey to be shared between multiple instances)
+    private static String userKey;
 
+    // 定义 URL 初始化完成后的回调接口
+    // Define the callback interface after URL initialization is completed
+    public interface URLInitializedListener {
+        void onURLInitialized();
+    }
+
+    // 用来存储注册的回调监听器
+    // Used to store registered callback listeners
+    private URLInitializedListener urlInitializedListener;
+
+    // Setter 方法，用于注册回调监听器
+    // Setter method, used to register callback listener
+    public void setURLInitializedListener(URLInitializedListener listener) {
+        this.urlInitializedListener = listener;
+    }
+
+    // 提供一个 getter 以便外部获取 userKey（如果需要）
+    // Provide a getter to obtain userKey externally (if necessary)
+    public String getUserKey() {
+        return userKey;
+    }
 
     /**
      * Public default constructor of {@link ServerCommunications}. The constructor saves context,
@@ -93,14 +119,15 @@ public class ServerCommunications implements Observable {
         mAuth = FirebaseAuth.getInstance();
         databaseReference = FirebaseDatabase.getInstance().getReference();
 
-//        // 同步获取 userKey，赋值给 final 变量
-//        fetchUserKey();
+        // 开始获取 userKey
+        // Start getting userKey
+        Log.e("Start fetching userKey", "Start fetching userKey");
+        fetchUserKey();
 
         // use the default key and URL
-        userKey = "9H8m_SU8K3xojnCD4iPobg";
-        uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
-        downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=30&key=" + masterKey;
-        infoRequestURL = "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
+//        uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
+//        downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=30&key=" + masterKey;
+//        infoRequestURL = "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
 
         this.context = context;
         this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -111,29 +138,37 @@ public class ServerCommunications implements Observable {
 
         this.observers = new ArrayList<>();
 
-        Log.e("userKey", userKey);
     }
 
-    // 获取 userKey 并更新 URL
     private void fetchUserKey() {
         FirebaseUser user = mAuth.getCurrentUser();
         if (user != null) {
             String uid = user.getUid();
-            DatabaseReference userRef = databaseReference.child("users").child(uid).child("userKey");
+            Log.d("uid", uid);
+            FirebaseDatabase database = FirebaseDatabase.getInstance("https://livelink-f37f6-default-rtdb.europe-west1.firebasedatabase.app");
+            DatabaseReference userRef = database.getReference().child("Users").child(uid).child("userKey");
+            Log.d("userRef", userRef.toString());
 
+            // 使用一次性事件监听器
+            // Using a one-time event listener
             userRef.addListenerForSingleValueEvent(new ValueEventListener() {
                 @Override
                 public void onDataChange(DataSnapshot snapshot) {
+                    Log.d("ServerCommunications", "onDataChange called, snapshot.exists(): " + snapshot.exists());
                     if (snapshot.exists()) {
                         userKey = snapshot.getValue(String.class);
-                        initializeURLs(); // userKey 获取到后，初始化 URL
+                        Log.d("ServerCommunications", "Fetched userKey: " + userKey);
+                        initializeURLs();
+                        if (urlInitializedListener != null) {
+                            urlInitializedListener.onURLInitialized();
+                        }
                     } else {
-                        // use the default key and URL
-                        userKey = "9H8m_SU8K3xojnCD4iPobg";
-                        uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
-                        downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=30&key=" + masterKey;
-                        infoRequestURL = "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
-                        System.out.println("userKey 不存在, 使用默认 key: " + userKey);
+                        Log.d("ServerCommunications", "userKey does not exist, using default key.");
+                        userKey = BuildConfig.OPENPOSITIONING_API_KEY;
+                        initializeURLs();
+                        if (urlInitializedListener != null) {
+                            urlInitializedListener.onURLInitialized();
+                        }
                     }
                 }
 
@@ -147,7 +182,6 @@ public class ServerCommunications implements Observable {
         }
     }
 
-    // 当 userKey 获取到后，初始化 URL
     private static void initializeURLs() {
         if (userKey != null) {
             uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
@@ -158,6 +192,7 @@ public class ServerCommunications implements Observable {
             System.err.println("userKey 为空，URL 无法初始化");
         }
     }
+
 
     /**
      * Outgoing communication request with a {@link Traj trajectory} object. The recorded
@@ -262,6 +297,8 @@ public class ServerCommunications implements Observable {
                         }
                         // Print a confirmation of a successful POST to API
                         System.out.println("Successful post response: " + responseBody.string());
+                        new Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(context, "Trajectory Upload Successful!", Toast.LENGTH_SHORT).show());
 
                         // Delete local file and set success to true
                         success = file.delete();
@@ -498,6 +535,11 @@ public class ServerCommunications implements Observable {
     public void sendInfoRequest() {
         // Create a new OkHttpclient
         OkHttpClient client = new OkHttpClient();
+
+        Log.e("masterKey", masterKey);
+        Log.e("uploadURL", uploadURL);
+        Log.e("downloadURL", downloadURL);
+        Log.e("infoRequestURL", infoRequestURL);
 
         if (infoRequestURL == null) {
             System.err.println("infoRequestURL 尚未初始化，无法发送请求");
