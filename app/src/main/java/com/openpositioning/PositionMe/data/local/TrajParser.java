@@ -199,61 +199,58 @@ public class TrajParser {
 
         return result;
     }
-
-    /** Parses IMU data from JSON. */
-    private static List<ImuRecord> parseImuData(JsonArray imuArray) {
-        List<ImuRecord> imuList = new ArrayList<>();
-        if (imuArray == null) return imuList;
-        Gson gson = new Gson();
-        for (int i = 0; i < imuArray.size(); i++) {
-            ImuRecord record = gson.fromJson(imuArray.get(i), ImuRecord.class);
-            imuList.add(record);
-        }
-        return imuList;
+/** Parses IMU data from JSON. */
+private static List<ImuRecord> parseImuData(JsonArray imuArray) {
+    List<ImuRecord> imuList = new ArrayList<>();
+    if (imuArray == null) return imuList;
+    Gson gson = new Gson();
+    for (int i = 0; i < imuArray.size(); i++) {
+        ImuRecord record = gson.fromJson(imuArray.get(i), ImuRecord.class);
+        imuList.add(record);
     }
-
-    private static List<PdrRecord> parsePdrData(JsonArray pdrArray) {
-        List<PdrRecord> pdrList = new ArrayList<>();
-        if (pdrArray == null) return pdrList;
-        Gson gson = new Gson();
-        for (int i = 0; i < pdrArray.size(); i++) {
-            PdrRecord record = gson.fromJson(pdrArray.get(i), PdrRecord.class);
-            pdrList.add(record);
-        }
-        return pdrList;
+    return imuList;
+}/** Parses PDR data from JSON. */
+private static List<PdrRecord> parsePdrData(JsonArray pdrArray) {
+    List<PdrRecord> pdrList = new ArrayList<>();
+    if (pdrArray == null) return pdrList;
+    Gson gson = new Gson();
+    for (int i = 0; i < pdrArray.size(); i++) {
+        PdrRecord record = gson.fromJson(pdrArray.get(i), PdrRecord.class);
+        pdrList.add(record);
     }
-
-    private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
-        List<GnssRecord> gnssList = new ArrayList<>();
-        if (gnssArray == null) return gnssList;
-        Gson gson = new Gson();
-        for (int i = 0; i < gnssArray.size(); i++) {
-            GnssRecord record = gson.fromJson(gnssArray.get(i), GnssRecord.class);
-            gnssList.add(record);
-        }
-        return gnssList;
+    return pdrList;
+}/** Parses GNSS data from JSON. */
+private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
+    List<GnssRecord> gnssList = new ArrayList<>();
+    if (gnssArray == null) return gnssList;
+    Gson gson = new Gson();
+    for (int i = 0; i < gnssArray.size(); i++) {
+        GnssRecord record = gson.fromJson(gnssArray.get(i), GnssRecord.class);
+        gnssList.add(record);
     }
+    return gnssList;
+}/** Finds the closest IMU record to the given timestamp. */
+private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {
+    return imuList.stream().min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp)))
+            .orElse(null);
 
-    private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {
-        return imuList.stream().min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp)))
-                .orElse(null);
-    }
+}/** Finds the closest GNSS record to the given timestamp. */
+private static GnssRecord findClosestGnssRecord(List<GnssRecord> gnssList, long targetTimestamp) {
+    return gnssList.stream().min(Comparator.comparingLong(gnss -> Math.abs(gnss.relativeTimestamp - targetTimestamp)))
+            .orElse(null);
 
-    private static GnssRecord findClosestGnssRecord(List<GnssRecord> gnssList, long targetTimestamp) {
-        return gnssList.stream().min(Comparator.comparingLong(gnss -> Math.abs(gnss.relativeTimestamp - targetTimestamp)))
-                .orElse(null);
-    }
+}/** Computes the orientation from a rotation vector. */
+private static float computeOrientationFromRotationVector(float rx, float ry, float rz, float rw, Context context) {
+    float[] rotationVector = new float[]{rx, ry, rz, rw};
+    float[] rotationMatrix = new float[9];
+    float[] orientationAngles = new float[3];
 
-    private static float computeOrientationFromRotationVector(float rx, float ry, float rz, float rw, Context context) {
-        float[] rotationVector = new float[]{rx, ry, rz, rw};
-        float[] rotationMatrix = new float[9];
-        float[] orientationAngles = new float[3];
+    SensorManager sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+    SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVector);
+    SensorManager.getOrientation(rotationMatrix, orientationAngles);
 
-        SensorManager sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
-        SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVector);
-        SensorManager.getOrientation(rotationMatrix, orientationAngles);
+    float azimuthDeg = (float) Math.toDegrees(orientationAngles[0]);
+    return azimuthDeg < 0 ? azimuthDeg + 360.0f : azimuthDeg;
+}
 
-        float azimuthDeg = (float) Math.toDegrees(orientationAngles[0]);
-        return azimuthDeg < 0 ? azimuthDeg + 360.0f : azimuthDeg;
-    }
 }
