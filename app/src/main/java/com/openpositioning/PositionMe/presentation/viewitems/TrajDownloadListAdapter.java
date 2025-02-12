@@ -66,16 +66,14 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         this.context = context;
         this.responseItems = responseItems;
         this.listener = listener;
-        loadDownloadRecords();
     }
 
     private void loadDownloadRecords() {
         try {
             File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
-            if (file.exists()) {
-                long currentSize = file.length();
-                lastFileSize = currentSize;
+            System.out.println("laigan File exists: " + file.exists() + ", Size: " + file.length());
 
+            if (file.exists()) {
                 StringBuilder jsonBuilder = new StringBuilder();
                 try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
                     String line;
@@ -83,21 +81,40 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                         jsonBuilder.append(line);
                     }
                 }
+
                 JSONObject jsonObject = new JSONObject(jsonBuilder.toString());
                 Iterator<String> keys = jsonObject.keys();
                 ServerCommunications.downloadRecords.clear();
+
                 while (keys.hasNext()) {
                     String key = keys.next();
-                    ServerCommunications.downloadRecords.put(Long.parseLong(key), jsonObject.getString(key));
-                }
-                System.out.println("✅ Download records loaded: " + ServerCommunications.downloadRecords);
+                    System.out.println("laigan Processing key: " + key);
 
+                    try {
+                        JSONObject recordDetails = jsonObject.getJSONObject(key);
+
+                        // 检查 id 是否存在，如果不存在则使用 key 作为 id
+                        String id = recordDetails.has("id") ? recordDetails.getString("id") : key;
+
+                        // 保存到 downloadRecords
+                        ServerCommunications.downloadRecords.put(id, recordDetails);
+                        System.out.println("laigan Added record with id: " + id);
+                    } catch (Exception e) {
+                        System.err.println("laigan Error processing key: " + key);
+                        e.printStackTrace();
+                    }
+                }
+
+                // 刷新 UI（在遍历完成后调用）
                 new Handler(Looper.getMainLooper()).post(this::notifyDataSetChanged);
+                System.out.println("laigan Finished loading download records."+ServerCommunications.downloadRecords);
             }
         } catch (Exception e) {
+            System.err.println("laigan Error loading download records:");
             e.printStackTrace();
         }
     }
+
 
     /**
      * {@inheritDoc}
@@ -139,9 +156,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
         boolean matched = false;
         String filePath = null;
-        for (Map.Entry<Long, String> entry : ServerCommunications.downloadRecords.entrySet()) {
+        for (Map.Entry<String, JSONObject> entry : ServerCommunications.downloadRecords.entrySet()) {
             try {
-                JSONObject recordDetails = new JSONObject(entry.getValue());
+                JSONObject recordDetails = new JSONObject(entry.getValue().toString());
                 String recordId = recordDetails.getString("id").trim();
 
                 if (recordId.equals(id.trim())) {
@@ -195,9 +212,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         return responseItems.size();
     }
 
-    public void refreshDownloadRecords() {
-        loadDownloadRecords();
-    }
 
     private void setButtonState(MaterialButton button, boolean isMatched) {
         if (isMatched) {

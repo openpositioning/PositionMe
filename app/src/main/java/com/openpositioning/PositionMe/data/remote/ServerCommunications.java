@@ -85,7 +85,7 @@ import com.openpositioning.PositionMe.data.remote.TrajectoryFileHandler;
  * @author Mate Stodulka
  */
 public class ServerCommunications implements Observable {
-    public static Map<Long, String> downloadRecords = new HashMap<>();
+    public static Map<String, JSONObject> downloadRecords = new HashMap<>();
     // Application context for handling permissions and devices
     private final Context context;
 
@@ -353,9 +353,14 @@ public class ServerCommunications implements Observable {
                 JSONObject jsonObject = new JSONObject(json.toString());
                 for (Iterator<String> it = jsonObject.keys(); it.hasNext(); ) {
                     String key = it.next();
-                    long timestamp = Long.parseLong(key);
-                    String record = jsonObject.getJSONObject(key).toString();
-                    downloadRecords.put(timestamp, record);
+                    try {
+                        JSONObject record = jsonObject.getJSONObject(key);
+                        String id = record.getString("id");  // 获取 id 作为新 key
+                        downloadRecords.put(id, record);
+                    } catch (Exception e) {
+                        System.err.println("Error loading record with key: " + key);
+                        e.printStackTrace();
+                    }
                 }
 
                 System.out.println("Loaded downloadRecords: " + downloadRecords);
@@ -407,11 +412,12 @@ public class ServerCommunications implements Observable {
             // Create the new record details
             JSONObject recordDetails = new JSONObject();
             recordDetails.put("file_name", fileName);
-            recordDetails.put("id", id);
+            recordDetails.put("startTimeStamp", startTimestamp);
             recordDetails.put("date_submitted", dateSubmitted);
+            recordDetails.put("id", id);
 
             // Insert or update in the main JSON
-            jsonObject.put(String.valueOf(startTimestamp), recordDetails);
+            jsonObject.put(id, recordDetails);  // 使用 id 作为 key
 
             // Write updated JSON to file
             try (FileWriter writer = new FileWriter(recordsFile)) {
