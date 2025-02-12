@@ -1,64 +1,117 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/replayFragmentLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     tools:context=".fragments.ReplayFragment">
 
-    <!-- 地图视图，占满屏幕剩余空间 -->
-    <com.google.android.gms.maps.MapView
-        android:id="@+id/mapView"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-
-    <!-- 按钮控制区域 -->
+    <!-- 主体内容：地图、播放控制和进度条 -->
     <LinearLayout
-        android:id="@+id/controlLayout"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:padding="8dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <Button
-            android:id="@+id/btnPlayPause"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Play" />
+        <!-- 地图视图，占满剩余空间 -->
+        <com.google.android.gms.maps.MapView
+            android:id="@+id/mapView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
 
-        <Button
-            android:id="@+id/btnRestart"
-            android:layout_width="wrap_content"
+        <!-- 播放控制按钮区域 -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Restart"
-            android:layout_marginStart="8dp" />
+            android:orientation="horizontal"
+            android:gravity="center">
 
-        <Button
-            android:id="@+id/btnGoToEnd"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Go To End"
-            android:layout_marginStart="8dp" />
+            <Button
+                android:id="@+id/btnPlayPause"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Play" />
 
-        <Button
-            android:id="@+id/btnExit"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Exit"
-            android:layout_marginStart="8dp" />
+            <Button
+                android:id="@+id/btnRestart"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Restart"
+                android:layout_marginStart="8dp" />
+
+            <Button
+                android:id="@+id/btnGoToEnd"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Go To End"
+                android:layout_marginStart="8dp" />
+
+            <Button
+                android:id="@+id/btnExit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Exit"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <!-- 可拖动的进度条 -->
+        <SeekBar
+            android:id="@+id/progressBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
     </LinearLayout>
 
-    <!-- 进度条 -->
-    <ProgressBar
-        android:id="@+id/progressBar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
+    <!-- 楼层控制卡片：仅在支持室内地图的建筑内显示 -->
+    <!-- 使用 CardView 作为容器，放置在右下角 -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/floorControlCard"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="8dp"
-        android:max="100" />
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="10dp"
+        android:layout_marginBottom="80dp"
+        android:layout_marginTop="400dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="4dp">
 
-</LinearLayout>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/floorUpButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_marginStart="30dp"
+                android:contentDescription="@string/floor_up_button"
+                android:src="@android:drawable/arrow_up_float" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/floorDownButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="40dp"
+                android:layout_marginStart="30dp"
+                android:contentDescription="@string/floor_down_button"
+                android:src="@android:drawable/arrow_down_float" />
+
+            <Switch
+                android:id="@+id/autoFloor"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Auto Floor"
+                android:padding="8dp"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:checked="true"
+                android:layout_marginTop="8dp" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+</FrameLayout>

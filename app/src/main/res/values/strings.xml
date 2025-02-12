@@ -17,6 +17,8 @@
     <string name="show_storage">Show locally</string>
     <string name="setLocation">Set</string>
     <string name="cancel">Cancel</string>
+    <string name="floor_down">Floor Down</string>
+    <string name="floor_up">Floor Up</string>
 
     <!-- Sensors -->
     <string name="accelerometer">Accelerometer</string>
