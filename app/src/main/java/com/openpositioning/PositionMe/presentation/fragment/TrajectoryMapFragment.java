@@ -168,9 +168,11 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-            float elevationVal = sensorFusion.getElevation();
-            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-                    ,true);
+
+            //TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
+//            float elevationVal = sensorFusion.getElevation();
+//            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
+//                    ,true);
         });
 
         floorUpButton.setOnClickListener(v -> {
