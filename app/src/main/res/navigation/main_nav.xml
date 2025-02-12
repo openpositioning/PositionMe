@@ -7,17 +7,10 @@
 
     <fragment
         android:id="@+id/homeFragment"
-        android:name="com.openpositioning.PositionMe.fragments.HomeFragment"
-        android:label="HomeFragment
-"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.HomeFragment"
+        android:label="HomeFragment"
         tools:layout="@layout/fragment_home" >
-        <action
-            android:id="@+id/action_homeFragment_to_startLocationFragment"
-            app:destination="@id/startLocationFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
+        <!-- Removed the action to startLocationFragment because the recording flow is now in RecordingActivity. -->
         <action
             android:id="@+id/action_homeFragment_to_infoFragment"
             app:destination="@id/infoFragment"
@@ -31,7 +24,7 @@
             app:enterAnim="@anim/slide_in_right"
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right"/>
+            app:popExitAnim="@anim/slide_out_right" />
         <action
             android:id="@+id/action_homeFragment_to_filesFragment"
             app:destination="@id/filesFragment"
@@ -40,68 +33,34 @@
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
     </fragment>
+
     <fragment
         android:id="@+id/settingsFragment"
-        android:name="com.openpositioning.PositionMe.fragments.SettingsFragment"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.SettingsFragment"
         android:label="SettingsFragment" >
         <action
             android:id="@+id/action_settingsFragment_to_homeFragment"
             app:destination="@id/homeFragment" />
     </fragment>
-    <fragment
-        android:id="@+id/startLocationFragment"
-        android:name="com.openpositioning.PositionMe.fragments.StartLocationFragment"
-        android:label="fragment_startLocation"
-        tools:layout="@layout/fragment_startlocation" >
-        <action
-            android:id="@+id/action_startLocationFragment_to_recordingFragment"
-            app:destination="@id/recordingFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
-    </fragment>
-    <fragment
-        android:id="@+id/recordingFragment"
-        android:name="com.openpositioning.PositionMe.fragments.RecordingFragment"
-        android:label="fragment_recording"
-        tools:layout="@layout/fragment_recording" >
-        <action
-            android:id="@+id/action_recordingFragment_to_correctionFragment"
-            app:destination="@id/correctionFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left" />
-        <action
-            android:id="@+id/action_recordingFragment_to_homeFragment"
-            app:destination="@id/homeFragment"
-            app:enterAnim="@anim/slide_in_left"
-            app:exitAnim="@anim/slide_out_right" />
-    </fragment>
+
+    <!-- The recording flow fragments have been removed since RecordingActivity now handles them. -->
+
     <fragment
         android:id="@+id/infoFragment"
-        android:name="com.openpositioning.PositionMe.fragments.InfoFragment"
-        android:label="fragment_info"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.InfoFragment"
+        android:label="InfoFragment"
         tools:layout="@layout/fragment_info" />
-    <fragment
-        android:id="@+id/correctionFragment"
-        android:name="com.openpositioning.PositionMe.fragments.CorrectionFragment"
-        android:label="fragment_correction"
-        tools:layout="@layout/fragment_correction" >
-        <action
-            android:id="@+id/action_correctionFragment_to_homeFragment"
-            app:destination="@id/homeFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left" />
-    </fragment>
+
     <fragment
         android:id="@+id/measurementsFragment"
-        android:name="com.openpositioning.PositionMe.fragments.MeasurementsFragment"
-        android:label="fragment_measurements"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment"
+        android:label="MeasurementsFragment"
         tools:layout="@layout/fragment_measurements" />
+
     <fragment
         android:id="@+id/filesFragment"
-        android:name="com.openpositioning.PositionMe.fragments.FilesFragment"
-        android:label="fragment_files"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.FilesFragment"
+        android:label="FilesFragment"
         tools:layout="@layout/fragment_files" >
         <action
             android:id="@+id/action_filesFragment_to_uploadFragment"
@@ -110,12 +69,14 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
-    </fragment><action android:id="@+id/action_global_correctionFragment" app:destination="@id/correctionFragment"/>
+    </fragment>
+
     <fragment
         android:id="@+id/uploadFragment"
-        android:name="com.openpositioning.PositionMe.fragments.UploadFragment"
-        android:label="fragment_upload"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.UploadFragment"
+        android:label="UploadFragment"
         tools:layout="@layout/fragment_upload" />
+
     <action
         android:id="@+id/action_global_settingsFragment"
         app:destination="@id/settingsFragment"
