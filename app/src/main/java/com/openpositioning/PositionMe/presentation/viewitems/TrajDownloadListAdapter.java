@@ -1,7 +1,8 @@
 package com.openpositioning.PositionMe.presentation.viewitems;
 
 import java.util.HashMap;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Iterator;
 import java.io.File;
 import java.io.FileReader;
@@ -41,11 +42,11 @@ import java.util.Map;
  * The download status is indicated via a button with different icons.
  * The adapter also listens for file changes using FileObserver to update the download records in real time.
  *
+ * A local set of "downloading" trajectory IDs is maintained to support simultaneous downloads.
+ *
  * @see TrajDownloadViewHolder for the corresponding view holder.
  * @see FilesFragment for details on how the data is generated.
  * @see ServerCommunications for where the response items are received.
- *
- * Author: Mate Stodulka (translated to English)
  */
 public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder> {
 
@@ -58,6 +59,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
     // FileObserver to monitor modifications to the "download_records.json" file.
     private FileObserver fileObserver;
+
+    // Set to keep track of trajectory IDs that are currently downloading.
+    private final Set<String> downloadingTrajIds = new HashSet<>();
 
     /**
      * Constructor for the adapter.
@@ -79,6 +83,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     /**
      * Loads the local download records from storage.
      * The records are stored in a JSON file located in the app-specific Downloads directory.
+     *
+     * After loading, any trajectory IDs that have now finished downloading are removed
+     * from the downloading set.
      */
     private void loadDownloadRecords() {
         try {
@@ -111,6 +118,10 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 }
 
                 System.out.println("Download records loaded: " + ServerCommunications.downloadRecords);
+
+                // Remove any IDs from the downloading set that are now present in the download records.
+                // This ensures the "downloading" state is removed when the download completes.
+                downloadingTrajIds.removeIf(id -> ServerCommunications.downloadRecords.containsKey(id));
 
                 // Refresh the RecyclerView UI on the main thread.
                 new Handler(Looper.getMainLooper()).post(() -> {
@@ -180,6 +191,11 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
      * Binds data to the view holder.
      * Formats and assigns trajectory metadata fields to the corresponding views.
      *
+     * The button state is determined as follows:
+     * - If the trajectory is present in the download records, it is set as "downloaded".
+     * - Else if the trajectory is in the downloading set, it is set as "downloading".
+     * - Otherwise, it is set as "not downloaded".
+     *
      * @param holder   The view holder to bind data to.
      * @param position The position of the item in the list.
      */
@@ -205,7 +221,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 )
         );
 
-        // Look up the download record from the HashMap for constant-time access.
+        // Determine if the trajectory is already downloaded by checking the records.
         JSONObject recordDetails = ServerCommunications.downloadRecords.get(id);
         boolean matched = recordDetails != null;
         String filePath = null;
@@ -222,8 +238,11 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        } else if (downloadingTrajIds.contains(id)) {
+            // If the item is still being downloaded, set the button state to "downloading".
+            setButtonState(holder.downloadButton, 2);
         } else {
-            // Set the button state to "not downloaded".
+            // Otherwise, the item is not downloaded.
             setButtonState(holder.downloadButton, 0);
         }
 
@@ -231,7 +250,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         final boolean finalMatched = matched;
         final String finalFilePath = filePath;
 
-        // Set the click listener for the download button based on the download status.
+        // Set the click listener for the download button.
         holder.downloadButton.setOnClickListener(v -> {
             String trajId = responseItems.get(position).get("id");
 
@@ -245,8 +264,11 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             } else {
                 // If the item is not downloaded, trigger the download action.
                 listener.onPositionClicked(position);
-                setButtonState(holder.downloadButton, 2); // Set button to "downloading" state.
-                // The FileObserver will automatically update the UI when the file changes.
+                // Mark the trajectory as downloading.
+                downloadingTrajIds.add(trajId);
+                // Immediately update the button state to "downloading".
+                setButtonState(holder.downloadButton, 2);
+                // The FileObserver will update the UI when the file changes.
             }
         });
 
