@@ -22,8 +22,8 @@ import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.protobuf.util.JsonFormat;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.sensors.Observer;
@@ -120,15 +120,14 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
-        // Note: The adapter expects a DownloadClickListener and a ReplayClickListener.
-        // FilesFragment implements ReplayClickListener and we assume onDownloadClicked is defined.
+        // The adapter expects a DownloadClickListener and a ReplayClickListener.
         listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, this::onDownloadClicked, this);
         filesList.setAdapter(listAdapter);
     }
 
     private void onDownloadClicked(int position) {
         serverCommunications.downloadTrajectory(position, fileName -> {
-
+            // Callback (if needed)
         });
         new AlertDialog.Builder(getContext())
                 .setTitle("File Downloaded")
@@ -142,8 +141,7 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
 
     @Override
     public void onReplayClick(int position) {
-        // 获取文件路径
-
+        // Download the trajectory file first
         final String[] trajectoryFileName = {null};
         CountDownLatch latch = new CountDownLatch(1);
 
@@ -153,21 +151,21 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
         });
 
         try {
-            latch.await(); // Wait for download to finish
+            latch.await(); // Wait for the download to finish
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
         File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), trajectoryFileName[0]);
 
-        // 检查文件是否存在
+        // Check if file exists
         if (!file.exists()) {
-            Log.e("FilesFragment", "Trajectory file not found!");
+            Log.e(TAG, "Trajectory file not found!");
             Toast.makeText(getContext(), "Trajectory file not found. Please download it first.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // 读取 JSON 文件内容
+        // Read the JSON file content
         StringBuilder jsonContent = new StringBuilder();
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
             String line;
@@ -175,129 +173,61 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
                 jsonContent.append(line);
             }
         } catch (IOException e) {
-            Log.e("FilesFragment", "Error reading trajectory file: " + e.getMessage());
+            Log.e(TAG, "Error reading trajectory file: " + e.getMessage());
             Toast.makeText(getContext(), "Error reading trajectory file.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // **测试是否可以正确读取文件**
-        Log.d("FilesFragment", "Trajectory file content: " + jsonContent.toString());
+        // Log the file content for testing
+        Log.d(TAG, "Trajectory file content: " + jsonContent.toString());
         Toast.makeText(getContext(), "Trajectory file read successfully!", Toast.LENGTH_SHORT).show();
 
-        // **解析 JSON 数据**
+        // Parse the JSON data into a Traj.Trajectory object
         Traj.Trajectory.Builder trajectoryBuilder = Traj.Trajectory.newBuilder();
         try {
             JsonFormat.parser().merge(jsonContent.toString(), trajectoryBuilder);
         } catch (IOException e) {
-            Log.e("FilesFragment", "Error parsing trajectory data: " + e.getMessage());
+            Log.e(TAG, "Error parsing trajectory data: " + e.getMessage());
             Toast.makeText(getContext(), "Error parsing trajectory data.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // **构建 `Trajectory` 对象**
+        // Build the Trajectory object
         Traj.Trajectory trajectory = trajectoryBuilder.build();
-        Log.d("FilesFragment", "Trajectory data successfully parsed!");
+        Log.d(TAG, "Trajectory data successfully parsed!");
 
-        // **提取数据**
+        // Extract GNSS (position) data
         List<LatLng> positionPoints = new ArrayList<>();
-        List<Traj.Motion_Sample> imuDataList = new ArrayList<>();
-        List<Traj.Pdr_Sample> pdrDataList = new ArrayList<>();
-        List<Traj.Pressure_Sample> pressureDataList = new ArrayList<>();
-        List<Traj.Light_Sample> lightDataList = new ArrayList<>();
-        List<Traj.GNSS_Sample> gnssDataList = new ArrayList<>();
-        List<Traj.WiFi_Sample> wifiDataList = new ArrayList<>();
-        List<Traj.AP_Data> apsDataList = new ArrayList<>();
-
-        // **提取 GNSS 数据 (真正的经纬度)**
         if (!trajectory.getGnssDataList().isEmpty()) {
             for (Traj.GNSS_Sample sample : trajectory.getGnssDataList()) {
-                double lat = sample.getLatitude();   // 纬度
-                double lng = sample.getLongitude();  // 经度
+                double lat = sample.getLatitude();
+                double lng = sample.getLongitude();
                 positionPoints.add(new LatLng(lat, lng));
             }
-            Log.d("FilesFragment", "GNSS data extracted successfully!");
+            Log.d(TAG, "GNSS data extracted successfully!");
         } else {
-            Log.e("FilesFragment", "No GNSS data found!");
+            Log.e(TAG, "No GNSS data found!");
         }
 
-        // **提取 IMU 传感器数据**
-        if (!trajectory.getImuDataList().isEmpty()) {
-            imuDataList.addAll(trajectory.getImuDataList());
-            Log.d("FilesFragment", "IMU data extracted successfully!");
-        } else {
-            Log.e("FilesFragment", "No IMU data found!");
-        }
+        // (Extract additional data if needed...)
 
-        // **提取 PDR 数据**
-        if (!trajectory.getPdrDataList().isEmpty()) {
-            pdrDataList.addAll(trajectory.getPdrDataList());
-            Log.d("FilesFragment", "PDR data extracted successfully!");
-        } else {
-            Log.e("FilesFragment", "No PDR data found!");
-        }
-
-        // **提取气压传感器数据**
-        if (!trajectory.getPressureDataList().isEmpty()) {
-            pressureDataList.addAll(trajectory.getPressureDataList());
-            Log.d("FilesFragment", "Pressure data extracted successfully!");
-        } else {
-            Log.e("FilesFragment", "No Pressure data found!");
-        }
-
-        // **提取光照传感器数据**
-        if (!trajectory.getLightDataList().isEmpty()) {
-            lightDataList.addAll(trajectory.getLightDataList());
-            Log.d("FilesFragment", "Light data extracted successfully!");
-        } else {
-            Log.e("FilesFragment", "No Light data found!");
-        }
-
-        // **提取 WiFi 采样数据**
-        if (!trajectory.getWifiDataList().isEmpty()) {
-            wifiDataList.addAll(trajectory.getWifiDataList());
-            Log.d("FilesFragment", "WiFi data extracted successfully!");
-        } else {
-            Log.e("FilesFragment", "No WiFi data found!");
-        }
-
-        // **提取 AP (WiFi) 数据**
-        if (!trajectory.getApsDataList().isEmpty()) {
-            apsDataList.addAll(trajectory.getApsDataList());
-            Log.d("FilesFragment", "AP data extracted successfully!");
-        } else {
-            Log.e("FilesFragment", "No AP data found!");
-        }
-
-        // **创建 Bundle 传输数据**
-        Bundle args = new Bundle();
-        args.putSerializable("trajectoryPoints", (ArrayList<LatLng>) positionPoints);
-        args.putSerializable("imuData", (ArrayList<Traj.Motion_Sample>) imuDataList);
-        args.putSerializable("pdrData", (ArrayList<Traj.Pdr_Sample>) pdrDataList);
-        args.putSerializable("pressureData", (ArrayList<Traj.Pressure_Sample>) pressureDataList);
-        args.putSerializable("lightData", (ArrayList<Traj.Light_Sample>) lightDataList);
-        args.putSerializable("gnssData", (ArrayList<Traj.GNSS_Sample>) gnssDataList);
-        args.putSerializable("wifiData", (ArrayList<Traj.WiFi_Sample>) wifiDataList);
-        args.putSerializable("apsData", (ArrayList<Traj.AP_Data>) apsDataList);
-        args.putLong("startTimestamp", trajectory.getStartTimestamp());
-        args.putString("dataIdentifier", trajectory.getDataIdentifier());
-
-        // **检查是否有有效数据**
+        // Check if valid position data exists
         if (positionPoints.isEmpty()) {
-            Log.e("FilesFragment", "No valid position data available!");
+            Log.e(TAG, "No valid position data available!");
             Toast.makeText(getContext(), "No valid trajectory data to replay.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // **跳转到 ReplayFragment**
-        Log.d("FilesFragment", "Navigating to ReplayFragment...");
+        // Create a Bundle to pass data to the ReplayFragment
+        Bundle args = new Bundle();
+        // IMPORTANT: Use putParcelableArrayList instead of putSerializable for LatLng!
+        args.putParcelableArrayList("trajectoryPoints", new ArrayList<>(positionPoints));
+        // (Pass additional data if ReplayFragment requires it)
+        args.putLong("startTimestamp", trajectory.getStartTimestamp());
+        args.putString("dataIdentifier", trajectory.getDataIdentifier());
+
+        // Navigate to ReplayFragment
+        Log.d(TAG, "Navigating to ReplayFragment...");
         Navigation.findNavController(getView()).navigate(R.id.action_filesFragment_to_replayFragment, args);
     }
 }
-//public void onReplayClick(int position) {
-//    Map<String, String> selectedEntry = entryList.get(position);
-//    String trajectoryId = selectedEntry.get("id");
-//    Bundle args = new Bundle();
-//    args.putString("trajectoryId", trajectoryId);
-//    Navigation.findNavController(getView()).navigate(R.id.action_filesFragment_to_replayFragment, args);
-//}
-//}

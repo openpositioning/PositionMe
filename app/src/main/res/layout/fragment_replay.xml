@@ -137,7 +137,7 @@
                     android:id="@+id/currentDistanceTraveled"
                     android:layout_width="wrap_content"
                     android:layout_height="24dp"
-                    android:layout_marginStart="56dp"
+                    android:layout_marginStart="40dp"
                     android:layout_marginTop="24dp"
                     android:text="@string/meter"
                     android:textColor="@color/LightYellow"
@@ -172,7 +172,7 @@
                     android:textStyle="bold"
                     app:layout_constraintBottom_toBottomOf="@+id/currentDistanceTraveled"
                     app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="1.0"
+                    app:layout_constraintHorizontal_bias="0.807"
                     app:layout_constraintStart_toEndOf="@+id/currentElevation" />
 
             </androidx.constraintlayout.widget.ConstraintLayout>
