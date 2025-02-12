@@ -1,4 +1,8 @@
 package com.openpositioning.PositionMe.presentation.viewitems;
+import java.util.HashMap;
+import java.util.Map;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 import android.Manifest;
 import android.content.Intent;
@@ -51,7 +55,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     private final Context context;
     private final List<Map<String, String>> responseItems;
     private final DownloadClickListener listener;
-    private long lastFileSize = -1;
+
+    private final Map<String, Boolean> pollingStatus = new HashMap<>();
 
     /**
      * Default public constructor with context for inflating views and list to be displayed.
@@ -59,7 +64,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
      * @param context       application context to enable inflating views used in the list.
      * @param responseItems List of Maps, where each map is a response item from the server.
      * @param listener      clickListener to download trajectories when clicked.
-     *
      * @see Traj protobuf objects exchanged with the server.
      */
     public TrajDownloadListAdapter(Context context, List<Map<String, String>> responseItems, DownloadClickListener listener) {
@@ -69,42 +73,43 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         loadDownloadRecords();
     }
 
+    boolean isFirstLoad = true;
+
     private void loadDownloadRecords() {
         try {
             File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
             if (file.exists()) {
-                StringBuilder jsonBuilder = new StringBuilder();
-                try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        jsonBuilder.append(line);
+                // ✅ 一次性读取整个文件，提升 I/O 性能
+                String jsonString = new String(Files.readAllBytes(file.toPath()));
+
+                JSONObject jsonObject = new JSONObject(jsonString);
+
+                if (isFirstLoad) {
+                    isFirstLoad = false;
+                    Iterator<String> keys = jsonObject.keys();
+                    while (keys.hasNext()) {
+                        String key = keys.next();
+                        try {
+                            JSONObject recordDetails = jsonObject.getJSONObject(key);
+                            String id = recordDetails.optString("id", key);
+                            ServerCommunications.downloadRecords.put(id, recordDetails); // 直接缓存 JSON 对象
+                        } catch (Exception e) {
+                            System.err.println("laigan Error processing key: " + key);
+                            e.printStackTrace();
+                        }
                     }
                 }
 
-                JSONObject jsonObject = new JSONObject(jsonBuilder.toString());
-                Iterator<String> keys = jsonObject.keys();
-//                ServerCommunications.downloadRecords.clear();
-                while (keys.hasNext()) {
-                    String key = keys.next();
-                    try {
-                        JSONObject recordDetails = jsonObject.getJSONObject(key);
-                        String id = recordDetails.optString("id", key);
-                        // 保存到 downloadRecords
-                        ServerCommunications.downloadRecords.put(id, recordDetails);
-                    } catch (Exception e) {
-                        System.err.println("laigan Error processing key: " + key);
-                        e.printStackTrace();
-                    }
-                }
-                // 刷新 UI（在遍历完成后调用）
+                // ✅ 在主线程刷新 UI，避免卡顿
                 new Handler(Looper.getMainLooper()).post(this::notifyDataSetChanged);
-                System.out.println("laigan Finished loading download records."+ServerCommunications.downloadRecords);
+                System.out.println("laigan Finished loading download records: " + ServerCommunications.downloadRecords);
             }
         } catch (Exception e) {
             System.err.println("laigan Error loading download records:");
             e.printStackTrace();
         }
     }
+
 
 
     /**
@@ -145,36 +150,32 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 )
         );
 
-        boolean matched = false;
+        // ✅ 直接使用 HashMap 进行 O(1) 查找
+        JSONObject recordDetails = ServerCommunications.downloadRecords.get(id);
+        boolean matched = recordDetails != null;
         String filePath = null;
-        for (Map.Entry<String, JSONObject> entry : ServerCommunications.downloadRecords.entrySet()) {
-            try {
-                JSONObject recordDetails = new JSONObject(entry.getValue().toString());
-                String recordId = recordDetails.getString("id").trim();
 
-                if (recordId.equals(id.trim())) {
-                    matched = true;
-                    String fileName = recordDetails.optString("file_name", null);
-                    if (fileName != null) {
-                        File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
-                        filePath = file.getAbsolutePath();
-                    }
-                    setButtonState(holder.downloadButton, 1);
-                    break;
+        if (matched) {
+            try {
+                String fileName = recordDetails.optString("file_name", null);
+                if (fileName != null) {
+                    File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
+                    filePath = file.getAbsolutePath();
                 }
+                setButtonState(holder.downloadButton, 1); // 已下载状态
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }
-
-        if (!matched) {
-            setButtonState(holder.downloadButton, 0);
+        } else {
+            setButtonState(holder.downloadButton, 0); // 未下载状态
         }
 
         final boolean finalMatched = matched;
         final String finalFilePath = filePath;
 
         holder.downloadButton.setOnClickListener(v -> {
+            String trajId = responseItems.get(position).get("id");
+
             if (finalMatched) {
                 if (finalFilePath != null) {
                     Intent intent = new Intent(context, ReplayActivity.class);
@@ -183,18 +184,18 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 }
             } else {
                 listener.onPositionClicked(position);
-                startPollingForFileUpdate(holder);
+                startPollingForFileUpdate(holder, trajId); // 独立轮询
             }
         });
+
         holder.downloadButton.invalidate();
     }
 
 
-
-        /**
-         * {@inheritDoc}
-         * Number of response maps.
-         */
+    /**
+     * {@inheritDoc}
+     * Number of response maps.
+     */
     @Override
     public int getItemCount() {
         return responseItems.size();
@@ -219,18 +220,20 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
     private boolean isPolling = false;
 
-    private void startPollingForFileUpdate(TrajDownloadViewHolder holder) {
-        setButtonState(holder.downloadButton, 2);
-        if (isPolling) {
+    private void startPollingForFileUpdate(TrajDownloadViewHolder holder, String trajId) {
+        setButtonState(holder.downloadButton, 2); // 切换为“下载中”状态
+
+        // 如果已经在轮询，直接返回
+        if (pollingStatus.getOrDefault(trajId, false)) {
             return;
         }
-        isPolling = true;
+        pollingStatus.put(trajId, true); // 标记为正在轮询
 
         File downloadsFolder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File file = new File(downloadsFolder, "download_records.json");
 
         if (!file.exists()) {
-            isPolling = false;
+            pollingStatus.put(trajId, false);
             return;
         }
 
@@ -245,11 +248,13 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 attempts++;
                 if (file.lastModified() > initialModified) {
                     loadDownloadRecords();
-                    isPolling = false;
+                    setButtonState(holder.downloadButton, 1); // 下载完成切换为“已下载”状态
+                    pollingStatus.put(trajId, false); // 结束当前轮询
                 } else if (attempts < 100) {
-                    handler.postDelayed(this, 200);
+                    handler.postDelayed(this, 200); // 继续轮询
                 } else {
-                    isPolling = false;
+                    setButtonState(holder.downloadButton, 0); // 超时恢复为未下载状态
+                    pollingStatus.put(trajId, false); // 停止轮询
                 }
             }
         };
