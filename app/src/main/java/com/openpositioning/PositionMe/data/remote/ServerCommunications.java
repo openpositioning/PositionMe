@@ -339,7 +339,7 @@ public class ServerCommunications implements Observable {
                     String key = it.next();
                     try {
                         JSONObject record = jsonObject.getJSONObject(key);
-                        String id = record.getString("id");  // 获取 id 作为新 key
+                        String id = record.getString("id");
                         downloadRecords.put(id, record);
                     } catch (Exception e) {
                         System.err.println("Error loading record with key: " + key);

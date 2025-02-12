@@ -378,7 +378,7 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * 绘制建筑物的多边形标注，并将其持久保留在地图上
+     * Draw the building's polygon annotation and keep it persistently on the map
      */
     private void drawBuildingPolygon() {
         if (gMap == null) {
