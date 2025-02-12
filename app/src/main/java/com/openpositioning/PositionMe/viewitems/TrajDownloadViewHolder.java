@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
 
 import java.lang.ref.WeakReference;
+import android.widget.ProgressBar;
 
 /**
  * View holder class for the RecyclerView displaying Trajectory download data.
@@ -19,7 +20,7 @@ import java.lang.ref.WeakReference;
  *
  * @author Mate Stodulka
  */
-// 就是用来保存每个卡片里的控件（比如显示ID、日期、按钮）的，它让我们不用每次都去找这些控件（省时间又省力）。
+// Defines a class called TrajDownloadViewHolder, which inherits from RecyclerView.ViewHolder and implements the View.OnClickListener interface
 public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener{
 
     TextView trajId;
@@ -27,6 +28,8 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
     //ImageButton downloadButton;
 
     ImageButton replayButton;
+    // Declares the ProgressBar to be private and does not expose the control directly
+    private ProgressBar progressBarLoading;
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
 
@@ -39,6 +42,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
      * @see com.openpositioning.PositionMe.fragments.FilesFragment generating the data and implementing the
      * listener.
      */
+    //Set the binding event for each button in the TrajectoryReplay card
     public TrajDownloadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
         super(itemView);
         this.listenerReference = new WeakReference<>(listener);
@@ -46,7 +50,8 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
         //this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
         this.replayButton = itemView.findViewById(R.id.replayTrajectoryButton);
-        //this.downloadButton.setOnClickListener(this);//绑定点击事件
+        //this.downloadButton.setOnClickListener(this);
+        this.progressBarLoading = itemView.findViewById(R.id.progressBarLoading);
         this.replayButton.setOnClickListener(this);
     }
     @Override
@@ -55,7 +60,21 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         //if (id == R.id.downloadTrajectoryButton) {
             //listenerReference.get().onPositionClicked(getAdapterPosition());
         if (id == R.id.replayTrajectoryButton) {
+            // The loading progress bar is displayed
+            showLoading();
             listenerReference.get().onReplayClicked(getAdapterPosition());
+        }
+    }
+    public void showLoading() {
+        if (progressBarLoading != null) {
+            progressBarLoading.setVisibility(View.VISIBLE);
+        }
+    }
+
+    // Provides a public method to hide Progressbars
+    public void hideLoading() {
+        if (progressBarLoading != null) {
+            progressBarLoading.setVisibility(View.GONE);
         }
     }
 }
