@@ -71,7 +71,7 @@ public class ReplayDataProcessor {
 
 
 
-//    public static void protoBinDecoder(String filePath) {
+    //    public static void protoBinDecoder(String filePath) {
     public static Traj.Trajectory protoDecoder(File file) {
 //        String filePath_sf = filePath.toString();
         String filePath = file.getAbsolutePath();
@@ -162,6 +162,7 @@ public class ReplayDataProcessor {
         if (trajectory.getGnssDataCount() == 0) {
             System.err.println("Trajectory has no GNSS data, using 0,0 instead");
             startLocation = new float[] {0, 0};
+            return startLocation;
         }
         Traj.GNSS_Sample gnssData = trajectory.getGnssData(0);
         float gnssLat = gnssData.getLatitude();
@@ -173,19 +174,19 @@ public class ReplayDataProcessor {
 
     public static float recalculateBaseAltitude(List<Traj.Pressure_Sample> pressureDataList) {
 
-            if (pressureDataList == null || pressureDataList.size() < 3) {
-                throw new IllegalArgumentException("List must contain at least 3 elements.");
-            }
+        if (pressureDataList == null || pressureDataList.size() < 3) {
+            throw new IllegalArgumentException("List must contain at least 3 elements.");
+        }
 
-            // obtain the first three saved sample (in this ver the first 3sec of data)
-            List<Float> sortedPressures = pressureDataList.stream()
-                    .limit(3)
-                    .map(Traj.Pressure_Sample::getPressure)
-                    .sorted()
-                    .collect(Collectors.toList());
+        // obtain the first three saved sample (in this ver the first 3sec of data)
+        List<Float> sortedPressures = pressureDataList.stream()
+                .limit(3)
+                .map(Traj.Pressure_Sample::getPressure)
+                .sorted()
+                .collect(Collectors.toList());
 
-            // use the medium to return the base altitude
-            return SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, sortedPressures.get(1));
+        // use the medium to return the base altitude
+        return SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, sortedPressures.get(1));
     }
 
     public static List<LatLng> translatePdrPath(Traj.Trajectory trajectory) {
@@ -214,6 +215,111 @@ public class ReplayDataProcessor {
         }
 
         return latLngList;
+    }
+
+    public static List<Traj.Pressure_Sample> pressureSampleAdapter(List<Traj.Pressure_Sample> PressureDataList) {
+        if (PressureDataList == null || PressureDataList.isEmpty()) {
+            return PressureDataList;
+        }
+
+        float baseAltitude = calculateAltitude(PressureDataList.get(0));
+        List<Traj.Pressure_Sample> updatedList = new ArrayList<>();
+
+        for (Traj.Pressure_Sample pressureSample : PressureDataList) {
+            float altitude = calculateAltitude(pressureSample);
+            Traj.Pressure_Sample.Builder builder = pressureSample.toBuilder();
+            builder.setEstimatedElevation(altitude - baseAltitude);
+            updatedList.add(builder.build()); // generate new object
+        }
+
+        return updatedList; // return new list
+    }
+
+    public static float calculateAltitude(Traj.Pressure_Sample pressureSample) {
+        float pressure = pressureSample.getPressure();
+        return SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure);
+    }
+
+    public static boolean hasEstimatedAltitude(Traj.Trajectory trajectory) {
+        if (trajectory == null) {
+            throw new IllegalArgumentException("Trajectory cannot be null");
+        }
+        for (Traj.Pressure_Sample pressureSample : trajectory.getPressureDataList()) {
+            if (pressureSample.hasField(Traj.Pressure_Sample.getDescriptor().findFieldByNumber(3))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static List<Traj.Pressure_Sample> getPressureDataList(Traj.Trajectory trajectory) {
+        if (trajectory == null) {
+            throw new IllegalArgumentException("Trajectory cannot be null");
+        }
+        List<Traj.Pressure_Sample> pressureDataList = trajectory.getPressureDataList();
+        if (!ReplayDataProcessor.hasEstimatedAltitude(trajectory)) {
+            pressureDataList = ReplayDataProcessor.pressureSampleAdapter(pressureDataList);
+        }
+        return pressureDataList;
+    }
+
+    public static boolean hasOrientationData(Traj.Trajectory trajectory) {
+        if (trajectory == null) {
+            throw new IllegalArgumentException("Trajectory cannot be null");
+        }
+        for (Traj.Motion_Sample motionSample : trajectory.getImuDataList()) {
+            if (motionSample.hasField(Traj.Motion_Sample.getDescriptor().findFieldByNumber(13))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static float calculateAzimuth(Traj.Motion_Sample motionSample) {
+        float rx = motionSample.getRotationVectorX();
+        float ry = motionSample.getRotationVectorY();
+        float rz = motionSample.getRotationVectorZ();
+        float rw = motionSample.getRotationVectorW();
+
+        float[] rotationVector = {rx, ry, rz, rw};
+        float[] orientation = new float[3];
+
+        float[] rotationVectorDCM = new float[9];
+        SensorManager.getRotationMatrixFromVector(rotationVectorDCM, rotationVector);
+        SensorManager.getOrientation(rotationVectorDCM, orientation);
+
+        return orientation[0];
+    }
+
+    public static List<Traj.Motion_Sample> MotionSampleAdapter(List<Traj.Motion_Sample> motionDataList) {
+        if (motionDataList == null || motionDataList.isEmpty()) {
+            return motionDataList;
+        }
+
+        List<Traj.Motion_Sample> updatedList = new ArrayList<>(); // 存储修改后的对象
+
+        for (Traj.Motion_Sample motionSample : motionDataList) {
+            float azimuth = calculateAzimuth(motionSample);
+            Traj.Motion_Sample.Builder builder = motionSample.toBuilder();
+            builder.setAzimuth(azimuth);
+//            System.out.println("Azimuth: " + azimuth);
+            updatedList.add(builder.build());
+        }
+        System.out.println("MotionSampleAdapter: " + updatedList);
+
+        return updatedList;
+    }
+
+    public static List<Traj.Motion_Sample> getMotionDataList(Traj.Trajectory trajectory) {
+        if (trajectory == null) {
+            throw new IllegalArgumentException("Trajectory cannot be null");
+        }
+        List<Traj.Motion_Sample> motionDataList = trajectory.getImuDataList();
+        if (!ReplayDataProcessor.hasOrientationData(trajectory)) {
+            System.out.println("No orientation data found in the trajectory");
+            motionDataList = ReplayDataProcessor.MotionSampleAdapter(motionDataList);
+        }
+        return motionDataList;
     }
 
     /**
