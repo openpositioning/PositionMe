@@ -46,10 +46,11 @@
                 android:layout_marginEnd="8dp"
                 android:text="1998-05-19 05:28:42"
                 android:textColor="@color/LightYellow"
-                android:textSize="18dp"
+                android:textSize="10dp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                app:layout_constraintHorizontal_bias="0.0"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
                 app:layout_constraintTop_toTopOf="parent" />
 
