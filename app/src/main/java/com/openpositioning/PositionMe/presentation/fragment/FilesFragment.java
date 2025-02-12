@@ -1,9 +1,5 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
-import android.app.AlertDialog;
-import android.app.DownloadManager;
-import android.content.DialogInterface;
-import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;

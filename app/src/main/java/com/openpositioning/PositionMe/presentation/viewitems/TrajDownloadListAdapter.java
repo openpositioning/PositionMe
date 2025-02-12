@@ -37,13 +37,10 @@ import java.util.Map;
 
 /**
  * Adapter used for displaying trajectory metadata in a RecyclerView list.
- *
  * This adapter binds trajectory metadata from the server to individual view items.
  * The download status is indicated via a button with different icons.
  * The adapter also listens for file changes using FileObserver to update the download records in real time.
- *
  * A local set of "downloading" trajectory IDs is maintained to support simultaneous downloads.
- *
  * @see TrajDownloadViewHolder for the corresponding view holder.
  * @see FilesFragment for details on how the data is generated.
  * @see ServerCommunications for where the response items are received.
@@ -83,7 +80,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     /**
      * Loads the local download records from storage.
      * The records are stored in a JSON file located in the app-specific Downloads directory.
-     *
      * After loading, any trajectory IDs that have now finished downloading are removed
      * from the downloading set.
      */
@@ -155,22 +151,11 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                     // On file modification, load the records and update the UI on the main thread.
                     new Handler(Looper.getMainLooper()).post(() -> {
                         loadDownloadRecords();
-                        notifyDataSetChanged();
                     });
                 }
             }
         };
         fileObserver.startWatching();
-    }
-
-    /**
-     * Stops the FileObserver when it is no longer needed.
-     * This method should be called to avoid memory leaks.
-     */
-    public void stopFileObserver() {
-        if (fileObserver != null) {
-            fileObserver.stopWatching();
-        }
     }
 
     /**
@@ -190,12 +175,10 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     /**
      * Binds data to the view holder.
      * Formats and assigns trajectory metadata fields to the corresponding views.
-     *
      * The button state is determined as follows:
      * - If the trajectory is present in the download records, it is set as "downloaded".
      * - Else if the trajectory is in the downloading set, it is set as "downloading".
      * - Otherwise, it is set as "not downloaded".
-     *
      * @param holder   The view holder to bind data to.
      * @param position The position of the item in the list.
      */

@@ -1,7 +1,6 @@
 package com.openpositioning.PositionMe.presentation.viewitems;
 
 import android.view.View;
-import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
