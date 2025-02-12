@@ -313,7 +313,7 @@ public class ServerCommunications implements Observable {
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
                         if (zipCount == position) {
                             // break if zip entry position matches the desired position
-                            trajectoryFileName = "trajectory_" + zipEntry.getName() + ".txt"; // get file name
+                            trajectoryFileName = String.valueOf(position)+"trajectory_" + zipEntry.getName() + ".txt"; // get file name
                             break;
                         }
                         zipCount++;
@@ -350,8 +350,7 @@ public class ServerCommunications implements Observable {
 
                     File file = new File(storagePath, trajectoryFileName);
 
-                    //return file name
-                    callback.onDownloadCompleted(trajectoryFileName);
+
 
                     try (FileWriter fileWriter = new FileWriter(file)) {
                         fileWriter.write(receivedTrajectoryString);
@@ -366,6 +365,9 @@ public class ServerCommunications implements Observable {
                         zipInputStream.close();
                         inputStream.close();
                     }
+
+                    //return file name
+                    callback.onDownloadCompleted(trajectoryFileName);
                 }
             }
         });
