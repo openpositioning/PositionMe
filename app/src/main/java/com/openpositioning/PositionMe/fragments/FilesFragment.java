@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.openpositioning.PositionMe.MainActivity;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ReplayDataProcessor;
 import com.openpositioning.PositionMe.ServerCommunications;

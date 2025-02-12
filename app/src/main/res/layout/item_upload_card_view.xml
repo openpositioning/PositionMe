@@ -9,7 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="90dp"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="15dp"
+        android:layout_marginTop="25dp"
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="5dp"
         app:cardBackgroundColor="@color/pastelBlue"
@@ -22,7 +22,8 @@
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="match_parent"
+            android:background="#6A52A4">
 
             <TextView
                 android:id="@+id/trajectoryIdItem"
@@ -58,6 +59,7 @@
                 android:layout_height="55dp"
                 android:layout_marginEnd="18dp"
                 android:background="@drawable/rounded_corner_lightblue_medium"
+                android:backgroundTint="#9982C8"
                 android:contentDescription="@string/download"
                 android:scaleType="fitXY"
                 app:layout_constraintBottom_toBottomOf="parent"
@@ -70,6 +72,7 @@
                 android:layout_width="55dp"
                 android:layout_height="55dp"
                 android:background="@drawable/rounded_corner_lightblue_medium"
+                android:backgroundTint="#6A52A4"
                 android:contentDescription="@string/delete_button"
                 android:scaleType="fitXY"
                 app:layout_constraintBottom_toBottomOf="parent"
@@ -90,6 +93,7 @@
                 android:layout_height="55dp"
 
                 android:background="@drawable/rounded_corner_lightblue_medium"
+                android:backgroundTint="#B180C7"
                 android:contentDescription="@string/replay_button"
                 android:scaleType="fitXY"
                 app:layout_constraintBottom_toBottomOf="parent"

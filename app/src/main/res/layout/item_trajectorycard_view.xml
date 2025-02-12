@@ -22,7 +22,8 @@
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="match_parent"
+            android:background="#6A52A4">
 
             <TextView
                 android:id="@+id/trajectoryIdItem"
@@ -30,7 +31,7 @@
                 android:layout_height="52dp"
                 android:gravity="center"
                 android:text="999"
-                android:textColor="@color/lightLogoBlue"
+                android:textColor="@color/LightYellow"
                 android:textSize="35dp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
@@ -60,6 +61,7 @@
                 android:layout_marginEnd="8dp"
                 android:layout_marginBottom="8dp"
                 android:background="@drawable/rounded_corner_lightblue"
+                android:backgroundTint="#9982C8"
                 android:contentDescription="@string/download"
                 android:scaleType="fitXY"
                 app:layout_constraintBottom_toBottomOf="parent"
@@ -80,6 +82,7 @@
                 android:layout_height="75dp"
                 android:layout_marginEnd="8dp"
                 android:background="@drawable/rounded_corner_lightblue"
+                android:backgroundTint="#B180C7"
                 android:contentDescription="@string/download"
                 android:scaleType="fitXY"
                 app:layout_constraintBottom_toBottomOf="parent"

@@ -30,6 +30,7 @@ import com.openpositioning.PositionMe.fragments.PositionFragment;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 public class MainActivity extends AppCompatActivity {
+    public OnBackPressedCallback onBackPressedCallback;
 
     private SharedPreferences settings;
 
@@ -45,13 +46,21 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_navigation);
 
         // Load HomeFragment by default
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragment_container, new HomeFragment())
                 .commit();
+
+        onBackPressedCallback = new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                // 默认不执行任何返回操作
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, onBackPressedCallback);
+
 
         bottomNavigationView.setOnItemSelectedListener(item -> {
             Fragment selectedFragment = null;
@@ -67,8 +76,15 @@ public class MainActivity extends AppCompatActivity {
             }
 
             if (selectedFragment != null) {
-                getSupportFragmentManager().beginTransaction()
-                        .replace(R.id.fragment_container, selectedFragment).commit();
+                FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+                transaction.setCustomAnimations(
+                        R.anim.slide_in_right,      // 新 Fragment 进入时的动画
+                        R.anim.slide_out_right,    // 当前 Fragment 退出时的动画
+                        R.anim.slide_in_right,  // 按返回键时，新 Fragment 的进入动画（可选）
+                        R.anim.slide_out_right    // 按返回键时，当前 Fragment 的退出动画（可选）
+                );
+                transaction.replace(R.id.fragment_container, selectedFragment);
+                transaction.commit();
             }
 
             return true;
