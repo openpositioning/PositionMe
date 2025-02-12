@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
+
 public class ReplayTrajFragment extends Fragment {
     // For initialize map to replay with indoor map
     private GoogleMap replayMap;
@@ -54,7 +55,7 @@ public class ReplayTrajFragment extends Fragment {
 
     private static final DecimalFormat df = new DecimalFormat("#.####");
 
-//    public ReplayDataProcessor ReplayDataProcessor;
+    //    public ReplayDataProcessor ReplayDataProcessor;
     private LatLng startLoc;
     private Polyline pdrPolyline;
     private Polyline gnssPolyline;
@@ -124,8 +125,14 @@ public class ReplayTrajFragment extends Fragment {
                              Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_replay, container, false);
         pdrLocList = ReplayDataProcessor.translatePdrPath(this.trajectory);
-        imuDataList = this.trajectory.getImuDataList();
-        pressureSampleList = this.trajectory.getPressureDataList();
+//        imuDataList = this.trajectory.getImuDataList();
+        imuDataList = ReplayDataProcessor.getMotionDataList(this.trajectory);
+//        pressureSampleList = this.trajectory.getPressureDataList();
+//        if (!ReplayDataProcessor.hasEstimatedAltitude(this.trajectory)) {
+//            pressureSampleList = ReplayDataProcessor.pressureSampleAdapter(pressureSampleList);
+//        }
+        pressureSampleList = ReplayDataProcessor.getPressureDataList(this.trajectory);
+
         gnssDataList = this.trajectory.getGnssDataList();
 
         trajSize = imuDataList.size();
@@ -157,7 +164,7 @@ public class ReplayTrajFragment extends Fragment {
                     indoorMapManager.setCurrentLocation(startLoc);
                     //Showing an indication of available indoor maps using PolyLines
                     indoorMapManager.setIndicationOfIndoorMap();
-                    }
+                }
             });
         }
         seekBar = rootView.findViewById(R.id.seekBar);
@@ -223,6 +230,7 @@ public class ReplayTrajFragment extends Fragment {
         String formatElevation = df.format(currElevation);
         ElevationPres.setText("Elevation:"+formatElevation+"m");
         currentOrientation = imuDataList.get(counterYaw).getAzimuth();
+        System.out.println("init Orientation: " + currentOrientation);
 
         if (!gnssDataList.isEmpty() ){
             Traj.GNSS_Sample gnssStartData = gnssDataList.get(counterGnss);
@@ -279,8 +287,8 @@ public class ReplayTrajFragment extends Fragment {
 
             pdrPolyline = replayMap.addPolyline(polylineOptions);
 
+        }
     }
-}
 
     public TimerTask drawPathView() {
 
@@ -297,9 +305,10 @@ public class ReplayTrajFragment extends Fragment {
         // get base tick
         long relativeTBase = imuDataList.get(counterYaw).getRelativeTimestamp();
 
-        float nextOrientation = trajectory.getImuData(counterYaw).getAzimuth();
+        float nextOrientation = imuDataList.get(counterYaw).getAzimuth();
         if (orientationMarker!=null && currentOrientation!= nextOrientation) {
             currentOrientation = nextOrientation;
+//            System.out.println("Current Orientation: " + currentOrientation);
             orientationMarker.setRotation((float) Math.toDegrees(currentOrientation));
         }
 
@@ -374,11 +383,11 @@ public class ReplayTrajFragment extends Fragment {
             }
 
             if(indoorMapManager != null){
-                    indoorMapManager.setCurrentLocation(currentLocation);
-                    if(indoorMapManager.getIsIndoorMapSet()){
-                        indoorMapManager.setCurrentFloor((int)(currElevation/indoorMapManager.getFloorHeight())
-                        ,true);
-                    }
+                indoorMapManager.setCurrentLocation(currentLocation);
+                if(indoorMapManager.getIsIndoorMapSet()){
+                    indoorMapManager.setCurrentFloor((int)(currElevation/indoorMapManager.getFloorHeight())
+                            ,true);
+                }
             }
         }
 
@@ -438,28 +447,28 @@ public class ReplayTrajFragment extends Fragment {
     }//////////////////////////////////////////////////////////////////////////////////
 
 
-// play / pause button control
-private void setupPlayPauseButton() {
-    playPauseButton = requireView().findViewById(R.id.PlayPauseButton);
-    playPauseButton.setOnClickListener(v -> {
-        if (currTask != null) {
-            currTask.cancel();
-            if (isPlaying) {
-                isPlaying = false;
-                playPauseButton.setImageResource(R.drawable.ic_baseline_play_arrow_24);
-            } else {
-                if (currProgress == 100) {
-                    PositionInitialization();
-                    readPdrTimer = new Timer();
+    // play / pause button control
+    private void setupPlayPauseButton() {
+        playPauseButton = requireView().findViewById(R.id.PlayPauseButton);
+        playPauseButton.setOnClickListener(v -> {
+            if (currTask != null) {
+                currTask.cancel();
+                if (isPlaying) {
+                    isPlaying = false;
+                    playPauseButton.setImageResource(R.drawable.ic_baseline_play_arrow_24);
+                } else {
+                    if (currProgress == 100) {
+                        PositionInitialization();
+                        readPdrTimer = new Timer();
+                    }
+                    currTask = createTimerTask();
+                    readPdrTimer.schedule(currTask, 0, TimeInterval);
+                    isPlaying = true;
+                    playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
                 }
-                currTask = createTimerTask();
-                readPdrTimer.schedule(currTask, 0, TimeInterval);
-                isPlaying = true;
-                playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
             }
-        }
-    });
-}
+        });
+    }
 
     private void setupReplayButton() {
         replayButton = requireView().findViewById(R.id.ReplayButton);
@@ -484,14 +493,14 @@ private void setupPlayPauseButton() {
                 Log.e("GoToEnd", "Fail to cancel currTask",e);
             }
             if(seekBar.getProgress() != 100){
-            counterYawLimit = trajSize - 1;
-            try{
-            for (counterYaw = 0; counterYaw < counterYawLimit; counterYaw++) { drawPathView(); }}
-            catch (Exception e){
-                Log.e("DrawLogic","Error Draw",e);
-            }
-            seekBar.setProgress(100);
-            isPlaying = false;}
+                counterYawLimit = trajSize - 1;
+                try{
+                    for (counterYaw = 0; counterYaw < counterYawLimit; counterYaw++) { drawPathView(); }}
+                catch (Exception e){
+                    Log.e("DrawLogic","Error Draw",e);
+                }
+                seekBar.setProgress(100);
+                isPlaying = false;}
         });
     }
 

@@ -62,6 +62,11 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
     private List<LatLng> nucleusZone;
     private Marker currentMarker;  // 🟢 存储当前用户拖动的 Marker
 
+    private LatLng library_NE;
+    private LatLng library_SW;
+    private LatLng necleus_NE;
+    private LatLng necleus_SW;
+
 
     // 位置权限请求
     private final ActivityResultLauncher<String> locationPermissionLauncher =
@@ -107,19 +112,21 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void initializeInterestZonesData() {
-        libraryZone = Arrays.asList(
-                new LatLng(55.92276, -3.17446),
-                new LatLng(55.92276, -3.17518),
-                new LatLng(55.92304, -3.17518),
-                new LatLng(55.92304, -3.17445)
-        );
+        library_NE = new LatLng(55.92306692576906, -3.174771893078224);
+        library_SW = new LatLng(55.92281045664704, -3.175184089079065);
 
-        nucleusZone = Arrays.asList(
-                new LatLng(55.92277, -3.17378),
-                new LatLng(55.92265, -3.17421),
-                new LatLng(55.92286, -3.17441),
-                new LatLng(55.92293, -3.17398)
-        );
+        necleus_NE = new LatLng(55.92332001571212, -3.1738768212979593);
+        necleus_SW = new LatLng(55.92282257022002, -3.1745956532857647);
+
+        // Calculate the regin
+        LatLng library_NW = new LatLng(library_NE.latitude, library_SW.longitude);
+        LatLng library_SE = new LatLng(library_SW.latitude, library_NE.longitude);
+
+        LatLng necleus_NW = new LatLng(necleus_NE.latitude, necleus_SW.longitude);
+        LatLng necleus_SE = new LatLng(necleus_SW.latitude, necleus_NE.longitude);
+
+        libraryZone = Arrays.asList(library_NW, library_NE, library_SE, library_SW);
+        nucleusZone = Arrays.asList(necleus_NW, necleus_NE, necleus_SE, necleus_SW);
 
         Log.d("InterestZones", "✅ Library Zone Initialized: " + libraryZone.size() + " points");
         Log.d("InterestZones", "✅ Nucleus Zone Initialized: " + nucleusZone.size() + " points");
