@@ -13,6 +13,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
+import android.widget.Switch;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -35,6 +36,7 @@ import com.google.android.gms.maps.model.Tile;
 import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.maps.model.TileOverlayOptions;
 import com.google.android.gms.maps.model.TileProvider;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.Traj.Trajectory;
@@ -65,6 +67,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
 
     // 轨迹数据：这里分别使用 Traj.Trajectory 解析得到的 GNSS 和 PDR 数据
     private Traj.Trajectory trajectory;//从文件中解析得到的轨迹数据对象。
+    private List<Traj.Position_Sample> _positionData;
+    private int _positionData_pointer = 0;
     private List<Traj.GNSS_Sample> gnssPositions;//存储解析后的 GNSS 数据列表（每个数据包含纬度、经度）。
     private List<Traj.Pdr_Sample> pdrPositions;//存储解析后的 PDR 数据列表（每个数据通常包含相对位移信息，如 x、y 偏移量）。
 
@@ -73,9 +77,13 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
     private Marker gnssMarker;
     private Marker pdrMarker;
 
-    private IndoorMapManager indoorMapManager_;
+    private IndoorMapManager _indoorMapManager;
     // 文件路径从 Bundle 中获取
     private String filePath;//用于存储传入的轨迹数据文件路径，从bundle中获取。
+
+    public FloatingActionButton _floorUpButton; // Floor Up button
+    public FloatingActionButton _floorDownButton; // Floor Down button
+    private Switch _autoFloor;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -114,6 +122,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
             fis.close();
             trajectory = Traj.Trajectory.parseFrom(data);
             // 分别获取 GNSS 数据列表和 PDR 数据列表
+            _positionData = trajectory.getPositionDataList();
             gnssPositions = trajectory.getGnssDataList();
             pdrPositions = trajectory.getPdrDataList();
         } catch (IOException e) {
@@ -122,6 +131,39 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
         }
 
         // 初始化按钮点击事件
+        // Floor changer Buttons
+        this._floorUpButton=getView().findViewById(R.id.floorUpButton1);
+        this._floorDownButton=getView().findViewById(R.id.floorDownButton1);
+        // Auto-floor switch
+        this._autoFloor=getView().findViewById(R.id.autoFloor1);
+        _autoFloor.setChecked(true);
+        // Hiding floor changing buttons and auto-floor switch
+        setFloorButtonVisibility(View.GONE);
+        this._floorUpButton.setOnClickListener(new View.OnClickListener() {
+            /**
+             *{@inheritDoc}
+             * Listener for increasing the floor for the indoor map
+             */
+            @Override
+            public void onClick(View view) {
+                // Setting off auto-floor as manually changed
+                _autoFloor.setChecked(false);
+                _indoorMapManager.increaseFloor();
+            }
+        });
+        this._floorDownButton.setOnClickListener(new View.OnClickListener() {
+            /**
+             *{@inheritDoc}
+             * Listener for decreasing the floor for the indoor map
+             */
+            @Override
+            public void onClick(View view) {
+                // Setting off auto-floor as manually changed
+                _autoFloor.setChecked(false);
+                _indoorMapManager.decreaseFloor();
+            }
+        });
+
         btnPlayPause.setOnClickListener(v -> {
             if (isPlaying) {
                 pauseReplay();
@@ -204,6 +246,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
         }
     }
 
+
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
@@ -214,9 +257,9 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
         mMap.getUiSettings().setScrollGesturesEnabled(true);
 
         //inner buildings
-        indoorMapManager_ = new IndoorMapManager(mMap);
+        _indoorMapManager = new IndoorMapManager(mMap);
         //Showing an indication of available indoor maps using PolyLines
-        indoorMapManager_.setIndicationOfIndoorMap();
+        _indoorMapManager .setIndicationOfIndoorMap();
 
         // 绘制 GNSS 轨迹（蓝色）
         if (gnssPositions != null && !gnssPositions.isEmpty()) {
@@ -257,6 +300,12 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
         }
     }
 
+    private void setFloorButtonVisibility(int visibility){
+        _floorUpButton.setVisibility(visibility);
+        _floorDownButton.setVisibility(visibility);
+        _autoFloor.setVisibility(visibility);
+    }
+
     // 开始回放：每隔一定时间更新两个轨迹的动态标记位置
     private void startReplay() {
         if ((gnssPositions == null || gnssPositions.isEmpty()) && (pdrPositions == null || pdrPositions.isEmpty()))
@@ -290,6 +339,33 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
                     float[] pdrOffset = new float[]{ sample.getX(), sample.getY() };
                     LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
 
+
+                    if(_positionData != null && _positionData_pointer < _positionData.size()) {
+                        // If not initialized, initialize
+                        if (_indoorMapManager == null) {
+                            _indoorMapManager = new IndoorMapManager(mMap);
+                        }
+                        //  Updates current location of user to show the indoor floor map (if applicable)
+                        //latLng = new LatLng(55.923089201509164, -3.17426605622692); //test
+                        _indoorMapManager.setCurrentLocation(latLng); //latLng
+                        float elevationVal = _positionData.get(_positionData_pointer).getMagZ();
+                        Log.d("MagZ", String.format("Elevation Value: %.2f", elevationVal));
+                        // Display buttons to allow user to change floors if indoor map is visible
+                        if (_indoorMapManager.getIsIndoorMapSet()) {
+                            setFloorButtonVisibility(View.VISIBLE);
+                            // Auto-floor logic
+                            if (_autoFloor.isChecked()) {
+                                _indoorMapManager.setCurrentFloor((int) (elevationVal / _indoorMapManager.getFloorHeight())
+                                        , true);
+                            }
+                        } else {
+                            // Hide the buttons and switch used to change floor if indoor map is not visible
+                            setFloorButtonVisibility(View.GONE);
+                        }
+                        _positionData_pointer++;
+                    }
+
+
                     if (pdrMarker != null) {
                         pdrMarker.setPosition(latLng);
                     } else {
@@ -301,20 +377,6 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
                 // 更新进度条，取两者的平均进度（或根据实际需求修改）
                 int progress = (currentGnssIndex + currentPdrIndex) / 2;
                 progressBar.setProgress(progress);
-
-                //indoor map for most case no gps
-                // If not initialized, initialize
-                if (indoorMapManager_ == null) {
-                    indoorMapManager_ =new IndoorMapManager(mMap);
-                }
-                LatLng Nucleus_building_inner = new LatLng(55.923089201509164, -3.17426605622692);
-                //  Updates current location of user to show the indoor floor map (if applicable)
-                indoorMapManager_.setCurrentLocation(Nucleus_building_inner);
-                //float elevationVal = sensorFusion.getElevation();
-                // Display buttons to allow user to change floors if indoor map is visible
-                if(indoorMapManager_.getIsIndoorMapSet()) {
-                    indoorMapManager_.setCurrentFloor(1 , false); //(int)(elevationVal / indoorMapManager.getFloorHeight())
-                }
 
                 if ((gnssPositions != null && currentGnssIndex < gnssPositions.size()) ||
                         (pdrPositions != null && currentPdrIndex < pdrPositions.size())) {
