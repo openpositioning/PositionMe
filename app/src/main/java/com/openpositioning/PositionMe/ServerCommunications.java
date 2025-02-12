@@ -72,7 +72,8 @@ public class ServerCommunications implements Observable {
     private final FirebaseAuth mAuth;
     private final DatabaseReference databaseReference;
 
-    private static final String masterKey = "ewireless";
+//    private static final String masterKey = "ewireless";
+    private static String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
     private static String uploadURL;
     private static String downloadURL;
     private static String infoRequestURL;
@@ -124,7 +125,6 @@ public class ServerCommunications implements Observable {
         fetchUserKey();
 
         // use the default key and URL
-//        userKey = "9H8m_SU8K3xojnCD4iPobg";
 //        uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
 //        downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=30&key=" + masterKey;
 //        infoRequestURL = "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
@@ -164,7 +164,7 @@ public class ServerCommunications implements Observable {
                         }
                     } else {
                         Log.d("ServerCommunications", "userKey does not exist, using default key.");
-                        userKey = "9H8m_SU8K3xojnCD4iPobg";
+                        userKey = BuildConfig.OPENPOSITIONING_API_KEY;
                         initializeURLs();
                         if (urlInitializedListener != null) {
                             urlInitializedListener.onURLInitialized();

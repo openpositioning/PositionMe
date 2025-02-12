@@ -188,7 +188,7 @@ public class SignUpActivity extends AppCompatActivity {
     private void saveUserData(String userId, String username, String email, String mobile, String userKey) {
         if (userKey == null) {
             Log.e("SignUpActivity", "UserKey is null!");
-            userKey = "9H8m_SU8K3xojnCD4iPobg";  // 默认值 default value
+            userKey = BuildConfig.OPENPOSITIONING_API_KEY;
             return;
         }
         // 创建 User 对象
