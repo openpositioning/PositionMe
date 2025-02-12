@@ -1,44 +1,47 @@
 syntax = "proto3";
 
 message Trajectory {
-string android_version = 1;
-repeated Motion_Sample imu_data = 2;
-repeated Pdr_Sample pdr_data = 3;
-repeated Position_Sample position_data = 4;
-repeated Pressure_Sample pressure_data = 5;
-repeated Light_Sample light_data = 6;
+    string android_version = 1;
+    repeated Motion_Sample imu_data = 2;
+    repeated Pdr_Sample pdr_data = 3;
+    repeated Position_Sample position_data = 4;
+    repeated Pressure_Sample pressure_data = 5;
+    repeated Light_Sample light_data = 6;
 
-repeated GNSS_Sample gnss_data = 7;
-repeated WiFi_Sample wifi_data = 8;
-repeated AP_Data aps_data = 9;
+    repeated GNSS_Sample gnss_data = 7;
+    repeated WiFi_Sample wifi_data = 8;
+    repeated AP_Data aps_data = 9;
 
-// UNIX timestamp (in milliseconds) recorded from the start of this
-// trajectory data collection event. All future
-// timestamps in sub classes are to be RELATIVE timestamps
-// (in milliseconds) to this start time.
-// E.g.
-// start_timestamp = 1674819807315 (UTC 27 Jan 2023 in the morning)
-// relative_timestamp = 3000 (3s)
-int64 start_timestamp = 10;
-string data_identifier = 11;
-Sensor_Info accelerometer_info = 12;
-Sensor_Info gyroscope_info = 13;
-Sensor_Info rotation_vector_info = 14;
-Sensor_Info magnetometer_info = 15;
-Sensor_Info barometer_info = 16;
-Sensor_Info light_sensor_info = 17;
+    // UNIX timestamp (in milliseconds) recorded from the start of this
+    // trajectory data collection event. All future
+    // timestamps in sub classes are to be RELATIVE timestamps
+    // (in milliseconds) to this start time.
+    // E.g.
+    // start_timestamp = 1674819807315 (UTC 27 Jan 2023 in the morning)
+    // relative_timestamp = 3000 (3s)
+    int64 start_timestamp = 10;
+    string data_identifier = 11;
+    Sensor_Info accelerometer_info = 12;
+    Sensor_Info gyroscope_info = 13;
+    Sensor_Info rotation_vector_info = 14;
+    Sensor_Info magnetometer_info = 15;
+    Sensor_Info barometer_info = 16;
+    Sensor_Info light_sensor_info = 17;
+
+    // new attribute to store starting position
+    Lat_Long_Position start_position = 18;
 
 }
 
 message Pdr_Sample {
-// milliseconds from the start_timestamp
-int64 relative_timestamp = 1;
+    // milliseconds from the start_timestamp
+    int64 relative_timestamp = 1;
 
-// Both in metres. You should implement an algorithm to estimate
-// these values. The values are always relative to your start point
-// so the first entry should always be x = 0.0, y = 0.0
-float x = 2;
-float y = 3;
+    // Both in metres. You should implement an algorithm to estimate
+    // these values. The values are always relative to your start point
+    // so the first entry should always be x = 0.0, y = 0.0
+    float x = 2;
+    float y = 3;
 }
 
 
@@ -63,6 +66,9 @@ message Motion_Sample {
 
     // Integer
     int32 step_count = 12;
+
+    // new attribute to store azimuth calculated from the rotation vector
+    float azimuth = 13;
 }
 
 message Position_Sample {
@@ -80,7 +86,10 @@ message Pressure_Sample {
     // mbar
     float pressure = 2;
 
+    // Estimated elevation in metres
+    float estimated_elevation = 3;
 }
+
 message Light_Sample {
     int64 relative_timestamp = 1;
     // lux
@@ -146,4 +155,11 @@ message Sensor_Info {
     float power = 4;
     int32 version = 5;
     int32 type = 6;
+}
+
+message Lat_Long_Position {
+    // latitude between -90 and 90
+    float lat = 1;
+    // longitude between -180 and 180
+    float long = 2;
 }

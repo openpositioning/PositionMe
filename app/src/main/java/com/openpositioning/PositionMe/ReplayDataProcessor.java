@@ -219,7 +219,12 @@ public class ReplayDataProcessor {
 
     public static List<Traj.Pressure_Sample> pressureSampleAdapter(List<Traj.Pressure_Sample> PressureDataList) {
         if (PressureDataList == null || PressureDataList.isEmpty()) {
-            return PressureDataList;
+            Traj.Pressure_Sample.Builder builder = Traj.Pressure_Sample.newBuilder();
+            builder.setEstimatedElevation(0f);
+            builder.setPressure(0f);
+            List<Traj.Pressure_Sample> updatedList = new ArrayList<>();
+            updatedList.add(builder.build());
+            return updatedList;
         }
 
         float baseAltitude = calculateAltitude(PressureDataList.get(0));
@@ -260,6 +265,7 @@ public class ReplayDataProcessor {
         if (!ReplayDataProcessor.hasEstimatedAltitude(trajectory)) {
             pressureDataList = ReplayDataProcessor.pressureSampleAdapter(pressureDataList);
         }
+
         return pressureDataList;
     }
 

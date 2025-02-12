@@ -58,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
         onBackPressedCallback = new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                // 默认不执行任何返回操作
+                // do nothing when using system back button
             }
         };
         getOnBackPressedDispatcher().addCallback(this, onBackPressedCallback);
@@ -80,10 +80,10 @@ public class MainActivity extends AppCompatActivity {
             if (selectedFragment != null) {
                 FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
                 transaction.setCustomAnimations(
-                        R.anim.slide_in_right,      // 新 Fragment 进入时的动画
-                        R.anim.slide_out_right,    // 当前 Fragment 退出时的动画
-                        R.anim.slide_in_right,  // 按返回键时，新 Fragment 的进入动画（可选）
-                        R.anim.slide_out_right    // 按返回键时，当前 Fragment 的退出动画（可选）
+                        R.anim.slide_in_right,      // new Fragment anim
+                        R.anim.slide_out_right,    // old Fragment out anim
+                        R.anim.slide_in_right,  // new Fragment anim when using back button
+                        R.anim.slide_out_right    // old Fragment out when using back button
                 );
                 transaction.replace(R.id.fragment_container, selectedFragment);
                 transaction.commit();

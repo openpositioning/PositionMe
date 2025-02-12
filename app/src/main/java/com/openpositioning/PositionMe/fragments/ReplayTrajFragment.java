@@ -15,6 +15,7 @@ import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
@@ -127,10 +128,6 @@ public class ReplayTrajFragment extends Fragment {
         pdrLocList = ReplayDataProcessor.translatePdrPath(this.trajectory);
 //        imuDataList = this.trajectory.getImuDataList();
         imuDataList = ReplayDataProcessor.getMotionDataList(this.trajectory);
-//        pressureSampleList = this.trajectory.getPressureDataList();
-//        if (!ReplayDataProcessor.hasEstimatedAltitude(this.trajectory)) {
-//            pressureSampleList = ReplayDataProcessor.pressureSampleAdapter(pressureSampleList);
-//        }
         pressureSampleList = ReplayDataProcessor.getPressureDataList(this.trajectory);
 
         gnssDataList = this.trajectory.getGnssDataList();
@@ -228,7 +225,9 @@ public class ReplayTrajFragment extends Fragment {
         if(gnssPolyline != null) { gnssPolyline.remove(); }
 
         startLoc = !pdrLocList.isEmpty() ? pdrLocList.get(0) : new LatLng(0,0);
-        currElevation = trajectory.getPressureData(counterPressure).getEstimatedElevation();
+//        currElevation = trajectory.getPressureData(counterPressure).getEstimatedElevation();
+
+        currElevation = pressureSampleList.get(counterPressure).getEstimatedElevation();
         String formatElevation = df.format(currElevation);
         ElevationPres.setText("Elevation:"+formatElevation+"m");
         currentOrientation = imuDataList.get(counterYaw).getAzimuth();
@@ -325,10 +324,11 @@ public class ReplayTrajFragment extends Fragment {
                 currElevation = nextElevation;
                 counterPressure++;
             }
-        } else {
-            // Ensure the last pressure sample is used when counterPressure reaches the last index
-            currElevation = pressureSampleList.get(counterPressure).getEstimatedElevation();
         }
+//        else {
+//            // Ensure the last pressure sample is used when counterPressure reaches the last index
+//            currElevation = pressureSampleList.get(counterPressure).getEstimatedElevation();
+//        }
         String formatElevation = df.format(currElevation);
         ElevationPres.setText("Elevation:"+formatElevation+"m");
         // ===== GNSS value update logic ===== //
