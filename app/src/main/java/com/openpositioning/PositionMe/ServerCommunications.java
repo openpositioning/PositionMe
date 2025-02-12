@@ -461,7 +461,7 @@ public class ServerCommunications implements Observable {
                     infoResponse =  responseBody.string();
                     // Print a message in the console and notify observers
                     System.out.println("Response received");
-                    notifyObservers(0);// 触发所有注册的 observer 调用 update()
+                    notifyObservers(0);
                 }
             }
         });
