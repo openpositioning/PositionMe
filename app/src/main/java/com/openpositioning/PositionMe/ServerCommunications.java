@@ -57,7 +57,7 @@ public class ServerCommunications implements Observable {
     private boolean isWifiConn;
     private boolean isMobileConn;
     private SharedPreferences settings;
-
+    private String trajectoryFileName;
     private String infoResponse;
     private boolean success;
     private List<Observer> observers;
@@ -281,7 +281,7 @@ public class ServerCommunications implements Observable {
      *
      * @param position the position of the trajectory in the zip file to retrieve
      */
-    public void downloadTrajectory(int position) {
+    public void downloadTrajectory(int position, DownloadCallback callback) {
         // Initialise OkHttp client
         OkHttpClient client = new OkHttpClient();
 
@@ -313,6 +313,7 @@ public class ServerCommunications implements Observable {
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
                         if (zipCount == position) {
                             // break if zip entry position matches the desired position
+                            trajectoryFileName = "trajectory_" + zipEntry.getName() + ".txt"; // get file name
                             break;
                         }
                         zipCount++;
@@ -340,10 +341,18 @@ public class ServerCommunications implements Observable {
 
                     // Save the received trajectory to a file in the Downloads folder
                     String storagePath = Environment.getExternalStoragePublicDirectory(Environment
-                           .DIRECTORY_DOWNLOADS).toString();
+                            .DIRECTORY_DOWNLOADS).toString();
                     //String storagePath = context.getFilesDir().toString();
 
-                    File file = new File(storagePath, "received_trajectory.txt");
+
+
+                     //trajectoryFileName = "trajectory_" + position + ".txt";
+
+                    File file = new File(storagePath, trajectoryFileName);
+
+                    //return file name
+                    callback.onDownloadCompleted(trajectoryFileName);
+
                     try (FileWriter fileWriter = new FileWriter(file)) {
                         fileWriter.write(receivedTrajectoryString);
                         fileWriter.flush();
@@ -361,6 +370,10 @@ public class ServerCommunications implements Observable {
             }
         });
 
+    }
+
+    public interface DownloadCallback {
+        void onDownloadCompleted(String fileName);
     }
 
     /**

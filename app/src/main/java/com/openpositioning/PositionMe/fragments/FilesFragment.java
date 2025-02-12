@@ -44,6 +44,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
 public class FilesFragment extends Fragment implements Observer, ReplayClickListener {
 
@@ -126,7 +127,9 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
     }
 
     private void onDownloadClicked(int position) {
-        serverCommunications.downloadTrajectory(position);
+        serverCommunications.downloadTrajectory(position, fileName -> {
+
+        });
         new AlertDialog.Builder(getContext())
                 .setTitle("File Downloaded")
                 .setMessage("Trajectory downloaded to local storage.")
@@ -140,8 +143,22 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
     @Override
     public void onReplayClick(int position) {
         // 获取文件路径
-        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "received_trajectory.txt");
+
+        final String[] trajectoryFileName = {null};
+        CountDownLatch latch = new CountDownLatch(1);
+
+        serverCommunications.downloadTrajectory(position, fileName -> {
+            trajectoryFileName[0] = fileName;
+            latch.countDown();
+        });
+
+        try {
+            latch.await(); // Wait for download to finish
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), trajectoryFileName[0]);
 
         // 检查文件是否存在
         if (!file.exists()) {
