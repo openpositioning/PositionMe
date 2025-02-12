@@ -63,7 +63,9 @@ public class ReplayFragment extends Fragment {
 
     // UI components
     private Button stopButton;
-    private Button cancelButton;
+    private Button cancelButton;  // This button will now act as a Pause/Resume toggle.
+    private Button restartButton; // New button to restart the replay.
+    private Button gotoEndButton; // New button to jump to the end of the replay.
     private ImageView recIcon;
     private SeekBar seekBar;  // Changed from ProgressBar to SeekBar
     private TextView elevation;
@@ -107,6 +109,11 @@ public class ReplayFragment extends Fragment {
     // SharedPreferences for settings
     private SharedPreferences settings;
 
+    // New variables for pause/resume functionality
+    private boolean isPaused = false;
+    // In autoStop mode, we keep track of the remaining time so that we can resume.
+    private long autoStopRemainingTime = 0;
+
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -122,7 +129,9 @@ public class ReplayFragment extends Fragment {
 
         // Initialize UI components
         stopButton = view.findViewById(R.id.stopButton);
-        cancelButton = view.findViewById(R.id.cancelButton);
+        cancelButton = view.findViewById(R.id.cancelButton); // Will be used as Pause/Resume.
+        restartButton = view.findViewById(R.id.restartButton); // New Restart button.
+        gotoEndButton = view.findViewById(R.id.gotoEndButton); // New Go to End button.
         recIcon = view.findViewById(R.id.redDot);
         seekBar = view.findViewById(R.id.timeRemainingBar); // Using SeekBar now
         elevation = view.findViewById(R.id.currentElevation);
@@ -143,7 +152,7 @@ public class ReplayFragment extends Fragment {
         previousLat = 0.0;
         previousLng = 0.0;
 
-        // Set up button listeners for stopping and cancelling replay
+        // Set up stop button listener to exit replay mode.
         stopButton.setOnClickListener(v -> {
             if (autoStop != null) autoStop.cancel();
             replayHandler.removeCallbacks(replayRunnable);
@@ -151,18 +160,134 @@ public class ReplayFragment extends Fragment {
             Navigation.findNavController(v).navigate(action);
         });
 
+        // Set up cancel button as Pause/Resume toggle.
+        // Initially the button text is set to "Pause".
+        cancelButton.setText("Pause");
         cancelButton.setOnClickListener(v -> {
-            if (autoStop != null) autoStop.cancel();
-            replayHandler.removeCallbacks(replayRunnable);
-            NavDirections action = ReplayFragmentDirections.actionReplayFragmentToFilesFragment();
-            Navigation.findNavController(v).navigate(action);
+            if (!isPaused) {
+                // Pause the replay.
+                isPaused = true;
+                cancelButton.setText("Resume");
+                if (usingAutoStop) {
+                    if (autoStop != null) {
+                        autoStop.cancel();
+                    }
+                } else {
+                    replayHandler.removeCallbacks(replayRunnable);
+                }
+            } else {
+                // Resume the replay.
+                isPaused = false;
+                cancelButton.setText("Pause");
+                if (usingAutoStop) {
+                    // If there is no remaining time stored, restart with the full duration.
+                    long limit = autoStopRemainingTime > 0
+                            ? autoStopRemainingTime
+                            : settings.getInt("split_duration", 30) * 60000L;
+                    autoStop = new CountDownTimer(limit, 1000) {
+                        @Override
+                        public void onTick(long millisUntilFinished) {
+                            autoStopRemainingTime = millisUntilFinished;
+                            updateReplay();
+                        }
+                        @Override
+                        public void onFinish() {
+                            isReplaying = false;
+                            NavDirections action = ReplayFragmentDirections.actionReplayFragmentToFilesFragment();
+                            Navigation.findNavController(v).navigate(action);
+                        }
+                    }.start();
+                } else {
+                    replayHandler.postDelayed(replayRunnable, 200);
+                }
+            }
         });
 
-        // Set up map type dropdown and floor controls
+        // Set up Restart button listener.
+        restartButton.setOnClickListener(v -> {
+            // Cancel any running timers or handlers.
+            if (usingAutoStop) {
+                if (autoStop != null) {
+                    autoStop.cancel();
+                }
+            } else {
+                replayHandler.removeCallbacks(replayRunnable);
+            }
+            isReplaying = true;
+            // Reset replay variables.
+            currentPointIndex = 0;
+            distance = 0.0;
+            // Reset polyline: only include the starting point.
+            if (trajectoryPoints != null && !trajectoryPoints.isEmpty()) {
+                trajectoryPolyline.setPoints(new ArrayList<>(trajectoryPoints.subList(0, 1)));
+                // Reset marker positions to the starting point.
+                LatLng startPoint = trajectoryPoints.get(0);
+                if (replayArrow != null) {
+                    replayArrow.setPosition(startPoint);
+                }
+                if (gnssMarker != null) {
+                    gnssMarker.setPosition(startPoint);
+                }
+                // Update the camera position.
+                googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startPoint, 18f));
+            }
+            // Reset SeekBar progress.
+            seekBar.setProgress(0);
+            // If paused, update the toggle button text and resume.
+            if (isPaused) {
+                isPaused = false;
+                cancelButton.setText("Pause");
+            }
+            // Restart the replay.
+            if (usingAutoStop) {
+                long limit = settings.getInt("split_duration", 30) * 60000L;
+                autoStopRemainingTime = limit;
+                autoStop = new CountDownTimer(limit, 1000) {
+                    @Override
+                    public void onTick(long millisUntilFinished) {
+                        autoStopRemainingTime = millisUntilFinished;
+                        updateReplay();
+                    }
+                    @Override
+                    public void onFinish() {
+                        isReplaying = false;
+                        NavDirections action = ReplayFragmentDirections.actionReplayFragmentToFilesFragment();
+                        Navigation.findNavController(v).navigate(action);
+                    }
+                }.start();
+            } else {
+                replayHandler.postDelayed(replayRunnable, 200);
+            }
+        });
+
+        // Set up Go to End button listener.
+        gotoEndButton.setOnClickListener(v -> {
+            if (trajectoryPoints != null && !trajectoryPoints.isEmpty()) {
+                // Cancel any current replay callbacks or timers.
+                if (usingAutoStop) {
+                    if (autoStop != null) {
+                        autoStop.cancel();
+                    }
+                } else {
+                    replayHandler.removeCallbacks(replayRunnable);
+                }
+                // Jump to the last point.
+                currentPointIndex = trajectoryPoints.size() - 1;
+                updateReplayTo(currentPointIndex);
+                // Update the polyline to show the entire trajectory.
+                trajectoryPolyline.setPoints(new ArrayList<>(trajectoryPoints));
+                // Update the SeekBar progress.
+                seekBar.setProgress(currentPointIndex);
+                // Mark replay as finished.
+                isReplaying = false;
+            }
+        });
+
+        // Set up map type dropdown and floor controls.
         setupMapDropdown();
         setupFloorControls();
 
-        // Set up GNSS switch listener
+        // Set up GNSS switch listener.
         gnss.setOnCheckedChangeListener((compoundButton, isChecked) -> {
             if (isChecked) {
                 float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
@@ -171,7 +296,7 @@ public class ReplayFragment extends Fragment {
                 double error = UtilFunctions.distanceBetweenPoints(
                         (trajectoryPoints != null && !trajectoryPoints.isEmpty()) ?
                                 trajectoryPoints.get(currentPointIndex > 0 ? currentPointIndex - 1 : 0)
-                                : new LatLng(0,0),
+                                : new LatLng(0, 0),
                         gnssLocation);
                 gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", error));
                 if (gnssMarker == null) {
@@ -191,7 +316,7 @@ public class ReplayFragment extends Fragment {
             }
         });
 
-        // Set up line colour switching button
+        // Set up line colour switching button.
         switchColor.setOnClickListener(v -> {
             if (trajectoryPolyline != null) {
                 if (isRed) {
@@ -206,10 +331,10 @@ public class ReplayFragment extends Fragment {
             }
         });
 
-        // Start the blinking animation on the recIcon
+        // Start the blinking animation on the recIcon.
         blinkingRecording();
 
-        // Initialize the map
+        // Initialize the map.
         SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager()
                 .findFragmentById(R.id.replayMap);
         if (mapFragment != null) {
@@ -224,33 +349,33 @@ public class ReplayFragment extends Fragment {
                     googleMap.getUiSettings().setRotateGesturesEnabled(true);
                     googleMap.getUiSettings().setScrollGesturesEnabled(true);
 
-                    // Initialize indoor map manager
+                    // Initialize indoor map manager.
                     indoorMapManager = new IndoorMapManager(googleMap);
 
-                    // Load trajectory data from arguments
+                    // Load trajectory data from arguments.
                     loadTrajectoryData();
 
                     if (trajectoryPoints != null && !trajectoryPoints.isEmpty()) {
-                        // Draw the trajectory and add the replay arrow
+                        // Draw the trajectory and add the replay arrow.
                         drawTrajectoryPath();
 
-                        // Initialize the replay position variables
+                        // Initialize the replay position variables.
                         LatLng startPoint = trajectoryPoints.get(0);
                         previousLat = startPoint.latitude;
                         previousLng = startPoint.longitude;
                         currentPointIndex = 0;
                         isReplaying = true;
 
-                        // Set the maximum value of the seek bar based on trajectory length
+                        // Set the maximum value of the seek bar based on trajectory length.
                         seekBar.setMax(trajectoryPoints.size() - 1);
                         seekBar.setProgress(0);
 
-                        // Set up the draggable functionality
+                        // Set up the draggable functionality.
                         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
                             @Override
                             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                                 if (fromUser) {
-                                    // Update the replay position based on the new progress value
+                                    // Update the replay position based on the new progress value.
                                     currentPointIndex = progress;
                                     updateReplayTo(progress);
                                 }
@@ -258,27 +383,35 @@ public class ReplayFragment extends Fragment {
 
                             @Override
                             public void onStartTrackingTouch(SeekBar seekBar) {
-                                // Optionally, pause any auto-replay updates while dragging
+                                // Optionally, pause any auto-replay updates while dragging.
                                 replayHandler.removeCallbacks(replayRunnable);
                             }
 
+
                             @Override
                             public void onStopTrackingTouch(SeekBar seekBar) {
-                                // Optionally, resume auto-replay updates if desired
+                                // Update the replay position to where the user dragged the SeekBar.
                                 updateReplayTo(seekBar.getProgress());
+
+                                // Resume replay if we're not using autoStop and not paused.
+                                if (!usingAutoStop && !isPaused) {
+                                    isReplaying = true;  // Re-enable replay.
+                                    replayHandler.removeCallbacks(replayRunnable);
+                                    replayHandler.postDelayed(replayRunnable, 200);  // Schedule the next update.
+                                }
                             }
+
                         });
 
-                        // If using auto replay (via CountDownTimer), start it; otherwise, use the handler
+                        // Start either the CountDownTimer or the Handler-based auto replay.
                         if (settings.getBoolean("split_trajectory", false)) {
                             usingAutoStop = true;
                             long limit = settings.getInt("split_duration", 30) * 60000L;
-                            // Optionally, update the seekBar max if you want time-based progress
+                            autoStopRemainingTime = limit;
                             autoStop = new CountDownTimer(limit, 1000) {
                                 @Override
                                 public void onTick(long millisUntilFinished) {
-                                    // You could update the seekBar progress here if needed
-                                    // For example: seekBar.setProgress(calculateProgress());
+                                    autoStopRemainingTime = millisUntilFinished;
                                     updateReplay();
                                 }
 
@@ -312,7 +445,7 @@ public class ReplayFragment extends Fragment {
             return;
         }
         LatLng point = trajectoryPoints.get(index);
-        // Update the replay arrow's position and rotation
+        // Update the replay arrow's position and rotation.
         if (replayArrow != null) {
             replayArrow.setPosition(point);
             if (index > 0) {
@@ -325,11 +458,10 @@ public class ReplayFragment extends Fragment {
         }
         googleMap.animateCamera(CameraUpdateFactory.newLatLng(point));
 
-        // **Update the polyline to include all points from the start up to the specified index**
+        // Update the polyline to include all points from the start up to the specified index.
         List<LatLng> newPoints = new ArrayList<>(trajectoryPoints.subList(0, index + 1));
         trajectoryPolyline.setPoints(newPoints);
     }
-
 
     /**
      * Runnable that calls updateReplay() for automatic replay.
@@ -349,7 +481,7 @@ public class ReplayFragment extends Fragment {
         if (currentPointIndex < trajectoryPoints.size()) {
             LatLng nextPoint = trajectoryPoints.get(currentPointIndex);
 
-            // Update replay arrow position and rotation
+            // Update replay arrow position and rotation.
             if (replayArrow != null) {
                 replayArrow.setPosition(nextPoint);
             }
@@ -362,7 +494,7 @@ public class ReplayFragment extends Fragment {
             }
             googleMap.animateCamera(CameraUpdateFactory.newLatLng(nextPoint));
 
-            // Update indoor overlay and cumulative distance
+            // Update indoor overlay and cumulative distance.
             indoorMapManager.setCurrentLocation(nextPoint);
             if (currentPointIndex == 0) {
                 previousLat = nextPoint.latitude;
@@ -376,7 +508,7 @@ public class ReplayFragment extends Fragment {
             float elevationVal = sensorFusion.getElevation();
             elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-            // Update GNSS marker if enabled
+            // Update GNSS marker if enabled.
             if (gnss.isChecked() && gnssMarker != null) {
                 float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
                 LatLng gnssLocation = new LatLng(location[0], location[1]);
@@ -386,12 +518,12 @@ public class ReplayFragment extends Fragment {
                 gnssMarker.setPosition(gnssLocation);
             }
 
-            // **Update the polyline: add the new point so the red path grows**
+            // Update the polyline: add the new point so the red path grows.
             List<LatLng> polyPoints = trajectoryPolyline.getPoints();
             polyPoints.add(nextPoint);
             trajectoryPolyline.setPoints(polyPoints);
 
-            // Update the SeekBar progress and increment the replay index
+            // Update the SeekBar progress and increment the replay index.
             seekBar.setProgress(currentPointIndex);
             currentPointIndex++;
 
@@ -402,7 +534,6 @@ public class ReplayFragment extends Fragment {
             isReplaying = false;
         }
     }
-
 
     /**
      * Sets up the map type dropdown spinner.
@@ -491,20 +622,20 @@ public class ReplayFragment extends Fragment {
         if (trajectoryPoints == null || trajectoryPoints.isEmpty()) {
             return;
         }
-        // Initialize the polyline with only the starting point
+        // Initialize the polyline with only the starting point.
         PolylineOptions polylineOptions = new PolylineOptions()
                 .add(trajectoryPoints.get(0))
                 .width(8f)
                 .color(Color.RED);
         trajectoryPolyline = googleMap.addPolyline(polylineOptions);
 
-        // Place the GNSS marker at the starting point
+        // Place the GNSS marker at the starting point.
         gnssMarker = googleMap.addMarker(new MarkerOptions()
                 .position(trajectoryPoints.get(0))
                 .title("GNSS Position")
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
 
-        // Initialize the replay arrow marker (with your navigation icon)
+        // Initialize the replay arrow marker (with your navigation icon).
         replayArrow = googleMap.addMarker(new MarkerOptions()
                 .position(trajectoryPoints.get(0))
                 .title("Replay Position")
@@ -513,7 +644,6 @@ public class ReplayFragment extends Fragment {
                         UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_24))));
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(trajectoryPoints.get(0), 18f));
     }
-
 
     @Override
     public void onDestroyView() {
