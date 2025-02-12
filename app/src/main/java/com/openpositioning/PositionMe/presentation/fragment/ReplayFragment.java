@@ -11,6 +11,7 @@ import android.widget.SeekBar;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.model.LatLng;
@@ -130,11 +131,20 @@ public class ReplayFragment extends Fragment {
                     .commit();
         }
 
-        // Set initial camera position if valid latitude and longitude are provided
-        if (initialLat != 0f || initialLon != 0f) {
-            LatLng startPoint = new LatLng(initialLat, initialLon);
-            Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-            trajectoryMapFragment.setInitialCameraPosition(startPoint);
+
+
+        // 1) Check if the file contains any GNSS data
+        boolean gnssExists = hasAnyGnssData(replayData);
+
+        if (gnssExists) {
+            showGnssChoiceDialog();
+        } else {
+            // No GNSS data -> automatically use param lat/lon
+            if (initialLat != 0f || initialLon != 0f) {
+                LatLng startPoint = new LatLng(initialLat, initialLon);
+                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
+                trajectoryMapFragment.setInitialCameraPosition(startPoint);
+            }
         }
 
         // Initialize UI controls
@@ -217,6 +227,66 @@ public class ReplayFragment extends Fragment {
         if (!replayData.isEmpty()) {
             updateMapForIndex(0);
         }
+    }
+
+
+
+    /**
+     * Checks if any ReplayPoint contains a non-null gnssLocation.
+     */
+    private boolean hasAnyGnssData(List<TrajParser.ReplayPoint> data) {
+        for (TrajParser.ReplayPoint point : data) {
+            if (point.gnssLocation != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    /**
+     * Show a simple dialog asking user to pick:
+     * 1) GNSS from file
+     * 2) Lat/Lon from ReplayActivity arguments
+     */
+    private void showGnssChoiceDialog() {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Choose Starting Location")
+                .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or the one you manually picked?")
+                .setPositiveButton("Use File's GNSS", (dialog, which) -> {
+                    LatLng firstGnss = getFirstGnssLocation(replayData);
+                    if (firstGnss != null) {
+                        setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
+                    } else {
+                        // Fallback if no valid GNSS found
+                        setupInitialMapPosition(initialLat, initialLon);
+                    }
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Use Manual Set", (dialog, which) -> {
+                    setupInitialMapPosition(initialLat, initialLon);
+                    dialog.dismiss();
+                })
+                .setCancelable(false)
+                .show();
+    }
+
+    private void setupInitialMapPosition(float latitude, float longitude) {
+        LatLng startPoint = new LatLng(initialLat, initialLon);
+        Log.i(TAG, "Setting initial map position: " + startPoint.toString());
+        trajectoryMapFragment.setInitialCameraPosition(startPoint);
+    }
+
+    /**
+     * Retrieve the first available GNSS location from the replay data.
+     */
+    private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
+        for (TrajParser.ReplayPoint point : data) {
+            if (point.gnssLocation != null) {
+                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+            }
+        }
+        return null; // None found
     }
 
 
