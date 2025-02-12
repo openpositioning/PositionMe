@@ -18,6 +18,7 @@ import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -28,23 +29,47 @@ import com.google.android.gms.maps.model.*;
 import java.util.ArrayList;
 import java.util.List;
 
+
+/**
+ * A fragment responsible for displaying a trajectory map using Google Maps.
+ * <p>
+ * The TrajectoryMapFragment provides a map interface for visualizing movement trajectories,
+ * GNSS tracking, and indoor mapping. It manages map settings, user interactions, and real-time
+ * updates to user location and GNSS markers.
+ * <p>
+ * Key Features:
+ * - Displays a Google Map with support for different map types (Hybrid, Normal, Satellite).
+ * - Tracks and visualizes user movement using polylines.
+ * - Supports GNSS position updates and visual representation.
+ * - Includes indoor mapping with floor selection and auto-floor adjustments.
+ * - Allows user interaction through map controls and UI elements.
+ *
+ * @see com.openpositioning.PositionMe.presentation.activity.RecordingActivity The activity hosting this fragment.
+ * @see com.openpositioning.PositionMe.utils.IndoorMapManager Utility for managing indoor map overlays.
+ * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
+ *
+ * @author Mate Stodulka
+ */
+
 public class TrajectoryMapFragment extends Fragment {
 
-    private GoogleMap gMap;
-    private LatLng currentLocation;
-    private Marker orientationMarker;
-    private Marker gnssMarker;
-    private Polyline polyline;
-    private boolean isRed = true;
-    private boolean isGnssOn = false;  // track if user toggles GNSS switch
+    private GoogleMap gMap; // Google Maps instance
+    private LatLng currentLocation; // Stores the user's current location
+    private Marker orientationMarker; // Marker representing user's heading
+    private Marker gnssMarker; // GNSS position marker
+    private Polyline polyline; // Polyline representing user's movement path
+    private boolean isRed = true; // Tracks whether the polyline color is red
+    private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
 
-    private Polyline gnssPolyline;
-    private LatLng lastGnssLocation = null;
+    private Polyline gnssPolyline; // Polyline for GNSS path
+    private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
-    private LatLng pendingCameraPosition = null;
-    private boolean hasPendingCameraMove = false;
+    private LatLng pendingCameraPosition = null; // Stores pending camera movement
+    private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
 
-    private IndoorMapManager indoorMapManager;
+    private IndoorMapManager indoorMapManager; // Manages indoor mapping
+    private SensorFusion sensorFusion;
+
 
     // UI
     private Spinner switchMapSpinner;
@@ -143,8 +168,9 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-            // If user toggles auto floor on, the map should automatically set floors
-            // in your logic. If off, user can do it manually.
+            float elevationVal = sensorFusion.getElevation();
+            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
+                    ,true);
         });
 
         floorUpButton.setOnClickListener(v -> {
@@ -162,6 +188,17 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
     }
+
+    /**
+     * Initialize the map settings with the provided GoogleMap instance.
+     * <p>
+     *     The method sets basic map settings, initializes the indoor map manager,
+     *     and creates an empty polyline for user movement tracking.
+     *     The method also initializes the GNSS polyline for tracking GNSS path.
+     *     The method sets the map type to Hybrid and initializes the map with these settings.
+     *
+     * @param map
+     */
 
     private void initMapSettings(GoogleMap map) {
         // Basic map settings
@@ -189,6 +226,22 @@ public class TrajectoryMapFragment extends Fragment {
         );
     }
 
+
+    /**
+     * Initialize the map type spinner with the available map types.
+     * <p>
+     *     The spinner allows the user to switch between different map types
+     *     (e.g. Hybrid, Normal, Satellite) to customize their map view.
+     *     The spinner is populated with the available map types and listens
+     *     for user selection to update the map accordingly.
+     *     The map type is updated directly on the GoogleMap instance.
+     *     <p>
+     *         Note: The spinner is initialized with the default map type (Hybrid).
+     *         The map type is updated on user selection.
+     *     </p>
+     * </p>
+     *     @see com.google.android.gms.maps.GoogleMap The GoogleMap instance to update map type.
+     */
     private void initMapTypeSpinner() {
         if (switchMapSpinner == null) return;
         String[] maps = new String[]{
@@ -273,6 +326,17 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
+
+    /**
+     * Set the initial camera position for the map.
+     * <p>
+     *     The method sets the initial camera position for the map when it is first loaded.
+     *     If the map is already ready, the camera is moved immediately.
+     *     If the map is not ready, the camera position is stored until the map is ready.
+     *     The method also tracks if there is a pending camera move.
+     * </p>
+     * @param startLocation The initial camera position to set.
+     */
     public void setInitialCameraPosition(@NonNull LatLng startLocation) {
         // If the map is already ready, move camera immediately
         if (gMap != null) {
@@ -285,7 +349,10 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
-
+    /**
+     * Get the current user location on the map.
+     * @return The current user location as a LatLng object.
+     */
     public LatLng getCurrentLocation() {
         return currentLocation;
     }
@@ -377,7 +444,21 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Draw the building's polygon annotation and keep it persistently on the map
+     * Draw the building polygon on the map
+     * <p>
+     *     The method draws a polygon representing the building on the map.
+     *     The polygon is drawn with specific vertices and colors to represent
+     *     different buildings or areas on the map.
+     *     The method removes the old polygon if it exists and adds the new polygon
+     *     to the map with the specified options.
+     *     The method logs the number of vertices in the polygon for debugging.
+     *     <p>
+     *
+     *    Note: The method uses hard-coded vertices for the building polygon.
+     *
+     *    </p>
+     *
+     *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
      */
     private void drawBuildingPolygon() {
         if (gMap == null) {
@@ -441,10 +522,12 @@ public class TrajectoryMapFragment extends Fragment {
                 .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
 
 
+        // Remove the old polygon if it exists
         if (buildingPolygon != null) {
             buildingPolygon.remove();
         }
 
+        // Add the polygon to the map
         buildingPolygon = gMap.addPolygon(buildingPolygonOptions);
         gMap.addPolygon(buildingPolygonOptions2);
         gMap.addPolygon(buildingPolygonOptions3);

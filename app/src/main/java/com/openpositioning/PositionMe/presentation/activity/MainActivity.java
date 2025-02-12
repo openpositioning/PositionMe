@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.presentation.activity;
 
 import android.content.SharedPreferences;
 
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.Menu;
@@ -98,7 +99,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
         toolbar.setTitleTextColor(ContextCompat.getColor(getApplicationContext(), R.color.black));
 
         // Set the custom back button with the desired tint
-        toolbar.setNavigationIcon(R.drawable.back_arrow);
+        toolbar.setNavigationIcon(R.drawable.ic_baseline_back_arrow);
 
         // Set up back action with NavigationUI
         AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(navController.getGraph()).build();
@@ -113,13 +114,15 @@ public class MainActivity extends AppCompatActivity implements Observer {
         this.sensorFusion.setContext(getApplicationContext());
 
         // Build the list of dangerous permissions for this device.
-        permissionManager = new PermissionManager(this, new PermissionManager.PermissionCallback() {
-            @Override
-            public void onAllPermissionsGranted() {
-                // Once all permissions are granted, complete initialization:
-                allPermissionsObtained();
-            }
-        });
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            permissionManager = new PermissionManager(this, new PermissionManager.PermissionCallback() {
+                @Override
+                public void onAllPermissionsGranted() {
+                    // Once all permissions are granted, complete initialization:
+                    allPermissionsObtained();
+                }
+            });
+        }
 
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();

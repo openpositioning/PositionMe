@@ -12,10 +12,32 @@ import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragmen
 import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
 
+
 /**
- * This Activity hosts the flow:
- * StartLocationFragment -> RecordingFragment (+ TrajectoryMapFragment) -> CorrectionFragment -> finish
+ * The RecordingActivity manages the recording flow of the application, guiding the user through a sequence
+ * of screens for location selection, recording, and correction before finalizing the process.
+ * <p>
+ * This activity follows a structured workflow:
+ * <ol>
+ *     <li>StartLocationFragment - Allows users to select their starting location.</li>
+ *     <li>RecordingFragment - Handles the recording process and contains a TrajectoryMapFragment.</li>
+ *     <li>CorrectionFragment - Enables users to review and correct recorded data before completion.</li>
+ * </ol>
+ * <p>
+ * The activity ensures that the screen remains on during the recording process to prevent interruptions.
+ * It also provides fragment transactions for seamless navigation between different stages of the workflow.
+ * <p>
+ * This class is referenced in various fragments such as HomeFragment, StartLocationFragment,
+ * RecordingFragment, and CorrectionFragment to control navigation through the recording flow.
+ *
+ * @see StartLocationFragment The first step in the recording process where users select their starting location.
+ * @see RecordingFragment Handles data recording and map visualization.
+ * @see CorrectionFragment Allows users to review and make corrections before finalizing the process.
+ * @see com.openpositioning.PositionMe.R.layout#activity_recording The associated layout for this activity.
+ *
+ * @author ShuGu
  */
+
 public class RecordingActivity extends AppCompatActivity {
 
     @Override
@@ -64,11 +86,7 @@ public class RecordingActivity extends AppCompatActivity {
      * Finish the Activity (or do any final steps) once corrections are done.
      */
     public void finishFlow() {
-        // Option 1: Just finish this activity
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         finish();
-
-        // Option 2: If you want to navigate somewhere else or show a "HomeFragment",
-        // you could do so here instead.
     }
 }

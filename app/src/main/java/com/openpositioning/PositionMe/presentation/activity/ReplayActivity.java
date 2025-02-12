@@ -11,6 +11,34 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 
+
+/**
+ * The ReplayActivity is responsible for managing the replay session of a user's trajectory.
+ * It handles the process of retrieving the trajectory data, displaying relevant fragments, and
+ * facilitating the interaction with the user to choose the starting location before displaying the
+ * replay of the trajectory.
+ * <p>
+ * The activity starts by extracting the trajectory file path from the intent that launched it. If
+ * the file path is not provided or is empty, it uses a default file path. It ensures that the trajectory
+ * file exists before proceeding. Once the file is verified, it shows the StartLocationFragment, which allows
+ * the user to select their starting location (latitude and longitude). After the user has selected the
+ * starting point, the activity switches to the ReplayFragment to display the replay of the user's trajectory.
+ * <p>
+ * The activity also provides functionality to finish the replay session and exit the activity once the replay
+ * process has completed.
+ * <p>
+ * This activity makes use of a few key constants for passing data between fragments, including the trajectory file
+ * path and the initial latitude and longitude. These constants are defined at the beginning of the class.
+ * <p>
+ * The ReplayActivity manages the interaction between fragments by facilitating communication from the
+ * StartLocationFragment to the ReplayFragment, where the replay of the trajectory is displayed.
+ *
+ * @see StartLocationFragment The fragment where the user selects their start location for the trajectory replay.
+ * @see ReplayFragment The fragment responsible for showing the trajectory replay.
+ *
+ * @author Shu Gu
+ */
+
 public class ReplayActivity extends AppCompatActivity {
 
     public static final String TAG = "ReplayActivity";
