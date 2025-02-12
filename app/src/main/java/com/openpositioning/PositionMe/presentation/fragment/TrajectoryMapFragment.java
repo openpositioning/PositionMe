@@ -55,6 +55,8 @@ public class TrajectoryMapFragment extends Fragment {
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
+    private Polygon buildingPolygon;
+
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -103,6 +105,12 @@ public class TrajectoryMapFragment extends Fragment {
                         hasPendingCameraMove = false;
                         pendingCameraPosition = null;
                     }
+
+                    drawBuildingPolygon();
+
+                    Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
+
+
                 }
             });
         }
@@ -368,5 +376,82 @@ public class TrajectoryMapFragment extends Fragment {
                     .add());
         }
     }
+
+    /**
+     * 绘制建筑物的多边形标注，并将其持久保留在地图上
+     */
+    private void drawBuildingPolygon() {
+        if (gMap == null) {
+            Log.e("TrajectoryMapFragment", "GoogleMap is not ready");
+            return;
+        }
+
+        // nuclear building polygon vertices
+        LatLng nucleus1 = new LatLng(55.92279538827796, -3.174612147506538);
+        LatLng nucleus2 = new LatLng(55.92278121423647, -3.174107900816096);
+        LatLng nucleus3 = new LatLng(55.92288405733954, -3.173843694667146);
+        LatLng nucleus4 = new LatLng(55.92331786793876, -3.173832892645086);
+        LatLng nucleus5 = new LatLng(55.923337194112555, -3.1746284301397387);
+
+
+        // nkml building polygon vertices
+        LatLng nkml1 = new LatLng(55.9230343434213, -3.1751847990731954);
+        LatLng nkml2 = new LatLng(55.923032840563366, -3.174777103346131);
+        LatLng nkml4 = new LatLng(55.92280139974615, -3.175195527934348);
+        LatLng nkml3 = new LatLng(55.922793885410734, -3.1747958788136867);
+
+        LatLng fjb1 = new LatLng(55.92269205199916, -3.1729563477188774);//left top
+        LatLng fjb2 = new LatLng(55.922822801570994, -3.172594249522305);
+        LatLng fjb3 = new LatLng(55.92223512226413, -3.171921917547244);
+        LatLng fjb4 = new LatLng(55.9221071265519, -3.1722813131202097);
+
+        LatLng faraday1 = new LatLng(55.92242866264128, -3.1719553662011815);
+        LatLng faraday2 = new LatLng(55.9224966752294, -3.1717846714743474);
+        LatLng faraday3 = new LatLng(55.922271383074154, -3.1715191463437162);
+        LatLng faraday4 = new LatLng(55.92220124468304, -3.171705013935158);
+
+
+
+        PolygonOptions buildingPolygonOptions = new PolygonOptions()
+                .add(nucleus1, nucleus2, nucleus3, nucleus4, nucleus5)
+                .strokeColor(Color.RED)    // Red border
+                .strokeWidth(10f)           // Border width
+                //.fillColor(Color.argb(50, 255, 0, 0)) // Semi-transparent red fill
+                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+
+        // Options for the new polygon
+        PolygonOptions buildingPolygonOptions2 = new PolygonOptions()
+                .add(nkml1, nkml2, nkml3, nkml4, nkml1)
+                .strokeColor(Color.BLUE)    // Blue border
+                .strokeWidth(10f)           // Border width
+               // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
+                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+
+        PolygonOptions buildingPolygonOptions3 = new PolygonOptions()
+                .add(fjb1, fjb2, fjb3, fjb4, fjb1)
+                .strokeColor(Color.GREEN)    // Green border
+                .strokeWidth(10f)           // Border width
+                //.fillColor(Color.argb(50, 0, 255, 0)) // Semi-transparent green fill
+                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+
+        PolygonOptions buildingPolygonOptions4 = new PolygonOptions()
+                .add(faraday1, faraday2, faraday3, faraday4, faraday1)
+                .strokeColor(Color.YELLOW)    // Yellow border
+                .strokeWidth(10f)           // Border width
+                //.fillColor(Color.argb(50, 255, 255, 0)) // Semi-transparent yellow fill
+                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+
+
+        if (buildingPolygon != null) {
+            buildingPolygon.remove();
+        }
+
+        buildingPolygon = gMap.addPolygon(buildingPolygonOptions);
+        gMap.addPolygon(buildingPolygonOptions2);
+        gMap.addPolygon(buildingPolygonOptions3);
+        gMap.addPolygon(buildingPolygonOptions4);
+        Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
+    }
+
 
 }
