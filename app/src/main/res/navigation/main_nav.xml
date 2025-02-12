@@ -129,6 +129,10 @@
     <fragment
         android:id="@+id/replayFragment"
         android:name="com.openpositioning.PositionMe.fragments.ReplayFragment"
-        android:label="Replay" />
+        android:label="Replay" >
+        <action
+            android:id="@+id/action_replayFragment_to_filesFragment"
+            app:destination="@id/filesFragment" />
+    </fragment>
 
 </navigation>
