@@ -68,9 +68,9 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         DownloadClickListener listener = listenerReference.get();
         if (listener != null) {
             listener.onPositionClicked(getAdapterPosition());
-            System.out.println("✅ Click detected at position: " + getAdapterPosition());
+            System.out.println("Click detected at position: " + getAdapterPosition());
         } else {
-            System.err.println("❌ Listener reference is null.");
+            System.err.println("Listener reference is null.");
         }
     }
 }

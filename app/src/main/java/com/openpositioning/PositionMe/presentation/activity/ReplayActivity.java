@@ -24,13 +24,14 @@ public class ReplayActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_replay);
-
+        // Get the trajectory file path from the Intent
         filePath = getIntent().getStringExtra(EXTRA_TRAJECTORY_FILE_PATH);
 
         // Debug log: Received file path
         Log.i(TAG, "Received trajectory file path: " + filePath);
 
         if (filePath == null || filePath.isEmpty()) {
+            // If not provided, set a default path (or show an error message)
             filePath = "/storage/emulated/0/Download/trajectory_default.txt";
             Log.e(TAG, "No trajectory file path provided, using default: " + filePath);
         }
@@ -50,6 +51,7 @@ public class ReplayActivity extends AppCompatActivity {
 
     /**
      * Display a StartLocationFragment to let user set their start location.
+     * Displays the ReplayFragment and passes the trajectory file path as an argument.
      */
     private void showStartLocationFragment() {
         Log.d(TAG, "Showing StartLocationFragment...");
@@ -76,6 +78,7 @@ public class ReplayActivity extends AppCompatActivity {
                 ", Initial Lat: " + initialLat + ", Initial Lon: " + initialLon);
 
         ReplayFragment replayFragment = new ReplayFragment();
+        // Pass the file path through a Bundle
         Bundle args = new Bundle();
         args.putString(EXTRA_TRAJECTORY_FILE_PATH, filePath);
         args.putFloat(EXTRA_INITIAL_LAT, initialLat);
@@ -90,6 +93,7 @@ public class ReplayActivity extends AppCompatActivity {
 
     /**
      * Finish replay session
+     * Called when the replay process is completed.
      */
     public void finishFlow() {
         Log.d(TAG, "Replay session finished.");

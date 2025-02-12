@@ -1,15 +1,9 @@
 package com.openpositioning.PositionMe.presentation.activity;
 
-import android.Manifest;
-import android.app.AlertDialog;
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
-import android.net.Uri;
-import android.os.Build;
+
 import android.os.Bundle;
 import android.os.Handler;
-import android.provider.Settings;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
@@ -18,7 +12,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.Toolbar;
-import androidx.core.app.ActivityCompat;
+
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.drawable.DrawableCompat;
 import android.graphics.drawable.Drawable;
@@ -37,8 +31,7 @@ import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.PermissionManager;
 
-import java.util.ArrayList;
-import java.util.List;
+
 import java.util.Objects;
 
 /**
@@ -95,7 +88,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
         setContentView(R.layout.activity_main);
 
         // Set up navigation and fragments
-        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager().findFragmentById(R.id.nav_host_fragment);
+        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager().
+                findFragmentById(R.id.nav_host_fragment);
         navController = Objects.requireNonNull(navHostFragment).getNavController();
 
         // Set action bar
@@ -286,7 +280,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
      * Task that displays positive toast on the main UI thread.
      * Called when {@link ServerCommunications} successfully uploads a trajectory.
      */
-    private final Runnable displayToastTaskSuccess = () -> Toast.makeText(MainActivity.this, "Trajectory uploaded", Toast.LENGTH_SHORT).show();
+    private final Runnable displayToastTaskSuccess = () -> Toast.makeText(MainActivity.this,
+            "Trajectory uploaded", Toast.LENGTH_SHORT).show();
 
     /**
      * Task that displays negative toast on the main UI thread.

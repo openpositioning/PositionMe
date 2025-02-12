@@ -1,5 +1,5 @@
 package com.openpositioning.PositionMe.data.remote;
-
+import android.util.Log;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -9,10 +9,8 @@ import org.json.JSONObject;
 
 import android.os.Environment;
 
-
 import java.io.FileInputStream;
 import java.io.OutputStream;
-
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -20,7 +18,6 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -99,8 +96,6 @@ public class ServerCommunications implements Observable {
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
 
-
-
     /**
      * Public default constructor of {@link ServerCommunications}. The constructor saves context,
      * initialises a {@link ConnectivityManager}, {@link Observer} and gets the user preferences.
@@ -109,14 +104,12 @@ public class ServerCommunications implements Observable {
      * @param context   application context for handling permissions and devices.
      */
     public ServerCommunications(Context context) {
-
         this.context = context;
         this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.isWifiConn = false;
         this.isMobileConn = false;
         checkNetworkStatus();
-
         this.observers = new ArrayList<>();
     }
 
@@ -229,7 +222,7 @@ public class ServerCommunications implements Observable {
                         String originalPath = file.getAbsolutePath();
                         System.out.println("Original trajectory file saved at: " + originalPath);
 
-                        // 将文件复制到 Downloads 文件夹（注意：需要在 Manifest 里声明相关权限，并在运行时申请）
+                        // Copy the file to the Downloads folder
                         File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                         File downloadFile = new File(downloadsDir, file.getName());
                         try {
@@ -240,8 +233,8 @@ public class ServerCommunications implements Observable {
                             System.err.println("Failed to copy file to Downloads: " + e.getMessage());
                         }
 
-                        // 不再删除文件，直接设置成功，并通知观察者
-                        success = true;
+                        // Delete local file and set success to true
+                        success = file.delete();
                         notifyObservers(1);
                     }
                 }
@@ -254,7 +247,6 @@ public class ServerCommunications implements Observable {
             success = false;
             notifyObservers(1);
         }
-
     }
 
     /**
@@ -325,6 +317,10 @@ public class ServerCommunications implements Observable {
         });
     }
 
+    /**
+     * Loads download records from a JSON file and updates the downloadRecords map.
+     * If the file exists, it reads the JSON content and populates the map.
+     */
     private void loadDownloadRecords() {
         // Point to the app-specific Downloads folder
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
@@ -361,8 +357,15 @@ public class ServerCommunications implements Observable {
         }
     }
 
-
-
+    /**
+     * Saves a download record to a JSON file.
+     * The method creates or updates the JSON file with the provided details.
+     *
+     * @param startTimestamp the start timestamp of the trajectory
+     * @param fileName the name of the file
+     * @param id the ID of the trajectory
+     * @param dateSubmitted the date the trajectory was submitted
+     */
     private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File recordsFile = new File(recordsDir, "download_records.json");
@@ -405,7 +408,7 @@ public class ServerCommunications implements Observable {
             recordDetails.put("id", id);
 
             // Insert or update in the main JSON
-            jsonObject.put(id, recordDetails);  // 使用 id 作为 key
+            jsonObject.put(id, recordDetails);
 
             // Write updated JSON to file
             try (FileWriter writer = new FileWriter(recordsFile)) {
@@ -421,9 +424,6 @@ public class ServerCommunications implements Observable {
         }
     }
 
-
-
-
     /**
      * Perform API request for downloading a Trajectory uploaded to the server. The trajectory is
      * retrieved from a zip file, with the method accepting a position argument specifying the
@@ -431,6 +431,8 @@ public class ServerCommunications implements Observable {
      * then to a JSON string to be downloaded to the device's Downloads folder.
      *
      * @param position the position of the trajectory in the zip file to retrieve
+     * @param id the ID of the trajectory
+     * @param dateSubmitted the date the trajectory was submitted
      */
     public void downloadTrajectory(int position, String id, String dateSubmitted) {
         loadDownloadRecords();  // Load existing records from app-specific directory
@@ -458,6 +460,7 @@ public class ServerCommunications implements Observable {
                     // Extract the nth entry from the zip
                     InputStream inputStream = responseBody.byteStream();
                     ZipInputStream zipInputStream = new ZipInputStream(inputStream);
+
                     java.util.zip.ZipEntry zipEntry;
                     int zipCount = 0;
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
@@ -512,16 +515,15 @@ public class ServerCommunications implements Observable {
 
                     // Save the download record
                     saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
+                    loadDownloadRecords();
                 }
             }
         });
     }
 
-
     /**
      * API request for information about submitted trajectories. If the response is successful,
      * the {@link ServerCommunications#infoResponse} field is updated and observes notified.
-     *
      */
     public void sendInfoRequest() {
         // Create a new OkHttpclient
@@ -619,7 +621,4 @@ public class ServerCommunications implements Observable {
             }
         }
     }
-
-
-
 }
