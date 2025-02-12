@@ -10,7 +10,7 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
-import android.widget.Switch;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -39,12 +39,20 @@ public class TrajectoryMapFragment extends Fragment {
     private boolean isRed = true;
     private boolean isGnssOn = false;  // track if user toggles GNSS switch
 
+    private Polyline gnssPolyline;
+    private LatLng lastGnssLocation = null;
+
+    private LatLng pendingCameraPosition = null;
+    private boolean hasPendingCameraMove = false;
+
     private IndoorMapManager indoorMapManager;
 
     // UI
     private Spinner switchMapSpinner;
-    private Switch gnssSwitch;
-    private Switch autoFloorSwitch;
+
+    private SwitchMaterial gnssSwitch;
+    private SwitchMaterial autoFloorSwitch;
+
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
 
@@ -83,9 +91,18 @@ public class TrajectoryMapFragment extends Fragment {
         if (mapFragment != null) {
             mapFragment.getMapAsync(new OnMapReadyCallback() {
                 @Override
-                public void onMapReady(GoogleMap googleMap) {
+                public void onMapReady(@NonNull GoogleMap googleMap) {
+                    // Assign the provided googleMap to your field variable
                     gMap = googleMap;
+                    // Initialize map settings with the now non-null gMap
                     initMapSettings(gMap);
+
+                    // If we had a pending camera move, apply it now
+                    if (hasPendingCameraMove && pendingCameraPosition != null) {
+                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, 19f));
+                        hasPendingCameraMove = false;
+                        pendingCameraPosition = null;
+                    }
                 }
             });
         }
@@ -153,6 +170,13 @@ public class TrajectoryMapFragment extends Fragment {
         // Initialize an empty polyline
         polyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
+                .width(5f)
+                .add() // start empty
+        );
+
+        // GNSS path in blue
+        gnssPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.BLUE)
                 .width(5f)
                 .add() // start empty
         );
@@ -227,20 +251,33 @@ public class TrajectoryMapFragment extends Fragment {
             gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
 
-        // If oldLocation != null and changed, extend polyline
+        // Extend polyline if movement occurred
         if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
             points.add(newLocation);
             polyline.setPoints(points);
         }
 
-        // Also update indoor map overlay
+        // Update indoor map overlay
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
-            // If the building is recognized, show floor controls
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
     }
+
+
+    public void setInitialCameraPosition(@NonNull LatLng startLocation) {
+        // If the map is already ready, move camera immediately
+        if (gMap != null) {
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLocation, 19f));
+        } else {
+            // Otherwise, store it until onMapReady
+            pendingCameraPosition = startLocation;
+            hasPendingCameraMove = true;
+        }
+    }
+
+
 
     public LatLng getCurrentLocation() {
         return currentLocation;
@@ -254,14 +291,27 @@ public class TrajectoryMapFragment extends Fragment {
         if (!isGnssOn) return;
 
         if (gnssMarker == null) {
+            // Create the GNSS marker for the first time
             gnssMarker = gMap.addMarker(new MarkerOptions()
                     .position(gnssLocation)
                     .title("GNSS Position")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+                    .icon(BitmapDescriptorFactory
+                            .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+            lastGnssLocation = gnssLocation;
         } else {
+            // Move existing GNSS marker
             gnssMarker.setPosition(gnssLocation);
+
+            // Add a segment to the blue GNSS line, if this is a new location
+            if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
+                List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
+                gnssPoints.add(gnssLocation);
+                gnssPolyline.setPoints(gnssPoints);
+            }
+            lastGnssLocation = gnssLocation;
         }
     }
+
 
     /**
      * Remove GNSS marker if user toggles it off
@@ -285,4 +335,38 @@ public class TrajectoryMapFragment extends Fragment {
         floorDownButton.setVisibility(visibility);
         autoFloorSwitch.setVisibility(visibility);
     }
+
+    public void clearMapAndReset() {
+        if (polyline != null) {
+            polyline.remove();
+            polyline = null;
+        }
+        if (gnssPolyline != null) {
+            gnssPolyline.remove();
+            gnssPolyline = null;
+        }
+        if (orientationMarker != null) {
+            orientationMarker.remove();
+            orientationMarker = null;
+        }
+        if (gnssMarker != null) {
+            gnssMarker.remove();
+            gnssMarker = null;
+        }
+        lastGnssLocation = null;
+        currentLocation  = null;
+
+        // Re-create empty polylines with your chosen colors
+        if (gMap != null) {
+            polyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.RED)
+                    .width(5f)
+                    .add());
+            gnssPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.BLUE)
+                    .width(5f)
+                    .add());
+        }
+    }
+
 }

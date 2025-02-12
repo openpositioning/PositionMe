@@ -73,7 +73,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_icon_map_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Cloud"
+        android:theme="@style/Theme.Material3.DayNight.NoActionBar"
         android:requestLegacyExternalStorage="true"
     >
 

@@ -72,7 +72,6 @@ import java.io.FileInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.openpositioning.PositionMe.data.remote.TrajectoryFileHandler;
 /**
  * This class handles communications with the server through HTTPs. The class uses an
  * {@link OkHttpClient} for making requests to the server. The class includes methods for sending
@@ -85,7 +84,7 @@ import com.openpositioning.PositionMe.data.remote.TrajectoryFileHandler;
  * @author Mate Stodulka
  */
 public class ServerCommunications implements Observable {
-    public static Map<Long, String> downloadRecords = new HashMap<>();
+    public static Map<String, JSONObject> downloadRecords = new HashMap<>();
     // Application context for handling permissions and devices
     private final Context context;
 
@@ -143,6 +142,7 @@ public class ServerCommunications implements Observable {
      * @param trajectory    Traj object matching all the timing and formal restrictions.
      */
     public void sendTrajectory(Traj.Trajectory trajectory){
+        logDataSize(trajectory);
 
         // Convert the trajectory to byte array
         byte[] binaryTrajectory = trajectory.toByteArray();
@@ -288,12 +288,12 @@ public class ServerCommunications implements Observable {
                 .build();
 
         // Create a POST request with the required headers
-        Request request = new Request.Builder().url(uploadURL).post(requestBody)
+        okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
 
         // Enqueue the request to be executed asynchronously and handle the response
-        client.newCall(request).enqueue(new Callback() {
+        client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override public void onFailure(Call call, IOException e) {
                 // Print error message, set success to false and notify observers
                 e.printStackTrace();
@@ -353,9 +353,14 @@ public class ServerCommunications implements Observable {
                 JSONObject jsonObject = new JSONObject(json.toString());
                 for (Iterator<String> it = jsonObject.keys(); it.hasNext(); ) {
                     String key = it.next();
-                    long timestamp = Long.parseLong(key);
-                    String record = jsonObject.getJSONObject(key).toString();
-                    downloadRecords.put(timestamp, record);
+                    try {
+                        JSONObject record = jsonObject.getJSONObject(key);
+                        String id = record.getString("id");  // 获取 id 作为新 key
+                        downloadRecords.put(id, record);
+                    } catch (Exception e) {
+                        System.err.println("Error loading record with key: " + key);
+                        e.printStackTrace();
+                    }
                 }
 
                 System.out.println("Loaded downloadRecords: " + downloadRecords);
@@ -407,11 +412,12 @@ public class ServerCommunications implements Observable {
             // Create the new record details
             JSONObject recordDetails = new JSONObject();
             recordDetails.put("file_name", fileName);
-            recordDetails.put("id", id);
+            recordDetails.put("startTimeStamp", startTimestamp);
             recordDetails.put("date_submitted", dateSubmitted);
+            recordDetails.put("id", id);
 
             // Insert or update in the main JSON
-            jsonObject.put(String.valueOf(startTimestamp), recordDetails);
+            jsonObject.put(id, recordDetails);  // 使用 id 作为 key
 
             // Write updated JSON to file
             try (FileWriter writer = new FileWriter(recordsFile)) {
@@ -442,6 +448,8 @@ public class ServerCommunications implements Observable {
         loadDownloadRecords();  // Load existing records from app-specific directory
 
         OkHttpClient client = new OkHttpClient();
+
+        // Create GET request with required header
         okhttp3.Request request = new okhttp3.Request.Builder()
                 .url(downloadURL)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
@@ -465,26 +473,34 @@ public class ServerCommunications implements Observable {
                     java.util.zip.ZipEntry zipEntry;
                     int zipCount = 0;
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                        if (zipCount == position) break;
+                        if (zipCount == position) {
+                            // break if zip entry position matches the desired position
+                            break;
+                        }
                         zipCount++;
                     }
 
+                    // Initialise a byte array output stream
                     ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+
+                    // Read the zipped data and write it to the byte array output stream
                     byte[] buffer = new byte[1024];
                     int bytesRead;
                     while ((bytesRead = zipInputStream.read(buffer)) != -1) {
                         byteArrayOutputStream.write(buffer, 0, bytesRead);
                     }
-                    zipInputStream.closeEntry();
+
 
                     // Convert the byte array to protobuf
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
 
+                    // Inspect the size of the received trajectory
+                    logDataSize(receivedTrajectory);
+
+                    // Print a message in the console
                     long startTimestamp = receivedTrajectory.getStartTimestamp();
-                    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy_MM_dd_HH_mm_ss");
-                    String formattedDate = dateFormat.format(new Date(startTimestamp));
-                    String fileName = "trajectory_" + formattedDate + ".txt";
+                    String fileName = "trajectory_" + dateSubmitted + ".txt";
 
                     // Place the file in your app-specific "Downloads" folder
                     File appSpecificDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
@@ -569,6 +585,18 @@ public class ServerCommunications implements Observable {
             isWifiConn = false;
             isMobileConn = false;
         }
+    }
+
+
+    private void logDataSize(Traj.Trajectory trajectory) {
+        Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
+        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+        Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
+        Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
+        Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
+        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+        Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
+        Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
 
     /**

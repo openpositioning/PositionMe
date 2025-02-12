@@ -13,6 +13,14 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
+
+    <!-- Progress bar or seek bar to show current playback position -->
+    <SeekBar
+        android:id="@+id/playbackSeekBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="14dp"/>
+
     <!-- Playback Controls -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -25,31 +33,31 @@
             android:id="@+id/restartButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Restart" />
+            android:text="Restart"
+            android:layout_margin="2dp" />
 
         <Button
             android:id="@+id/playPauseButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Play" />
+            android:text="Play"
+            android:layout_margin="2dp" />
 
         <Button
             android:id="@+id/goEndButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="End" />
+            android:text="End"
+            android:layout_margin="2dp" />
 
         <Button
             android:id="@+id/exitButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Exit" />
+            android:text="Exit"
+            android:layout_margin="2dp"/>
     </LinearLayout>
 
-    <!-- Progress bar or seek bar to show current playback position -->
-    <SeekBar
-        android:id="@+id/playbackSeekBar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+
 
 </LinearLayout>

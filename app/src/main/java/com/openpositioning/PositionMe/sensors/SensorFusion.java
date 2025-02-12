@@ -17,7 +17,6 @@ import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.openpositioning.PositionMe.domain.KalmanPdrFilter;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
@@ -59,11 +58,6 @@ import java.util.stream.Stream;
  * @author Virginia Cangelosi
  */
 public class SensorFusion implements SensorEventListener, Observer {
-
-
-    private KalmanPdrFilter kalmanFilter;
-    private boolean isKalmanInitialized = false;
-    private long lastKalmanUpdateMillis = 0;
 
     // Store the last event timestamps for each sensor type
     private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -290,23 +284,17 @@ public class SensorFusion implements SensorEventListener, Observer {
         if (lastTimestamp != null) {
             long timeGap = currentTime - lastTimestamp;
 
-            // Log a warning if the time gap is larger than the threshold
-            if (timeGap > LARGE_GAP_THRESHOLD_MS) {
-                Log.e("SensorFusion", "Large time gap detected for sensor " + sensorType +
-                        " | Time gap: " + timeGap + " ms");
-            }
+//            // Log a warning if the time gap is larger than the threshold
+//            if (timeGap > LARGE_GAP_THRESHOLD_MS) {
+//                Log.e("SensorFusion", "Large time gap detected for sensor " + sensorType +
+//                        " | Time gap: " + timeGap + " ms");
+//            }
         }
 
         // Update timestamp and frequency counter for this sensor
         lastEventTimestamps.put(sensorType, currentTime);
         eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
 
-
-        // Time since last Kalman update
-        long dtMillis = currentTime - lastKalmanUpdateMillis;
-        double dtSec = dtMillis / 1000.0;
-        // This will be used for the filter’s predict step if needed
-        lastKalmanUpdateMillis = currentTime;
 
 
         switch (sensorType) {
@@ -330,17 +318,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 angularVelocity[1] = sensorEvent.values[1];
                 angularVelocity[2] = sensorEvent.values[2];
 
-                // Kalman predict step, if needed...
-                if (isKalmanInitialized) {
-                    dtMillis = currentTime - lastKalmanUpdateMillis;
-                    dtSec = dtMillis / 1000.0;
-                    lastKalmanUpdateMillis = currentTime;
-
-                    double gyroZ = angularVelocity[2];
-                    kalmanFilter.predict(dtSec, gyroZ);
-                }
-                break;
-
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 filteredAcc[0] = sensorEvent.values[0];
                 filteredAcc[1] = sensorEvent.values[1];
@@ -354,10 +331,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 );
                 this.accelMagnitude.add(accelMagFiltered);
 
-                // Debug logging
-                Log.v("SensorFusion",
-                        "Added new linear accel magnitude: " + accelMagFiltered
-                                + "; accelMagnitude size = " + accelMagnitude.size());
+//                // Debug logging
+//                Log.v("SensorFusion",
+//                        "Added new linear accel magnitude: " + accelMagFiltered
+//                                + "; accelMagnitude size = " + accelMagnitude.size());
 
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
@@ -425,14 +402,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // Clear the accelMagnitude after using it
                     this.accelMagnitude.clear();
 
-                    // Kalman update
-                    if (isKalmanInitialized) {
-                        double newX = newCords[0];
-                        double newY = newCords[1];
-                        // Example measurement noise
-                        double posNoise = 0.25;
-                        kalmanFilter.updateStep(newX, newY, posNoise);
-                    }
 
                     if (saveRecording) {
                         this.pathView.drawTrajectory(newCords);
@@ -445,12 +414,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                     break;
                 }
 
-        }
-        //read out the updated Kalman states:
-        if (isKalmanInitialized) {
-            double fusedX = kalmanFilter.getX();
-            double fusedY = kalmanFilter.getY();
-            double fusedHeading = kalmanFilter.getHeading();
         }
     }
 
@@ -911,17 +874,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setLightSensorInfo(createInfoBuilder(lightSensor));
 
 
-        // CREATE OR RESET KALMAN FILTER
-        // (x=0, y=0, v=0, heading=0) as an example
-        kalmanFilter = new KalmanPdrFilter(
-                0.0,  // initX
-                0.0,  // initY
-                0.0,  // initVelocity
-                0.0   // initHeading
-        );
-        isKalmanInitialized = true;
-        lastKalmanUpdateMillis = System.currentTimeMillis();
-
 
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
@@ -1015,7 +967,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setMagX(magneticField[0])
                             .setMagY(magneticField[1])
                             .setMagZ(magneticField[2])
-                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime));
+                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
+//                    .addGnssData(Traj.GNSS_Sample.newBuilder()
+//                            .setLatitude(latitude)
+//                            .setLongitude(longitude)
+//                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
+            ;
 
             // Divide timer with a counter for storing data every 1 second
             if (counter == 99) {
