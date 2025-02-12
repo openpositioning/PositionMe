@@ -13,8 +13,17 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
+
+    <!-- Progress bar or seek bar to show current playback position -->
+    <SeekBar
+        android:id="@+id/playbackSeekBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="14dp"/>
+
     <!-- Playback Controls -->
     <LinearLayout
+        style="?android:attr/buttonBarStyle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
@@ -23,33 +32,37 @@
 
         <Button
             android:id="@+id/restartButton"
+            style="?android:attr/buttonBarButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Restart" />
+            android:text="@string/replay_frag_restart"
+            android:layout_margin="2dp" />
 
         <Button
             android:id="@+id/playPauseButton"
+            style="?android:attr/buttonBarButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Play" />
+            android:text="@string/replay_frag_play"
+            android:layout_margin="2dp" />
 
         <Button
             android:id="@+id/goEndButton"
+            style="?android:attr/buttonBarButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="End" />
+            android:text="@string/replay_frag_end"
+            android:layout_margin="2dp" />
 
         <Button
             android:id="@+id/exitButton"
+            style="?android:attr/buttonBarButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Exit" />
+            android:text="@string/replay_frag_exit"
+            android:layout_margin="2dp"/>
     </LinearLayout>
 
-    <!-- Progress bar or seek bar to show current playback position -->
-    <SeekBar
-        android:id="@+id/playbackSeekBar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+
 
 </LinearLayout>

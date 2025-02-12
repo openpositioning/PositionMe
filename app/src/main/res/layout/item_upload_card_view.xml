@@ -14,7 +14,7 @@
         android:layout_marginTop="15dp"
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="5dp"
-        app:cardBackgroundColor="@color/md_theme_primaryContainer"
+        app:cardBackgroundColor="@color/md_theme_tertiaryContainer"
         app:cardCornerRadius="16dp"
         app:strokeColor="@color/md_theme_outlineVariant">
 
@@ -27,9 +27,10 @@
                 android:id="@+id/trajectoryIdItem"
                 android:layout_width="80dp"
                 android:layout_height="wrap_content"
+                android:textStyle="bold"
                 android:gravity="center"
                 android:text="99999"
-                android:textColor="@color/md_theme_onPrimaryContainer"
+                android:textColor="@color/pastelBlue"
                 android:textAppearance="@style/TextAppearance.Material3.DisplaySmall"
                 android:maxLines="1"
                 android:ellipsize="end"

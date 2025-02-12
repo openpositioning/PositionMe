@@ -208,15 +208,15 @@ public class FilesFragment extends Fragment implements Observer {
             // Pass ID and date_submitted
             serverCommunications.downloadTrajectory(position, id, dateSubmitted);
 
-            new AlertDialog.Builder(getContext())
-                    .setTitle("File downloaded")
-                    .setMessage("Trajectory downloaded to local storage")
-                    .setPositiveButton(R.string.ok, null)
-                    .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
-                        startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-                    })
-                    .setIcon(R.drawable.ic_baseline_download_24)
-                    .show();
+//            new AlertDialog.Builder(getContext())
+//                    .setTitle("File downloaded")
+//                    .setMessage("Trajectory downloaded to local storage")
+//                    .setPositiveButton(R.string.ok, null)
+//                    .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
+//                        startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
+//                    })
+//                    .setIcon(R.drawable.ic_baseline_download_24)
+//                    .show();
         });
         filesList.setAdapter(listAdapter);
         // Force refresh RecyclerView to ensure downloadRecords changes are detected

@@ -1,7 +1,9 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
@@ -16,6 +18,7 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -32,7 +35,7 @@ import com.google.android.gms.maps.model.LatLng;
 public class RecordingFragment extends Fragment {
 
     // UI elements
-    private Button stopButton, cancelButton;
+    private MaterialButton completeButton, cancelButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -108,7 +111,7 @@ public class RecordingFragment extends Fragment {
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
 
-        stopButton = view.findViewById(R.id.stopButton);
+        completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
@@ -119,7 +122,7 @@ public class RecordingFragment extends Fragment {
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
         // Buttons
-        stopButton.setOnClickListener(v -> {
+        completeButton.setOnClickListener(v -> {
             // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
@@ -127,12 +130,30 @@ public class RecordingFragment extends Fragment {
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
         });
 
+
         cancelButton.setOnClickListener(v -> {
-            // Cancel recording & go back (discard)
-            sensorFusion.stopRecording();
-            if (autoStop != null) autoStop.cancel();
-            // For example, pop back stack or show some "home" screen
-            requireActivity().onBackPressed();
+            AlertDialog dialog = new AlertDialog.Builder(requireActivity())
+                    .setTitle("Confirm Cancel")
+                    .setMessage("Are you sure you want to cancel the recording? Your progress will be lost permanently!")
+                    .setNegativeButton("Yes", (dialogInterface, which) -> {
+                        // User confirmed cancellation
+                        sensorFusion.stopRecording();
+                        if (autoStop != null) autoStop.cancel();
+                        requireActivity().onBackPressed();
+                    })
+                    .setPositiveButton("No", (dialogInterface, which) -> {
+                        // User cancelled the dialog. Do nothing.
+                        dialogInterface.dismiss();
+                    })
+                    .create(); // Create the dialog but do not show it yet
+
+            // Show the dialog and change the button color
+            dialog.setOnShowListener(dialogInterface -> {
+                Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+                negativeButton.setTextColor(Color.RED); // Set "Yes" button color to red
+            });
+
+            dialog.show(); // Finally, show the dialog
         });
 
         // The blinking effect for recIcon
