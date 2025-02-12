@@ -488,9 +488,7 @@ public class ServerCommunications implements Observable {
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
 
                     long startTimestamp = receivedTrajectory.getStartTimestamp();
-                    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy_MM_dd_HH_mm_ss");
-                    String formattedDate = dateFormat.format(new Date(startTimestamp));
-                    String fileName = "trajectory_" + formattedDate + ".txt";
+                    String fileName = "trajectory_" + dateSubmitted + ".txt";
 
                     // Place the file in your app-specific "Downloads" folder
                     File appSpecificDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
