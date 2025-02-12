@@ -3,10 +3,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 
-import android.Manifest;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.graphics.Color;
+
 import org.json.JSONObject;
 import android.os.Handler;
 import android.os.Looper;
@@ -18,7 +16,7 @@ import java.io.FileReader;
 import java.io.BufferedReader;
 import java.util.Iterator;
 
-import com.openpositioning.PositionMe.Traj;
+
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import android.content.Context;
 import android.util.Log;
@@ -36,7 +34,7 @@ import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
+
 
 /**
  * Adapter used for displaying Trajectory metadata in a RecyclerView list.
@@ -44,8 +42,6 @@ import java.util.Map;
  * @see TrajDownloadViewHolder the corresponding view holder.
  * @see FilesFragment on how the data is generated
  * @see ServerCommunications on where the response items are received.
- *
- * @author Mate Stodulka
  */
 public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder> {
 
@@ -55,8 +51,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     private final Context context;
     private final List<Map<String, String>> responseItems;
     private final DownloadClickListener listener;
-    private long lastFileSize = -1;
-
     private final Map<String, Boolean> pollingStatus = new HashMap<>();
 
     /**
@@ -65,20 +59,15 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
      * @param context       application context to enable inflating views used in the list.
      * @param responseItems List of Maps, where each map is a response item from the server.
      * @param listener      clickListener to download trajectories when clicked.
-     * @see Traj protobuf objects exchanged with the server.
      */
     public TrajDownloadListAdapter(Context context, List<Map<String, String>> responseItems, DownloadClickListener listener) {
         this.context = context;
         this.responseItems = responseItems;
         this.listener = listener;
         // Load local records
-        // Load local download records
         loadDownloadRecords();
     }
 
-    /**
-     * Load the download records from the local storage.
-     */
     /**
      * Loads download records from a JSON file and updates the UI if necessary.
      * It reads the JSON file, parses it, and updates the download records in ServerCommunications.
@@ -88,9 +77,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         try {
             File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
             if (file.exists()) {
-                // ✅ 逐行读取，减少内存占用
+                // Read line by line to reduce memory usage
                 StringBuilder jsonBuilder = new StringBuilder();
-                try (BufferedReader reader = new BufferedReader(new FileReader(file), 8192)) { // 增加缓冲区大小
+                try (BufferedReader reader = new BufferedReader(new FileReader(file), 8192)) { // Increase buffer size
                     String line;
                     while ((line = reader.readLine()) != null) {
                         jsonBuilder.append(line);
@@ -100,7 +89,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 JSONObject jsonObject = new JSONObject(jsonBuilder.toString());
                 ServerCommunications.downloadRecords.clear();
 
-                // ✅ 预分配 HashMap 容量，减少扩容开销
+                // Pre-allocate HashMap capacity to reduce resizing overhead
                 int estimatedSize = jsonObject.length();
                 ServerCommunications.downloadRecords = new HashMap<>(estimatedSize * 2);
 
@@ -111,15 +100,15 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                     ServerCommunications.downloadRecords.put(id, recordDetails);
                 }
 
-                System.out.println("✅ Download records loaded: " + ServerCommunications.downloadRecords);
+                System.out.println("Download records loaded: " + ServerCommunications.downloadRecords);
 
-                // ✅ 仅刷新一次 UI，避免频繁重绘
+                // Refresh UI only once to avoid frequent redraws
                 new Handler(Looper.getMainLooper()).post(() -> {
                     notifyDataSetChanged();
-                    System.out.println("🔄 RecyclerView fully refreshed after loading records.");
+                    System.out.println("RecyclerView fully refreshed after loading records.");
                 });
             } else {
-                System.out.println("⚠️ Download records file not found.");
+                System.out.println("Download records file not found.");
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -164,7 +153,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 )
         );
 
-        // ✅ 直接使用 HashMap 进行 O(1) 查找
+        // Directly use HashMap for O(1) lookup
         JSONObject recordDetails = ServerCommunications.downloadRecords.get(id);
         boolean matched = recordDetails != null;
         String filePath = null;
@@ -176,39 +165,38 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                     File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
                     filePath = file.getAbsolutePath();
                 }
-                setButtonState(holder.downloadButton, 1); // 已下载状态
+                setButtonState(holder.downloadButton, 1); // Downloaded state
             } catch (Exception e) {
                 e.printStackTrace();
             }
         } else {
-            setButtonState(holder.downloadButton, 0); // 未下载状态
+            setButtonState(holder.downloadButton, 0); // Not downloaded state
         }
 
-// 将 matched 和 filePath 复制到 final 变量中供 lambda 使用
+        // Copy matched and filePath to final variables for lambda use
         final boolean finalMatched = matched;
         final String finalFilePath = filePath;
 
-// 设置按钮点击事件，根据 matched 状态判断行为
+        // Set button click event, determine behavior based on matched state
         holder.downloadButton.setOnClickListener(v -> {
             String trajId = responseItems.get(position).get("id");
 
             if (finalMatched) {
-                // 当为 replay 状态时，直接启动 ReplayActivity
+                // When in replay state, directly start ReplayActivity
                 if (finalFilePath != null) {
                     Intent intent = new Intent(context, ReplayActivity.class);
                     intent.putExtra(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, finalFilePath);
                     context.startActivity(intent);
                 }
             } else {
-                // 原下载逻辑
+                // Original download logic
                 listener.onPositionClicked(position);
-                startPollingForFileUpdate(holder, trajId); // 独立轮询
+                startPollingForFileUpdate(holder, trajId); // Independent polling
             }
         });
 
         holder.downloadButton.invalidate();
     }
-
 
     /**
      * {@inheritDoc}
@@ -241,13 +229,13 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
      * This method sets up a polling mechanism to periodically check if the download records file has been updated.
      */
     private void startPollingForFileUpdate(TrajDownloadViewHolder holder, String trajId) {
-        setButtonState(holder.downloadButton, 2); // 切换为“下载中”状态
+        setButtonState(holder.downloadButton, 2); // Switch to "downloading" state
 
-        // 如果已经在轮询，直接返回
+        // If already polling, return directly
         if (pollingStatus.getOrDefault(trajId, false)) {
             return;
         }
-        pollingStatus.put(trajId, true); // 标记为正在轮询
+        pollingStatus.put(trajId, true); // Mark as polling
 
         // Use the app-specific Downloads directory.
         File downloadsFolder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
@@ -268,15 +256,15 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             public void run() {
                 attempts++;
                 if (file.lastModified() > initialModified) {
-                    Log.i("FileUpdate", "🎉 文件更新成功！尝试次数：" + attempts);
+                    Log.i("FileUpdate", "File updated successfully! Attempts: " + attempts);
                     loadDownloadRecords();
-                    setButtonState(holder.downloadButton, 1); // 下载完成切换为“已下载”状态
-                    pollingStatus.put(trajId, false); // 结束当前轮询
+                    setButtonState(holder.downloadButton, 1); // Download complete, switch to "downloaded" state
+                    pollingStatus.put(trajId, false); // End current polling
                 } else if (attempts < 100) {
-                    handler.postDelayed(this, 200); // 继续轮询
+                    handler.postDelayed(this, 200); // Continue polling
                 } else {
-                    setButtonState(holder.downloadButton, 0); // 超时恢复为未下载状态
-                    pollingStatus.put(trajId, false); // 停止轮询
+                    setButtonState(holder.downloadButton, 0); // Timeout, revert to not downloaded state
+                    pollingStatus.put(trajId, false); // Stop polling
                 }
             }
         };

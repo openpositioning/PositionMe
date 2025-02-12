@@ -1,5 +1,5 @@
 package com.openpositioning.PositionMe.data.remote;
-
+import android.util.Log;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Iterator;
