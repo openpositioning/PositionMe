@@ -1,13 +1,15 @@
 package com.openpositioning.PositionMe.presentation.viewitems;
 import java.util.HashMap;
 import java.util.Map;
+
+import java.util.HashMap;
+import java.util.Map;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
-import android.Manifest;
+
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.graphics.Color;
+
 import org.json.JSONObject;
 import android.os.Handler;
 import android.os.Looper;
@@ -17,7 +19,6 @@ import java.time.format.DateTimeFormatter;
 import java.io.File;
 import java.io.FileReader;
 import java.io.BufferedReader;
-import java.util.HashMap;
 import java.util.Iterator;
 
 import com.openpositioning.PositionMe.Traj;
@@ -60,7 +61,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     private final DownloadClickListener listener;
 
     private final Map<String, Boolean> pollingStatus = new HashMap<>();
-
+    
     /**
      * Default public constructor with context for inflating views and list to be displayed.
      *
@@ -258,6 +259,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             public void run() {
                 attempts++;
                 if (file.lastModified() > initialModified) {
+                    Log.i("FileUpdate", "🎉 文件更新成功！尝试次数：" + attempts);
                     loadDownloadRecords();
                     setButtonState(holder.downloadButton, 1); // 下载完成切换为“已下载”状态
                     pollingStatus.put(trajId, false); // 结束当前轮询
