@@ -134,6 +134,46 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
+        checkAndUpdatePermissions();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        checkAndUpdatePermissions();
+    }
+
+    /**
+     * Checks if GNSS/Location is enabled on the device.
+     */
+    private boolean isGnssEnabled() {
+        LocationManager locationManager =
+                (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
+        // Checks both GPS and network provider. Adjust as needed.
+        boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        return (gpsEnabled || networkEnabled);
+    }
+
+    /**
+     * Move the map to the University of Edinburgh and display a message.
+     */
+    private void showEdinburghAndMessage(String message) {
+        gnssStatusTextView.setText(message);
+        gnssStatusTextView.setVisibility(View.VISIBLE);
+
+        LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
+        mMap.addMarker(new MarkerOptions()
+                .position(edinburghLatLng)
+                .title("University of Edinburgh"));
+    }
+
+    private void checkAndUpdatePermissions() {
+
+        if (mMap == null) {
+            return;
+        }
 
         // Check if GNSS/Location is enabled
         boolean gnssEnabled = isGnssEnabled();
@@ -168,37 +208,11 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                 */
             } else {
                 // If no permission, simply show a default location or prompt for permissions
-                showEdinburghAndMessage("Location permission not granted.");
+                showEdinburghAndMessage("Permission not granted. Please enable in settings.");
             }
         } else {
             // If GNSS is disabled, show University of Edinburgh + message
-            showEdinburghAndMessage("GNSS is disabled");
+            showEdinburghAndMessage("GNSS is disabled. Please enable in settings.");
         }
-    }
-
-    /**
-     * Checks if GNSS/Location is enabled on the device.
-     */
-    private boolean isGnssEnabled() {
-        LocationManager locationManager =
-                (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
-        // Checks both GPS and network provider. Adjust as needed.
-        boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-        return (gpsEnabled || networkEnabled);
-    }
-
-    /**
-     * Move the map to the University of Edinburgh and display a message.
-     */
-    private void showEdinburghAndMessage(String message) {
-        gnssStatusTextView.setText(message);
-        gnssStatusTextView.setVisibility(View.VISIBLE);
-
-        LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
-        mMap.addMarker(new MarkerOptions()
-                .position(edinburghLatLng)
-                .title("University of Edinburgh"));
     }
 }

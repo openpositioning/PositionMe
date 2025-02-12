@@ -283,9 +283,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             button.setIconTintResource(R.color.md_theme_onPrimary);
             button.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.md_theme_primary));
         } else if (state == 2) {
-            button.setIconResource(R.drawable.ic_baseline_stop_24);
+            button.setIconResource(R.drawable.baseline_data_usage_24);
             button.setIconTintResource(R.color.md_theme_onPrimary);
-            button.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.md_theme_secondaryFixed_mediumContrast));
+            button.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.goldYellow));
         } else {
             button.setIconResource(R.drawable.ic_baseline_download_24);
             button.setIconTintResource(R.color.md_theme_onSecondary);

@@ -1,7 +1,8 @@
 package com.openpositioning.PositionMe.presentation.activity;
-
+import android.Manifest;
 import android.content.SharedPreferences;
 
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -9,7 +10,10 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.Toolbar;
@@ -61,6 +65,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
     //region Instance variables
     private NavController navController;
+    private ActivityResultLauncher<String> locationPermissionLauncher;
+    private ActivityResultLauncher<String[]> multiplePermissionsLauncher;
 
     private SharedPreferences settings;
     private SensorFusion sensorFusion;
@@ -87,8 +93,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
         setContentView(R.layout.activity_main);
 
         // Set up navigation and fragments
-        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager().
-                findFragmentById(R.id.nav_host_fragment);
+        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
+                .findFragmentById(R.id.nav_host_fragment);
         navController = Objects.requireNonNull(navHostFragment).getNavController();
 
         // Set action bar
@@ -97,8 +103,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
         toolbar.showOverflowMenu();
         toolbar.setBackgroundColor(ContextCompat.getColor(getApplicationContext(), R.color.md_theme_light_surface));
         toolbar.setTitleTextColor(ContextCompat.getColor(getApplicationContext(), R.color.black));
-
-        // Set the custom back button with the desired tint
         toolbar.setNavigationIcon(R.drawable.ic_baseline_back_arrow);
 
         // Set up back action with NavigationUI
@@ -113,20 +117,30 @@ public class MainActivity extends AppCompatActivity implements Observer {
         this.sensorFusion = SensorFusion.getInstance();
         this.sensorFusion.setContext(getApplicationContext());
 
-        // Build the list of dangerous permissions for this device.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            permissionManager = new PermissionManager(this, new PermissionManager.PermissionCallback() {
-                @Override
-                public void onAllPermissionsGranted() {
-                    // Once all permissions are granted, complete initialization:
-                    allPermissionsObtained();
+        // Register multiple permissions launcher
+        multiplePermissionsLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestMultiplePermissions(),
+                result -> {
+                    boolean locationGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
+                    boolean activityGranted = result.getOrDefault(Manifest.permission.ACTIVITY_RECOGNITION, false);
+
+                    if (locationGranted && activityGranted) {
+                        // Both permissions granted
+                        allPermissionsObtained();
+                    } else {
+                        // Permission denied
+                        Toast.makeText(this,
+                                "Location or Physical Activity permission denied. Some features may not work.",
+                                Toast.LENGTH_LONG).show();
+                    }
                 }
-            });
-        }
+        );
 
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();
     }
+
+
 
 
     /**
@@ -158,15 +172,43 @@ public class MainActivity extends AppCompatActivity implements Observer {
             getSupportActionBar().show();
         }
 
+        // Delay permission check slightly to ensure the Activity is in the foreground
         new Handler().postDelayed(() -> {
-            if (permissionManager != null) {
-                permissionManager.checkAndRequestPermissions();
+            if (isActivityVisible()) {
+                // Check if both permissions are granted
+                boolean locationGranted = ContextCompat.checkSelfPermission(
+                        this, Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED;
+
+                boolean activityGranted = ContextCompat.checkSelfPermission(
+                        this, Manifest.permission.ACTIVITY_RECOGNITION
+                ) == PackageManager.PERMISSION_GRANTED;
+
+                if (!locationGranted || !activityGranted) {
+                    // Request both permissions using ActivityResultLauncher
+                    multiplePermissionsLauncher.launch(new String[]{
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                    });
+                    multiplePermissionsLauncher.launch(new String[]{
+                            Manifest.permission.ACTIVITY_RECOGNITION
+                    });
+                } else {
+                    // Both permissions are already granted
+                    allPermissionsObtained();
+                }
             }
-        }, 300); // 300 ms delay to ensure the Activity is fully in the foreground
+        }, 300); // Delay ensures activity is fully visible before requesting permissions
+
         if (sensorFusion != null) {
             sensorFusion.resumeListening();
         }
     }
+
+    private boolean isActivityVisible() {
+        return !isFinishing() && !isDestroyed();
+    }
+
+
 
     /**
      * Unregisters sensor listeners when the app closes. Not in {@link MainActivity#onPause()} to
@@ -257,6 +299,34 @@ public class MainActivity extends AppCompatActivity implements Observer {
         getMenuInflater().inflate(R.menu.menu_items, menu);
         return true;
     }
+
+    /**
+     * {@inheritDoc}
+     * Handles the back button press. If the current fragment is the HomeFragment, a dialog is
+     * displayed to confirm the exit. If not, the default back navigation is performed.
+     */
+    @Override
+    public void onBackPressed() {
+        // Check if the current destination is HomeFragment (assumed to be the root)
+        if (navController.getCurrentDestination() != null &&
+                navController.getCurrentDestination().getId() == R.id.homeFragment) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Confirm Exit")
+                    .setMessage("Are you sure you want to exit the app?")
+                    .setPositiveButton("Yes", (dialog, which) -> {
+                        dialog.dismiss();
+                        finish(); // Close the activity (exit the app)
+                    })
+                    .setNegativeButton("No", (dialog, which) -> dialog.dismiss())
+                    .create()
+                    .show();
+        } else {
+            // If not on the root destination, perform the default back navigation.
+            super.onBackPressed();
+        }
+    }
+
+
 
     //endregion
 
