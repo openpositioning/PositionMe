@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/replayContainer"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -25,7 +23,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_margin="8dp"
-
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
@@ -34,37 +31,87 @@
             android:id="@+id/autoFloorSwitch_playback"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="AutoFloor"
             android:layout_marginTop="8dp"
-
+            android:text="AutoFloor"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner_playback" />
+            app:layout_constraintTop_toBottomOf="@id/mapSwitchSpinner_playback" />
+
+        <!-- New TextView to display GNSS data (longitude & latitude) -->
+        <LinearLayout
+            android:id="@+id/gnss_data_layout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/autoFloorSwitch_playback">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="GNSS Data:"
+                android:textColor="@android:color/black" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp">
+
+                <TextView
+                    android:layout_width="35dp"
+                    android:layout_height="wrap_content"
+                    android:text="Lon:"
+                    android:textColor="@android:color/black" />
+
+                <TextView
+                    android:id="@+id/gnss_data_lon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1.23"
+                    android:textColor="@android:color/darker_gray" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp">
+
+                <TextView
+                    android:layout_width="35dp"
+                    android:layout_height="wrap_content"
+                    android:text="Lat:"
+                    android:textColor="@android:color/black" />
+
+                <TextView
+                    android:id="@+id/gnss_data_lat"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1.23"
+                    android:textColor="@android:color/darker_gray" />
+            </LinearLayout>
+        </LinearLayout>
 
         <!-- Floor up button -->
-
-        <!-- Floor down button -->
-
-        <!-- Playback progress bar at the very bottom -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton_playback"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_margin="16dp"
             android:src="@android:drawable/arrow_up_float"
-
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="1.0"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
+        <!-- Floor down button -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton_playback"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_margin="16dp"
             android:src="@android:drawable/arrow_down_float"
-
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="1.0"
@@ -72,6 +119,7 @@
             app:layout_constraintTop_toBottomOf="@+id/floorUpButton_playback"
             app:layout_constraintVertical_bias="0.0" />
 
+        <!-- Playback progress bar at the very bottom -->
         <ProgressBar
             android:id="@+id/playbackProgressBar"
             style="?android:attr/progressBarStyleHorizontal"
@@ -79,10 +127,9 @@
             android:layout_height="wrap_content"
             android:max="100"
             android:progress="0"
-
-            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent" />
+            app:layout_constraintStart_toStartOf="parent" />
 
         <!-- Play/Pause button -->
         <Button
@@ -90,7 +137,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Play"
-
             app:layout_constraintBottom_toTopOf="@+id/playbackProgressBar"
             app:layout_constraintStart_toStartOf="parent" />
 
@@ -100,7 +146,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Restart"
-
             app:layout_constraintBottom_toTopOf="@+id/playbackProgressBar"
             app:layout_constraintStart_toEndOf="@+id/playPauseButton" />
 
@@ -110,7 +155,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="End"
-
             app:layout_constraintBottom_toTopOf="@+id/playbackProgressBar"
             app:layout_constraintStart_toEndOf="@+id/restartButton" />
 
@@ -120,10 +164,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Exit"
-
             app:layout_constraintBottom_toTopOf="@+id/playbackProgressBar"
-            app:layout_constraintStart_toEndOf="@+id/goToEndButton"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/goToEndButton" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>
