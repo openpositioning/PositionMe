@@ -9,6 +9,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -18,17 +20,61 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+/**
+ * Handles parsing of trajectory data stored in JSON files, combining IMU, PDR, and GNSS data
+ * to reconstruct motion paths.
+ *
+ * <p>
+ * The **TrajParser** is primarily responsible for processing recorded trajectory data and
+ * reconstructing motion information, including estimated positions, GNSS coordinates, speed, and orientation.
+ * It does this by reading a JSON file containing:
+ * </p>
+ * <ul>
+ *     <li>IMU (Inertial Measurement Unit) data</li>
+ *     <li>PDR (Pedestrian Dead Reckoning) position data</li>
+ *     <li>GNSS (Global Navigation Satellite System) location data</li>
+ * </ul>
+ *
+ * <p>
+ * **Usage in Module 'PositionMe.app.main':**
+ * </p>
+ * <ul>
+ *     <li>**ReplayFragment** - Calls `parseTrajectoryData()` to read recorded trajectory files and process movement.</li>
+ *     <li>Stores parsed trajectory data as `ReplayPoint` objects.</li>
+ *     <li>Provides data for updating map visualizations in `ReplayFragment`.</li>
+ * </ul>
+ *
+ * @see ReplayFragment which uses parsed trajectory data for visualization.
+ * @see SensorFusion for motion processing and sensor integration.
+ * @see com.openpositioning.PositionMe.presentation.fragment.ReplayFragment for implementation details.
+ *
+ * @author Mate Stodulka
+ * @author Virginia Cangelosi
+ */
 public class TrajParser {
 
     private static final String TAG = "TrajParser";
 
+    /**
+     * Represents a single replay point containing estimated PDR position, GNSS location,
+     * orientation, speed, and timestamp.
+     */
     public static class ReplayPoint {
-        public LatLng pdrLocation;
-        public LatLng gnssLocation;
-        public float orientation;
-        public float speed;
-        public long timestamp;
+        public LatLng pdrLocation;  // PDR-derived location estimate
+        public LatLng gnssLocation; // GNSS location (may be null if unavailable)
+        public float orientation;   // Orientation in degrees
+        public float speed;         // Speed in meters per second
+        public long timestamp;      // Relative timestamp
 
+        /**
+         * Constructs a ReplayPoint.
+         *
+         * @param pdrLocation  The pedestrian dead reckoning (PDR) location.
+         * @param gnssLocation The GNSS location, or null if unavailable.
+         * @param orientation  The orientation angle in degrees.
+         * @param speed        The speed in meters per second.
+         * @param timestamp    The timestamp associated with this point.
+         */
         public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, float orientation, float speed, long timestamp) {
             this.pdrLocation = pdrLocation;
             this.gnssLocation = gnssLocation;
@@ -38,26 +84,49 @@ public class TrajParser {
         }
     }
 
+    /** Represents an IMU (Inertial Measurement Unit) data record used for orientation calculations. */
     private static class ImuRecord {
         public long relativeTimestamp;
-        public float accX, accY, accZ;
-        public float gyrX, gyrY, gyrZ;
-        public float rotationVectorX, rotationVectorY, rotationVectorZ, rotationVectorW;
+        public float accX, accY, accZ; // Accelerometer values
+        public float gyrX, gyrY, gyrZ; // Gyroscope values
+        public float rotationVectorX, rotationVectorY, rotationVectorZ, rotationVectorW; // Rotation quaternion
     }
 
+    /** Represents a Pedestrian Dead Reckoning (PDR) data record storing position shifts over time. */
     private static class PdrRecord {
         public long relativeTimestamp;
-        public float x, y;
+        public float x, y; // Position relative to the starting point
     }
 
+    /** Represents a GNSS (Global Navigation Satellite System) data record with latitude/longitude. */
     private static class GnssRecord {
         public long relativeTimestamp;
-        public double latitude;
-        public double longitude;
+        public double latitude, longitude; // GNSS coordinates
     }
 
-    public static List<ReplayPoint> parseTrajectoryData(String filePath, Context context, double originLat, double originLng) {
-    List<ReplayPoint> result = new ArrayList<>();
+    /**
+     * Parses trajectory data from a JSON file and reconstructs a list of replay points.
+     *
+     * <p>
+     * This method processes a trajectory log file, extracting IMU, PDR, and GNSS records,
+     * and uses them to generate **ReplayPoint** objects. Each point contains:
+     * </p>
+     * <ul>
+     *     <li>Estimated PDR-based position.</li>
+     *     <li>GNSS location (if available).</li>
+     *     <li>Computed orientation using rotation vectors.</li>
+     *     <li>Speed estimation based on movement data.</li>
+     * </ul>
+     *
+     * @param filePath  Path to the JSON file containing trajectory data.
+     * @param context   Android application context (used for sensor processing).
+     * @param originLat Latitude of the reference origin.
+     * @param originLng Longitude of the reference origin.
+     * @return A list of parsed {@link ReplayPoint} objects.
+     */
+    public static List<ReplayPoint> parseTrajectoryData(String filePath, Context context,
+                                                        double originLat, double originLng) {
+        List<ReplayPoint> result = new ArrayList<>();
 
         try {
             File file = new File(filePath);
@@ -82,7 +151,8 @@ public class TrajParser {
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
 
-            Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: " + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
+            Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: "
+                    + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
 
             for (int i = 0; i < pdrList.size(); i++) {
                 PdrRecord pdr = pdrList.get(i);
@@ -112,12 +182,11 @@ public class TrajParser {
                 LatLng pdrLocation = new LatLng(lat, lng);
 
                 GnssRecord closestGnss = findClosestGnssRecord(gnssList, pdr.relativeTimestamp);
-                LatLng gnssLocation = closestGnss != null ? new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
+                LatLng gnssLocation = closestGnss != null ?
+                        new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
 
-                ReplayPoint rp = new ReplayPoint(pdrLocation, gnssLocation, orientationDeg, speed, pdr.relativeTimestamp);
-                result.add(rp);
-
-                Log.d(TAG, "Created ReplayPoint - PDR: " + pdrLocation + ", GNSS: " + gnssLocation + ", Orientation: " + orientationDeg + ", Speed: " + speed + ", Timestamp: " + pdr.relativeTimestamp);
+                result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
+                        0f, pdr.relativeTimestamp));
             }
 
             Collections.sort(result, Comparator.comparingLong(rp -> rp.timestamp));
@@ -131,6 +200,7 @@ public class TrajParser {
         return result;
     }
 
+    /** Parses IMU data from JSON. */
     private static List<ImuRecord> parseImuData(JsonArray imuArray) {
         List<ImuRecord> imuList = new ArrayList<>();
         if (imuArray == null) return imuList;
@@ -165,11 +235,13 @@ public class TrajParser {
     }
 
     private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {
-        return imuList.stream().min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp))).orElse(null);
+        return imuList.stream().min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp)))
+                .orElse(null);
     }
 
     private static GnssRecord findClosestGnssRecord(List<GnssRecord> gnssList, long targetTimestamp) {
-        return gnssList.stream().min(Comparator.comparingLong(gnss -> Math.abs(gnss.relativeTimestamp - targetTimestamp))).orElse(null);
+        return gnssList.stream().min(Comparator.comparingLong(gnss -> Math.abs(gnss.relativeTimestamp - targetTimestamp)))
+                .orElse(null);
     }
 
     private static float computeOrientationFromRotationVector(float rx, float ry, float rz, float rw, Context context) {

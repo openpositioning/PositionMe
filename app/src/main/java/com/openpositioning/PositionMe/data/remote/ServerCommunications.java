@@ -23,6 +23,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.protobuf.util.JsonFormat;
@@ -290,7 +291,7 @@ public class ServerCommunications implements Observable {
                 new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());//show error message to users
             }
 
-            @Override public void onResponse(Call call, Response response) throws IOException {
+            @Override public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful()) {
                         // Print error message, set success to false and throw an exception
@@ -298,6 +299,7 @@ public class ServerCommunications implements Observable {
 //                        System.err.println("UPLOAD unsuccessful: " + responseBody.string());
                         notifyObservers(1);
 //                        localTrajectory.delete();
+                        assert responseBody != null;
                         String errorBody = responseBody.string();
                         System.err.println("UPLOAD unsuccessful: " + errorBody);
                         infoResponse = "Upload failed: " + errorBody;
@@ -312,6 +314,7 @@ public class ServerCommunications implements Observable {
                     }
 
                     // Print a confirmation of a successful POST to API
+                    assert responseBody != null;
                     System.out.println("UPLOAD SUCCESSFUL: " + responseBody.string());
 
                     // Delete local file, set success to true and notify observers
