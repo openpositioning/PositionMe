@@ -43,4 +43,3 @@
 6. **Control playback**:
     - Pause, restart, or jump to the end using playback controls.
 
-## Contributors
