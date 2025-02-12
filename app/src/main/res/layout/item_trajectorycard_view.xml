@@ -22,7 +22,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent">
 
-            <!-- 轨迹 ID -->
+            <!-- Tra ID -->
             <TextView
                 android:id="@+id/trajectoryIdItem"
                 android:layout_width="wrap_content"
@@ -40,7 +40,7 @@
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintVertical_bias="0.0" />
 
-            <!-- 日期 -->
+            <!-- Date -->
             <TextView
                 android:id="@+id/trajectoryDateItem"
                 android:layout_width="0dp"
@@ -57,7 +57,7 @@
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
                 app:layout_constraintTop_toTopOf="parent" />
 
-            <!-- Play 按钮 -->
+            <!-- Play button -->
             <ImageButton
                 android:id="@+id/playTrajectoryButton"
                 android:layout_width="48dp"
@@ -71,7 +71,7 @@
                 app:layout_constraintTop_toTopOf="parent"
                 app:srcCompat="@drawable/ic_baseline_play_arrow_24" />
 
-            <!-- Download 按钮 -->
+            <!-- Download button -->
             <ImageButton
                 android:id="@+id/downloadTrajectoryButton"
                 android:layout_width="49dp"

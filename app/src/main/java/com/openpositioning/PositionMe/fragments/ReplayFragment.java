@@ -49,8 +49,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * ReplayFragment that replays a stored trajectory with indoor updates.
- * This version uses a SeekBar for navigation and a unified replay loop.
+ The ReplayFragment takes sensor data (trajectory points, GNSS coordinates, etc.) 、
+ from the FileFragment via Bundle arguments and replays a recorded path on a Google Map.
+ It initializes a polyline to draw the trajectory and places markers—such as a replay arrow for the current position
+ and a GNSS marker that updates in real time using sensor fusion data. The fragment features a SeekBar for manual navigation
+ through the replay and provides controls for pausing/resuming, restarting, and jumping to the end of the trajectory.
+ Additional UI elements include a map type spinner and indoor floor controls, while dynamic updates (like cumulative distance and elevation) a
+ re calculated and displayed continuously. This design ensures an interactive, real-time visualization of the user’s past movement.
  */
 public class ReplayFragment extends Fragment {
 

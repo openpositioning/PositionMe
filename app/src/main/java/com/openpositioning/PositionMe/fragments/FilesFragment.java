@@ -22,8 +22,8 @@ import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.gms.maps.model.LatLng;
 import com.google.protobuf.util.JsonFormat;
+import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.sensors.Observer;
@@ -45,6 +45,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+/**
+This fragment is responsible for displaying a list of recorded trajectories and handling both
+the download and replay of a selected trajectory. When a user taps the “replay” button, the
+fragment first initiates a download of the corresponding trajectory file using an asynchronous POST request.
+It waits for the download to complete (using a CountDownLatch) and then checks if the file exists in the device’s Downloads directory.
+Once confirmed, the file is read line-by-line into a JSON string. The JSON string is then parsed using the Protobuf
+JsonFormat parser to build a Trajectory object (generated from your Traj.proto file). From this object, the fragment extracts various types of sensor data such as
+ GNSS, IMU, PDR, pressure, light, WiFi, and AP data. These extracted data lists, along with metadata like start timestamp and data identifier,
+are bundled into a Bundle. Finally, the fragment navigates to the ReplayFragment, passing the Bundle so that the replay functionality can render the trajectory on the map.
+ */
 
 public class FilesFragment extends Fragment implements Observer, ReplayClickListener {
 
@@ -120,14 +130,15 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
-        // The adapter expects a DownloadClickListener and a ReplayClickListener.
+        // Note: The adapter expects a DownloadClickListener and a ReplayClickListener.
+        // FilesFragment implements ReplayClickListener and we assume onDownloadClicked is defined.
         listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, this::onDownloadClicked, this);
         filesList.setAdapter(listAdapter);
     }
 
     private void onDownloadClicked(int position) {
         serverCommunications.downloadTrajectory(position, fileName -> {
-            // Callback (if needed)
+
         });
         new AlertDialog.Builder(getContext())
                 .setTitle("File Downloaded")
@@ -141,7 +152,8 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
 
     @Override
     public void onReplayClick(int position) {
-        // Download the trajectory file first
+
+
         final String[] trajectoryFileName = {null};
         CountDownLatch latch = new CountDownLatch(1);
 
@@ -151,21 +163,21 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
         });
 
         try {
-            latch.await(); // Wait for the download to finish
+            latch.await(); // Wait for download to finish
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
         File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), trajectoryFileName[0]);
 
-        // Check if file exists
+        // cgheck if file exists
         if (!file.exists()) {
-            Log.e(TAG, "Trajectory file not found!");
+            Log.e("FilesFragment", "Trajectory file not found!");
             Toast.makeText(getContext(), "Trajectory file not found. Please download it first.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Read the JSON file content
+        // reads trajectory data
         StringBuilder jsonContent = new StringBuilder();
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
             String line;
@@ -173,61 +185,121 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
                 jsonContent.append(line);
             }
         } catch (IOException e) {
-            Log.e(TAG, "Error reading trajectory file: " + e.getMessage());
+            Log.e("FilesFragment", "Error reading trajectory file: " + e.getMessage());
             Toast.makeText(getContext(), "Error reading trajectory file.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Log the file content for testing
-        Log.d(TAG, "Trajectory file content: " + jsonContent.toString());
+        // check if file is empty
+        Log.d("FilesFragment", "Trajectory file content: " + jsonContent.toString());
         Toast.makeText(getContext(), "Trajectory file read successfully!", Toast.LENGTH_SHORT).show();
 
-        // Parse the JSON data into a Traj.Trajectory object
+        // parses trajectory data
         Traj.Trajectory.Builder trajectoryBuilder = Traj.Trajectory.newBuilder();
         try {
             JsonFormat.parser().merge(jsonContent.toString(), trajectoryBuilder);
         } catch (IOException e) {
-            Log.e(TAG, "Error parsing trajectory data: " + e.getMessage());
+            Log.e("FilesFragment", "Error parsing trajectory data: " + e.getMessage());
             Toast.makeText(getContext(), "Error parsing trajectory data.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Build the Trajectory object
+        // creates trajectory object
         Traj.Trajectory trajectory = trajectoryBuilder.build();
-        Log.d(TAG, "Trajectory data successfully parsed!");
+        Log.d("FilesFragment", "Trajectory data successfully parsed!");
 
-        // Extract GNSS (position) data
+        // extracts position data
         List<LatLng> positionPoints = new ArrayList<>();
+        List<Traj.Motion_Sample> imuDataList = new ArrayList<>();
+        List<Traj.Pdr_Sample> pdrDataList = new ArrayList<>();
+        List<Traj.Pressure_Sample> pressureDataList = new ArrayList<>();
+        List<Traj.Light_Sample> lightDataList = new ArrayList<>();
+        List<Traj.GNSS_Sample> gnssDataList = new ArrayList<>();
+        List<Traj.WiFi_Sample> wifiDataList = new ArrayList<>();
+        List<Traj.AP_Data> apsDataList = new ArrayList<>();
+
+        // extracts GNSS data
         if (!trajectory.getGnssDataList().isEmpty()) {
             for (Traj.GNSS_Sample sample : trajectory.getGnssDataList()) {
-                double lat = sample.getLatitude();
-                double lng = sample.getLongitude();
+                double lat = sample.getLatitude();   // 纬度
+                double lng = sample.getLongitude();  // 经度
                 positionPoints.add(new LatLng(lat, lng));
             }
-            Log.d(TAG, "GNSS data extracted successfully!");
+            Log.d("FilesFragment", "GNSS data extracted successfully!");
         } else {
-            Log.e(TAG, "No GNSS data found!");
+            Log.e("FilesFragment", "No GNSS data found!");
         }
 
-        // (Extract additional data if needed...)
+        // extracts IMU data
+        if (!trajectory.getImuDataList().isEmpty()) {
+            imuDataList.addAll(trajectory.getImuDataList());
+            Log.d("FilesFragment", "IMU data extracted successfully!");
+        } else {
+            Log.e("FilesFragment", "No IMU data found!");
+        }
 
-        // Check if valid position data exists
+        // extracts PDR data
+        if (!trajectory.getPdrDataList().isEmpty()) {
+            pdrDataList.addAll(trajectory.getPdrDataList());
+            Log.d("FilesFragment", "PDR data extracted successfully!");
+        } else {
+            Log.e("FilesFragment", "No PDR data found!");
+        }
+
+        // extracts pressure data
+        if (!trajectory.getPressureDataList().isEmpty()) {
+            pressureDataList.addAll(trajectory.getPressureDataList());
+            Log.d("FilesFragment", "Pressure data extracted successfully!");
+        } else {
+            Log.e("FilesFragment", "No Pressure data found!");
+        }
+
+        // extracts light data
+        if (!trajectory.getLightDataList().isEmpty()) {
+            lightDataList.addAll(trajectory.getLightDataList());
+            Log.d("FilesFragment", "Light data extracted successfully!");
+        } else {
+            Log.e("FilesFragment", "No Light data found!");
+        }
+
+        // extracts WiFi data
+        if (!trajectory.getWifiDataList().isEmpty()) {
+            wifiDataList.addAll(trajectory.getWifiDataList());
+            Log.d("FilesFragment", "WiFi data extracted successfully!");
+        } else {
+            Log.e("FilesFragment", "No WiFi data found!");
+        }
+
+        // extracts AP data
+        if (!trajectory.getApsDataList().isEmpty()) {
+            apsDataList.addAll(trajectory.getApsDataList());
+            Log.d("FilesFragment", "AP data extracted successfully!");
+        } else {
+            Log.e("FilesFragment", "No AP data found!");
+        }
+
+        // creates bundle for replay fragment
+        Bundle args = new Bundle();
+        args.putSerializable("trajectoryPoints", (ArrayList<LatLng>) positionPoints);
+        args.putSerializable("imuData", (ArrayList<Traj.Motion_Sample>) imuDataList);
+        args.putSerializable("pdrData", (ArrayList<Traj.Pdr_Sample>) pdrDataList);
+        args.putSerializable("pressureData", (ArrayList<Traj.Pressure_Sample>) pressureDataList);
+        args.putSerializable("lightData", (ArrayList<Traj.Light_Sample>) lightDataList);
+        args.putSerializable("gnssData", (ArrayList<Traj.GNSS_Sample>) gnssDataList);
+        args.putSerializable("wifiData", (ArrayList<Traj.WiFi_Sample>) wifiDataList);
+        args.putSerializable("apsData", (ArrayList<Traj.AP_Data>) apsDataList);
+        args.putLong("startTimestamp", trajectory.getStartTimestamp());
+        args.putString("dataIdentifier", trajectory.getDataIdentifier());
+
+        // check for valid data
         if (positionPoints.isEmpty()) {
-            Log.e(TAG, "No valid position data available!");
+            Log.e("FilesFragment", "No valid position data available!");
             Toast.makeText(getContext(), "No valid trajectory data to replay.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Create a Bundle to pass data to the ReplayFragment
-        Bundle args = new Bundle();
-        // IMPORTANT: Use putParcelableArrayList instead of putSerializable for LatLng!
-        args.putParcelableArrayList("trajectoryPoints", new ArrayList<>(positionPoints));
-        // (Pass additional data if ReplayFragment requires it)
-        args.putLong("startTimestamp", trajectory.getStartTimestamp());
-        args.putString("dataIdentifier", trajectory.getDataIdentifier());
-
-        // Navigate to ReplayFragment
-        Log.d(TAG, "Navigating to ReplayFragment...");
+        // jumps to FilesFragment
+        Log.d("FilesFragment", "Navigating to ReplayFragment...");
         Navigation.findNavController(getView()).navigate(R.id.action_filesFragment_to_replayFragment, args);
     }
 }
