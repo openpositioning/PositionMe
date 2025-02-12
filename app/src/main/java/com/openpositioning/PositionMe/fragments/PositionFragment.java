@@ -137,6 +137,9 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
+        // 设置地图类型为卫星图
+        mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
+
         // ✅ 先默认设置为爱丁堡
         initialPosition = new LatLng(55.953251, -3.188267);
         fixedMarkerPosition = initialPosition;
