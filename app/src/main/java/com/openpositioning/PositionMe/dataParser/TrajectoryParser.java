@@ -86,23 +86,6 @@ public class TrajectoryParser {
             }
             trajectoryData.setPdrData(pdrDataList);
 
-            // --- Parse Position data ---
-            JSONArray posArray = jsonTrajectory.optJSONArray("positionData");
-            List<PositionData> positionDataList = new ArrayList<>();
-            if (posArray != null) {
-                for (int i = 0; i < posArray.length(); i++) {
-                    JSONObject posObj = posArray.getJSONObject(i);
-                    long relativeTimestamp = posObj.has("relativeTimestamp")
-                            ? posObj.getLong("relativeTimestamp")
-                            : Long.parseLong(posObj.getString("relativeTimestamp"));
-                    double magX = posObj.getDouble("magX");
-                    double magY = posObj.getDouble("magY");
-                    double magZ = posObj.getDouble("magZ");
-                    PositionData sample = new PositionData(relativeTimestamp, magX, magY, magZ);
-                    positionDataList.add(sample);
-                }
-            }
-            trajectoryData.setPositionData(positionDataList);
 
             // --- Parse Pressure data ---
             JSONArray pressureArray = jsonTrajectory.optJSONArray("pressureData");

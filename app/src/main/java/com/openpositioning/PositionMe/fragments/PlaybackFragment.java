@@ -9,9 +9,11 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.Switch;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -42,10 +44,12 @@ import java.util.List;
 /**
  * PlaybackFragment for replaying recorded trajectories using converted PDR data.
  *
- * The playback runnable now iterates over converted PDR points (with their own
- * relative timestamps) rather than using fake GNSS data.
+ * This version uses the base implementation for processing PDR data (with a hard-coded start
+ * position) and adds functionality to display the current GNSS (latitude/longitude) in a view.
  */
 public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
+
+    private static final String TAG = "PlaybackFragment";
 
     // --- UI Components ---
     private GoogleMap mMap;
@@ -57,10 +61,12 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
     private Polyline replayPolyline;
     private Marker replayMarker;
 
+    // Additional UI for displaying GNSS data:
+    private LinearLayout gnssDataLayout;
+    private TextView gnssDataLat, gnssDataLon;
+
     // --- Recorded Data ---
-    // The list of all trajectory points (used for initial positioning and drawing the polyline)
     private List<LatLng> recordedTrajectory = new ArrayList<>();
-    // List of converted PDR points (with their own relative timestamps) used for playback.
     private List<PdrPoint> recordedPdrPoints = new ArrayList<>();
     private List<PressureData> recordedPressureData = new ArrayList<>();
 
@@ -69,7 +75,6 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
     private Runnable playbackRunnable;
     private boolean isPlaying = false;
     private long playbackStartTime = 0;
-    // Index for stepping through the converted PDR data during playback.
     private int currentPdrIndex = 0;
     private int currentPressureIndex = 0;
     private static final long PLAYBACK_INTERVAL_MS = 200; // Update interval in ms
@@ -104,8 +109,7 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         // Retrieve passed arguments.
         if (getArguments() != null) {
-            PlaybackFragmentArgs args = PlaybackFragmentArgs.fromBundle(getArguments());
-            trajectoryId = args.getTrajectoryId();
+            trajectoryId = PlaybackFragmentArgs.fromBundle(getArguments()).getTrajectoryId();
         }
 
         // Initialize UI components.
@@ -118,6 +122,14 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
         restartBtn = view.findViewById(R.id.restartButton);
         goToEndBtn = view.findViewById(R.id.goToEndButton);
         exitBtn = view.findViewById(R.id.exitButton);
+
+        // Initialize GNSS data UI components from the layout.
+        gnssDataLayout = view.findViewById(R.id.gnss_data_layout);
+        gnssDataLat = view.findViewById(R.id.gnss_data_lat);
+        gnssDataLon = view.findViewById(R.id.gnss_data_lon);
+
+        // Force auto-floor to be enabled.
+        autoFloorSwitch.setChecked(true);
 
         replayHandler = new Handler(Looper.getMainLooper());
 
@@ -145,10 +157,14 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
                     replayPolyline.setPoints(new ArrayList<>());
                 }
                 replayHandler.post(playbackRunnable);
+                // Make GNSS data visible when playback starts.
+                gnssDataLayout.setVisibility(View.VISIBLE);
             } else {
                 isPlaying = false;
                 playPauseBtn.setText("Play");
                 replayHandler.removeCallbacks(playbackRunnable);
+                // Hide GNSS data when paused.
+                gnssDataLayout.setVisibility(View.GONE);
             }
         });
 
@@ -248,12 +264,13 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
         }
         playbackProgressBar.setMax((int)getPlaybackDuration());
 
-        // Define the playback runnable using the converted PDR points.
+        // Define the playback runnable.
         playbackRunnable = new Runnable() {
             @Override
             public void run() {
                 long elapsedTime = System.currentTimeMillis() - playbackStartTime;
-                // Process PDR events based on their relative timestamps.
+
+                // Process PDR events: draw the path and update the marker.
                 while (currentPdrIndex < recordedPdrPoints.size() &&
                         recordedPdrPoints.get(currentPdrIndex).relativeTimestamp <= elapsedTime) {
                     PdrPoint pdrPoint = recordedPdrPoints.get(currentPdrIndex);
@@ -265,21 +282,31 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
                     mMap.animateCamera(CameraUpdateFactory.newLatLng(pt));
                     currentPdrIndex++;
                 }
-                // Process Pressure events to update current elevation.
+
+                // Process pressure events to update current elevation.
                 while (currentPressureIndex < recordedPressureData.size() &&
                         recordedPressureData.get(currentPressureIndex).getRelativeTimestamp() <= elapsedTime) {
                     PressureData pressureEvent = recordedPressureData.get(currentPressureIndex);
                     currentElevation = pressureEvent.getRelativeAltitude();
                     currentPressureIndex++;
                 }
-                // Update indoor overlay.
+
+                // Update GNSS view with the current playback point.
                 LatLng currentPoint = currentPlaybackPoint();
                 if (currentPoint != null) {
+                    String latStr = "" + currentPoint.latitude;
+                    String lonStr = "" + currentPoint.longitude;
+                    gnssDataLat.setText(latStr);
+                    gnssDataLon.setText(lonStr);
+
+                    // Update indoor overlay.
                     autoFloorMapManager.setCurrentLocation(currentPoint);
                     if (autoFloorSwitch.isChecked()) {
-                        autoFloorMapManager.setCurrentFloor((int)(currentElevation / autoFloorMapManager.getFloorHeight()), true);
+                        int newFloor = (int)(currentElevation / autoFloorMapManager.getFloorHeight());
+                        autoFloorMapManager.setCurrentFloor(newFloor, true);
                     }
                 }
+
                 playbackProgressBar.setProgress((int) elapsedTime);
                 if (elapsedTime < getPlaybackDuration()) {
                     replayHandler.postDelayed(this, PLAYBACK_INTERVAL_MS);
@@ -294,7 +321,7 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
     /**
      * Loads the recorded trajectory.
      * If PDR data is available, converts its (x,y in meters) into lat/lng offsets
-     * using the first GNSS fix as the origin. Both the master trajectory and the
+     * using the hard-coded GNSS fix as the origin. Both the master trajectory and the
      * playback list (recordedPdrPoints) are populated.
      */
     private void loadRecordedTrajectory(String trajectoryId) {
@@ -302,44 +329,31 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
         recordedPdrPoints.clear();
         recordedPressureData.clear();
 
-        TrajectoryData trajectoryData = TrajectoryParser.parseTrajectoryFile(getContext(),trajectoryId);
+        TrajectoryData trajectoryData = TrajectoryParser.parseTrajectoryFile(getContext(), trajectoryId);
         List<PdrData> pdrDataList = trajectoryData.getPdrData();
-        if (pdrDataList != null && !pdrDataList.isEmpty()) {
-            // Use the first GNSS sample as the origin.
-            List<GnssData> gnssSamples = trajectoryData.getGnssData();
-            if (gnssSamples != null && !gnssSamples.isEmpty()) {
-                GnssData firstGnssData = gnssSamples.get(0);
-                double initialLat = firstGnssData.getLatitude();
-                double initialLon = firstGnssData.getLongitude();
-                LatLng initialLocation = new LatLng(initialLat, initialLon);
-                recordedTrajectory.add(initialLocation);
-                recordedPdrPoints.add(new PdrPoint(initialLocation, firstGnssData.getRelativeTimestamp()));
 
-                // Convert each PDR sample.
-                for (PdrData pdrData : pdrDataList) {
-                    double offsetX = pdrData.getX(); // east-west displacement in meters
-                    double offsetY = pdrData.getY(); // north-south displacement in meters
-                    double deltaLat = offsetY / 111320.0;
-                    double deltaLon = offsetX / (111320.0 * Math.cos(Math.toRadians(initialLat)));
-                    double newLat = initialLat + deltaLat;
-                    double newLon = initialLon + deltaLon;
-                    LatLng newPoint = new LatLng(newLat, newLon);
-                    recordedTrajectory.add(newPoint);
-                    recordedPdrPoints.add(new PdrPoint(newPoint, pdrData.getRelativeTimestamp()));
-                }
-            }
-        } else {
-            // Fallback: use GNSS data.
-            List<GnssData> gnssSamples = trajectoryData.getGnssData();
-            if (gnssSamples != null) {
-                for (GnssData sample : gnssSamples) {
-                    LatLng pt = new LatLng(sample.getLatitude(), sample.getLongitude());
-                    recordedTrajectory.add(pt);
-                    recordedPdrPoints.add(new PdrPoint(pt, sample.getRelativeTimestamp()));
-                }
-            }
+        double initialLat = 55.922913;
+        double initialLon = -3.174322;
+        LatLng manualLocation = new LatLng(initialLat, initialLon);
+
+        long manualTimeStamp = 110;
+        recordedTrajectory.add(manualLocation);
+        recordedPdrPoints.add(new PdrPoint(manualLocation, manualTimeStamp));
+
+        for (PdrData pdrData : pdrDataList) {
+            double offsetX = pdrData.getX();
+            double offsetY = pdrData.getY();
+            double deltaLat = offsetY / 111320.0;
+            double deltaLon = offsetX / (111320.0 * Math.cos(Math.toRadians(initialLat)));
+            double newLat = initialLat + deltaLat;
+            double newLon = initialLon + deltaLon;
+            LatLng newPoint = new LatLng(newLat, newLon);
+            recordedTrajectory.add(newPoint);
+            recordedPdrPoints.add(new PdrPoint(newPoint, pdrData.getRelativeTimestamp()));
+
         }
-        // Load pressure data (unchanged).
+
+        // Load pressure data.
         if (trajectoryData.getPressureData() != null) {
             recordedPressureData.addAll(trajectoryData.getPressureData());
         }
@@ -376,6 +390,8 @@ public class PlaybackFragment extends Fragment implements OnMapReadyCallback {
     public void onPause() {
         super.onPause();
         isPlaying = false;
+        // Hide the GNSS data layout when playback is paused.
+        gnssDataLayout.setVisibility(View.GONE);
         replayHandler.removeCallbacks(playbackRunnable);
     }
 
