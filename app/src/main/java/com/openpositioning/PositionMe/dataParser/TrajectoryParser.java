@@ -10,8 +10,10 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,12 +60,7 @@ public class TrajectoryParser {
                             : Long.parseLong(gnssObj.getString("relativeTimestamp"));
                     double latitude = gnssObj.getDouble("latitude");
                     double longitude = gnssObj.getDouble("longitude");
-                    double altitude;
-                    try {
-                        altitude = gnssObj.getDouble("altitude");
-                    } catch (JSONException e) {
-                        altitude = 0.0; // 或者使用其他默认值
-                    }
+                    double altitude = gnssObj.getDouble("altitude");
                     double accuracy = gnssObj.getDouble("accuracy");
                     String provider = gnssObj.getString("provider");
                     GnssData sample = new GnssData(relativeTimestamp, latitude, longitude, altitude, accuracy, provider);
@@ -98,24 +95,9 @@ public class TrajectoryParser {
                     long relativeTimestamp = posObj.has("relativeTimestamp")
                             ? posObj.getLong("relativeTimestamp")
                             : Long.parseLong(posObj.getString("relativeTimestamp"));
-                    double magX;
-                    try {
-                        magX = posObj.getDouble("magX");
-                    } catch (JSONException e) {
-                        magX = 0.0; // 或者使用其他默认值
-                    }
-                    double magY;
-                    try {
-                        magY = posObj.getDouble("magX");
-                    } catch (JSONException e) {
-                        magY = 0.0; // 或者使用其他默认值
-                    }
-                    double magZ;
-                    try {
-                        magZ = posObj.getDouble("magX");
-                    } catch (JSONException e) {
-                        magZ = 0.0; // 或者使用其他默认值
-                    }
+                    double magX = posObj.getDouble("magX");
+                    double magY = posObj.getDouble("magY");
+                    double magZ = posObj.getDouble("magZ");
                     PositionData sample = new PositionData(relativeTimestamp, magX, magY, magZ);
                     positionDataList.add(sample);
                 }

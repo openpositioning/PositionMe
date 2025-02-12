@@ -217,7 +217,7 @@ public class FilesFragment extends Fragment implements Observer {
                             FilesFragmentDirections.actionFilesFragmentToPlaybackFragment(trajectoryId);
                     Navigation.findNavController(requireView()).navigate(action);
                 } else {
-                    String tip = trajectoryId + " is downloading, please try again until downloaded.";
+                    String tip = trajectoryId + " is downloading, please try again when downloaded.";
                     Toast.makeText(getContext(), tip, Toast.LENGTH_LONG).show();
                     serverCommunications.downloadTrajectory(position, trajectoryId);
                 }
