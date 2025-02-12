@@ -14,8 +14,6 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import com.openpositioning.PositionMe.R;
-
 import java.util.ArrayList;
 import java.util.List;
 
