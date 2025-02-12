@@ -72,8 +72,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     private void loadDownloadRecords() {
         try {
             File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
-            System.out.println("laigan File exists: " + file.exists() + ", Size: " + file.length());
-
             if (file.exists()) {
                 StringBuilder jsonBuilder = new StringBuilder();
                 try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
@@ -85,18 +83,13 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
                 JSONObject jsonObject = new JSONObject(jsonBuilder.toString());
                 Iterator<String> keys = jsonObject.keys();
-                ServerCommunications.downloadRecords.clear();
-
+//                ServerCommunications.downloadRecords.clear();
                 while (keys.hasNext()) {
                     String key = keys.next();
                     System.out.println("laigan Processing key: " + key);
-
                     try {
                         JSONObject recordDetails = jsonObject.getJSONObject(key);
-
-                        // 检查 id 是否存在，如果不存在则使用 key 作为 id
-                        String id = recordDetails.has("id") ? recordDetails.getString("id") : key;
-
+                        String id = recordDetails.optString("id", key);
                         // 保存到 downloadRecords
                         ServerCommunications.downloadRecords.put(id, recordDetails);
                         System.out.println("laigan Added record with id: " + id);
@@ -105,7 +98,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                         e.printStackTrace();
                     }
                 }
-
                 // 刷新 UI（在遍历完成后调用）
                 new Handler(Looper.getMainLooper()).post(this::notifyDataSetChanged);
                 System.out.println("laigan Finished loading download records."+ServerCommunications.downloadRecords);
@@ -169,7 +161,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                         File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
                         filePath = file.getAbsolutePath();
                     }
-                    setButtonState(holder.downloadButton, true);
+                    setButtonState(holder.downloadButton, 1);
                     break;
                 }
             } catch (Exception e) {
@@ -178,7 +170,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         }
 
         if (!matched) {
-            setButtonState(holder.downloadButton, false);
+            setButtonState(holder.downloadButton, 0);
         }
 
         final boolean finalMatched = matched;
@@ -196,11 +188,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 startPollingForFileUpdate();
             }
         });
-
         holder.downloadButton.invalidate();
     }
-
-
 
 
 
@@ -213,12 +202,16 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         return responseItems.size();
     }
 
-
-    private void setButtonState(MaterialButton button, boolean isMatched) {
-        if (isMatched) {
+    private void setButtonState(MaterialButton button, int state) {
+        if (state == 1) {
             button.setIconResource(R.drawable.ic_baseline_play_circle_filled_24);
             button.setIconTintResource(R.color.md_theme_onPrimary);
             button.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.md_theme_primary));
+        } else if (state == 2) {
+            button.setIconResource(R.drawable.ic_baseline_stop_24);
+            button.setIconTintResource(R.color.md_theme_onPrimary);
+            button.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.md_theme_secondaryFixed_mediumContrast));
+
         } else {
             button.setIconResource(R.drawable.ic_baseline_download_24);
             button.setIconTintResource(R.color.md_theme_onSecondary);
