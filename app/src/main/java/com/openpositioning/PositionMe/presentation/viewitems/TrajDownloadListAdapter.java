@@ -73,42 +73,49 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         loadDownloadRecords();
     }
 
-    boolean isFirstLoad = true;
 
     private void loadDownloadRecords() {
         try {
             File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
             if (file.exists()) {
-                // ✅ 一次性读取整个文件，提升 I/O 性能
-                String jsonString = new String(Files.readAllBytes(file.toPath()));
-
-                JSONObject jsonObject = new JSONObject(jsonString);
-
-                if (isFirstLoad) {
-                    isFirstLoad = false;
-                    Iterator<String> keys = jsonObject.keys();
-                    while (keys.hasNext()) {
-                        String key = keys.next();
-                        try {
-                            JSONObject recordDetails = jsonObject.getJSONObject(key);
-                            String id = recordDetails.optString("id", key);
-                            ServerCommunications.downloadRecords.put(id, recordDetails); // 直接缓存 JSON 对象
-                        } catch (Exception e) {
-                            System.err.println("laigan Error processing key: " + key);
-                            e.printStackTrace();
-                        }
+                // ✅ 逐行读取，减少内存占用
+                StringBuilder jsonBuilder = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new FileReader(file), 8192)) { // 增加缓冲区大小
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        jsonBuilder.append(line);
                     }
                 }
 
-                // ✅ 在主线程刷新 UI，避免卡顿
-                new Handler(Looper.getMainLooper()).post(this::notifyDataSetChanged);
-                System.out.println("laigan Finished loading download records: " + ServerCommunications.downloadRecords);
+                JSONObject jsonObject = new JSONObject(jsonBuilder.toString());
+                ServerCommunications.downloadRecords.clear();
+
+                // ✅ 预分配 HashMap 容量，减少扩容开销
+                int estimatedSize = jsonObject.length();
+                ServerCommunications.downloadRecords = new HashMap<>(estimatedSize * 2);
+
+                for (Iterator<String> keys = jsonObject.keys(); keys.hasNext(); ) {
+                    String key = keys.next();
+                    JSONObject recordDetails = jsonObject.getJSONObject(key);
+                    String id = recordDetails.optString("id", key);
+                    ServerCommunications.downloadRecords.put(id, recordDetails);
+                }
+
+                System.out.println("✅ Download records loaded: " + ServerCommunications.downloadRecords);
+
+                // ✅ 仅刷新一次 UI，避免频繁重绘
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    notifyDataSetChanged();
+                    System.out.println("🔄 RecyclerView fully refreshed after loading records.");
+                });
+            } else {
+                System.out.println("⚠️ Download records file not found.");
             }
         } catch (Exception e) {
-            System.err.println("laigan Error loading download records:");
             e.printStackTrace();
         }
     }
+
 
 
 
