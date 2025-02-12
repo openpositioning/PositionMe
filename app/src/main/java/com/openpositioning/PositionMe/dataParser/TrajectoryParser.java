@@ -1,33 +1,39 @@
 package com.openpositioning.PositionMe.dataParser;
 
 import android.content.Context;
+import android.hardware.SensorManager;
 import android.util.Log;
 
-import com.google.gson.Gson;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Utility class to parse a JSON-formatted trajectory file from internal storage.
- * It extracts GNSS data, PDR data, and Position data.
+ * Utility class to parse a JSON-formatted trajectory file.
  */
 public class TrajectoryParser {
     private static final String TAG = "TrajectoryParser";
 
-    /**
-     * Reads the "received_trajectory.txt" file from internal storage and parses its JSON content.
-     * @param context the application context
-     * @return a TrajectoryData object containing the parsed GNSS, PDR, and Position data
-     */
-    public static TrajectoryData parseTrajectoryFile(Context context, String fileId) {
-        //TrajectoryData trajectoryData = new TrajectoryData();
-        String fileName = "received_trajectory" + fileId + ".txt";
+    public static TrajectoryData parseTrajectoryFile(Context context, String trajectoryId) {
+        TrajectoryData trajectoryData = new TrajectoryData();
+        // Construct the file name using the trajectoryId.
+        String fileName = "received_trajectory" + trajectoryId + ".txt";
         File file = new File(context.getFilesDir(), fileName);
-        StringBuilder content = new StringBuilder();
+        if (!file.exists()) {
+            Log.e(TAG, "Trajectory file does not exist: " + file.getAbsolutePath());
+            return trajectoryData;
+        }
 
+        StringBuilder content = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -36,11 +42,105 @@ public class TrajectoryParser {
         } catch (IOException e) {
             Log.e(TAG, "Error reading trajectory file: " + e.getMessage());
             e.printStackTrace();
-            return new TrajectoryData();
+            return trajectoryData;
         }
 
         String fileContent = content.toString();
-        TrajectoryData trajectoryData = new Gson().fromJson(fileContent, TrajectoryData.class);
+        try {
+            JSONObject jsonTrajectory = new JSONObject(fileContent);
+
+            // --- Parse GNSS data ---
+            JSONArray gnssArray = jsonTrajectory.optJSONArray("gnssData");
+            List<GnssData> gnssDataList = new ArrayList<>();
+            if (gnssArray != null) {
+                for (int i = 0; i < gnssArray.length(); i++) {
+                    JSONObject gnssObj = gnssArray.getJSONObject(i);
+                    long relativeTimestamp = gnssObj.has("relativeTimestamp")
+                            ? gnssObj.getLong("relativeTimestamp")
+                            : Long.parseLong(gnssObj.getString("relativeTimestamp"));
+                    double latitude = gnssObj.getDouble("latitude");
+                    double longitude = gnssObj.getDouble("longitude");
+                    double altitude = gnssObj.getDouble("altitude");
+                    double accuracy = gnssObj.getDouble("accuracy");
+                    String provider = gnssObj.getString("provider");
+                    GnssData sample = new GnssData(relativeTimestamp, latitude, longitude, altitude, accuracy, provider);
+                    gnssDataList.add(sample);
+                }
+            }
+            trajectoryData.setGnssData(gnssDataList);
+
+            // --- Parse PDR data ---
+            JSONArray pdrArray = jsonTrajectory.optJSONArray("pdrData");
+            List<PdrData> pdrDataList = new ArrayList<>();
+            if (pdrArray != null) {
+                for (int i = 0; i < pdrArray.length(); i++) {
+                    JSONObject pdrObj = pdrArray.getJSONObject(i);
+                    long relativeTimestamp = pdrObj.has("relativeTimestamp")
+                            ? pdrObj.getLong("relativeTimestamp")
+                            : Long.parseLong(pdrObj.getString("relativeTimestamp"));
+                    float x = (float) pdrObj.getDouble("x");
+                    float y = (float) pdrObj.getDouble("y");
+                    PdrData sample = new PdrData(relativeTimestamp, x, y);
+                    pdrDataList.add(sample);
+                }
+            }
+            trajectoryData.setPdrData(pdrDataList);
+
+            // --- Parse Position data ---
+            JSONArray posArray = jsonTrajectory.optJSONArray("positionData");
+            List<PositionData> positionDataList = new ArrayList<>();
+            if (posArray != null) {
+                for (int i = 0; i < posArray.length(); i++) {
+                    JSONObject posObj = posArray.getJSONObject(i);
+                    long relativeTimestamp = posObj.has("relativeTimestamp")
+                            ? posObj.getLong("relativeTimestamp")
+                            : Long.parseLong(posObj.getString("relativeTimestamp"));
+                    double magX = posObj.getDouble("magX");
+                    double magY = posObj.getDouble("magY");
+                    double magZ = posObj.getDouble("magZ");
+                    PositionData sample = new PositionData(relativeTimestamp, magX, magY, magZ);
+                    positionDataList.add(sample);
+                }
+            }
+            trajectoryData.setPositionData(positionDataList);
+
+            // --- Parse Pressure data ---
+            JSONArray pressureArray = jsonTrajectory.optJSONArray("pressureData");
+            List<PressureData> pressureDataList = new ArrayList<>();
+            float baselineAltitude = 0;
+            if (pressureArray != null && pressureArray.length() > 0) {
+                int baselineCount = Math.min(3, pressureArray.length());
+                float[] baselineAltitudes = new float[baselineCount];
+                for (int i = 0; i < baselineCount; i++) {
+                    JSONObject pressObj = pressureArray.getJSONObject(i);
+                    float pressure = (float) pressObj.getDouble("pressure");
+                    float altitude = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure);
+                    baselineAltitudes[i] = altitude;
+                }
+                float sum = 0;
+                for (float alt : baselineAltitudes) {
+                    sum += alt;
+                }
+                baselineAltitude = sum / baselineCount;
+
+                for (int i = 0; i < pressureArray.length(); i++) {
+                    JSONObject pressObj = pressureArray.getJSONObject(i);
+                    long relativeTimestamp = pressObj.has("relativeTimestamp")
+                            ? pressObj.getLong("relativeTimestamp")
+                            : Long.parseLong(pressObj.getString("relativeTimestamp"));
+                    float pressure = (float) pressObj.getDouble("pressure");
+                    float absoluteAltitude = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure);
+                    float relativeAltitude = absoluteAltitude - baselineAltitude;
+                    PressureData sample = new PressureData(relativeTimestamp, relativeAltitude);
+                    pressureDataList.add(sample);
+                }
+            }
+            trajectoryData.setPressureData(pressureDataList);
+
+        } catch (JSONException e) {
+            Log.e(TAG, "Error parsing JSON: " + e.getMessage());
+            e.printStackTrace();
+        }
         return trajectoryData;
     }
 }
