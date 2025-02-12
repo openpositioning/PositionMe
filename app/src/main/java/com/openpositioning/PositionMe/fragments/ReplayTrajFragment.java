@@ -504,8 +504,8 @@ public class ReplayTrajFragment extends Fragment {
                     Log.e("DrawLogic","Error Draw",e);
                 }
                 seekBar.setProgress(100);
-            isPlaying = false;
-            playPauseButton.setImageResource(R.drawable.ic_baseline_play_arrow_24);}
+                isPlaying = false;
+                playPauseButton.setImageResource(R.drawable.ic_baseline_play_arrow_24);}
         });
     }
 
