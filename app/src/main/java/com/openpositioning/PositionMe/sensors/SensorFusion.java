@@ -274,7 +274,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             case Sensor.TYPE_PRESSURE:
                 // Barometer processing - filter
                 pressure = (1- ALPHA) * pressure + ALPHA * sensorEvent.values[0];
-                System.err.println("Pressure: " + pressure);
+//                System.err.println("Pressure: " + pressure);
                 // Store pressure data in protobuf trajectory class
                 if (saveRecording) {
                     this.elevation = pdrProcessing.updateElevation(SensorManager.getAltitude(

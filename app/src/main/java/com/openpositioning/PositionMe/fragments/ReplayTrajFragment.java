@@ -231,7 +231,7 @@ public class ReplayTrajFragment extends Fragment {
         String formatElevation = df.format(currElevation);
         ElevationPres.setText("Elevation:"+formatElevation+"m");
         currentOrientation = imuDataList.get(counterYaw).getAzimuth();
-        System.out.println("init Orientation: " + currentOrientation);
+//        System.out.println("init Orientation: " + currentOrientation);
 
         if (!gnssDataList.isEmpty() ){
             Traj.GNSS_Sample gnssStartData = gnssDataList.get(counterGnss);
@@ -332,7 +332,7 @@ public class ReplayTrajFragment extends Fragment {
         String formatElevation = df.format(currElevation);
         ElevationPres.setText("Elevation:"+formatElevation+"m");
         // ===== GNSS value update logic ===== //
-        if (!gnssDataList.isEmpty() && counterGnss < gnssDataList.size() - 1) {
+        if ((!gnssDataList.isEmpty()) && counterGnss < gnssDataList.size() - 1) {
             // always take the next gnss sample
             Traj.GNSS_Sample nextGnssSample = gnssDataList.get(counterGnss + 1);
             long nextTGnss = nextGnssSample.getRelativeTimestamp();
@@ -347,19 +347,20 @@ public class ReplayTrajFragment extends Fragment {
                         .center(currentGnssLoc)
                         .zIndex(0)
                         .visible(gnssEnabled);
-                circleList.add(replayMap.addCircle(circleOptions));
-
-                List<LatLng> pointsMoved = gnssPolyline.getPoints();
-                pointsMoved.add(currentGnssLoc);
-                gnssPolyline.setPoints(pointsMoved);
-                gnssPolyline.setVisible(gnssEnabled);
-
-                gnssMarker.setPosition(currentGnssLoc);
-                gnssMarker.setVisible(gnssEnabled);
-
-                float altitude = nextGnssSample.getAltitude();
-                gnssMarker.setTitle("GNSS position");
-                gnssMarker.setSnippet("Acc: " + radius + "m" + " Alt: " + altitude + "m");
+                if (circleList != null && replayMap != null) {circleList.add(replayMap.addCircle(circleOptions));}
+                if (gnssPolyline != null) {
+                    List<LatLng> pointsMoved = gnssPolyline.getPoints();
+                    pointsMoved.add(currentGnssLoc);
+                    gnssPolyline.setPoints(pointsMoved);
+                    gnssPolyline.setVisible(gnssEnabled);
+                }
+                if (gnssMarker != null) {
+                    gnssMarker.setPosition(currentGnssLoc);
+                    gnssMarker.setVisible(gnssEnabled);
+                    float altitude = nextGnssSample.getAltitude();
+                    gnssMarker.setTitle("GNSS position");
+                    gnssMarker.setSnippet("Acc: " + radius + "m" + " Alt: " + altitude + "m");
+                }
 
                 counterGnss++;
             }
