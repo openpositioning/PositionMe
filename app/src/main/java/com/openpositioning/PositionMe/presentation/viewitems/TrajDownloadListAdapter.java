@@ -66,6 +66,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         this.context = context;
         this.responseItems = responseItems;
         this.listener = listener;
+        loadDownloadRecords();
     }
 
     private void loadDownloadRecords() {
