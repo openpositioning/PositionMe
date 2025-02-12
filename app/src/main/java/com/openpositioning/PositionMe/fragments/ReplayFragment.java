@@ -403,6 +403,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//хо
         pauseReplay();
         currentGnssIndex = 0;
         currentPdrIndex = 0;
+        _positionData_pointer = 0;
         progressBar.setProgress(0);
         startReplay();
     }

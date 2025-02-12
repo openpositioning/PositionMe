@@ -24,7 +24,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
 
     TextView trajId;
     TextView trajDate;
-    ImageButton downloadButton;
+    //ImageButton downloadButton;
 
     ImageButton replayButton;
     // Weak reference to the click listener to enable garbage collection on recyclerview items
@@ -44,17 +44,17 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         this.listenerReference = new WeakReference<>(listener);
         this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
         this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
-        this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
+        //this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
         this.replayButton = itemView.findViewById(R.id.replayTrajectoryButton);
-        this.downloadButton.setOnClickListener(this);//绑定点击事件
+        //this.downloadButton.setOnClickListener(this);//绑定点击事件
         this.replayButton.setOnClickListener(this);
     }
     @Override
     public void onClick(View view) {
         int id = view.getId();
-        if (id == R.id.downloadTrajectoryButton) {
-            listenerReference.get().onPositionClicked(getAdapterPosition());
-        } else if (id == R.id.replayTrajectoryButton) {
+        //if (id == R.id.downloadTrajectoryButton) {
+            //listenerReference.get().onPositionClicked(getAdapterPosition());
+        if (id == R.id.replayTrajectoryButton) {
             listenerReference.get().onReplayClicked(getAdapterPosition());
         }
     }
