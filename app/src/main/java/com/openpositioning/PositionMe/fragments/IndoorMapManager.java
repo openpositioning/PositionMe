@@ -60,4 +60,8 @@ public class IndoorMapManager {
             }
         }
     }
+
+    public int getCurrentFloor() {
+        return currentFloor;
+    }
 }
