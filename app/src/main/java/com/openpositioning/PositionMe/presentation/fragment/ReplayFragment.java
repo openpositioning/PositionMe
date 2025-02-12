@@ -23,7 +23,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Fragment that replays trajectory data on a map.
+ * Sub fragment of Replay Activity. Fragment that replays trajectory data on a map.
+ * <p>
+ * The ReplayFragment is responsible for visualizing and replaying trajectory data captured during
+ * previous recordings. It loads trajectory data from a JSON file, updates the map with user movement,
+ * and provides UI controls for playback, pause, and seek functionalities.
+ * <p>
+ * Features:
+ * - Loads trajectory data from a file and displays it on a map.
+ * - Provides playback controls including play, pause, restart, and go to end.
+ * - Updates the trajectory dynamically as playback progresses.
+ * - Allows users to manually seek through the recorded trajectory.
+ * - Integrates with {@link TrajectoryMapFragment} for map visualization.
+ *
+ * @see TrajectoryMapFragment The map fragment displaying the trajectory.
+ * @see ReplayActivity The activity managing the replay workflow.
+ * @see TrajParser Utility class for parsing trajectory data.
+ *
+ * @author Shu Gu
  */
 public class ReplayFragment extends Fragment {
 
@@ -58,6 +75,7 @@ public class ReplayFragment extends Fragment {
             initialLon = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LON, 0f);
         }
 
+        // Log the received data
         Log.i(TAG, "ReplayFragment received data:");
         Log.i(TAG, "Trajectory file path: " + filePath);
         Log.i(TAG, "Initial latitude: " + initialLat);
@@ -152,6 +170,7 @@ public class ReplayFragment extends Fragment {
             }
         });
 
+        // Restart button listener
         restartButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = 0;
@@ -160,6 +179,7 @@ public class ReplayFragment extends Fragment {
             updateMapForIndex(0);
         });
 
+        // Go to End button listener
         goEndButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = replayData.size() - 1;
@@ -170,6 +190,7 @@ public class ReplayFragment extends Fragment {
             playPauseButton.setText("Play");
         });
 
+        // Exit button listener
         exitButton.setOnClickListener(v -> {
             Log.i(TAG, "Exit button pressed. Exiting replay.");
             if (getActivity() instanceof ReplayActivity) {
@@ -179,6 +200,7 @@ public class ReplayFragment extends Fragment {
             }
         });
 
+        // SeekBar listener
         playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -197,6 +219,11 @@ public class ReplayFragment extends Fragment {
         }
     }
 
+
+    /**
+     * Runnable for playback of trajectory data.
+     * This runnable is called repeatedly to update the map with the next point in the replayData list.
+     */
     private final Runnable playbackRunnable = new Runnable() {
         @Override
         public void run() {
@@ -217,6 +244,13 @@ public class ReplayFragment extends Fragment {
         }
     };
 
+
+    /**
+     * Update the map with the user location and GNSS location (if available) for the given index.
+     * Clears the map and redraws up to the given index.
+     *
+     * @param newIndex
+     */
     private void updateMapForIndex(int newIndex) {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
 

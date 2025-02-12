@@ -32,6 +32,30 @@ import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 
+
+/**
+ * Fragment responsible for managing the recording process of trajectory data.
+ * <p>
+ * The RecordingFragment serves as the interface for users to initiate, monitor, and
+ * complete trajectory recording. It integrates sensor fusion data to track user movement
+ * and updates a map view in real time. Additionally, it provides UI controls to cancel,
+ * stop, and monitor recording progress.
+ * <p>
+ * Features:
+ * - Starts and stops trajectory recording.
+ * - Displays real-time sensor data such as elevation and distance traveled.
+ * - Provides UI controls to cancel or complete recording.
+ * - Uses {@link TrajectoryMapFragment} to visualize recorded paths.
+ * - Manages GNSS tracking and error display.
+ *
+ * @see TrajectoryMapFragment The map fragment displaying the recorded trajectory.
+ * @see RecordingActivity The activity managing the recording workflow.
+ * @see SensorFusion Handles sensor data collection.
+ * @see SensorTypes Enumeration of available sensor types.
+ *
+ * @author Shu Gu
+ */
+
 public class RecordingFragment extends Fragment {
 
     // UI elements
@@ -131,6 +155,7 @@ public class RecordingFragment extends Fragment {
         });
 
 
+        // Cancel button with confirmation dialog
         cancelButton.setOnClickListener(v -> {
             AlertDialog dialog = new AlertDialog.Builder(requireActivity())
                     .setTitle("Confirm Cancel")
@@ -245,6 +270,9 @@ public class RecordingFragment extends Fragment {
         previousPosY = pdrValues[1];
     }
 
+    /**
+     * Start the blinking effect for the recording icon.
+     */
     private void blinkingRecordingIcon() {
         Animation blinking = new AlphaAnimation(1, 0);
         blinking.setDuration(800);
