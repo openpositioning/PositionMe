@@ -209,15 +209,15 @@ public class FilesFragment extends Fragment implements Observer {
             // 传入 ID 和 date_submitted
             serverCommunications.downloadTrajectory(position, id, dateSubmitted);
 
-            new AlertDialog.Builder(getContext())
-                    .setTitle("File downloaded")
-                    .setMessage("Trajectory downloaded to local storage")
-                    .setPositiveButton(R.string.ok, null)
-                    .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
-                        startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-                    })
-                    .setIcon(R.drawable.ic_baseline_download_24)
-                    .show();
+//            new AlertDialog.Builder(getContext())
+//                    .setTitle("File downloaded")
+//                    .setMessage("Trajectory downloaded to local storage")
+//                    .setPositiveButton(R.string.ok, null)
+//                    .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
+//                        startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
+//                    })
+//                    .setIcon(R.drawable.ic_baseline_download_24)
+//                    .show();
         });
         filesList.setAdapter(listAdapter);
         // ✅ 强制刷新 RecyclerView，确保 downloadRecords 变化能被检测到

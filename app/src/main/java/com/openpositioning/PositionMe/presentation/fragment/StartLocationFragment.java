@@ -159,6 +159,11 @@ public class StartLocationFragment extends Fragment {
 
         this.button = view.findViewById(R.id.startLocationDone);
         this.button.setOnClickListener(new View.OnClickListener() {
+            /**
+             * {@inheritDoc}
+             * When button clicked the PDR recording can start and the start position is stored for
+             * the {@link CorrectionFragment} to display. The {@link RecordingFragment} is loaded.
+             */
             @Override
             public void onClick(View view) {
                 float chosenLat = startPosition[0];

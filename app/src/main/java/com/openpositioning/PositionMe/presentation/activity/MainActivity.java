@@ -167,7 +167,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
             if (permissionManager != null) {
                 permissionManager.checkAndRequestPermissions();
             }
-        }, 5000); // 5000 ms delay to ensure the Activity is fully in the foreground
+        }, 300); // 300 ms delay to ensure the Activity is fully in the foreground
         if (sensorFusion != null) {
             sensorFusion.resumeListening();
         }
