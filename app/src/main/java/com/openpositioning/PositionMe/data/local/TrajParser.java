@@ -48,8 +48,8 @@ import java.util.List;
  * @see SensorFusion for motion processing and sensor integration.
  * @see com.openpositioning.PositionMe.presentation.fragment.ReplayFragment for implementation details.
  *
- * @author Mate Stodulka
- * @author Virginia Cangelosi
+ * @author Shu Gu
+ * @author Lin Cheng
  */
 public class TrajParser {
 
