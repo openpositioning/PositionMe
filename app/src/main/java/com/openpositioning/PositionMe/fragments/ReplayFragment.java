@@ -56,9 +56,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     private MapView mapView;
     private GoogleMap mMap;
     private Button btnPlayPause, btnRestart, btnGoToEnd, btnExit;
-    private SeekBar progressBar;
+    private SeekBar progressBar;// adding progressBar
 
-    // 播放控制
     private boolean isPlaying = false;
     private int currentGnssIndex = 0;
     private int currentPdrIndex = 0;

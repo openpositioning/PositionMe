@@ -198,19 +198,14 @@ public class FilesFragment extends Fragment implements Observer {
      *                  trajectories (ID, owner ID, date).
      */
     private void updateView(List<Map<String, String>> entryList) {
-        // 设置 RecyclerView 的布局管理器
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
-
-        // 创建一个新的适配器实例，同时传入实现了 DownloadClickListener 的匿名内部类
         listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, new DownloadClickListener() {
             @Override
             public void onPositionClicked(int position) {
-                // 下载操作：调用 ServerCommunications 的下载方法
                 serverCommunications.downloadTrajectory(position);
 
-                // 弹出对话框提示用户文件已下载
                 new AlertDialog.Builder(getContext())
                         .setTitle("File downloaded")
                         .setMessage("Trajectory downloaded to local storage")
@@ -226,12 +221,10 @@ public class FilesFragment extends Fragment implements Observer {
             }
 
             @Override
-            public void onReplayClicked(int position) {
-                // 使用下载文件的方法，根据 position 下载相应的轨迹数据
-                serverCommunications.downloadTrajectoryToTempFile(position, new TrajectoryFileCallback() {
+            public void onReplayClicked(int position) {//set Click to playback
+                serverCommunications.downloadTrajectoryToTempFile(position, new TrajectoryFileCallback() {//Invoke the server download method
                     @Override
-                    public void onFileReady(File file) {
-                        // 当临时文件准备好后，创建 Bundle 将文件路径传递到 ReplayFragment
+                    public void onFileReady(File file) {//TrajectoryFileCallback trajectories
                         Bundle bundle = new Bundle();
                         bundle.putString("trajectory_file_path", file.getAbsolutePath());
                         Navigation.findNavController(getView()).navigate(R.id.action_filesFragment_to_replayFragment, bundle);
@@ -239,7 +232,6 @@ public class FilesFragment extends Fragment implements Observer {
 
                     @Override
                     public void onError(String errorMessage) {
-                        // 处理错误，比如显示 Toast
                         new Handler(Looper.getMainLooper()).post(() ->
                                 Toast.makeText(getContext(), "Error: " + errorMessage, Toast.LENGTH_LONG).show()
                         );
@@ -248,7 +240,6 @@ public class FilesFragment extends Fragment implements Observer {
             }
         });
 
-        // 将适配器设置给 RecyclerView
         filesList.setAdapter(listAdapter);
     }
 
