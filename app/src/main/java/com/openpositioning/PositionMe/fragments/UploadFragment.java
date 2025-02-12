@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.openpositioning.PositionMe.MainActivity;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ReplayDataProcessor;
 import com.openpositioning.PositionMe.ServerCommunications;
@@ -98,7 +99,23 @@ public class UploadFragment extends Fragment {
         if (bottomNav != null) {
             bottomNav.setVisibility(View.VISIBLE);
         }
+        MainActivity activity = (MainActivity) getActivity();
+        if (activity != null && activity.onBackPressedCallback != null) {
+            activity.onBackPressedCallback.setEnabled(false);  // 禁用返回键拦截
+        }
     }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+
+        // 恢复返回键拦截
+        MainActivity activity = (MainActivity) getActivity();
+        if (activity != null && activity.onBackPressedCallback != null) {
+            activity.onBackPressedCallback.setEnabled(true);  // 恢复拦截
+        }
+    }
+
 
     /**
      * {@inheritDoc}

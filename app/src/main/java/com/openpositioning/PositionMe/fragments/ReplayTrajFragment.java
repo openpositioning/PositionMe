@@ -206,6 +206,8 @@ public class ReplayTrajFragment extends Fragment {
         currProgress = 0;
         currStepCount = 0;
         counterGnss = 0;
+        isPlaying = true;
+        playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
 
         if(pdrPolyline != null) { pdrPolyline.remove(); }
         if(orientationMarker != null) { orientationMarker.remove(); }
@@ -290,6 +292,7 @@ public class ReplayTrajFragment extends Fragment {
                 currTask.cancel();
             }
             isPlaying = false;
+            playPauseButton.setImageResource(R.drawable.ic_baseline_play_arrow_24);
             return null;
         }
 
@@ -471,6 +474,7 @@ private void setupPlayPauseButton() {
             currTask = createTimerTask();
             readPdrTimer.schedule(currTask, 0, TimeInterval);
             isPlaying = true;
+            playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
         });
     }
     private void setupGoToEndButton() {
@@ -491,7 +495,8 @@ private void setupPlayPauseButton() {
                 Log.e("DrawLogic","Error Draw",e);
             }
             seekBar.setProgress(100);
-            isPlaying = false;}
+            isPlaying = false;
+            playPauseButton.setImageResource(R.drawable.ic_baseline_play_arrow_24);}
         });
     }
 
