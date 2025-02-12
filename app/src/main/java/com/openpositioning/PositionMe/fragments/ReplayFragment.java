@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.fragments;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -42,7 +43,7 @@ import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.Traj.Trajectory;
 import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.IndoorMapManager;
-
+import com.openpositioning.PositionMe.PdrProcessing;
 import android.graphics.Color;
 
 import java.io.ByteArrayOutputStream;
@@ -67,8 +68,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
 
     // 轨迹数据：这里分别使用 Traj.Trajectory 解析得到的 GNSS 和 PDR 数据
     private Traj.Trajectory trajectory;//从文件中解析得到的轨迹数据对象。
-    private List<Traj.Position_Sample> _positionData;
-    private int _positionData_pointer = 0;
+    private List<Traj.Pressure_Sample> PressureRead;
+    private int CurrentPressureIndex = 0;
     private List<Traj.GNSS_Sample> gnssPositions;//存储解析后的 GNSS 数据列表（每个数据包含纬度、经度）。
     private List<Traj.Pdr_Sample> pdrPositions;//存储解析后的 PDR 数据列表（每个数据通常包含相对位移信息，如 x、y 偏移量）。
 
@@ -83,6 +84,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
 
     public FloatingActionButton _floorUpButton; // Floor Up button
     public FloatingActionButton _floorDownButton; // Floor Down button
+    private PdrProcessing pdrProcessing;
     private Switch _autoFloor;
 
     @Override
@@ -122,7 +124,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
             fis.close();
             trajectory = Traj.Trajectory.parseFrom(data);
             // 分别获取 GNSS 数据列表和 PDR 数据列表
-            _positionData = trajectory.getPositionDataList();
+            PressureRead = trajectory.getPressureDataList();
             gnssPositions = trajectory.getGnssDataList();
             pdrPositions = trajectory.getPdrDataList();
         } catch (IOException e) {
@@ -340,7 +342,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
                     LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
 
 
-                    if(_positionData != null && _positionData_pointer < _positionData.size()) {
+                    if(PressureRead != null && CurrentPressureIndex < PressureRead.size()) {
                         // If not initialized, initialize
                         if (_indoorMapManager == null) {
                             _indoorMapManager = new IndoorMapManager(mMap);
@@ -348,8 +350,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
                         //  Updates current location of user to show the indoor floor map (if applicable)
                         //latLng = new LatLng(55.923089201509164, -3.17426605622692); //test
                         _indoorMapManager.setCurrentLocation(latLng); //latLng
-                        float elevationVal = _positionData.get(_positionData_pointer).getMagZ();
-                        Log.d("MagZ", String.format("Elevation Value: %.2f", elevationVal));
+                        float elevationVal = pdrProcessing.updateElevation(SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, PressureRead.get(currentGnssIndex).getPressure()));
+                        Log.d("pressure", String.format("Elevation Value: %.2f", elevationVal));
                         // Display buttons to allow user to change floors if indoor map is visible
                         if (_indoorMapManager.getIsIndoorMapSet()) {
                             setFloorButtonVisibility(View.VISIBLE);
@@ -362,7 +364,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
                             // Hide the buttons and switch used to change floor if indoor map is not visible
                             setFloorButtonVisibility(View.GONE);
                         }
-                        _positionData_pointer++;
+                        CurrentPressureIndex++;
                     }
 
 
@@ -403,7 +405,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {//�
         pauseReplay();
         currentGnssIndex = 0;
         currentPdrIndex = 0;
-        _positionData_pointer = 0;
+        CurrentPressureIndex = 0;
         progressBar.setProgress(0);
         startReplay();
     }
