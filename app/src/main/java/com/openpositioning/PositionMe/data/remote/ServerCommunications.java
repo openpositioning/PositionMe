@@ -489,10 +489,6 @@ public class ServerCommunications implements Observable {
             @Override
             public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
-                // Notify failure on callback (remember to run on UI thread if needed)
-                if (callback != null) {
-                    callback.onResult(false);
-                }
             }
 
             @Override

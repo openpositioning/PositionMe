@@ -45,7 +45,7 @@
             <!-- Vendor -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/sensorVendorItem"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/vendor"
@@ -57,7 +57,7 @@
             <!-- Resolution -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/sensorResolutionItem"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/resolution"
@@ -69,7 +69,7 @@
             <!-- Power -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/sensorPowerItem"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/power"
@@ -81,7 +81,7 @@
             <!-- Version -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/sensorVersionItem"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/version"
