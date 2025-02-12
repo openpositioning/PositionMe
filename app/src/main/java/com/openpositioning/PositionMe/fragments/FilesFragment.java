@@ -27,6 +27,8 @@ import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.viewitems.TrajDownloadListAdapter;
 import com.openpositioning.PositionMe.viewitems.DownloadClickListener;
+import com.openpositioning.PositionMe.viewitems.TrajDownloadViewHolder;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -231,6 +233,11 @@ public class FilesFragment extends Fragment implements Observer {
                 serverCommunications.downloadTrajectoryToTempFile(position, new TrajectoryFileCallback() {
                     @Override
                     public void onFileReady(File file) {
+                        //// 下载完成后，找到对应的 ViewHolder，并隐藏该卡片中的 ProgressBar
+                        RecyclerView.ViewHolder viewHolder = filesList.findViewHolderForAdapterPosition(position);
+                        if (viewHolder instanceof TrajDownloadViewHolder) {
+                            ((TrajDownloadViewHolder) viewHolder).hideLoading();
+                        }
                         // 当临时文件准备好后，创建 Bundle 将文件路径传递到 ReplayFragment
                         Bundle bundle = new Bundle();
                         bundle.putString("trajectory_file_path", file.getAbsolutePath());
@@ -239,6 +246,11 @@ public class FilesFragment extends Fragment implements Observer {
 
                     @Override
                     public void onError(String errorMessage) {
+                        // 出现错误时，也需要隐藏 ProgressBar
+                        RecyclerView.ViewHolder viewHolder = filesList.findViewHolderForAdapterPosition(position);
+                        if (viewHolder instanceof TrajDownloadViewHolder) {
+                            ((TrajDownloadViewHolder) viewHolder).hideLoading();
+                        }
                         // 处理错误，比如显示 Toast
                         new Handler(Looper.getMainLooper()).post(() ->
                                 Toast.makeText(getContext(), "Error: " + errorMessage, Toast.LENGTH_LONG).show()
