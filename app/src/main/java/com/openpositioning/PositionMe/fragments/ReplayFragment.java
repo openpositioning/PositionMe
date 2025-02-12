@@ -8,11 +8,11 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.Toast;
 import android.graphics.Color;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -33,13 +33,20 @@ import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.PdrProcessing;
+import com.openpositioning.PositionMe.BuildingPolygon;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
+/**
+ * ReplayFragment: 在地图上回放 GNSS + PDR + Pressure 等轨迹数据。
+ * 修复了“并行递增索引导致的时间错位”问题，改为基于相对时间戳 (relative_timestamp) 顺序回放。
+ */
 public class ReplayFragment extends Fragment implements OnMapReadyCallback {
 
     private MapView mapView;
@@ -49,10 +56,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
 
     // 播放控制
     private boolean isPlaying = false;
-    private int currentGnssIndex = 0;
-    private int currentPdrIndex = 0;
     private Handler playbackHandler = new Handler(Looper.getMainLooper());
-    private Runnable playbackRunnable;
 
     // 轨迹数据
     private Traj.Trajectory trajectory;
@@ -70,21 +74,42 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
 
     private IndoorMapManager indoorMapManager;
 
-    // 楼层切换相关变量
-    private int currentMeasuredFloor = 0;  // 录制起始时相对高度为 0 层
-    private final float FLOOR_HEIGHT = 4.2f; // 默认 Nucleus 楼层高度 4.2 米
-    private final float TOLERANCE = 0.5f;    // 容差 ±0.5 米
-    private final int CONSECUTIVE_THRESHOLD = 3;
+    // 当前位置信息（用于更新 indoorMapManager）
+    private LatLng currentLocation;
+
+    // 楼层切换相关变量（与你原先代码一致）
+    private int currentMeasuredFloor = 0;
+    private final float FLOOR_HEIGHT = 4.2f;
+    private final float TOLERANCE = 0.5f;
+    // 注意：为让楼层检测更“敏感”一点，这里把 CONSECUTIVE_THRESHOLD 设为 1
+    private final int CONSECUTIVE_THRESHOLD = 1;
     private int upCounter = 0;
     private int downCounter = 0;
 
-    // 手动调整楼层控件（需要在布局文件中添加）
+    // 手动调整楼层控件
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton;
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorDownButton;
     private Switch autoFloor;
 
     // 文件路径
     private String filePath;
+
+    // --------------------------
+    //  新增：事件队列 (mergedEvents)
+    // --------------------------
+    // 用于合并 GNSS/PDR/Pressure 并按时间戳回放
+    private List<Event> mergedEvents = new ArrayList<>();
+    private int currentEventIndex = 0;  // 当前事件播放到哪一个
+    private long startReplayTimestamp;  // 用于“模拟真实间隔”时，记录回放开始的系统时间
+
+    /** 用于统一管理不同类型的轨迹事件 */
+    private static class Event {
+        long relativeTime;  // 来自 GNSS/Pdr/Pressure 的 relative_timestamp
+        int eventType;      // 0=GNSS, 1=PDR, 2=Pressure
+        Traj.GNSS_Sample gnss;
+        Traj.Pdr_Sample pdr;
+        Traj.Pressure_Sample pressure;
+    }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -96,7 +121,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         btnGoToEnd = view.findViewById(R.id.btnGoToEnd);
         btnExit = view.findViewById(R.id.btnExit);
         progressBar = view.findViewById(R.id.progressBar);
-        // 获取楼层控制控件
+
+        // 楼层控制控件
         floorUpButton = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         autoFloor = view.findViewById(R.id.autoFloor);
@@ -109,10 +135,11 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
         // 初始化 pdrProcessing
         pdrProcessing = new PdrProcessing(getContext());
 
-        // 获取文件路径
+        // 获取传入的文件路径
         if (getArguments() != null) {
             filePath = getArguments().getString("trajectory_file_path");
         }
@@ -120,6 +147,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             Toast.makeText(getContext(), "No trajectory file provided", Toast.LENGTH_SHORT).show();
             return;
         }
+
+        // 读取轨迹文件
         try {
             File file = new File(filePath);
             FileInputStream fis = new FileInputStream(file);
@@ -127,9 +156,11 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             fis.read(data);
             fis.close();
             trajectory = Traj.Trajectory.parseFrom(data);
+
             gnssPositions = trajectory.getGnssDataList();
             pdrPositions = trajectory.getPdrDataList();
             pressureinfos = trajectory.getPressureDataList();
+
             altitudeList = new ArrayList<>();
             relativeAltitudeList = new ArrayList<>();
             if (pressureinfos != null && !pressureinfos.isEmpty()) {
@@ -138,11 +169,17 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                     altitudeList.add(alt);
                 }
             }
-            // 将绝对海拔转换为相对海拔（注意：updateElevation() 是状态化的，只转换一次）
+            // 生成相对海拔列表
             for (Float absoluteAlt : altitudeList) {
                 float relativeAlt = pdrProcessing.updateElevation(absoluteAlt);
                 relativeAltitudeList.add(relativeAlt);
             }
+
+            // -----------------------------
+            // **关键：构建 mergedEvents 列表**
+            // -----------------------------
+            buildMergedEvents();
+
         } catch (IOException e) {
             e.printStackTrace();
             Toast.makeText(getContext(), "Failed to load trajectory data", Toast.LENGTH_SHORT).show();
@@ -160,22 +197,19 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         btnGoToEnd.setOnClickListener(v -> goToEndReplay());
         btnExit.setOnClickListener(v -> exitReplay());
 
-        // 设置进度条最大值
-        if ((gnssPositions != null && !gnssPositions.isEmpty()) ||
-                (pdrPositions != null && !pdrPositions.isEmpty())) {
-            int maxCount = Math.max(
-                    (gnssPositions != null ? gnssPositions.size() : 0),
-                    (pdrPositions != null ? pdrPositions.size() : 0));
-            progressBar.setMax(maxCount);
+        // 进度条最大值改为 mergedEvents.size()
+        if (!mergedEvents.isEmpty()) {
+            progressBar.setMax(mergedEvents.size());
         }
 
+        // 进度条监听：拖动时跳到对应的 event
         progressBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    currentGnssIndex = progress;
-                    currentPdrIndex = progress;
-                    updateMarkersForProgress();
+                    currentEventIndex = progress;
+                    // 同步到当前 eventIndex 的地图 Marker 位置
+                    updateMarkersForEventIndex(currentEventIndex);
                 }
             }
             @Override
@@ -183,12 +217,11 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 pauseReplay();
             }
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) { }
+            public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        // 设置手动楼层调整控件的监听器
+        // 手动楼层调整
         floorUpButton.setOnClickListener(v -> {
-            // 手动调整时关闭自动楼层
             autoFloor.setChecked(false);
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
@@ -200,12 +233,53 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 indoorMapManager.decreaseFloor();
             }
         });
-        // 初始时，根据室内地图是否显示来设置楼层按钮的可见性
-        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
-            setFloorButtonVisibility(View.VISIBLE);
-        } else {
-            setFloorButtonVisibility(View.GONE);
+        // 初始时，显示楼层控制控件
+        setFloorButtonVisibility(View.VISIBLE);
+    }
+
+    /** 将 GNSS/PDR/Pressure 三类数据合并到一个列表 mergedEvents */
+    private void buildMergedEvents() {
+        mergedEvents.clear();
+
+        // GNSS
+        if (gnssPositions != null) {
+            for (Traj.GNSS_Sample g : gnssPositions) {
+                Event e = new Event();
+                e.relativeTime = g.getRelativeTimestamp();
+                e.eventType = 0;
+                e.gnss = g;
+                mergedEvents.add(e);
+            }
         }
+        // PDR
+        if (pdrPositions != null) {
+            for (int i = 0; i < pdrPositions.size(); i++) {
+                Traj.Pdr_Sample p = pdrPositions.get(i);
+                Event e = new Event();
+                e.relativeTime = p.getRelativeTimestamp();
+                e.eventType = 1;
+                e.pdr = p;
+                mergedEvents.add(e);
+            }
+        }
+        // Pressure
+        if (pressureinfos != null) {
+            for (int i = 0; i < pressureinfos.size(); i++) {
+                Traj.Pressure_Sample pr = pressureinfos.get(i);
+                Event e = new Event();
+                e.relativeTime = pr.getRelativeTimestamp();
+                e.eventType = 2;
+                e.pressure = pr;
+                mergedEvents.add(e);
+            }
+        }
+        // 排序：按 relativeTime 升序
+        Collections.sort(mergedEvents, new Comparator<Event>() {
+            @Override
+            public int compare(Event o1, Event o2) {
+                return Long.compare(o1.relativeTime, o2.relativeTime);
+            }
+        });
     }
 
     // 辅助方法：设置楼层按钮及自动楼层开关的可见性
@@ -221,50 +295,39 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
-    private void updateMarkersForProgress() {
-        if (mMap == null) {
-            return;
+    /**
+     * 当手动拖动进度条或播放到某个 eventIndex 时，需要把地图 Marker
+     * 更新到 mergedEvents[0..eventIndex] 的最后状态
+     */
+    private void updateMarkersForEventIndex(int eventIndex) {
+        if (mMap == null || indoorMapManager == null || mergedEvents.isEmpty()) return;
+
+        // 先从头到该 eventIndex，依次处理 event；这样能“模拟”到当前状态
+        // 由于用户可能频繁拖拽，为了简化，这里就直接从0播到eventIndex
+        // 若数据量很大，可以优化为“记住上一次的状态”，这里只求逻辑清晰
+
+        // 重置marker
+        if (gnssMarker != null) {
+            gnssMarker.remove();
+            gnssMarker = null;
         }
-        if (indoorMapManager == null) {
-            indoorMapManager = new IndoorMapManager(mMap);
+        if (pdrMarker != null) {
+            pdrMarker.remove();
+            pdrMarker = null;
         }
-        // 更新 GNSS Marker
-        if (gnssPositions != null && !gnssPositions.isEmpty()) {
-            int index = Math.min(currentGnssIndex, gnssPositions.size() - 1);
-            Traj.GNSS_Sample sample = gnssPositions.get(index);
-            LatLng latLng = new LatLng(sample.getLatitude(), sample.getLongitude());
-            if (gnssMarker != null) {
-                gnssMarker.setPosition(latLng);
-            } else {
-                gnssMarker = mMap.addMarker(new MarkerOptions()
-                        .position(latLng)
-                        .title("GNSS Position")
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
-            }
+
+        currentLocation = null;  // 每次重头更新
+
+        // 重置楼层检测计数
+        currentMeasuredFloor = 0;
+        upCounter = 0;
+        downCounter = 0;
+
+        for (int i = 0; i <= eventIndex && i < mergedEvents.size(); i++) {
+            processEvent(mergedEvents.get(i), false);
         }
-        // 更新 PDR Marker 和显示相对高度
-        if (pdrPositions != null && !pdrPositions.isEmpty()) {
-            int index = Math.min(currentPdrIndex, pdrPositions.size() - 1);
-            Traj.Pdr_Sample sample = pdrPositions.get(index);
-            LatLng pdrStart = (gnssPositions != null && !gnssPositions.isEmpty())
-                    ? new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude())
-                    : new LatLng(0, 0);
-            float[] pdrOffset = new float[]{ sample.getX(), sample.getY() };
-            LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
-            if (pdrMarker != null) {
-                pdrMarker.setPosition(latLng);
-            } else {
-                pdrMarker = mMap.addMarker(new MarkerOptions()
-                        .position(latLng)
-                        .title("PDR Position")
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
-            }
-            if (relativeAltitudeList != null && !relativeAltitudeList.isEmpty()) {
-                int altIndex = Math.min(currentPdrIndex, relativeAltitudeList.size() - 1);
-                float currentRelAlt = relativeAltitudeList.get(altIndex);
-                pdrMarker.setSnippet("Altitude: " + String.format("%.1f", currentRelAlt) + " m");
-            }
-        }
+        // 同时更新进度条
+        progressBar.setProgress(eventIndex);
     }
 
     @Override
@@ -275,6 +338,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         mMap.getUiSettings().setTiltGesturesEnabled(true);
         mMap.getUiSettings().setRotateGesturesEnabled(true);
         mMap.getUiSettings().setScrollGesturesEnabled(true);
+
         // 绘制 GNSS 轨迹（蓝色）
         if (gnssPositions != null && !gnssPositions.isEmpty()) {
             PolylineOptions gnssOptions = new PolylineOptions().color(Color.BLUE);
@@ -283,11 +347,18 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 gnssOptions.add(latLng);
             }
             gnssPolyline = mMap.addPolyline(gnssOptions);
-            LatLng gnssStart = new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude());
+            LatLng gnssStart = new LatLng(
+                    gnssPositions.get(0).getLatitude(),
+                    gnssPositions.get(0).getLongitude()
+            );
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(gnssStart, 18f));
-            gnssMarker = mMap.addMarker(new MarkerOptions().position(gnssStart).title("GNSS Position")
+            gnssMarker = mMap.addMarker(new MarkerOptions()
+                    .position(gnssStart)
+                    .title("GNSS Position")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
+            currentLocation = gnssStart;
         }
+
         // 绘制 PDR 轨迹（红色）
         if (pdrPositions != null && !pdrPositions.isEmpty()) {
             LatLng pdrStart = (gnssPositions != null && !gnssPositions.isEmpty())
@@ -295,171 +366,68 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                     : new LatLng(0, 0);
             PolylineOptions pdrOptions = new PolylineOptions().color(Color.RED);
             for (Traj.Pdr_Sample sample : pdrPositions) {
-                float[] pdrOffset = new float[]{ sample.getX(), sample.getY() };
+                float[] pdrOffset = new float[]{sample.getX(), sample.getY()};
                 LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
                 pdrOptions.add(latLng);
             }
             pdrPolyline = mMap.addPolyline(pdrOptions);
             if (!pdrOptions.getPoints().isEmpty()) {
-                pdrMarker = mMap.addMarker(new MarkerOptions().position(pdrOptions.getPoints().get(0)).title("PDR Position")
+                pdrMarker = mMap.addMarker(new MarkerOptions()
+                        .position(pdrOptions.getPoints().get(0))
+                        .title("PDR Position")
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
             }
         }
-        // 初始化 indoorMapManager
+
+        // 初始化 IndoorMapManager
         indoorMapManager = new IndoorMapManager(mMap);
     }
 
-    // 开始回放：更新 Marker 位置，并检测楼层切换
+    /**
+     * 开始回放：基于 mergedEvents（时间戳排序）逐条处理
+     * 不再并行递增索引。
+     */
     private void startReplay() {
-        if ((gnssPositions == null || gnssPositions.isEmpty()) &&
-                (pdrPositions == null || pdrPositions.isEmpty()))
+        if (mergedEvents.isEmpty()) {
             return;
+        }
         isPlaying = true;
         btnPlayPause.setText("Pause");
 
-        playbackRunnable = new Runnable() {
-            @Override
-            public void run() {
-                // 更新 GNSS Marker
-                if (gnssPositions != null && currentGnssIndex < gnssPositions.size()) {
-                    Traj.GNSS_Sample sample = gnssPositions.get(currentGnssIndex);
-                    LatLng latLng = new LatLng(sample.getLatitude(), sample.getLongitude());
-                    if (gnssMarker != null) {
-                        gnssMarker.setPosition(latLng);
-                    } else {
-                        gnssMarker = mMap.addMarker(new MarkerOptions()
-                                .position(latLng)
-                                .title("GNSS Position")
-                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
-                    }
-                    // 更新室内地图位置
-                    if (indoorMapManager != null) {
-                        indoorMapManager.setCurrentLocation(latLng);
-                    }
-                    currentGnssIndex++;
-                }
-                // 更新 PDR Marker 并检测楼层切换
-                if (pdrPositions != null && currentPdrIndex < pdrPositions.size()) {
-                    Traj.Pdr_Sample sample = pdrPositions.get(currentPdrIndex);
-                    LatLng pdrStart = (gnssPositions != null && !gnssPositions.isEmpty())
-                            ? new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude())
-                            : new LatLng(0, 0);
-                    float[] pdrOffset = new float[]{ sample.getX(), sample.getY() };
-                    LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
-                    if (pdrMarker != null) {
-                        pdrMarker.setPosition(latLng);
-                    } else {
-                        pdrMarker = mMap.addMarker(new MarkerOptions()
-                                .position(latLng)
-                                .title("PDR Position")
-                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
-                    }
-                    currentPdrIndex++;
-                    // 更新相对高度显示，并检测楼层切换
-                    if (relativeAltitudeList != null && !relativeAltitudeList.isEmpty()) {
-                        int altIndex = Math.min(currentPdrIndex, relativeAltitudeList.size() - 1);
-                        float currentRelAlt = relativeAltitudeList.get(altIndex);
-                        pdrMarker.setSnippet("Altitude: " + String.format("%.1f", currentRelAlt) + " m");
+        currentEventIndex = 0;
+        // 把地图 Marker 同步到第0个事件的状态
+        updateMarkersForEventIndex(0);
 
-                        // 判断当前建筑类型，并设置相应楼层高度
-                        float buildingFloorHeight = FLOOR_HEIGHT; // 默认 Nucleus
-                        // 这里使用第一个 GNSS 点来判断建筑类型（或使用最新位置）
-                        if (gnssPositions != null && !gnssPositions.isEmpty()) {
-                            LatLng currentPos = new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude());
-                            // 注意：确保 BuildingPolygon 类已正确实现
-                            if (com.openpositioning.PositionMe.BuildingPolygon.inLibrary(currentPos)) {
-                                buildingFloorHeight = IndoorMapManager.LIBRARY_FLOOR_HEIGHT; // 如 3.6f
-                            }
-                        }
-
-                        // 计算期望上层和下层的相对高度
-                        float expectedUp = (currentMeasuredFloor + 1) * buildingFloorHeight;
-                        float expectedDown = (currentMeasuredFloor - 1) * buildingFloorHeight;
-                        if (currentRelAlt >= expectedUp - TOLERANCE && currentRelAlt <= expectedUp + TOLERANCE) {
-                            upCounter++;
-                            downCounter = 0;
-                        } else if (currentRelAlt >= expectedDown - TOLERANCE && currentRelAlt <= expectedDown + TOLERANCE) {
-                            downCounter++;
-                            upCounter = 0;
-                        } else {
-                            upCounter = 0;
-                            downCounter = 0;
-                        }
-                        if (upCounter >= CONSECUTIVE_THRESHOLD && indoorMapManager.getIsIndoorMapSet()) {
-                            currentMeasuredFloor++; // 向上切换一层
-                            indoorMapManager.setCurrentFloor(currentMeasuredFloor, true);
-                            upCounter = 0;
-                        }
-                        if (downCounter >= CONSECUTIVE_THRESHOLD && indoorMapManager.getIsIndoorMapSet()) {
-                            currentMeasuredFloor--; // 向下切换一层
-                            indoorMapManager.setCurrentFloor(currentMeasuredFloor, true);
-                            downCounter = 0;
-                        }
-                    }
-                }
-                // 更新进度条
-                int progress = Math.max(currentGnssIndex, currentPdrIndex);
-                progressBar.setProgress(progress);
-
-                if ((gnssPositions != null && currentGnssIndex < gnssPositions.size()) ||
-                        (pdrPositions != null && currentPdrIndex < pdrPositions.size())) {
-                    playbackHandler.postDelayed(this, 500);
-                } else {
-                    pauseReplay();
-                }
-            }
-        };
-        playbackHandler.postDelayed(playbackRunnable, 500);
+        // 开始逐条调度
+        scheduleNext();
     }
 
+    /** 停止回放 */
     private void pauseReplay() {
         isPlaying = false;
         btnPlayPause.setText("Play");
-        if (playbackRunnable != null) {
-            playbackHandler.removeCallbacks(playbackRunnable);
-        }
+        playbackHandler.removeCallbacksAndMessages(null);
     }
 
+    /** 重新开始回放 */
     private void restartReplay() {
         pauseReplay();
-        currentGnssIndex = 0;
-        currentPdrIndex = 0;
-        progressBar.setProgress(0);
-        currentMeasuredFloor = 0;
-        upCounter = 0;
-        downCounter = 0;
+        currentEventIndex = 0;
+        updateMarkersForEventIndex(0);
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentFloor(0, true);
+        }
+
+        startReplay();
         startReplay();
     }
 
+    /** 跳到末尾（最后一个事件） */
     private void goToEndReplay() {
         pauseReplay();
-        if (gnssPositions != null && !gnssPositions.isEmpty()) {
-            currentGnssIndex = gnssPositions.size() - 1;
-            Traj.GNSS_Sample sample = gnssPositions.get(currentGnssIndex);
-            LatLng latLng = new LatLng(sample.getLatitude(), sample.getLongitude());
-            if (gnssMarker != null) {
-                gnssMarker.setPosition(latLng);
-            } else {
-                gnssMarker = mMap.addMarker(new MarkerOptions().position(latLng).title("GNSS Position"));
-            }
-            mMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
-            progressBar.setProgress(currentGnssIndex);
-        }
-        if (pdrPositions != null && !pdrPositions.isEmpty()) {
-            currentPdrIndex = pdrPositions.size() - 1;
-            LatLng pdrStart = (gnssPositions != null && !gnssPositions.isEmpty())
-                    ? new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude())
-                    : new LatLng(0, 0);
-            Traj.Pdr_Sample sample = pdrPositions.get(currentPdrIndex);
-            float[] pdrOffset = new float[]{ sample.getX(), sample.getY() };
-            LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
-            if (pdrMarker != null) {
-                pdrMarker.setPosition(latLng);
-            } else {
-                pdrMarker = mMap.addMarker(new MarkerOptions().position(latLng).title("PDR Position"));
-            }
-            mMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
-            progressBar.setProgress(Math.max(currentGnssIndex, currentPdrIndex));
+        if (!mergedEvents.isEmpty()) {
+            currentEventIndex = mergedEvents.size() - 1;
+            updateMarkersForEventIndex(currentEventIndex);
         }
     }
 
@@ -468,20 +436,176 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         getActivity().onBackPressed();
     }
 
+    /**
+     * 核心：调度下一条事件
+     * 根据相邻事件的时间戳差值，动态计算延迟
+     */
+    private void scheduleNext() {
+        if (!isPlaying || currentEventIndex >= mergedEvents.size()) {
+            pauseReplay();
+            return;
+        }
+
+        // 当前事件
+        final Event current = mergedEvents.get(currentEventIndex);
+        // 下一个事件（如果有）
+        final int nextIndex = currentEventIndex + 1;
+        long delayMs = 500; // 默认半秒
+        if (nextIndex < mergedEvents.size()) {
+            long dt = mergedEvents.get(nextIndex).relativeTime - current.relativeTime;
+            // 你也可以把 dt 直接当延迟，也可做倍速: e.g. dt / 2
+            // 这里简单地用 dt
+            delayMs = dt;
+            if (delayMs < 0) {
+                // 极端情况：如果时间戳没排序好或重复，保证不出现负值
+                delayMs = 0;
+            }
+        }
+
+        // 立即处理当前事件
+        processEvent(current, true);
+
+        // 调度播放下一个事件
+        currentEventIndex++;
+        progressBar.setProgress(currentEventIndex);
+
+        playbackHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                scheduleNext();
+            }
+        }, delayMs);
+    }
+
+    /**
+     * 处理单个 Event：根据 eventType 更新 GNSS / PDR / Pressure（海拔+楼层检测）
+     * @param immediate 是否是自动播放时按节奏触发；如果是 “手动一次性处理” 则 immediate=false
+     */
+    private void processEvent(Event e, boolean immediate) {
+        switch (e.eventType) {
+            case 0: // GNSS
+                if (e.gnss != null) {
+                    Traj.GNSS_Sample sample = e.gnss;
+                    LatLng latLng = new LatLng(sample.getLatitude(), sample.getLongitude());
+                    currentLocation = latLng;
+                    if (gnssMarker != null) {
+                        gnssMarker.setPosition(latLng);
+                    } else {
+                        gnssMarker = mMap.addMarker(new MarkerOptions()
+                                .position(latLng)
+                                .title("GNSS Position")
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
+                    }
+                    if (indoorMapManager != null) {
+                        indoorMapManager.setCurrentLocation(latLng);
+                    }
+                }
+                break;
+            case 1: // PDR
+                if (e.pdr != null) {
+                    Traj.Pdr_Sample pdrSample = e.pdr;
+                    // PDR 假设相对 (gnss首点) 来计算位置
+                    LatLng pdrStart = (gnssPositions != null && !gnssPositions.isEmpty())
+                            ? new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude())
+                            : new LatLng(0, 0);
+                    float[] pdrOffset = new float[]{pdrSample.getX(), pdrSample.getY()};
+                    LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
+
+                    if (pdrMarker != null) {
+                        pdrMarker.setPosition(latLng);
+                    } else {
+                        pdrMarker = mMap.addMarker(new MarkerOptions()
+                                .position(latLng)
+                                .title("PDR Position")
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
+                    }
+                    // 如果我们有海拔数据(pressure)已处理，则更新楼层检测
+                    // 不过 PDR 事件本身不带海拔；海拔更新在 pressure event
+                }
+                break;
+            case 2: // PRESSURE
+                // 在 playback 时，用 relativeAltitudeList 来做海拔
+                // 由于 pressure list 与 mergedEvents 不一定一一对应下标，
+                // 需要找到在 pressureinfos 中的 index
+                Traj.Pressure_Sample pr = e.pressure;
+                if (pr != null && pressureinfos != null && !pressureinfos.isEmpty()) {
+                    // 找到 pr 在 pressureinfos 中的顺序 index
+                    int idx = pressureinfos.indexOf(pr);
+                    if (idx >= 0 && idx < relativeAltitudeList.size()) {
+                        float currentRelAlt = relativeAltitudeList.get(idx);
+                        // 如果 pdrMarker 存在，就更新 snippet
+                        if (pdrMarker != null) {
+                            pdrMarker.setSnippet("Altitude: " + String.format("%.1f", currentRelAlt) + " m");
+                        }
+                        // 自动楼层检测
+                        if (autoFloor != null && autoFloor.isChecked()) {
+                            float buildingFloorHeight = FLOOR_HEIGHT;
+                            if (currentLocation != null) {
+                                if (BuildingPolygon.inNucleus(currentLocation)) {
+                                    buildingFloorHeight = IndoorMapManager.NUCLEUS_FLOOR_HEIGHT;
+                                } else if (BuildingPolygon.inLibrary(currentLocation)) {
+                                    buildingFloorHeight = IndoorMapManager.LIBRARY_FLOOR_HEIGHT;
+                                } else {
+                                    buildingFloorHeight = 0;
+                                }
+                            }
+
+                            if (buildingFloorHeight > 0 && indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
+                                float expectedUp = (currentMeasuredFloor + 1) * buildingFloorHeight;
+                                float expectedDown = (currentMeasuredFloor - 1) * buildingFloorHeight;
+
+                                if (currentRelAlt >= (expectedUp - TOLERANCE) && currentRelAlt <= (expectedUp + TOLERANCE)) {
+                                    upCounter++;
+                                    downCounter = 0;
+                                } else if (currentRelAlt >= (expectedDown - TOLERANCE) && currentRelAlt <= (expectedDown + TOLERANCE)) {
+                                    downCounter++;
+                                    upCounter = 0;
+                                } else {
+                                    upCounter = 0;
+                                    downCounter = 0;
+                                }
+
+                                if (upCounter >= CONSECUTIVE_THRESHOLD) {
+                                    currentMeasuredFloor++;
+                                    indoorMapManager.setCurrentFloor(currentMeasuredFloor, true);
+                                    if (currentLocation != null) {
+                                        mMap.animateCamera(CameraUpdateFactory.newLatLng(currentLocation));
+                                    }
+                                    upCounter = 0;
+                                }
+                                if (downCounter >= CONSECUTIVE_THRESHOLD) {
+                                    currentMeasuredFloor--;
+                                    indoorMapManager.setCurrentFloor(currentMeasuredFloor, true);
+                                    if (currentLocation != null) {
+                                        mMap.animateCamera(CameraUpdateFactory.newLatLng(currentLocation));
+                                    }
+                                    downCounter = 0;
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+        }
+    }
+
     @Override
     public void onResume() {
         super.onResume();
         mapView.onResume();
     }
+
     @Override
     public void onPause() {
         super.onPause();
         mapView.onPause();
     }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
         mapView.onDestroy();
+        // 退出时删除临时文件
         if (getArguments() != null) {
             String path = getArguments().getString("trajectory_file_path");
             if (path != null) {
@@ -492,6 +616,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             }
         }
     }
+
     @Override
     public void onLowMemory() {
         super.onLowMemory();
