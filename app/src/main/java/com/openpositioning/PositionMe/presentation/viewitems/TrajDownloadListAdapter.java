@@ -73,7 +73,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         loadDownloadRecords();
     }
 
-
+    /**
+     * Load the download records from the local storage.
+     */
     private void loadDownloadRecords() {
         try {
             File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "download_records.json");
@@ -224,8 +226,6 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             button.setBackgroundTintList(ContextCompat.getColorStateList(context, R.color.md_theme_light_primary));
         }
     }
-
-    private boolean isPolling = false;
 
     private void startPollingForFileUpdate(TrajDownloadViewHolder holder, String trajId) {
         setButtonState(holder.downloadButton, 2); // 切换为“下载中”状态
