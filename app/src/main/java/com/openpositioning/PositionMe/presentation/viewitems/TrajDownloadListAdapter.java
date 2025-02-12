@@ -86,13 +86,11 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 //                ServerCommunications.downloadRecords.clear();
                 while (keys.hasNext()) {
                     String key = keys.next();
-                    System.out.println("laigan Processing key: " + key);
                     try {
                         JSONObject recordDetails = jsonObject.getJSONObject(key);
                         String id = recordDetails.optString("id", key);
                         // 保存到 downloadRecords
                         ServerCommunications.downloadRecords.put(id, recordDetails);
-                        System.out.println("laigan Added record with id: " + id);
                     } catch (Exception e) {
                         System.err.println("laigan Error processing key: " + key);
                         e.printStackTrace();
@@ -185,7 +183,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 }
             } else {
                 listener.onPositionClicked(position);
-                startPollingForFileUpdate();
+                startPollingForFileUpdate(holder);
             }
         });
         holder.downloadButton.invalidate();
@@ -221,7 +219,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
     private boolean isPolling = false;
 
-    private void startPollingForFileUpdate() {
+    private void startPollingForFileUpdate(TrajDownloadViewHolder holder) {
+        setButtonState(holder.downloadButton, 2);
         if (isPolling) {
             return;
         }
