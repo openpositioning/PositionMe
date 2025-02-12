@@ -118,7 +118,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float[] angularVelocity;
     private float[] orientation;
     private float[] rotation;
-    private float pressure;
+    private float pressure = 1013.25f;
+//    private float pressure;
     private float light;
     private float proximity;
     private float[] R;
@@ -273,6 +274,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             case Sensor.TYPE_PRESSURE:
                 // Barometer processing - filter
                 pressure = (1- ALPHA) * pressure + ALPHA * sensorEvent.values[0];
+                System.err.println("Pressure: " + pressure);
                 // Store pressure data in protobuf trajectory class
                 if (saveRecording) {
                     this.elevation = pdrProcessing.updateElevation(SensorManager.getAltitude(

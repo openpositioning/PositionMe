@@ -46,21 +46,21 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
     private Button setButton, resetButton;
     private LatLng initialPosition;
     private boolean isGpsInitialized = false;
-    // ✅ 当前 Marker 的位置
+    // current marker position
     private LatLng currentMarkerPosition;
 
-    // ✅ 用户固定的 Marker 位置（点击 "Set" 按钮后）
+    // user fixed marker position
     private LatLng fixedMarkerPosition;
 
 
-    // GNSS 相关
+    // Gnss
     private LocationManager locationManager;
     private LocationListener locationListener;
 
-    // 兴趣区域
+    // Interest Zones
     private List<LatLng> libraryZone;
     private List<LatLng> nucleusZone;
-    private Marker currentMarker;  // 🟢 存储当前用户拖动的 Marker
+    private Marker currentMarker;  // marker for user dragging
 
     private LatLng library_NE;
     private LatLng library_SW;
@@ -68,7 +68,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
     private LatLng necleus_SW;
 
 
-    // 位置权限请求
+    // position permission launcher
     private final ActivityResultLauncher<String> locationPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
                 if (isGranted) {
@@ -83,29 +83,29 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_position, container, false);
 
-        // 🛑 **删除旧 Marker，避免重复**
+        // delete the old marker
         if (currentMarker != null) {
             currentMarker.remove();
             currentMarker = null;
             Log.d("MarkerReset", "🔥 旧 Marker 被移除");
         }
 
-        // ✅ 初始化 LocationManager
+        // initialise location manager
         locationManager = (LocationManager) requireActivity().getSystemService(Context.LOCATION_SERVICE);
 
-        // 绑定 UI 组件
+        // ui bounding
         tvLatitude = view.findViewById(R.id.tv_latitude);
         tvLongitude = view.findViewById(R.id.tv_longitude);
         setButton = view.findViewById(R.id.button_set);
         resetButton = view.findViewById(R.id.button_reset);
 
-        // 获取地图 Fragment
+        // obtain map Fragment
         SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.map_fragment);
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
 
-        // 🔥 只初始化兴趣区域的数据（但不画图）
+        // initialize interest zones
         initializeInterestZonesData();
 
         return view;
@@ -137,27 +137,27 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
-        // 设置地图类型为卫星图
+        // set map type
         mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
 
-        // ✅ 先默认设置为爱丁堡
+        // Default to Edinburgh
         initialPosition = new LatLng(55.953251, -3.188267);
         fixedMarkerPosition = initialPosition;
         currentMarkerPosition = initialPosition;
 
-        // ✅ 确保 `locationManager` 不为空
+        // Ensure `locationManager` is initialized
         if (locationManager == null) {
             Log.e("GNSS", "❌ LocationManager is NULL!");
             locationManager = (LocationManager) requireActivity().getSystemService(Context.LOCATION_SERVICE);
         }
 
-        // ✅ 确保 `locationManager` 初始化成功后，尝试获取位置
+        // ensure permission
         if (locationManager != null && ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
             Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
 
             if (lastKnownLocation != null) {
-                // 🔥 发现 GNSS 位置，将其设为初始点
+                // Gnss position discovered
                 initialPosition = new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
                 fixedMarkerPosition = initialPosition;
                 currentMarkerPosition = initialPosition;
@@ -168,19 +168,19 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             Log.w("GNSS", "⚠️ LocationManager unavailable or permission not granted.");
         }
 
-        // ✅ 在地图上添加 Marker
+        // add maker to map
         currentMarker = mMap.addMarker(new MarkerOptions()
                 .position(initialPosition)
                 .draggable(true)
                 .title("Drag me"));
 
-        // ✅ 设置相机初始位置
+        // set initial position
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialPosition, 15));
 
-        // ✅ 初始化兴趣区域
+        // initialize interest zones
         initializeInterestZones();
 
-        // ✅ 添加 Marker 拖动监听器
+        // add marker drag listener
         mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
             @Override
             public void onMarkerDragStart(Marker marker) {}
@@ -198,29 +198,29 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             }
         });
 
-        // ✅ 申请 GNSS 位置权限（确保 GNSS 监听）
+        // ask for location permission
         requestLocationPermission();
 
-        // ✅ 设置 Set 按钮（固定 Marker 位置并跳转）
+        // configure button
         setButton.setOnClickListener(v -> {
             if (currentMarker != null) {
                 LatLng markerPosition = currentMarker.getPosition();
 
                 Toast.makeText(getContext(), "Location set!", Toast.LENGTH_SHORT).show();
 
-                // 🚀 **创建 Bundle 传递数据**
+                // create bundle for RecordingFragment
                 Bundle bundle = new Bundle();
                 bundle.putDouble("marker_latitude", markerPosition.latitude);
                 bundle.putDouble("marker_longitude", markerPosition.longitude);
 
-                // 关闭GNSS监听
+                // stop GNSS listener
                 locationManager.removeUpdates(locationListener);
 
-                // 🚀 **创建 RecordingFragment 并设置参数**
+                // Initialize RecordingFragment and set arguments
                 RecordingFragment recordingFragment = new RecordingFragment();
                 recordingFragment.setArguments(bundle);
 
-                // 🚀 **跳转到 RecordingFragment**
+                // jump to RecordingFragment
                 FragmentTransaction transaction = requireActivity().getSupportFragmentManager().beginTransaction();
                 transaction.replace(R.id.fragment_container, recordingFragment);
                 transaction.addToBackStack(null);
@@ -228,7 +228,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             }
         });
 
-        // ✅ 设置 Reset 按钮（恢复初始位置）
+        // Set reset button
         resetButton.setOnClickListener(v -> {
             if (currentMarker != null) {
                 currentMarker.setPosition(initialPosition);
@@ -238,21 +238,21 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         });
     }
 
-    // **初始化兴趣区域**
+    // initialize interest zones
     private void initializeInterestZones() {
         if (libraryZone == null || nucleusZone == null) {
             Log.e("InterestZones", "❌ Interest zones data is NULL!");
             return;
         }
 
-        // 画出兴趣区域
+        // draw interest zones
         drawPolygon(libraryZone, Color.BLUE);
         drawPolygon(nucleusZone, Color.GREEN);
     }
 
 
 
-    // **在 Google Map 绘制区域**
+    // draw polygon for interest zones
     private void drawPolygon(List<LatLng> zone, int color) {
         if (mMap == null) {
             Log.e("MapError", "❌ GoogleMap is NULL! Cannot draw polygon.");
@@ -274,8 +274,10 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
     }
 
 
-
-    // **检查是否进入兴趣区域**
+    /**
+     * checkIfInInterestZone is called when the user drags the marker.
+     * @param markerPosition The current position of the marker.
+     */
     private void checkIfInInterestZone(LatLng markerPosition) {
         if (isPointInPolygon(markerPosition, libraryZone)) {
             showZoneDialog("Library");
@@ -284,10 +286,16 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
+    /**
+     *  check if the point is in the polygon
+     * @param point The position point to check
+     * @param zone The polygon to check against
+     * @return true if the point is in the polygon, false otherwise
+     */
     private boolean isPointInPolygon(LatLng point, List<LatLng> zone) {
         if (zone == null || zone.isEmpty()) {
             Log.e("InterestZone", "❌ Zone is NULL or EMPTY!");
-            return false; // 避免 NullPointerException
+            return false; // avoid NullPointerException
         }
 
         int intersectCount = 0;
@@ -298,10 +306,17 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
                 intersectCount++;
             }
         }
-        return (intersectCount % 2) == 1; // 奇数交点则在区域内
+        return (intersectCount % 2) == 1; // if odd, point is inside
     }
 
 
+    /**
+     *  check if the ray intersects the polygon
+     * @param point The position point to check
+     * @param a The first point of the ray
+     * @param b The second point of the ray
+     * @return true if the ray intersects the polygon, false otherwise
+     */
     private boolean rayCastIntersect(LatLng point, LatLng a, LatLng b) {
         double px = point.longitude;
         double py = point.latitude;
@@ -334,44 +349,53 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         return (red >= blue);
     }
 
+
+    /**
+     *  show the dialog for the zone
+     * @param zoneName The name of the zone
+     */
     private void showZoneDialog(String zoneName) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Entered Interest Zone")
-                .setMessage("You have entered the " + zoneName + " area. What do you want to do?")
-                .setPositiveButton("OK", (dialog, which) -> {
+                .setMessage("You have entered the " + zoneName + " area. Do you want to start recording?")
+                .setPositiveButton("Yes", (dialog, which) -> {
                     if (currentMarker != null) {
                         LatLng markerPosition = currentMarker.getPosition();
 
-                        // 🚀 **创建 Bundle 传递数据**
+                        // create Bundle for the fragment
                         Bundle bundle = new Bundle();
                         bundle.putString("zone_name", zoneName);
                         bundle.putDouble("marker_latitude", markerPosition.latitude);
                         bundle.putDouble("marker_longitude", markerPosition.longitude);
 
-                        // 🚀 **创建 RecordingFragment 并设置参数**
+                        // create RecordingFragment and set arguments
                         RecordingFragment recordingFragment = new RecordingFragment();
                         recordingFragment.setArguments(bundle);
 
-                        // 🚀 **跳转到 RecordingFragment**
+                        // jump to RecordingFragment
                         FragmentTransaction transaction = requireActivity().getSupportFragmentManager().beginTransaction();
                         transaction.replace(R.id.fragment_container, recordingFragment);
                         transaction.addToBackStack(null);
                         transaction.commit();
                     }
                 })
-                .setNegativeButton("Continue", (dialog, which) -> dialog.dismiss())
+                .setNegativeButton("NO", (dialog, which) -> dialog.dismiss())
                 .show();
     }
 
 
-
-    // **更新 UI 经纬度**
+    /**
+     * update the marker info
+     * @param position The position of the marker
+     */
     private void updateMarkerInfo(LatLng position) {
         tvLatitude.setText("Lat: " + String.format("%.5f", position.latitude));
         tvLongitude.setText("Long: " + String.format("%.5f", position.longitude));
     }
 
-    // **请求 GNSS 位置**
+    /**
+     *  request location permission
+     */
     private void requestLocationPermission() {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -381,6 +405,9 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
+    /**
+     *  start GNSS listener
+     */
     private void startGNSS() {
         locationManager = (LocationManager) requireActivity().getSystemService(Context.LOCATION_SERVICE);
 
@@ -389,7 +416,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
-        // ✅ 确保有权限
+        // ensure permission
         if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             Log.e("GNSS", "Permission not granted.");
@@ -405,14 +432,14 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
 
 //                Log.d("GNSS", "Location updated: " + latitude + ", " + longitude);
 
-                // ✅ **仅在 GNSS 位置未初始化时更新起始点**
+                // only initialize once
                 if (!isGpsInitialized) {
                     isGpsInitialized = true;
                     initialPosition = newLocation;
                     fixedMarkerPosition = newLocation;
                     currentMarkerPosition = newLocation;
 
-                    // ✅ **更新 Marker 位置并移动相机**
+                    // renew the marker
                     requireActivity().runOnUiThread(() -> {
                         if (currentMarker != null) {
                             currentMarker.setPosition(initialPosition);
@@ -439,11 +466,11 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             public void onProviderDisabled(@NonNull String provider) {}
         };
 
-        // ✅ **请求 GNSS 更新**
+        // ask for location updates
         locationManager.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER,
-                2000,  // 更新间隔（毫秒）
-                1,     // 移动 1m 才更新
+                2000,  // interval (milli seconds)
+                1,     // update only if distance is more than 1 meter
                 locationListener
         );
 
@@ -464,13 +491,13 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         super.onResume();
 
         if (mMap != null) {
-            // 🛑 **检查 fixedMarkerPosition 是否为空，避免崩溃**
+            // check if fixedMarkerPosition is null
             if (fixedMarkerPosition == null) {
                 Log.e("MarkerReset", "⚠️ fixedMarkerPosition is NULL! Using default Edinburgh location.");
-                fixedMarkerPosition = new LatLng(55.953251, -3.188267); // 💡 重新设置默认位置
+                fixedMarkerPosition = new LatLng(55.953251, -3.188267); // reset to Edinburgh
             }
 
-            Log.d("MarkerReset", "✅ 重新创建默认 Marker at " + fixedMarkerPosition);
+            Log.d("MarkerReset", "Recreating Marker at " + fixedMarkerPosition);
         }
     }
 
@@ -478,7 +505,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
     public void onPause() {
         super.onPause();
 
-        // ✅ **在 Fragment 切换时停止 GNSS**
+        // stop GNSS listener
         if (locationManager != null && locationListener != null) {
             locationManager.removeUpdates(locationListener);
             Log.d("GNSS", "🔥 GNSS Listener Stopped in onPause()");

@@ -12,10 +12,11 @@
     <!-- 🗺️ Google Map -->
 
     <!-- 📌 左侧控件：地图模式切换 & GNSS 开关 -->
+
     <LinearLayout
         android:id="@+id/status_bar"
         android:layout_width="match_parent"
-        android:layout_height="60dp"
+        android:layout_height="85dp"
 
         android:background="@android:color/holo_blue_dark"
         android:backgroundTint="#F0A6E8"
@@ -27,6 +28,7 @@
             android:layout_width="351dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:layout_gravity="bottom"
             android:orientation="vertical">
 
             <TextView
@@ -50,6 +52,7 @@
             android:id="@+id/tv_gnss_error"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
             android:text="GNSS error:%1s"
             android:textColor="@android:color/white"
             android:textStyle="bold" />
@@ -65,6 +68,18 @@
         android:layout_marginTop="0dp"
         android:layout_marginBottom="0dp" />
 
+    <ImageView
+        android:id="@+id/redDot"
+        android:layout_width="48dp"
+        android:layout_height="43dp"
+
+        android:layout_marginBottom="80dp"
+        android:layout_alignBottom="@id/control_panel"
+        android:layout_alignEnd="@id/control_panel"
+        android:contentDescription="@string/recording"
+
+        android:src="@drawable/ic_baseline_red_dot_24" />
+
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -73,19 +88,25 @@
         android:orientation="vertical"
         android:layout_marginTop="10dp">
 
-        <Spinner
-            android:id="@+id/spinner_map_type"
-            android:layout_width="150dp"
-            android:layout_height="40dp"
-            android:background="@drawable/button_background"
-            android:backgroundTint="#F0A6E8"
-            android:padding="5dp" />
-
         <Switch
             android:id="@+id/switch_gnss"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="GNSS"/>
+            android:layout_marginBottom="5dp"
+            android:background="@drawable/button_background"
+            android:backgroundTint="#F0A6E8"
+            android:text="GNSS" />
+
+        <Spinner
+            android:id="@+id/spinner_map_type"
+            android:layout_width="150dp"
+            android:layout_height="40dp"
+            android:background="@drawable/rounded_corner_pink_rounder"
+            android:backgroundTint="#F0A6E8"
+            android:backgroundTintMode="src_in"
+
+            android:popupBackground="@drawable/rounded_corner_pink_rounder" />
+
     </LinearLayout>
 
     <!-- 📌 右侧控件：Auto Floor 开关 & 楼层增减按钮 -->
@@ -150,11 +171,11 @@
             android:id="@+id/button_start"
             android:layout_width="150dp"
             android:layout_height="match_parent"
+            android:background="@drawable/rounded_corner_pink_rounder"
+            android:drawableLeft="@drawable/ic_baseline_play_arrow_24"
             android:text="START"
-            android:background="@android:color/holo_blue_dark"
             android:textColor="@android:color/white"
-            android:textStyle="bold"
-            android:drawableLeft="@drawable/start" />
+            android:textStyle="bold" />
 
         <View
             android:layout_width="20dp"
@@ -165,10 +186,11 @@
             android:layout_width="150dp"
             android:layout_height="60dp"
             android:text="STOP"
-            android:background="@android:color/holo_blue_dark"
+            android:background="@drawable/rounded_corner_pink_rounder"
+
             android:textColor="@android:color/white"
             android:textStyle="bold"
-            android:drawableLeft="@drawable/stop" />
+            android:drawableLeft="@drawable/ic_baseline_stop_24" />
     </LinearLayout>
 </RelativeLayout>
 

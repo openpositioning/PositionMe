@@ -35,6 +35,8 @@ public class PdrProcessing {
     private static final float movementThreshold = 0.3f; // m/s^2
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
+    // buffer size to determine the start elevation
+    private static final int elevation_buffer_size = 5;
     //endregion
 
     //region Instance variables
@@ -122,7 +124,7 @@ public class PdrProcessing {
         // Distance between floors is building dependent, use manual value
         this.floorHeight = settings.getInt("floor_height", 4);
         // Array for holding initial values
-        this.startElevationBuffer = new Float[3];
+        this.startElevationBuffer = new Float[elevation_buffer_size];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
     }
@@ -176,13 +178,13 @@ public class PdrProcessing {
      */
     public float updateElevation(float absoluteElevation) {
         // Set start to median of first three values
-        if(setupIndex < 3) {
+        if(setupIndex < elevation_buffer_size) {
             // Add values to buffer until it's full
             this.startElevationBuffer[setupIndex] = absoluteElevation;
             // When buffer is full, find median, assign as startElevation
-            if(setupIndex == 2) {
+            if(setupIndex == elevation_buffer_size - 1) {
                 Arrays.sort(startElevationBuffer);
-                startElevation = startElevationBuffer[1];
+                startElevation = startElevationBuffer[(int) elevation_buffer_size/2];
             }
             this.setupIndex++;
         }
@@ -382,7 +384,7 @@ public class PdrProcessing {
         // Distance between floors is building dependent, use manual value
         this.floorHeight = settings.getInt("floor_height", 4);
         // Array for holding initial values
-        this.startElevationBuffer = new Float[3];
+        this.startElevationBuffer = new Float[elevation_buffer_size];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
     }

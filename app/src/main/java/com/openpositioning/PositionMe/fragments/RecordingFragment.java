@@ -2,18 +2,24 @@ package com.openpositioning.PositionMe.fragments;
 
 
 import android.Manifest;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.os.Handler;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
+import android.view.animation.LinearInterpolator;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -47,6 +53,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import java.util.Timer;
+import java.util.TimerTask;
 
 
 public class RecordingFragment extends Fragment {
@@ -104,6 +113,11 @@ public class RecordingFragment extends Fragment {
     private static final int REQUEST_ACTIVITY_RECOGNITION_PERMISSION_CODE = 1001;
     private NucleusBuildingManager nucleusBuildingManager;
     private boolean ifstart = false;
+
+    private ImageView recIcon;
+    private static final long THRESHOLD = 30 * 1000; // 30秒（以毫秒计）
+    private CountDownTimer timer;
+
 
 
     /**
@@ -239,6 +253,8 @@ public class RecordingFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+
+
         // 🛑 **删除旧 Marker，避免重复**
         // 🛑 **Delete old Marker to avoid duplication**
         if (orientationMarker != null) {
@@ -273,38 +289,83 @@ public class RecordingFragment extends Fragment {
         this.previousPosX = 0f;
         this.previousPosY = 0f;
 
+
+
+        this.recIcon = getView().findViewById(R.id.redDot);
+        if (recIcon != null) {
+            recIcon.setVisibility(View.GONE);
+            blinkingRecording();
+        }
+
         // ✅ **Start 按钮（开始录制）**
         // ✅ **Start button (start recording)**
         this.startButton.setOnClickListener(view1 -> {
-            ifstart = true;
+            if (!isRecording) {
+                ifstart = true;
+                if (recIcon != null) {
+                    recIcon.setVisibility(View.VISIBLE);
+                    recIcon.setColorFilter(Color.RED);
+                }
 
-            // 停止之前的录制、传感器监听和定时任务
-            // Stop previous recording, sensor monitoring and scheduled tasks
-            sensorFusion.stopRecording();
-            sensorFusion.stopListening();
-            refreshDataHandler.removeCallbacks(refreshDataTask);
-            // 第一次调用 resetMap()，立即重置地图
-            // The first call to resetMap() resets the map immediately
-            resetMap();
-            // 延迟一定时间后，再自动调用一次 resetMap() 模拟第二次点击
-            // After a certain delay, automatically call resetMap() again to simulate the second click
-            new Handler().postDelayed(() -> {
+                // 停止之前的录制、传感器监听和定时任务
+                // Stop previous recording, sensor monitoring and scheduled tasks
+                sensorFusion.stopRecording();
+                sensorFusion.stopListening();
+                refreshDataHandler.removeCallbacks(refreshDataTask);
+                // 第一次调用 resetMap()，立即重置地图
+                // The first call to resetMap() resets the map immediately
                 resetMap();
-            }, 100); // 延迟100毫秒，你可以根据实际情况调整延迟时间 The delay is 100 milliseconds. You can adjust the delay time according to the actual situation.
+                // 延迟一定时间后，再自动调用一次 resetMap() 模拟第二次点击
+                // After a certain delay, automatically call resetMap() again to simulate the second click
+    //            new Handler().postDelayed(() -> {
+    //                resetMap();
+    //            }, 100); // 延迟100毫秒，你可以根据实际情况调整延迟时间 The delay is 100 milliseconds. You can adjust the delay time according to the actual situation.
 
-            if (sensorFusion != null) {
-                sensorFusion.setContext(getActivity().getApplicationContext());
-                sensorFusion.resumeListening();  // 注册所有传感器监听器 Register all sensor listeners
-                sensorFusion.startRecording();
-                Toast.makeText(getContext(), "Recording Started", Toast.LENGTH_SHORT).show();
-                Log.d("RecordingFragment", "🚀 SensorFusion 录制已启动");
-                isRecording = true; // 标记正在录制 Mark recording
-                // 开始更新 UI
-                // Start updating the UI
-                refreshDataHandler.post(refreshDataTask);
+                if (sensorFusion != null) {
+                    sensorFusion.setContext(getActivity().getApplicationContext());
+                    sensorFusion.resumeListening();  // 注册所有传感器监听器 Register all sensor listeners
+                    sensorFusion.startRecording();
+                    Toast.makeText(getContext(), "Recording Started", Toast.LENGTH_SHORT).show();
+                    Log.d("RecordingFragment", "🚀 SensorFusion 录制已启动");
+                    isRecording = true; // 标记正在录制 Mark recording
+                    // 开始更新 UI
+                    // Start updating the UI
+                    refreshDataHandler.post(refreshDataTask);
 
+                } else {
+                    Log.e("RecordingFragment", "❌ SensorFusion 未初始化！");
+                }
+
+
+                // ✅ **检测是否已有 timer，若有则取消重置**
+                if (timer != null) {
+                    timer.cancel();
+                    timer = null;
+                    Log.d("TimerReset", "🔥 旧 Timer 被重置");
+                }
+
+                // 创建新的 CountDownTimer（30秒倒计时，每秒触发一次）
+                timer = new CountDownTimer(33000, 1000) {
+                    @Override
+                    public void onTick(long millisUntilFinished) {
+                        // 每秒可执行一些任务（此处为空）
+                    }
+
+                    @Override
+                    public void onFinish() {
+                        if (recIcon != null) {
+                            recIcon.setColorFilter(Color.GREEN);
+                        }
+
+                        Context context = getContext();
+                        if (context != null) {
+                            Toast.makeText(context, "Recording reached 30sec, you may stop at anytime!", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                };
+                timer.start();
             } else {
-                Log.e("RecordingFragment", "❌ SensorFusion 未初始化！");
+                Toast.makeText(getContext(), "Recording in Progress", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -316,6 +377,14 @@ public class RecordingFragment extends Fragment {
                     sensorFusion.stopRecording();
                     Toast.makeText(getContext(), "Recording Stopped", Toast.LENGTH_SHORT).show();
                     isRecording = false; // 标记录制已停止
+                    if (recIcon != null) {
+                        recIcon.setVisibility(View.GONE);
+                    }
+                    if (timer != null) {
+                        timer.cancel();
+                        timer = null;
+                        Log.d("TimerReset", "🔥 旧 Timer 被重置");
+                    }
                     Log.d("RecordingFragment", "🛑 SensorFusion 录制已停止");
                 } else {
                     Log.e("RecordingFragment", "❌ SensorFusion 未初始化！");
@@ -342,7 +411,7 @@ public class RecordingFragment extends Fragment {
                     Log.w("RecordingFragment", "⚠️ Fragment 已销毁，无法跳转");
                 }
             }else{
-                Toast.makeText(getContext(), "未开始录制", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Recording not started yet!", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -466,7 +535,8 @@ public class RecordingFragment extends Fragment {
                             gnssMarker.setPosition(gnssLocation);
                         }
                         gnssError.setVisibility(View.VISIBLE);
-                        gnssError.setText("GNSS error: " + String.format("%.2f", distance) + " m");
+                        String GnssErrorRound = df.format(distance);
+                        gnssError.setText("GNSS error: " + GnssErrorRound + " m");
                     }
                 } else {
                     // 如果 orientationMarker 尚未创建（这种情况比较少见），直接显示 GNSS Marker
@@ -699,7 +769,8 @@ public class RecordingFragment extends Fragment {
                 // Calculate the error between GNSS and PDR positions
                 double error = UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation);
                 gnssError.setVisibility(View.VISIBLE);
-                gnssError.setText("GNSS error: " + error + " m");
+                String GnssErrorRound = df.format(error);
+                gnssError.setText("GNSS error: " + GnssErrorRound + " m");
 
                 // 更新 GNSS Marker 位置
                 // Update GNSS Marker position
@@ -878,6 +949,26 @@ public class RecordingFragment extends Fragment {
             refreshDataHandler.removeCallbacksAndMessages(null);
             Log.d("RecordingFragment", "🔥 onDestroy: 清理所有 Handler 回调");
         }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (timer != null) {
+            timer.cancel();
+        }
+    }
+
+    private void blinkingRecording() {
+        //Initialise Image View
+        this.recIcon = getView().findViewById(R.id.redDot);
+        //Configure blinking animation
+        Animation blinking_rec = new AlphaAnimation(1, 0);
+        blinking_rec.setDuration(800);
+        blinking_rec.setInterpolator(new LinearInterpolator());
+        blinking_rec.setRepeatCount(Animation.INFINITE);
+        blinking_rec.setRepeatMode(Animation.REVERSE);
+        recIcon.startAnimation(blinking_rec);
     }
 
 }

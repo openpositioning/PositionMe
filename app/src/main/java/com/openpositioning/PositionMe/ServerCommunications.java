@@ -297,6 +297,8 @@ public class ServerCommunications implements Observable {
                         }
                         // Print a confirmation of a successful POST to API
                         System.out.println("Successful post response: " + responseBody.string());
+                        new Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(context, "Trajectory Upload Successful!", Toast.LENGTH_SHORT).show());
 
                         // Delete local file and set success to true
                         success = file.delete();
