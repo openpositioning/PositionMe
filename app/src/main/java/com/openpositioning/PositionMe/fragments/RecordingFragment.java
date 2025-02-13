@@ -6,9 +6,11 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import androidx.appcompat.widget.SwitchCompat;
 import android.os.Handler;
 import android.util.Log;
 import android.view.LayoutInflater;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.AlphaAnimation;
@@ -27,7 +29,6 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.SwitchCompat;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
@@ -44,7 +45,6 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.UtilFunctions;
@@ -201,7 +201,7 @@ public class RecordingFragment extends Fragment {
                 orientationMarker=map.addMarker(new MarkerOptions().position(start).title("Current Position")
                         .flat(true)
                         .icon(BitmapDescriptorFactory.fromBitmap(
-                                UtilFunctions.getBitmapFromVector(getContext(),R.drawable.ic_baseline_navigation_24))));
+                                UtilFunctions.getBitmapFromVector(getContext(),R.drawable.ic_baseline_navigation_24, 2f))));
                 //Center the camera
                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(start, (float) 19f));
                 // Adding polyline to map to plot real-time trajectory
@@ -496,6 +496,8 @@ public class RecordingFragment extends Fragment {
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
         // Net pdr movement
         float[] pdrMoved={pdrValues[0]-previousPosX,pdrValues[1]-previousPosY};
+        Log.d("RecordingFragment","PDR 0s" + pdrValues[0] + " " + pdrValues[1]);
+        Log.d("RecordingFragment", "PDR Moved" + pdrMoved);
         // if PDR has changed plot new line to indicate user movement
         if (pdrMoved[0]!=0 ||pdrMoved[1]!=0) {
             plotLines(pdrMoved);

@@ -9,8 +9,6 @@ import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.maps.model.LatLng;
 
-import kotlin.text.MatchGroup;
-
 /**
  * Class containing utility functions which can used by other classes.
  * @see com.openpositioning.PositionMe.fragments.RecordingFragment Currently used by RecordingFragment
@@ -78,11 +76,13 @@ public class UtilFunctions {
 
     /**
      * Creates a bitmap from a vector
-     * @param context Context of activity being used
+     *
+     * @param context          Context of activity being used
      * @param vectorResourceID Resource id whose vector get converted to a Bitmap
+     * @param v
      * @return Bitmap of the resource vector
      */
-    public static Bitmap getBitmapFromVector(Context context, int vectorResourceID) {
+    public static Bitmap getBitmapFromVector(Context context, int vectorResourceID, float v) {
         // Get drawable vector
         Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResourceID);
         // Bitmap created to draw the vector in

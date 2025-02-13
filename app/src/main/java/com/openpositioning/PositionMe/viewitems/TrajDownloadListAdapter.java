@@ -32,6 +32,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     private final List<Map<String, String>>  responseItems;
     private final DownloadClickListener listener;
 
+    public int position;
+
     /**
      * Default public constructor with context for inflating views and list to be displayed.
      *
@@ -79,6 +81,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                         )
                 )
         );
+
     }
 
     /**

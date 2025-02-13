@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.SensorManager;
+import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
@@ -12,8 +13,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.OptionalDouble;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * Processes data recorded in the {@link SensorFusion} class and calculates live PDR estimates.
@@ -143,12 +142,6 @@ public class PdrProcessing {
         // Change angle so zero rad is east
         float adaptedHeading = (float) (Math.PI/2 - headingRad);
 
-        // check if accelMagnitudeOvertime is empty
-        if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.isEmpty()) {
-            // return current position, do not update
-            return new float[]{this.positionX, this.positionY};
-        }
-        
         // Calculate step length
         if(!useManualStep) {
             //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
@@ -226,35 +219,26 @@ public class PdrProcessing {
      *
      * @param accelMagnitude    magnitude of acceleration values between the last and current step.
      * @return                  float stride length in meters.
+     * @Update Jamie Arnott - added a condition to check if the accelMagnitude is null or empty to prevent
+     * access requests from crashing the app during recording of a trajectory
      */
     private float weibergMinMax(List<Double> accelMagnitude) {
-        // if the list itself is null or empty, return 0 (or return other default values as needed)
         if (accelMagnitude == null || accelMagnitude.isEmpty()) {
-            return 0f;
+            Log.e("PdrProcessing", "weibergMinMax: Empty or null list received, returning default value.");
+            return 0;  // Return a default value to prevent a crash
         }
 
-        // filter out null values from the list
-        List<Double> validAccel = accelMagnitude.stream()
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-        if (validAccel.isEmpty()) {
-            return 0f;
-        }
-
-        // calculate max and min values
-        double maxAccel = Collections.max(validAccel);
-        double minAccel = Collections.min(validAccel);
-
-        // calculate bounce
+        double maxAccel = Collections.max(accelMagnitude);
+        double minAccel = Collections.min(accelMagnitude);
         float bounce = (float) Math.pow((maxAccel - minAccel), 0.25);
 
-        // determine which constant to use based on settings
         if (this.settings.getBoolean("overwrite_constants", false)) {
             return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
         }
 
         return bounce * K * 2;
     }
+
 
     /**
      * Get the current X and Y coordinates from the PDR processing class.
