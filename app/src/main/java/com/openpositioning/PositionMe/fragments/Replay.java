@@ -13,7 +13,6 @@ import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.CompoundButton;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.Spinner;
@@ -52,57 +51,99 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * The Replay activity is used to play back recorded trajectory data. It provides a user interface
+ * that includes a map displaying the recorded PDR (Pedestrian Dead Reckoning) path along with a
+ * marker that indicates the current PDR location and its movement direction. In addition, a GNSS
+ * marker is updated based on the recorded GNSS data. Users can control playback via play/pause,
+ * fast forward, and fast rewind buttons, as well as by dragging the SeekBar, which represents the
+ * normalized playback time. The activity also supports overlaying indoor maps to enhance the user
+ * experience in indoor environments.
+ *
+ * @see com.openpositioning.PositionMe.ServerCommunications the previous fragment edited in order to
+ * view the file from server, the file can be saved as proto files instead of json file.
+ * @see com.openpositioning.PositionMe.sensors.SensorFusion Debug and modify to ensure that GNSS
+ * and other initial data are present as the first entry in the trajectory file to avoid replaying
+ * at position (0, 0).
+ *
+ * @author Xiaofei Huang
+ * @author Asher Deng
+ * @author Hao Cai
+ * @author Zonghan Zhao
+ */
+
 public class Replay extends AppCompatActivity implements OnMapReadyCallback {
 
     private GoogleMap mMap;
-    // 使用 TimedLatLng 来存储 PDR 样本的坐标和归一化后的时间戳（单位：毫秒）
+    // Use TimedLatLng to store the PDR samples' coordinates and their normalized timestamps (in milliseconds)
     private List<TimedLatLng> trackPoints = new ArrayList<>();
+    /**
+     * Flag indicating whether playback is currently in progress.
+     * This is used to control the start, pause, and resume of trajectory playback.
+     */
     private Polyline polyline;
-    private Marker currentMarker;  // 当前 PDR 位置的 Marker（显示方向）
-    private Marker gnssMarker;     // 用于显示 GNSS 的位置
+    /**
+     * Polyline object that represents the drawn trajectory on the map.
+     * This polyline is updated with the recorded PDR positions to visualize the user's path.
+     */
+    private Marker currentMarker;  // Marker representing the current PDR position (shows direction)
+    private Marker gnssMarker;     // Marker used to display the GNSS position
 
-    // 播放控制变量
+    // Playback control variables
     private boolean isPlaying = false;
+    /**
+     * Handler for scheduling and managing playback update tasks.
+     * It posts runnable tasks to update the UI based on the current playback time.
+     */
     private Handler handler = new Handler();
-
+    /**
+     * SeekBar UI component used to display and control the current playback progress.
+     * Users can drag the SeekBar to jump to a specific point in the recorded trajectory.
+     */
     private SeekBar seekBar;
     private ImageButton playButton, fastRewind, fastForward, gotoStartButton, gotoEndButon;
     private TextView progressText, totaltimetext;
-    private Switch switch1; // 控制是否显示完整轨迹
+    private Switch switch1; // Controls whether to display the full trajectory
     private String filePath;
 
-    // 播放相关的时间参数（单位：毫秒）
-    private long totalDuration = 0; // 轨迹总时长，根据所有 PDR 样本中最大的归一化时间戳决定
-    // currentTime 表示当前播放到的时间戳（归一化时间）
+    // Playback time parameters (in milliseconds)
+    private long totalDuration = 0; // Total duration of the trajectory, determined by the maximum normalized timestamp among all PDR samples
+    // currentTime represents the current playback timestamp (normalized)
     private long currentTime = 0;
 
-    // 播放速度因子（1.0 表示以录制真实时长播放，可根据需要加速播放）
+    // Playback speed factor (1.0 means playback at real-time; can be adjusted for faster playback)
     private double playbackSpeedFactor = 1.0;
 
-    // 用于室内地图显示的管理器
+    // Manager for displaying indoor maps
     private IndoorMapManager indoorMapManager;
 
-    // 保存解析后的 Trajectory 数据，用于获取 GNSS 数据
+    // Parsed Trajectory data, used for obtaining GNSS data
     private Traj.Trajectory trajectoryData;
 
-    // Switch 用于自动楼层切换及楼层切换按钮
+    // Switch for auto-floor switching and floor change buttons
     private Switch autoFloor;
+    // Button for floor +1
     public FloatingActionButton floorUpButton;
+    // Button for floor -1
     public FloatingActionButton floorDownButton;
     private Spinner mapTypeSpinner;
 
+<<<<<<< Updated upstream
     // 当前播放到的 PDR 样本索引（用于遍历 trackPoints）
+=======
+    // Index of the current PDR sample (used for iterating over trackPoints)
+>>>>>>> Stashed changes
     private int currentIndex = 0;
 
-    // 记录播放开始的系统时间（ms）
+    // Records the system time when playback started (in milliseconds)
     private long playbackStartTime = 0;
 
     /**
-     * 内部类，用于存储 PDR 计算得到的地理位置及其对应的归一化时间戳（单位：毫秒）
+     * Inner class used to store the calculated geographic position from PDR along with its corresponding normalized timestamp (in milliseconds).
      */
     public static class TimedLatLng {
         public LatLng point;
-        public long relativeTimestamp; // 使用 long 表示毫秒时间戳
+        public long relativeTimestamp; // Normalized timestamp in milliseconds
 
         public TimedLatLng(LatLng point, long relativeTimestamp) {
             this.point = point;
@@ -117,10 +158,10 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_replay);
 
-        // 从 Intent 获取文件路径
+        // Retrieve the file path from the Intent
         filePath = getIntent().getStringExtra("filePath");
 
-        // 初始化 UI 控件
+        // Initialize UI controls
         seekBar = findViewById(R.id.seekBar);
         playButton = findViewById(R.id.playPauseButton);
         fastRewind = findViewById(R.id.fastRewindButton);
@@ -129,12 +170,13 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         gotoEndButon = findViewById(R.id.goToEndButton);
         progressText = findViewById(R.id.currentTime);
         totaltimetext = findViewById(R.id.totalTime);
-        switch1 = findViewById(R.id.switch1);  // 请确保 layout 中存在此 Switch 控件
+        switch1 = findViewById(R.id.switch1);  // Ensure this Switch exists in the layout
         autoFloor = findViewById(R.id.autoFloor2);
         autoFloor.setChecked(false);
         floorUpButton = findViewById(R.id.floorUpButton2);
         floorDownButton = findViewById(R.id.floorDownButton2);
 
+        // Set up click listeners for the floor change buttons
         floorUpButton.setOnClickListener(view -> {
             autoFloor.setChecked(false);
             indoorMapManager.increaseFloor();
@@ -147,7 +189,8 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         mapTypeSpinner = findViewById(R.id.mapTypeSpinner);
         setupMapTypeSpinner();
 
-        // 切换 switch1 时更新轨迹显示：显示完整轨迹或只显示当前播放时间之前的轨迹
+        // When the switch is toggled, update the trajectory display:
+        // Show the full trajectory or only the portion up to the current playback time.
         switch1.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (polyline == null) return;
             if (isChecked) {
@@ -172,50 +215,79 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             }
         });
 
-        // 初始化地图 fragment
+        // Initialize the map fragment
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        // 解析轨迹文件（Protobuf 格式）
+        // Parse the trajectory file (in Protobuf format)
         Traj.Trajectory trajectory = readTrajectoryFromFile(this, filePath);
         if (trajectory != null) {
             trajectoryData = trajectory;
-            // 转换 PDR 数据为归一化后的 TimedLatLng 列表
+            // Convert PDR data into a normalized TimedLatLng list
             trackPoints = convertTrajectoryToTimedLatLng(trajectory);
             if (!trackPoints.isEmpty()) {
-                // 将轨迹总时长设置为最后一个 PDR 样本的归一化时间戳
+                // Set the total duration as the normalized timestamp of the last PDR sample
                 totalDuration = trackPoints.get(trackPoints.size() - 1).relativeTimestamp;
-                // 进度条最大值为 totalDuration（假设总时长在 int 范围内）
+                // Set the maximum value of the SeekBar to totalDuration (assuming it fits in an int)
                 seekBar.setMax((int) totalDuration);
             }
         } else {
-            Log.e(TAG, "轨迹文件解析失败！");
+            Log.e(TAG, "Trajectory file parsing failed!");
         }
 
-        // 按钮点击事件
+        // Button click event handlers
         playButton.setOnClickListener(v -> {
             if (isPlaying) {
                 pausePlayback();
             } else {
-                // 当播放时，不重置 currentTime 和 currentIndex，
-                // 而是根据当前 seekBar 上的值继续播放
+                // When resuming playback, do not reset currentTime and currentIndex; instead, continue from the current SeekBar position.
                 playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
                 startPlayback();
             }
         });
-        fastRewind.setOnClickListener(v -> fastRewind());
-        fastForward.setOnClickListener(v -> fastForward());
+        fastRewind.setOnClickListener(v -> {
+            // Fast rewind by 5 seconds and update playbackStartTime so that playback resumes from the new position.
+            int jumpTime = 5000;
+            currentTime = Math.max(currentTime - jumpTime, 0);
+            for (int i = 0; i < trackPoints.size(); i++) {
+                if (trackPoints.get(i).relativeTimestamp >= currentTime) {
+                    currentIndex = i;
+                    break;
+                }
+            }
+            if (isPlaying) {
+                playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
+            }
+            updateMapPosition();
+            seekBar.setProgress((int) currentTime);
+        });
+        fastForward.setOnClickListener(v -> {
+            // Fast forward by 5 seconds and update playbackStartTime.
+            int jumpTime = 5000;
+            currentTime = Math.min(currentTime + jumpTime, totalDuration);
+            for (int i = 0; i < trackPoints.size(); i++) {
+                if (trackPoints.get(i).relativeTimestamp >= currentTime) {
+                    currentIndex = i;
+                    break;
+                }
+            }
+            if (isPlaying) {
+                playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
+            }
+            updateMapPosition();
+            seekBar.setProgress((int) currentTime);
+        });
         gotoStartButton.setOnClickListener(v -> gotoStart());
         gotoEndButon.setOnClickListener(v -> gotoEnd());
 
-        // 进度条拖动监听：在拖动时暂停自动更新，在拖动结束后更新 playbackStartTime 以从新位置开始播放
+        // SeekBar listener: pause automatic updates during dragging and update playbackStartTime after dragging ends
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    currentTime = progress; // progress 为 int，直接赋值给 long
-                    // 更新当前播放样本索引：找第一个样本的归一化时间戳 >= currentTime
+                    currentTime = progress; // 'progress' is an int; assign directly to long
+                    // Update the current sample index: find the first sample with a normalized timestamp >= currentTime
                     for (int i = 0; i < trackPoints.size(); i++) {
                         if (trackPoints.get(i).relativeTimestamp >= currentTime) {
                             currentIndex = i;
@@ -227,14 +299,12 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
-                // 如果正在播放，暂停自动播放
                 if (isPlaying) {
                     handler.removeCallbacks(playbackRunnable);
                 }
             }
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                // 如果播放状态仍然有效，更新 playbackStartTime 以从当前进度继续播放
                 if (isPlaying) {
                     playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
                     handler.post(playbackRunnable);
@@ -259,37 +329,43 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         setFloorButtonVisibility(View.GONE);
     }
 
-    // 解析 Protobuf 轨迹文件
+    // Parses the trajectory file (in Protobuf format)
     public static Traj.Trajectory readTrajectoryFromFile(Context context, String filePath) {
         File file = new File(filePath);
         if (!file.exists()) {
-            Log.e(TAG, "文件不存在");
+            Log.e(TAG, "File not found");
         }
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] data = new byte[(int) file.length()];
             fis.read(data);
             return Traj.Trajectory.parseFrom(data);
         } catch (InvalidProtocolBufferException e) {
-            Log.e(TAG, "Protobuf 解析失败", e);
+            Log.e(TAG, "Protobuf parsing failed", e);
         } catch (IOException e) {
-            Log.e(TAG, "文件读取失败", e);
+            Log.e(TAG, "File read failed", e);
         }
         return null;
     }
 
     /**
-     * 将轨迹数据转换为 TimedLatLng 列表（基于 PDR 数据），对时间戳进行归一化处理。
-     * 归一化方法：以第一个有效 GNSS 样本的 relativeTimestamp 作为基准 baseline，
-     * 这样第一个 GNSS 数据和对应 PDR 数据的归一化时间均为 0，从而避免开局时路径跳跃。
+     * Converts the trajectory data into a list of TimedLatLng objects (based on PDR data)
+     * and normalizes the timestamps.
+     * <p>
+     * Normalization method: use the relativeTimestamp of the first valid GNSS sample as the baseline.
+     * This ensures that both the first GNSS data and the corresponding PDR data have a normalized time of 0,
+     * thereby avoiding path jumps at the start.
+     *
+     * @param trajectory The Traj.Trajectory object containing the recorded data.
+     * @return A list of TimedLatLng objects with normalized timestamps.
      */
     private List<TimedLatLng> convertTrajectoryToTimedLatLng(Traj.Trajectory trajectory) {
         List<TimedLatLng> points = new ArrayList<>();
-        double R = 6378137; // 地球半径（米）
+        double R = 6378137; // Earth's radius in meters
         double lat0 = 0;
         double lon0 = 0;
-        long baseline = 0;  // 归一化基准
+        long baseline = 0;  // Normalization baseline
 
-        // 找到第一个有效的 GNSS 样本（经纬度不为 0），并取其 relativeTimestamp 作为基准
+        // Find the first valid GNSS sample (non-zero latitude and longitude) and use its relativeTimestamp as the baseline
         for (Traj.GNSS_Sample sample : trajectory.getGnssDataList()) {
             if (sample.getLatitude() != 0 && sample.getLongitude() != 0) {
                 lat0 = sample.getLatitude();
@@ -299,29 +375,33 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             }
         }
         if (lat0 == 0 && lon0 == 0) {
-            Log.e(TAG, "未找到有效的 GNSS 数据，使用默认起点 (0,0)！");
+            Log.e(TAG, "No valid GNSS data found, using default start (0,0)!");
         }
-        // 遍历所有 PDR 样本，归一化时间戳，并计算坐标
+        // Iterate over all PDR samples, normalize their timestamps, and compute coordinates
         for (Traj.Pdr_Sample pdrSample : trajectory.getPdrDataList()) {
-            double trackX = pdrSample.getX();  // 前进位移（米）
-            double trackY = pdrSample.getY();  // 侧向位移（米）
+            double trackX = pdrSample.getX();
+            double trackY = pdrSample.getY();
             double dLat = trackY / R;
             double dLon = trackX / (R * Math.cos(Math.toRadians(lat0)));
             double lat = lat0 + Math.toDegrees(dLat);
             double lon = lon0 + Math.toDegrees(dLon);
-            long timestamp = pdrSample.getRelativeTimestamp() - baseline;  // 归一化后，第一个样本为 0
+            long timestamp = pdrSample.getRelativeTimestamp() - baseline;  // After normalization, the first sample is 0
             points.add(new TimedLatLng(new LatLng(lat, lon), timestamp));
         }
         return points;
     }
 
     /**
-     * 根据当前播放时间，从 trajectoryData 的 GNSS 样本中选取最后一个 relativeTimestamp <= currentTime 的样本
+     * Selects the last GNSS sample with a relativeTimestamp less than or equal to the current playback time.
+     *
+     * @param currentTime    The current playback time (normalized).
+     * @param trajectoryData The Traj.Trajectory object containing GNSS samples.
+     * @return A LatLng object representing the current GNSS position.
      */
     private LatLng getCurrentGnssPosition(long currentTime, Traj.Trajectory trajectoryData) {
         Traj.GNSS_Sample bestSample = null;
         for (Traj.GNSS_Sample sample : trajectoryData.getGnssDataList()) {
-            Log.d(TAG, "检查 GNSS 样本：relativeTimestamp = " + sample.getRelativeTimestamp() + ", currentTime = " + currentTime);
+            Log.d(TAG, "Checking GNSS sample: relativeTimestamp = " + sample.getRelativeTimestamp() + ", currentTime = " + currentTime);
             if (sample.getRelativeTimestamp() <= currentTime) {
                 bestSample = sample;
             } else {
@@ -332,18 +412,18 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             bestSample = trajectoryData.getGnssData(0);
         }
         if (bestSample != null) {
-            Log.d(TAG, "选定 GNSS 样本：lat = " + bestSample.getLatitude() + ", lon = " + bestSample.getLongitude());
+            Log.d(TAG, "Selected GNSS sample: lat = " + bestSample.getLatitude() + ", lon = " + bestSample.getLongitude());
             return new LatLng(bestSample.getLatitude(), bestSample.getLongitude());
         }
         return null;
     }
 
-    // 绘制轨迹及添加 Marker（包括用于 GNSS 地址显示的 Marker）
+    // Draws the trajectory and adds markers (including the GNSS marker)
     private void drawTrack() {
         if (mMap != null && !trackPoints.isEmpty()) {
             PolylineOptions polylineOptions = new PolylineOptions()
                     .width(10)
-                    .color(0xFFFF00FF) // 轨迹颜色
+                    .color(0xFFFF00FF) // Trajectory color
                     .geodesic(true)
                     .zIndex(1000);
             if (switch1 != null && switch1.isChecked()) {
@@ -357,15 +437,19 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             }
             polyline = mMap.addPolyline(polylineOptions);
 
-            // 添加起点 Marker（用于显示 PDR 轨迹）
+            // Add a marker at the starting point
             currentMarker = mMap.addMarker(new MarkerOptions()
                     .position(trackPoints.get(0).point)
+<<<<<<< Updated upstream
                     .title("起点")
+=======
+                    .title(String.format("Elevation: %s", trajectoryData.getGnssData(0).getAltitude()))
+>>>>>>> Stashed changes
                     .flat(true)
                     .icon(bitmapDescriptorFromVector(this, R.drawable.ic_baseline_navigation_24))
                     .zIndex(1100));
 
-            // 添加 GNSS Marker（使用 baseline_location_gnss 作为图标），初始位置取第一个 GNSS 样本
+            // Add a GNSS marker (using the baseline_location_gnss icon) at the position of the first GNSS sample
             if (trajectoryData != null && trajectoryData.getGnssDataCount() > 0) {
                 Traj.GNSS_Sample firstSample = trajectoryData.getGnssData(0);
                 LatLng gnssLatLng = new LatLng(firstSample.getLatitude(), firstSample.getLongitude());
@@ -380,7 +464,11 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     /**
-     * 将 vector drawable 转换成 BitmapDescriptor
+     * Converts a vector drawable to a BitmapDescriptor.
+     *
+     * @param context     The application context.
+     * @param vectorResId The resource ID of the vector drawable.
+     * @return A BitmapDescriptor representation of the vector drawable.
      */
     private BitmapDescriptor bitmapDescriptorFromVector(Context context, @DrawableRes int vectorResId) {
         Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
@@ -396,17 +484,17 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         return BitmapDescriptorFactory.fromBitmap(bitmap);
     }
 
-    // 开始回放：使用固定定时任务每秒更新播放进度和当前播放时间
+    // Starts playback: uses a fixed timer task to update the playback progress and current playback time every second
     private void startPlayback() {
         if (trackPoints.isEmpty()) return;
-        // 初始化播放：不要重置 currentTime（以用户拖动的时间为准），只更新 playbackStartTime
+        // Do not reset currentTime; use the current SeekBar progress as the starting point
         playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
         isPlaying = true;
         playButton.setImageResource(R.drawable.baseline_pause_24);
         handler.post(playbackRunnable);
     }
 
-    // 每秒更新一次播放进度的 Runnable —— 基于系统时间更新播放进度
+    // Runnable that updates the playback progress once per second based on the system time
     private final Runnable playbackRunnable = new Runnable() {
         @Override
         public void run() {
@@ -416,7 +504,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             if (currentTime > totalDuration) {
                 currentTime = totalDuration;
             }
-            // 根据 currentTime 查找当前播放样本索引
+            // Determine the current playback sample index based on currentTime
             for (int i = 0; i < trackPoints.size(); i++) {
                 if (trackPoints.get(i).relativeTimestamp >= currentTime) {
                     currentIndex = i;
@@ -440,9 +528,9 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         playButton.setImageResource(R.drawable.baseline_play_arrow_24);
     }
 
-    // 快进 5 秒：在录制时间尺度上跳转
+    // Fast forward 5 seconds: jumps ahead in the recording and updates playbackStartTime
     private void fastForward() {
-        int jumpTime = 5000; // ms
+        int jumpTime = 5000; // in milliseconds
         currentTime = Math.min(currentTime + jumpTime, totalDuration);
         for (int i = 0; i < trackPoints.size(); i++) {
             if (trackPoints.get(i).relativeTimestamp >= currentTime) {
@@ -450,13 +538,16 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                 break;
             }
         }
+        if (isPlaying) {
+            playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
+        }
         updateMapPosition();
         seekBar.setProgress((int) currentTime);
     }
 
-    // 快退 5 秒
+    // Fast rewind 5 seconds: jumps back in the recording and updates playbackStartTime
     private void fastRewind() {
-        int jumpTime = 5000; // ms
+        int jumpTime = 5000; // in milliseconds
         currentTime = Math.max(currentTime - jumpTime, 0);
         for (int i = 0; i < trackPoints.size(); i++) {
             if (trackPoints.get(i).relativeTimestamp >= currentTime) {
@@ -464,32 +555,41 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
                 break;
             }
         }
+        if (isPlaying) {
+            playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
+        }
         updateMapPosition();
         seekBar.setProgress((int) currentTime);
     }
 
-    // 跳转到起始位置
+    // Jumps to the start of the recording
     private void gotoStart() {
         currentTime = 0;
         currentIndex = 0;
+        if (isPlaying) {
+            playbackStartTime = System.currentTimeMillis();
+        }
         updateMapPosition();
         seekBar.setProgress((int) currentTime);
     }
 
-    // 跳转到结束位置
+    // Jumps to the end of the recording
     private void gotoEnd() {
         currentTime = totalDuration;
         currentIndex = trackPoints.size() - 1;
+        if (isPlaying) {
+            playbackStartTime = System.currentTimeMillis() - (long)(currentTime / playbackSpeedFactor);
+        }
         updateMapPosition();
         seekBar.setProgress((int) currentTime);
     }
 
     /**
-     * 更新地图位置：
-     * 1. 根据当前播放时间查找对应的 PDR 样本，更新相机和 Marker 的位置与方向（由当前样本与前一个样本计算）
-     * 2. 根据 switch1 状态更新 Polyline（显示当前时间之前的轨迹或完整轨迹）
-     * 3. 更新时间显示
-     * 4. 根据当前播放时间更新 GNSS Marker
+     * Updates the map position:
+     * 1. Finds the PDR sample corresponding to the current playback time and updates the camera and marker positions and orientation (calculated using the current and previous samples).
+     * 2. Updates the Polyline based on the state of switch1 (displaying either the trajectory up to the current time or the full trajectory).
+     * 3. Updates the time display.
+     * 4. Updates the GNSS marker based on the current playback time.
      */
     private void updateMapPosition() {
         if (mMap != null && !trackPoints.isEmpty()) {
@@ -568,7 +668,9 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     /**
-     * 设置楼层按钮的可见性
+     * Sets the visibility of the floor change buttons.
+     *
+     * @param visibility The desired visibility (e.g., View.VISIBLE or View.GONE).
      */
     private void setFloorButtonVisibility(int visibility) {
         floorUpButton.setVisibility(visibility);
@@ -577,7 +679,11 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     /**
-     * 根据两个 LatLng 计算方位角（bearing），单位：度（0~360）
+     * Calculates the bearing (direction angle) between two LatLng points in degrees (0–360).
+     *
+     * @param from The starting LatLng point.
+     * @param to The destination LatLng point.
+     * @return The bearing in degrees.
      */
     private float computeBearing(LatLng from, LatLng to) {
         double lat1 = Math.toRadians(from.latitude);
@@ -591,7 +697,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
         return (float)((bearing + 360) % 360);
     }
 
-    // 设置 Spinner 监听以切换地图类型
+    // Sets up the Spinner listener to change the map type based on user selection
     private void setupMapTypeSpinner() {
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
                 this, R.array.map_types, android.R.layout.simple_spinner_item);
