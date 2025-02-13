@@ -23,14 +23,13 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField "String", "MAPS_API_KEY",
-                "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
+        buildConfigField "String", "MAPS_API_KEY", "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
 
-        buildConfigField "String", "OPENPOSITIONING_API_KEY",
-                "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
+        buildConfigField "String", "OPENPOSITIONING_API_KEY", "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
 
-        buildConfigField "String", "OPENPOSITIONING_MASTER_KEY",
-                "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
+        buildConfigField "String", "OPENPOSITIONING_MASTER_KEY", "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
+
+        resValue "string", "google_maps_key", "\"${localProperties['MAPS_API_KEY']}\""
     }
 
     buildFeatures {

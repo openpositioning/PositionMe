@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_title"
+        android:title="Select Playback Speed"
+        android:enabled="false"
+        android:icon="@null"/>
+
+    <item
+        android:id="@+id/speed_5x"
+        android:title="5x" />
+    <item
+        android:id="@+id/speed_2x"
+        android:title="2x" />
+    <item
+        android:id="@+id/speed_1x"
+        android:title="1x" />
+    <item
+        android:id="@+id/speed_0_5x"
+        android:title="0.5x" />
+</menu>
