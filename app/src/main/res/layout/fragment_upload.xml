@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".fragments.UploadFragment">
+    tools:context=".presentation.fragment.UploadFragment">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -18,7 +18,7 @@
             android:layout_marginEnd="8dp"
             android:text="@string/emptyUploadTitle"
             android:textSize="32sp"
-            android:textStyle="bold"
+            android:textAlignment="center"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="@+id/uploadTrajectories"
             app:layout_constraintStart_toStartOf="parent"

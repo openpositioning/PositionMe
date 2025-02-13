@@ -3,18 +3,22 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:padding="4dp">
 
-    <androidx.cardview.widget.CardView
+    <!-- Material Card -->
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
         android:layout_marginTop="15dp"
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="5dp"
-        app:cardBackgroundColor="@color/pastelBlue"
+        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
         app:cardCornerRadius="20dp"
-        app:cardElevation="8dp"
+        app:cardElevation="4dp"
+        app:strokeColor="@color/md_theme_outline"
+        app:strokeWidth="1dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -22,74 +26,71 @@
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="190dp">
+            android:layout_height="190dp"
+            android:padding="12dp">
 
-            <TextView
+            <!-- Sensor Name -->
+            <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/sensorNameItem"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
-                android:layout_marginTop="8dp"
-                android:layout_marginEnd="16dp"
                 android:text="LSM6DSO Acceleration Sensor"
-                android:textColor="@color/white"
-                android:textSize="20sp"
+                android:textColor="@color/md_theme_onSurface"
+                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                 android:textStyle="bold"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
-            <TextView
+            <!-- Vendor -->
+            <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/sensorVendorItem"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
                 android:layout_marginTop="16dp"
                 android:text="@string/vendor"
-                android:textColor="@color/LightYellow"
-                android:textSize="16sp"
-                android:textStyle="bold"
+                android:textColor="@color/md_theme_secondary"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/sensorNameItem" />
 
-            <TextView
+            <!-- Resolution -->
+            <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/sensorResolutionItem"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
                 android:layout_marginTop="8dp"
                 android:text="@string/resolution"
-                android:textColor="@color/LightYellow"
-                android:textSize="16sp"
-                android:textStyle="bold"
+                android:textColor="@color/md_theme_secondary"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/sensorVendorItem" />
 
-            <TextView
+            <!-- Power -->
+            <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/sensorPowerItem"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
                 android:layout_marginTop="8dp"
                 android:text="@string/power"
-                android:textColor="@color/LightYellow"
-                android:textSize="16sp"
-                android:textStyle="bold"
+                android:textColor="@color/md_theme_secondary"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/sensorResolutionItem" />
 
-            <TextView
+            <!-- Version -->
+            <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/sensorVersionItem"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
                 android:layout_marginTop="8dp"
                 android:text="@string/version"
-                android:textColor="@color/LightYellow"
-                android:textSize="16sp"
-                android:textStyle="bold"
+                android:textColor="@color/md_theme_secondary"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/sensorPowerItem" />
+
         </androidx.constraintlayout.widget.ConstraintLayout>
-    </androidx.cardview.widget.CardView>
+    </com.google.android.material.card.MaterialCardView>
+
 </androidx.constraintlayout.widget.ConstraintLayout>
