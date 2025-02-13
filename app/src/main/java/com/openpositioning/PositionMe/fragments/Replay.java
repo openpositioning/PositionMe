@@ -128,11 +128,9 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
     public FloatingActionButton floorDownButton;
     private Spinner mapTypeSpinner;
 
-<<<<<<< Updated upstream
-    // 当前播放到的 PDR 样本索引（用于遍历 trackPoints）
-=======
+
     // Index of the current PDR sample (used for iterating over trackPoints)
->>>>>>> Stashed changes
+
     private int currentIndex = 0;
 
     // Records the system time when playback started (in milliseconds)
@@ -440,11 +438,7 @@ public class Replay extends AppCompatActivity implements OnMapReadyCallback {
             // Add a marker at the starting point
             currentMarker = mMap.addMarker(new MarkerOptions()
                     .position(trackPoints.get(0).point)
-<<<<<<< Updated upstream
-                    .title("起点")
-=======
                     .title(String.format("Elevation: %s", trajectoryData.getGnssData(0).getAltitude()))
->>>>>>> Stashed changes
                     .flat(true)
                     .icon(bitmapDescriptorFromVector(this, R.drawable.ic_baseline_navigation_24))
                     .zIndex(1100));
