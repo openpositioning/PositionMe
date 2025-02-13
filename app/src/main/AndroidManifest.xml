@@ -51,11 +51,7 @@
         -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyCoM62ket5gpuO95TescR-4s2GauE3n6No" />
-
         <activity
-            android:name=".MainActivity"
-            android:configChanges="orientation"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>
