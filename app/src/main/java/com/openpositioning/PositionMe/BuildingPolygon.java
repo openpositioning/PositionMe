@@ -21,6 +21,12 @@ public class BuildingPolygon {
     public static final LatLng LIBRARY_NE=new LatLng(55.92306692576906, -3.174771893078224);
     public static final LatLng LIBRARY_SW=new LatLng(55.92281045664704, -3.175184089079065);
     // Boundary coordinates of the Nucleus building (clockwise)
+
+    /**
+     * Adding in the coordinates for the 4 corners of Fleeming Jenkin, Sanderson, and
+     * Hudson Beare
+     * Author - Marco Bancalari
+     */
     public static final LatLng FLEEMING_NE=new LatLng(55.922795644237574, -3.172590999121778);
     public static final LatLng FLEEMING_SW=new LatLng(55.92217867969299, -3.1723778181203066);
     public static final LatLng FLEEMING_NW=new LatLng(55.92267120276125, -3.1729395780918668);
@@ -48,7 +54,10 @@ public class BuildingPolygon {
         add(BuildingPolygon.LIBRARY_SW);
         add(new LatLng(BuildingPolygon.LIBRARY_NE.latitude,BuildingPolygon.LIBRARY_SW.longitude));//(North-West)
     }};
-
+    /**
+     * Polygons for Fleeming Jenkin, Sanderson and Hudson Beare
+     * Author - Marco Bancalari
+     */
     public static final List<LatLng> FLEEMING_POLYGON = new ArrayList<LatLng>() {{
         add(BuildingPolygon.FLEEMING_NE);
         add(BuildingPolygon.FLEEMING_SE);//(South-East)

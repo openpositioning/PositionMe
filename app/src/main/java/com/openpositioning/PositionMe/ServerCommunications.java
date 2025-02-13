@@ -333,7 +333,7 @@ public class ServerCommunications implements Observable {
                     new Handler(Looper.getMainLooper()).post(() ->
                             Toast.makeText(context, "Trajectory downloaded successfully", Toast.LENGTH_SHORT).show()
                     );
-
+                    // pass the receivedTrajectory as an argument to the callback function
                     callback.onTrajectoryDownloaded(receivedTrajectory);
 
                     zipInputStream.closeEntry();
@@ -345,6 +345,10 @@ public class ServerCommunications implements Observable {
         });
     }
 
+    /**
+     * Callback function needed to return the receivedTrajectory when it is downloaded
+     * @ Author - Jamie Arnott
+     */
     public interface TrajectoryDownloadCallback {
         void onTrajectoryDownloaded(Traj.Trajectory trajectory);
 

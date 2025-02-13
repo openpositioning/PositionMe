@@ -42,6 +42,11 @@ public class IndoorMapManager {
     private final List<Integer> LIBRARY_MAPS =Arrays.asList(
             R.drawable.libraryg, R.drawable.library1, R.drawable.library2,
             R.drawable.library3);
+
+    /**
+     * Adding in maps for Fleeming Jenkin, Hudson Beare and Sanderson buildings
+     * Author - Marco Bancalari
+     */
     private final List<Integer> FLEEMING_MAPS =Arrays.asList(
             R.drawable.fj_floor_g, R.drawable.fj_floor_1);
     private final List<Integer> HUDSON_MAPS =Arrays.asList(
@@ -61,6 +66,10 @@ public class IndoorMapManager {
     //Average Floor Heights of the Buildings
     public static final float NUCLEUS_FLOOR_HEIGHT=4.2F;
     public static final float LIBRARY_FLOOR_HEIGHT=3.6F;
+    /**
+     * Adding floor heights for new buildings
+     * Author - Marco Bancalari
+     */
     public static final float FLEEMING_FLOOR_HEIGHT=3.6F;
     public static final float HUDSON_FLOOR_HEIGHT=3.6F;
     public static final float SANDERSON_FLOOR_HEIGHT=3.6F;
@@ -125,21 +134,21 @@ public class IndoorMapManager {
                 this.currentFloor=newFloor;
             }
         }
-        else if (BuildingPolygon.inFleeming(currentLocation)){
+        else if (BuildingPolygon.inFleeming(currentLocation)){ // current floor functionality for Fleeming Jenkin
             // If within bounds and different from floor map currently being shown
             if (newFloor>=0 && newFloor<FLEEMING_MAPS.size() && newFloor!=this.currentFloor) {
                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(FLEEMING_MAPS.get(newFloor)));
                 this.currentFloor=newFloor;
             }
         }
-        else if (BuildingPolygon.inHudson(currentLocation)){
+        else if (BuildingPolygon.inHudson(currentLocation)){ // current floor functionality for Hudson Beare
             // If within bounds and different from floor map currently being shown
             if (newFloor>=0 && newFloor<HUDSON_MAPS.size() && newFloor!=this.currentFloor) {
                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(HUDSON_MAPS.get(newFloor)));
                 this.currentFloor=newFloor;
             }
         }
-        else if (BuildingPolygon.inSanderson(currentLocation)){
+        else if (BuildingPolygon.inSanderson(currentLocation)){ // current floor functionality for Sanderson
             // If within bounds and different from floor map currently being shown
             if (newFloor>=0 && newFloor<SANDERSON_MAPS.size() && newFloor!=this.currentFloor) {
                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(SANDERSON_MAPS.get(newFloor)));

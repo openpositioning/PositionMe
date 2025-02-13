@@ -75,7 +75,24 @@ public class replayFragment extends Fragment {
     private List<LatLng> gnssTrajectoryPoints = new ArrayList<>();
     private List<LatLng> gnssRevealedTrajectoryPoints = new ArrayList<>();
 
-
+    /**
+     * onCreateView to initialise the ReplayFragment xml layout.
+     * Playback buttons are initialised with listener functions to achieve their functionality.
+     * The Trajectory file is received as a JSON and parsed before being built back into a Trajectory type.
+     * PDR and GNSS data are extracted from the trajectory when initialising the map and passed as
+     * arguments to the loadTrajectory() function.
+     * @param inflater The LayoutInflater object that can be used to inflate
+     * any views in the fragment,
+     * @param container If non-null, this is the parent view that the fragment's
+     * UI should be attached to.  The fragment should not add the view itself,
+     * but this can be used to generate the LayoutParams of the view.
+     * @param savedInstanceState If non-null, this fragment is being re-constructed
+     * from a previous saved state as given here.
+     *
+     * @return rootView
+     * @ Author - Jamie Arnott
+     * @ Author - Guilherme Barreiros
+     */
     @SuppressLint("WrongViewCast")
     @Nullable
     @Override
@@ -94,7 +111,7 @@ public class replayFragment extends Fragment {
         endButton = rootView.findViewById(R.id.goToEndButton);
         viewStatsButton = rootView.findViewById(R.id.viewStatsButton);
 
-
+        // listener functions for playback buttons
         pauseButton.setOnClickListener(v -> stopPlaying());
 
         speedHalfButton.setOnClickListener(v -> {
@@ -120,6 +137,7 @@ public class replayFragment extends Fragment {
             updateMarkerPosition(maxProgress);
         });
 
+        // initialise the toolbar to display at the top of the page
         Toolbar toolbar = rootView.findViewById(R.id.toolbar);
         toolbar.setTitle("Replay Trajectory");
         toolbar.setNavigationIcon(R.drawable.ic_arrow_back);
@@ -136,15 +154,18 @@ public class replayFragment extends Fragment {
             viewStatsButton.setVisibility(View.GONE);
         }
 
-
+        // check the received arguments
         if (getArguments() != null) {
+            // parse the trajectory JSON file
             String trajectoryJson = getArguments().getString("trajectory");
             trajectoryJSON = trajectoryJson;
             Log.d("ReplayFragment", "Received trajectory JSON: " + trajectoryJson);
-
+            // initialise a new trajectory builder
             Traj.Trajectory.Builder trajectoryBuilder = Traj.Trajectory.newBuilder();
             try {
+                // merge the JSON and builder trajectories using parsing function
                 com.google.protobuf.util.JsonFormat.parser().merge(trajectoryJson, trajectoryBuilder);
+                // build trajectory
                 receivedTrajectory = trajectoryBuilder.build();
             } catch (InvalidProtocolBufferException e) {
                 Log.e("ReplayFragment", "Error parsing trajectory JSON", e);
@@ -154,12 +175,14 @@ public class replayFragment extends Fragment {
             Log.d("TrajectoryData" , "GNSS Points: " + receivedTrajectory.getGnssDataCount());
             Log.d("TrajectoryData", "Pressure Points: " + receivedTrajectory.getPressureDataCount());
             if (receivedTrajectory.getGnssDataCount() > 0) {
+                // check if GNSS data exists and initialise the start point as the first lat and lon elements
                 Traj.GNSS_Sample firstGnss = receivedTrajectory.getGnssData(0);
                 initialPosition = new LatLng(firstGnss.getLatitude(), firstGnss.getLongitude());
             } else {
-                initialPosition = new LatLng(55.9229346, -3.17451653); // if GNSS data not found, set location to nucleus building
+                // If no GNSS data exists, set start location as Nucleus Building
+                initialPosition = new LatLng(55.9229346, -3.17451653);
             }
-
+            // obtain timestamps of PDR data to display the time next to the seek bar
             if (receivedTrajectory.getPdrDataCount() > 1) {
                 long startTime = receivedTrajectory.getPdrData(0).getRelativeTimestamp();
                 long endTime = receivedTrajectory.getPdrData(receivedTrajectory.getPdrDataCount() - 1).getRelativeTimestamp();
@@ -169,7 +192,7 @@ public class replayFragment extends Fragment {
 
         SupportMapFragment supportMapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.fragmentContainerView);
-
+        // initialise the google map fragment
         supportMapFragment.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(GoogleMap map) {
@@ -180,13 +203,16 @@ public class replayFragment extends Fragment {
                 gMap.getUiSettings().setRotateGesturesEnabled(true);
                 gMap.getUiSettings().setScrollGesturesEnabled(true);
 
+                // initialise the indoor map manager for the replay on the google map
                 indoorMapManager = new IndoorMapManager(gMap);
 
+                // extract the PDR data and store the X and Y elements in a list
                 List<float[]> pdrDataList = new ArrayList<>();
                 for (Traj.Pdr_Sample pdr : receivedTrajectory.getPdrDataList()) {
                     pdrDataList.add(new float[]{pdr.getX(), pdr.getY()});
                     Log.d("ReplayFragment", "PDR data XY: " + pdr.getX() + " " + pdr.getY());
                 }
+                // extract the GNSS data and store the X and Y elements in a list
                 List<Traj.GNSS_Sample> gnssDataList = new ArrayList<>();
                 for (Traj.GNSS_Sample gnss : receivedTrajectory.getGnssDataList()){
                     gnssDataList.add(gnss);
@@ -194,6 +220,7 @@ public class replayFragment extends Fragment {
                 }
 
                 Log.d("ReplayFragment", "PDR data: " + pdrDataList);
+                // call loadTrajectory() and pass necessary arguments
                 loadTrajectory(pdrDataList, gnssDataList, initialPosition, gMap);
             }
         });
@@ -211,6 +238,12 @@ public class replayFragment extends Fragment {
 
         return rootView;
     }
+
+    /**
+     * Function to navigate from the ReplayFragment to the StatsFragment using
+     * the NavDirections
+     * @ Author - Guilherme Barreiros
+     */
     private void navigateToStats() {
         if (receivedTrajectory != null) {
             try {
@@ -226,13 +259,27 @@ public class replayFragment extends Fragment {
         }
     }
 
+    /**
+     * Function to process the trajectory data and plot them on the google map using polyline
+     * Trajectory is plotted by looping through PDR and GNSS data and computing the new coords to add to
+     * trajectoryPoint and gnssTrajectoryPoint lists.
+     * Calls to UpdateUIandMarker() to plot the lines as the markers move
+     * @param recordedPDRData
+     * @param recordedGnssData
+     * @param initialPosition
+     * @param gMap
+     * @ Author - Jamie Arnott
+     * @ Author - Guilherme Barreiros
+     */
     private void loadTrajectory(List<float[]> recordedPDRData, List<Traj.GNSS_Sample> recordedGnssData, LatLng initialPosition, GoogleMap gMap) {
         if (gMap == null || recordedPDRData.isEmpty()) return;
 
+        // clear the google map and initialise BitMaps for the PDR and GNSS markers
         gMap.clear();
         Bitmap largeMarker = UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_24, 2f);
         Bitmap gnssMarker = UtilFunctions.getBitmapFromVector(getContext(),R.drawable.ic_launcher_icon, 2f);
 
+        // initialise markers
         movingMarker = gMap.addMarker(new MarkerOptions()
                 .position(initialPosition)
                 .title("Current Position")
@@ -248,7 +295,7 @@ public class replayFragment extends Fragment {
                 .icon(BitmapDescriptorFactory.fromBitmap(gnssMarker))
         );
 
-
+        // clear and add initial coords to the trajectory lists
         trajectoryPoints.clear();
         revealedTrajectoryPoints.clear();
         trajectoryPoints.add(initialPosition);
@@ -258,39 +305,50 @@ public class replayFragment extends Fragment {
         gnssTrajectoryPoints.add(initialPosition);
         gnssRevealedTrajectoryPoints.add(initialPosition);
 
+        // initialise previousPos variables using first values in PDR set
         LatLng lastPosition = initialPosition;
         float previousPosX = recordedPDRData.get(0)[0];
         float previousPosY = recordedPDRData.get(0)[1];
 
+
+        // retreieve pressure data to compute the elevationVal
         pressureData = receivedTrajectory.getPressureDataList();
         pdrProcessing = new PdrProcessing(getContext());
         elevationVal = pdrProcessing.updateElevation(SensorManager.getAltitude(
                 SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressureData.get(0).getPressure()));
-
+        // use IndoorMapManager to determine if the coordinates lie inside one of the indoor spaces
         indoorMapManager.setCurrentLocation(initialPosition);
+        // set the green bounding box indicators of available indoor spaces
         indoorMapManager.setIndicationOfIndoorMap();
+        // set the current floor of the building using the elevationVal
         indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
                 ,true);
 
+        // pressure list and PDR list not the same length, so compute ratio to index pressure
+        // without going higher than available index
         float pdrToPressureListRatio = (float)recordedPDRData.size()/pressureData.size(); // pressure and pdr lists not always same length
         int j = 0;
 
         for (int i = 1; i < recordedPDRData.size(); i++) {
             float[] pdrData = recordedPDRData.get(i);
+            // compute PDR moved by subtracting previous X and Y data from new X and Y data
             float[] pdrMoved = {pdrData[0] - previousPosX, pdrData[1] - previousPosY};
+            // use UtilFunctions to calculate new position based on pdrMoved and lastPosition
             LatLng newPosition = UtilFunctions.calculateNewPos(lastPosition, pdrMoved);
             trajectoryPoints.add(newPosition);
+            // add GNSS points to gnssTrajectoryPoints
+            // check to ensure index never exceeds size() of recordedGnssData
             if (i > recordedGnssData.size()-1){
                 gnssTrajectoryPoints.add(new LatLng(recordedGnssData.get(recordedGnssData.size()-1).getLatitude(),recordedGnssData.get(recordedGnssData.size()-1).getLongitude()));
             } else{
                 gnssTrajectoryPoints.add(new LatLng(recordedGnssData.get(i).getLatitude(),recordedGnssData.get(i).getLongitude()));
             }
-
+            // update lastPosition
             lastPosition = newPosition;
 
             previousPosX = pdrData[0];
             previousPosY = pdrData[1];
-
+            // compute the new elevationVal and indoor floor number
             j = (int)Math.max(i/pdrToPressureListRatio-1,0);
             elevationVal = pdrProcessing.updateElevation(SensorManager.getAltitude(
                     SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressureData.get(j).getPressure()));
@@ -302,10 +360,10 @@ public class replayFragment extends Fragment {
         // Ensure polyline is initialized properly
         trajectoryPolyline = gMap.addPolyline(new PolylineOptions().color(Color.RED).addAll(revealedTrajectoryPoints));
         gnssTrajectoryPolyline = gMap.addPolyline(new PolylineOptions().color(Color.BLUE).addAll(gnssRevealedTrajectoryPoints));
-
+        // move camera to initial position
         gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialPosition, 19f));
         seekBar.setMax(trajectoryPoints.size() - 1);
-
+        // listener function for seekBar
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -326,6 +384,13 @@ public class replayFragment extends Fragment {
         });
     }
 
+    /**
+     * Function to update the marker positions and plot the lines as the markers move
+     * Ensures that the trajectory line is hidden until the marker reaches the given coordinate
+     * @param index
+     * @ Author - Guilherme Barreiros: Wrote the main functionality for the movingMarker
+     * @ Author - Jamie Arnott: Added the functionality for the movingGnssMarker
+     */
     private void updateMarkerPosition(int index) {
         if (index < 0 || index >= trajectoryPoints.size()) return;
 
@@ -335,17 +400,20 @@ public class replayFragment extends Fragment {
         movingGnssMarker.setPosition(gnssNewPosition);
         gMap.animateCamera(CameraUpdateFactory.newLatLng(newPosition));
 
+        // calculates angle to next point to point marker in correct direction
         if (index < trajectoryPoints.size() - 1) {
             LatLng nextPosition = trajectoryPoints.get(index + 1);
             movingMarker.setRotation(calculateBearing(newPosition, nextPosition));
         }
 
+        // add the trajectoryPoints to the revealedTrajectoryPoints as the index increases
         revealedTrajectoryPoints.clear();
         gnssRevealedTrajectoryPoints.clear();
         for (int i = 0; i <= index-1; i++) {
             revealedTrajectoryPoints.add(trajectoryPoints.get(i));
             gnssRevealedTrajectoryPoints.add(gnssTrajectoryPoints.get(i));
         }
+        // add the revealed points to the polylines
         trajectoryPolyline.setPoints(revealedTrajectoryPoints);
         gnssTrajectoryPolyline.setPoints(gnssRevealedTrajectoryPoints);
 
@@ -361,21 +429,38 @@ public class replayFragment extends Fragment {
             viewStatsButton.setVisibility(View.VISIBLE);
             statsButtonVisible = true;
         }
+        // check the current position on the indoorMapManager again
         indoorMapManager.setCurrentLocation(newPosition);
     }
 
+    /**
+     * Function to calculate the angle between 2 points
+     * @param start
+     * @param end
+     * @return float angle
+     * @ Author - Guilherme Barreiros
+     */
     private float calculateBearing(LatLng start, LatLng end) {
         return (float) Math.toDegrees(Math.atan2(
                 end.longitude - start.longitude, end.latitude - start.latitude));
     }
 
-
+    /**
+     * Function to format the time to seconds on the display
+     * @param seconds
+     * @return String time format
+     * @ Author - Guilherme Barreiros
+     */
     private String formatTime(int seconds) {
         return String.format("%02d:%02d", seconds / 60, seconds % 60);
     }
 
 
-
+    /**
+     * Set the playback speed
+     * @param speed
+     * @ Author - Guilherme Barreiros
+     */
     private void setPlaybackSpeed(int speed) {
         playbackSpeed = speed;
         if (isPlaying) {
@@ -384,6 +469,10 @@ public class replayFragment extends Fragment {
         }
     }
 
+    /**
+     * Start playing when the play button is clicked
+     * @ Author - Guilherme Barreiros
+     */
     private void startPlaying() {
         if (seekBar == null || seekBar.getMax() == 0) return;
 
@@ -398,6 +487,10 @@ public class replayFragment extends Fragment {
         }, playbackSpeed);
     }
 
+    /**
+     * Stop playing when the video ends or the stop button is pressed
+     * @ Author - Guilherme Barreiros
+     */
     private void stopPlaying() {
         isPlaying = false;
         handler.removeCallbacksAndMessages(null);

@@ -63,6 +63,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
          * Listener function for the playButton added which navigates to replayFragment and
          * passes the trajectory via the NavDirections. Converted the trajectory to JSON to make the argument passing
          * easier as strings can be passed without causing 'non parcelable[]' errors (at least from what I saw)
+         * @ Author - Jamie Arnott
          */
         this.playButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -76,7 +77,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
                     public void onTrajectoryDownloaded(Traj.Trajectory trajectory) { // ✅ Required method
                         Log.d("ReplayFragment", "Downloaded trajectory: " + trajectory.toString());
 
-                        // Convert to JSON if needed for navigation
+                        // Convert to JSON format to pass as argument for navigation to ReplayFragment
                         String trajectoryJson;
                         try {
                             trajectoryJson = com.google.protobuf.util.JsonFormat.printer().print(trajectory);
@@ -84,7 +85,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
                             Log.e("ReplayFragment", "Error converting trajectory to JSON", e);
                             return; // Stop execution if conversion fails
                         }
-
+                        // handler to handle the navigation to ReplayFragment
                         new Handler(Looper.getMainLooper()).post(() -> {
                             NavDirections action = FilesFragmentDirections.actionFilesFragmentToReplayFragment(trajectoryJson);
                             Navigation.findNavController(view).navigate(action);
