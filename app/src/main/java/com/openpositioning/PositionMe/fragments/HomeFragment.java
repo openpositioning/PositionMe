@@ -37,6 +37,8 @@ public class HomeFragment extends Fragment {
     private Button measurements;
     private Button files;
 
+
+
     /**
      * Default empty constructor, unused.
      */

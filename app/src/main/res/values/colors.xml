@@ -12,5 +12,6 @@
     <color name="lightLogoBlue">#FF00A1FF</color>
     <color name="darkLogoBlue">#FF001080</color>
     <color name="primaryBlue">#FF001080</color>
+    <color name="red">#FE0000</color>
 
 </resources>

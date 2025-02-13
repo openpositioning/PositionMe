@@ -141,6 +141,12 @@ public class PdrProcessing {
         // Change angle so zero rad is east
         float adaptedHeading = (float) (Math.PI/2 - headingRad);
 
+        // check if accelMagnitudeOvertime is empty
+        if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.isEmpty()) {
+            // return current position, do not update
+            return new float[]{this.positionX, this.positionY};
+        }
+
         // Calculate step length
         if(!useManualStep) {
             //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);

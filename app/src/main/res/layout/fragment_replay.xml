@@ -1,0 +1,174 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".fragments.ReplayFragment">
+
+    <!-- 地图显示区域 -->
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/replayMap"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        tools:context=".MapsActivity" />
+
+    <FrameLayout
+        android:id="@+id/map_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="16dp">
+
+            <!-- 快退按钮 -->
+            <ImageButton
+                android:id="@+id/btn_rewind"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:background="@drawable/button_background_light_trans"
+                android:contentDescription="Rewind"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_baseline_fast_rewind_24"
+                app:layout_constraintBottom_toTopOf="@id/guideline2"
+                app:layout_constraintEnd_toStartOf="@id/btn_play_pause"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="@id/guideline2" />
+
+            <!-- 播放/暂停按钮 -->
+            <ImageButton
+                android:id="@+id/btn_play_pause"
+                android:layout_width="101dp"
+                android:layout_height="127dp"
+                android:background="@drawable/button_background_light_trans"
+                android:contentDescription="Play/Pause Button"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_baseline_play_circle_filled_24_b"
+                app:layout_constraintBottom_toTopOf="@id/guideline2"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="@id/guideline2" />
+
+            <!-- 快进按钮 -->
+            <ImageButton
+                android:id="@+id/btn_forward"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:background="@drawable/button_background_light_trans"
+                android:contentDescription="Forward"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_baseline_fast_forward_24"
+                app:layout_constraintBottom_toTopOf="@id/guideline2"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@id/btn_play_pause"
+                app:layout_constraintTop_toTopOf="@id/guideline2" />
+
+            <!-- GNSS 开关 -->
+            <!-- 播放进度时间显示 -->
+            <Switch
+                android:id="@+id/gnssSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/button_background_light"
+                android:buttonTint="@android:color/holo_green_dark"
+                android:text="@string/gnssSwitch"
+                android:textColor="@color/black"
+                app:layout_constraintBottom_toTopOf="@id/guideline3"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="@id/guideline3"
+                app:layout_constraintVertical_bias="0.516" />
+
+            <TextView
+                android:id="@+id/tv_progress_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@color/lightLogoBlue"
+                android:text="0:00"
+                android:textColor="@android:color/black"
+                android:textSize="16sp"
+                app:layout_constraintBottom_toBottomOf="@id/seek_bar"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@id/seek_bar" /> <!-- 给时间文本和进度条之间留 8dp 间距 -->
+
+            <!-- 按钮区域 -->
+            <LinearLayout
+                android:id="@+id/button_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="15dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                app:layout_constraintBottom_toTopOf="@id/seek_bar"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent">
+
+                <!-- Restart 按钮 -->
+                <Button
+                    android:id="@+id/btn_restart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_background_trans_anti"
+
+                    android:text="Restart" />
+
+                <!-- Go to End 按钮 -->
+                <Button
+                    android:id="@+id/btn_go_to_end"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_background_trans_anti"
+
+                    android:text="Go to End" />
+
+                <!-- Exit 按钮 -->
+                <Button
+                    android:id="@+id/btn_exit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_background_trans_anti"
+
+                    android:text="Exit" />
+            </LinearLayout>
+
+            <!-- 进度条 -->
+            <SeekBar
+                android:id="@+id/seek_bar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:background="#CCCCCC"
+                android:progressTint="#8CB4FF"
+                android:thumbTint="#FF0000"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/tv_progress_time"
+                app:layout_constraintHorizontal_weight="1"
+                app:layout_constraintStart_toStartOf="parent" /> <!-- 让 SeekBar 充满剩余空间 -->
+
+
+            <!-- 指南线 -->
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/guideline2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                app:layout_constraintGuide_percent="0.73" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/guideline3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                app:layout_constraintGuide_begin="51dp" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </FrameLayout>
+
+</FrameLayout>

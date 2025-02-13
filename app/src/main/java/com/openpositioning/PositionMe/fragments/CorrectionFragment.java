@@ -18,6 +18,9 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.GroundOverlayOptions;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.openpositioning.PositionMe.PathView;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
@@ -128,6 +131,7 @@ public class CorrectionFragment extends Fragment {
                 System.out.println("onMapReady zoom: " + zoom);
                 //Center the camera
                 mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(start, (float) zoom));
+
             }
         });
 

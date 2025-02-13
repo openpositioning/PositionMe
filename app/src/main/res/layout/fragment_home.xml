@@ -6,89 +6,158 @@
     android:layout_height="match_parent"
     tools:context=".fragments.HomeFragment">
 
-
-
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <ImageView
+            android:id="@+id/backgroundImage"
+            android:layout_width="500dp"
+            android:layout_height="1000dp"
+            android:scaleType="center"
+            android:src="@drawable/eng123"
+            android:layout_marginStart="-50dp"
+            android:layout_marginTop="-150dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+
+
+        <!-- 悬浮按钮（添加波纹点击效果） -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
+
             android:id="@+id/sensorInfoButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="16dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="8dp"
             android:clickable="true"
             android:contentDescription="@string/info_description"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_baseline_info_24"
             app:backgroundTint="?attr/colorPrimaryVariant"
-            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:tint="@color/white" />
 
-        <Button
-            android:id="@+id/startStopButton"
-            android:layout_width="300dp"
-            android:layout_height="300dp"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="24dp"
-            android:background="@drawable/round_button"
-            android:enabled="false"
-            android:paddingStart="15dp"
-            android:paddingTop="5dp"
-            android:paddingBottom="10dp"
-            android:paddingEnd="10dp"
-            android:text="@string/start"
-            android:textColor="@color/LightYellow"
-            android:textSize="18dp"
-            android:textStyle="bold"
-            app:icon="@drawable/ic_baseline_directions_walk_24"
-            app:iconGravity="textTop"
-            app:iconSize="170dp"
+        <!-- Start 按钮 -->
+        <FrameLayout
+            android:id="@+id/otherButtonLayoutFrame"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             app:layout_constraintBottom_toTopOf="@+id/otherButtonLayout"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- 按钮 -->
+            <Button
+                android:id="@+id/startStopButton"
+                android:layout_width="300dp"
+                android:layout_height="300dp"
+                android:background="@drawable/round_button"
+                android:enabled="false"
+                android:gravity="center"
+                android:paddingTop="150dp"
+                android:text="@string/start"
+                android:textColor="@color/LightYellow"
+                android:textSize="18dp"
+                android:textStyle="bold" />
+
+            <!-- 小人图标 -->
+            <ImageView
+                android:id="@+id/iconImage"
+                android:layout_width="170dp"
+                android:layout_height="170dp"
+                android:layout_gravity="center"
+                android:layout_marginTop="-30dp"
+                android:src="@drawable/ic_baseline_directions_walk_24"
+                android:elevation="6dp"/>
+
+        </FrameLayout>
+
 
         <LinearLayout
             android:id="@+id/otherButtonLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
             android:gravity="center"
+            android:orientation="horizontal"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/startStopButton">
+            app:layout_constraintTop_toBottomOf="@+id/otherButtonLayoutFrame">
+            >
+                <!-- Measurement 按钮 -->
+                <FrameLayout
+                    android:id="@+id/measurementButtonFrame"
+                    android:layout_width="165dp"
+                    android:layout_height="150dp"
+                    android:layout_marginEnd="12dp">
 
-            <Button
-                android:id="@+id/measurementButton"
-                android:layout_width="165dp"
-                android:layout_height="150dp"
-                android:layout_marginEnd="12dp"
-                android:layout_marginTop="6dp"
-                android:layout_marginBottom="6dp"
-                android:background="@drawable/rounded_corner"
-                android:scaleType="centerCrop"
-                android:text="@string/measurements"
-                app:icon="@drawable/ic_baseline_data_array_24"
-                app:iconGravity="textTop"
-                app:iconSize="50dp" />
+                    <!-- 按钮 -->
+                    <Button
+                        android:id="@+id/measurementButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/button_background"
+                        android:foreground="?attr/selectableItemBackground"
+                        android:text="@string/measurements"
+                        android:textColor="@color/LightYellow"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:gravity="bottom|center_horizontal"
+                        android:paddingBottom="20dp"/>  <!-- 让文本靠近按钮底部 -->
 
-            <Button
-                android:id="@+id/filesButton"
-                android:layout_width="165dp"
-                android:layout_height="150dp"
-                android:layout_marginStart="12dp"
-                android:layout_marginTop="6dp"
-                android:layout_marginBottom="6dp"
-                android:background="@drawable/rounded_corner"
-                android:scaleType="centerCrop"
-                android:text="@string/files"
-                app:icon="@drawable/ic_baseline_folder_24"
-                app:iconGravity="textTop"
-                app:iconSize="50dp" />
-        </LinearLayout>
+                    <!-- 图标 -->
+                    <ImageView
+                        android:id="@+id/measurementIcon"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:layout_gravity="center_horizontal|top"
+                        android:layout_marginTop="30dp"
+                        android:src="@drawable/ic_baseline_data_array_24"
+                        android:elevation="6dp"/>  <!-- 让图标显示在按钮之上 -->
+                </FrameLayout>
+
+                <!-- Files 按钮 -->
+                <FrameLayout
+                    android:id="@+id/filesButtonFrame"
+                    android:layout_width="165dp"
+                    android:layout_height="150dp"
+                    android:layout_marginStart="12dp">
+
+                    <!-- 按钮 -->
+                    <Button
+                        android:id="@+id/filesButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/button_background"
+                        android:foreground="?attr/selectableItemBackground"
+                        android:text="@string/files"
+                        android:textColor="@color/LightYellow"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:gravity="bottom|center_horizontal"
+                        android:paddingBottom="20dp"/>  <!-- 让文本靠近按钮底部 -->
+
+                    <!-- 图标 -->
+                    <ImageView
+                        android:id="@+id/filesIcon"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:layout_gravity="center_horizontal|top"
+                        android:layout_marginTop="30dp"
+                        android:src="@drawable/ic_baseline_folder_24"
+                        android:elevation="6dp"/>  <!-- 让图标显示在按钮之上 -->
+                </FrameLayout>
+
+            </LinearLayout>
+
+
+
+
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>
