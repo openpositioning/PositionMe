@@ -104,7 +104,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
 
     /** 用于统一管理不同类型的轨迹事件 */
     private static class Event {
-        long relativeTime;  // 来自 GNSS/Pdr/Pressure 的 relative_timestamp
+        long relativeTime;  // the relative_timestamp from the GNSS/PDR/Pressures
         int eventType;      // 0=GNSS, 1=PDR, 2=Pressure
         Traj.GNSS_Sample gnss;
         Traj.Pdr_Sample pdr;
