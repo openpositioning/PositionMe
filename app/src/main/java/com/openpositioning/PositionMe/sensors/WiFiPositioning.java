@@ -10,6 +10,7 @@ import com.google.android.gms.maps.model.LatLng;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
 /**
  * Class for creating and handling POST requests for obtaining the current position using
  * WiFi positioning API from https://openpositioning.org/api/position/fine

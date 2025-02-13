@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    tools:context=".Reset">
+
+    <!-- 顶部波浪背景 -->
+    <ImageView
+        android:id="@+id/top_background"
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:scaleType="fitXY"
+        android:src="@drawable/top"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <!-- 标题 "Reset Password" -->
+    <TextView
+        android:id="@+id/reset_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Reset Password"
+        android:textSize="30dp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"
+        app:layout_constraintTop_toBottomOf="@id/top_background"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="30dp"/>
+
+    <!-- 说明文字 -->
+    <TextView
+        android:id="@+id/reset_description"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="We'll send an email to your email with a link to reset your password. Please click on the link to create a new password and regain access to your account."
+        android:textSize="14sp"
+        android:textColor="@android:color/darker_gray"
+        android:textAlignment="center"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/reset_title"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="15dp"
+        android:layout_marginHorizontal="40dp"/>
+
+    <!-- E-mail 输入框 -->
+    <EditText
+        android:id="@+id/email"
+        android:layout_width="0dp"
+        android:layout_height="50dp"
+        android:background="@drawable/rounded_edittext"
+        android:hint="E-mail"
+        android:drawableStart="@drawable/ic_email"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:textSize="16sp"
+        android:inputType="textEmailAddress"
+        android:maxLines="1"
+        app:layout_constraintTop_toBottomOf="@id/reset_description"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="30dp"
+        android:layout_marginHorizontal="40dp"/>
+
+    <!-- Send 按钮 -->
+    <Button
+        android:id="@+id/send"
+        android:layout_width="0dp"
+        android:layout_height="60dp"
+        android:text="Send"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:background="@drawable/gradient_button"
+        android:textColor="@color/white"
+        app:layout_constraintTop_toBottomOf="@id/email"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="30dp"
+        android:layout_marginHorizontal="40dp"/>
+
+    <!-- 底部波浪背景 -->
+    <ImageView
+        android:id="@+id/bottom_background"
+        android:layout_width="100dp"
+        android:layout_height="210dp"
+        android:scaleType="fitXY"
+        android:src="@drawable/bottom"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>

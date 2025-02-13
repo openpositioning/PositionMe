@@ -9,11 +9,14 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.fragments.UploadFragment;
 
 import java.io.File;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Adapter used for displaying local Trajectory file data
@@ -59,7 +62,7 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
      * {@inheritDoc}
      * Formats and assigns the data fields from the local Trajectory Files object to the TextView fields.
      *
-     * @see com.openpositioning.PositionMe.fragments.UploadFragment finding the data from on local storage.
+     * @see UploadFragment finding the data from on local storage.
      * @see com.openpositioning.PositionMe.R.layout#item_upload_card_view xml layout file.
      */
     @Override
@@ -69,7 +72,18 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
         Matcher dateMatcher = datePattern.matcher(uploadItems.get(position).getName());
         String dateString = dateMatcher.find() ? dateMatcher.group(1) : "N/A";
         System.err.println("UPLOAD - Date string: " + dateString);
-        holder.trajDate.setText(dateString);
+
+
+        // define input format
+        DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("dd-MM-yy-HH-mm-ss");
+        LocalDateTime dateTime = LocalDateTime.parse(dateString, inputFormatter);
+
+        // define output format
+        DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        // formatting into required string
+        String formattedDate = dateTime.format(outputFormatter);
+
+        holder.trajDate.setText(formattedDate);
 
         // Set click listener for the delete button
         holder.deletebutton.setOnClickListener(v -> deleteFileAtPosition(position));

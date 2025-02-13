@@ -8,6 +8,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.fragments.FilesFragment;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -18,7 +19,7 @@ import java.util.Map;
  * Adapter used for displaying Trajectory metadata in a RecyclerView list.
  *
  * @see TrajDownloadViewHolder the corresponding view holder.
- * @see com.openpositioning.PositionMe.fragments.FilesFragment on how the data is generated
+ * @see FilesFragment on how the data is generated
  * @see com.openpositioning.PositionMe.ServerCommunications on where the response items are received.
  *
  * @author Mate Stodulka
@@ -62,15 +63,27 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
      * {@inheritDoc}
      * Formats and assigns the data fields from the Trajectory metadata object to the TextView fields.
      *
-     * @see com.openpositioning.PositionMe.fragments.FilesFragment generating the data from server response.
+     * @see FilesFragment generating the data from server response.
      * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file.
      */
     @Override
     public void onBindViewHolder(@NonNull TrajDownloadViewHolder holder, int position) {
         String id = responseItems.get(position).get("id");
         holder.trajId.setText(id);
-        if(id.length() > 2) holder.trajId.setTextSize(58);
-        else holder.trajId.setTextSize(65);
+        holder.trajId.setTextSize(35);
+//        switch (id.length()) {
+//            case 1:
+//                holder.trajId.setTextSize(65);
+//                break;
+//            case 2:
+//                holder.trajId.setTextSize(58);
+//                break;
+//            default:
+//                holder.trajId.setTextSize(35);
+//                break;
+//        }
+//        if(id.length() > 2) holder.trajId.setTextSize(58);
+//        else holder.trajId.setTextSize(65);
         holder.trajDate.setText(
                 dateFormat.format(
                         LocalDateTime.parse(

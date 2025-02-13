@@ -37,12 +37,6 @@ public class Wifi {
     public void setLevel(int level) { this.level = level; }
     public void setFrequency(long frequency) { this.frequency = frequency; }
 
-    /**
-     * Generates a string containing mac address and rssi of Wifi.
-     *
-     * Concatenates mac address and rssi to display in the
-     * {@link com.openpositioning.PositionMe.fragments.MeasurementsFragment} fragment
-     */
     @Override
     public String toString() {
         return  "bssid: " + bssid +", level: " + level;

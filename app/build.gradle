@@ -12,13 +12,13 @@ if (localPropertiesFile.exists()) {
 }
 
 android {
-    namespace ="com.openpositioning.PositionMe" //fix Namespace not specified problem
-    compileSdk 33
+    namespace 'com.openpositioning.PositionMe'
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.openpositioning.PositionMe"
         minSdk 28
-        targetSdk 33
+        targetSdk 35
         versionCode 1
         versionName "1.0"
 
@@ -41,19 +41,45 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-
-
         }
-
-
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 }
 
 dependencies {
+    // appcompat
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    // material design
+    implementation 'com.google.android.material:material:1.12.0'
+    // activity
+    implementation 'androidx.activity:activity:1.10.0'
+    // constraintlayout
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
+    // Firebase Auth
+    implementation 'com.google.firebase:firebase-auth:23.1.0'
+    // Firebase Database
+    implementation 'com.google.firebase:firebase-database:21.0.0'
+    // Navigation Fragment
+    implementation 'androidx.navigation:navigation-fragment:2.8.6'
+    // Navigation UI
+    implementation 'androidx.navigation:navigation-ui:2.8.6'
+
+    // 单元测试
+    testImplementation 'junit:junit:4.13.2'
+    // Android 测试扩展 JUnit
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    // Espresso 核心
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+
+//    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
+//    implementation 'com.google.android.gms:play-services-maps:18.1.0'
+//    implementation 'androidx.preference:preference:1.2.0'
+//    implementation 'com.google.protobuf:protobuf-java:3.0.0'
+//    implementation "com.google.protobuf:protobuf-java-util:3.0.0"
+//    implementation 'com.android.volley:volley:1.2.1'
 
     implementation 'androidx.appcompat:appcompat:1.4.1'
     implementation 'com.google.android.material:material:1.6.0'
@@ -75,17 +101,14 @@ dependencies {
     implementation "androidx.navigation:navigation-ui-ktx:$nav_version"
 }
 
-//secrets {
-//    // Optionally specify a different file name containing your secrets.
-//    // The plugin defaults to "local.properties"
-//    propertiesFileName = "secrets.properties"
-//
-//    // A properties file containing default secret values. This file can be
-//    // checked in version control.
-//    defaultPropertiesFileName = "local.defaults.properties"
-//
-//    // Configure which keys should be ignored by the plugin by providing regular expressions.
-//    // "sdk.dir" is ignored by default.
-//    ignoreList.add("keyToIgnore") // Ignore the key "keyToIgnore"
-//    ignoreList.add("sdk.*")       // Ignore all keys matching the regexp "sdk.*"
-//}
+secrets {
+    // To add your Maps API key to this project:
+    // 1. If the secrets.properties file does not exist, create it in the same folder as the local.properties file.
+    // 2. Add this line, where YOUR_API_KEY is your API key:
+    //        MAPS_API_KEY=YOUR_API_KEY
+    propertiesFileName = "secrets.properties"
+
+    // A properties file containing default secret values. This file can be
+    // checked in version control.
+    defaultPropertiesFileName = "local.defaults.properties"
+}

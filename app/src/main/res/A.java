@@ -1,0 +1,9 @@
+mipmap-anydpi
+mipmap-hdpi
+mipmap-mdpi
+mipmap-xhdpi
+mipmap-xxhdpi
+mipmap-xxxhdpi
+values
+values-night
+xml

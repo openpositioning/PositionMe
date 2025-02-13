@@ -1,36 +1,26 @@
 {
   "project_info": {
-    "project_number": "409909178850",
-    "project_id": "cloud-b4ff2",
-    "storage_bucket": "cloud-b4ff2.appspot.com"
+    "project_number": "143519632941",
+    "project_id": "livelink-f37f6",
+    "storage_bucket": "livelink-f37f6.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:409909178850:android:711b301da3007d4b2789bb",
+        "mobilesdk_app_id": "1:143519632941:android:05e4bb7f0d25669a1972a4",
         "android_client_info": {
           "package_name": "com.openpositioning.PositionMe"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "409909178850-3rhke46k35ckun93gseam9banmmkq2r4.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCF7HYaO3ZrkXIy7tfMsk_oQheF_EZ5UMA"
+          "current_key": "AIzaSyBJOLwqdmOGx2r-eZJDBu3DGZ55lF0NtQE"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "409909178850-3rhke46k35ckun93gseam9banmmkq2r4.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }

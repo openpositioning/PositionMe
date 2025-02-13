@@ -8,6 +8,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.fragments.FilesFragment;
 
 import java.lang.ref.WeakReference;
 
@@ -24,6 +25,9 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
     TextView trajId;
     TextView trajDate;
     ImageButton downloadButton;
+
+    public ImageButton replaybutton;
+
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
 
@@ -33,7 +37,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
      *
      * @param listener DownloadClickListener to enable acting on clicks on items.
      *
-     * @see com.openpositioning.PositionMe.fragments.FilesFragment generating the data and implementing the
+     * @see FilesFragment generating the data and implementing the
      * listener.
      */
     public TrajDownloadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
@@ -44,6 +48,13 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
 
         this.downloadButton.setOnClickListener(this);
+
+        this.replaybutton = itemView.findViewById(R.id.replayTrajectoryButton);
+        this.replaybutton.setOnClickListener(v -> {
+            if (listenerReference.get() != null) {
+                listenerReference.get().onReplayClicked(getAdapterPosition());
+            }
+        });
     }
 
 

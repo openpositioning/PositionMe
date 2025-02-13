@@ -5,17 +5,25 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+
 import android.os.Environment;
 import android.os.Build;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+
+import androidx.fragment.app.FragmentTransaction;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.openpositioning.PositionMe.MainActivity;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.ReplayDataProcessor;
 import com.openpositioning.PositionMe.ServerCommunications;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.viewitems.DownloadClickListener;
 import com.openpositioning.PositionMe.viewitems.UploadListAdapter;
 
@@ -23,7 +31,6 @@ import java.io.File;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 
 /**
  * A simple {@link Fragment} subclass. Displays trajectories that were saved locally because no
@@ -84,6 +91,32 @@ public class UploadFragment extends Fragment {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        // 获取主界面的 BottomNavigationView，并隐藏它
+        BottomNavigationView bottomNav = getActivity().findViewById(R.id.bottom_navigation);
+        if (bottomNav != null) {
+            bottomNav.setVisibility(View.VISIBLE);
+        }
+        MainActivity activity = (MainActivity) getActivity();
+        if (activity != null && activity.onBackPressedCallback != null) {
+            activity.onBackPressedCallback.setEnabled(false);  // 禁用返回键拦截
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+
+        // 恢复返回键拦截
+        MainActivity activity = (MainActivity) getActivity();
+        if (activity != null && activity.onBackPressedCallback != null) {
+            activity.onBackPressedCallback.setEnabled(true);  // 恢复拦截
+        }
+    }
+
+
     /**
      * {@inheritDoc}
      * Sets the title in the action bar to "Upload"
@@ -139,6 +172,37 @@ public class UploadFragment extends Fragment {
                     serverCommunications.uploadLocalTrajectory(localTrajectories.get(position));
 //                    localTrajectories.remove(position);
 //                    listAdapter.notifyItemRemoved(position);
+                }
+
+                @Override
+                public void onReplayClicked(int position) {
+                    // replay button logic
+                    File replayFile = localTrajectories.get(position);
+
+//                    String filePath = replayFile.getAbsolutePath();
+                    if (replayFile == null) {
+                        Toast.makeText(getContext(), "Trajectory file not found, cannot invoke replay!", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    Traj.Trajectory trajectory = ReplayDataProcessor.protoDecoder(replayFile);
+
+                    if (trajectory == null) {
+                        Toast.makeText(getContext(), "Trajectory empty, cannot invoke replay!", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    ReplayDataProcessor.TrajRecorder replayProcessor =
+                            ReplayDataProcessor.TrajRecorder.getInstance();
+
+                    replayProcessor.setReplayFile(trajectory);
+
+                    // Jump to ReplayTrajFragment
+                    FragmentTransaction transaction = getParentFragmentManager().beginTransaction();
+                    transaction.replace(R.id.fragment_container, new ReplayTrajFragment());
+                    transaction.addToBackStack(null);
+                    transaction.commit();
+
                 }
             });
             uploadList.setAdapter(listAdapter);

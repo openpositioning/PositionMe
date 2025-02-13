@@ -6,8 +6,6 @@ import android.hardware.SensorManager;
 
 import androidx.preference.PreferenceManager;
 
-import com.openpositioning.PositionMe.sensors.SensorFusion;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -16,7 +14,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Processes data recorded in the {@link SensorFusion} class and calculates live PDR estimates.
+ * Processes data recorded in the {SensorFusion} class and calculates live PDR estimates.
  * It calculates the position from the steps and directions detected, using either estimated values
  * (eg. stride length from the Weiberg algorithm) or provided constants, calculates the elevation
  * and attempts to estimate the current floor as well as elevators.
@@ -28,7 +26,8 @@ public class PdrProcessing {
 
     //region Static variables
     // Weiberg algorithm coefficient for stride calculations
-    private static final float K = 0.364f;
+//    private static final float K = 0.364f;
+    private static final float K = 0.240f;
     // Number of samples (seconds) to keep as memory for elevation calculation
     private static final int elevationSeconds = 4;
     // Number of samples (0.01 seconds)
@@ -37,6 +36,8 @@ public class PdrProcessing {
     private static final float movementThreshold = 0.3f; // m/s^2
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
+    // buffer size to determine the start elevation
+    private static final int elevation_buffer_size = 5;
     //endregion
 
     //region Instance variables
@@ -124,7 +125,7 @@ public class PdrProcessing {
         // Distance between floors is building dependent, use manual value
         this.floorHeight = settings.getInt("floor_height", 4);
         // Array for holding initial values
-        this.startElevationBuffer = new Float[3];
+        this.startElevationBuffer = new Float[elevation_buffer_size];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
     }
@@ -184,13 +185,13 @@ public class PdrProcessing {
      */
     public float updateElevation(float absoluteElevation) {
         // Set start to median of first three values
-        if(setupIndex < 3) {
+        if(setupIndex < elevation_buffer_size) {
             // Add values to buffer until it's full
             this.startElevationBuffer[setupIndex] = absoluteElevation;
             // When buffer is full, find median, assign as startElevation
-            if(setupIndex == 2) {
+            if(setupIndex == elevation_buffer_size - 1) {
                 Arrays.sort(startElevationBuffer);
-                startElevation = startElevationBuffer[1];
+                startElevation = startElevationBuffer[(int) elevation_buffer_size/2];
             }
             this.setupIndex++;
         }
@@ -256,6 +257,7 @@ public class PdrProcessing {
         return bounce * K * 2;
     }
 
+
     /**
      * Get the current X and Y coordinates from the PDR processing class.
      * The coordinates are in meters, the start of the recording is the (0,0)
@@ -303,12 +305,12 @@ public class PdrProcessing {
         // get horizontal and vertical acceleration magnitude
         float verticalAcc = (float) Math.sqrt(
                 Math.pow((acc[0] * gravity[0]/g),2) +
-                Math.pow((acc[1] * gravity[1]/g), 2) +
-                Math.pow((acc[2] * gravity[2]/g), 2));
+                        Math.pow((acc[1] * gravity[1]/g), 2) +
+                        Math.pow((acc[2] * gravity[2]/g), 2));
         float horizontalAcc = (float) Math.sqrt(
                 Math.pow((acc[0] * (1 - gravity[0]/g)), 2) +
-                Math.pow((acc[1] * (1 - gravity[1]/g)), 2) +
-                Math.pow((acc[2] * (1 - gravity[2]/g)), 2));
+                        Math.pow((acc[1] * (1 - gravity[1]/g)), 2) +
+                        Math.pow((acc[2] * (1 - gravity[2]/g)), 2));
         // Save into buffer to compare with past values
         this.verticalAccel.putNewest(verticalAcc);
         this.horizontalAccel.putNewest(horizontalAcc);
@@ -367,6 +369,8 @@ public class PdrProcessing {
         this.positionY = 0f;
         this.elevation = 0f;
 
+        this.setupIndex = 0; // to reset the elevation to 0, otherwise buffer would be full
+
         if(this.settings.getBoolean("overwrite_constants", false)) {
             // Capacity - pressure is read with 1Hz - store values of past 10 seconds
             this.elevationList = new CircularFloatBuffer(Integer.parseInt(settings.getString("elevation_seconds", "4")));
@@ -387,7 +391,7 @@ public class PdrProcessing {
         // Distance between floors is building dependent, use manual value
         this.floorHeight = settings.getInt("floor_height", 4);
         // Array for holding initial values
-        this.startElevationBuffer = new Float[3];
+        this.startElevationBuffer = new Float[elevation_buffer_size];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
     }

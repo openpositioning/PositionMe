@@ -17,7 +17,7 @@ import java.util.Objects;
  * Adapter used for displaying sensor info data.
  *
  * @see SensorInfoViewHolder corresponding View Holder class
- * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
+ * @see R.layout#item_sensorinfo_card_view xml layout file
  *
  * @author Mate Stodulka
  */
@@ -41,7 +41,7 @@ public class SensorInfoListAdapter extends RecyclerView.Adapter<SensorInfoViewHo
 
     /**
      * {@inheritDoc}
-     * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
+     * @see R.layout#item_sensorinfo_card_view xml layout file
      */
     @NonNull
     @Override
@@ -54,8 +54,8 @@ public class SensorInfoListAdapter extends RecyclerView.Adapter<SensorInfoViewHo
      * Formats and assigns the data fields from the SensorInfo object to the TextView fields.
      *
      * @see SensorInfo data class
-     * @see com.openpositioning.PositionMe.R.string formatting for strings.
-     * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
+     * @see R.string formatting for strings.
+     * @see R.layout#item_sensorinfo_card_view xml layout file
      */
     @Override
     public void onBindViewHolder(@NonNull SensorInfoViewHolder holder, int position) {

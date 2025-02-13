@@ -5,54 +5,54 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PointF;
 import android.util.AttributeSet;
 import android.view.View;
 
-import com.openpositioning.PositionMe.fragments.CorrectionFragment;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
-
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 /**
- * This View class displays the path taken in the UI.
- * A path of straight lines is drawn based on PDR coordinates. The coordinates are passed to
- * PathView by calling method {@link PathView#drawTrajectory(float[])} in {@link SensorFusion}.
- * The coordinates are scaled and centered in {@link PathView#scaleTrajectory()} to fill the
- * device's screen. The scaling ratio is passed to the {@link CorrectionFragment} for calculating
- * the Google Maps zoom ratio.
- *
- * @author Michal Dvorak
- * @author Virginia Cangelosi
+ * 自定义 View：显示路径轨迹
+ * 该类基于 PDR 计算的坐标绘制路径，并支持轨迹缩放适配屏幕。
+ * Custom View: Display path trajectory
+ * This class draws the path based on the coordinates calculated by PDR and supports scaling the trajectory to fit the screen.
  */
 public class PathView extends View {
-    // Set up drawing colour
-    private final int paintColor = Color.BLUE;
-    // Defines paint and canvas
+    // 轨迹绘制颜色
+    //Track drawing color
+    private int paintColor = Color.BLUE;
+    // 画笔
+    // Brush
     private Paint drawPaint;
-    // Path of straight lines
+    // 存储轨迹的 Path
+    // Path to store the trajectory
     private Path path = new Path();
-    // Array lists of integers to store coordinates
-    private static ArrayList<Float> xCoords = new ArrayList<Float>();
-    private static ArrayList<Float> yCoords = new ArrayList<Float>();
-    // Scaling ratio for multiplying PDR coordinates to fill the screen size
-    private static float scalingRatio;
-    // Instantiate correction fragment for passing it the scaling ratio
-    private CorrectionFragment correctionFragment = new CorrectionFragment();
-    // Boolean flag to avoid rescaling trajectory when view is redrawn
-    private static boolean firstTimeOnDraw = true;
-    //Variable to only draw when the variable is true
-    private static boolean draw = true;
-    //Variable to only draw when the variable is true
-    private static boolean reDraw = false;
+    // 存储轨迹坐标
+    //Store trajectory coordinates
+    private List<Float> xCoords = new ArrayList<>();
+    private List<Float> yCoords = new ArrayList<>();
+    // 轨迹缩放比例
+    // Track scaling
+    private float scalingRatio;
+    // 控制是否绘制轨迹
+    // Control whether to draw the track
+    private boolean draw = true;
+    private boolean reDraw = false;
+    private float strokeWidth = 5f;
+    private static final int MAX_POINTS = 500;  // 限制最多 500 个轨迹点 Limited to 500 track points
+    private List<PointF> trajectoryPoints = new ArrayList<>();  // 存储轨迹点 Store track points
 
     /**
-     * Public default constructor for PathView. The constructor initialises the view with a context
-     * and attribute set, sets the view as focusable and focusable in touch mode and calls
-     * {@link PathView#setupPaint()} to initialise the paint object with colour and style.
+     * 构造函数：初始化 PathView
      *
-     * @param context   Application Context to be used for permissions and device accesses.
-     * @param attrs     The attribute set of the view.
+     * @param context 应用上下文
+     * @param attrs   视图属性
+     * Constructor: Initialize PathView
+     *
+     * @param context application context
+     * @param attrs view attributes
      */
     public PathView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -62,186 +62,206 @@ public class PathView extends View {
     }
 
     /**
-     * Method used for setting up paint object for drawing the path with colour and stroke styles.
+     * 设置画笔样式
+     * Set the brush style
      */
     private void setupPaint() {
-        drawPaint = new Paint();
-        // Set the color of the paint object to paintColor
-        drawPaint.setColor(paintColor);
-        // Enable anti-aliasing to smooth out the edges of the lines
-        drawPaint.setAntiAlias(true);
-        // Set the width of path
-        drawPaint.setStrokeWidth(5);
-        // Set the style of path to be drawn
-        drawPaint.setStyle(Paint.Style.STROKE);
-        // Set the type of join to use between line segments
-        drawPaint.setStrokeJoin(Paint.Join.ROUND);
-        // Set the type of cap to use at the end of the line
-        drawPaint.setStrokeCap(Paint.Cap.ROUND);
+        if (drawPaint == null) {
+            drawPaint = new Paint();
+        }
+        drawPaint.setColor(paintColor);  // 设置颜色 Setting Color
+        drawPaint.setAntiAlias(true);    // 抗锯齿（如果影响性能，可关闭）Anti-aliasing (can be turned off if it affects performance)
+        drawPaint.setStrokeWidth(strokeWidth);  // 设置线宽 Set line width
+        drawPaint.setStyle(Paint.Style.STROKE); // 仅绘制轮廓 Draw outline only
+        drawPaint.setStrokeJoin(Paint.Join.ROUND); // 线段连接方式 Segment connection method
+        drawPaint.setStrokeCap(Paint.Cap.ROUND);   // 线端点样式 Line Cap Style
     }
 
     /**
-     * {@inheritDoc}
-     *
-     * Method drawing the created path with our paint.
-     *
-     * @param canvas The canvas on which the path will be drawn
+     * 设置绘制颜色
      */
+    public void setPaintColor(int color) {
+        this.paintColor = color;
+        if (drawPaint != null) {
+            drawPaint.setColor(color);
+        }
+    }
+
+    /**
+     * 设置绘制线宽
+     */
+    public void setStrokeWidth(float width) {
+        this.strokeWidth = width;
+        if (drawPaint != null) {
+            drawPaint.setStrokeWidth(width);
+        }
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        //If drawing for first time scale trajectory to fit screen
-        if(this.draw){
-            // If there are no coordinates, don't draw anything
-            if (xCoords.size() == 0)
-                return;
 
-            //Scale trajectory to fit screen
-            scaleTrajectory();
+        // 如果轨迹为空，直接返回
+        // If the track is empty, return directly
+        if (xCoords.isEmpty()) return;
 
-            // Start a new path at the center of the view
-            path.moveTo(getWidth()/2, getHeight()/2);
+        path.reset();  // 清空旧路径 Clear old paths
 
-            // Draw line between last point and this point
+        if (reDraw) {
+            scaleTrajectory();  // 只有在重新绘制时才进行缩放计算 Scaling calculations are only performed when redrawing
+        }
+
+        // 轨迹起点应是 xCoords.get(0), yCoords.get(0)
+        // The starting point of the trajectory should be xCoords.get(0), yCoords.get(0)
+        path.moveTo(xCoords.get(0), yCoords.get(0));
+
+        if (reDraw) {
+            // 计算缩放后的坐标，避免修改原始数据
+            // Calculate the scaled coordinates to avoid modifying the original data
+            for (int i = 1; i < xCoords.size(); i++) {
+                float newX = (xCoords.get(i) - getWidth() / 2) * scalingRatio + getWidth() / 2;
+                float newY = (yCoords.get(i) - getHeight() / 2) * scalingRatio + getHeight() / 2;
+                path.lineTo(newX, newY);
+            }
+        } else {
+            // 普通绘制，使用原始坐标
+            // Normal drawing, using original coordinates
             for (int i = 1; i < xCoords.size(); i++) {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
-
-            //Draw path
-            canvas.drawPath(path, drawPaint);
-
-            //Ensure path not redrawn
-            draw = false;
-
         }
-        //If redrawing due to scaling of the average step length
-        else if(reDraw){
-            // If there are no coordinates, don't draw anything
-            if (xCoords.size() == 0)
-                return;
 
-            //Clear old path
-            path.reset();
+        // 绘制轨迹
+        // Draw the trajectory
+        canvas.drawPath(path, drawPaint);
 
-            // Iterate over all coordinates, shifting to the center and scaling then returning to original location
-            for (int i = 0; i < xCoords.size(); i++) {
-                float newXCoord = (xCoords.get(i) - getWidth()/2) * scalingRatio + getWidth()/2;
-                xCoords.set(i, newXCoord);
-                float newYCoord = (yCoords.get(i) - getHeight()/2) * scalingRatio + getHeight()/2;
-                yCoords.set(i, newYCoord);
-            }
-
-            // Start a new path at the center of the view
-            path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
-            }
-
-            canvas.drawPath(path, drawPaint);
-
-            //Ensure path not redrawn when screen is resized
-            reDraw = false;
-        }
-        else{
-
-            // If there are no coordinates, don't draw anything
-            if (xCoords.size() == 0)
-                return;
-
-            // Start a new path at the center of the view
-            path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
-            }
-
-            canvas.drawPath(path, drawPaint);
-        }
+        // 防止重复绘制
+        // Prevent repeated drawing
+        draw = false;
+        reDraw = false;
     }
 
     /**
-     * Method called from {@link SensorFusion} used for adding PDR coordinates to the path to be
-     * drawn.
-     *
-     * @param newCords An array containing the newly calculated coordinates to be added.
+     * 添加 PDR 轨迹坐标
+     * @param newCords 轨迹点坐标 (float[2])
+     * Add PDR track coordinates
+     * @param newCords track point coordinates (float[2])
      */
     public void drawTrajectory(float[] newCords) {
-        // Add x coordinates
-        xCoords.add(newCords[0]);
-        // Negate the y coordinate and add it to the yCoords list, since screen coordinates
-        // start from top to bottom
-        yCoords.add(-newCords[1]);
+        if (newCords == null || newCords.length < 2) return;  // 避免崩溃 Avoid crashes
+
+        // 保持列表大小不超过 MAX_POINTS
+        // Keep the list size no larger than MAX_POINTS
+        if (trajectoryPoints.size() >= MAX_POINTS) {
+            trajectoryPoints.remove(0);  // 删除最早的点 // Delete the earliest point
+        }
+
+        // 添加新轨迹点（Y 坐标取反适应屏幕坐标）
+        // Add a new track point (the Y coordinate is inverted to adapt to the screen coordinate)
+        trajectoryPoints.add(new PointF(newCords[0], -newCords[1]));
     }
 
     /**
-     * Method used for scaling PDR coordinates to fill the screen.
-     * Center of the view is used as the origin, scaling ratio is calculated for the path to fit
-     * the screen with margins included.
+     * 缩放 PDR 轨迹点，使其适应屏幕尺寸
+     * Scale PDR track points to fit screen size
      */
     private void scaleTrajectory() {
-        // Get the center coordinates of the view
+        if (xCoords.isEmpty() || yCoords.isEmpty()) return; // 避免空列表异常 Avoiding Empty List Exception
+
         int centerX = getWidth() / 2;
         int centerY = getHeight() / 2;
 
-        // Calculate the scaling that would be required in each direction
-        float xRightRange = (getWidth() / 2) / (Math.abs(Collections.max(xCoords)));
-        float xLeftRange = (getWidth() / 2) / (Math.abs(Collections.min(xCoords)));
-        float yTopRange = (getHeight() / 2) / (Math.abs(Collections.max(yCoords)));
-        float yBottomRange = (getHeight() / 2) / (Math.abs(Collections.min(yCoords)));
+        // 计算 X 和 Y 方向的最大值（确保不为 0）
+        // Calculate the maximum value in the X and Y directions (make sure it is not 0)
+        float xRightMax = Math.max(Math.abs(Collections.max(xCoords)), 0.1f);
+        float xLeftMax = Math.max(Math.abs(Collections.min(xCoords)), 0.1f);
+        float yTopMax = Math.max(Math.abs(Collections.max(yCoords)), 0.1f);
+        float yBottomMax = Math.max(Math.abs(Collections.min(yCoords)), 0.1f);
 
-        // Take the minimum scaling ratio to ensure all points fit within the view
+        // 计算缩放比例
+        // Calculate the scaling ratio
+        float xRightRange = (getWidth() / 2) / xRightMax;
+        float xLeftRange = (getWidth() / 2) / xLeftMax;
+        float yTopRange = (getHeight() / 2) / yTopMax;
+        float yBottomRange = (getHeight() / 2) / yBottomMax;
+
+        // 取最小缩放比例，保证所有点都适应屏幕
+        // Take the minimum scaling ratio to ensure that all points fit on the screen
         float minRatio = Math.min(Math.min(xRightRange, xLeftRange), Math.min(yTopRange, yBottomRange));
 
-        // Add margins to the scaling ratio
-        scalingRatio = 0.9f * minRatio;
+        // 预留 10% 边距，限制缩放比例
+        // Reserve 10% margin to limit the scaling ratio
+        scalingRatio = Math.max(0.5f, Math.min(0.9f * minRatio, 23.926f));
 
-        // Limit scaling ratio to an equivalent of zoom of 21 in google maps
-        if (scalingRatio >= 23.926) {
-            scalingRatio = 23.926f;
-        }
         System.out.println("Adjusted scaling ratio: " + scalingRatio);
 
-        // Set the scaling ratio for the correction fragment for setting Google Maps zoom
-        correctionFragment.setScalingRatio(scalingRatio);
+        // 计算缩放后的坐标
+        // Calculate the scaled coordinates
+        List<Float> scaledXCoords = new ArrayList<>();
+        List<Float> scaledYCoords = new ArrayList<>();
 
-        // Iterate over all coordinates, shifting to the center and scaling
         for (int i = 0; i < xCoords.size(); i++) {
-            float newXCoord = xCoords.get(i) * scalingRatio + centerX;
-            xCoords.set(i, newXCoord);
-            float newYCoord = yCoords.get(i) * scalingRatio + centerY;
-            yCoords.set(i, newYCoord);
+            scaledXCoords.add(xCoords.get(i) * scalingRatio + centerX);
+            scaledYCoords.add(yCoords.get(i) * scalingRatio + centerY);
         }
+
+        // 替换坐标列表
+        // Replace the coordinate list
+        xCoords = scaledXCoords;
+        yCoords = scaledYCoords;
     }
 
-    /**
-     * Method called when PathView is detached from its window. {@link PathView#xCoords} and
-     * {@link PathView#yCoords} are cleared so that path can start from 0 for next recording.
-     */
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        // Reset trajectory
-        xCoords.clear();
-        yCoords.clear();
-        //New recording so must scale trajectory
-        draw = true;
+
+        // 确保不为空后清空轨迹数据
+        // Make sure it is not empty and clear the track data
+        if (xCoords != null) xCoords.clear();
+        if (yCoords != null) yCoords.clear();
+
+        // 只有在有数据时才标记 `draw = true`
+        // Only mark `draw = true` if there is data
+        if (!xCoords.isEmpty() || !yCoords.isEmpty()) {
+            draw = true;
+        }
+
+        // 释放 `Paint` 资源（可选）
+        // Release `Paint` resources (optional)
+        drawPaint = null;
     }
 
     /**
-     * Redraw trajectory to rescale the path.
-     * Called by {@link CorrectionFragment} through {@link SensorFusion} to reset the scaling ratio
-     * which will resize the path. It enables the redraw flag so new path is drawn.
+     * 重新缩放路径
      *
-     * @param newScale
+     * @param newScale 新的缩放比例
+     * Rescale the path
+     *
+     * @param newScale new scale
      */
-    public void redraw(float newScale){
-        //Set scaling ratio based on user input
-        scalingRatio = newScale;
-        //Enable redrawing of path
+    public void redraw(float newScale) {
+        // 如果缩放比例几乎没有变化，则不触发重绘
+        // If the zoom ratio has hardly changed, no redraw is triggered
+        if (Math.abs(newScale - scalingRatio) < 0.01f) return;
+
+        // 限制缩放范围，防止过大或过小
+        // Limit the zoom range to prevent it from being too large or too small
+        if (newScale < 0.1f) {
+            scalingRatio = 0.1f;
+        } else if (newScale > 23.926f) {
+            scalingRatio = 23.926f;
+        } else {
+            scalingRatio = newScale;
+        }
+
+        // 标记 `reDraw = true`，让 `onDraw()` 重新缩放轨迹
+        // Mark `reDraw = true` to let `onDraw()` rescale the track
         reDraw = true;
+
+        // 立即刷新 UI
+        // Refresh the UI immediately
+        invalidate();
     }
+
 
 }

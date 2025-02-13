@@ -1,7 +1,6 @@
 package com.openpositioning.PositionMe.viewitems;
 
 import android.view.View;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -9,6 +8,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.fragments.UploadFragment;
 
 import java.lang.ref.WeakReference;
 
@@ -27,7 +27,9 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
     ImageButton uploadButton;
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
-    public Button deletebutton;
+    public ImageButton deletebutton;
+
+    public ImageButton replaybutton;
 
     /**
      * {@inheritDoc}
@@ -35,7 +37,7 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
      *
      * @param listener DownloadClickListener to enable acting on clicks on items.
      *
-     * @see com.openpositioning.PositionMe.fragments.UploadFragment locating the data and implementing the
+     * @see UploadFragment locating the data and implementing the
      * listener.
      */
     public UploadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
@@ -48,6 +50,17 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
 
         this.uploadButton.setOnClickListener(this);
         this.deletebutton = itemView.findViewById(R.id.deletebutton);
+
+        this.replaybutton = itemView.findViewById(R.id.replayTrajectoryButton);
+        this.replaybutton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                // call when the replay button is pressed
+                if (listenerReference.get() != null) {
+                    listenerReference.get().onReplayClicked(getAdapterPosition());
+                }
+            }
+        });
     }
 
     /**
