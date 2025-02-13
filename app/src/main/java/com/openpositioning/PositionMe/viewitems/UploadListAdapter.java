@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.openpositioning.PositionMe.viewitems.ReplayClickListener;
+
 /**
  * Adapter used for displaying local Trajectory file data
  *
@@ -28,6 +30,7 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
     private final Context context;
     private final List<File> uploadItems;
     private final DownloadClickListener listener;
+    private final ReplayClickListener replayListener;
 
     /**
      * Default public constructor with context for inflating views and list to be displayed.
@@ -38,10 +41,14 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
      *
      * @see com.openpositioning.PositionMe.Traj protobuf objects exchanged with the server.
      */
-    public UploadListAdapter(Context context, List<File> uploadItems, DownloadClickListener listener) {
+    public UploadListAdapter(Context context,
+                             List<File> uploadItems,
+                             DownloadClickListener listener,
+                             ReplayClickListener replayListener) {
         this.context = context;
         this.uploadItems = uploadItems;
         this.listener = listener;
+        this.replayListener = replayListener;
     }
 
     /**
@@ -73,6 +80,8 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
 
         // Set click listener for the delete button
         holder.deletebutton.setOnClickListener(v -> deleteFileAtPosition(position));
+        // Set click listener for the replay button
+        holder.replayButton.setOnClickListener(v -> launchReplayAtPosition(position));
 
     }
 
@@ -85,6 +94,14 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
         return uploadItems.size();
     }
 
+    private void launchReplayAtPosition(int position)
+    {
+        System.out.println("REPLAY: Beginning replay of file index=" + position);
+        Toast.makeText(context, "Replay pos="+position, Toast.LENGTH_SHORT).show();
+
+        File trajectoryFile = uploadItems.get(position);
+        replayListener.onReplayClicked(trajectoryFile);
+    }
     private void deleteFileAtPosition(int position)
     {
         if (position >= 0 && position < uploadItems.size())

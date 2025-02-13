@@ -8,8 +8,7 @@
     <fragment
         android:id="@+id/homeFragment"
         android:name="com.openpositioning.PositionMe.fragments.HomeFragment"
-        android:label="HomeFragment
-"
+        android:label="HomeFragment"
         tools:layout="@layout/fragment_home" >
         <action
             android:id="@+id/action_homeFragment_to_startLocationFragment"
@@ -77,6 +76,32 @@
             app:enterAnim="@anim/slide_in_left"
             app:exitAnim="@anim/slide_out_right" />
     </fragment>
+	
+	<fragment
+    android:id="@+id/replayFragment"
+    android:name="com.openpositioning.PositionMe.fragments.ReplayFragment"
+    android:label="Replay Trajectory">
+		<argument
+			android:name="trajectoryPath"
+			android:defaultValue="@null"
+			app:argType="string"
+			app:nullable="true" />
+		<argument
+			android:name="initialLat"
+			android:defaultValue="55.9533"
+			app:argType="float"/>
+		<argument
+			android:name="initialLon"
+			android:defaultValue="3.1883"
+			app:argType="float"/>
+		<action
+			android:id="@+id/action_replayFragment_to_uploadFragment"
+			app:destination="@id/uploadFragment" />
+		<action
+			android:id="@+id/action_replayFragment_to_homeFragment"
+			app:destination="@id/homeFragment" />
+	</fragment>
+	
     <fragment
         android:id="@+id/infoFragment"
         android:name="com.openpositioning.PositionMe.fragments.InfoFragment"
@@ -110,12 +135,31 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
-    </fragment><action android:id="@+id/action_global_correctionFragment" app:destination="@id/correctionFragment"/>
+		<action
+			android:id="@+id/action_filesFragment_to_replayFragment"
+			app:destination="@id/replayFragment">
+					<argument
+				android:name="trajectoryPath"
+				app:argType="string"
+				app:nullable="true" />
+		</action>
+		
+    </fragment>
+	<action android:id="@+id/action_global_correctionFragment" app:destination="@id/correctionFragment"/>
     <fragment
         android:id="@+id/uploadFragment"
         android:name="com.openpositioning.PositionMe.fragments.UploadFragment"
         android:label="fragment_upload"
-        tools:layout="@layout/fragment_upload" />
+        tools:layout="@layout/fragment_upload" >
+		<action
+        android:id="@+id/action_uploadFragment_to_replayFragment"
+        app:destination="@id/replayFragment">
+			<argument
+        android:name="trajectoryPath"
+        app:argType="string"
+        app:nullable="true" />
+		</action>
+	</fragment>
     <action
         android:id="@+id/action_global_settingsFragment"
         app:destination="@id/settingsFragment"
@@ -123,4 +167,5 @@
         app:exitAnim="@anim/slide_out_bottom"
         app:popEnterAnim="@anim/slide_in_bottom"
         app:popExitAnim="@anim/slide_in_top" />
+
 </navigation>

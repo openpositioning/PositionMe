@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+option java_package = "com.openpositioning.PositionMe";
+
 message Trajectory {
 string android_version = 1;
 repeated Motion_Sample imu_data = 2;
@@ -27,6 +29,8 @@ Sensor_Info rotation_vector_info = 14;
 Sensor_Info magnetometer_info = 15;
 Sensor_Info barometer_info = 16;
 Sensor_Info light_sensor_info = 17;
+
+Initial_Pos initial_pos = 18;
 
 }
 
@@ -146,4 +150,9 @@ message Sensor_Info {
     float power = 4;
     int32 version = 5;
     int32 type = 6;
+}
+
+message Initial_Pos{
+    float initial_latitude = 1;
+    float initial_longitude = 2;
 }

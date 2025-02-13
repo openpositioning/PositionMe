@@ -108,19 +108,19 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
         //Check Permissions
         if(ActivityCompat.checkSelfPermission(this,
-                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.CHANGE_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.CHANGE_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
                         Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED){
             askLocationPermissions();
@@ -254,14 +254,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
             );
         }
         else{
-            // Determine next step based on android version
-            // if android ver is lower than 13, check for storage permissions
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                askStoragePermission();
-            } else { // else skip storage permission check
-                askMotionPermissions();
-            }
-//            askStoragePermission();
+            // Check other permissions if present
+            askMotionPermissions();
         }
     }
 
@@ -374,11 +368,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
                         grantResults[1] == PackageManager.PERMISSION_GRANTED) {
                     Toast.makeText(this, "Permissions granted!", Toast.LENGTH_SHORT).show();
                     this.settings.edit().putBoolean("wifi", true).apply();
-                    // Check for storage permissions if android ver lower than 13
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                        askStoragePermission();
-                    }
-//                    askStoragePermission();
+                    askStoragePermission();
                 }
                 else {
                     if(!settings.getBoolean("permanentDeny", false)) {

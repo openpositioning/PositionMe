@@ -19,6 +19,7 @@
             android:text="@string/emptyUploadTitle"
             android:textSize="32sp"
             android:textStyle="bold"
+            android:gravity="center"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="@+id/uploadTrajectories"
             app:layout_constraintStart_toStartOf="parent"

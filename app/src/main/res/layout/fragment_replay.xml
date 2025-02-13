@@ -1,0 +1,413 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".fragments.RecordingFragment">
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/RecordingMap"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        tools:context=".MapsActivity" />
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        tools:ignore="ExtraText">
+
+        <!-- autoFloor Switch -->
+        <Switch
+            android:id="@+id/autoFloor"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="292dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/rounded_corner_pastel_blue"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="@string/auto_floor"
+            android:textColor="@color/black"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
+        -->
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guideline33"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:layout_constraintGuide_end="58dp" />
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guideline44"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:layout_constraintGuide_end="109dp" />
+
+
+        <!-- timeRemainingBar ProgressBar -->
+        <ProgressBar
+            android:id="@+id/timeRemainingBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="8dp"
+            android:elevation="2sp"
+            android:max="1800"
+            android:progress="0"
+            app:layout_constraintBottom_toTopOf="@+id/stopButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/currentPositionCard"
+            android:layout_width="411dp"
+            android:layout_height="60dp"
+            android:layout_marginTop="2dp"
+            app:cardBackgroundColor="@color/pastelBlue"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="8dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="357dp"
+                android:layout_height="50dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginEnd="52dp"
+                app:layout_constraintEnd_toEndOf="@+id/currentPositionCard"
+                app:layout_constraintTop_toTopOf="parent">
+
+                <TextView
+                    android:id="@+id/currentElevation"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/elevation"
+                    android:textColor="@color/LightYellow"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <TextView
+                    android:id="@+id/currentDistanceTraveled"
+                    android:layout_width="wrap_content"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/meter"
+                    android:textColor="@color/LightYellow"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    app:layout_constraintStart_toEndOf="@+id/distanceTravelledTitle"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <TextView
+                    android:id="@+id/distanceTravelledTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/distance_travelled"
+                    android:textColor="@color/LightYellow"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="0.05"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="@+id/currentElevation" />
+
+                <TextView
+                    android:id="@+id/gnssError"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginBottom="28dp"
+                    android:text="@string/gnss_error"
+                    android:textColor="@color/LightYellow"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:layout_constraintBottom_toBottomOf="@+id/currentDistanceTraveled"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="1.0"
+                    app:layout_constraintStart_toEndOf="@+id/currentElevation" />
+
+                <androidx.constraintlayout.widget.Guideline
+                    android:id="@+id/guideline4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    app:layout_constraintGuide_begin="20dp" />
+
+                <androidx.constraintlayout.widget.Guideline
+                    android:id="@+id/guideline6"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    app:layout_constraintGuide_begin="20dp" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <ImageView
+                android:id="@+id/redDot"
+                android:layout_width="48dp"
+                android:layout_height="43dp"
+                android:layout_marginStart="350dp"
+                android:layout_marginTop="6dp"
+                android:contentDescription="@string/recording"
+                android:src="@drawable/ic_baseline_red_dot_24" />
+
+
+        </androidx.cardview.widget.CardView>
+
+
+        <Spinner
+            android:id="@+id/mapSwitchSpinner"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="68dp"
+            android:background="@color/white"
+            android:spinnerMode="dropdown"
+            android:text="@string/choose_map"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorUpButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="32dp"
+            android:clickable="true"
+            android:contentDescription="@string/floor_up_button"
+            android:src="@android:drawable/arrow_up_float"
+            app:layout_constraintBottom_toTopOf="@+id/floorDownButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.954"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorDownButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="296dp"
+            android:clickable="true"
+            android:contentDescription="@string/floor_down_button"
+            android:src="@android:drawable/arrow_down_float"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.954"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <!-- gnssSwitch Switch -->
+        <Switch
+            android:id="@+id/gnssSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/rounded_corner_pastel_blue"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="@string/gnssSwitch"
+            android:textColor="@color/black"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
+
+        <!-- lineColorButton Button -->
+        <Button
+            android:id="@+id/lineColorButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="244dp"
+            android:layout_marginTop="2dp"
+            android:background="@drawable/rounded_button_black"
+            android:backgroundTint="@color/black"
+            android:text="@string/color"
+            app:layout_constraintStart_toEndOf="@+id/mapSwitchSpinner"
+            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
+
+        <!-- control layout -->
+        <LinearLayout
+            android:id="@+id/controlButtonsLayout"
+            android:layout_width="411dp"
+            android:layout_height="58dp"
+            android:background="@color/pastelBlue"
+
+            android:orientation="horizontal"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/guideline33">
+
+
+            <!-- leaveButton Button -->
+
+            <Button
+                android:id="@+id/leaveButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center_vertical"
+                android:background="@drawable/exit_icon"
+                android:contentDescription="@string/exit" />
+
+            <View
+                android:layout_width="97dp"
+                android:layout_height="match_parent" />
+
+            <Button
+                android:id="@+id/restartButton"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center_vertical"
+                android:background="@drawable/to_start"
+                android:contentDescription="@string/restart" />
+
+            <Button
+                android:id="@+id/playPauseButton"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_gravity="center_vertical"
+                android:background="@drawable/pause_icon"
+                android:contentDescription="@string/play_pause" />
+
+            <Button
+                android:id="@+id/goToEndButton"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center_vertical"
+                android:background="@drawable/to_end"
+                android:contentDescription="@string/go_to_end" />
+
+            <View
+                android:layout_width="145dp"
+                android:layout_height="match_parent" />
+
+        </LinearLayout>
+
+        <!-- progress layout -->
+
+        <!-- progress layout -->
+        <LinearLayout
+            android:id="@+id/progressLayout"
+            android:layout_width="424dp"
+            android:layout_height="51dp"
+            android:background="@color/pastelBlue"
+            android:gravity="bottom"
+            android:orientation="horizontal"
+            android:padding="16dp"
+            app:layout_constraintBottom_toTopOf="@id/guideline33"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="@id/guideline44">
+
+            <!-- Progress Bar -->
+            <ProgressBar
+                android:id="@+id/replayProgressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="100"
+                android:progress="0"
+                android:progressBackgroundTint="@color/lightGrey"
+                android:progressTint="@color/darkLogoBlue" />
+
+            <!-- Progress Text -->
+            <TextView
+                android:id="@+id/progressText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="0% "
+                android:textColor="@android:color/black"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guideline5"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:layout_constraintGuide_begin="729dp" />
+
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guideline2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:layout_constraintGuide_begin="469dp" />
+
+        <!-- magnetic Button -->
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/magneticButton"
+            android:layout_width="205dp"
+            android:layout_height="30dp"
+            android:layout_marginTop="5dp"
+            android:background="@drawable/rounded_button"
+            android:backgroundTint="@color/pastelBlue"
+            android:text="Magnometer Graph"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            app:layout_constraintBottom_toBottomOf="@id/progressLayout"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toStartOf="@id/gyroButton"
+            app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
+            app:layout_constraintVertical_bias="0.0" />
+
+        <com.github.mikephil.charting.charts.LineChart
+            android:id="@+id/lineChart"
+            android:layout_width="411dp"
+            android:layout_height="304dp"
+            android:background="@android:color/white"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="@id/magneticButton"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="1.0" />
+
+        <com.github.mikephil.charting.charts.LineChart
+            android:id="@+id/accChart"
+            android:layout_width="411dp"
+            android:layout_height="304dp"
+            android:background="@android:color/white"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="1.0" />
+
+        <!-- Accelerometer Button -->
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/gyroButton"
+            android:layout_width="205dp"
+            android:layout_height="30dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginEnd="206dp"
+            android:background="@drawable/rounded_button"
+            android:backgroundTint="@color/pastelBlue"
+            android:text="Acceleration Graph"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            app:layout_constraintBottom_toBottomOf="@id/progressLayout"
+            app:layout_constraintEnd_toEndOf="@id/magneticButton"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
+            app:layout_constraintVertical_bias="0.0" />
+
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</FrameLayout>

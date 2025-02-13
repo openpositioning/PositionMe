@@ -30,7 +30,7 @@
         android:theme="@style/Theme.Cloud">
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="@string/google_maps_key"/>
+            android:value="AIzaSyBG_MjF5_q-GqigF0j6sqLk-she_biAUrw"/>
         <activity
             android:name="com.openpositioning.PositionMe.MainActivity"
             android:exported="true"
