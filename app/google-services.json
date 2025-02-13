@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "409909178850",
+    "project_id": "cloud-b4ff2",
+    "storage_bucket": "cloud-b4ff2.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:409909178850:android:711b301da3007d4b2789bb",
+        "android_client_info": {
+          "package_name": "com.openpositioning.PositionMe"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "409909178850-3rhke46k35ckun93gseam9banmmkq2r4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCF7HYaO3ZrkXIy7tfMsk_oQheF_EZ5UMA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "409909178850-3rhke46k35ckun93gseam9banmmkq2r4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

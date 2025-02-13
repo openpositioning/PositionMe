@@ -1,0 +1,135 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory
+        app:icon="@drawable/ic_baseline_wifi_24"
+        app:title="@string/sync_header">
+
+        <SwitchPreferenceCompat
+            app:defaultValue="false"
+            app:key="mobile_sync"
+            app:summaryOff="@string/mobile_data_summary_off"
+            app:summaryOn="@string/mobile_data_summary_on"
+            app:title="@string/mobile_data_title" />
+
+
+        <SwitchPreferenceCompat
+            app:defaultValue="false"
+            app:key="split_trajectory"
+            app:summaryOff="@string/split_trajectory_summary_off"
+            app:summaryOn="@string/split_trajectory_summary_on"
+            app:title="@string/split_trajectory_title" />
+
+        <SeekBarPreference
+            android:max="30"
+            android:min="5"
+            app:defaultValue="10"
+            app:dependency="split_trajectory"
+            app:key="split_duration"
+            app:showSeekBarValue="true"
+            app:title="@string/split_trajectory_slider_title" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/user_header"
+        app:icon="@drawable/ic_baseline_directions_walk_24">
+
+        <SwitchPreferenceCompat
+            app:key="manual_step_values"
+            app:title="@string/manual_steps_title"
+            app:summaryOff="@string/manual_steps_summary_off"
+            app:summaryOn="@string/manual_steps_summary_on"
+            app:defaultValue="false"/>
+
+        <SeekBarPreference
+            app:key="user_step_length"
+            app:title="@string/step_title"
+            app:dependency="manual_step_values"
+            app:showSeekBarValue="true"
+            app:defaultValue="75"
+            android:max="150"
+            android:min="50"/>
+    </PreferenceCategory>
+
+
+    <PreferenceCategory android:title="@string/building_def_title"
+        app:icon="@drawable/ic_baseline_building_24">
+
+        <SeekBarPreference
+            app:key="floor_height"
+            app:title="@string/floor_height"
+            app:showSeekBarValue="true"
+            app:defaultValue="75"
+            android:max="10"/>
+    </PreferenceCategory>
+
+
+    <PreferenceCategory app:title="@string/constants_header"
+        app:icon="@drawable/ic_baseline_location_searching_24">
+
+        <SwitchPreferenceCompat
+            app:key="overwrite_constants"
+            app:title="@string/constants_enable_title"
+            app:summaryOff="@string/constants_summary_off"
+            app:summaryOn="@string/constants_summary_on"
+            app:defaultValue="false"/>
+
+        <EditTextPreference
+            android:id="@+id/weibergKInput"
+            android:inputType="number"
+            app:key="weiberg_k"
+            app:title="@string/weiberg_K_title"
+            app:dependency="overwrite_constants"
+            app:defaultValue="0.364"
+            android:summary="@string/weiberg_K" />
+
+        <EditTextPreference
+            android:id="@+id/elevationSecondsInput"
+            android:inputType="number"
+            app:key="elevation_seconds"
+            app:title="@string/elevation_seconds_title"
+            app:dependency="overwrite_constants"
+            app:defaultValue="4"
+            android:summary="@string/elevation_seconds" />
+
+        <EditTextPreference
+            android:id="@+id/accelSamplesInput"
+            android:inputType="number"
+            app:key="accel_samples"
+            app:title="@string/accel_samples_title"
+            app:dependency="overwrite_constants"
+            app:defaultValue="100"
+            android:summary="@string/accel_samples" />
+
+        <EditTextPreference
+            android:id="@+id/epsilonInput"
+            android:inputType="number"
+            app:key="epsilon"
+            app:title="@string/movement_epsilon_title"
+            app:dependency="overwrite_constants"
+            app:defaultValue="0.18"
+            android:summary="@string/movement_epsilon" />
+
+        <EditTextPreference
+            android:id="@+id/accelFilterInput"
+            android:inputType="number"
+            app:key="accel_filter"
+            app:title="@string/filter_coefficient_title"
+            app:dependency="overwrite_constants"
+            app:defaultValue="0.96"
+            android:summary="@string/filter_coefficient" />
+
+        <EditTextPreference
+            android:id="@+id/wifiIntervalInput"
+            android:inputType="number"
+            app:key="wifi_interval"
+            app:title="@string/wifi_scan_title"
+            app:dependency="overwrite_constants"
+            app:defaultValue="5"
+            android:summary="@string/wifi_scan_interval" />
+
+    </PreferenceCategory>
+
+
+
+</PreferenceScreen>

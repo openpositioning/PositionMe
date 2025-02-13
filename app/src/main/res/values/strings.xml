@@ -1,0 +1,131 @@
+<resources>
+    <string name="app_name">PositionMe</string>
+
+    <!-- Buttons -->
+    <string name="done">Done</string>
+    <string name="stop">Stop</string>
+    <string name="start">Start</string>
+    <string name="measurements">Live data</string>
+    <string name="files">Files</string>
+    <string name="info_description">See sensor hardware information</string>
+    <string name="refresh_read">Refresh readings</string>
+    <string name="download">Download</string>
+    <string name="grant">Grant permissions</string>
+    <string name="exit">Exit application</string>
+    <string name="ok">Ok</string>
+    <string name="show_storage">Show locally</string>
+    <string name="setLocation">Set</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- Sensors -->
+    <string name="accelerometer">Accelerometer</string>
+    <string name="gravity">Gravity</string>
+    <string name="magnetic">Magnetic field</string>
+    <string name="gyro">Gyroscope</string>
+    <string name="light">Light sensor</string>
+    <string name="pressure">Pressure sensor</string>
+    <string name="proximity">Proximity sensor</string>
+    <string name="gnssLatLong">GNSS (Lat/Long)</string>
+    <string name="gnss">GNSS</string>
+    <string name="pdr_pos">PDR Position</string>
+    <string name="pdr">Pedestrian Dead Reckoning</string>
+    <string name="wifi">WiFi Networks</string>
+
+
+    <!-- Misc -->
+    <string name="x">X: %1s</string>
+    <string name="y">Y: %1s</string>
+    <string name="z">Z: %1s</string>
+    <string name="level">Level: %1s</string>
+    <string name="lati">Lat: %1s</string>
+    <string name="longi">Long: %1s</string>
+    <string name="position">PDR Position</string>
+    <string name="id">ID</string>
+    <string name="datetime">Date&amp;Time</string>
+    <string name="elevation">Elevation: %1s</string>
+    <string name="averageStepLgn">Avg. Step Length</string>
+    <string name="correctStepLgn">Enter corrected length</string>
+    <string name="locationInstructions">Long press and drag the marker to your start location</string>
+    <string name="correctionInstructions">Zoom, scroll and rotate the map to correct the path</string>
+
+    <!-- Sensor Info -->
+    <string name="vendor">Vendor:\t\t\t\t\t\t\t %1$s</string>
+    <string name="resolution">Resolution:\t\t %1$s</string>
+    <string name="power">Power:\t\t\t\t\t\t\t\t %1$s</string>
+    <string name="version">Version:\t\t\t\t\t\t %1$s</string>
+    <string name="mac">MAC: %1$s</string>
+
+    <!-- Preference Titles -->
+    <string name="settings_title">Settings</string>
+    <string name="sensor_header">Sensors</string>
+    <string name="sync_header">Sync</string>
+    <string name="user_header">User information</string>
+    <string name="constants_header">Constants</string>
+
+    <!-- Content Descriptions -->
+    <string name="recording">Recording in progress</string>
+    <string name="distance_travelled">Distance travelled:</string>
+    <string name="uploadTitle">Manual upload</string>
+    <string name="emptyUploadTitle">No trajectories to upload</string>
+
+    <!-- Units only -->
+    <string name="meter">%1$s m</string>
+    <string name="db">%1$s dB</string>
+
+    <!-- Sync Preferences -->
+    <string name="time_title">Sync frequency</string>
+    <string name="split_trajectory_title">Automatically split records</string>
+    <string name="split_trajectory_summary_off">Trajectories are saved start to finish</string>
+    <string name="split_trajectory_summary_on">Trajectories are split based on slider</string>
+    <string name="split_trajectory_slider_title">Max number of minutes per recording</string>
+    <string name="title_activity_settings">SettingsActivity</string>
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <!-- User data Preferences -->
+    <string name="manual_steps_title">Use manual stride length</string>
+    <string name="manual_steps_summary_off">The app will estimate stride length from the accelerometer readings</string>
+    <string name="manual_steps_summary_on">The app will use the values provided below</string>
+    <string name="height_title">User height (cm)</string>
+    <string name="step_title">Step length (cm)</string>
+    <!-- Constants Preferences -->
+    <string name="constants_enable_title">Edit the constants used</string>
+    <string name="constants_summary_off">The app will use the default constants</string>
+    <string name="constants_summary_on">The app will use the values provided below</string>
+    <string name="weiberg_K_title">Weiberg K</string>
+    <string name="weiberg_K">K used in the Weiberg stride length estimation</string>
+    <string name="elevation_seconds_title">Elevation seconds</string>
+    <string name="elevation_seconds">Number of samples in the elevation buffer</string>
+    <string name="accel_samples">Number of samples in the vertical/horizontal movement buffer</string>
+    <string name="accel_samples_title">Accelerometer Samples</string>
+    <string name="movement_epsilon_title">\u03B5</string>
+    <string name="movement_epsilon">Minimum accelerometer magnitude for movement</string>
+    <string name="filter_coefficient">Coefficient for fusing gyro-based and magnetometer-based orientation. [0,1]</string>
+    <string name="filter_coefficient_title">Orientation filter coefficient</string>
+    <string name="wifi_scan_interval">Scan interval for wifi networks. A scan takes approximately two seconds.</string>
+    <string name="wifi_scan_title">WiFi interval</string>
+    <!-- Mobile data Preferences -->
+    <string name="mobile_data_title">Sync using mobile data</string>
+    <string name="mobile_data_summary_off">The app will only send data through a WiFi connection</string>
+    <string name="mobile_data_summary_on">The app will send data over mobile or WiFi connections</string>
+    <!-- Building defaults -->
+    <string name="building_def_title">Default building assumptions</string>
+    <string name="floor_height">Floor height in meters</string>
+    <string name="color">Color</string>
+    <string name="gnssSwitch">GNSS</string>
+    <string name="floor_down_button">Floor Down button</string>
+    <string name="floor_up_button">Floor Up button</string>
+    <string name="choose_map">Choose Map</string>
+    <string name="auto_floor">Auto Floor</string>
+    <string name="gnss_error">GNSS error:</string>
+    <string name="satellite">Satellite</string>
+    <string name="normal">Normal</string>
+    <string name="hybrid">Hybrid</string>
+    <string name="delete_button">Delete</string>
+
+    <string name="restart">Restart</string>
+    <string name="replay_trajectory">Replay trajectory</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="Current_Floor">Current floor:</string>
+    <string name="Cur_floor">Current Floor</string>
+
+</resources>

@@ -1,0 +1,35 @@
+<resources>
+    <!-- Time Preference -->
+    <string-array name="time_entries">
+        <item>Hourly</item>
+        <item>Daily</item>
+        <item>Weekly</item>
+    </string-array>
+
+    <string-array name="time_values">
+        <item>hour</item>
+        <item>day</item>
+        <item>week</item>
+    </string-array>
+
+    <!-- Sensor Preference -->
+    <string-array name="sensor_entries">
+        <item>Gyroscope</item>
+        <item>Accelerometer</item>
+        <item>Magnetometer</item>
+        <item>GPS</item>
+        <item>Bluetooth</item>
+        <item>Cellular</item>
+        <item>WiFi</item>
+    </string-array>
+
+    <string-array name="sensor_values">
+        <item>gyro</item>
+        <item>acc</item>
+        <item>mag</item>
+        <item>gps</item>
+        <item>blt</item>
+        <item>cell</item>
+        <item>wifi</item>
+    </string-array>
+</resources>

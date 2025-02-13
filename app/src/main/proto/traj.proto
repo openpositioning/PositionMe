@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+message Trajectory {
+string android_version = 1;
+repeated Motion_Sample imu_data = 2;
+repeated Pdr_Sample pdr_data = 3;
+repeated Position_Sample position_data = 4;
+repeated Pressure_Sample pressure_data = 5;
+repeated Light_Sample light_data = 6;
+
+repeated GNSS_Sample gnss_data = 7;
+repeated WiFi_Sample wifi_data = 8;
+repeated AP_Data aps_data = 9;
+
+// UNIX timestamp (in milliseconds) recorded from the start of this
+// trajectory data collection event. All future
+// timestamps in sub classes are to be RELATIVE timestamps
+// (in milliseconds) to this start time.
+// E.g.
+// start_timestamp = 1674819807315 (UTC 27 Jan 2023 in the morning)
+// relative_timestamp = 3000 (3s)
+int64 start_timestamp = 10;
+string data_identifier = 11;
+Sensor_Info accelerometer_info = 12;
+Sensor_Info gyroscope_info = 13;
+Sensor_Info rotation_vector_info = 14;
+Sensor_Info magnetometer_info = 15;
+Sensor_Info barometer_info = 16;
+Sensor_Info light_sensor_info = 17;
+
+}
+
+message Pdr_Sample {
+// milliseconds from the start_timestamp
+int64 relative_timestamp = 1;
+
+// Both in metres. You should implement an algorithm to estimate
+// these values. The values are always relative to your start point
+// so the first entry should always be x = 0.0, y = 0.0
+float x = 2;
+float y = 3;
+}
+
+
+message Motion_Sample {
+    // milliseconds
+    int64 relative_timestamp = 1;
+    // m/s^2
+    float acc_x = 2;
+    float acc_y = 3;
+    float acc_z = 4;
+
+    // radians/s
+    float gyr_x = 5;
+    float gyr_y = 6;
+    float gyr_z = 7;
+
+    // unitless, 4 components should sum to ~1
+    float rotation_vector_x = 8;
+    float rotation_vector_y = 9;
+    float rotation_vector_z = 10;
+    float rotation_vector_w = 11;
+
+    // Integer
+    int32 step_count = 12;
+}
+
+message Position_Sample {
+    int64 relative_timestamp = 1;
+
+    // uT
+    float mag_x = 2;
+    float mag_y = 3;
+    float mag_z = 4;
+}
+
+message Pressure_Sample {
+    int64 relative_timestamp = 1;
+
+    // mbar
+    float pressure = 2;
+
+}
+message Light_Sample {
+    int64 relative_timestamp = 1;
+    // lux
+    float light = 2;
+}
+message GNSS_Sample {
+    int64 relative_timestamp = 1;
+
+    // degrees (minimum 6 significant figures)
+    // latitude between -90 and 90
+    float latitude = 2;
+
+    // longitude between -180 and 180
+    float longitude = 3;
+
+    //metres
+    float altitude = 4;
+
+    // metres
+    float accuracy = 5;
+
+    // m/s
+    float speed = 6;
+
+    // e.g 'gps' or 'network'
+    string provider = 7;
+}
+
+message WiFi_Sample {
+    int64 relative_timestamp = 1;
+    repeated Mac_Scan mac_scans = 2;
+
+}
+
+message Mac_Scan {
+    int64 relative_timestamp = 1;
+
+    // Integer encoding of the hex mac address
+    // e.g. 207394925843984
+    int64 mac = 2;
+
+    // rssi integer in dBm.
+    // typically between -120 and -10
+    int32 rssi = 3;
+}
+
+message AP_Data {
+    // Integer encoding of the hex mac address
+    // e.g. 207394925843984
+    int64 mac = 1;
+
+    // E.g. 'Eduroam' or 'Starbucks_free_wifi'
+    string ssid = 2;
+
+    // Typically 2.4GHz or 5GHz
+    int64 frequency = 3;
+}
+
+message Sensor_Info {
+    string name = 1;
+    string vendor = 2;
+    float resolution = 3;
+    float power = 4;
+    int32 version = 5;
+    int32 type = 6;
+}

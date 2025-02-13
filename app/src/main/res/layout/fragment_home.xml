@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".fragments.HomeFragment">
+
+
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/sensorInfoButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="16dp"
+            android:clickable="true"
+            android:contentDescription="@string/info_description"
+            android:src="@drawable/ic_baseline_info_24"
+            app:backgroundTint="?attr/colorPrimaryVariant"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:tint="@color/white" />
+
+        <Button
+            android:id="@+id/startStopButton"
+            android:layout_width="300dp"
+            android:layout_height="300dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="24dp"
+            android:background="@drawable/round_button"
+            android:enabled="false"
+            android:paddingStart="15dp"
+            android:paddingTop="5dp"
+            android:paddingBottom="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/start"
+            android:textColor="@color/LightYellow"
+            android:textSize="18dp"
+            android:textStyle="bold"
+            app:icon="@drawable/ic_baseline_directions_walk_24"
+            app:iconGravity="textTop"
+            app:iconSize="170dp"
+            app:layout_constraintBottom_toTopOf="@+id/otherButtonLayout"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <LinearLayout
+            android:id="@+id/otherButtonLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/startStopButton">
+
+            <Button
+                android:id="@+id/measurementButton"
+                android:layout_width="165dp"
+                android:layout_height="150dp"
+                android:layout_marginEnd="12dp"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="6dp"
+                android:background="@drawable/rounded_corner"
+                android:scaleType="centerCrop"
+                android:text="@string/measurements"
+                app:icon="@drawable/ic_baseline_data_array_24"
+                app:iconGravity="textTop"
+                app:iconSize="50dp" />
+
+            <Button
+                android:id="@+id/filesButton"
+                android:layout_width="165dp"
+                android:layout_height="150dp"
+                android:layout_marginStart="12dp"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="6dp"
+                android:background="@drawable/rounded_corner"
+                android:scaleType="centerCrop"
+                android:text="@string/files"
+                app:icon="@drawable/ic_baseline_folder_24"
+                app:iconGravity="textTop"
+                app:iconSize="50dp" />
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</FrameLayout>
