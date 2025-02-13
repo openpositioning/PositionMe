@@ -21,6 +21,9 @@
         app:layout_constraintTop_toTopOf="parent" />
 
 
+    <!-- PDR Indicator (Red) -->
+
+
 
     <Button
         android:id="@+id/viewStatsButton"
@@ -197,5 +200,82 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.871" />
+
+    <!-- PDR Indicator (Red) with Background -->
+
+    <!-- PDR Label with Background -->
+
+    <!-- GNSS Indicator (Blue) with Background -->
+
+    <TextView
+        android:id="@+id/pdrIndicator"
+        android:layout_width="23dp"
+        android:layout_height="23dp"
+        android:background="@color/red"
+        android:gravity="center"
+        android:padding="4dp"
+        android:text=" "
+        android:textSize="1sp"
+        app:layout_constraintBottom_toBottomOf="@+id/buttonContainer"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.018"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.167" />
+
+    <!-- GNSS Label with Background -->
+
+    <TextView
+        android:id="@+id/pdrLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/rounded_background2"
+        android:gravity="center"
+        android:padding="6dp"
+        android:text="PDR Data"
+        android:textColor="@android:color/black"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.102"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.157" />
+
+    <TextView
+        android:id="@+id/gnssIndicator"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:background="@color/pastelBlue"
+        android:gravity="center"
+        android:padding="4dp"
+        android:text=" "
+        android:textSize="1sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.018"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.104" />
+
+    <TextView
+        android:id="@+id/gnssLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/rounded_background2"
+        android:gravity="center"
+        android:padding="6dp"
+        android:text="GNSS Data"
+        android:textColor="@android:color/black"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.106"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.100" />
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>
