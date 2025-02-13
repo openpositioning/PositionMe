@@ -13,6 +13,7 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
+import androidx.cardview.widget.CardView;
 
 import com.openpositioning.PositionMe.R;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -73,66 +74,36 @@ public class HomeFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-
-        // Button to navigate to Sensor Info display fragment
-        this.goToInfo = getView().findViewById(R.id.sensorInfoButton);
-        this.goToInfo.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Navigate to the {@link InfoFragment} using AndroidX Jetpack
-             */
-            @Override
-            public void onClick(View view) {
-                NavDirections action = HomeFragmentDirections.actionHomeFragmentToInfoFragment();
-                Navigation.findNavController(view).navigate(action);
-            }
+        
+        // 获取各个按钮
+        Button startStopButton = view.findViewById(R.id.startStopButton);
+        FloatingActionButton sensorInfoButton = view.findViewById(R.id.sensorInfoButton);
+        Button measurementButton = view.findViewById(R.id.measurementButton);
+        Button filesButton = view.findViewById(R.id.filesButton);
+        
+        // 设置点击监听器
+        startStopButton.setOnClickListener(v -> {
+            NavDirections action = HomeFragmentDirections.actionHomeFragmentToStartLocationFragment();
+            Navigation.findNavController(v).navigate(action);
         });
-
-        // Button to start a recording session. Only enable if all relevant permissions are granted.
-        this.start = getView().findViewById(R.id.startStopButton);
-        start.setEnabled(!PreferenceManager.getDefaultSharedPreferences(getContext())
+        
+        sensorInfoButton.setOnClickListener(v -> {
+            NavDirections action = HomeFragmentDirections.actionHomeFragmentToInfoFragment();
+            Navigation.findNavController(v).navigate(action);
+        });
+        
+        measurementButton.setOnClickListener(v -> {
+            NavDirections action = HomeFragmentDirections.actionHomeFragmentToMeasurementsFragment();
+            Navigation.findNavController(v).navigate(action);
+        });
+        
+        filesButton.setOnClickListener(v -> {
+            NavDirections action = HomeFragmentDirections.actionHomeFragmentToFilesFragment();
+            Navigation.findNavController(v).navigate(action);
+        });
+        
+        // 设置开始按钮的启用状态
+        startStopButton.setEnabled(!PreferenceManager.getDefaultSharedPreferences(getContext())
                 .getBoolean("permanentDeny", false));
-        this.start.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Navigate to the {@link StartLocationFragment} using AndroidX Jetpack. Hides the
-             * action bar so the map appears on the full screen.
-             */
-            @Override
-            public void onClick(View view) {
-                NavDirections action = HomeFragmentDirections.actionHomeFragmentToStartLocationFragment();
-                Navigation.findNavController(view).navigate(action);
-                //Show action bar
-                ((AppCompatActivity)getActivity()).getSupportActionBar().hide();
-            }
-        });
-
-        // Button to navigate to display of current sensor recording values
-        this.measurements = getView().findViewById(R.id.measurementButton);
-        this.measurements.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Navigate to the {@link MeasurementsFragment} using AndroidX Jetpack.
-             */
-            @Override
-            public void onClick(View view) {
-                NavDirections action = HomeFragmentDirections.actionHomeFragmentToMeasurementsFragment();
-                Navigation.findNavController(view).navigate(action);
-            }
-        });
-
-        // Button to navigate to the file system showing previous recordings
-        this.files = getView().findViewById(R.id.filesButton);
-        this.files.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Navigate to the {@link FilesFragment} using AndroidX Jetpack.
-             */
-            @Override
-            public void onClick(View view) {
-                NavDirections action = HomeFragmentDirections.actionHomeFragmentToFilesFragment();
-                Navigation.findNavController(view).navigate(action);
-            }
-        });
     }
 }

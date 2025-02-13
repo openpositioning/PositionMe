@@ -12,14 +12,14 @@ public class NucleusBuildingManager {
     private ArrayList<LatLng> buildingPolygon;
 
     public NucleusBuildingManager(GoogleMap map) {
-        // The nuclear building has 5 floors
+// The nuclear building has 5 floors
         indoorMapManager = new IndoorMapManager(map, 5);
 
-        // southwest corner
+// southwest corner
         double N1 = 55.92279;
         double W1 = 3.174643;
 
-        // Northeast corner
+// Northeast corner
         double N2 = 55.92335;
         double W2 = 3.173829;
 

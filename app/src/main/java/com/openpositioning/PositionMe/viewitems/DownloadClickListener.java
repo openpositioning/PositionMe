@@ -14,4 +14,11 @@ public interface DownloadClickListener {
      */
     void onPositionClicked(int position);
 
+    /**
+     * Function executed when the replay button is clicked.
+     *
+     * @param position  integer position of the item in the list.
+     */
+    void onReplayClicked(int position);
+
 }

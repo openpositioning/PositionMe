@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.location.Location;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
@@ -33,6 +34,8 @@ import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
 
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -50,6 +53,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.utils.LocationLogger;
 
 import java.util.List;
 
@@ -78,12 +82,14 @@ public class RecordingFragment extends Fragment {
     private ImageView recIcon;
     //Loading bar to show time remaining before recording automatically ends
     private ProgressBar timeRemaining;
-    //Text views to display distance travelled and elevation since beginning of recording
+    // Text views to display distance travelled and elevation since beginning of recording
 
     private TextView elevation;
     private TextView distanceTravelled;
     // Text view to show the error between current PDR and current GNSS
     private TextView gnssError;
+    // 初始化楼层显示文本框
+    private TextView floorTextView;
 
     //App settings
     private SharedPreferences settings;
@@ -130,6 +136,10 @@ public class RecordingFragment extends Fragment {
     // Switch used to set auto floor
     private Switch autoFloor;
 
+    private LocationLogger locationLogger;
+
+    private LocationCallback locationCallback;
+
     /**
      * Public Constructor for the class.
      * Left empty as not required
@@ -151,6 +161,9 @@ public class RecordingFragment extends Fragment {
         Context context = getActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.refreshDataHandler = new Handler();
+        
+        // 初始化 LocationLogger
+        this.locationLogger = new LocationLogger(context);
     }
 
     /**
@@ -207,7 +220,8 @@ public class RecordingFragment extends Fragment {
                 // Adding polyline to map to plot real-time trajectory
                 PolylineOptions polylineOptions=new PolylineOptions()
                         .color(Color.RED)
-                        .add(currentLocation);
+                        .add(currentLocation)
+                        .zIndex(1000f);
                 polyline = gMap.addPolyline(polylineOptions);
                 // Setting current location to set Ground Overlay for indoor map (if in building)
                 indoorMapManager.setCurrentLocation(currentLocation);
@@ -262,6 +276,9 @@ public class RecordingFragment extends Fragment {
             @Override
             public void onClick(View view) {
                 if(autoStop != null) autoStop.cancel();
+                Log.d("RecordingFragment", "Saving trajectory file...");
+                locationLogger.saveToFile();
+                Log.d("RecordingFragment", "Trajectory file saved");
                 sensorFusion.stopRecording();
                 NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
                 Navigation.findNavController(view).navigate(action);
@@ -419,6 +436,60 @@ public class RecordingFragment extends Fragment {
             // No time limit - use a repeating task to refresh UI.
             this.refreshDataHandler.post(refreshDataTask);
         }
+
+        // 在位置更新时记录
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                if (locationResult == null) {
+                    return;
+                }
+                
+                for (Location location : locationResult.getLocations()) {
+                    // 记录位置
+                    locationLogger.logLocation(
+                        location.getTime(),
+                        location.getLatitude(),
+                        location.getLongitude()
+                    );
+                    
+                    // 其他处理...
+                }
+            }
+        };
+
+        // 初始化楼层显示文本框
+        this.floorTextView = getView().findViewById(R.id.Floor);
+
+        // 添加状态改变监听器
+        autoFloor.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                Log.d("AutoFloor", "Switch state changed to: " + isChecked);
+                
+                if (indoorMapManager == null) {
+                    Log.d("AutoFloor", "IndoorMapManager is null");
+                    return;
+                }
+                
+                if (!indoorMapManager.getIsIndoorMapSet()) {
+                    Log.d("AutoFloor", "No indoor map is currently set");
+                    return;
+                }
+                
+                if (isChecked) {
+                    // 直接使用 SensorFusion 中的当前楼层
+                    int currentFloor = sensorFusion.getCurrentFloor();
+                    Log.d("AutoFloor", String.format(
+                        "Switch ON - Using SensorFusion floor: %d",
+                        currentFloor
+                    ));
+                    indoorMapManager.resumeAutoFloor(currentFloor);
+                } else {
+                    Log.d("AutoFloor", "Switch turned OFF");
+                }
+            }
+        });
     }
 
     /**
@@ -515,27 +586,39 @@ public class RecordingFragment extends Fragment {
         }
         //  Updates current location of user to show the indoor floor map (if applicable)
         indoorMapManager.setCurrentLocation(currentLocation);
-        float elevationVal = sensorFusion.getElevation();
-        // Display buttons to allow user to change floors if indoor map is visible
-        if(indoorMapManager.getIsIndoorMapSet()){
+        
+        // 如果在室内且自动楼层开启，持续更新楼层
+        if (indoorMapManager.getIsIndoorMapSet()) {
             setFloorButtonVisibility(View.VISIBLE);
-            // Auto-floor logic
-            if(autoFloor.isChecked()){
-                indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-                ,true);
+            if (autoFloor.isChecked()) {
+                // 直接使用 SensorFusion 中的当前楼层
+                int currentFloor = sensorFusion.getCurrentFloor();
+                Log.d("AutoFloor", "Auto updating - Current floor: " + currentFloor);
+                indoorMapManager.setCurrentFloor(currentFloor, true);
             }
-        }else{
-            // Hide the buttons and switch used to change floor if indoor map is not visible
+            floorTextView.setText(sensorFusion.getFloorDisplay());
+        } else {
             setFloorButtonVisibility(View.GONE);
+            floorTextView.setText(sensorFusion.getFloorDisplay());
         }
         // Store previous PDR values for next call
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
         // Display elevation
-        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
+        elevation.setText(getString(R.string.elevation, String.format("%.1f", sensorFusion.getElevation())));
         //Rotate compass Marker according to direction of movement
         if (orientationMarker!=null) {
             orientationMarker.setRotation((float) Math.toDegrees(sensorFusion.passOrientation()));
+        }
+
+        // 在位置更新时记录到 LocationLogger
+        if (currentLocation != null) {
+            Log.d("RecordingFragment", "Recording location: " + currentLocation.latitude + ", " + currentLocation.longitude);
+            locationLogger.logLocation(
+                System.currentTimeMillis(),
+                currentLocation.latitude,
+                currentLocation.longitude
+            );
         }
     }
     /**
@@ -546,20 +629,24 @@ public class RecordingFragment extends Fragment {
         if (currentLocation!=null){
             // Calculate new position based on net PDR movement
             nextLocation=UtilFunctions.calculateNewPos(currentLocation,pdrMoved);
-                //Try catch to prevent exceptions from crashing the app
-                try{
-                    // Adds new location to polyline to plot the PDR path of user
-                    List<LatLng> pointsMoved = polyline.getPoints();
-                    pointsMoved.add(nextLocation);
-                    polyline.setPoints(pointsMoved);
-                    // Change current location to new location and zoom there
-                    orientationMarker.setPosition(nextLocation);
-                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
-                }
-                catch (Exception ex){
-                    Log.e("PlottingPDR","Exception: "+ex);
-                }
-                currentLocation=nextLocation;
+            //Try catch to prevent exceptions from crashing the app
+            try{
+                // Adds new location to polyline to plot the PDR path of user
+                List<LatLng> pointsMoved = polyline.getPoints();
+                pointsMoved.add(nextLocation);
+                polyline.setPoints(pointsMoved);
+                // 设置轨迹线的 zIndex 为较大值,确保显示在地图覆盖层上方
+                polyline.setZIndex(1000f);
+                // Change current location to new location and zoom there
+                orientationMarker.setPosition(nextLocation);
+                // 设置位置标记的 zIndex 也为较大值
+                orientationMarker.setZIndex(1000f);
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
+            }
+            catch (Exception ex){
+                Log.e("PlottingPDR","Exception: "+ex);
+            }
+            currentLocation=nextLocation;
         }
         else{
             //Initialise the starting location
@@ -615,5 +702,21 @@ public class RecordingFragment extends Fragment {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
         super.onResume();
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (locationLogger != null) {
+            locationLogger.saveToFile();
+        }
+    }
+
+    private void stopRecording() {
+        // ...
+        if (locationLogger != null) {
+            locationLogger.saveToFile();
+        }
+        // ...
     }
 }

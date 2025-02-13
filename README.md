@@ -1,3 +1,5 @@
+# PositionMe -
+
 # PositionMe
 Indoor poistioning data collection application created for the University of Edinburgh's Embedded Wireless course. 
 

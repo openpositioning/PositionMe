@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.viewitems;
 
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -19,11 +20,12 @@ import java.lang.ref.WeakReference;
  *
  * @author Mate Stodulka
  */
-public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener{
+public class TrajDownloadViewHolder extends RecyclerView.ViewHolder {
 
-    TextView trajId;
-    TextView trajDate;
-    ImageButton downloadButton;
+    public TextView trajId;
+    public TextView trajDate;
+    public ImageButton downloadButton;
+    public Button replayButton;
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
 
@@ -36,23 +38,35 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
      * @see com.openpositioning.PositionMe.fragments.FilesFragment generating the data and implementing the
      * listener.
      */
-    public TrajDownloadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
+    public TrajDownloadViewHolder(@NonNull View itemView, final DownloadClickListener listener) {
         super(itemView);
         this.listenerReference = new WeakReference<>(listener);
         this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
         this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
         this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
+        this.replayButton = itemView.findViewById(R.id.replayTrajectoryButton);
 
-        this.downloadButton.setOnClickListener(this);
-    }
+        // 设置点击监听器
+        downloadButton.setOnClickListener(v -> {
+            if (listener != null) {
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    listener.onPositionClicked(position);
+                }
+            }
+        });
 
+        replayButton.setOnClickListener(v -> {
+            if (listener != null) {
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    listener.onReplayClicked(position);
+                }
+            }
+        });
 
-    /**
-     * {@inheritDoc}
-     * Calls the onPositionClick function on the listenerReference object.
-     */
-    @Override
-    public void onClick(View view) {
-        listenerReference.get().onPositionClicked(getAdapterPosition());
+        // 初始状态：显示下载按钮，隐藏播放按钮
+        downloadButton.setVisibility(View.VISIBLE);
+        replayButton.setVisibility(View.GONE);
     }
 }

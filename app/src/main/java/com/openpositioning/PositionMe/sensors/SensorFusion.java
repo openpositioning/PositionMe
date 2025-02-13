@@ -15,11 +15,14 @@ import android.util.Log;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.BuildingPolygon;
+import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.MainActivity;
 import com.openpositioning.PositionMe.PathView;
 import com.openpositioning.PositionMe.PdrProcessing;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
+import com.openpositioning.PositionMe.utils.LocationLogger;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -58,6 +61,24 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     //region Static variables
     // Singleton Class
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////
+    private List<float[]> trajectoryPoints = new ArrayList<>();
+
+    // 开始记录时清空轨迹数据
+
+    // 实时添加轨迹点
+    public void addTrajectoryPoint(float latitude, float longitude) {
+        trajectoryPoints.add(new float[]{latitude, longitude});
+    }
+
+    // 获取记录的轨迹点
+    public List<float[]> getTrajectoryPoints() {
+        return trajectoryPoints;
+    }
+
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////
     private static final SensorFusion sensorFusion = new SensorFusion();
     // Static constant for calculations with milliseconds
     private static final long TIME_CONST = 10;
@@ -145,6 +166,20 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
+    private LocationLogger locationLogger;
+    private Context context;
+
+    // 修改常量定义
+    private static float STANDARD_PRESSURE = 1015.2f;
+    private static final float DEFAULT_FLOOR_HEIGHT = 2.5f; // 默认楼层高度
+    private static final float ALTITUDE_OFFSET = 0.0f; // 基准高度偏移量
+    private float currentFloorHeight = DEFAULT_FLOOR_HEIGHT; // 当前使用的楼层高度
+    private int currentFloor = 0;
+    private boolean isInSpecialBuilding = false; // 是否在特殊建筑物内
+
+    // 在 SensorFusion 类中添加观察者列表
+    private List<Observer> floorObservers = new ArrayList<>();
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -177,6 +212,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.R = new float[9];
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
+        
+        // 初始化位置变量为0
+        this.latitude = 0.0f;
+        this.longitude = 0.0f;
+
+        // 初始化气压值为设定的基准气压
+        this.pressure = STANDARD_PRESSURE;
     }
 
 
@@ -204,6 +246,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see WifiDataProcessor for network data processing.
      */
     public void setContext(Context context) {
+        this.context = context;
         // Initialise data collection devices
         this.accelerometerSensor = new MovementSensor(context, Sensor.TYPE_ACCELEROMETER);
         this.barometerSensor = new MovementSensor(context, Sensor.TYPE_PRESSURE);
@@ -247,6 +290,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
                 "MyApp::MyWakelockTag");
+
+        // 初始化位置记录器
+        locationLogger = new LocationLogger(context);
     }
     //endregion
 
@@ -271,12 +317,40 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_PRESSURE:
-                // Barometer processing - filter
-                pressure = (1- ALPHA) * pressure + ALPHA * sensorEvent.values[0];
-                // Store pressure data in protobuf trajectory class
-                if (saveRecording) {
-                    this.elevation = pdrProcessing.updateElevation(SensorManager.getAltitude(
-                            SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure));
+                // 使用移动平均值平滑气压数据
+                float smoothedPressure = getSmoothedPressure(sensorEvent.values[0]);
+                pressure = (1- ALPHA) * pressure + ALPHA * smoothedPressure;
+                
+                // 计算海拔高度
+                float altitude = SensorManager.getAltitude(STANDARD_PRESSURE, pressure) - ALTITUDE_OFFSET;
+                
+                // 添加更详细的调试日志
+                Log.d("PRESSURE_DEBUG", String.format(
+                    "原始气压: %.2f hPa, 过滤后气压: %.2f hPa, 计算海拔: %.2f m, 位置: (%.6f, %.6f)", 
+                    sensorEvent.values[0],
+                    pressure,
+                    altitude,
+                    latitude,
+                    longitude
+                ));
+                
+                // 更新海拔高度
+                this.elevation = pdrProcessing.updateElevation(altitude);
+                
+                // 使用新的楼层计算方法
+                int newFloor = calculateFloor(altitude);
+                
+                // 如果楼层发生变化，通知观察者
+                if (newFloor != currentFloor) {
+                    currentFloor = newFloor;
+                    Log.d("FLOOR_CHANGE", String.format(
+                        "楼层变化 - 海拔: %.2f m, 新楼层: %d, 楼层高度: %.1f m, 特殊建筑: %b", 
+                        altitude,
+                        currentFloor,
+                        currentFloorHeight,
+                        isInSpecialBuilding
+                    ));
+                    notifyFloorObservers(currentFloor);
                 }
                 break;
 
@@ -363,14 +437,33 @@ public class SensorFusion implements SensorEventListener, Observer {
         @Override
         public void onLocationChanged(Location location) {
             if(location != null){
-                //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
                 latitude = (float) location.getLatitude();
                 longitude = (float) location.getLongitude();
-                float altitude = (float) location.getAltitude();
-                float accuracy = (float) location.getAccuracy();
-                float speed = (float) location.getSpeed();
-                String provider = location.getProvider();
+                
+                // 记录位置到日志
+                if(saveRecording && locationLogger != null) {
+                    locationLogger.logLocation(
+                        System.currentTimeMillis(),
+                        latitude,
+                        longitude
+                    );
+                }
+                
+                // 添加详细的日志
+                Log.d("LOCATION_UPDATE", String.format(
+                    "位置更新 - 提供者: %s, 纬度: %.6f, 经度: %.6f, 精度: %.1f米",
+                    location.getProvider(),
+                    latitude,
+                    longitude,
+                    location.getAccuracy()
+                ));
+                
                 if(saveRecording) {
+                    float altitude = (float) location.getAltitude();
+                    float accuracy = (float) location.getAccuracy();
+                    float speed = (float) location.getSpeed();
+                    String provider = location.getProvider();
+                    
                     trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
                             .setAccuracy(accuracy)
                             .setAltitude(altitude)
@@ -561,7 +654,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return longitude and latitude data in a float[2].
      */
     public float[] getGNSSLatitude(boolean start) {
-        float [] latLong = new float[2];
+        float[] latLong = new float[2];
         if(!start) {
             latLong[0] = latitude;
             latLong[1] = longitude;
@@ -706,6 +799,34 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+    /**
+     * 获取当前估计的楼层
+     * @return 当前楼层数(0表示地面层)
+     */
+    public int getCurrentFloor() {
+        return currentFloor;
+    }
+
+    /**
+     * 校准当前位置的基准气压值
+     * @param newPressure 新的基准气压值 (hPa)
+     */
+    public void calibrateBasePressure(float newPressure) {
+        STANDARD_PRESSURE = newPressure;
+        Log.d("PRESSURE_CALIBRATE", String.format(
+            "基准气压已更新为: %.2f hPa", 
+            STANDARD_PRESSURE
+        ));
+    }
+
+    /**
+     * 获取当前基准气压值
+     * @return 当前基准气压值 (hPa)
+     */
+    public float getBasePressure() {
+        return STANDARD_PRESSURE;
+    }
+
     //endregion
 
     //region Start/Stop
@@ -732,7 +853,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_FASTEST);
         rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, (int) 1e6);
         wifiProcessor.startListening();
-        gnssProcessor.startLocationUpdates();
+        
+        // 确保GNSS处理器启动
+        if (gnssProcessor != null) {
+            gnssProcessor.startLocationUpdates();
+        }
     }
 
     /**
@@ -760,12 +885,14 @@ public class SensorFusion implements SensorEventListener, Observer {
             //The app often crashes here because the scan receiver stops after it has found the list.
             // It will only unregister one if there is to unregister
             try {
-                this.wifiProcessor.stopListening(); //error here?
+                this.wifiProcessor.stopListening();
             } catch (Exception e) {
                 System.err.println("Wifi resumed before existing");
             }
             // Stop receiving location updates
-            this.gnssProcessor.stopUpdating();
+            if (gnssProcessor != null) {
+                gnssProcessor.stopUpdating();
+            }
         }
     }
 
@@ -784,6 +911,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = android.os.SystemClock.uptimeMillis();
+
+        // 清空轨迹点列表
+        trajectoryPoints.clear();
+
+
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
@@ -802,6 +934,9 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         }
         else {this.filter_coefficient = FILTER_COEFFICIENT;}
+
+        // 初始化位置记录器
+        locationLogger = new LocationLogger(context);
     }
 
     /**
@@ -818,6 +953,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         if(this.saveRecording) {
             this.saveRecording = false;
             storeTrajectoryTimer.cancel();
+
+            // 保存位置日志
+            if (locationLogger != null) {
+                locationLogger.saveToFile();
+            }
         }
         if(wakeLock.isHeld()) {
             this.wakeLock.release();
@@ -924,5 +1064,190 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     //endregion
+
+    /**
+     * 注册观察者以接收楼层更新
+     */
+    public void registerFloorObserver(Observer observer) {
+        if (!floorObservers.contains(observer)) {
+            floorObservers.add(observer);
+        }
+    }
+
+    /**
+     * 移除楼层更新观察者
+     */
+    public void removeFloorObserver(Observer observer) {
+        floorObservers.remove(observer);
+    }
+
+    /**
+     * 通知所有观察者楼层变化
+     */
+    private void notifyFloorObservers(int floor) {
+        Log.d("FLOOR_NOTIFY", String.format(
+            "正在通知观察者楼层变化，观察者数量: %d, 新楼层: %d",
+            floorObservers.size(),
+            floor
+        ));
+        
+        for (Observer observer : floorObservers) {
+            Log.d("FLOOR_NOTIFY", "通知观察者: " + observer.getClass().getName());
+            Object[] updateData = new Object[]{floor};
+            observer.update(updateData);
+        }
+    }
+
+    /**
+     * 根据当前位置计算楼层
+     * @param altitude 当前海拔高度
+     * @return 计算得到的楼层数
+     */
+    private int calculateFloor(float altitude) {
+        LatLng currentPosition = new LatLng(latitude, longitude);
+        
+        // 检查是否在Nucleus大楼内
+        if (BuildingPolygon.inNucleus(currentPosition)) {
+            currentFloorHeight = IndoorMapManager.NUCLEUS_FLOOR_HEIGHT;
+            isInSpecialBuilding = true;
+            
+            // 计算楼层（Nucleus的特殊规则）
+            int calculatedFloor = (int)Math.floor(altitude / currentFloorHeight);
+            
+            // Nucleus的楼层对应关系：
+            // calculatedFloor: -1  0  1  2  3
+            // 实际显示:       LG  G  1  2  3
+            // 所以不需要额外调整，只需要限制范围
+            
+            // 限制楼层范围（-1到3，对应LG到3楼）
+            return Math.min(Math.max(calculatedFloor, -1), 3);
+        }
+        // 检查是否在图书馆内
+        else if (BuildingPolygon.inLibrary(currentPosition)) {
+            currentFloorHeight = IndoorMapManager.LIBRARY_FLOOR_HEIGHT;
+            isInSpecialBuilding = true;
+            
+            // 计算楼层（图书馆的特殊规则）
+            int calculatedFloor = (int)Math.floor(altitude / currentFloorHeight);
+            
+            // 限制楼层范围（0到3，对应G到3楼）
+            return Math.min(Math.max(calculatedFloor, 0), 3);
+        }
+        else {
+            // 不在特殊建筑物内，使用默认规则
+            isInSpecialBuilding = false;
+            currentFloorHeight = DEFAULT_FLOOR_HEIGHT;
+            
+            // 计算楼层
+            int calculatedFloor = (int)Math.floor(altitude / currentFloorHeight);
+            
+            // 对于其他位置，确保从0开始（G层）
+            return Math.max(calculatedFloor, 0); // 0=G, 1=1, 2=2, ...
+        }
+    }
+
+    /**
+     * 获取当前楼层的显示文本
+     * @return 楼层显示文本（如"LG", "G", "1", "2"等）
+     */
+    public String getFloorDisplay() {
+        LatLng currentPosition = new LatLng(latitude, longitude);
+        
+        if (BuildingPolygon.inNucleus(currentPosition)) {
+            // Nucleus的特殊显示规则
+            if (currentFloor == -1) {
+                return "LG";
+            } else if (currentFloor == 0) {
+                return "G";
+            } else {
+                return String.valueOf(currentFloor);
+            }
+        } else {
+            // 其他位置（包括图书馆）的显示规则
+            if (currentFloor == 0) {
+                return "G";
+            } else {
+                return String.valueOf(currentFloor);
+            }
+        }
+    }
+
+    /**
+     * 在已知楼层位置校准气压计
+     * @param knownFloor 当前已知的楼层（0=G, -1=LG, 1=1F, etc.）
+     */
+    public void calibrateAtKnownFloor(int knownFloor) {
+        // 获取当前位置
+        LatLng currentPosition = new LatLng(latitude, longitude);
+        float floorHeight;
+        
+        // 根据位置确定楼层高度
+        if (BuildingPolygon.inNucleus(currentPosition)) {
+            floorHeight = IndoorMapManager.NUCLEUS_FLOOR_HEIGHT;
+        } else if (BuildingPolygon.inLibrary(currentPosition)) {
+            floorHeight = IndoorMapManager.LIBRARY_FLOOR_HEIGHT;
+        } else {
+            floorHeight = DEFAULT_FLOOR_HEIGHT;
+        }
+
+        // 计算理论高度
+        float expectedAltitude = knownFloor * floorHeight;
+        
+        // 根据当前气压和已知高度，反向计算基准气压
+        float newStandardPressure = pressure * (float)Math.exp(expectedAltitude / -7400);
+        
+        // 更新基准气压
+        STANDARD_PRESSURE = newStandardPressure;
+        
+        Log.d("PRESSURE_CALIBRATE", String.format(
+            "在已知楼层%d校准 - 当前气压: %.2f hPa, 理论高度: %.2f m, 新基准气压: %.2f hPa",
+            knownFloor,
+            pressure,
+            expectedAltitude,
+            STANDARD_PRESSURE
+        ));
+    }
+
+    /**
+     * 使用移动平均值平滑气压数据
+     */
+    private static final int PRESSURE_WINDOW_SIZE = 10;
+    private final float[] pressureWindow = new float[PRESSURE_WINDOW_SIZE];
+    private int pressureWindowIndex = 0;
+    private boolean pressureWindowFull = false;
+
+    private float getSmoothedPressure(float rawPressure) {
+        // 更新滑动窗口
+        pressureWindow[pressureWindowIndex] = rawPressure;
+        pressureWindowIndex = (pressureWindowIndex + 1) % PRESSURE_WINDOW_SIZE;
+        if (pressureWindowIndex == 0) {
+            pressureWindowFull = true;
+        }
+
+        // 计算平均值
+        float sum = 0;
+        int count = pressureWindowFull ? PRESSURE_WINDOW_SIZE : pressureWindowIndex;
+        for (int i = 0; i < count; i++) {
+            sum += pressureWindow[i];
+        }
+        return sum / count;
+    }
+
+    // 添加获取经纬度的方法
+    /**
+     * 获取当前纬度
+     * @return 当前纬度值
+     */
+    public float getLatitude() {
+        return this.latitude;
+    }
+
+    /**
+     * 获取当前经度
+     * @return 当前经度值
+     */
+    public float getLongitude() {
+        return this.longitude;
+    }
 
 }

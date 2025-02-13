@@ -2,9 +2,11 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/Fl"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".fragments.RecordingFragment">
+
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/RecordingMap"
         android:name="com.google.android.gms.maps.SupportMapFragment"
@@ -15,7 +17,36 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clickable="false"
         tools:ignore="ExtraText">
+
+        <Button
+            android:id="@+id/Floor"
+            android:layout_width="91dp"
+            android:layout_height="33dp"
+            android:background="@drawable/rounded_button_black"
+            android:backgroundTint="@color/black"
+            android:checkable="false"
+            android:text="@string/color"
+            android:textSize="12sp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.946"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.246" />
+
+        <Button
+            android:id="@+id/lineColorButton2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="228dp"
+            android:layout_marginTop="4dp"
+            android:background="@drawable/rounded_button_black"
+            android:backgroundTint="@color/black"
+            android:text="@string/color"
+            app:layout_constraintStart_toEndOf="@+id/mapSwitchSpinner"
+            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
 
         <Switch
             android:id="@+id/autoFloor"
@@ -36,9 +67,9 @@
             android:layout_height="70dp"
             android:layout_marginEnd="16dp"
             android:layout_marginBottom="4dp"
+            android:background="@drawable/rounded_button"
             android:text="@string/stop"
             android:textSize="24sp"
-            android:background="@drawable/rounded_button"
             app:icon="@drawable/ic_baseline_stop_24"
             app:iconGravity="start"
             app:iconSize="30dp"
@@ -51,9 +82,9 @@
             android:layout_height="70dp"
             android:layout_marginStart="16dp"
             android:layout_marginBottom="4dp"
+            android:background="@drawable/rounded_button"
             android:text="@string/cancel"
             android:textSize="16sp"
-            android:background="@drawable/rounded_button"
             app:icon="@drawable/ic_baseline_cancel_24"
             app:iconGravity="start"
             app:iconSize="28dp"
@@ -219,13 +250,28 @@
             android:id="@+id/lineColorButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="244dp"
-            android:layout_marginTop="2dp"
-            android:text="@string/color"
+            android:layout_marginStart="228dp"
+            android:layout_marginTop="4dp"
             android:background="@drawable/rounded_button_black"
             android:backgroundTint="@color/black"
+            android:text="@string/color"
             app:layout_constraintStart_toEndOf="@+id/mapSwitchSpinner"
             app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
+
+        <Button
+            android:id="@+id/lineColorButton3"
+            android:layout_width="152dp"
+            android:layout_height="33dp"
+            android:background="@drawable/rounded_button_black"
+            android:backgroundTint="@color/black"
+            android:text="Current floor:"
+            android:textSize="12sp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.675"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.246" />
 
 
     </androidx.constraintlayout.widget.ConstraintLayout>

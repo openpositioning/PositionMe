@@ -121,4 +121,11 @@
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
 
+    <string name="restart">Restart</string>
+    <string name="replay_trajectory">Replay trajectory</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="Current_Floor">Current floor:</string>
+    <string name="Cur_floor">Current Floor</string>
+
 </resources>

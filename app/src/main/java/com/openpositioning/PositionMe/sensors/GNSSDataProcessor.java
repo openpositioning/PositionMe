@@ -105,13 +105,22 @@ public class GNSSDataProcessor {
      */
     @SuppressLint("MissingPermission")
     public void startLocationUpdates() {
-        //if (sharedPreferences.getBoolean("location", true)) {
         boolean permissionGranted = checkLocationPermissions();
         if (permissionGranted && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
-                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){
+                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
 
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
+            locationManager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                100,  // 最小时间间隔（毫秒）
+                0,    // 最小距离变化（米）
+                locationListener
+            );
+            locationManager.requestLocationUpdates(
+                LocationManager.NETWORK_PROVIDER,
+                100,  // 最小时间间隔（毫秒）
+                0,    // 最小距离变化（米）
+                locationListener
+            );
         }
         else if(permissionGranted && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){
             Toast.makeText(context, "Open GPS", Toast.LENGTH_LONG).show();

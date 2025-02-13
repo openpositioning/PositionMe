@@ -60,7 +60,8 @@ public class IndoorMapManager {
      * @param map The map on which the indoor floor map overlays are set
      */
     public IndoorMapManager(GoogleMap map){
-        this.gMap=map;
+        this.gMap = map;
+        this.currentFloor = 1; // 默认从G层开始
     }
 
     /**
@@ -69,7 +70,7 @@ public class IndoorMapManager {
      * @param currentLocation new location of user
      */
     public void setCurrentLocation(LatLng currentLocation){
-        this.currentLocation=currentLocation;
+        this.currentLocation = currentLocation;
         setBuildingOverlay();
     }
 
@@ -96,26 +97,49 @@ public class IndoorMapManager {
      * @param autoFloor flag if function called by auto-floor feature
      */
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
-        if (BuildingPolygon.inNucleus(currentLocation)){
-            //Special case for nucleus when auto-floor is being used
-            if (autoFloor) {
-                // If nucleus add bias floor as lower-ground floor referred to as floor 0
-                newFloor += 1;
+        try {
+            if (BuildingPolygon.inNucleus(currentLocation)){
+                if (autoFloor) {
+                    int mapIndex = newFloor + 1;
+                    if (mapIndex >= 0 && mapIndex < NUCLEUS_MAPS.size()) {
+                        groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(mapIndex)));
+                        this.currentFloor = newFloor;
+                        Log.d("Floor Status", String.format(
+                            "Auto Mode - Real Floor: %d, Showing Map: %s",
+                            newFloor,
+                            newFloor == -1 ? "LG" : newFloor == 0 ? "G" : String.valueOf(newFloor)
+                        ));
+                    }
+                } else {
+                    if (newFloor >= 0 && newFloor < NUCLEUS_MAPS.size()) {
+                        groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
+                        this.currentFloor = newFloor;
+                        Log.d("Floor Status", String.format(
+                            "Manual Mode - Selected Map: %s",
+                            newFloor == 0 ? "LG" : newFloor == 1 ? "G" : String.valueOf(newFloor-1)
+                        ));
+                    }
+                }
             }
-            // If within bounds and different from floor map currently being shown
-             if (newFloor>=0 && newFloor<NUCLEUS_MAPS.size() && newFloor!=this.currentFloor) {
-                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
-                 this.currentFloor=newFloor;
-             }
-        }
-        else if (BuildingPolygon.inLibrary(currentLocation)){
-            // If within bounds and different from floor map currently being shown
-            if (newFloor>=0 && newFloor<LIBRARY_MAPS.size() && newFloor!=this.currentFloor) {
-                groundOverlay.setImage(BitmapDescriptorFactory.fromResource(LIBRARY_MAPS.get(newFloor)));
-                this.currentFloor=newFloor;
+            else if (BuildingPolygon.inLibrary(currentLocation)){
+                if (newFloor >= 0 && newFloor < LIBRARY_MAPS.size()) {
+                    groundOverlay.setImage(BitmapDescriptorFactory.fromResource(LIBRARY_MAPS.get(newFloor)));
+                    this.currentFloor = newFloor;
+                    Log.d("Floor Change", "Library: Changed to floor " + newFloor);
+                }
             }
+        } catch (Exception ex) {
+            Log.e("SetFloor Error:", ex.toString());
         }
+    }
 
+    /**
+     * 重新启用自动楼层时，立即更新到当前实际楼层
+     * @param actualFloor 当前实际楼层
+     */
+    public void resumeAutoFloor(int actualFloor) {
+        Log.d("Floor Status", "Resuming Auto Floor - Actual Floor: " + actualFloor);
+        setCurrentFloor(actualFloor, true);
     }
 
     /**
@@ -138,34 +162,36 @@ public class IndoorMapManager {
      * Removes the overlay if user no longer in building
      */
     private void setBuildingOverlay() {
-        // Try catch block to prevent fatal crashes
         try {
-            // Setting overlay if in Nucleus and not already set
-            if (BuildingPolygon.inNucleus(currentLocation) && !isIndoorMapSet) {
+            if (BuildingPolygon.inNucleus(currentLocation)) {
+                if (!isIndoorMapSet) {
+                    currentFloor = 1;
                     groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
-                            .image(BitmapDescriptorFactory.fromResource(R.drawable.nucleusg))
+                            .image(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(currentFloor)))
                             .positionFromBounds(NUCLEUS));
                     isIndoorMapSet = true;
-                    // Nucleus has an LG floor so G floor is at index 1
-                    currentFloor=1;
-                    floorHeight=NUCLEUS_FLOOR_HEIGHT;
+                    floorHeight = NUCLEUS_FLOOR_HEIGHT;
+                    Log.d("Overlay", "Nucleus: Initial overlay set to floor " + currentFloor);
+                }
             }
-            // Setting overlay if in Library and not already set
-            else if (BuildingPolygon.inLibrary(currentLocation) && !isIndoorMapSet) {
+            else if (BuildingPolygon.inLibrary(currentLocation)) {
+                if (!isIndoorMapSet) {
+                    currentFloor = 0;
                     groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
-                            .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
+                            .image(BitmapDescriptorFactory.fromResource(LIBRARY_MAPS.get(currentFloor)))
                             .positionFromBounds(LIBRARY));
                     isIndoorMapSet = true;
-                    currentFloor=0;
-                    floorHeight=LIBRARY_FLOOR_HEIGHT;
+                    floorHeight = LIBRARY_FLOOR_HEIGHT;
+                    Log.d("Overlay", "Library: Initial overlay set to floor " + currentFloor);
+                }
             }
-            // Removing overlay if user no longer in area with indoor maps available
             else if (!BuildingPolygon.inLibrary(currentLocation) &&
-                    !BuildingPolygon.inNucleus(currentLocation)&& isIndoorMapSet){
+                    !BuildingPolygon.inNucleus(currentLocation) && isIndoorMapSet){
                 groundOverlay.remove();
                 isIndoorMapSet = false;
-                currentFloor=0;
-            }   
+                currentFloor = 0;
+                Log.d("Overlay", "Removed overlay");
+            }
         } catch (Exception ex) {
             Log.e("Error with overlay, Exception:", ex.toString());
         }

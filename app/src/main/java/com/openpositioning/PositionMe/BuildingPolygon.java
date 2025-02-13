@@ -14,7 +14,7 @@ import java.util.List;
  */
 public class BuildingPolygon {
     // Defining the coordinates of the building boundaries (rectangular boundaries based on floor map shape)
-    // North-East and South-West Coordinates for the Nucleus Building
+// North-East and South-West Coordinates for the Nucleus Building
     public static final LatLng NUCLEUS_NE=new LatLng(55.92332001571212, -3.1738768212979593);
     public static final LatLng NUCLEUS_SW=new LatLng(55.92282257022002, -3.1745956532857647);
     // North-East and South-West Coordinates for the Kenneth and Murray Library Building

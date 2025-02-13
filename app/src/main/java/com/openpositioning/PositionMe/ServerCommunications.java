@@ -4,10 +4,9 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
@@ -23,12 +22,14 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.zip.ZipEntry;
+import java.util.Locale;
+import java.util.Map;
+import java.util.TimeZone;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -39,6 +40,10 @@ import okhttp3.OkHttpClient;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * This class handles communications with the server through HTTPs. The class uses an
@@ -64,6 +69,8 @@ public class ServerCommunications implements Observable {
     private String infoResponse;
     private boolean success;
     private List<Observer> observers;
+
+    private List<Map<String, String>> entryList;
 
     // Static constants necessary for communications
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
@@ -100,6 +107,10 @@ public class ServerCommunications implements Observable {
         this.observers = new ArrayList<>();
     }
 
+    public void setEntryList(List<Map<String, String>> entryList) {
+        this.entryList = entryList;
+    }
+
     /**
      * Outgoing communication request with a {@link Traj trajectory} object. The recorded
      * trajectory is passed to the method. It is processed into the right format for sending
@@ -112,18 +123,8 @@ public class ServerCommunications implements Observable {
         // Convert the trajectory to byte array
         byte[] binaryTrajectory = trajectory.toByteArray();
 
-        File path = null;
-        // for android 13 or higher use dedicated external storage
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            if (path == null) {
-                path = context.getFilesDir();
-            }
-        } else { // for android 12 or lower use internal storage
-            path = context.getFilesDir();
-        }
-
-        System.out.println(path.toString());
+        // Get the directory path for storing the file with the trajectory
+        File path = context.getFilesDir();
 
         // Format the file name according to date
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
@@ -145,14 +146,14 @@ public class ServerCommunications implements Observable {
         checkNetworkStatus();
 
         // Check if user preference allows for syncing with mobile data
-        // ODO: add sync delay and enforce settings
+        // TODO: add sync delay and enforce settings
         boolean enableMobileData = this.settings.getBoolean("mobile_sync", false);
         // Check if device is connected to WiFi or to mobile data with enabled preference
         if(this.isWifiConn || (enableMobileData && isMobileConn)) {
             // Instantiate client for HTTP requests
             OkHttpClient client = new OkHttpClient();
 
-            // Creaet a request body with a file to upload in multipart/form-data format
+            // Creaet a equest body with a file to upload in multipart/form-data format
             RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", file.getName(),
                             RequestBody.create(MediaType.parse("text/plain"), file))
@@ -183,12 +184,11 @@ public class ServerCommunications implements Observable {
                         // exception
                         if (!response.isSuccessful()) {
                             //file.delete();
-//                        System.err.println("POST error response: " + responseBody.string());
+//                            System.err.println("POST error response: " + responseBody.string());
 
                             String errorBody = responseBody.string();
                             infoResponse = "Upload failed: " + errorBody;
-                            new Handler(Looper.getMainLooper()).post(() ->
-                                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
+                            new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());//show error message to users
 
                             System.err.println("POST error response: " + errorBody);
                             success = false;
@@ -227,35 +227,14 @@ public class ServerCommunications implements Observable {
      *
      * @param localTrajectory the File object of the local trajectory to be uploaded
      */
-    /**
-     * Uploads a local trajectory file to the API server in the specified format.
-     * {@link okhttp3.OkHttp} library is used for the asynchronous POST request.
-     *
-     * @param localTrajectory the File object of the local trajectory to be uploaded
-     */
     public void uploadLocalTrajectory(File localTrajectory) {
-
         // Instantiate client for HTTP requests
         OkHttpClient client = new OkHttpClient();
 
-        // robustness improvement
-        RequestBody fileRequestBody;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            try {
-                byte[] fileBytes = Files.readAllBytes(localTrajectory.toPath());
-                fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), fileBytes);
-            } catch (IOException e) {
-                e.printStackTrace();
-                // if failed, use File object to construct RequestBody
-                fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), localTrajectory);
-            }
-        } else {
-            fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), localTrajectory);
-        }
-
         // Create request body with a file to upload in multipart/form-data format
         RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("file", localTrajectory.getName(), fileRequestBody)
+                .addFormDataPart("file", localTrajectory.getName(),
+                        RequestBody.create(MediaType.parse("text/plain"), localTrajectory))
                 .build();
 
         // Create a POST request with the required headers
@@ -265,31 +244,29 @@ public class ServerCommunications implements Observable {
 
         // Enqueue the request to be executed asynchronously and handle the response
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
+            @Override public void onFailure(Call call, IOException e) {
                 // Print error message, set success to false and notify observers
                 e.printStackTrace();
-//          localTrajectory.delete();
+//                localTrajectory.delete();
                 success = false;
                 System.err.println("UPLOAD: Failure to get response");
                 notifyObservers(1);
                 infoResponse = "Upload failed: " + e.getMessage(); // Store error message
-                new Handler(Looper.getMainLooper()).post(() ->
-                        Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
+                new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());//show error message to users
             }
 
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            @Override public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful()) {
                         // Print error message, set success to false and throw an exception
                         success = false;
+//                        System.err.println("UPLOAD unsuccessful: " + responseBody.string());
                         notifyObservers(1);
+//                        localTrajectory.delete();
                         String errorBody = responseBody.string();
                         System.err.println("UPLOAD unsuccessful: " + errorBody);
                         infoResponse = "Upload failed: " + errorBody;
-                        new Handler(Looper.getMainLooper()).post(() ->
-                                Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
+                        new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
                         throw new IOException("UPLOAD failed with code " + response);
                     }
 
@@ -311,118 +288,132 @@ public class ServerCommunications implements Observable {
     }
 
     /**
-     * Callback interface for handling the result of a download operation.
-     */
-    public interface DownloadResultCallback {
-        void onResult(boolean success);
-    }
-
-    /**
      * Perform API request for downloading a Trajectory uploaded to the server. The trajectory is
-     * retrieved from a zip file, with the method accepting an id argument specifying the
+     * retrieved from a zip file, with the method accepting a position argument specifying the
      * trajectory to be downloaded. The trajectory is then converted to a protobuf object and
      * then to a JSON string to be downloaded to the device's Downloads folder.
      *
-     * @param id the id of the trajectory to be downloaded
+     * @param position the position of the trajectory in the zip file to retrieve
      */
-    public void downloadTrajectory(int id, DownloadResultCallback callback) {
-        // Initialise OkHttp client
+    public void downloadTrajectory(int position) {
+        if (entryList == null || position >= entryList.size()) {
+            Log.e("ServerCommunications", "Invalid position or entryList not set");
+            return;
+        }
+        
+        // 获取轨迹信息
+        Map<String, String> trajectory = entryList.get(position);
+        String id = trajectory.get("id");
+        String serverDate = trajectory.get("date_submitted")
+            .split("\\.")[0]
+            .replace(":", "-")
+            .replace("T", "_");
+        
+        // 构建云端轨迹文件路径
+        String fileName = String.format("trajectory_%s_%s.json", serverDate, id);
+        File localDirectory = new File(context.getExternalFilesDir(null), "cloud_trajectories");
+        Log.d("ServerCommunications", "Cloud trajectories directory: " + localDirectory.getAbsolutePath());
+        File localFile = new File(localDirectory, fileName);
+        
+        // 如果本地文件已存在，直接返回成功
+        if (localFile.exists()) {
+            Log.d("ServerCommunications", "Local file already exists: " + localFile.getAbsolutePath());
+            new Handler(Looper.getMainLooper()).post(() -> {
+                success = true;
+                notifyObservers(1);
+            });
+            return;
+        }
+        
+        // 否则从服务器下载
         OkHttpClient client = new OkHttpClient();
-
-        // Create GET request with required header
+        String downloadUrl = downloadURL + "&id=" + id;
+        
         okhttp3.Request request = new okhttp3.Request.Builder()
-                .url(downloadURL)
-                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
-                .get()
-                .build();
-
+            .url(downloadUrl)
+            .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+            .get()
+            .build();
+        
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
+            @Override public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
-                // Notify failure on callback (remember to run on UI thread if needed)
-                if (callback != null) {
-                    callback.onResult(false);
-                }
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    success = false;
+                    notifyObservers(1);
+                });
             }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                boolean success = false;
+            
+            @Override public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful())
+                    if (!response.isSuccessful()) {
                         throw new IOException("Unexpected code " + response);
-
-                    // Set target file name
-                    String targetFileName = id + ".pkt";
-
-                    // Create input streams to process the response
-                    InputStream inputStream = responseBody.byteStream();
-                    ZipInputStream zipInputStream = new ZipInputStream(inputStream);
-                    ZipEntry zipEntry;
-                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                    boolean fileFound = false;
-
-                    // Search for the target file in the zip archive
-                    while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                        if (zipEntry.getName().equals(targetFileName)) {
-                            fileFound = true;
-                            byte[] buffer = new byte[1024];
-                            int bytesRead;
-                            while ((bytesRead = zipInputStream.read(buffer)) != -1) {
-                                byteArrayOutputStream.write(buffer, 0, bytesRead);
+                    }
+                    
+                    // 保存云端轨迹数据到本地文件
+                    if (!localDirectory.exists()) {
+                        localDirectory.mkdirs();
+                    }
+                    
+                    try (FileOutputStream fos = new FileOutputStream(localFile)) {
+                        fos.write(responseBody.bytes());
+                        
+                        // 创建映射文件来存储云端ID和本地文件的对应关系
+                        File mappingFile = new File(context.getExternalFilesDir(null), "trajectory_mapping.json");
+                        JSONObject mapping = new JSONObject();
+                        
+                        if (mappingFile.exists()) {
+                            // 如果文件存在，读取现有内容
+                            try {
+                                StringBuilder content = new StringBuilder();
+                                try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(mappingFile))) {
+                                    String line;
+                                    while ((line = reader.readLine()) != null) {
+                                        content.append(line);
+                                    }
+                                }
+                                mapping = new JSONObject(content.toString());
+                            } catch (JSONException e) {
+                                Log.e("ServerCommunications", "Error reading mapping file: ", e);
+                                // 如果文件损坏，使用新的空 JSONObject
+                                mapping = new JSONObject();
                             }
-                            break;
+                        }
+                        
+                        // 找到最近的本地轨迹文件
+                        File logsDirectory = new File(context.getExternalFilesDir(null), "location_logs");
+                        File[] localFiles = logsDirectory.listFiles((dir, name) -> 
+                            name.startsWith("location_log_local_") && name.endsWith(".json"));
+                            
+                        if (localFiles != null && localFiles.length > 0) {
+                            // 获取最新的本地文件
+                            File latestFile = localFiles[0];
+                            for (File file : localFiles) {
+                                if (file.lastModified() > latestFile.lastModified()) {
+                                    latestFile = file;
+                                }
+                            }
+                            
+                            try {
+                                // 保存映射关系
+                                mapping.put(id, latestFile.getName());
+                                try (FileWriter writer = new FileWriter(mappingFile)) {
+                                    writer.write(mapping.toString());
+                                }
+                                
+                                Log.d("ServerCommunications", "Mapped cloud ID " + id + " to local file: " + latestFile.getName());
+                            } catch (JSONException e) {
+                                Log.e("ServerCommunications", "Error updating mapping: ", e);
+                            }
                         }
                     }
-
-                    // Check if the target file was found
-                    if (!fileFound) {
-                        System.err.println("File not found: " + targetFileName);
-                        return; // Exit the method if the file is not found
-                    }
-
-                    // Convert to protobuf and then to JSON string
-                    byte[] byteArray = byteArrayOutputStream.toByteArray();
-                    Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
-                    JsonFormat.Printer printer = JsonFormat.printer();
-                    String receivedTrajectoryString = printer.print(receivedTrajectory);
-                    System.out.println("Successful download: " + receivedTrajectoryString.substring(0, 100));
-
-                    // Determine storage directory (for Android versions)
-                    File storageDir = null;
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        storageDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-                        if (storageDir == null) {
-                            storageDir = context.getFilesDir();
-                        }
-                    } else {
-                        storageDir = context.getFilesDir();
-                    }
-                    File file = new File(storageDir, "received_trajectory.txt");
-
-                    // Write the downloaded data to a file
-                    try (FileWriter fileWriter = new FileWriter(file)) {
-                        fileWriter.write(receivedTrajectoryString);
-                        fileWriter.flush();
-                        System.out.println("Received trajectory stored in: " + storageDir.getAbsolutePath());
-
-                        success = true;// Set success to true
-                    } catch (IOException ee) {
-                        System.err.println("Trajectory download failed");
-                    } finally {
-                        zipInputStream.closeEntry();
-                        byteArrayOutputStream.close();
-                        zipInputStream.close();
-                        inputStream.close();
-                    }
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                } finally {
-                    // Notify the callback of the result
-                    if (callback != null) {
-                        callback.onResult(success);
-                    }
+                    
+                    Log.d("ServerCommunications", "Successfully saved trajectory to: " + localFile.getAbsolutePath());
+                    
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        success = true;
+                        notifyObservers(1);
+                    });
                 }
             }
         });
@@ -495,7 +486,11 @@ public class ServerCommunications implements Observable {
      */
     @Override
     public void registerObserver(Observer o) {
-        this.observers.add(o);
+        Log.d("ServerCommunications", "Registering observer: " + o.getClass().getSimpleName());
+        if (observers == null) {
+            observers = new ArrayList<>();
+        }
+        observers.add(o);
     }
 
     /**
@@ -508,13 +503,19 @@ public class ServerCommunications implements Observable {
      */
     @Override
     public void notifyObservers(int index) {
-        for(Observer o : observers) {
-            if(index == 0 && o instanceof FilesFragment) {
-                o.update(new String[] {infoResponse});
+        Log.d("ServerCommunications", "Notifying observers with success: " + success);
+        if (observers != null) {
+            Log.d("ServerCommunications", "Number of observers: " + observers.size());
+            for (Observer observer : observers) {
+                if (index == 0 && observer instanceof FilesFragment) {
+                    observer.update(new String[] {infoResponse});
+                } else if (index == 1) {
+                    observer.update(new Boolean[] {success});
+                    Log.d("ServerCommunications", "Notifying " + observer.getClass().getSimpleName() + " with success: " + success);
+                }
             }
-            else if (index == 1 && o instanceof MainActivity) {
-                o.update(new Boolean[] {success});
-            }
+        } else {
+            Log.e("ServerCommunications", "No observers registered");
         }
     }
 }

@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.fragments;
 
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -16,6 +17,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
@@ -34,7 +36,7 @@ import java.util.Map;
  *
  * @author Mate Stodulka
  */
-public class MeasurementsFragment extends Fragment {
+public class MeasurementsFragment extends Fragment implements Observer {
 
     // Static constant for refresh time in milliseconds
     private static final long REFRESH_TIME = 5000;
@@ -50,7 +52,7 @@ public class MeasurementsFragment extends Fragment {
     // List of string resource IDs
     private int[] prefaces;
     private int[] gnssPrefaces;
-
+    private TextView floorTextView;
 
     /**
      * Public default constructor, empty.
@@ -125,6 +127,25 @@ public class MeasurementsFragment extends Fragment {
         sensorMeasurementList = (ConstraintLayout) getView().findViewById(R.id.sensorMeasurementList);
         wifiListView = (RecyclerView) getView().findViewById(R.id.wifiList);
         wifiListView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        
+        // 初始化视图
+        floorTextView = view.findViewById(R.id.Floor);
+        
+        // 获取SensorFusion实例并注册为观察者
+        sensorFusion = SensorFusion.getInstance();
+        sensorFusion.registerFloorObserver(this);
+        
+        // 设置初始楼层值
+        updateFloorDisplay(sensorFusion.getCurrentFloor());
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // 取消注册观察者
+        if (sensorFusion != null) {
+            sensorFusion.removeFloorObserver(this);
+        }
     }
 
     /**
@@ -174,4 +195,53 @@ public class MeasurementsFragment extends Fragment {
             refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
         }
     };
+
+    @Override
+    public void update(Object[] obj) {
+        if (obj.length > 0 && obj[0] instanceof Integer) {
+            int floor = (Integer) obj[0];
+            // 确保在主线程中更新UI
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> updateFloorDisplay(floor));
+            }
+        }
+    }
+
+    private void updateFloorDisplay(int floor) {
+        if (floorTextView != null) {
+            String oldText = floorTextView.getText().toString();
+            String displayText = sensorFusion.getFloorDisplay();
+            floorTextView.setText(displayText);
+            Log.d("FLOOR_UPDATE", String.format(
+                "Fragment UI更新 - 旧值: %s, 新值: %s (数值: %d)", 
+                oldText,
+                displayText,
+                floor
+            ));
+        }
+    }
+
+    /**
+     * 设置基准气压值
+     * @param basePressure 新的基准气压值 (hPa)
+     */
+    public void setBasePressure(float basePressure) {
+        if (sensorFusion != null) {
+            sensorFusion.calibrateBasePressure(basePressure);
+            // 更新显示
+            updateFloorDisplay(sensorFusion.getCurrentFloor());
+        }
+    }
+
+    /**
+     * 在当前楼层校准气压计
+     * @param currentFloor 当前所在楼层
+     */
+    public void calibrateAtCurrentFloor(int currentFloor) {
+        if (sensorFusion != null) {
+            sensorFusion.calibrateAtKnownFloor(currentFloor);
+            // 更新显示
+            updateFloorDisplay(sensorFusion.getCurrentFloor());
+        }
+    }
 }

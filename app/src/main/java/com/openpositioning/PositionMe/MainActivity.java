@@ -11,8 +11,11 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -30,6 +33,7 @@ import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.google.android.gms.maps.model.LatLng;
 
 /**
  * The Main Activity of the application, handling setup, permissions and starting all other fragments
@@ -70,6 +74,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private SharedPreferences settings;
     private SensorFusion sensorFusion;
     private Handler httpResponseHandler;
+    private LatLng lastPosition = null;
+    private boolean hasCalibrated = false;
 
     //endregion
 
@@ -108,25 +114,33 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
         //Check Permissions
         if(ActivityCompat.checkSelfPermission(this,
-                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.CHANGE_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.CHANGE_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this,
                         Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED){
             askLocationPermissions();
         }
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();
+
+        // 初始化 SensorFusion
+        this.sensorFusion = SensorFusion.getInstance();
+        this.sensorFusion.setContext(getApplicationContext());
+        this.sensorFusion.registerForServerUpdate(this);
+        
+        // 立即开始监听传感器
+        this.sensorFusion.resumeListening();
     }
 
     /**
@@ -254,14 +268,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
             );
         }
         else{
-            // Determine next step based on android version
-            // if android ver is lower than 13, check for storage permissions
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                askStoragePermission();
-            } else { // else skip storage permission check
-                askMotionPermissions();
-            }
-//            askStoragePermission();
+            // Check other permissions if present
+            askMotionPermissions();
         }
     }
 
@@ -374,11 +382,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
                         grantResults[1] == PackageManager.PERMISSION_GRANTED) {
                     Toast.makeText(this, "Permissions granted!", Toast.LENGTH_SHORT).show();
                     this.settings.edit().putBoolean("wifi", true).apply();
-                    // Check for storage permissions if android ver lower than 13
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                        askStoragePermission();
-                    }
-//                    askStoragePermission();
+                    askStoragePermission();
                 }
                 else {
                     if(!settings.getBoolean("permanentDeny", false)) {
@@ -500,7 +504,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
         settings.edit().putBoolean("permanentDeny", false).apply();
         this.sensorFusion = SensorFusion.getInstance();
         this.sensorFusion.setContext(getApplicationContext());
-        sensorFusion.registerForServerUpdate(this);
+        sensorFusion.resumeListening();
     }
 
     //endregion
@@ -555,16 +559,26 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
     /**
      * {@inheritDoc}
-     * Calls the corresponding handler that runs a toast on the Main UI thread.
+     * 处理来自SensorFusion和ServerCommunications的更新
      */
     @Override
-    public void update(Object[] objList) {
-        assert objList[0] instanceof Boolean;
-        if((Boolean) objList[0]) {
-            this.httpResponseHandler.post(displayToastTaskSuccess);
-        }
-        else {
-            this.httpResponseHandler.post(displayToastTaskFailure);
+    public void update(Object[] obj) {
+        if (obj.length > 0) {
+            if (obj[0] instanceof Boolean) {
+                // 处理服务器响应
+                if ((Boolean) obj[0]) {
+                    this.httpResponseHandler.post(displayToastTaskSuccess);
+                } else {
+                    this.httpResponseHandler.post(displayToastTaskFailure);
+                }
+            } else if (sensorFusion != null) {
+                // 检查位置更新
+                float lat = sensorFusion.getLatitude();
+                float lon = sensorFusion.getLongitude();
+                if (lat != 0 && lon != 0) {  // 确保有有效的位置
+                    checkBuildingEntry(new LatLng(lat, lon));
+                }
+            }
         }
     }
 
@@ -591,4 +605,69 @@ public class MainActivity extends AppCompatActivity implements Observer {
     };
 
     //endregion
+
+    /**
+     * 检查并处理建筑物进入事件
+     * @param newPosition 新的位置
+     */
+    private void checkBuildingEntry(LatLng newPosition) {
+        if (lastPosition == null) {
+            lastPosition = newPosition;
+            return;
+        }
+
+        // 检查是否刚进入建筑物
+        boolean wasInBuilding = BuildingPolygon.inNucleus(lastPosition) || 
+                              BuildingPolygon.inLibrary(lastPosition);
+        boolean isInBuilding = BuildingPolygon.inNucleus(newPosition) || 
+                             BuildingPolygon.inLibrary(newPosition);
+
+        if (!wasInBuilding && isInBuilding && !hasCalibrated) {
+            // 刚进入建筑物，进行校准
+            if (BuildingPolygon.inNucleus(newPosition)) {
+                // Nucleus大楼，在G层(0层)校准
+                sensorFusion.calibrateAtKnownFloor(0);
+                Log.d("CALIBRATION", "Enter Nucleus, callibrate in G layer");
+            } else if (BuildingPolygon.inLibrary(newPosition)) {
+                // 图书馆，在G层(0层)校准
+                sensorFusion.calibrateAtKnownFloor(0);
+                Log.d("CALIBRATION", "Enter Library, callibrate in G layer");
+            }
+            hasCalibrated = true;
+            
+            // 显示校准提示
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Callibrated at current floor", Toast.LENGTH_SHORT).show();
+            });
+        } else if (!isInBuilding) {
+            // 离开建筑物，重置校准标志
+            hasCalibrated = false;
+        }
+
+        lastPosition = newPosition;
+    }
+
+    // 添加手动校准的方法
+    public void calibrateAtCurrentFloor(View view) {
+        if (sensorFusion != null) {
+            LatLng currentPosition = new LatLng(
+                sensorFusion.getLatitude(), 
+                sensorFusion.getLongitude()
+            );
+
+            int floorToCalibrate = 0; // 默认在G层校准
+            
+            // 根据位置确定校准楼层
+            if (BuildingPolygon.inNucleus(currentPosition)) {
+                // 在Nucleus大楼，可以根据实际情况选择校准楼层
+                floorToCalibrate = 0; // G层
+            } else if (BuildingPolygon.inLibrary(currentPosition)) {
+                // 在图书馆，可以根据实际情况选择校准楼层
+                floorToCalibrate = 0; // G层
+            }
+
+            sensorFusion.calibrateAtKnownFloor(floorToCalibrate);
+            Toast.makeText(this, "Callibrated at current floor", Toast.LENGTH_SHORT).show();
+        }
+    }
 }
