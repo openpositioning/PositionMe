@@ -10,6 +10,7 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -22,6 +23,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.viewitems.TrajDownloadListAdapter;
 
@@ -29,6 +31,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -102,6 +105,8 @@ public class FilesFragment extends Fragment implements Observer {
         super.onViewCreated(view, savedInstanceState);
         // Get recyclerview
         filesList = view.findViewById(R.id.filesList);
+
+
         // Get clickable card view
         uploadCard = view.findViewById(R.id.uploadCard);
         uploadCard.setOnClickListener(new View.OnClickListener() {
@@ -181,8 +186,8 @@ public class FilesFragment extends Fragment implements Observer {
      * Update the RecyclerView in the FilesFragment with new data.
      * Must be called from a UI thread. Initialises a new Layout Manager, and passes it to the
      * RecyclerView. Initialises a {@link TrajDownloadListAdapter} with the input array and setting
-     * up a listener so that trajectories are downloaded when clicked, and a proper pop-up message is
-     * displayed to notify the user of the download result.
+     * up a listener so that trajectories are downloaded when clicked, and a pop-up message is
+     * displayed to notify the user.
      *
      * @param entryList List of Maps of String to String containing metadata about the uploaded
      *                  trajectories (ID, owner ID, date).
@@ -192,52 +197,35 @@ public class FilesFragment extends Fragment implements Observer {
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
-
         listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
-            System.out.println("Position: " + position);
-            Map targetFile = entryList.get(position);
-            int id = Integer.parseInt(targetFile.get("id").toString());
-
-            // Create and show a progress dialog using AlertDialog
-            AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-            builder.setTitle("Downloading");
-            builder.setMessage("Please wait while the trajectory is being downloaded...");
-            builder.setCancelable(false); // Prevent user from dismissing the dialog manually
-
-            AlertDialog progressDialog = builder.create();
-            progressDialog.show(); // Show the progress dialog
-
-            // Call downloadTrajectory with a callback
-            serverCommunications.downloadTrajectory(id, new ServerCommunications.DownloadResultCallback() {
+            // Download the appropriate trajectory instance
+            serverCommunications.downloadTrajectory(position, new ServerCommunications.TrajectoryDownloadCallback() {
                 @Override
-                public void onResult(boolean success) {
-                    // Run UI updates on the main thread
-                    getActivity().runOnUiThread(() -> {
-                        // Dismiss the progress dialog now that the download is complete
-                        progressDialog.dismiss();
+                public void onTrajectoryDownloaded(Traj.Trajectory trajectory) {
+                    // Handle the downloaded trajectory here (e.g., navigate to replayFragment)
+                    System.out.println("Trajectory downloaded: " + trajectory);
+                }
 
-                        // Show the appropriate dialog based on the download result
-                        if (success) { // If the download was successful
-                            new AlertDialog.Builder(getContext())
-                                    .setTitle("File downloaded")
-                                    .setMessage("Trajectory downloaded to local storage")
-                                    .setPositiveButton(R.string.ok, null)
-                                    .setNegativeButton(R.string.show_storage, (dialog, which) ->
-                                            startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)))
-                                    .setIcon(R.drawable.ic_baseline_download_24)
-                                    .show();
-                        } else { // If the download failed
-                            new AlertDialog.Builder(getContext())
-                                    .setTitle("Download Failed")
-                                    .setMessage("Trajectory download failed. Please try again.")
-                                    .setPositiveButton(R.string.ok, null)
-                                    .show();
-                        }
-                    });
+                @Override
+                public void onFailure(IOException e) {
+                    System.err.println("Download failed: " + e.getMessage());
                 }
             });
-        });
 
+            // Display a pop-up message to direct the user to the download location if necessary.
+            new AlertDialog.Builder(getContext())
+                    .setTitle("File downloaded")
+                    .setMessage("Trajectory downloaded to local storage")
+                    .setPositiveButton(R.string.ok, null)
+                    .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialogInterface, int i) {
+                            startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
+                        }
+                    })
+                    .setIcon(R.drawable.ic_baseline_download_24)
+                    .show();
+        });
         filesList.setAdapter(listAdapter);
     }
 }

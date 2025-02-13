@@ -67,6 +67,8 @@ public class CorrectionFragment extends Fragment {
     //Path view on screen
     private PathView pathView;
 
+
+
     /**
      * Public Constructor for the class.
      * Left empty as not required
@@ -227,4 +229,9 @@ public class CorrectionFragment extends Fragment {
     public void setScalingRatio(float scalingRatio) {
         this.scalingRatio = scalingRatio;
     }
+
+    public static float getScalingRatio() {
+        return scalingRatio;
+    }
+
 }

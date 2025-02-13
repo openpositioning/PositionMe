@@ -150,7 +150,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Private constructor for implementing singleton design pattern for SensorFusion.
      * Initialises empty arrays and new objects that do not depends on outside information.
      */
-    private SensorFusion() {
+    public SensorFusion() {
         // Location listener to be used by the GNSS class
         this.locationListener= new myLocationListener();
         // Timer to store sensor values in the trajectory object
