@@ -42,9 +42,12 @@ import com.openpositioning.PositionMe.fragments.StartLocationFragment;
  * @see HomeFragment the next fragment in the nav graph.
  *
  *
+ *
  * @author Michal Dvorak
  * @author Mate Stodulka
  * @author Virginia Cangelosi
+ *
+ * @author Zonghanzhao @12/02/2025 From group09
  */
 public class CorrectionFragment extends Fragment {
 
@@ -153,6 +156,18 @@ public class CorrectionFragment extends Fragment {
      * Button onClick listener enabled to detect when to go to next fragment and show the action bar.
      * Load and display average step length from PDR.
      */
+
+    /**
+     * {@inheritDoc}.
+     * Add feature to allow user to adjust step length by adopt a calibrated K value for weiburg algorithm.
+     * When recording is done, while an actual step length is entered, the K value is calibrated with previous
+     * K value (read from shared preferences settings), step length for old K value and the new step length.
+     * then the new K value will be pushed to shared preferences for future calculation
+     *
+     * Along with UI upgrading
+     *
+     * @author Zonghan Zhao
+     */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -172,24 +187,24 @@ public class CorrectionFragment extends Fragment {
         this.stepLengthInput.setOnKeyListener(new View.OnKeyListener() {
             @Override
             public boolean onKey(View v, int keyCode, KeyEvent event) {
-                // 只在按下事件时处理，避免重复执行
+                // Process only on key press to prevent duplicate execution
                 if (keyCode == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN) {
-                    // 从输入框中直接获取文本
+                    // Get text directly from the input field
                     String inputStr = stepLengthInput.getText().toString().trim();
                     if (inputStr.isEmpty()) {
-                        Log.w("CorrectionFragment", "请输入实际步长。");
+                        Log.w("CorrectionFragment", "Please enter the actual step length");
                         return true;
                     }
                     try {
                         newStepLength = Float.parseFloat(inputStr);
                     } catch (NumberFormatException e) {
-                        Log.w("CorrectionFragment", "输入的步长格式错误");
+                        Log.w("CorrectionFragment", "Invalid step length format (e.g.,0.75)");
                         e.printStackTrace();
                         return true;
                     }
 
                     SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
-                    String weibergKValue = sharedPreferences.getString("weiberg_k", "0.364");  // 使用默认值 "0.364"
+                    String weibergKValue = sharedPreferences.getString("weiberg_k", "0.364");  // default value 0.364
                     float weibergKFloat;
                     try {
                         weibergKFloat = Float.parseFloat(weibergKValue);
@@ -198,7 +213,7 @@ public class CorrectionFragment extends Fragment {
                         weibergKFloat = 0.364f;
                     }
 
-                    // 计算新的 K 值，只执行一次
+                    // Compute the new K value only once
                     float newK = weibergKFloat * (newStepLength / averageStepLength);
 
                     newkey.setText(String.format("Previous K factor = %.3f", weibergKFloat) + "\n" +
@@ -213,8 +228,8 @@ public class CorrectionFragment extends Fragment {
                     averageStepLengthText.setText(getActivity().getResources().getString(R.string.averageStepLgn)
                             + ": " + String.format("%.2f", newStepLength));
 
-                    // 移除了 secondPass 逻辑，确保只执行一次校准
-                    return true; // 表示事件已处理
+                    // Removed the secondPass logic to ensure calibration runs only once
+                    return true; // return true to sign calibration done
                 }
                 return false;
             }

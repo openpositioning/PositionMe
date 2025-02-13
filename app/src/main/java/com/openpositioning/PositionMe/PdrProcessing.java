@@ -22,11 +22,14 @@ import java.util.OptionalDouble;
  * to determine the current floor (including detecting elevator use).
  * </p>
  * <p>
+ * Former version: Added an if-statement condition in weibergMinMax, to avoid crush when sensor data is invalid by giving 0 value.
+ *
+ *
  * This version integrates a Kalman Filter to smooth the stride length estimation. When sensor data is invalid,
  * the filter will predict the current value rather than simply returning 0. Sensor data validity is checked before computation.
  * </p>
  *
- * Author: [Your Name]
+ * @author Zonghanzhao @12/02/2025 From group09
  */
 public class PdrProcessing {
 
@@ -34,7 +37,9 @@ public class PdrProcessing {
 
     // Empirical constant for the Weiberg stride length estimation algorithm.
     private static final float K = 0.364f;
-    //Note by G02: this is override by weibergMinMax func
+    /**Note by Zonghan: this is override by weibergMinMax func
+     *
+     */
     // Number of seconds for which elevation samples are stored.
     private static final int elevationSeconds = 4;
     // Number of acceleration samples (e.g., if sampled every 0.01 seconds, total 100 samples).

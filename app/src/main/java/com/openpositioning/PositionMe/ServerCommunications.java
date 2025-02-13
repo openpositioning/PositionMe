@@ -47,6 +47,15 @@ import okhttp3.ResponseBody;
  *
  * @author Michal Dvorak
  * @author Mate Stodulka
+ *
+ * By G09:
+ * Stopped encording download data to JSON format, and keep it being Protobuf for a more straight-forward
+ * download&replay
+ *
+ * @author Hao Cai
+ * @author  Deng
+ * @author Xiaofei Huang
+ * @author Zonghan Zhao @13/02/2025
  */
 public class ServerCommunications implements Observable {
 
@@ -281,6 +290,9 @@ public class ServerCommunications implements Observable {
      * then to a JSON string to be downloaded to the device's Downloads folder.
      *
      * @param position the position of the trajectory in the zip file to retrieve
+     *
+     * Deleted encoding the protobuf to json
+     * @author Hao cai
      */
     public void downloadTrajectory(int position) {
         // Initialise OkHttp client
@@ -299,6 +311,7 @@ public class ServerCommunications implements Observable {
             public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }
+
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {

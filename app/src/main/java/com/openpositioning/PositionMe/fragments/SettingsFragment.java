@@ -13,8 +13,11 @@ import com.openpositioning.PositionMe.R;
  * Sets type for numeric only fields.
  *
  * @see HomeFragment the return fragment when leaving the settings.
+ * @see CorrectionFragment for weiburg K correction.
  *
  * @author Mate Stodulka
+ *
+ * @author Zonghanzhao @12/02/2025 From group09
  */
 public class SettingsFragment extends PreferenceFragmentCompat {
 
