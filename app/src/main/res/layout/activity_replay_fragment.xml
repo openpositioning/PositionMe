@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".fragments.replayFragment">
+
+    <!-- Toolbar with back button -->
+
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorPrimary"
+        android:elevation="4dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+
+
+    <Button
+        android:id="@+id/viewStatsButton"
+        android:layout_width="180dp"
+        android:layout_height="85dp"
+        android:layout_marginTop="40dp"
+        android:background="@drawable/view_stats_button"
+        android:text="View Stats"
+        android:textColor="@android:color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:padding="10dp"
+        android:visibility="gone"
+        android:elevation="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/fragmentContainerView"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintVertical_bias="0.0" />
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/constraintLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- Time Elapsed (Left) -->
+
+        <!-- SeekBar in the middle -->
+
+        <!-- Time Remaining (Right) -->
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+    <!-- White background container for controls -->
+    <FrameLayout
+        android:id="@+id/buttonContainer"
+        android:layout_width="394dp"
+        android:layout_height="79dp"
+        android:background="@drawable/rounded_background"
+        android:elevation="4dp"
+        android:padding="12dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/trajectorySeekBar">
+
+        <LinearLayout
+            android:layout_width="372dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:spacing="8dp">
+
+            <ImageButton
+                android:id="@+id/playButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/round_button"
+                android:src="@drawable/ic_baseline_play_arrow_24" />
+
+            <ImageButton
+                android:id="@+id/pauseButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/round_button"
+                android:src="@drawable/pause_icon"
+                android:scaleType="centerInside"/>
+
+            <Button
+                android:id="@+id/speedHalfButton"
+                android:layout_width="54dp"
+                android:layout_height="50dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/round_button"
+                android:paddingHorizontal="10dp"
+                android:text="0.5x"
+                android:textColor="@android:color/white"
+                android:textSize="14sp" />
+
+            <!-- Replay Button -->
+
+            <!-- Go to End Button -->
+
+            <Button
+                android:id="@+id/speedDoubleButton"
+                android:layout_width="54dp"
+                android:layout_height="50dp"
+                android:background="@drawable/round_button"
+                android:paddingHorizontal="10dp"
+                android:text="2x"
+                android:textColor="@android:color/white"
+                android:textSize="14sp" />
+
+            <ImageButton
+                android:id="@+id/replayButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/round_button"
+                android:src="@drawable/rewind_icon"
+                android:translationX="4dp" />
+
+
+
+            <ImageButton
+                android:id="@+id/goToEndButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/round_button"
+                android:src="@android:drawable/ic_media_next" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <SeekBar
+        android:id="@+id/trajectorySeekBar"
+        android:layout_width="238dp"
+        android:layout_height="46dp"
+        android:progressDrawable="@drawable/custom_seekbar"
+        android:thumb="@drawable/custom_thumb"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.87" />
+
+    <TextView
+        android:id="@+id/timeElapsedTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/rounded_background2"
+        android:elevation="4dp"
+        android:padding="6dp"
+        android:text="00:00"
+        android:textColor="@color/black"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/timeRemainingTextView"
+        app:layout_constraintHorizontal_bias="0.054"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.871" />
+
+    <TextView
+        android:id="@+id/timeRemainingTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/rounded_background2"
+        android:elevation="4dp"
+        android:padding="6dp"
+        android:text="00:00"
+        android:textColor="@color/black"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.871" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
