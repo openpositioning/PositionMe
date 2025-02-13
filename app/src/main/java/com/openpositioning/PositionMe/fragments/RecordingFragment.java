@@ -72,47 +72,47 @@ import java.util.List;
 public class RecordingFragment extends Fragment {
 
     //Button to end PDR recording
-    private Button stopButton;
-    private Button cancelButton;
+    protected Button stopButton;
+    protected Button cancelButton;
     //Recording icon to show user recording is in progress
-    private ImageView recIcon;
+    protected ImageView recIcon;
     //Loading bar to show time remaining before recording automatically ends
-    private ProgressBar timeRemaining;
+    protected ProgressBar timeRemaining;
     //Text views to display distance travelled and elevation since beginning of recording
 
-    private TextView elevation;
-    private TextView distanceTravelled;
+    protected TextView elevation;
+    protected TextView distanceTravelled;
     // Text view to show the error between current PDR and current GNSS
-    private TextView gnssError;
+    protected TextView gnssError;
 
     //App settings
-    private SharedPreferences settings;
+    protected SharedPreferences settings;
     //Singleton class to collect all sensor data
-    private SensorFusion sensorFusion;
+    protected SensorFusion sensorFusion;
     //Timer to end recording
-    private CountDownTimer autoStop;
+    protected CountDownTimer autoStop;
     // Responsible for updating UI in Loop
-    private Handler refreshDataHandler;
+    protected Handler refreshDataHandler;
 
     //variables to store data of the trajectory
-    private float distance;
-    private float previousPosX;
-    private float previousPosY;
+    protected float distance;
+    protected float previousPosX;
+    protected float previousPosY;
 
     // Starting point coordinates
-    private static LatLng start;
+    protected static LatLng start;
     // Storing the google map object
-    private GoogleMap gMap;
+    protected GoogleMap gMap;
     //Switch Map Dropdown
-    private Spinner switchMapSpinner;
+    protected Spinner switchMapSpinner;
     //Map Marker
-    private Marker orientationMarker;
+    protected Marker orientationMarker;
     // Current Location coordinates
-    private LatLng currentLocation;
+    protected LatLng currentLocation;
     // Next Location coordinates
-    private LatLng nextLocation;
+    protected LatLng nextLocation;
     // Stores the polyline object for plotting path
-    private Polyline polyline;
+    protected Polyline polyline;
     // Manages overlaying of the indoor maps
     public IndoorMapManager indoorMapManager;
     // Floor Up button
@@ -537,6 +537,9 @@ public class RecordingFragment extends Fragment {
         if (orientationMarker!=null) {
             orientationMarker.setRotation((float) Math.toDegrees(sensorFusion.passOrientation()));
         }
+
+//        System.out.println("POSMELOG: updateUIandPosition: pdrValues="+pdrValues);
+        System.out.println("POSMELOG: updateUIandPosition: currentLocation="+currentLocation);
     }
     /**
      * Plots the users location based on movement in Real-time

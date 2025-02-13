@@ -120,5 +120,9 @@
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
+    <string name="replay">Replay</string>
+    <string name="restart" />
+    <string name="play_pause" />
+    <string name="go_to_end" />
 
 </resources>

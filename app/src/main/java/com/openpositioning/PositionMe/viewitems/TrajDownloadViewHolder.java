@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.viewitems;
 
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -24,8 +25,10 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
     TextView trajId;
     TextView trajDate;
     ImageButton downloadButton;
+    Button replayButton;
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
+    private WeakReference<FIReplayClickListener> replayListenerReference;
 
     /**
      * {@inheritDoc}
@@ -36,14 +39,24 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
      * @see com.openpositioning.PositionMe.fragments.FilesFragment generating the data and implementing the
      * listener.
      */
-    public TrajDownloadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
+    public TrajDownloadViewHolder(@NonNull View itemView, DownloadClickListener listener, FIReplayClickListener replayListener) {
         super(itemView);
         this.listenerReference = new WeakReference<>(listener);
+        this.replayListenerReference = new WeakReference<>(replayListener);
         this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
         this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
         this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
+        this.replayButton = itemView.findViewById(R.id.replayButton);
 
         this.downloadButton.setOnClickListener(this);
+
+        // Add replay button click listener
+        this.replayButton.setOnClickListener(v -> {
+            if (replayListenerReference.get() != null) {
+                replayListenerReference.get().onReplayClicked(getAdapterPosition());
+            }
+        });
+
     }
 
 

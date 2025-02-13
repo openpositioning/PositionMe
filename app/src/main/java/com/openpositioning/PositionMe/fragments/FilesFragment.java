@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.fragments;
 
 import android.app.AlertDialog;
 import android.app.DownloadManager;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
@@ -10,6 +11,7 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -29,6 +31,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -181,62 +184,82 @@ public class FilesFragment extends Fragment implements Observer {
      * Update the RecyclerView in the FilesFragment with new data.
      * Must be called from a UI thread. Initialises a new Layout Manager, and passes it to the
      * RecyclerView. Initialises a {@link TrajDownloadListAdapter} with the input array and setting
-     * up a listener so that trajectories are downloaded when clicked, and a proper pop-up message is
-     * displayed to notify the user of the download result.
+     * up a listener so that trajectories are downloaded when clicked, and a pop-up message is
+     * displayed to notify the user.
      *
      * @param entryList List of Maps of String to String containing metadata about the uploaded
      *                  trajectories (ID, owner ID, date).
      */
     private void updateView(List<Map<String, String>> entryList) {
-        // Initialise RecyclerView with Manager and Adapter
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
 
-        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
-            System.out.println("Position: " + position);
-            Map targetFile = entryList.get(position);
-            int id = Integer.parseInt(targetFile.get("id").toString());
+        listAdapter = new TrajDownloadListAdapter(
+                getActivity(),
+                entryList,
+                // Download click handler
+                position -> {
+                    serverCommunications.downloadTrajectory(position);
+                    new AlertDialog.Builder(getContext())
+                            .setTitle("File downloaded")
+                            .setMessage("Trajectory downloaded to local storage")
+                            .setPositiveButton(R.string.ok, null)
+                            .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
+                                startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
+                            })
+                            .setIcon(R.drawable.ic_baseline_download_24)
+                            .show();
+                },
+                // Replay click handler
+                position -> {
+                    Map<String, String> selectedTrajectory = entryList.get(position);
+                    String trajectoryId = selectedTrajectory.get("id");
+                    String dateSubmitted = selectedTrajectory.get("date_submitted");
 
-            // Create and show a progress dialog using AlertDialog
-            AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-            builder.setTitle("Downloading");
-            builder.setMessage("Please wait while the trajectory is being downloaded...");
-            builder.setCancelable(false); // Prevent user from dismissing the dialog manually
+                    Context ctx = getActivity();
+                    assert ctx != null;
 
-            AlertDialog progressDialog = builder.create();
-            progressDialog.show(); // Show the progress dialog
+                    String filePath = ctx.getFilesDir() + "/raw_trajectory_" + trajectoryId + ".pkt";
+                    File trajectoryFile = new File(filePath);
 
-            // Call downloadTrajectory with a callback
-            serverCommunications.downloadTrajectory(id, new ServerCommunications.DownloadResultCallback() {
-                @Override
-                public void onResult(boolean success) {
-                    // Run UI updates on the main thread
-                    getActivity().runOnUiThread(() -> {
-                        // Dismiss the progress dialog now that the download is complete
-                        progressDialog.dismiss();
+                    // For debugging
+                    System.out.println("Replay requested for trajectory:" +
+                            "\nID: " + trajectoryId +
+                            "\nDate: " + dateSubmitted +
+                            "\nExpect-Filepath: " + filePath);
 
-                        // Show the appropriate dialog based on the download result
-                        if (success) { // If the download was successful
-                            new AlertDialog.Builder(getContext())
-                                    .setTitle("File downloaded")
-                                    .setMessage("Trajectory downloaded to local storage")
-                                    .setPositiveButton(R.string.ok, null)
-                                    .setNegativeButton(R.string.show_storage, (dialog, which) ->
-                                            startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)))
-                                    .setIcon(R.drawable.ic_baseline_download_24)
-                                    .show();
-                        } else { // If the download failed
-                            new AlertDialog.Builder(getContext())
-                                    .setTitle("Download Failed")
-                                    .setMessage("Trajectory download failed. Please try again.")
-                                    .setPositiveButton(R.string.ok, null)
-                                    .show();
+                    Toast.makeText(getContext(),
+                            "Preparing to replay trajectory " + trajectoryId,
+                            Toast.LENGTH_SHORT).show();
+
+                    AlertDialog loadingDialog = new AlertDialog.Builder(getContext())
+                            .setTitle("Preparing Replay")
+                            .setMessage("Downloading trajectory data...")
+                            .setCancelable(false)
+                            .create();
+                    loadingDialog.show();
+                    serverCommunications.downloadRawProtobufTrajectory(position, trajectoryId);
+
+                    // Check periodically if file exists (since downloadTrajectory is async)
+                    new Handler().postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (trajectoryFile.exists()) {
+                                loadingDialog.dismiss();
+                                // Navigate to replay
+                                NavDirections action = FilesFragmentDirections
+                                        .actionFilesFragmentToReplayFragment(filePath);
+                                Navigation.findNavController(requireView()).navigate(action);
+                            } else {
+                                // Check again in 500ms
+                                System.out.println("[HANDLER] Could not find file at " + filePath);
+                                new Handler().postDelayed(this, 500);
+                            }
                         }
-                    });
+                    }, 500);
                 }
-            });
-        });
+        );
 
         filesList.setAdapter(listAdapter);
     }

@@ -25,9 +25,11 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
     TextView trajId;
     TextView trajDate;
     ImageButton uploadButton;
+
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
     public Button deletebutton;
+    public Button replayButton;
 
     /**
      * {@inheritDoc}
@@ -48,6 +50,7 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
 
         this.uploadButton.setOnClickListener(this);
         this.deletebutton = itemView.findViewById(R.id.deletebutton);
+        this.replayButton = itemView.findViewById(R.id.replayButton);
     }
 
     /**

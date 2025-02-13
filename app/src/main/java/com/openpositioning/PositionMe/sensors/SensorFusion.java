@@ -96,7 +96,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Server communication class for sending data
     private ServerCommunications serverCommunications;
     // Trajectory object containing all data
-    private Traj.Trajectory.Builder trajectory;
+    public Traj.Trajectory.Builder trajectory;
 
     // Settings
     private boolean saveRecording;
@@ -335,18 +335,25 @@ public class SensorFusion implements SensorEventListener, Observer {
             case Sensor.TYPE_STEP_DETECTOR:
                 //Store time of step
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
-                float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
-                if (saveRecording) {
-                    // Store the PDR coordinates for plotting the trajectory
-                    this.pathView.drawTrajectory(newCords);
+
+                // We should only process if we have enough acceleration data.
+                if (!this.accelMagnitude.isEmpty()) {
+                    float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
+                    if (saveRecording) {
+                        // Store the PDR coordinates for plotting the trajectory
+                        this.pathView.drawTrajectory(newCords);
+                    }
+                    this.accelMagnitude.clear();
+                    if (saveRecording) {
+                        stepCounter++;
+                        trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+                                .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
+                                .setX(newCords[0]).setY(newCords[1]));
+                    }
+                } else {
+                    System.out.println("Sensor.TYPE_STEP_DETECTOR: skipping this step because we don't have enough accelerometer data.");
                 }
-                this.accelMagnitude.clear();
-                if (saveRecording) {
-                    stepCounter++;
-                    trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
-                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
-                            .setX(newCords[0]).setY(newCords[1]));
-                }
+
                 break;
         }
     }
@@ -382,6 +389,17 @@ public class SensorFusion implements SensorEventListener, Observer {
                 }
             }
         }
+    }
+
+    /**
+     * Sets the initial position of the trajectory using the provided latitude and longitude.
+     *
+     * @param lat   The latitude of the initial position.
+     * @param longi The longitude of the initial position.
+     */
+    public void writeInitialPositionToTraj(float lat, float longi)
+    {
+        trajectory.setInitialPos(createInitialPosBuilder(lat, longi));
     }
 
     /**
@@ -721,6 +739,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see GNSSDataProcessor handles location data.
      */
     public void resumeListening() {
+        System.out.println("resumeListening()");
         accelerometerSensor.sensorManager.registerListener(this, accelerometerSensor.sensor, 10000);
         accelerometerSensor.sensorManager.registerListener(this, linearAccelerationSensor.sensor, 10000);
         accelerometerSensor.sensorManager.registerListener(this, gravitySensor.sensor, 10000);
@@ -745,6 +764,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see GNSSDataProcessor handles location data.
      */
     public void stopListening() {
+        System.out.println("stopListening()");
         if(!saveRecording) {
             // Unregister sensor-manager based devices
             accelerometerSensor.sensorManager.unregisterListener(this);
@@ -778,6 +798,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see Traj object for storing data.
      */
     public void startRecording() {
+        System.out.println("startRecording(): Starting, acquiring the wake lock.");
         // Acquire wakelock so the phone will record with a locked screen. Timeout after 31 minutes.
         this.wakeLock.acquire(31*60*1000L /*31 minutes*/);
         this.saveRecording = true;
@@ -859,6 +880,20 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setType(sensor.sensorInfo.getType());
     }
 
+
+    /**
+     * Creates and returns a builder for the initial position of the trajectory.
+     *
+     * @param lat   The latitude of the initial position.
+     * @param longi The longitude of the initial position.
+     * @return A builder instance with the specified latitude and longitude set.
+     */
+    public Traj.Initial_Pos.Builder createInitialPosBuilder(float lat, float longi)
+    {
+        return Traj.Initial_Pos.newBuilder().setInitialLatitude(lat).setInitialLongitude(longi);
+    }
+
+
     /**
      * Timer task to record data with the desired frequency in the trajectory class.
      *
@@ -867,6 +902,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     private class storeDataInTrajectory extends TimerTask {
         public void run() {
+//            System.out.println("TimerTask.storeDataInTrajectory: run()");
             // Store IMU and magnetometer data in Trajectory class
             trajectory.addImuData(Traj.Motion_Sample.newBuilder()
                     .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
@@ -891,6 +927,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Divide timer with a counter for storing data every 1 second
             if (counter == 99) {
                 counter = 0;
+                System.out.println("TimerTask.storeDataInTrajectory: counter == 99, so; storing pressure and light data");
                 // Store pressure and light data
                 if (barometerSensor.sensor != null) {
                     trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
@@ -904,6 +941,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                 // Divide the timer for storing AP data every 5 seconds
                 if (secondCounter == 4) {
+                    System.out.println("TimerTask.storeDataInTrajectory: secondCounter == 4, so; storing SSIDs");
                     secondCounter = 0;
                     //Current Wifi Object
                     Wifi currentWifi = wifiProcessor.getCurrentWifiData();

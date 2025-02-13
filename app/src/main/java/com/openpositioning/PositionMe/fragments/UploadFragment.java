@@ -5,25 +5,26 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-import android.os.Environment;
-import android.os.Build;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.Navigation;
+import androidx.navigation.NavDirections;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.appcompat.app.AppCompatActivity;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.viewitems.DownloadClickListener;
+import com.openpositioning.PositionMe.viewitems.ReplayClickListener;
 import com.openpositioning.PositionMe.viewitems.UploadListAdapter;
 
 import java.io.File;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 
 /**
  * A simple {@link Fragment} subclass. Displays trajectories that were saved locally because no
@@ -32,7 +33,7 @@ import java.util.stream.Stream;
  *
  * @author Mate Stodulka
  */
-public class UploadFragment extends Fragment {
+public class UploadFragment extends Fragment implements ReplayClickListener {
 
     // UI elements
     private TextView emptyNotice;
@@ -58,28 +59,13 @@ public class UploadFragment extends Fragment {
      * Initialises new Server Communication instance with the context, and finds all the files that
      * match the trajectory naming scheme in local storage.
      */
-
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         // Get communication class
         serverCommunications = new ServerCommunications(getActivity());
-
-        // Determine the directory to load trajectory files from.
-        File trajectoriesDir = null;
-
-        // for android 13 or higher use dedicated external storage
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            trajectoriesDir = getActivity().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            if (trajectoriesDir == null) {
-                trajectoriesDir = getActivity().getFilesDir();
-            }
-        } else { // for android 12 or lower use internal storage
-            trajectoriesDir = getActivity().getFilesDir();
-        }
-
-        localTrajectories = Stream.of(trajectoriesDir.listFiles((file, name) ->
-                        name.contains("trajectory_") && name.endsWith(".txt")))
+        // Load local trajectories
+        localTrajectories = Stream.of(getActivity().getFilesDir().listFiles((file, name) -> name.contains("trajectory_") && name.endsWith(".txt")))
                 .filter(file -> !file.isDirectory())
                 .collect(Collectors.toList());
     }
@@ -92,6 +78,8 @@ public class UploadFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         getActivity().setTitle("Upload");
+
+
         // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_upload, container, false);
     }
@@ -140,8 +128,19 @@ public class UploadFragment extends Fragment {
 //                    localTrajectories.remove(position);
 //                    listAdapter.notifyItemRemoved(position);
                 }
-            });
+            }, this);
             uploadList.setAdapter(listAdapter);
         }
+    }
+
+
+    public void onReplayClicked(File trajectoryFile)
+    {
+        NavDirections action = UploadFragmentDirections
+                .actionUploadFragmentToReplayFragment(trajectoryFile.getAbsolutePath());
+
+        Navigation.findNavController(getView()).navigate(action);
+
+        ((AppCompatActivity)getActivity()).getSupportActionBar().hide();
     }
 }
