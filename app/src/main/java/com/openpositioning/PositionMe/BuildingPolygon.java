@@ -21,6 +21,19 @@ public class BuildingPolygon {
     public static final LatLng LIBRARY_NE=new LatLng(55.92306692576906, -3.174771893078224);
     public static final LatLng LIBRARY_SW=new LatLng(55.92281045664704, -3.175184089079065);
     // Boundary coordinates of the Nucleus building (clockwise)
+    public static final LatLng FLEEMING_NE=new LatLng(55.922795644237574, -3.172590999121778);
+    public static final LatLng FLEEMING_SW=new LatLng(55.92217867969299, -3.1723778181203066);
+    public static final LatLng FLEEMING_NW=new LatLng(55.92267120276125, -3.1729395780918668);
+    public static final LatLng FLEEMING_SE=new LatLng(55.922289704728435, -3.1720198754618534);
+    public static final LatLng HUDSON_NE=new LatLng(55.92249233774948, -3.171660730901822);
+    public static final LatLng HUDSON_SE=new LatLng(55.92222123124437, -3.1712962191735006);
+    public static final LatLng HUDSON_NW=new LatLng(55.92268084126103, -3.1711342135685694);
+    public static final LatLng HUDSON_SW=new LatLng(55.92240649428076, -3.1707803099666454);
+    public static final LatLng SANDERSON_NE=new LatLng(55.923341373371784, -3.171908560007919);
+    public static final LatLng SANDERSON_SE=new LatLng(55.92288116339978, -3.1713849360942903);
+    public static final LatLng SANDERSON_NW=new LatLng(55.92310586595678, -3.1725266865044666);
+    public static final LatLng SANDERSON_SW=new LatLng(55.92266024166355, -3.1720001697597033);
+    // Boundary coordinates of the Nucleus building (clockwise)
 
     public static final List<LatLng> NUCLEUS_POLYGON = new ArrayList<LatLng>() {{
         add(BuildingPolygon.NUCLEUS_NE);
@@ -34,6 +47,27 @@ public class BuildingPolygon {
         add(new LatLng(BuildingPolygon.LIBRARY_SW.latitude,BuildingPolygon.LIBRARY_NE.longitude));//(South-East)
         add(BuildingPolygon.LIBRARY_SW);
         add(new LatLng(BuildingPolygon.LIBRARY_NE.latitude,BuildingPolygon.LIBRARY_SW.longitude));//(North-West)
+    }};
+
+    public static final List<LatLng> FLEEMING_POLYGON = new ArrayList<LatLng>() {{
+        add(BuildingPolygon.FLEEMING_NE);
+        add(BuildingPolygon.FLEEMING_SE);//(South-East)
+        add(BuildingPolygon.FLEEMING_SW);
+        add(BuildingPolygon.FLEEMING_NW);//(North-West)
+    }};
+
+    public static final List<LatLng> HUDSON_POLYGON = new ArrayList<LatLng>() {{
+        add(BuildingPolygon.HUDSON_NE);
+        add(BuildingPolygon.HUDSON_SE);//(South-East)
+        add(BuildingPolygon.HUDSON_SW);
+        add(BuildingPolygon.HUDSON_NW);//(North-West)
+    }};
+
+    public static final List<LatLng> SANDERSON_POLYGON = new ArrayList<LatLng>() {{
+        add(BuildingPolygon.SANDERSON_NE);
+        add(BuildingPolygon.SANDERSON_SE);//(South-East)
+        add(BuildingPolygon.SANDERSON_SW);
+        add(BuildingPolygon.SANDERSON_NW);//(North-West)
     }};
 
     /**
@@ -53,6 +87,23 @@ public class BuildingPolygon {
     public static boolean inLibrary(LatLng point){
         return (pointInPolygon(point,LIBRARY_POLYGON));
     }
+    /**
+     * Function to check if a point is in the Fleeming Jenkins Building
+     * @param point the point which is checked if inside the building
+     * @return True if point is in Fleeming jenkins building else False
+     */
+    public static boolean inFleeming(LatLng point){
+        return (pointInPolygon(point,FLEEMING_POLYGON));
+    }
+
+    public static boolean inHudson(LatLng point){
+        return (pointInPolygon(point,HUDSON_POLYGON));
+    }
+
+    public static boolean inSanderson(LatLng point){
+        return (pointInPolygon(point,SANDERSON_POLYGON));
+    }
+
 
     /**
      * Function to check if point in polygon (approximates earth to be flat)
