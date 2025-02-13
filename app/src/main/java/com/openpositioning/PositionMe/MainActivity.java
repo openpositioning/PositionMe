@@ -28,6 +28,9 @@ import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 import androidx.preference.PreferenceManager;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
@@ -71,6 +74,24 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private SensorFusion sensorFusion;
     private Handler httpResponseHandler;
 
+    private static final int REQUEST_ID_PERMISSIONS = 100;
+    private static final String[] MANDATORY_PERMISSIONS = {
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACTIVITY_RECOGNITION
+    };
+
+    private static final String[] OPTIONAL_PERMISSIONS = {
+            Manifest.permission.WAKE_LOCK,
+            Manifest.permission.ACCESS_WIFI_STATE,
+            Manifest.permission.CHANGE_WIFI_STATE,
+            Manifest.permission.ACCESS_NETWORK_STATE,
+            Manifest.permission.INTERNET,
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+    };
+    private final Deque<String> pendingPermissions = new ArrayDeque<>();
+
     //endregion
 
     //region Activity Lifecycle
@@ -107,26 +128,83 @@ public class MainActivity extends AppCompatActivity implements Observer {
         settings.edit().putBoolean("permanentDeny", false).apply();
 
         //Check Permissions
-        if(ActivityCompat.checkSelfPermission(this,
-                    Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(this,
-                    Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(this,
-                    Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(this,
-                    Manifest.permission.CHANGE_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(this,
-                    Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(this,
-                    Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(this,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(this,
-                        Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED){
-            askLocationPermissions();
-        }
+        checkPermissionsPhase();
+
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();
+    }
+
+    private void checkPermissionsPhase() {
+        pendingPermissions.clear();
+
+        // check mandatory permissions
+        for (String perm : MANDATORY_PERMISSIONS) {
+            if (!hasPermission(perm)) pendingPermissions.add(perm);
+        }
+
+        // check optional permissions
+        for (String perm : OPTIONAL_PERMISSIONS) {
+            if (!hasPermission(perm)) pendingPermissions.add(perm);
+        }
+
+        if (!pendingPermissions.isEmpty()) {
+            requestNextPermission();
+        } else {
+            allPermissionsObtained();
+        }
+    }
+
+    private boolean hasPermission(String permission) {
+        return ActivityCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestNextPermission() {
+        if (pendingPermissions.isEmpty()) {
+            allPermissionsObtained();
+            return;
+        }
+
+        String nextPermission = pendingPermissions.pollFirst();
+        ActivityCompat.requestPermissions(this, new String[]{nextPermission}, REQUEST_ID_PERMISSIONS);
+    }
+
+    private boolean isMandatoryPermission(String permission) {
+        for (String p : MANDATORY_PERMISSIONS) {
+            if (p.equals(permission)) return true;
+        }
+        return false;
+    }
+
+    private void handleMandatoryDenied(String deniedPermission) {
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, deniedPermission)) {
+            showRationaleDialog(deniedPermission);
+        } else {
+            showPermanentDenyDialog();
+        }
+    }
+
+    private void showRationaleDialog(String permission) {
+        new AlertDialog.Builder(this)
+                .setTitle("Permission Required")
+                .setMessage("This feature requires the " + permission + " permission to work properly")
+                .setPositiveButton("Retry", (d, w) -> requestNextPermission())
+                .setNegativeButton("Exit", (d, w) -> finishAffinity())
+                .show();
+    }
+
+    private void showPermanentDenyDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Permissions Required")
+                .setMessage("You have permanently denied required permissions. Please enable them in settings.")
+                .setPositiveButton("Settings", (d, w) -> openAppSettings())
+                .setNegativeButton("Exit", (d, w) -> finishAffinity())
+                .show();
+    }
+
+    private void openAppSettings() {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        intent.setData(Uri.fromParts("package", getPackageName(), null));
+        startActivity(intent);
     }
 
     /**
@@ -338,81 +416,18 @@ public class MainActivity extends AppCompatActivity implements Observer {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        switch (requestCode) {
-            case REQUEST_ID_LOCATION_PERMISSION: { // Location permissions
-                // If request is cancelled results are empty
-                if (grantResults.length > 1 &&
-                        grantResults[0] == PackageManager.PERMISSION_GRANTED &&
-                        grantResults[1] == PackageManager.PERMISSION_GRANTED &&
-                        grantResults[2] == PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(this, "Location permissions granted!", Toast.LENGTH_SHORT).show();
-                    this.settings.edit().putBoolean("gps", true).apply();
-                    askWifiPermissions();
-                }
-                else {
-                    if(!settings.getBoolean("permanentDeny", false)) {
-                        permissionsDeniedFirst();
-                    }
-                    else permissionsDeniedPermanent();
-                    Toast.makeText(this, "Location permissions denied!", Toast.LENGTH_SHORT).show();
-                    // Unset setting
-                    this.settings.edit().putBoolean("gps", false).apply();
-                }
-                break;
+        if (requestCode != REQUEST_ID_PERMISSIONS) return;
 
-            }
-            case REQUEST_ID_WIFI_PERMISSION: { // Wifi permissions
-                // If request is cancelled results are empty
-                if (grantResults.length > 1 &&
-                        grantResults[0] == PackageManager.PERMISSION_GRANTED &&
-                        grantResults[1] == PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(this, "Permissions granted!", Toast.LENGTH_SHORT).show();
-                    this.settings.edit().putBoolean("wifi", true).apply();
-                    askStoragePermission();
-                }
-                else {
-                    if(!settings.getBoolean("permanentDeny", false)) {
-                        permissionsDeniedFirst();
-                    }
-                    else permissionsDeniedPermanent();
-                    Toast.makeText(this, "Wifi permissions denied!", Toast.LENGTH_SHORT).show();
-                    // Unset setting
-                    this.settings.edit().putBoolean("wifi", false).apply();
-                }
-                break;
-            }
-            case REQUEST_ID_READ_WRITE_PERMISSION: { // Read write permissions
-                // If request is cancelled results are empty
-                if (grantResults.length > 1 &&
-                        grantResults[0] == PackageManager.PERMISSION_GRANTED &&
-                        grantResults[1] == PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(this, "Permissions granted!", Toast.LENGTH_SHORT).show();
-                    askMotionPermissions();
-                }
-                else {
-                    if(!settings.getBoolean("permanentDeny", false)) {
-                        permissionsDeniedFirst();
-                    }
-                    else permissionsDeniedPermanent();
-                    Toast.makeText(this, "Storage permissions denied!", Toast.LENGTH_SHORT).show();
-                }
-                break;
-            }
-            case REQUEST_ID_ACTIVITY_PERMISSION: { // Activity permissions
-                // If request is cancelled results are empty
-                if (grantResults.length >= 1 &&
-                        grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(this, "Permissions granted!", Toast.LENGTH_SHORT).show();
-                    allPermissionsObtained();
-                }
-                else {
-                    if(!settings.getBoolean("permanentDeny", false)) {
-                        permissionsDeniedFirst();
-                    }
-                    else permissionsDeniedPermanent();
-                    Toast.makeText(this, "Activity permissions denied!", Toast.LENGTH_SHORT).show();
-                }
-                break;
+        boolean isMandatory = isMandatoryPermission(permissions[0]);
+
+        if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            requestNextPermission();
+        } else {
+            if (isMandatory) {
+                handleMandatoryDenied(permissions[0]);
+            } else {
+                // Optional permission denied - just move on
+                requestNextPermission();
             }
         }
     }

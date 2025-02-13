@@ -341,21 +341,39 @@ public class ServerCommunications implements Observable {
                     //String storagePath = Environment.getExternalStoragePublicDirectory(Environment
                            // .DIRECTORY_DOWNLOADS).toString();
                     String storagePath = context.getFilesDir().toString();
+                    
+                    // save the received trajectory as a protobuf file
+                    File file = new File(storagePath, "received_trajectory.traj");
 
-                    File file = new File(storagePath, "received_trajectory.txt");
-                    try (FileWriter fileWriter = new FileWriter(file)) {
-                        fileWriter.write(receivedTrajectoryString);
-                        fileWriter.flush();
-                        System.err.println("Received trajectory stored in: " + storagePath);
+                    try (FileOutputStream fileOutputStream = new FileOutputStream(file)) {
+                        fileOutputStream.write(byteArray); // byteArray is the byte array of the protobuf object
+                        System.err.println("Received trajectory stored in: " + file.getAbsolutePath());
+                        System.out.println("ReplayFragment PDR number: " + receivedTrajectory.getPdrDataCount());
+                        System.out.println("ReplayFragment GNSS number: " + receivedTrajectory.getGnssDataCount());
                     } catch (IOException ee) {
-                        System.err.println("Trajectory download failed");
-                    } finally {
-                        // Close all streams and entries to release resources
-                        zipInputStream.closeEntry();
-                        byteArrayOutputStream.close();
-                        zipInputStream.close();
-                        inputStream.close();
+                        System.err.println("Trajectory download failed: " + ee.getMessage());
                     }
+
+                    // Close all streams and entries to release resources
+                    zipInputStream.closeEntry();
+                    byteArrayOutputStream.close();
+                    zipInputStream.close();
+                    inputStream.close();
+
+                    // File file = new File(storagePath, "received_trajectory.txt");
+                    // try (FileWriter fileWriter = new FileWriter(file)) {
+                    //     fileWriter.write(receivedTrajectoryString);
+                    //     fileWriter.flush();
+                    //     System.err.println("Received trajectory stored in: " + storagePath);
+                    // } catch (IOException ee) {
+                    //     System.err.println("Trajectory download failed");
+                    // } finally {
+                    //     // Close all streams and entries to release resources
+                    //     zipInputStream.closeEntry();
+                    //     byteArrayOutputStream.close();
+                    //     zipInputStream.close();
+                    //     inputStream.close();
+                    // }
                 }
             }
         });

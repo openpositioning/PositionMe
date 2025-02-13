@@ -46,7 +46,10 @@ public class StartLocationFragment extends Fragment {
     private float[] startPosition = new float[2];
     //Zoom of google maps
     private NucleusBuildingManager NucleusBuildingManager;
+
+
     private float zoom = 19f;
+    private int FloorNK;
 
     /**
      * Public Constructor for the class.
@@ -83,18 +86,19 @@ public class StartLocationFragment extends Fragment {
 
         // This is just a demonstration of the automatic expansion of the indoor map.
         // Assume that we have obtained the user's position "newPosition" from the callback function. >>>
-        if (newPosition != null) {
-            // Check if the user's position is inside the defined building polygon
-            if (NucleusBuildingManager.isPointInBuilding(newPosition)) {
-                FloorButtons.setVisibility(View.VISIBLE);
-                switchFloorNU(floor);
-                InNu = 1; // Mark indoor map status
-            } else {
-                NucleusBuildingManager.getIndoorMapManager().hideMap();
-                FloorButtons.setVisibility(View.GONE);
-                InNu = 0; // Mark indoor map status
-            }
-        }
+
+//        if (newPosition != null) {
+//            // Check if the user's position is inside the defined building polygon
+//            if (NucleusBuildingManager.isPointInBuilding(newPosition)) {
+//                FloorButtons.setVisibility(View.VISIBLE);
+//                switchFloorNU(floor);
+//                InNu = 1; // Mark indoor map status
+//            } else {
+//                NucleusBuildingManager.getIndoorMapManager().hideMap();
+//                FloorButtons.setVisibility(View.GONE);
+//                InNu = 0; // Mark indoor map status
+//            }
+//        }
 
 
         // Asynchronous map which can be configured
@@ -119,6 +123,7 @@ public class StartLocationFragment extends Fragment {
                     // Create NuclearBuildingManager instance
                     NucleusBuildingManager = new NucleusBuildingManager(mMap);
                     NucleusBuildingManager.getIndoorMapManager().hideMap();
+
                 }
 
                 // Add a marker in current GPS location and move the camera

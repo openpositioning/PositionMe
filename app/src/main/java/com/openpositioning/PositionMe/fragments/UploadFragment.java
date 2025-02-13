@@ -124,6 +124,9 @@ public class UploadFragment extends Fragment {
                 }
             });
             uploadList.setAdapter(listAdapter);
+
+
         }
     }
+
 }

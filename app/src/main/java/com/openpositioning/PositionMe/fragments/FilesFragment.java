@@ -10,6 +10,7 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -34,6 +35,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A simple {@link Fragment} subclass. The files fragments displays a list of trajectories already
@@ -55,6 +57,8 @@ public class FilesFragment extends Fragment implements Observer {
 
     // Class handling HTTP communication
     private ServerCommunications serverCommunications;
+
+    private Button REPLAY;
 
     /**
      * Default public constructor, empty.
@@ -97,27 +101,7 @@ public class FilesFragment extends Fragment implements Observer {
      * @see TrajDownloadListAdapter the list adapter for displaying the recycler view.
      * @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view the elements in the list.
      */
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        // Get recyclerview
-        filesList = view.findViewById(R.id.filesList);
-        // Get clickable card view
-        uploadCard = view.findViewById(R.id.uploadCard);
-        uploadCard.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Navigates to {@link UploadFragment}.
-             */
-            @Override
-            public void onClick(View view) {
-                NavDirections action = FilesFragmentDirections.actionFilesFragmentToUploadFragment();
-                Navigation.findNavController(view).navigate(action);
-            }
-        });
-        // Request list of uploaded trajectories from the server.
-        serverCommunications.sendInfoRequest();
-    }
+
 
     /**
      * {@inheritDoc}
@@ -210,5 +194,38 @@ public class FilesFragment extends Fragment implements Observer {
                     .show();
         });
         filesList.setAdapter(listAdapter);
+
+    }
+
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        // 获取 RecyclerView
+        filesList = view.findViewById(R.id.filesList);
+
+        // 获取上传按钮
+        uploadCard = view.findViewById(R.id.uploadCard);
+        uploadCard.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                NavDirections action = FilesFragmentDirections.actionFilesFragmentToUploadFragment();
+                Navigation.findNavController(view).navigate(action);
+            }
+        });
+
+        // 获取并初始化 REPLAY 按钮
+        REPLAY = view.findViewById(R.id.replayButton); // 确保 fragment_files.xml 里有这个按钮
+        REPLAY.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                NavDirections action = FilesFragmentDirections.actionFilesFragmentToReplayFragment();
+                Navigation.findNavController(view).navigate(action);
+            }
+        });
+
+        // 请求服务器数据
+        serverCommunications.sendInfoRequest();
     }
 }

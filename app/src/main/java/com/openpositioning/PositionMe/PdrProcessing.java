@@ -146,7 +146,7 @@ public class PdrProcessing {
             // return current position, do not update
             return new float[]{this.positionX, this.positionY};
         }
-        
+
         // Calculate step length
         if(!useManualStep) {
             //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);

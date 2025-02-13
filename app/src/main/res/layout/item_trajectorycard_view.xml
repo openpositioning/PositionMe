@@ -27,22 +27,26 @@
             <TextView
                 android:id="@+id/trajectoryIdItem"
                 android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:layout_marginStart="8dp"
+                android:layout_height="80dp"
+                android:layout_marginStart="16dp"
                 android:gravity="center"
-                android:text="999"
+                android:text="9999"
                 android:textColor="@color/lightLogoBlue"
-                android:textSize="65dp"
+                android:textSize="20sp"
                 android:textStyle="bold"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                android:maxLines="1"
+                app:autoSizeTextType="none"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.473" />
+
 
             <TextView
                 android:id="@+id/trajectoryDateItem"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="5dp"
                 android:layout_marginEnd="8dp"
                 android:text="1998-05-19 05:28:42"
                 android:textColor="@color/LightYellow"
