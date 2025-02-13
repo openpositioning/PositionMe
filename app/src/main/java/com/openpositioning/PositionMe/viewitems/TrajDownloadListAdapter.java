@@ -30,21 +30,25 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
     private final Context context;
     private final List<Map<String, String>>  responseItems;
-    private final DownloadClickListener listener;
+    private final DownloadClickListener downloadClickListener;
+
+    private final DownloadClickListener playClickListener;
 
     /**
      * Default public constructor with context for inflating views and list to be displayed.
      *
      * @param context       application context to enable inflating views used in the list.
      * @param responseItems List of Maps, where each map is a response item from the server.
-     * @param listener      clickListener to download trajectories when clicked.
+     * @param downloadClickListener clickListener to download trajectories when clicked.
+     * @param playClickListener clickListener to play trajectories when clicked.
      *
      * @see com.openpositioning.PositionMe.Traj protobuf objects exchanged with the server.
      */
-    public TrajDownloadListAdapter(Context context, List<Map<String, String>> responseItems, DownloadClickListener listener) {
+    public TrajDownloadListAdapter(Context context, List<Map<String, String>> responseItems, DownloadClickListener downloadClickListener, DownloadClickListener playClickListener) {
         this.context = context;
         this.responseItems = responseItems;
-        this.listener = listener;
+        this.downloadClickListener = downloadClickListener;
+        this.playClickListener = playClickListener;
     }
 
     /**
@@ -55,7 +59,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     @NonNull
     @Override
     public TrajDownloadViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        return new TrajDownloadViewHolder(LayoutInflater.from(context).inflate(R.layout.item_trajectorycard_view, parent, false), listener);
+        return new TrajDownloadViewHolder(LayoutInflater.from(context).inflate(R.layout.item_trajectorycard_view, parent, false), downloadClickListener, playClickListener);
     }
 
     /**
@@ -69,8 +73,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     public void onBindViewHolder(@NonNull TrajDownloadViewHolder holder, int position) {
         String id = responseItems.get(position).get("id");
         holder.trajId.setText(id);
-        if(id.length() > 2) holder.trajId.setTextSize(58);
-        else holder.trajId.setTextSize(65);
+        if(id.length() > 2) holder.trajId.setTextSize(25);
+        else holder.trajId.setTextSize(25);
         holder.trajDate.setText(
                 dateFormat.format(
                         LocalDateTime.parse(
@@ -90,4 +94,3 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         return responseItems.size();
     }
 }
-
