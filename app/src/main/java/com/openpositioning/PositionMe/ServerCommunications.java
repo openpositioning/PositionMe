@@ -48,7 +48,7 @@ import okhttp3.ResponseBody;
  * @author Michal Dvorak
  * @author Mate Stodulka
  *
- * By G09:
+ * By G02:
  * Stopped encording download data to JSON format, and keep it being Protobuf for a more straight-forward
  * download&replay
  *

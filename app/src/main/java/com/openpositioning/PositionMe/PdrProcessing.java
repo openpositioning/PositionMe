@@ -29,7 +29,7 @@ import java.util.OptionalDouble;
  * the filter will predict the current value rather than simply returning 0. Sensor data validity is checked before computation.
  * </p>
  *
- * @author Zonghanzhao @12/02/2025 From group09
+ * @author Zonghanzhao @12/02/2025 From group02
  */
 public class PdrProcessing {
 

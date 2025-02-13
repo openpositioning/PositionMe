@@ -47,7 +47,7 @@ import com.openpositioning.PositionMe.fragments.StartLocationFragment;
  * @author Mate Stodulka
  * @author Virginia Cangelosi
  *
- * @author Zonghanzhao @12/02/2025 From group09
+ * @author Zonghanzhao @12/02/2025 From group02
  */
 public class CorrectionFragment extends Fragment {
 
