@@ -8,73 +8,84 @@
     android:layout_height="match_parent"
     tools:context=".fragments.ReplayFragment">
 
-    <!-- 地图 Fragment 容器 -->
+    <!-- Map Fragment Container -->
     <FrameLayout
         android:id="@+id/fragment_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 
-    <!-- 顶部/中部覆盖层：添加额外的控件，采用 ConstraintLayout -->
+    <!-- Top/Middle Overlay: Using ConstraintLayout -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/fragment_control_root"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:padding="16dp">
 
-        <!-- AutoFloor 开关 -->
-        <Switch
-            android:id="@+id/autoFloor"
-            android:layout_width="126dp"
-            android:layout_height="67dp"
-            android:text="Auto Floor"
-            android:background="@color/light_gray"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
-        <!-- GNSS 开关 -->
+        <!-- GNSS Switch (Uniform size: 125dp x 66dp) -->
         <Switch
             android:id="@+id/gnssSwitch"
             android:layout_width="125dp"
             android:layout_height="66dp"
             android:layout_marginTop="16dp"
             android:text="GNSS"
-            android:background="@color/light_gray"
+            android:background="@color/white"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/autoFloor" />
+            app:layout_constraintTop_toTopOf="parent"/>
 
-        <!-- 楼层上升按钮 -->
+        <!-- Map Switch Dropdown Menu (Uniform size: 125dp x 66dp), placed to the right of GNSS Switch -->
+        <Spinner
+            android:id="@+id/mapSwitchSpinner"
+            android:layout_width="125dp"
+            android:layout_height="66dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="16dp"
+            android:background="@color/white"
+            android:spinnerMode="dropdown"
+            android:text="@string/choose_map"
+            app:layout_constraintStart_toEndOf="@id/gnssSwitch"
+            app:layout_constraintTop_toTopOf="parent"/>
+
+        <!-- Auto Floor Switch, placed below the Map Dropdown Menu on the right side of the screen -->
+        <Switch
+            android:id="@+id/autoFloor"
+            android:layout_width="125dp"
+            android:layout_height="66dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/rounded_corner_pastel_blue"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="@string/auto_floor"
+            android:textColor="@color/black"
+            app:layout_constraintTop_toBottomOf="@id/mapSwitchSpinner"
+            app:layout_constraintEnd_toEndOf="parent"/>
+
+        <!-- Floor Up Button -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="8dp"
+            android:clickable="true"
+            android:contentDescription="@string/floor_up_button"
             android:src="@android:drawable/arrow_up_float"
-            android:contentDescription="Floor Up"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"/>
+            app:layout_constraintBottom_toTopOf="@+id/floorDownButton"
+            app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- 楼层下降按钮 -->
+        <!-- Floor Down Button -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="250dp"
+            android:clickable="true"
+            android:contentDescription="@string/floor_down_button"
             android:src="@android:drawable/arrow_down_float"
-            android:contentDescription="Floor Down"
-            app:layout_constraintTop_toBottomOf="@id/floorUpButton"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="16dp"/>
-
-        <!-- 换色按钮 -->
-        <Button
-            android:id="@+id/lineColorButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Change Color"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"/>
-
+            app:layout_constraintEnd_toEndOf="parent"/>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- 底部区域：包含播放、暂停、退出、重启、跳到末尾按钮和进度条 -->
+    <!-- Bottom Area: Includes Play, Pause, Exit, Restart, Go to End Buttons, and Progress Bar -->
     <LinearLayout
         android:id="@+id/bottomControls"
         android:layout_width="match_parent"
@@ -82,7 +93,7 @@
         android:orientation="vertical"
         android:layout_gravity="bottom">
 
-        <!-- 播放区：按钮横向排列，按钮宽度相等 -->
+        <!-- Playback Area: Buttons arranged horizontally with equal width -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
