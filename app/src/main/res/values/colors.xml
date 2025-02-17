@@ -13,5 +13,7 @@
     <color name="darkLogoBlue">#FF001080</color>
     <color name="primaryBlue">#FF001080</color>
     <color name="red">#FE0000</color>
+    <color name="light_gray">#D3D3D3</color>
+
 
 </resources>
