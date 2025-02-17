@@ -1,6 +1,6 @@
 package com.openpositioning.PositionMe;
 
-import android.content.Context;
+import  android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.SensorManager;
 

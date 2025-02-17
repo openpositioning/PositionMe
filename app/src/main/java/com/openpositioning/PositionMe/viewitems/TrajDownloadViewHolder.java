@@ -1,10 +1,13 @@
 package com.openpositioning.PositionMe.viewitems;
 
+
+import android.os.Bundle;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
@@ -24,6 +27,8 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
     TextView trajId;
     TextView trajDate;
     ImageButton downloadButton;
+
+    ImageButton playButton;
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
 
@@ -42,8 +47,10 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
         this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
         this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
+        this.playButton = itemView.findViewById(R.id.play_button_item);
 
         this.downloadButton.setOnClickListener(this);
+        this.playButton.setOnClickListener(this);
     }
 
 
@@ -53,6 +60,21 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
      */
     @Override
     public void onClick(View view) {
-        listenerReference.get().onPositionClicked(getAdapterPosition());
+        DownloadClickListener listener = listenerReference.get();
+        if (listener != null) {
+            if (view.getId() == R.id.downloadTrajectoryButton) {
+                listener.onPositionClicked(getAdapterPosition());
+            } else if (view.getId() == R.id.play_button_item) {
+                // 获取当前轨迹的 ID
+                String trajId = this.trajId.getText().toString();
+                // 使用 Bundle 传递轨迹 ID 到 replayFragment
+                Bundle bundle = new Bundle();
+                bundle.putString("trajectoryId", trajId);
+                Navigation.findNavController(view)
+                        .navigate(R.id.action_uploadFragment_to_ReplayFragment, bundle);
+            }
+
+        }
     }
 }
+
