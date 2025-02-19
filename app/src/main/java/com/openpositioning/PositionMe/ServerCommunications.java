@@ -2,15 +2,24 @@ package com.openpositioning.PositionMe;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.hardware.SensorManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.Build;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
 
+import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.fragments.FilesFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
-import com.google.protobuf.util.JsonFormat;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -18,10 +27,13 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -59,8 +71,8 @@ public class ServerCommunications implements Observable {
     private List<Observer> observers;
 
     // Static constants necessary for communications
-    private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
-    private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
+    private static final String userKey = "";
+    private static final String masterKey = "";
     private static final String uploadURL =
             "https://openpositioning.org/api/live/trajectory/upload/" + userKey
                     + "/?key=" + masterKey;
@@ -105,13 +117,23 @@ public class ServerCommunications implements Observable {
         // Convert the trajectory to byte array
         byte[] binaryTrajectory = trajectory.toByteArray();
 
-        // Get the directory path for storing the file with the trajectory
-        java.io.File path = context.getFilesDir();
+        File path = null;
+        // for android 13 or higher use dedicated external storage
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+            if (path == null) {
+                path = context.getFilesDir();
+            }
+        } else { // for android 12 or lower use internal storage
+            path = context.getFilesDir();
+        }
+
+        System.out.println(path.toString());
 
         // Format the file name according to date
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
         Date date = new Date();
-        java.io.File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
+        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
 
         try {
             // Write the binary data to the file
@@ -128,14 +150,14 @@ public class ServerCommunications implements Observable {
         checkNetworkStatus();
 
         // Check if user preference allows for syncing with mobile data
-        // TODO: add sync delay and enforce settings
+        // ODO: add sync delay and enforce settings
         boolean enableMobileData = this.settings.getBoolean("mobile_sync", false);
         // Check if device is connected to WiFi or to mobile data with enabled preference
         if(this.isWifiConn || (enableMobileData && isMobileConn)) {
             // Instantiate client for HTTP requests
             OkHttpClient client = new OkHttpClient();
 
-            // Creaet a equest body with a file to upload in multipart/form-data format
+            // Creaet a request body with a file to upload in multipart/form-data format
             RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", file.getName(),
                             RequestBody.create(MediaType.parse("text/plain"), file))
@@ -166,7 +188,14 @@ public class ServerCommunications implements Observable {
                         // exception
                         if (!response.isSuccessful()) {
                             //file.delete();
-                            System.err.println("POST error response: " + responseBody.string());
+//                        System.err.println("POST error response: " + responseBody.string());
+
+                            String errorBody = responseBody.string();
+                            infoResponse = "Upload failed: " + errorBody;
+                            new Handler(Looper.getMainLooper()).post(() ->
+                                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
+
+                            System.err.println("POST error response: " + errorBody);
                             success = false;
                             notifyObservers(1);
                             throw new IOException("Unexpected code " + response);
@@ -203,14 +232,35 @@ public class ServerCommunications implements Observable {
      *
      * @param localTrajectory the File object of the local trajectory to be uploaded
      */
+    /**
+     * Uploads a local trajectory file to the API server in the specified format.
+     * {@link okhttp3.OkHttp} library is used for the asynchronous POST request.
+     *
+     * @param localTrajectory the File object of the local trajectory to be uploaded
+     */
     public void uploadLocalTrajectory(File localTrajectory) {
+
         // Instantiate client for HTTP requests
         OkHttpClient client = new OkHttpClient();
 
+        // robustness improvement
+        RequestBody fileRequestBody;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                byte[] fileBytes = Files.readAllBytes(localTrajectory.toPath());
+                fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), fileBytes);
+            } catch (IOException e) {
+                e.printStackTrace();
+                // if failed, use File object to construct RequestBody
+                fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), localTrajectory);
+            }
+        } else {
+            fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), localTrajectory);
+        }
+
         // Create request body with a file to upload in multipart/form-data format
         RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("file", localTrajectory.getName(),
-                        RequestBody.create(MediaType.parse("text/plain"), localTrajectory))
+                .addFormDataPart("file", localTrajectory.getName(), fileRequestBody)
                 .build();
 
         // Create a POST request with the required headers
@@ -220,23 +270,31 @@ public class ServerCommunications implements Observable {
 
         // Enqueue the request to be executed asynchronously and handle the response
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override public void onFailure(Call call, IOException e) {
+            @Override
+            public void onFailure(Call call, IOException e) {
                 // Print error message, set success to false and notify observers
                 e.printStackTrace();
-                localTrajectory.delete();
+//          localTrajectory.delete();
                 success = false;
                 System.err.println("UPLOAD: Failure to get response");
                 notifyObservers(1);
+                infoResponse = "Upload failed: " + e.getMessage(); // Store error message
+                new Handler(Looper.getMainLooper()).post(() ->
+                        Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
             }
 
-            @Override public void onResponse(Call call, Response response) throws IOException {
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful()) {
                         // Print error message, set success to false and throw an exception
                         success = false;
-                        System.err.println("UPLOAD unsuccessful: " + responseBody.string());
                         notifyObservers(1);
-                        localTrajectory.delete();
+                        String errorBody = responseBody.string();
+                        System.err.println("UPLOAD unsuccessful: " + errorBody);
+                        infoResponse = "Upload failed: " + errorBody;
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
                         throw new IOException("UPLOAD failed with code " + response);
                     }
 
@@ -258,14 +316,21 @@ public class ServerCommunications implements Observable {
     }
 
     /**
+     * Callback interface for handling the result of a download operation.
+     */
+    public interface DownloadResultCallback {
+        void onResult(boolean success);
+    }
+
+    /**
      * Perform API request for downloading a Trajectory uploaded to the server. The trajectory is
-     * retrieved from a zip file, with the method accepting a position argument specifying the
+     * retrieved from a zip file, with the method accepting an id argument specifying the
      * trajectory to be downloaded. The trajectory is then converted to a protobuf object and
      * then to a JSON string to be downloaded to the device's Downloads folder.
      *
-     * @param position the position of the trajectory in the zip file to retrieve
+     * @param id the id of the trajectory to be downloaded
      */
-    public void downloadTrajectory(int position) {
+    public void downloadTrajectory(int id, DownloadResultCallback callback) {
         // Initialise OkHttp client
         OkHttpClient client = new OkHttpClient();
 
@@ -276,75 +341,305 @@ public class ServerCommunications implements Observable {
                 .get()
                 .build();
 
-        // Enqueue the GET request for asynchronous execution
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override public void onFailure(Call call, IOException e) {
+            @Override
+            public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
+                // Notify failure on callback (remember to run on UI thread if needed)
+                if (callback != null) {
+                    callback.onResult(false);
+                }
             }
 
-            @Override public void onResponse(Call call, Response response) throws IOException {
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                boolean success = false;
                 try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful()) throw new IOException("Unexpected code "
-                            + response);
+                    if (!response.isSuccessful())
+                        throw new IOException("Unexpected code " + response);
+
+                    // Set target file name
+                    String targetFileName = id + ".pkt";
 
                     // Create input streams to process the response
                     InputStream inputStream = responseBody.byteStream();
                     ZipInputStream zipInputStream = new ZipInputStream(inputStream);
+                    ZipEntry zipEntry;
+                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                    boolean fileFound = false;
 
-                    // Get the nth entry in the zip file
-                    java.util.zip.ZipEntry zipEntry;
-                    int zipCount = 0;
+                    // Search for the target file in the zip archive
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                        if (zipCount == position) {
-                            // break if zip entry position matches the desired position
+                        if (zipEntry.getName().equals(targetFileName)) {
+                            fileFound = true;
+                            byte[] buffer = new byte[1024];
+                            int bytesRead;
+                            while ((bytesRead = zipInputStream.read(buffer)) != -1) {
+                                byteArrayOutputStream.write(buffer, 0, bytesRead);
+                            }
                             break;
                         }
-                        zipCount++;
                     }
 
-                    // Initialise a byte array output stream
-                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-
-                    // Read the zipped data and write it to the byte array output stream
-                    byte[] buffer = new byte[1024];
-                    int bytesRead;
-                    while ((bytesRead = zipInputStream.read(buffer)) != -1) {
-                        byteArrayOutputStream.write(buffer, 0, bytesRead);
+                    // Check if the target file was found
+                    if (!fileFound) {
+                        System.err.println("File not found: " + targetFileName);
+                        return; // Exit the method if the file is not found
                     }
 
-                    // Convert the byte array to a protobuf object
+                    // Convert to protobuf and then to JSON string
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
-
-                    // Convert the protobuf object to a string
                     JsonFormat.Printer printer = JsonFormat.printer();
                     String receivedTrajectoryString = printer.print(receivedTrajectory);
-                    System.out.println("Successful download: "
-                            + receivedTrajectoryString.substring(0, 100));
+                    System.out.println("Successful download: " + receivedTrajectoryString.substring(0, 100));
 
-                    // Save the received trajectory to a file in the Downloads folder
-                    //String storagePath = Environment.getExternalStoragePublicDirectory(Environment
-                           // .DIRECTORY_DOWNLOADS).toString();
-                    String storagePath = context.getFilesDir().toString();
+                    // Determine storage directory (for Android versions)
+                    File storageDir = null;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        storageDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                        if (storageDir == null) {
+                            storageDir = context.getFilesDir();
+                        }
+                    } else {
+                        storageDir = context.getFilesDir();
+                    }
+                    File file = new File(storageDir, "received_trajectory.txt");
 
-                    File file = new File(storagePath, "received_trajectory.txt");
+                    // Write the downloaded data to a file
                     try (FileWriter fileWriter = new FileWriter(file)) {
                         fileWriter.write(receivedTrajectoryString);
                         fileWriter.flush();
-                        System.err.println("Received trajectory stored in: " + storagePath);
+                        System.out.println("Received trajectory stored in: " + storageDir.getAbsolutePath());
+
+                        success = true;// Set success to true
                     } catch (IOException ee) {
                         System.err.println("Trajectory download failed");
                     } finally {
-                        // Close all streams and entries to release resources
                         zipInputStream.closeEntry();
                         byteArrayOutputStream.close();
                         zipInputStream.close();
                         inputStream.close();
                     }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                } finally {
+                    // Notify the callback of the result
+                    if (callback != null) {
+                        callback.onResult(success);
+                    }
                 }
             }
         });
+    }
 
+    /**
+     * Callback interface for handling the result of a download operation that returns a string.
+     */
+    public interface DownloadStringResultCallback {
+        void onResult(String result);
+    }
+
+    /**
+     * Perform API request for downloading a Trajectory uploaded to the server. The trajectory is
+     * retrieved from a zip file, with the method accepting an id argument specifying the
+     * trajectory to be downloaded. The trajectory is then converted to a protobuf object and
+     * then to a JSON string to be returned.
+     *
+     * @param id the id of the trajectory to be downloaded
+     * @param callback the callback to handle the result as a string
+     */
+    public void replayTrajectory(int id, DownloadStringResultCallback callback) {
+        // Initialise OkHttp client
+        OkHttpClient client = new OkHttpClient();
+
+        // Create GET request with required header
+        okhttp3.Request request = new okhttp3.Request.Builder()
+                .url(downloadURL + "&id=" + id)
+                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+                .get()
+                .build();
+
+        client.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
+                // Notify failure on callback (remember to run on UI thread if needed)
+                if (callback != null) {
+                    callback.onResult(null);
+                }
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String receivedTrajectoryString = null;
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful())
+                        throw new IOException("Unexpected code " + response);
+
+                    // Set target file name
+                    String targetFileName = id + ".pkt";
+
+                    // Create input streams to process the response
+                    InputStream inputStream = responseBody.byteStream();
+                    ZipInputStream zipInputStream = new ZipInputStream(inputStream);
+                    ZipEntry zipEntry;
+                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                    boolean fileFound = false;
+
+                    // Search for the target file in the zip archive
+                    while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                        if (zipEntry.getName().equals(targetFileName)) {
+                            fileFound = true;
+                            byte[] buffer = new byte[1024];
+                            int bytesRead;
+                            while ((bytesRead = zipInputStream.read(buffer)) != -1) {
+                                byteArrayOutputStream.write(buffer, 0, bytesRead);
+                            }
+                            break;
+                        }
+                    }
+
+                    // Check if the target file was found
+                    if (!fileFound) {
+                        System.err.println("File not found: " + targetFileName);
+                        return; // Exit the method if the file is not found
+                    }
+
+                    byte[] byteArray = byteArrayOutputStream.toByteArray();
+                    Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
+
+// Extract Pdr_Sample and GNSS_Sample information
+                    List<Traj.Pdr_Sample> pdrSamples = receivedTrajectory.getPdrDataList();
+                    List<Traj.GNSS_Sample> gnssSamples = receivedTrajectory.getGnssDataList();
+                    List<Traj.Motion_Sample> imuSamples = receivedTrajectory.getImuDataList();
+
+                    List<Double> accelMagnitudeOvertime = new ArrayList<>(imuSamples.size());
+                    List<Float> headingRadList = new ArrayList<>(imuSamples.size());
+
+                    float[] rotationMatrix = new float[9];
+                    float[] orientation = new float[3];
+
+// 计算加速度和航向角，并存入列表
+                    for (Traj.Motion_Sample sample : imuSamples) {
+                        // 从旋转向量计算旋转矩阵
+                        float[] rotationVector = new float[]{
+                                sample.getRotationVectorX(),
+                                sample.getRotationVectorY(),
+                                sample.getRotationVectorZ(),
+                                sample.getRotationVectorW()
+                        };
+                        SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVector);
+
+                        // 从旋转矩阵计算方向角
+                        SensorManager.getOrientation(rotationMatrix, orientation);
+                        float headingRad = orientation[0]; // 方位角（航向角）
+                        headingRadList.add(headingRad);
+
+                        // 计算加速度模长
+                        double accelMagnitude = Math.sqrt(
+                                sample.getAccX() * sample.getAccX() +
+                                        sample.getAccY() * sample.getAccY() +
+                                        sample.getAccZ() * sample.getAccZ()
+                        );
+                        accelMagnitudeOvertime.add(accelMagnitude);
+                    }
+
+                    PdrProcessing pdrProcessing = new PdrProcessing(context);
+                    JSONArray pdrJsonArray = new JSONArray();
+                    for (int i = 0; i < imuSamples.size(); i++) {
+                        float[] pdrCoords = pdrProcessing.updatePdr(
+                                imuSamples.get(i).getRelativeTimestamp(),
+                                accelMagnitudeOvertime,
+                                headingRadList.get(i)
+                        );
+
+
+
+
+
+
+                        JSONObject pdrJson = new JSONObject();
+                        pdrJson.put("relative_timestamp", imuSamples.get(i).getRelativeTimestamp());
+                        pdrJson.put("x", pdrCoords[0]);
+                        pdrJson.put("y", pdrCoords[1]);
+                        pdrJsonArray.put(pdrJson);
+                    }
+
+
+                    // Check if PDR samples are empty
+                    if (pdrSamples.isEmpty()) {
+                        System.out.println("PDR samples are empty.");
+                    }
+
+                    // Check if GNSS samples are empty
+                    if (gnssSamples.isEmpty()) {
+                        System.out.println("GNSS samples are empty.");
+                    }
+
+
+                    JSONArray gnssSamplesJsonArray = new JSONArray();
+                    for (Traj.GNSS_Sample gnssSample : gnssSamples) {
+                        JSONObject gnssSampleJson = new JSONObject();
+                        gnssSampleJson.put("relative_timestamp", gnssSample.getRelativeTimestamp());
+                        gnssSampleJson.put("latitude", gnssSample.getLatitude());
+                        gnssSampleJson.put("longitude", gnssSample.getLongitude());
+                        gnssSampleJson.put("altitude", gnssSample.getAltitude());
+                        gnssSampleJson.put("accuracy", gnssSample.getAccuracy());
+                        gnssSampleJson.put("speed", gnssSample.getSpeed());
+                        gnssSampleJson.put("provider", gnssSample.getProvider());
+                        gnssSamplesJsonArray.put(gnssSampleJson);
+                    }
+
+                    // Log the extracted information
+                    System.out.println("PDR Samples: " + pdrJsonArray.toString());
+                    System.out.println("GNSS Samples: " + gnssSamplesJsonArray.toString());
+
+                    // Create a JSON object to hold both arrays
+                    JSONObject resultJson = new JSONObject();
+                    resultJson.put("pdr_samples", pdrJsonArray);
+                    resultJson.put("gnss_samples", gnssSamplesJsonArray);
+
+                    // Convert the JSON object to a string
+                    receivedTrajectoryString = resultJson.toString();
+
+                    // Determine storage directory (for Android versions)
+                    File storageDir = null;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        storageDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                        if (storageDir == null) {
+                            storageDir = context.getFilesDir();
+                        }
+                    } else {
+                        storageDir = context.getFilesDir();
+                    }
+                    File file = new File(storageDir, "received_trajectory_" + id + ".json");
+
+                    // Write the downloaded data to a file
+                    try (FileWriter fileWriter = new FileWriter(file)) {
+                        fileWriter.write(receivedTrajectoryString);
+                        fileWriter.flush();
+                        System.out.println("Received trajectory stored in: " + storageDir.getAbsolutePath());
+
+                        // Set success to true
+                    } catch (IOException ee) {
+                        System.err.println("Trajectory download failed");
+                    } finally {
+                        zipInputStream.closeEntry();
+                        byteArrayOutputStream.close();
+                        zipInputStream.close();
+                        inputStream.close();
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                } finally {
+                    // Notify the callback of the result
+                    if (callback != null) {
+                        callback.onResult(receivedTrajectoryString);
+                    }
+                }
+            }
+        });
     }
 
     /**

@@ -13,8 +13,6 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 
-import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -22,6 +20,9 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
+
 /**
  * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
  * recording starts. This fragment displays a map in which the user can adjust their location to
@@ -44,7 +45,9 @@ public class StartLocationFragment extends Fragment {
     //Start position of the user to be stored
     private float[] startPosition = new float[2];
     //Zoom of google maps
+    private NucleusBuildingManager NucleusBuildingManager;
     private float zoom = 19f;
+    private int FloorNK;
 
     /**
      * Public Constructor for the class.
@@ -78,6 +81,24 @@ public class StartLocationFragment extends Fragment {
         SupportMapFragment supportMapFragment=(SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.startMap);
 
+
+        // This is just a demonstration of the automatic expansion of the indoor map.
+        // Assume that we have obtained the user's position "newPosition" from the callback function. >>>
+
+//        if (newPosition != null) {
+//            // Check if the user's position is inside the defined building polygon
+//            if (NucleusBuildingManager.isPointInBuilding(newPosition)) {
+//                FloorButtons.setVisibility(View.VISIBLE);
+//                switchFloorNU(floor);
+//                InNu = 1; // Mark indoor map status
+//            } else {
+//                NucleusBuildingManager.getIndoorMapManager().hideMap();
+//                FloorButtons.setVisibility(View.GONE);
+//                InNu = 0; // Mark indoor map status
+//            }
+//        }
+
+
         // Asynchronous map which can be configured
         supportMapFragment.getMapAsync(new OnMapReadyCallback() {
             /**
@@ -94,6 +115,13 @@ public class StartLocationFragment extends Fragment {
                 mMap.getUiSettings().setTiltGesturesEnabled(true);
                 mMap.getUiSettings().setRotateGesturesEnabled(true);
                 mMap.getUiSettings().setScrollGesturesEnabled(true);
+
+
+                if (mMap != null) {
+                    // Create NuclearBuildingManager instance
+                    NucleusBuildingManager = new NucleusBuildingManager(mMap);
+                    NucleusBuildingManager.getIndoorMapManager().hideMap();
+                }
 
                 // Add a marker in current GPS location and move the camera
                 position = new LatLng(startPosition[0], startPosition[1]);
@@ -157,5 +185,20 @@ public class StartLocationFragment extends Fragment {
                 Navigation.findNavController(view).navigate(action);
             }
         });
+
     }
+
+    /**
+     * Switches the indoor map to the specified floor.
+     *
+     * @param floorIndex the index of the floor to switch to
+     */
+    private void switchFloorNU(int floorIndex) {
+        FloorNK = floorIndex; // Set the current floor index
+        if (NucleusBuildingManager != null) {
+            // Call the switchFloor method of the IndoorMapManager to switch to the specified floor
+            NucleusBuildingManager.getIndoorMapManager().switchFloor(floorIndex);
+        }
+    }
+
 }

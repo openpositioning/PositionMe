@@ -7,7 +7,6 @@
     tools:context=".fragments.HomeFragment">
 
 
-
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
@@ -36,8 +35,8 @@
             android:enabled="false"
             android:paddingStart="15dp"
             android:paddingTop="5dp"
-            android:paddingBottom="10dp"
             android:paddingEnd="10dp"
+            android:paddingBottom="10dp"
             android:text="@string/start"
             android:textColor="@color/LightYellow"
             android:textSize="18dp"
@@ -54,8 +53,8 @@
             android:id="@+id/otherButtonLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
             android:gravity="center"
+            android:orientation="horizontal"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -65,8 +64,8 @@
                 android:id="@+id/measurementButton"
                 android:layout_width="165dp"
                 android:layout_height="150dp"
-                android:layout_marginEnd="12dp"
                 android:layout_marginTop="6dp"
+                android:layout_marginEnd="12dp"
                 android:layout_marginBottom="6dp"
                 android:background="@drawable/rounded_corner"
                 android:scaleType="centerCrop"
