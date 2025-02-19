@@ -31,6 +31,11 @@ public class WiFiPositioning {
     // Queue for storing the POST requests made
     private RequestQueue requestQueue;
     // URL for WiFi positioning API
+//    private static final String userKey = "ygowxLsiAJEZ89_ZS6V2Ew";
+//    private static final String masterKey = "ewireless";
+//    private static final String url =
+//            "https://openpositioning.org/api/position/fine/" + userKey
+//                    + "/?key=" + masterKey;
     private static final String url="https://openpositioning.org/api/position/fine";
 
     /**

@@ -522,7 +522,7 @@ public class RecordingFragment extends Fragment {
             // Auto-floor logic
             if(autoFloor.isChecked()){
                 indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-                ,true);
+                        ,true);
             }
         }else{
             // Hide the buttons and switch used to change floor if indoor map is not visible
@@ -546,20 +546,20 @@ public class RecordingFragment extends Fragment {
         if (currentLocation!=null){
             // Calculate new position based on net PDR movement
             nextLocation=UtilFunctions.calculateNewPos(currentLocation,pdrMoved);
-                //Try catch to prevent exceptions from crashing the app
-                try{
-                    // Adds new location to polyline to plot the PDR path of user
-                    List<LatLng> pointsMoved = polyline.getPoints();
-                    pointsMoved.add(nextLocation);
-                    polyline.setPoints(pointsMoved);
-                    // Change current location to new location and zoom there
-                    orientationMarker.setPosition(nextLocation);
-                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
-                }
-                catch (Exception ex){
-                    Log.e("PlottingPDR","Exception: "+ex);
-                }
-                currentLocation=nextLocation;
+            //Try catch to prevent exceptions from crashing the app
+            try{
+                // Adds new location to polyline to plot the PDR path of user
+                List<LatLng> pointsMoved = polyline.getPoints();
+                pointsMoved.add(nextLocation);
+                polyline.setPoints(pointsMoved);
+                // Change current location to new location and zoom there
+                orientationMarker.setPosition(nextLocation);
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
+            }
+            catch (Exception ex){
+                Log.e("PlottingPDR","Exception: "+ex);
+            }
+            currentLocation=nextLocation;
         }
         else{
             //Initialise the starting location

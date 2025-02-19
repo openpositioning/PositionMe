@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/ReplayMap"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".fragments.ReplayFragment">
+
+    <!-- Map Fragment Container -->
+    <FrameLayout
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+    <!-- Top/Middle Overlay: Using ConstraintLayout -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/fragment_control_root"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="16dp">
+
+        <!-- GNSS Switch (Uniform size: 125dp x 66dp) -->
+        <Switch
+            android:id="@+id/gnssSwitch"
+            android:layout_width="125dp"
+            android:layout_height="66dp"
+            android:layout_marginTop="16dp"
+            android:text="GNSS"
+            android:background="@color/white"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"/>
+
+        <!-- Map Switch Dropdown Menu (Uniform size: 125dp x 66dp), placed to the right of GNSS Switch -->
+        <Spinner
+            android:id="@+id/mapSwitchSpinner"
+            android:layout_width="125dp"
+            android:layout_height="66dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="16dp"
+            android:background="@color/white"
+            android:spinnerMode="dropdown"
+            android:text="@string/choose_map"
+            app:layout_constraintStart_toEndOf="@id/gnssSwitch"
+            app:layout_constraintTop_toTopOf="parent"/>
+
+        <!-- Auto Floor Switch, placed below the Map Dropdown Menu on the right side of the screen -->
+        <Switch
+            android:id="@+id/autoFloor"
+            android:layout_width="125dp"
+            android:layout_height="66dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/rounded_corner_pastel_blue"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="@string/auto_floor"
+            android:textColor="@color/black"
+            app:layout_constraintTop_toBottomOf="@id/mapSwitchSpinner"
+            app:layout_constraintEnd_toEndOf="parent"/>
+
+        <!-- Floor Up Button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorUpButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="8dp"
+            android:clickable="true"
+            android:contentDescription="@string/floor_up_button"
+            android:src="@android:drawable/arrow_up_float"
+            app:layout_constraintBottom_toTopOf="@+id/floorDownButton"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Floor Down Button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorDownButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="250dp"
+            android:clickable="true"
+            android:contentDescription="@string/floor_down_button"
+            android:src="@android:drawable/arrow_down_float"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"/>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Bottom Area: Includes Play, Pause, Exit, Restart, Go to End Buttons, and Progress Bar -->
+    <LinearLayout
+        android:id="@+id/bottomControls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_gravity="bottom">
+
+        <!-- Playback Area: Buttons arranged horizontally with equal width -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:weightSum="5">
+
+            <Button
+                android:id="@+id/play_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Play"
+                android:textSize="10sp" />
+
+            <Button
+                android:id="@+id/pause_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Pause"
+                android:textSize="10sp" />
+
+            <Button
+                android:id="@+id/exit_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Exit"
+                android:textSize="10sp" />
+
+            <Button
+                android:id="@+id/restart_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Restart"
+                android:textSize="10sp" />
+
+            <Button
+                android:id="@+id/go_to_end_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Go to End"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            style="?android:attr/progressBarStyleHorizontal"/>
+    </LinearLayout>
+
+</FrameLayout>

@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.hardware.SensorManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
@@ -17,6 +18,9 @@ import com.openpositioning.PositionMe.fragments.FilesFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -26,6 +30,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -66,8 +71,8 @@ public class ServerCommunications implements Observable {
     private List<Observer> observers;
 
     // Static constants necessary for communications
-    private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
-    private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
+    private static final String userKey = "";
+    private static final String masterKey = "";
     private static final String uploadURL =
             "https://openpositioning.org/api/live/trajectory/upload/" + userKey
                     + "/?key=" + masterKey;
@@ -422,6 +427,215 @@ public class ServerCommunications implements Observable {
                     // Notify the callback of the result
                     if (callback != null) {
                         callback.onResult(success);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Callback interface for handling the result of a download operation that returns a string.
+     */
+    public interface DownloadStringResultCallback {
+        void onResult(String result);
+    }
+
+    /**
+     * Perform API request for downloading a Trajectory uploaded to the server. The trajectory is
+     * retrieved from a zip file, with the method accepting an id argument specifying the
+     * trajectory to be downloaded. The trajectory is then converted to a protobuf object and
+     * then to a JSON string to be returned.
+     *
+     * @param id the id of the trajectory to be downloaded
+     * @param callback the callback to handle the result as a string
+     */
+    public void replayTrajectory(int id, DownloadStringResultCallback callback) {
+        // Initialise OkHttp client
+        OkHttpClient client = new OkHttpClient();
+
+        // Create GET request with required header
+        okhttp3.Request request = new okhttp3.Request.Builder()
+                .url(downloadURL + "&id=" + id)
+                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+                .get()
+                .build();
+
+        client.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
+                // Notify failure on callback (remember to run on UI thread if needed)
+                if (callback != null) {
+                    callback.onResult(null);
+                }
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String receivedTrajectoryString = null;
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful())
+                        throw new IOException("Unexpected code " + response);
+
+                    // Set target file name
+                    String targetFileName = id + ".pkt";
+
+                    // Create input streams to process the response
+                    InputStream inputStream = responseBody.byteStream();
+                    ZipInputStream zipInputStream = new ZipInputStream(inputStream);
+                    ZipEntry zipEntry;
+                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                    boolean fileFound = false;
+
+                    // Search for the target file in the zip archive
+                    while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                        if (zipEntry.getName().equals(targetFileName)) {
+                            fileFound = true;
+                            byte[] buffer = new byte[1024];
+                            int bytesRead;
+                            while ((bytesRead = zipInputStream.read(buffer)) != -1) {
+                                byteArrayOutputStream.write(buffer, 0, bytesRead);
+                            }
+                            break;
+                        }
+                    }
+
+                    // Check if the target file was found
+                    if (!fileFound) {
+                        System.err.println("File not found: " + targetFileName);
+                        return; // Exit the method if the file is not found
+                    }
+
+                    byte[] byteArray = byteArrayOutputStream.toByteArray();
+                    Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
+
+// Extract Pdr_Sample and GNSS_Sample information
+                    List<Traj.Pdr_Sample> pdrSamples = receivedTrajectory.getPdrDataList();
+                    List<Traj.GNSS_Sample> gnssSamples = receivedTrajectory.getGnssDataList();
+                    List<Traj.Motion_Sample> imuSamples = receivedTrajectory.getImuDataList();
+
+                    List<Double> accelMagnitudeOvertime = new ArrayList<>(imuSamples.size());
+                    List<Float> headingRadList = new ArrayList<>(imuSamples.size());
+
+                    float[] rotationMatrix = new float[9];
+                    float[] orientation = new float[3];
+
+// 计算加速度和航向角，并存入列表
+                    for (Traj.Motion_Sample sample : imuSamples) {
+                        // 从旋转向量计算旋转矩阵
+                        float[] rotationVector = new float[]{
+                                sample.getRotationVectorX(),
+                                sample.getRotationVectorY(),
+                                sample.getRotationVectorZ(),
+                                sample.getRotationVectorW()
+                        };
+                        SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVector);
+
+                        // 从旋转矩阵计算方向角
+                        SensorManager.getOrientation(rotationMatrix, orientation);
+                        float headingRad = orientation[0]; // 方位角（航向角）
+                        headingRadList.add(headingRad);
+
+                        // 计算加速度模长
+                        double accelMagnitude = Math.sqrt(
+                                sample.getAccX() * sample.getAccX() +
+                                        sample.getAccY() * sample.getAccY() +
+                                        sample.getAccZ() * sample.getAccZ()
+                        );
+                        accelMagnitudeOvertime.add(accelMagnitude);
+                    }
+
+                    PdrProcessing pdrProcessing = new PdrProcessing(context);
+                    JSONArray pdrJsonArray = new JSONArray();
+                    for (int i = 0; i < imuSamples.size(); i++) {
+                        float[] pdrCoords = pdrProcessing.updatePdr(
+                                imuSamples.get(i).getRelativeTimestamp(),
+                                accelMagnitudeOvertime,
+                                headingRadList.get(i)
+                        );
+
+
+
+
+
+
+                        JSONObject pdrJson = new JSONObject();
+                        pdrJson.put("relative_timestamp", imuSamples.get(i).getRelativeTimestamp());
+                        pdrJson.put("x", pdrCoords[0]);
+                        pdrJson.put("y", pdrCoords[1]);
+                        pdrJsonArray.put(pdrJson);
+                    }
+
+
+                    // Check if PDR samples are empty
+                    if (pdrSamples.isEmpty()) {
+                        System.out.println("PDR samples are empty.");
+                    }
+
+                    // Check if GNSS samples are empty
+                    if (gnssSamples.isEmpty()) {
+                        System.out.println("GNSS samples are empty.");
+                    }
+
+
+                    JSONArray gnssSamplesJsonArray = new JSONArray();
+                    for (Traj.GNSS_Sample gnssSample : gnssSamples) {
+                        JSONObject gnssSampleJson = new JSONObject();
+                        gnssSampleJson.put("relative_timestamp", gnssSample.getRelativeTimestamp());
+                        gnssSampleJson.put("latitude", gnssSample.getLatitude());
+                        gnssSampleJson.put("longitude", gnssSample.getLongitude());
+                        gnssSampleJson.put("altitude", gnssSample.getAltitude());
+                        gnssSampleJson.put("accuracy", gnssSample.getAccuracy());
+                        gnssSampleJson.put("speed", gnssSample.getSpeed());
+                        gnssSampleJson.put("provider", gnssSample.getProvider());
+                        gnssSamplesJsonArray.put(gnssSampleJson);
+                    }
+
+                    // Log the extracted information
+                    System.out.println("PDR Samples: " + pdrJsonArray.toString());
+                    System.out.println("GNSS Samples: " + gnssSamplesJsonArray.toString());
+
+                    // Create a JSON object to hold both arrays
+                    JSONObject resultJson = new JSONObject();
+                    resultJson.put("pdr_samples", pdrJsonArray);
+                    resultJson.put("gnss_samples", gnssSamplesJsonArray);
+
+                    // Convert the JSON object to a string
+                    receivedTrajectoryString = resultJson.toString();
+
+                    // Determine storage directory (for Android versions)
+                    File storageDir = null;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        storageDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                        if (storageDir == null) {
+                            storageDir = context.getFilesDir();
+                        }
+                    } else {
+                        storageDir = context.getFilesDir();
+                    }
+                    File file = new File(storageDir, "received_trajectory_" + id + ".json");
+
+                    // Write the downloaded data to a file
+                    try (FileWriter fileWriter = new FileWriter(file)) {
+                        fileWriter.write(receivedTrajectoryString);
+                        fileWriter.flush();
+                        System.out.println("Received trajectory stored in: " + storageDir.getAbsolutePath());
+
+                        // Set success to true
+                    } catch (IOException ee) {
+                        System.err.println("Trajectory download failed");
+                    } finally {
+                        zipInputStream.closeEntry();
+                        byteArrayOutputStream.close();
+                        zipInputStream.close();
+                        inputStream.close();
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                } finally {
+                    // Notify the callback of the result
+                    if (callback != null) {
+                        callback.onResult(receivedTrajectoryString);
                     }
                 }
             }
