@@ -295,8 +295,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastEventTimestamps.put(sensorType, currentTime);
         eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
 
-
-
         switch (sensorType) {
             case Sensor.TYPE_ACCELEROMETER:
                 acceleration[0] = sensorEvent.values[0];
@@ -402,7 +400,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // Clear the accelMagnitude after using it
                     this.accelMagnitude.clear();
 
-
                     if (saveRecording) {
                         this.pathView.drawTrajectory(newCords);
                         stepCounter++;
@@ -481,12 +478,11 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
         }
-        createWifiPositioningRequest();
+      createWifiPositioningRequest();
     }
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
-     *
      */
     private void createWifiPositioningRequest(){
         // Try catch block to catch any errors and prevent app crashing
@@ -506,10 +502,11 @@ public class SensorFusion implements SensorEventListener, Observer {
             Log.e("jsonErrors","Error creating json object"+e.toString());
         }
     }
+
     // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
-     * using Volley Callback
+     * Handle response with a volley callback
      */
     private void createWifiPositionRequestCallback(){
         try {
@@ -704,6 +701,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         sensorValueMap.put(SensorTypes.PROXIMITY, new float[]{proximity});
         sensorValueMap.put(SensorTypes.GNSSLATLONG, getGNSSLatitude(false));
         sensorValueMap.put(SensorTypes.PDR, pdrProcessing.getPDRMovement());
+        sensorValueMap.put(SensorTypes.WIFI, new float[]
+                          {(float) wiFiPositioning.getWifiLocation().latitude,
+                          (float) wiFiPositioning.getWifiLocation().longitude});
+        sensorValueMap.put(SensorTypes.FUSED, null);
         return sensorValueMap;
     }
 

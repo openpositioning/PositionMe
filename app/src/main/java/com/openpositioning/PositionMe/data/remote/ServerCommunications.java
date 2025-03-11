@@ -134,6 +134,7 @@ public class ServerCommunications implements Observable {
         byte[] binaryTrajectory = trajectory.toByteArray();
 
         File path = null;
+
         // for android 13 or higher use dedicated external storage
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);

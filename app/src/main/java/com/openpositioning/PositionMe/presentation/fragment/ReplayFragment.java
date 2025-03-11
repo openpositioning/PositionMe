@@ -314,7 +314,6 @@ public class ReplayFragment extends Fragment {
         }
     };
 
-
     /**
      * Update the map with the user location and GNSS location (if available) for the given index.
      * Clears the map and redraws up to the given index.
