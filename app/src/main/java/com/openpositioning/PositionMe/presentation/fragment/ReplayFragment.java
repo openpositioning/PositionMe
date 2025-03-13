@@ -118,8 +118,7 @@ public class ReplayFragment extends Fragment {
     }
 
     @Override
-    public void onViewCreated(@NonNull View view,
-                              @Nullable Bundle savedInstanceState) {
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
         // Initialize map fragment
@@ -133,78 +132,136 @@ public class ReplayFragment extends Fragment {
                     .commit();
         }
 
-        // Check for GNSS data in file; if found, prompt the user.
-        boolean gnssExists = hasAnyGnssData(replayData);
-        if (gnssExists) {
-            showGnssChoiceDialog();
-        } else {
-            if (initialLat != 0f || initialLon != 0f) {
-                LatLng startPoint = new LatLng(initialLat, initialLon);
-                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-                trajectoryMapFragment.setInitialCameraPosition(startPoint);
+        // Attempt to use the first WiFi point if available
+        if (!replayData.isEmpty()) {
+            TrajParser.ReplayPoint firstReplayPoint = replayData.get(0);
+
+            if (firstReplayPoint.wifiSamples != null && !firstReplayPoint.wifiSamples.isEmpty()) {
+                JSONObject wifiFingerprint = new JSONObject();
+
+                // Build WiFi fingerprint JSON from first WiFi sample
+                for (Traj.WiFi_Sample sample : firstReplayPoint.wifiSamples) {
+                    for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
+                        try {
+                            wifiFingerprint.put(String.valueOf(macScan.getMac()), macScan.getRssi());
+                        } catch (JSONException e) {
+                            Log.e(TAG, "Error creating WiFi fingerprint JSON: " + e.getMessage());
+                        }
+                    }
+                }
+
+                // Attempt to retrieve WiFi position
+                WiFiPositioning wifiPositioning = new WiFiPositioning(getContext());
+                wifiPositioning.request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
+                    @Override
+                    public void onSuccess(LatLng wifiLocation, int floor) {
+                        Log.i(TAG, "WiFi positioning successful. Location: " + wifiLocation);
+
+                        // Show dialog asking user if they want to use WiFi positioning
+                        new AlertDialog.Builder(requireContext())
+                                .setTitle("Choose Positioning Method")
+                                .setMessage("WiFi-based positioning is available for this trajectory. Do you want to use WiFi positioning?")
+                                .setPositiveButton("Use WiFi", (dialog, which) -> {
+                                    setupInitialMapPosition((float) wifiLocation.latitude, (float) wifiLocation.longitude);
+                                    dialog.dismiss();
+                                })
+                                .setNegativeButton("Use GNSS", (dialog, which) -> {
+                                    showGnssChoiceDialog();
+                                    dialog.dismiss();
+                                })
+                                .setCancelable(false)
+                                .show();
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        Log.e(TAG, "WiFi positioning failed: " + message);
+                        // If WiFi fails, proceed with the existing GNSS choice dialog
+                        if (hasAnyGnssData(replayData)) {
+                            showGnssChoiceDialog();
+                        } else {
+                            if (initialLat != 0f || initialLon != 0f) {
+                                LatLng startPoint = new LatLng(initialLat, initialLon);
+                                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
+                                trajectoryMapFragment.setInitialCameraPosition(startPoint);
+                            }
+                        }
+                    }
+                });
+            } else {
+                // No WiFi samples, proceed with GNSS
+                if (hasAnyGnssData(replayData)) {
+                    showGnssChoiceDialog();
+                } else {
+                    if (initialLat != 0f || initialLon != 0f) {
+                        LatLng startPoint = new LatLng(initialLat, initialLon);
+                        Log.i(TAG, "Setting initial map position: " + startPoint.toString());
+                        trajectoryMapFragment.setInitialCameraPosition(startPoint);
+                    }
+                }
             }
+        } else {
+            Log.e(TAG, "Replay data is empty, cannot determine initial location.");
         }
 
-        // Link UI controls from XML based on provided layout IDs.
-        playButton = view.findViewById(R.id.playButton);
-        pauseButton = view.findViewById(R.id.pauseButton);
-        speedHalfButton = view.findViewById(R.id.speedHalfButton);
-        speedDoubleButton = view.findViewById(R.id.speedDoubleButton);
-        replayButton = view.findViewById(R.id.replayButton);
-        goToEndButton = view.findViewById(R.id.goToEndButton);
         playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
-
-        // Set SeekBar max value based on replayData
+        if (playbackSeekBar == null) {
+            Log.e(TAG, "ERROR: playbackSeekBar is NULL! Check XML layout ID.");
+            return;
+        }
         if (!replayData.isEmpty()) {
             playbackSeekBar.setMax(replayData.size() - 1);
         }
 
-        // Set up button listeners:
 
-        // Play button starts playback.
-        playButton.setOnClickListener(v -> {
+        // Initialize button listeners
+        view.findViewById(R.id.playButton).setOnClickListener(v -> {
             if (replayData.isEmpty()) {
                 Log.w(TAG, "Play button pressed but replayData is empty.");
                 return;
             }
             if (!isPlaying) {
-                startPlaying();
+                isPlaying = true;
+                v.setEnabled(false);  // Disable play button while playing
+                view.findViewById(R.id.pauseButton).setEnabled(true);  // Enable pause button
+                playbackHandler.postDelayed(playbackRunnable, playbackInterval);
+                Log.i(TAG, "Playback started from index: " + currentIndex);
             } else {
                 Toast.makeText(getContext(), "Playback is already running.", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // Pause button stops playback.
-        pauseButton.setOnClickListener(v -> {
+        view.findViewById(R.id.pauseButton).setOnClickListener(v -> {
             if (isPlaying) {
-                stopPlaying();
+                isPlaying = false;
+                v.setEnabled(false);  // Disable pause button when paused
+                view.findViewById(R.id.playButton).setEnabled(true);  // Re-enable play button
+                playbackHandler.removeCallbacks(playbackRunnable);
+                Log.i(TAG, "Playback stopped at index: " + currentIndex);
             } else {
                 Toast.makeText(getContext(), "Playback is not running.", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // Speed Half button sets playback interval to 1000 ms (0.5× speed).
-        speedHalfButton.setOnClickListener(v -> {
+        view.findViewById(R.id.speedHalfButton).setOnClickListener(v -> {
             playbackInterval = 1000;
             if (isPlaying) {
-                stopPlaying();
-                startPlaying();
+                playbackHandler.removeCallbacks(playbackRunnable);
+                playbackHandler.postDelayed(playbackRunnable, playbackInterval);
             }
             Log.i(TAG, "Playback speed set to 0.5x (interval: " + playbackInterval + " ms)");
         });
 
-        // Speed Double button sets playback interval to 250 ms (2× speed).
-        speedDoubleButton.setOnClickListener(v -> {
+        view.findViewById(R.id.speedDoubleButton).setOnClickListener(v -> {
             playbackInterval = 250;
             if (isPlaying) {
-                stopPlaying();
-                startPlaying();
+                playbackHandler.removeCallbacks(playbackRunnable);
+                playbackHandler.postDelayed(playbackRunnable, playbackInterval);
             }
             Log.i(TAG, "Playback speed set to 2x (interval: " + playbackInterval + " ms)");
         });
 
-        // Replay (rewind) button resets playback to beginning.
-        replayButton.setOnClickListener(v -> {
+        view.findViewById(R.id.replayButton).setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = 0;
             playbackSeekBar.setProgress(0);
@@ -212,17 +269,20 @@ public class ReplayFragment extends Fragment {
             Log.i(TAG, "Replay button pressed. Resetting playback to index 0.");
         });
 
-        // Go To End button jumps to the last index.
-        goToEndButton.setOnClickListener(v -> {
+        view.findViewById(R.id.goToEndButton).setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = replayData.size() - 1;
             playbackSeekBar.setProgress(currentIndex);
             updateMapForIndex(currentIndex);
-            stopPlaying();
+            isPlaying = false;
             Log.i(TAG, "Go To End button pressed. Moving to last index: " + currentIndex);
         });
 
-        // SeekBar listener for manual scrubbing.
+        SeekBar playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
+        if (!replayData.isEmpty()) {
+            playbackSeekBar.setMax(replayData.size() - 1);
+        }
+
         playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -232,10 +292,15 @@ public class ReplayFragment extends Fragment {
                     Log.i(TAG, "SeekBar moved by user. New index: " + currentIndex);
                 }
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {
-                stopPlaying();
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                isPlaying = false;
+                playbackHandler.removeCallbacks(playbackRunnable);
             }
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
         // If replayData is available, update the map to show the first point.
@@ -243,6 +308,8 @@ public class ReplayFragment extends Fragment {
             updateMapForIndex(0);
         }
     }
+
+
 
     /**
      * Checks if any ReplayPoint contains a non-null GNSS location.
