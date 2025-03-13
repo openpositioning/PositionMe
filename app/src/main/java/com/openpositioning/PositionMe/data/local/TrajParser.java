@@ -69,6 +69,7 @@ public class TrajParser {
         public long timestamp;      // Relative timestamp
 
         public List<Traj.WiFi_Sample> wifiSamples = new ArrayList<>();
+        public LatLng wifiLocation;
 
 
         /**

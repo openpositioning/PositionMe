@@ -6,9 +6,11 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
-import android.widget.Button;
+import android.widget.Spinner;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -18,13 +20,9 @@ import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.sensors.WiFiPositioning;
-
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -33,16 +31,13 @@ import java.util.List;
 /**
  * Sub fragment of Replay Activity. Fragment that replays trajectory data on a map.
  *
- * The ReplayFragment is responsible for visualizing and replaying trajectory data captured during
- * previous recordings. It loads trajectory data from a JSON file, updates the map with user movement,
- * and provides UI controls for playback, pause, and seek functionalities.
+ * The ReplayFragment visualizes and replays trajectory data captured during previous recordings.
+ * It loads trajectory data from a JSON file, updates the map with user movement, and provides
+ * UI controls for playback (with separate play and pause buttons), speed control, rewind,
+ * and go-to-end functionalities. Additionally, it provides a dropdown (Spinner) at the top right
+ * to select which data source to replay (PDR, GNSS, or WiFi) – each with its own polyline color.
  *
- * Features:
- * - Loads trajectory data from a file and displays it on a map.
- * - Provides playback controls including separate play and pause buttons, replay (rewind), and go to end.
- * - Updates the trajectory dynamically as playback progresses.
- * - Allows users to manually seek through the recorded trajectory.
- * - Integrates with {@link TrajectoryMapFragment} for map visualization.
+ * For PDR mode, if a GNSS starting point exists, that same point is used as the starting point.
  *
  * @see ReplayActivity The activity managing the replay workflow.
  * @see TrajParser Utility class for parsing trajectory data.
@@ -51,21 +46,25 @@ public class ReplayFragment extends Fragment {
 
     private static final String TAG = "ReplayFragment";
 
-    // GPS start location (received from ReplayActivity)
+    // Received from ReplayActivity.
     private float initialLat = 0f;
     private float initialLon = 0f;
     private String filePath = "";
     private int lastIndex = -1;
 
-    // UI Controls
+    // UI Controls.
     private TrajectoryMapFragment trajectoryMapFragment;
     private ImageButton playButton, pauseButton, replayButton, goToEndButton;
     private Button speedHalfButton, speedDoubleButton, viewStatsButton;
     private SeekBar playbackSeekBar;
+    // Spinner for selecting data source.
+    private Spinner dataSourceSpinner;
+    // Holds the selected mode ("PDR", "GNSS", or "WiFi")
+    private String selectedMode = "PDR";
 
-    // Playback-related
+    // Playback-related.
     private final Handler playbackHandler = new Handler();
-    private long playbackInterval = 500; // Default interval (ms)
+    private long playbackInterval = 500; // Default playback interval in ms.
     private List<TrajParser.ReplayPoint> replayData = new ArrayList<>();
     private int currentIndex = 0;
     private boolean isPlaying = false;
@@ -74,38 +73,28 @@ public class ReplayFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Retrieve transferred data from ReplayActivity
+        // Retrieve data from ReplayActivity.
         if (getArguments() != null) {
             filePath = getArguments().getString(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, "");
             initialLat = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LAT, 0f);
             initialLon = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LON, 0f);
         }
+        Log.i(TAG, "ReplayFragment received data: filePath=" + filePath + ", initialLat=" + initialLat + ", initialLon=" + initialLon);
 
-        Log.i(TAG, "ReplayFragment received data:");
-        Log.i(TAG, "Trajectory file path: " + filePath);
-        Log.i(TAG, "Initial latitude: " + initialLat);
-        Log.i(TAG, "Initial longitude: " + initialLon);
-
-        // Check if file exists before parsing
+        // Check file existence.
         File trajectoryFile = new File(filePath);
-        if (!trajectoryFile.exists()) {
-            Log.e(TAG, "ERROR: Trajectory file does NOT exist at: " + filePath);
+        if (!trajectoryFile.exists() || !trajectoryFile.canRead()) {
+            Log.e(TAG, "ERROR: Trajectory file missing or unreadable at: " + filePath);
             return;
         }
-        if (!trajectoryFile.canRead()) {
-            Log.e(TAG, "ERROR: Trajectory file exists but is NOT readable: " + filePath);
-            return;
-        }
+        Log.i(TAG, "Trajectory file exists and is readable.");
 
-        Log.i(TAG, "Trajectory file confirmed to exist and is readable.");
-
-        // Parse the JSON file and prepare replayData using TrajParser
+        // Parse trajectory data.
         replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
-
         if (replayData != null && !replayData.isEmpty()) {
-            Log.i(TAG, "Trajectory data loaded successfully. Total points: " + replayData.size());
+            Log.i(TAG, "Trajectory data loaded. Total points: " + replayData.size());
         } else {
-            Log.e(TAG, "Failed to load trajectory data! replayData is empty or null.");
+            Log.e(TAG, "Failed to load trajectory data!");
         }
     }
 
@@ -122,7 +111,7 @@ public class ReplayFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Initialize map fragment
+        // Initialize map fragment.
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.replayMapFragmentContainer);
         if (trajectoryMapFragment == null) {
@@ -133,19 +122,18 @@ public class ReplayFragment extends Fragment {
                     .commit();
         }
 
-        // Check for GNSS data in file; if found, prompt the user.
-        boolean gnssExists = hasAnyGnssData(replayData);
-        if (gnssExists) {
+        // If GNSS data exists, prompt the user; otherwise, use initial lat/lon.
+        if (hasAnyGnssData(replayData)) {
             showGnssChoiceDialog();
         } else {
             if (initialLat != 0f || initialLon != 0f) {
                 LatLng startPoint = new LatLng(initialLat, initialLon);
-                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
+                Log.i(TAG, "Setting initial map position: " + startPoint);
                 trajectoryMapFragment.setInitialCameraPosition(startPoint);
             }
         }
 
-        // Link UI controls from XML based on provided layout IDs.
+        // Link UI controls.
         playButton = view.findViewById(R.id.playButton);
         pauseButton = view.findViewById(R.id.pauseButton);
         speedHalfButton = view.findViewById(R.id.speedHalfButton);
@@ -153,13 +141,39 @@ public class ReplayFragment extends Fragment {
         replayButton = view.findViewById(R.id.replayButton);
         goToEndButton = view.findViewById(R.id.goToEndButton);
         playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
+        dataSourceSpinner = view.findViewById(R.id.dataSourceSpinner);
 
-        // Set SeekBar max value based on replayData
+        // Set up Spinner adapter and listener.
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
+                android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"PDR", "GNSS", "WiFi"});
+        dataSourceSpinner.setAdapter(adapter);
+        dataSourceSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                selectedMode = parent.getItemAtPosition(position).toString();
+                Log.i(TAG, "Data source selected: " + selectedMode);
+                // Set polyline color based on selection.
+                if (trajectoryMapFragment != null) {
+                    trajectoryMapFragment.setPolylineColor(getColorForMode(selectedMode));
+                }
+                // Instead of resetting playback time, clear current drawing and redraw the polyline
+                // from index 0 to currentIndex using the new selected mode.
+                trajectoryMapFragment.clearMapAndReset();
+                for (int i = 0; i <= currentIndex && i < replayData.size(); i++) {
+                    drawReplayPointWithMode(i);
+                }
+            }
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+
+        // Set SeekBar max value.
         if (!replayData.isEmpty()) {
             playbackSeekBar.setMax(replayData.size() - 1);
         }
 
-        // Set up button listeners:
+        // Button Listeners:
 
         // Play button starts playback.
         playButton.setOnClickListener(v -> {
@@ -183,7 +197,7 @@ public class ReplayFragment extends Fragment {
             }
         });
 
-        // Speed Half button sets playback interval to 1000 ms (0.5× speed).
+        // Speed Half button sets playback interval to 1000 ms (0.5x speed).
         speedHalfButton.setOnClickListener(v -> {
             playbackInterval = 1000;
             if (isPlaying) {
@@ -193,7 +207,7 @@ public class ReplayFragment extends Fragment {
             Log.i(TAG, "Playback speed set to 0.5x (interval: " + playbackInterval + " ms)");
         });
 
-        // Speed Double button sets playback interval to 250 ms (2× speed).
+        // Speed Double button sets playback interval to 250 ms (2x speed).
         speedDoubleButton.setOnClickListener(v -> {
             playbackInterval = 250;
             if (isPlaying) {
@@ -208,7 +222,10 @@ public class ReplayFragment extends Fragment {
             if (replayData.isEmpty()) return;
             currentIndex = 0;
             playbackSeekBar.setProgress(0);
-            updateMapForIndex(0);
+            trajectoryMapFragment.clearMapAndReset();
+            for (int i = 0; i <= currentIndex && i < replayData.size(); i++) {
+                drawReplayPointWithMode(i);
+            }
             Log.i(TAG, "Replay button pressed. Resetting playback to index 0.");
         });
 
@@ -217,7 +234,10 @@ public class ReplayFragment extends Fragment {
             if (replayData.isEmpty()) return;
             currentIndex = replayData.size() - 1;
             playbackSeekBar.setProgress(currentIndex);
-            updateMapForIndex(currentIndex);
+            trajectoryMapFragment.clearMapAndReset();
+            for (int i = 0; i <= currentIndex && i < replayData.size(); i++) {
+                drawReplayPointWithMode(i);
+            }
             stopPlaying();
             Log.i(TAG, "Go To End button pressed. Moving to last index: " + currentIndex);
         });
@@ -228,19 +248,37 @@ public class ReplayFragment extends Fragment {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
                     currentIndex = progress;
-                    updateMapForIndex(currentIndex);
+                    trajectoryMapFragment.clearMapAndReset();
+                    for (int i = 0; i <= currentIndex && i < replayData.size(); i++) {
+                        drawReplayPointWithMode(i);
+                    }
                     Log.i(TAG, "SeekBar moved by user. New index: " + currentIndex);
                 }
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {
                 stopPlaying();
             }
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) { }
         });
 
-        // If replayData is available, update the map to show the first point.
+        // Initially, if replayData is available, draw the first point.
         if (!replayData.isEmpty()) {
-            updateMapForIndex(0);
+            trajectoryMapFragment.clearMapAndReset();
+            drawReplayPointWithMode(0);
+        }
+    }
+
+    /**
+     * Helper method to return the polyline color for the given mode.
+     */
+    private int getColorForMode(String mode) {
+        switch (mode) {
+            case "GNSS":
+                return android.graphics.Color.BLUE;
+            case "WiFi":
+                return android.graphics.Color.GREEN;
+            default: // "PDR"
+                return android.graphics.Color.RED;
         }
     }
 
@@ -302,12 +340,15 @@ public class ReplayFragment extends Fragment {
         @Override
         public void run() {
             if (!isPlaying || replayData.isEmpty()) return;
-
             Log.i(TAG, "Playing index: " + currentIndex);
-            updateMapForIndex(currentIndex);
+            trajectoryMapFragment.clearMapAndReset();
+            // Set the polyline color based on the current mode.
+            trajectoryMapFragment.setPolylineColor(getColorForMode(selectedMode));
+            for (int i = 0; i <= currentIndex && i < replayData.size(); i++) {
+                drawReplayPointWithMode(i);
+            }
             currentIndex++;
             playbackSeekBar.setProgress(currentIndex);
-
             if (currentIndex < replayData.size()) {
                 playbackHandler.postDelayed(this, playbackInterval);
             } else {
@@ -318,88 +359,40 @@ public class ReplayFragment extends Fragment {
     };
 
     /**
-     * Updates the map with the replay point at the given index.
+     * Draws the replay point at the given index based on the selected mode.
+     * For "PDR" mode, if the index is 0 and a GNSS starting point exists, that is used.
      */
-    private void updateMapForIndex(int newIndex) {
-        if (newIndex < 0 || newIndex >= replayData.size()) return;
-
-        // Get the current replay point
-        TrajParser.ReplayPoint replayPoint = replayData.get(newIndex);
-
-        // Track if WiFi positioning was successful
-        final boolean[] wifiPositionSuccess = {false};
-
-        // Check if WiFi samples exist for this index
-        if (replayPoint.wifiSamples != null && !replayPoint.wifiSamples.isEmpty()) {
-            // Create JSON fingerprint for WiFi positioning
-            JSONObject wifiFingerprint = new JSONObject();
-            for (Traj.WiFi_Sample sample : replayPoint.wifiSamples) {
-                for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
-                    try {
-                        wifiFingerprint.put(String.valueOf(macScan.getMac()), macScan.getRssi());
-                    } catch (JSONException e) {
-                        Log.e(TAG, "Error creating WiFi fingerprint JSON: " + e.getMessage());
-                    }
-                }
-            }
-
-            // Request WiFi position from API
-            WiFiPositioning wifiPositioning = new WiFiPositioning(getContext());
-            wifiPositioning.request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
-                @Override
-                public void onSuccess(LatLng wifiLocation, int floor) {
-                    // WiFi positioning successful
-                    wifiPositionSuccess[0] = true;
-                    trajectoryMapFragment.updateUserLocation(wifiLocation, 0f); // Display WiFi Position
-                    Log.i(TAG, "WiFi positioning successful at: " + wifiLocation.toString());
-                }
-
-                @Override
-                public void onError(String message) {
-                    Log.e(TAG, "WiFi positioning failed: " + message);
-                    // If WiFi positioning fails, fall back to PDR positioning
-                    fallbackToPdr(replayPoint);
-                }
-            });
-        } else {
-            // No WiFi samples, directly fallback to PDR positioning
-            fallbackToPdr(replayPoint);
-        }
-
-        lastIndex = newIndex;
-    }
-
-    private void fallbackToPdr(TrajParser.ReplayPoint replayPoint) {
-        Log.i(TAG, "Falling back to PDR positioning");
-
-        // Detect if user is playing sequentially (lastIndex + 1)
-        boolean isSequentialForward = (currentIndex == lastIndex + 1);
-
-        if (!isSequentialForward) {
-            // Clear everything and redraw up to currentIndex
-            trajectoryMapFragment.clearMapAndReset();
-            for (int i = 0; i <= currentIndex; i++) {
-                TrajParser.ReplayPoint p = replayData.get(i);
-                trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-                if (p.gnssLocation != null) {
-                    trajectoryMapFragment.updateGNSS(p.gnssLocation);
-                }
-            }
-        } else {
-            // Normal sequential forward step: add just the new point
-            trajectoryMapFragment.updateUserLocation(replayPoint.pdrLocation, replayPoint.orientation);
-            if (replayPoint.gnssLocation != null) {
-                trajectoryMapFragment.updateGNSS(replayPoint.gnssLocation);
-            }
-        }
-    }
-
-
-    private void drawReplayPoint(int index) {
+    private void drawReplayPointWithMode(int index) {
         if (index < 0 || index >= replayData.size()) return;
         TrajParser.ReplayPoint p = replayData.get(index);
-        trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-        if (p.gnssLocation != null) {
+        switch (selectedMode) {
+            case "GNSS":
+                if (p.gnssLocation != null) {
+                    trajectoryMapFragment.updateUserLocation(p.gnssLocation, p.orientation);
+                } else {
+                    trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+                }
+                break;
+            case "WiFi":
+                if (p.wifiLocation != null) {
+                    trajectoryMapFragment.updateUserLocation(p.wifiLocation, p.orientation);
+                } else {
+                    trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+                }
+                break;
+            default: // "PDR"
+                // For PDR mode, use the first GNSS coordinate as the starting point if available.
+                if (index == 0) {
+                    LatLng firstGnss = getFirstGnssLocation(replayData);
+                    if (firstGnss != null) {
+                        trajectoryMapFragment.updateUserLocation(firstGnss, p.orientation);
+                        break;
+                    }
+                }
+                trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+                break;
+        }
+        if (selectedMode.equals("GNSS") && p.gnssLocation != null) {
             trajectoryMapFragment.updateGNSS(p.gnssLocation);
         }
     }
