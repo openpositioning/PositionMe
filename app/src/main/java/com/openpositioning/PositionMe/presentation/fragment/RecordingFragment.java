@@ -7,6 +7,8 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.os.SystemClock;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,11 +28,15 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
+
+import java.util.List;
 
 
 /**
@@ -217,6 +223,41 @@ public class RecordingFragment extends Fragment {
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
+        if (sensorFusion.saveRecording) {
+            List<Wifi> wifiList = sensorFusion.getWifiList();
+            if (wifiList != null && !wifiList.isEmpty()) {
+                // Create a new WiFi sample
+                Traj.WiFi_Sample.Builder wifiSample = Traj.WiFi_Sample.newBuilder()
+                        .setRelativeTimestamp(SystemClock.uptimeMillis() - sensorFusion.bootTime);
+
+                // Add all detected WiFi MAC scans
+                for (Wifi wifi : wifiList) {
+                    wifiSample.addMacScans(Traj.Mac_Scan.newBuilder()
+                            .setRelativeTimestamp(SystemClock.uptimeMillis() - sensorFusion.bootTime)
+                            .setMac(wifi.getBssid())
+                            .setRssi(wifi.getLevel()));
+                }
+
+                for (Wifi data : wifiList) {
+                    if (data.getLevel() == 0) {
+                        Log.e("RecordingFragment", "WiFi scan missing RSSI value!");
+                    } else {
+                        Log.d("RecordingFragment", "Recording WiFi RSSI: " + data.getLevel());
+                    }
+
+                    if (data.getBssid() == 0){
+                        Log.e("RecordingFragment", "WiFi scan missing MAC value");
+                    } else{
+                        Log.e("RecordingFragment", "Recording WiFi MAC" + data.getBssid());
+                    }
+                }
+
+
+                // Store WiFi sample in the trajectory
+                sensorFusion.trajectory.addWifiData(wifiSample);
+            }
+        }
+
 
         // Distance
         distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)

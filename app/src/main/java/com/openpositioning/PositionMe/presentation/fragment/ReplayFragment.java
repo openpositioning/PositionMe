@@ -16,8 +16,13 @@ import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.data.local.TrajParser;
+import com.openpositioning.PositionMe.sensors.WiFiPositioning;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -324,14 +329,62 @@ public class ReplayFragment extends Fragment {
     private void updateMapForIndex(int newIndex) {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
 
+        // Get the current replay point
+        TrajParser.ReplayPoint replayPoint = replayData.get(newIndex);
+
+        // Track if WiFi positioning was successful
+        final boolean[] wifiPositionSuccess = {false};
+
+        // Check if WiFi samples exist for this index
+        if (replayPoint.wifiSamples != null && !replayPoint.wifiSamples.isEmpty()) {
+            // Create JSON fingerprint for WiFi positioning
+            JSONObject wifiFingerprint = new JSONObject();
+            for (Traj.WiFi_Sample sample : replayPoint.wifiSamples) {
+                for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
+                    try {
+                        wifiFingerprint.put(String.valueOf(macScan.getMac()), macScan.getRssi());
+                    } catch (JSONException e) {
+                        Log.e(TAG, "Error creating WiFi fingerprint JSON: " + e.getMessage());
+                    }
+                }
+            }
+
+            // Request WiFi position from API
+            WiFiPositioning wifiPositioning = new WiFiPositioning(getContext());
+            wifiPositioning.request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    // WiFi positioning successful
+                    wifiPositionSuccess[0] = true;
+                    trajectoryMapFragment.updateUserLocation(wifiLocation, 0f); // Display WiFi Position
+                    Log.i(TAG, "WiFi positioning successful at: " + wifiLocation.toString());
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.e(TAG, "WiFi positioning failed: " + message);
+                    // If WiFi positioning fails, fall back to PDR positioning
+                    fallbackToPdr(replayPoint);
+                }
+            });
+        } else {
+            // No WiFi samples, directly fallback to PDR positioning
+            fallbackToPdr(replayPoint);
+        }
+
+        lastIndex = newIndex;
+    }
+
+    private void fallbackToPdr(TrajParser.ReplayPoint replayPoint) {
+        Log.i(TAG, "Falling back to PDR positioning");
+
         // Detect if user is playing sequentially (lastIndex + 1)
-        // or is skipping around (backwards, or jump forward)
-        boolean isSequentialForward = (newIndex == lastIndex + 1);
+        boolean isSequentialForward = (currentIndex == lastIndex + 1);
 
         if (!isSequentialForward) {
-            // Clear everything and redraw up to newIndex
+            // Clear everything and redraw up to currentIndex
             trajectoryMapFragment.clearMapAndReset();
-            for (int i = 0; i <= newIndex; i++) {
+            for (int i = 0; i <= currentIndex; i++) {
                 TrajParser.ReplayPoint p = replayData.get(i);
                 trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
                 if (p.gnssLocation != null) {
@@ -340,15 +393,13 @@ public class ReplayFragment extends Fragment {
             }
         } else {
             // Normal sequential forward step: add just the new point
-            TrajParser.ReplayPoint p = replayData.get(newIndex);
-            trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-            if (p.gnssLocation != null) {
-                trajectoryMapFragment.updateGNSS(p.gnssLocation);
+            trajectoryMapFragment.updateUserLocation(replayPoint.pdrLocation, replayPoint.orientation);
+            if (replayPoint.gnssLocation != null) {
+                trajectoryMapFragment.updateGNSS(replayPoint.gnssLocation);
             }
         }
-
-        lastIndex = newIndex;
     }
+
 
     @Override
     public void onPause() {

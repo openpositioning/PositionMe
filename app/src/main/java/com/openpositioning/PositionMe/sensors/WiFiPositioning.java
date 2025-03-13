@@ -132,6 +132,8 @@ public class WiFiPositioning {
      * @param callback callback function to allow user to use location when ready
      */
     public void request( JSONObject jsonWifiFeatures, final VolleyCallback callback) {
+        Log.d("WiFiPositioning", "Sending WiFi fingerprint: " + jsonWifiFeatures.toString());
+
         // Creating the POST request using WiFi fingerprint (a JSON object)
         JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(
                 Request.Method.POST, url, jsonWifiFeatures,

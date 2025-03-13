@@ -7,8 +7,10 @@ import android.util.Log;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
@@ -66,6 +68,9 @@ public class TrajParser {
         public float speed;         // Speed in meters per second
         public long timestamp;      // Relative timestamp
 
+        public List<Traj.WiFi_Sample> wifiSamples = new ArrayList<>();
+
+
         /**
          * Constructs a ReplayPoint.
          *
@@ -75,13 +80,16 @@ public class TrajParser {
          * @param speed        The speed in meters per second.
          * @param timestamp    The timestamp associated with this point.
          */
-        public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, float orientation, float speed, long timestamp) {
+        public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, float orientation,
+                           float speed, long timestamp, List<Traj.WiFi_Sample> wifiSamples) {
             this.pdrLocation = pdrLocation;
             this.gnssLocation = gnssLocation;
             this.orientation = orientation;
             this.speed = speed;
             this.timestamp = timestamp;
+            this.wifiSamples = wifiSamples != null ? wifiSamples : new ArrayList<>();
         }
+
     }
 
     /** Represents an IMU (Inertial Measurement Unit) data record used for orientation calculations. */
@@ -151,6 +159,7 @@ public class TrajParser {
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
 
+
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: "
                     + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
 
@@ -185,8 +194,96 @@ public class TrajParser {
                 LatLng gnssLocation = closestGnss != null ?
                         new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
 
+                //result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
+                //        0f, pdr.relativeTimestamp, null));
+                // add wifi code here......
+                // Inside the for-loop processing PDR data:
+                List<Traj.WiFi_Sample> wifiSamples = new ArrayList<>();
+
+// Check if there is WiFi data for this timestamp
+                if (root.has("wifiData")) {
+                    Log.d(TAG, "Parsing WiFi data...");
+                    JsonArray wifiArray = root.getAsJsonArray("wifiData");
+
+                    for (JsonElement wifiElement : wifiArray) {
+                        JsonObject wifiObject = wifiElement.getAsJsonObject();
+
+                        // ✅ Prevent null crashes when accessing timestamps
+                        long timestamp = 0;
+                        if (wifiObject.has("relativeTimestamp") && !wifiObject.get("relativeTimestamp").isJsonNull()) {
+                            timestamp = wifiObject.get("relativeTimestamp").getAsLong();
+                        } else {
+                            Log.e(TAG, "Missing or null relativeTimestamp in WiFi data!");
+                        }
+
+                        // Ensure the timestamp matches the current PDR timestamp
+                        if (Math.abs(timestamp - pdr.relativeTimestamp) < 500) { // 500ms tolerance
+                            // Extract "macScans" array
+                            long mac = 0;
+                            int rssi = 0;
+                            if (wifiObject.has("macScans") && !wifiObject.get("macScans").isJsonNull()) {
+                                JsonArray macScansArray = wifiObject.getAsJsonArray("macScans");
+
+                                for (JsonElement scanElement : macScansArray) {
+                                    JsonObject scanObject = scanElement.getAsJsonObject();
+
+                                    // Extract MAC address safely
+                                    mac = 0;
+                                    if (scanObject.has("mac") && !scanObject.get("mac").isJsonNull()) {
+                                        mac = scanObject.get("mac").getAsLong();
+                                    } else {
+                                        Log.e(TAG, "Missing or null MAC address in macScans: " + scanObject);
+                                    }
+
+                                    // Extract RSSI safely
+                                    rssi = -100;
+                                    if (scanObject.has("rssi") && !scanObject.get("rssi").isJsonNull()) {
+                                        rssi = scanObject.get("rssi").getAsInt();
+                                    } else {
+                                        Log.e(TAG, "Missing or null RSSI in macScans: " + scanObject);
+                                    }
+
+                                    // Only add valid scans
+                                    if (mac != 0) {
+                                        Traj.WiFi_Sample.Builder wifiSampleBuilder = Traj.WiFi_Sample.newBuilder()
+                                                .setRelativeTimestamp(timestamp)
+                                                .addMacScans(Traj.Mac_Scan.newBuilder()
+                                                        .setMac(mac)
+                                                        .setRssi(rssi)
+                                                        .setRelativeTimestamp(timestamp));
+
+                                        wifiSamples.add(wifiSampleBuilder.build());
+                                        Log.d(TAG, "Added WiFi sample: MAC=" + mac + ", RSSI=" + rssi);
+                                    }
+                                }
+                            } else {
+                                Log.e(TAG, "No macScans array found in WiFi data: " + wifiObject);
+                            }
+
+
+                            Traj.WiFi_Sample.Builder wifiSampleBuilder = Traj.WiFi_Sample.newBuilder()
+                                    .setRelativeTimestamp(timestamp);
+
+                            wifiSampleBuilder.addMacScans(Traj.Mac_Scan.newBuilder()
+                                    .setMac(mac)
+                                    .setRssi(rssi)
+                                    .setRelativeTimestamp(timestamp));
+
+                            Traj.WiFi_Sample wifiSample = wifiSampleBuilder.build();
+                            wifiSamples.add(wifiSample);
+
+                            Log.d(TAG, "Added WiFi sample: Timestamp=" + timestamp + ", MAC=" + mac + ", RSSI=" + rssi);
+                        }
+                    }
+                } else {
+                    Log.e(TAG, "No WiFi data found in trajectory file!");
+                }
+
+
+// Add the ReplayPoint with WiFi data
                 result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
-                        0f, pdr.relativeTimestamp));
+                        0f, pdr.relativeTimestamp, wifiSamples));
+
             }
 
             Collections.sort(result, Comparator.comparingLong(rp -> rp.timestamp));
