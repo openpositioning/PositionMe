@@ -94,4 +94,13 @@ public class UtilFunctions {
         return bitmap;
     }
 
+    /**
+     * Function to fuse sensor data using particle filter algorithm
+     * @return LatLng Position
+     * @Author Jamie Arnott
+     */
+    public static LatLng particleFilter(){
+        return null;
+    }
+
 }
