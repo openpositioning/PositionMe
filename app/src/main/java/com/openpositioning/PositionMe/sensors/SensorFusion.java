@@ -701,9 +701,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         sensorValueMap.put(SensorTypes.PROXIMITY, new float[]{proximity});
         sensorValueMap.put(SensorTypes.GNSSLATLONG, getGNSSLatitude(false));
         sensorValueMap.put(SensorTypes.PDR, pdrProcessing.getPDRMovement());
-        sensorValueMap.put(SensorTypes.WIFI, new float[]
-                          {(float) wiFiPositioning.getWifiLocation().latitude,
-                          (float) wiFiPositioning.getWifiLocation().longitude});
+//        sensorValueMap.put(SensorTypes.WIFI, new float[]
+//                          {(float) wiFiPositioning.getWifiLocation().latitude,
+//                          (float) wiFiPositioning.getWifiLocation().longitude});
         sensorValueMap.put(SensorTypes.FUSED, null);
         return sensorValueMap;
     }

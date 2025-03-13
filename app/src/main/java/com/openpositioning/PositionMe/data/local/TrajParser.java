@@ -23,6 +23,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -114,6 +115,10 @@ public class TrajParser {
         public double latitude, longitude; // GNSS coordinates
     }
 
+    private static class WifiLocation extends TimedData {
+      public LatLng latLng; // Wifi Location coordinates
+    }
+
     private static class WifiRecord extends TimedData{
       public WifiSample[] macScans;
     }
@@ -165,12 +170,16 @@ public class TrajParser {
 
             Log.i(TAG, "Successfully read trajectory file: " + filePath);
 
-            long startTimestamp = root.has("startTimestamp") ? root.get("startTimestamp").getAsLong() : 0;
+            long startTimestamp = root.has("startTimestamp") ?
+                                  root.get("startTimestamp").getAsLong() : 0;
 
             List<ImuRecord> imuList = parseImuData(root.getAsJsonArray("imuData"));
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
             List<WifiRecord> wifiList = parseWifiData(root.getAsJsonArray("wifiData"));
+            // Create a list of wifi locations for which to fill in.
+            WifiLocation[] wifiLocations = new WifiLocation[wifiList.size()];
+            getLocationsForWifi(new WiFiPositioning(context), wifiList, wifiLocations);
 
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: "
                     + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
@@ -205,12 +214,11 @@ public class TrajParser {
                 GnssRecord closestGnss = TimedData.findClosestRecord(gnssList, pdr.relativeTimestamp);
                 LatLng gnssLocation = closestGnss != null ?
                         new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
-
-                WifiRecord closestWifiSample = TimedData.findClosestRecord(wifiList, pdr.relativeTimestamp);
-                WiFiPositioning wiFiPositioning = new WiFiPositioning(context);
-                createWifiPositionRequestCallback(wiFiPositioning, closestWifiSample.macScans);
-                LatLng wifiLocation = closestWifiSample != null ?
-                        wiFiPositioning.getWifiLocation() : null;
+                WifiLocation closestWifiLoc = TimedData.findClosestRecord(
+                                                Arrays.asList(wifiLocations),
+                                                pdr.relativeTimestamp);
+                LatLng wifiLocation = closestWifiLoc != null ?
+                                      closestWifiLoc.latLng : null;
 
                 result.add(new ReplayPoint(pdrLocation, gnssLocation, wifiLocation, pdrLocation,
                         orientationDeg,0f, pdr.relativeTimestamp));
@@ -226,6 +234,57 @@ public class TrajParser {
 
         return result;
     }
+
+  /** Send out asynchronous callbacks to retrieve the locations all WiFi fingerprints
+   *  TODO: Check what happens when we either 1) don't have signal or 2) are an outlier
+   * @param wiFiPositioning
+   * @param wifiRecords
+   * @param wifiLocations Locations to fill in. MUST be the same length as wifiSamples!
+   */
+  private static void getLocationsForWifi(WiFiPositioning wiFiPositioning,
+                                          List<WifiRecord> wifiRecords,
+                                          WifiLocation[] wifiLocations) {
+    if (wifiRecords.size() != wifiLocations.length) {
+      throw new IllegalArgumentException("Size of wifiRecords must equal that of wifiLocations.");
+    }
+    for (int i = 0; i < wifiRecords.size(); i++) {
+      WifiRecord record = wifiRecords.get(i);
+      try {
+        // Creating a JSON object to store the WiFi access points
+        JSONObject wifiAccessPoints = new JSONObject();
+        for (WifiSample sample : record.macScans) {
+          wifiAccessPoints.put(String.valueOf(sample.mac), sample.rssi);
+        }
+        // Creating POST Request
+        JSONObject wifiFingerPrint = new JSONObject();
+        wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+        //
+        int index = i;
+        WifiLocation location = new WifiLocation();
+        location.relativeTimestamp = record.relativeTimestamp;
+        wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+          @Override
+          public void onSuccess(LatLng wifiLocation, int floor) {
+            // Handle the success response
+            location.latLng = wifiLocation;
+            wifiLocations[index] = location;
+          }
+
+          @Override
+          public void onError(String message) {
+            // Handle the error response
+            Log.e("getLocationsForWifi", "ERROR IN SERVER RESPONSE FOR WIFI POSITIONING"
+                    + message);
+          }
+        });
+      } catch (JSONException e) {
+        // Catching error while making JSON object, to prevent crashes
+        // Error log to keep record of errors (for secure programming and maintainability)
+        Log.e("jsonErrors", "Error creating json object" + e.toString());
+      }
+    }
+  }
+
 
   private static void createWifiPositionRequestCallback(WiFiPositioning wiFiPositioning,
                                                         WifiSample[] scans){
