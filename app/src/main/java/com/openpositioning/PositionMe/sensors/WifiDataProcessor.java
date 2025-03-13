@@ -10,6 +10,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.provider.Settings;
 import android.widget.Toast;
 
@@ -79,17 +80,14 @@ public class WifiDataProcessor implements Observable {
         this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
         this.scanWifiDataTimer = new Timer();
         this.observers = new ArrayList<>();
-
-        // Decreapted method after API 29
         // Turn on wifi if it is currently disabled
-        // TODO - turn it to a notification toward user
-//      //  if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
-//      //      wifiManager.setWifiEnabled(true);
-//      //  }
+        if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
+            wifiManager.setWifiEnabled(true);
+        }
 
         // Start wifi scan and return results via broadcast
         if(permissionsGranted) {
-            this.scanWifiDataTimer.schedule(new scheduledWifiScan(), 0, scanInterval);
+            this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, scanInterval);
         }
 
         //Inform the user if wifi throttling is enabled on their device
@@ -187,20 +185,27 @@ public class WifiDataProcessor implements Observable {
      * @return  boolean true if all permissions are granted for wifi access, false otherwise.
      */
     private boolean checkWifiPermissions() {
-        int wifiAccessPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.ACCESS_WIFI_STATE);
-        int wifiChangePermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.CHANGE_WIFI_STATE);
-        int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.ACCESS_COARSE_LOCATION);
-        int fineLocationPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.ACCESS_FINE_LOCATION);
+        if (Build.VERSION.SDK_INT >= 23) {
 
-        // Return missing permissions
-        return wifiAccessPermission == PackageManager.PERMISSION_GRANTED &&
-                wifiChangePermission == PackageManager.PERMISSION_GRANTED &&
-                coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
-                fineLocationPermission == PackageManager.PERMISSION_GRANTED;
+            int wifiAccessPermission = ActivityCompat.checkSelfPermission(this.context,
+                    Manifest.permission.ACCESS_WIFI_STATE);
+            int wifiChangePermission = ActivityCompat.checkSelfPermission(this.context,
+                    Manifest.permission.CHANGE_WIFI_STATE);
+            int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION);
+            int fineLocationPermission = ActivityCompat.checkSelfPermission(this.context,
+                    Manifest.permission.ACCESS_FINE_LOCATION);
+
+            // Return missing permissions
+            return wifiAccessPermission == PackageManager.PERMISSION_GRANTED &&
+                    wifiChangePermission == PackageManager.PERMISSION_GRANTED &&
+                    coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
+                    fineLocationPermission == PackageManager.PERMISSION_GRANTED;
+        }
+        else {
+            // Permissions are granted by default
+            return true;
+        }
     }
 
     /**
