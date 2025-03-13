@@ -109,14 +109,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Server communication class for sending data
     private ServerCommunications serverCommunications;
     // Trajectory object containing all data
-    private Traj.Trajectory.Builder trajectory;
+    public Traj.Trajectory.Builder trajectory;
 
     // Settings
-    private boolean saveRecording;
+    public boolean saveRecording;
     private float filter_coefficient;
     // Variables to help with timed events
     private long absoluteStartTime;
-    private long bootTime;
+    public long bootTime;
     long lastStepTime = 0;
     // Timer object for scheduling data recording
     private Timer storeTrajectoryTimer;
@@ -146,6 +146,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
+
+    private int floor = 0; // Store the detected floor level
 
 
     // Over time accelerometer magnitude values since last step
@@ -191,6 +193,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.R = new float[9];
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
+        this.floor = 0;
     }
 
 
@@ -467,45 +470,70 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     @Override
     public void update(Object[] wifiList) {
-        // Save newest wifi values to local variable
+        // Save newest WiFi values to local variable
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
-        if(this.saveRecording) {
+        if (this.saveRecording) {
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
+                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
+
             for (Wifi data : this.wifiList) {
                 wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
                         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                        .setMac(data.getBssid()).setRssi(data.getLevel()));
+                        .setMac(data.getBssid())
+                        .setRssi(data.getLevel()));
             }
-            // Adding WiFi data to Trajectory
-            this.trajectory.addWifiData(wifiData);
+
+            // ✅ Correctly add WiFi data to Trajectory
+            this.trajectory.addWifiData(wifiData.build());  // <-- Fix: Ensure `.build()` is called
         }
+
         createWifiPositioningRequest();
     }
+
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      *
      */
-    private void createWifiPositioningRequest(){
-        // Try catch block to catch any errors and prevent app crashing
+    private void createWifiPositioningRequest() {
         try {
-            // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
-            for (Wifi data : this.wifiList){
+            JSONObject wifiAccessPoints = new JSONObject();
+            for (Wifi data : this.wifiList) {
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
-            // Creating POST Request
-            JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint);
+
+            JSONObject wifiFingerprint = new JSONObject();
+            wifiFingerprint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+
+            // Send the WiFi fingerprint request with a callback
+            this.wiFiPositioning.request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    updateWifiPosition(wifiLocation, floor);
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.e("SensorFusion", "WiFi positioning failed: " + message);
+                }
+            });
         } catch (JSONException e) {
-            // Catching error while making JSON object, to prevent crashes
-            // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors","Error creating json object"+e.toString());
+            Log.e("jsonErrors", "Error creating WiFi fingerprint JSON: " + e.toString());
         }
     }
+
+    private void updateWifiPosition(LatLng wifiLocation, int floor) {
+        Log.d("SensorFusion", "WiFi Positioning Successful: " + wifiLocation.toString() + ", Floor: " + floor);
+        this.latitude = (float) wifiLocation.latitude;
+        this.longitude = (float) wifiLocation.longitude;
+        this.floor = floor;
+
+        // No need to add WiFi data again here
+    }
+
+
+
     // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
