@@ -191,6 +191,15 @@ public class TrajectoryMapFragment extends Fragment {
         });
     }
 
+
+    public void setPolylineColor(int color) {
+        if (polyline != null) {
+            polyline.setColor(color);
+        } else {
+            Log.e("TrajectoryMapFragment", "Polyline is null. Cannot set color.");
+        }
+    }
+
     /**
      * Initialize the map settings with the provided GoogleMap instance.
      * <p>
