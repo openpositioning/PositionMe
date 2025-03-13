@@ -8,7 +8,12 @@ import android.graphics.drawable.Drawable;
 import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
 /**
  * Class containing utility functions which can used by other classes.
@@ -17,6 +22,168 @@ import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 public class UtilFunctions {
     // Constant 1degree of latitiude/longitude (in m)
     private static final int  DEGREE_IN_M=111111;
+
+    private static final int PARTICLE_COUNT = 1000; // Number of particles
+    private static final double PDR_NOISE_STD = 0.5; // Noise in PDR movement (meters)
+    private static final double GNSS_STD = 3.0; // Standard deviation for GNSS errors (meters)
+    private static final double WIFI_STD = 5.0; // Standard deviation for WiFi errors (meters)
+
+    private static final Random random = new Random();
+
+    /**
+     * Particle filter for fusing PDR, GNSS, and WiFi from replay data.
+     * @param replayPoints List of replay points containing trajectory data.
+     * @return List of LatLng points representing the estimated trajectory.
+     */
+    public static List<LatLng> particleFilter(List<TrajParser.ReplayPoint> replayPoints) {
+        List<LatLng> estimatedTrajectory = new ArrayList<>();
+        if (replayPoints.isEmpty()) return estimatedTrajectory;
+
+        // Initialize particles at first known position
+        List<Particle> particles = new ArrayList<>();
+        LatLng initialPosition = getFirstKnownPosition(replayPoints);
+        if (initialPosition == null) return estimatedTrajectory; // No valid start position
+
+        for (int i = 0; i < PARTICLE_COUNT; i++) {
+            particles.add(new Particle(initialPosition.latitude, initialPosition.longitude));
+        }
+
+        // Process replay points sequentially
+        for (TrajParser.ReplayPoint replayPoint : replayPoints) {
+            // Move particles using PDR
+            moveParticles(particles, replayPoint);
+
+            // Update weights using GNSS/WiFi
+            updateParticleWeights(particles, replayPoint);
+
+            // Resample particles
+            particles = resampleParticles(particles);
+
+            // Estimate position and add to trajectory
+            LatLng estimatedPosition = getEstimatedPosition(particles);
+            estimatedTrajectory.add(estimatedPosition);
+        }
+
+        return estimatedTrajectory;
+    }
+
+    /**
+     * Finds the first known position using GNSS or WiFi.
+     */
+    private static LatLng getFirstKnownPosition(List<TrajParser.ReplayPoint> replayPoints) {
+        for (TrajParser.ReplayPoint point : replayPoints) {
+            if (point.gnssLocation != null) {
+                return point.gnssLocation;
+            }
+            if (point.wifiSamples != null && !point.wifiSamples.isEmpty()) {
+                // Assume WiFi positioning is available (API call needed)
+            }
+        }
+        return null; // No valid starting position
+    }
+
+    /**
+     * Moves particles based on PDR displacement.
+     */
+    private static void moveParticles(List<Particle> particles, TrajParser.ReplayPoint replayPoint) {
+        double dx = randomGaussian(PDR_NOISE_STD); // PDR X movement with noise
+        double dy = randomGaussian(PDR_NOISE_STD); // PDR Y movement with noise
+        for (Particle particle : particles) {
+            particle.move(dx, dy);
+        }
+    }
+
+    /**
+     * Updates particle weights based on GNSS and WiFi measurements.
+     */
+    private static void updateParticleWeights(List<Particle> particles, TrajParser.ReplayPoint replayPoint) {
+        for (Particle particle : particles) {
+            double weight = 1.0;
+
+            if (replayPoint.gnssLocation != null) {
+                double distance = distanceBetweenPoints(
+                        new LatLng(particle.lat, particle.lon), replayPoint.gnssLocation);
+                weight *= gaussianProbability(distance, GNSS_STD);
+            }
+
+            if (replayPoint.wifiSamples != null && !replayPoint.wifiSamples.isEmpty()) {
+                // WiFi positioning should be fetched via API (not implemented here)
+                weight *= gaussianProbability(0, WIFI_STD); // Placeholder
+            }
+
+            particle.weight = weight;
+        }
+    }
+
+    /**
+     * Resamples particles based on their weights.
+     */
+    private static List<Particle> resampleParticles(List<Particle> particles) {
+        List<Particle> newParticles = new ArrayList<>();
+        double totalWeight = particles.stream().mapToDouble(p -> p.weight).sum();
+        if (totalWeight == 0) return particles; // Avoid division by zero
+
+        for (int i = 0; i < PARTICLE_COUNT; i++) {
+            double rand = random.nextDouble() * totalWeight;
+            double cumulativeWeight = 0;
+            for (Particle particle : particles) {
+                cumulativeWeight += particle.weight;
+                if (cumulativeWeight >= rand) {
+                    newParticles.add(new Particle(particle.lat, particle.lon));
+                    break;
+                }
+            }
+        }
+        return newParticles;
+    }
+
+    /**
+     * Computes the estimated position as the weighted average of particles.
+     */
+    private static LatLng getEstimatedPosition(List<Particle> particles) {
+        double latSum = 0, lonSum = 0, weightSum = 0;
+        for (Particle particle : particles) {
+            latSum += particle.lat * particle.weight;
+            lonSum += particle.lon * particle.weight;
+            weightSum += particle.weight;
+        }
+        return weightSum > 0 ? new LatLng(latSum / weightSum, lonSum / weightSum) :
+                new LatLng(particles.get(0).lat, particles.get(0).lon);
+    }
+
+    /**
+     * Computes Gaussian probability.
+     */
+    private static double gaussianProbability(double x, double std) {
+        return Math.exp(-0.5 * (x * x) / (std * std)) / (std * Math.sqrt(2 * Math.PI));
+    }
+
+    /**
+     * Generates a random Gaussian value.
+     */
+    private static double randomGaussian(double std) {
+        return random.nextGaussian() * std;
+    }
+
+    /**
+     * Particle representation for filtering.
+     */
+    private static class Particle {
+        double lat, lon, weight;
+
+        Particle(double lat, double lon) {
+            this.lat = lat;
+            this.lon = lon;
+            this.weight = 1.0;
+        }
+
+        void move(double dx, double dy) {
+            this.lat += dx / 111111; // Convert meters to degrees (lat)
+            this.lon += dy / (111111 * Math.cos(Math.toRadians(lat))); // Convert meters to degrees (lon)
+        }
+    }
+
+
     /**
      * Simple function to calculate the angle between two close points
      * @param pointA Starting point
@@ -92,15 +259,6 @@ public class UtilFunctions {
         vectorDrawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
         vectorDrawable.draw(canvas);
         return bitmap;
-    }
-
-    /**
-     * Function to fuse sensor data using particle filter algorithm
-     * @return LatLng Position
-     * @Author Jamie Arnott
-     */
-    public static LatLng particleFilter(){
-        return null;
     }
 
 }
