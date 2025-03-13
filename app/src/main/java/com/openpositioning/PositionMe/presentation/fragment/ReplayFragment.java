@@ -6,8 +6,10 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.SeekBar;
+import android.widget.Button;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -25,22 +27,20 @@ import java.util.List;
 
 /**
  * Sub fragment of Replay Activity. Fragment that replays trajectory data on a map.
- * <p>
+ *
  * The ReplayFragment is responsible for visualizing and replaying trajectory data captured during
  * previous recordings. It loads trajectory data from a JSON file, updates the map with user movement,
  * and provides UI controls for playback, pause, and seek functionalities.
- * <p>
+ *
  * Features:
  * - Loads trajectory data from a file and displays it on a map.
- * - Provides playback controls including play, pause, restart, and go to end.
+ * - Provides playback controls including separate play and pause buttons, replay (rewind), and go to end.
  * - Updates the trajectory dynamically as playback progresses.
  * - Allows users to manually seek through the recorded trajectory.
  * - Integrates with {@link TrajectoryMapFragment} for map visualization.
  *
  * @see ReplayActivity The activity managing the replay workflow.
  * @see TrajParser Utility class for parsing trajectory data.
- *
- * @author Shu Gu
  */
 public class ReplayFragment extends Fragment {
 
@@ -54,12 +54,13 @@ public class ReplayFragment extends Fragment {
 
     // UI Controls
     private TrajectoryMapFragment trajectoryMapFragment;
-    private Button playPauseButton, restartButton, exitButton, goEndButton;
+    private ImageButton playButton, pauseButton, replayButton, goToEndButton;
+    private Button speedHalfButton, speedDoubleButton, viewStatsButton;
     private SeekBar playbackSeekBar;
 
     // Playback-related
     private final Handler playbackHandler = new Handler();
-    private final long PLAYBACK_INTERVAL_MS = 500; // milliseconds
+    private long playbackInterval = 500; // Default interval (ms)
     private List<TrajParser.ReplayPoint> replayData = new ArrayList<>();
     private int currentIndex = 0;
     private boolean isPlaying = false;
@@ -75,7 +76,6 @@ public class ReplayFragment extends Fragment {
             initialLon = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LON, 0f);
         }
 
-        // Log the received data
         Log.i(TAG, "ReplayFragment received data:");
         Log.i(TAG, "Trajectory file path: " + filePath);
         Log.i(TAG, "Initial latitude: " + initialLat);
@@ -97,14 +97,12 @@ public class ReplayFragment extends Fragment {
         // Parse the JSON file and prepare replayData using TrajParser
         replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
 
-        // Log the number of parsed points
         if (replayData != null && !replayData.isEmpty()) {
             Log.i(TAG, "Trajectory data loaded successfully. Total points: " + replayData.size());
         } else {
             Log.e(TAG, "Failed to load trajectory data! replayData is empty or null.");
         }
     }
-
 
     @Nullable
     @Override
@@ -130,13 +128,11 @@ public class ReplayFragment extends Fragment {
                     .commit();
         }
 
-        // If GNSS data exists, prompt for starting location choice; otherwise, use initial values.
+        // Check for GNSS data in file; if found, prompt the user.
         boolean gnssExists = hasAnyGnssData(replayData);
-
         if (gnssExists) {
             showGnssChoiceDialog();
         } else {
-            // No GNSS data -> automatically use param lat/lon
             if (initialLat != 0f || initialLon != 0f) {
                 LatLng startPoint = new LatLng(initialLat, initialLon);
                 Log.i(TAG, "Setting initial map position: " + startPoint.toString());
@@ -144,7 +140,7 @@ public class ReplayFragment extends Fragment {
             }
         }
 
-        // Link UI controls from XML (using the IDs from your provided layout)
+        // Link UI controls from XML based on provided layout IDs.
         playButton = view.findViewById(R.id.playButton);
         pauseButton = view.findViewById(R.id.pauseButton);
         speedHalfButton = view.findViewById(R.id.speedHalfButton);
@@ -153,27 +149,36 @@ public class ReplayFragment extends Fragment {
         goToEndButton = view.findViewById(R.id.goToEndButton);
         playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
 
-        // Set SeekBar max value based on replay data
+        // Set SeekBar max value based on replayData
         if (!replayData.isEmpty()) {
             playbackSeekBar.setMax(replayData.size() - 1);
         }
 
         // Set up button listeners:
 
-        // Play button starts playback
+        // Play button starts playback.
         playButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) {
                 Log.w(TAG, "Play button pressed but replayData is empty.");
                 return;
             }
-            if (isPlaying) {
-                stopPlaying();
+            if (!isPlaying) {
+                startPlaying();
             } else {
-                Log.w(TAG, "Pause button pressed but playback is not running.");
+                Toast.makeText(getContext(), "Playback is already running.", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // Speed Half button sets playback interval to 1000 ms (0.5x speed)
+        // Pause button stops playback.
+        pauseButton.setOnClickListener(v -> {
+            if (isPlaying) {
+                stopPlaying();
+            } else {
+                Toast.makeText(getContext(), "Playback is not running.", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // Speed Half button sets playback interval to 1000 ms (0.5× speed).
         speedHalfButton.setOnClickListener(v -> {
             playbackInterval = 1000;
             if (isPlaying) {
@@ -183,7 +188,7 @@ public class ReplayFragment extends Fragment {
             Log.i(TAG, "Playback speed set to 0.5x (interval: " + playbackInterval + " ms)");
         });
 
-        // Speed Double button sets playback interval to 250 ms (2x speed)
+        // Speed Double button sets playback interval to 250 ms (2× speed).
         speedDoubleButton.setOnClickListener(v -> {
             playbackInterval = 250;
             if (isPlaying) {
@@ -193,7 +198,7 @@ public class ReplayFragment extends Fragment {
             Log.i(TAG, "Playback speed set to 2x (interval: " + playbackInterval + " ms)");
         });
 
-        // Replay button (rewind) resets playback to beginning
+        // Replay (rewind) button resets playback to beginning.
         replayButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = 0;
@@ -202,7 +207,7 @@ public class ReplayFragment extends Fragment {
             Log.i(TAG, "Replay button pressed. Resetting playback to index 0.");
         });
 
-        // Go To End button jumps to the last index
+        // Go To End button jumps to the last index.
         goToEndButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = replayData.size() - 1;
@@ -212,7 +217,7 @@ public class ReplayFragment extends Fragment {
             Log.i(TAG, "Go To End button pressed. Moving to last index: " + currentIndex);
         });
 
-        // SeekBar listener to allow manual scrubbing through the replay
+        // SeekBar listener for manual scrubbing.
         playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -225,7 +230,7 @@ public class ReplayFragment extends Fragment {
             @Override public void onStartTrackingTouch(SeekBar seekBar) {
                 stopPlaying();
             }
-            @Override public void onStopTrackingTouch(SeekBar seekBar) { }
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
         // If replayData is available, update the map to show the first point.
@@ -247,23 +252,22 @@ public class ReplayFragment extends Fragment {
     }
 
     /**
-     * Shows a dialog asking the user whether to use GNSS from file or manual coordinates.
+     * Shows a dialog asking whether to use GNSS from file or manual coordinates.
      */
     private void showGnssChoiceDialog() {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Choose Starting Location")
-                .setMessage("GNSS data found in file. Use file's GNSS or your manually picked coordinates?")
+                .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or your manually picked coordinates?")
                 .setPositiveButton("File's GNSS", (dialog, which) -> {
                     LatLng firstGnss = getFirstGnssLocation(replayData);
                     if (firstGnss != null) {
                         setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
                     } else {
-                        // Fallback if no valid GNSS found
                         setupInitialMapPosition(initialLat, initialLon);
                     }
                     dialog.dismiss();
                 })
-                .setNegativeButton("Use Manual Set", (dialog, which) -> {
+                .setNegativeButton("Manual Set", (dialog, which) -> {
                     setupInitialMapPosition(initialLat, initialLon);
                     dialog.dismiss();
                 })
@@ -272,27 +276,22 @@ public class ReplayFragment extends Fragment {
     }
 
     private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
-        Log.i(TAG, "Setting initial map position: " + startPoint.toString());
+        LatLng startPoint = new LatLng(latitude, longitude);
+        Log.i(TAG, "Setting initial map position: " + startPoint);
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
     }
 
-    /**
-     * Retrieve the first available GNSS location from the replay data.
-     */
     private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
         for (TrajParser.ReplayPoint point : data) {
             if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+                return new LatLng(point.gnssLocation.latitude, point.gnssLocation.longitude);
             }
         }
-        return null; // None found
+        return null;
     }
 
-
     /**
-     * Runnable for playback of trajectory data.
-     * This runnable is called repeatedly to update the map with the next point in the replayData list.
+     * Runnable for updating playback. Called repeatedly to update the map with the next replay point.
      */
     private final Runnable playbackRunnable = new Runnable() {
         @Override
@@ -313,40 +312,53 @@ public class ReplayFragment extends Fragment {
         }
     };
 
-
     /**
-     * Update the map with the user location and GNSS location (if available) for the given index.
-     * Clears the map and redraws up to the given index.
-     *
-     * @param newIndex
+     * Updates the map with the replay point at the given index.
      */
     private void updateMapForIndex(int newIndex) {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
 
-        // Detect if user is playing sequentially (lastIndex + 1)
-        // or is skipping around (backwards, or jump forward)
         boolean isSequentialForward = (newIndex == lastIndex + 1);
-
         if (!isSequentialForward) {
-            // Clear everything and redraw up to newIndex
             trajectoryMapFragment.clearMapAndReset();
             for (int i = 0; i <= newIndex; i++) {
-                TrajParser.ReplayPoint p = replayData.get(i);
-                trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-                if (p.gnssLocation != null) {
-                    trajectoryMapFragment.updateGNSS(p.gnssLocation);
-                }
+                drawReplayPoint(i);
             }
         } else {
-            // Normal sequential forward step: add just the new point
-            TrajParser.ReplayPoint p = replayData.get(newIndex);
-            trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-            if (p.gnssLocation != null) {
-                trajectoryMapFragment.updateGNSS(p.gnssLocation);
-            }
+            drawReplayPoint(newIndex);
         }
-
         lastIndex = newIndex;
+    }
+
+    private void drawReplayPoint(int index) {
+        if (index < 0 || index >= replayData.size()) return;
+        TrajParser.ReplayPoint p = replayData.get(index);
+        trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+        if (p.gnssLocation != null) {
+            trajectoryMapFragment.updateGNSS(p.gnssLocation);
+        }
+    }
+
+    /**
+     * Starts playback by posting the playbackRunnable and updating UI controls.
+     */
+    private void startPlaying() {
+        isPlaying = true;
+        playButton.setEnabled(false);
+        pauseButton.setEnabled(true);
+        playbackHandler.postDelayed(playbackRunnable, playbackInterval);
+        Log.i(TAG, "Playback started from index: " + currentIndex);
+    }
+
+    /**
+     * Stops playback by removing playbackRunnable callbacks and updating UI controls.
+     */
+    private void stopPlaying() {
+        isPlaying = false;
+        playbackHandler.removeCallbacks(playbackRunnable);
+        playButton.setEnabled(true);
+        pauseButton.setEnabled(false);
+        Log.i(TAG, "Playback stopped at index: " + currentIndex);
     }
 
     @Override
