@@ -217,12 +217,14 @@ public class TrajectoryMapFragment extends Fragment {
         polyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
                 .width(5f)
+                .zIndex(10f)
                 .add() // start empty
         );
 
         // GNSS path in blue
         gnssPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.BLUE)
+                .zIndex(10f)
                 .width(5f)
                 .add() // start empty
         );
@@ -287,12 +289,14 @@ public class TrajectoryMapFragment extends Fragment {
      * @param newLocation The new location to plot.
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
-    public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
-        if (gMap == null) return;
+    public void updateUserLocation(@NonNull LatLng newLocation, LatLng initialPosition,
+                                   float orientation) {
+      if (gMap == null) return;
 
         // Keep track of current location
-        LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
+      LatLng oldLocation = this.currentLocation;
+      this.currentLocation = new LatLng(newLocation.latitude + initialPosition.latitude,
+                                        newLocation.longitude + initialPosition.longitude);
 
         // If no marker, create it
         if (orientationMarker == null) {
@@ -304,25 +308,24 @@ public class TrajectoryMapFragment extends Fragment {
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(this.currentLocation, 19f));
         } else {
             // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
+            orientationMarker.setPosition(this.currentLocation);
             orientationMarker.setRotation(orientation);
             // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(this.currentLocation));
         }
 
         // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
+        if (oldLocation != null && !oldLocation.equals(this.currentLocation) && polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            points.add(newLocation);
+            points.add(this.currentLocation);
             polyline.setPoints(points);
         }
-
         // Update indoor map overlay
         if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
+            indoorMapManager.setCurrentLocation(this.currentLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
     }
@@ -436,10 +439,12 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap != null) {
             polyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
+                    .zIndex(10f)
                     .width(5f)
                     .add());
             gnssPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.BLUE)
+                    .zIndex(10f)
                     .width(5f)
                     .add());
         }
