@@ -1,68 +1,110 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/replayRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:background="#FFFFFF">
 
-    <!-- Map container (reuse the same approach used in RecordingFragment) -->
+    <!-- Map container -->
     <FrameLayout
         android:id="@+id/replayMapFragmentContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-
-    <!-- Progress bar or seek bar to show current playback position -->
+    <!-- SeekBar for playback position -->
     <SeekBar
         android:id="@+id/playbackSeekBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="14dp"/>
 
-    <!-- Playback Controls -->
-    <LinearLayout
-        style="?android:attr/buttonBarStyle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:padding="8dp">
+    <!-- White background container for controls -->
+    <FrameLayout
+        android:id="@+id/buttonContainer"
+        android:layout_width="394dp"
+        android:layout_height="79dp"
+        android:background="@drawable/rounded_background"
+        android:elevation="4dp"
+        android:padding="12dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        >
 
-        <Button
-            android:id="@+id/restartButton"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="372dp"
             android:layout_height="wrap_content"
-            android:text="@string/replay_frag_restart"
-            android:layout_margin="2dp" />
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:spacing="8dp">
 
-        <Button
-            android:id="@+id/playPauseButton"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/replay_frag_play"
-            android:layout_margin="2dp" />
+            <ImageButton
+                android:id="@+id/playButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/round_button"
+                android:src="@drawable/ic_baseline_play_arrow_24" />
 
-        <Button
-            android:id="@+id/goEndButton"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/replay_frag_end"
-            android:layout_margin="2dp" />
+            <ImageButton
+                android:id="@+id/pauseButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/round_button"
+                android:src="@drawable/pause_icon"
+                android:scaleType="centerInside"/>
 
-        <Button
-            android:id="@+id/exitButton"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/replay_frag_exit"
-            android:layout_margin="2dp"/>
-    </LinearLayout>
+            <Button
+                android:id="@+id/speedHalfButton"
+                android:layout_width="54dp"
+                android:layout_height="50dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/round_button"
+                android:paddingHorizontal="10dp"
+                android:text="0.5x"
+                android:textColor="@android:color/white"
+                android:textSize="14sp" />
+
+            <!-- Replay Button -->
+
+            <!-- Go to End Button -->
+
+            <Button
+                android:id="@+id/speedDoubleButton"
+                android:layout_width="54dp"
+                android:layout_height="50dp"
+                android:background="@drawable/round_button"
+                android:paddingHorizontal="10dp"
+                android:text="2x"
+                android:textColor="@android:color/white"
+                android:textSize="14sp" />
+
+            <ImageButton
+                android:id="@+id/replayButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/round_button"
+                android:src="@drawable/rewind_icon"
+                android:translationX="4dp" />
 
 
+
+            <ImageButton
+                android:id="@+id/goToEndButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/round_button"
+                android:src="@android:drawable/ic_media_next" />
+
+        </LinearLayout>
+
+    </FrameLayout>
 
 </LinearLayout>
