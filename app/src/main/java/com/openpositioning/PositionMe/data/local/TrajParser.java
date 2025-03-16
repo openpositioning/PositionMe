@@ -9,11 +9,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.WiFiPositioning;
-import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.utils.TimedData;
 
 import org.json.JSONException;
@@ -27,6 +25,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Handles parsing of trajectory data stored in JSON files, combining IMU, PDR, and GNSS data
@@ -64,6 +63,13 @@ public class TrajParser {
     private static final String TAG = "TrajParser";
 
     private static final String WIFI_FINGERPRINT= "wf";
+
+
+    public interface TrajectoryParseCallback {
+      void progress(int completed, int total);
+      void onTrajectoryParsed(List<ReplayPoint> replayPoints);
+      void onError(Exception e);
+    }
 
     /**
      * Represents a single replay point containing estimated PDR position, GNSS location,
@@ -145,21 +151,22 @@ public class TrajParser {
      *
      * @param filePath  Path to the JSON file containing trajectory data.
      * @param context   Android application context (used for sensor processing).
-     * @return A list of parsed {@link ReplayPoint} objects.
      */
-    public static List<ReplayPoint> parseTrajectoryData(String filePath, Context context,
-                                                        LatLng initialPos) {
+    public static void parseTrajectoryData(String filePath,
+                                                        Context context,
+                                                        LatLng initialPos,
+                                                        TrajectoryParseCallback callback) {
         List<ReplayPoint> result = new ArrayList<>();
 
         try {
             File file = new File(filePath);
             if (!file.exists()) {
                 Log.e(TAG, "File does NOT exist: " + filePath);
-                return result;
+                callback.onTrajectoryParsed(result);
             }
             if (!file.canRead()) {
                 Log.e(TAG, "File is NOT readable: " + filePath);
-                return result;
+                callback.onTrajectoryParsed(result);
             }
 
             BufferedReader br = new BufferedReader(new FileReader(file));
@@ -176,8 +183,11 @@ public class TrajParser {
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
             List<WifiRecord> wifiList = parseWifiData(root.getAsJsonArray("wifiData"));
             // Create a list of wifi locations for which to fill in.
-            WifiLocation[] wifiLocations = new WifiLocation[wifiList.size()];
-            getLocationsForWifi(new WiFiPositioning(context), wifiList, wifiLocations);
+            List<WifiLocation> wifiLocations = getLocationsForWifi(
+                    new WiFiPositioning(context),
+                    wifiList,
+                    true,
+                    callback);
 
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: "
                     + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
@@ -208,14 +218,17 @@ public class TrajParser {
                 double lng = initialPos.longitude + pdr.x * 1E-5;
                 LatLng pdrLocation = new LatLng(lat, lng);
 
+                // TODO: CAN THESE METHODS CAN GET RECORDS FROM THE FUTURE? i.e. display them before
+                // their time has come
                 GnssRecord closestGnss = TimedData.findClosestRecord(gnssList, pdr.relativeTimestamp);
                 LatLng gnssLocation = closestGnss != null ?
                         new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
                 WifiLocation closestWifiLoc = TimedData.findClosestRecord(
-                                                Arrays.asList(wifiLocations),
+                                                wifiLocations,
                                                 pdr.relativeTimestamp);
-                LatLng wifiLocation = closestWifiLoc != null ?
-                                      closestWifiLoc.latLng : null;
+                LatLng wifiLocation = closestWifiLoc == null ?
+                                      null :
+                                      closestWifiLoc.latLng;
 
                 result.add(new ReplayPoint(pdrLocation, gnssLocation, wifiLocation, pdrLocation,
                         orientationDeg,0f, pdr.relativeTimestamp));
@@ -227,23 +240,26 @@ public class TrajParser {
 
         } catch (Exception e) {
             Log.e(TAG, "Error parsing trajectory file!", e);
+            callback.onError(e);
         }
-
-        return result;
+        callback.onTrajectoryParsed(result);
     }
 
   /** Send out asynchronous callbacks to retrieve the locations all WiFi fingerprints
    *  TODO: Check what happens when we either 1) don't have signal or 2) are an outlier
    * @param wiFiPositioning
    * @param wifiRecords
-   * @param wifiLocations Locations to fill in. MUST be the same length as wifiSamples!
+   * @param wait If the call should block until all wifi responses are received
    */
-  private static void getLocationsForWifi(WiFiPositioning wiFiPositioning,
+  private static List<WifiLocation> getLocationsForWifi(WiFiPositioning wiFiPositioning,
                                           List<WifiRecord> wifiRecords,
-                                          WifiLocation[] wifiLocations) {
-    if (wifiRecords.size() != wifiLocations.length) {
-      throw new IllegalArgumentException("Size of wifiRecords must equal that of wifiLocations.");
-    }
+                                          boolean wait,
+                                          TrajectoryParseCallback callback) {
+    WifiLocation[] wifiLocationsWithNulls = new WifiLocation[wifiRecords.size()];
+    // Initialize a countdownlatch that will wait for all responses to come back
+    CountDownLatch wifiResponses = new CountDownLatch(wifiRecords.size());
+    callback.progress(0, (int) wifiRecords.size());
+
     for (int i = 0; i < wifiRecords.size(); i++) {
       WifiRecord record = wifiRecords.get(i);
       try {
@@ -264,7 +280,10 @@ public class TrajParser {
           public void onSuccess(LatLng wifiLocation, int floor) {
             // Handle the success response
             location.latLng = wifiLocation;
-            wifiLocations[index] = location;
+            wifiLocationsWithNulls[index] = location;
+            // Signal completion on wifiResponses (decrement the count)
+            wifiResponses.countDown();
+            callback.progress(wifiRecords.size() - (int) wifiResponses.getCount(), wifiRecords.size());
           }
 
           @Override
@@ -272,14 +291,36 @@ public class TrajParser {
             // Handle the error response
             Log.e("getLocationsForWifi", "ERROR IN SERVER RESPONSE FOR WIFI POSITIONING"
                     + message);
+            // Error is implicitly a completion; otherwise we risk stalling the UI
+            wifiResponses.countDown();
+            callback.progress(wifiRecords.size() - (int) wifiResponses.getCount(), wifiRecords.size());
           }
         });
       } catch (JSONException e) {
         // Catching error while making JSON object, to prevent crashes
         // Error log to keep record of errors (for secure programming and maintainability)
         Log.e("jsonErrors", "Error creating json object" + e.toString());
+        // Error is implicitly a completion; otherwise we risk stalling the UI
+        wifiResponses.countDown();
+        callback.progress(wifiRecords.size() - (int) wifiResponses.getCount(), wifiRecords.size());
       }
     }
+    if(wait) {
+      try {
+        callback.progress(wifiRecords.size() - (int) wifiResponses.getCount(), wifiRecords.size());
+        wifiResponses.await(); // Wait for all responses to compelte
+      } catch (InterruptedException e) {
+        Log.e("getLocationsForWifi", "Interrupted whilst waiting for wifi responses: " + e.toString());
+      }
+    }
+    List<WifiLocation> wifiLocations = new ArrayList<>();
+    // Filter out the nulls into a new
+    for (int i = 0; i < wifiLocationsWithNulls.length; i++){
+      if(wifiLocationsWithNulls[i] != null) {
+        wifiLocations.add(wifiLocationsWithNulls[i]);
+      }
+    }
+    return wifiLocations;
   }
 
 

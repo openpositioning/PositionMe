@@ -133,8 +133,6 @@ public class TrajectoryMapFragment extends Fragment {
                     drawBuildingPolygon();
 
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
-
-
                 }
             });
         }

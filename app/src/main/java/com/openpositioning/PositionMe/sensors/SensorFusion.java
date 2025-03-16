@@ -643,6 +643,24 @@ public class SensorFusion implements SensorEventListener, Observer {
         return latLong;
     }
 
+  /** Get the most recent wifi location from WifiPositioning API
+   *
+   * @return float[] of current latitude and longitude (WGS84)
+   *         null if there have been no successful readings.
+   */
+  public float[] getWifiLocation() {
+      float[] latlng = new float[2];
+      LatLng wifiPosition = this.wiFiPositioning.getWifiLocation();
+      if(wifiPosition == null) {
+        return null;
+      }
+      else {
+        latlng[0] = (float) wifiPosition.latitude;
+        latlng[1] = (float) wifiPosition.longitude;
+      }
+      return latlng;
+    }
+
     /**
      * Setter function for core location data.
      *
@@ -689,6 +707,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      * that is indexed by {@link SensorTypes} and makes it accessible for other classes.
      *
      * @return  Map of <code>SensorTypes</code> to float array of most recent values.
+     *
+     * @author Philip Heptonstall, updated to enable wifi data and sensor data.
      */
     public Map<SensorTypes, float[]> getSensorValueMap() {
         Map<SensorTypes, float[]> sensorValueMap = new HashMap<>();
@@ -699,11 +719,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         sensorValueMap.put(SensorTypes.LIGHT, new float[]{light});
         sensorValueMap.put(SensorTypes.PRESSURE, new float[]{pressure});
         sensorValueMap.put(SensorTypes.PROXIMITY, new float[]{proximity});
-        sensorValueMap.put(SensorTypes.GNSSLATLONG, getGNSSLatitude(false));
+        sensorValueMap.put(SensorTypes.GNSSLATLONG, this.getGNSSLatitude(false));
         sensorValueMap.put(SensorTypes.PDR, pdrProcessing.getPDRMovement());
-//        sensorValueMap.put(SensorTypes.WIFI, new float[]
-//                          {(float) wiFiPositioning.getWifiLocation().latitude,
-//                          (float) wiFiPositioning.getWifiLocation().longitude});
+        float[] wifiLocation = this.getWifiLocation();
+        if(wifiLocation != null)
+          sensorValueMap.put(SensorTypes.WIFI, wifiLocation);
         sensorValueMap.put(SensorTypes.FUSED, null);
         return sensorValueMap;
     }
