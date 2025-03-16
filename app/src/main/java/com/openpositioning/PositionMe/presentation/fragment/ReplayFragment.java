@@ -48,8 +48,7 @@ public class ReplayFragment extends Fragment {
     private static final String TAG = "ReplayFragment";
 
     // GPS start location (received from ReplayActivity)
-    private float initialLat = 0f;
-    private float initialLon = 0f;
+    private LatLng initialLatLng;
     private String filePath = "";
     private int lastIndex = -1;
 
@@ -71,16 +70,17 @@ public class ReplayFragment extends Fragment {
 
         // Retrieve transferred data from ReplayActivity
         if (getArguments() != null) {
-            filePath = getArguments().getString(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, "");
-            initialLat = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LAT, 0f);
-            initialLon = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LON, 0f);
+           filePath = getArguments().getString(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, "");
+           initialLatLng = new LatLng(
+                   getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LAT, 0f),
+                   getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LON, 0f));
         }
 
         // Log the received data
         Log.i(TAG, "ReplayFragment received data:");
         Log.i(TAG, "Trajectory file path: " + filePath);
-        Log.i(TAG, "Initial latitude: " + initialLat);
-        Log.i(TAG, "Initial longitude: " + initialLon);
+        Log.i(TAG, "Initial latitude: " + initialLatLng.latitude);
+        Log.i(TAG, "Initial longitude: " + initialLatLng.longitude);
 
         // Check if file exists before parsing
         File trajectoryFile = new File(filePath);
@@ -96,7 +96,8 @@ public class ReplayFragment extends Fragment {
         Log.i(TAG, "Trajectory file confirmed to exist and is readable.");
 
         // Parse the JSON file and prepare replayData using TrajParser
-        replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
+        LatLng dummy = new LatLng(0,0);
+        replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), dummy);
 
         // Log the number of parsed points
         if (replayData != null && !replayData.isEmpty()) {
@@ -140,10 +141,9 @@ public class ReplayFragment extends Fragment {
             showGnssChoiceDialog();
         } else {
             // No GNSS data -> automatically use param lat/lon
-            if (initialLat != 0f || initialLon != 0f) {
-                LatLng startPoint = new LatLng(initialLat, initialLon);
-                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-                trajectoryMapFragment.setInitialCameraPosition(startPoint);
+            if (initialLatLng.latitude != 0f || initialLatLng.longitude != 0f) {
+                Log.i(TAG, "Setting initial map position: " + initialLatLng.toString());
+                trajectoryMapFragment.setInitialCameraPosition(initialLatLng);
             }
         }
 
@@ -256,25 +256,25 @@ public class ReplayFragment extends Fragment {
                 .setPositiveButton("Use File's GNSS", (dialog, which) -> {
                     LatLng firstGnss = getFirstGnssLocation(replayData);
                     if (firstGnss != null) {
-                        setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
+                        setupInitialMapPosition(firstGnss);
                     } else {
                         // Fallback if no valid GNSS found
-                        setupInitialMapPosition(initialLat, initialLon);
+                        setupInitialMapPosition(initialLatLng);
                     }
                     dialog.dismiss();
                 })
                 .setNegativeButton("Use Manual Set", (dialog, which) -> {
-                    setupInitialMapPosition(initialLat, initialLon);
+                    setupInitialMapPosition(initialLatLng);
                     dialog.dismiss();
                 })
                 .setCancelable(false)
                 .show();
     }
 
-    private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
-        Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-        trajectoryMapFragment.setInitialCameraPosition(startPoint);
+    private void setupInitialMapPosition(LatLng pos) {
+        initialLatLng = pos;
+        Log.i(TAG, "Setting initial map position: " + pos.toString());
+        trajectoryMapFragment.setInitialCameraPosition(pos);
     }
 
     /**
@@ -283,7 +283,7 @@ public class ReplayFragment extends Fragment {
     private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
         for (TrajParser.ReplayPoint point : data) {
             if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+                return new LatLng(point.gnssLocation.latitude, point.gnssLocation.longitude);
             }
         }
         return null; // None found
@@ -322,7 +322,6 @@ public class ReplayFragment extends Fragment {
      */
     private void updateMapForIndex(int newIndex) {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
-
         // Detect if user is playing sequentially (lastIndex + 1)
         // or is skipping around (backwards, or jump forward)
         boolean isSequentialForward = (newIndex == lastIndex + 1);
@@ -332,7 +331,7 @@ public class ReplayFragment extends Fragment {
             trajectoryMapFragment.clearMapAndReset();
             for (int i = 0; i <= newIndex; i++) {
                 TrajParser.ReplayPoint p = replayData.get(i);
-                trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+                trajectoryMapFragment.updateUserLocation(p.pdrLocation, initialLatLng,  p.orientation);
                 if (p.gnssLocation != null) {
                     trajectoryMapFragment.updateGNSS(p.gnssLocation);
                 }
@@ -340,7 +339,7 @@ public class ReplayFragment extends Fragment {
         } else {
             // Normal sequential forward step: add just the new point
             TrajParser.ReplayPoint p = replayData.get(newIndex);
-            trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+            trajectoryMapFragment.updateUserLocation(p.pdrLocation, initialLatLng, p.orientation);
             if (p.gnssLocation != null) {
                 trajectoryMapFragment.updateGNSS(p.gnssLocation);
             }
