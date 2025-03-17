@@ -120,12 +120,10 @@ public class TrajParser {
      *
      * @param filePath  Path to the JSON file containing trajectory data.
      * @param context   Android application context (used for sensor processing).
-     * @param originLat Latitude of the reference origin.
-     * @param originLng Longitude of the reference origin.
      * @return A list of parsed {@link ReplayPoint} objects.
      */
     public static List<ReplayPoint> parseTrajectoryData(String filePath, Context context,
-                                                        double originLat, double originLng) {
+                                                        LatLng initialPos) {
         List<ReplayPoint> result = new ArrayList<>();
 
         try {
@@ -176,9 +174,8 @@ public class TrajParser {
                     if (dt > 0) speed = (float) (distance / dt);
                 }
 
-
-                double lat = originLat + pdr.y * 1E-5;
-                double lng = originLng + pdr.x * 1E-5;
+                double lat = initialPos.latitude + pdr.y * 1E-5;
+                double lng = initialPos.longitude + pdr.x * 1E-5;
                 LatLng pdrLocation = new LatLng(lat, lng);
 
                 GnssRecord closestGnss = findClosestGnssRecord(gnssList, pdr.relativeTimestamp);
