@@ -259,9 +259,34 @@ public class RecordingFragment extends Fragment {
                     gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
                 }
                 trajectoryMapFragment.updateGNSS(gnssLocation);
+                updateWifiMarkerNextToGNSS();
             } else {
                 gnssError.setVisibility(View.GONE);
-                trajectoryMapFragment.clearGNSS();
+                trajectoryMapFragment.clearMarkers();
+            }
+        }
+
+        // Get and plot wifi data
+        float[] wifi = sensorFusion.getSensorValueMap().get(SensorTypes.WIFI);
+        if (wifi != null && trajectoryMapFragment != null) {
+            // If user toggles showing GNSS in the map, call e.g.
+            if (trajectoryMapFragment.isGnssEnabled()) {
+                LatLng wifiLocation = new LatLng(wifi[0], wifi[1]);
+                trajectoryMapFragment.updateWifi(wifiLocation);
+            } else {
+                trajectoryMapFragment.clearMarkers();
+            }
+        }
+
+        // Get and plot fused data
+        float[] fused = sensorFusion.getSensorValueMap().get(SensorTypes.WIFI);
+        if (fused != null && trajectoryMapFragment != null) {
+            // If user toggles showing GNSS in the map, call e.g.
+            if (trajectoryMapFragment.isGnssEnabled()) {
+                LatLng fusedLocation = new LatLng(fused[0], fused[1]);
+                trajectoryMapFragment.updateWifi(fusedLocation);
+            } else {
+                trajectoryMapFragment.clearMarkers();
             }
         }
 
@@ -269,6 +294,30 @@ public class RecordingFragment extends Fragment {
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
     }
+
+    // Code for testing wifi plotting ----- remove when done
+    private void updateWifiMarkerNextToGNSS() {
+        // Retrieve the current GNSS values
+        float[] gnssValues = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+        if (gnssValues == null || trajectoryMapFragment == null) {
+            return;
+        }
+
+        // Create a new WiFi location by adding a small offset to the GNSS coordinates
+        // You can adjust the offset value (in degrees) as needed
+        double offset = 0.00005; // approximately 5-6 meters, depending on latitude
+        double wifiLat = gnssValues[0] + offset;
+        double wifiLon = gnssValues[1] + offset;
+        LatLng wifiLocation = new LatLng(wifiLat, wifiLon);
+        double fusedLat = gnssValues[0] + 2*offset;
+        double fusedLon = gnssValues[1] + 2*offset;
+        LatLng fusedLocation = new LatLng(fusedLat, fusedLon);
+
+        // Update the WiFi marker on the map using the TrajectoryMapFragment's updateWifi method
+        trajectoryMapFragment.updateWifi(wifiLocation);
+        trajectoryMapFragment.updateFused(fusedLocation);
+    }
+
 
     /**
      * Start the blinking effect for the recording icon.

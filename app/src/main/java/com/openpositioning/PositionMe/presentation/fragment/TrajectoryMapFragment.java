@@ -57,6 +57,8 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
+    private Marker wifiMarker; // Wifi position marker
+    private Marker fusedMarker; // Fused data position marker
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
@@ -388,16 +390,64 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    /**
+     * Update the map with a WiFi marker at the specified location.
+     *
+     * @param wifiLocation The location where the WiFi marker should be placed.
+     */
+    public void updateWifi(@NonNull LatLng wifiLocation) {
+        if (gMap == null) return;
+
+        if (wifiMarker == null) {
+            // Create the WiFi marker if it doesn't already exist
+            wifiMarker = gMap.addMarker(new MarkerOptions()
+                    .position(wifiLocation)
+                    .title("WiFi Access Point")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+            );
+        } else {
+            // Update the existing WiFi marker's position
+            wifiMarker.setPosition(wifiLocation);
+        }
+    }
+
+    /**
+     * Update the map with a Fused marker at the specified location.
+     *
+     * @param fusedLocation The location where the Fused marker should be placed.
+     */
+    public void updateFused(@NonNull LatLng fusedLocation) {
+        if (gMap == null) return;
+
+        if (fusedMarker == null) {
+            // Create the fused marker if it doesn't already exist
+            fusedMarker = gMap.addMarker(new MarkerOptions()
+                    .position(fusedLocation)
+                    .title("Fused Position")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+            );
+        } else {
+            // Update the existing fused marker's position
+            fusedMarker.setPosition(fusedLocation);
+        }
+    }
 
     /**
      * Remove GNSS marker if user toggles it off
      */
-    public void clearGNSS() {
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
+    private Marker removeAndClear(Marker marker) {
+        if (marker != null) {
+            marker.remove();
         }
+        return null;
     }
+
+    public void clearMarkers() {
+        gnssMarker = removeAndClear(gnssMarker);
+        wifiMarker = removeAndClear(wifiMarker);
+        fusedMarker = removeAndClear(fusedMarker);
+    }
+
 
     /**
      * Whether user is currently showing GNSS or not
