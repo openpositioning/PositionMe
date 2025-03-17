@@ -242,6 +242,7 @@ public class TrajParser {
             Log.e(TAG, "Error parsing trajectory file!", e);
             callback.onError(e);
         }
+        Gson gson = new Gson();
         callback.onTrajectoryParsed(result);
     }
 
