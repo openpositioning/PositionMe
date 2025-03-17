@@ -12,6 +12,9 @@ import org.locationtech.proj4j.ProjCoordinate;
  * within the UK, the OSGB36 coordinate system is used. For cases outside the UK, the UTM is used.
  * Depending on the initial location, the correct UTM zone is found. This design preserves maximum
  * accuracy for UK and outside.
+ * Library Used:
+ * This implementation uses the Proj4J< library for coordinate transformations:
+ * https://github.com/locationtech/proj4j
 
  * Reference:
  * - "A Guide to Coordinate Systems in Great Britain" (Ordnance Survey, 2020).
