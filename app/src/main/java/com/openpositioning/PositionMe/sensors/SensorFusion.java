@@ -56,6 +56,10 @@ import java.util.stream.Stream;
  * @author Michal Dvorak
  * @author Mate Stodulka
  * @author Virginia Cangelosi
+ *
+ * Particle filter integration done by
+ * @author Wojciech Boncela
+ * @author Philip Heptonstall
  */
 public class SensorFusion implements SensorEventListener, Observer {
 
@@ -79,6 +83,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final float ALPHA = 0.8f;
     // String for creating WiFi fingerprint JSO N object
     private static final String WIFI_FINGERPRINT= "wf";
+
+    private static final float OUTLIER_THRESHOLD = 10;
     //endregion
 
     //region Instance variables
@@ -191,6 +197,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.R = new float[9];
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
+    }
+
+    private void isOutlier(LatLng currentPoint, LatLng update) {
+
     }
 
 
