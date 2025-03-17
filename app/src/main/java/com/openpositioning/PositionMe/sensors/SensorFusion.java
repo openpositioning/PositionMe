@@ -295,8 +295,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastEventTimestamps.put(sensorType, currentTime);
         eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
 
-
-
         switch (sensorType) {
             case Sensor.TYPE_ACCELEROMETER:
                 acceleration[0] = sensorEvent.values[0];
@@ -402,7 +400,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // Clear the accelMagnitude after using it
                     this.accelMagnitude.clear();
 
-
                     if (saveRecording) {
                         this.pathView.drawTrajectory(newCords);
                         stepCounter++;
@@ -481,12 +478,11 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
         }
-        createWifiPositioningRequest();
+      createWifiPositioningRequest();
     }
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
-     *
      */
     private void createWifiPositioningRequest(){
         // Try catch block to catch any errors and prevent app crashing
@@ -506,10 +502,11 @@ public class SensorFusion implements SensorEventListener, Observer {
             Log.e("jsonErrors","Error creating json object"+e.toString());
         }
     }
+
     // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
-     * using Volley Callback
+     * Handle response with a volley callback
      */
     private void createWifiPositionRequestCallback(){
         try {
@@ -646,6 +643,24 @@ public class SensorFusion implements SensorEventListener, Observer {
         return latLong;
     }
 
+  /** Get the most recent wifi location from WifiPositioning API
+   *
+   * @return float[] of current latitude and longitude (WGS84)
+   *         null if there have been no successful readings.
+   */
+  public float[] getWifiLocation() {
+      float[] latlng = new float[2];
+      LatLng wifiPosition = this.wiFiPositioning.getWifiLocation();
+      if(wifiPosition == null) {
+        return null;
+      }
+      else {
+        latlng[0] = (float) wifiPosition.latitude;
+        latlng[1] = (float) wifiPosition.longitude;
+      }
+      return latlng;
+    }
+
     /**
      * Setter function for core location data.
      *
@@ -692,6 +707,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      * that is indexed by {@link SensorTypes} and makes it accessible for other classes.
      *
      * @return  Map of <code>SensorTypes</code> to float array of most recent values.
+     *
+     * @author Philip Heptonstall, updated to enable wifi data and sensor data.
      */
     public Map<SensorTypes, float[]> getSensorValueMap() {
         Map<SensorTypes, float[]> sensorValueMap = new HashMap<>();
@@ -702,8 +719,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         sensorValueMap.put(SensorTypes.LIGHT, new float[]{light});
         sensorValueMap.put(SensorTypes.PRESSURE, new float[]{pressure});
         sensorValueMap.put(SensorTypes.PROXIMITY, new float[]{proximity});
-        sensorValueMap.put(SensorTypes.GNSSLATLONG, getGNSSLatitude(false));
+        sensorValueMap.put(SensorTypes.GNSSLATLONG, this.getGNSSLatitude(false));
         sensorValueMap.put(SensorTypes.PDR, pdrProcessing.getPDRMovement());
+        float[] wifiLocation = this.getWifiLocation();
+        if(wifiLocation != null)
+          sensorValueMap.put(SensorTypes.WIFI, wifiLocation);
+          sensorValueMap.put(SensorTypes.WIFI_HEIGHT, new float[this.getWifiFloor()]);
+        sensorValueMap.put(SensorTypes.FUSED, null);
         return sensorValueMap;
     }
 

@@ -1,17 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/replayRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
 
     <!-- Map container (reuse the same approach used in RecordingFragment) -->
+
     <FrameLayout
-        android:id="@+id/replayMapFragmentContainer"
+        android:id="@+id/container1"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1" >
+
+        <LinearLayout
+            android:id="@+id/progress_layout"
+            android:layout_width="307dp"
+            android:layout_height="69dp"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:translationY="15dp">
+
+            <TextView
+                android:id="@+id/progress_bar_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:text="@string/progressbar_text"
+                tools:text="@string/progressbar_text" />
+
+            <ProgressBar
+                android:id="@+id/progressBar5"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:indeterminate="false" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/replayMapFragmentContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+        </FrameLayout>
+    </FrameLayout>
 
 
     <!-- Progress bar or seek bar to show current playback position -->
@@ -22,6 +57,7 @@
         android:layout_margin="14dp"/>
 
     <!-- Playback Controls -->
+
     <LinearLayout
         style="?android:attr/buttonBarStyle"
         android:layout_width="match_parent"
@@ -35,8 +71,8 @@
             style="?android:attr/buttonBarButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/replay_frag_restart"
-            android:layout_margin="2dp" />
+            android:layout_margin="2dp"
+            android:text="@string/replay_frag_restart" />
 
         <Button
             android:id="@+id/playPauseButton"

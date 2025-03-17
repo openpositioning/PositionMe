@@ -36,13 +36,14 @@ public class UtilFunctions {
      * @param pdrMoved Amount of movement along X and Y
      * @return new Coordinates based on the movement
      */
-    public static LatLng calculateNewPos(LatLng initialLocation,float[] pdrMoved){
-        // Changes Euclidean movement into maps latitude and longitude as per WGS84 datum
-        double newLatitude=initialLocation.latitude+(pdrMoved[1]/(DEGREE_IN_M));
-        double newLongitude=initialLocation.longitude+(pdrMoved[0]/(DEGREE_IN_M))
-                *Math.cos(Math.toRadians(initialLocation.latitude));
-        return new LatLng(newLatitude, newLongitude);
+    public static LatLng calculateNewPos(LatLng initialLocation,float[] pdrMoved) {
+      // Changes Euclidean movement into maps latitude and longitude as per WGS84 datum
+      double newLatitude = initialLocation.latitude + (pdrMoved[1] / (DEGREE_IN_M));
+      double newLongitude = initialLocation.longitude + (pdrMoved[0] / (DEGREE_IN_M
+              * Math.cos(Math.toRadians(initialLocation.latitude))));
+      return new LatLng(newLatitude, newLongitude);
     }
+
     /**
      * Converts a degree value of Latitude into meters
      * (as per WGS84 datum)
