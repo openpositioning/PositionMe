@@ -26,6 +26,9 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
 
+import com.google.maps.android.SphericalUtil;
+
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -86,8 +89,7 @@ public class TrajectoryMapFragment extends Fragment {
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
     private SwitchMaterial wifiSwitch;
-
-
+    private static final double MAX_DISTANCE_THRESHOLD = 100; //wifi max distance between readings to detect outliers
 
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
@@ -439,9 +441,28 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker = null;
         }
     }
+    /**
+     * Updates the WiFi marker and polyline on the map based on the provided location.
+     *
+     * This method ensures that the WiFi marker is either created or updated at the given location.
+     * It also adds a segment to the polyline representing the WiFi path if the new location is
+     * different from the previous one. Updates are ignored if WiFi tracking is disabled.
+     *
+     *
+     * @param wifiLocation The new WiFi location to update on the map. Must not be null.
+     *
+     * @author Laura Maryakhina
+     * @author Kalliopi Vakali
+     */
     public void updateWiFi(@NonNull LatLng wifiLocation) {
         if (gMap == null) return;
         if (!isWifiOn) return; // Ignore updates if WiFi is turned off
+
+        // Check if the new wifi location is an outlier
+        if (isOutlier(lastWifiLocation, wifiLocation)) {
+            Log.w("OutlierDetection", "Rejected outlier WiFi location: " + wifiLocation.toString());
+            return; // Skip updating the marker
+        }
 
         if (wifiMarker == null) {
             // Create the WiFi marker for the first time
@@ -464,7 +485,9 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-
+    /**
+     * Clears Wifi marker so only one is present on the map at a time
+     */
     public void clearWiFi() {
         if (wifiMarker != null) {
             wifiMarker.remove();
@@ -473,11 +496,29 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
+     * Method to check if a Wifi location is an outlier
+     * @param lastLocation - last wifi location
+     * @param newLocation - current wifi location
+     * @return boolean - True if new wifi location is too far from last location
+     *
+     * @author Laura Maryakhina
+     */
+    private boolean isOutlier(LatLng lastLocation, LatLng newLocation) {
+        if (lastLocation == null || newLocation == null) return false; // No comparison possible
+        double distance = SphericalUtil.computeDistanceBetween(lastLocation, newLocation);
+        return distance > MAX_DISTANCE_THRESHOLD; // True if the new location is too far
+    }
+
+
+    /**
      * Whether user is currently showing GNSS or not
      */
     public boolean isGnssEnabled() {
         return isGnssOn;
     }
+    /**
+     * Whether user is currently showing Wifi or not
+     */
     public boolean isWifiEnabled() {
         return isWifiOn;
     }
