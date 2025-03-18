@@ -265,6 +265,16 @@ public class RecordingFragment extends Fragment {
             }
         }
 
+        LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+        // Update WiFi marker if the switch is enabled
+        if (trajectoryMapFragment.isWifiEnabled() && wifiLocation != null) {
+            trajectoryMapFragment.updateWiFi(wifiLocation);
+        } else {
+            trajectoryMapFragment.clearWiFi();
+        }
+
+
+
         // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
