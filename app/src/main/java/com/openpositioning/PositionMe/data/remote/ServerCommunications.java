@@ -17,12 +17,10 @@ import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.protobuf.util.JsonFormat;
@@ -44,7 +42,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -64,7 +61,6 @@ import okhttp3.ResponseBody;
  * {@link OkHttpClient} for making requests to the server. The class includes methods for sending
  * a recorded trajectory, uploading locally-stored trajectories, downloading trajectories from the
  * server and requesting information about the uploaded trajectories.
- *
  * Keys and URLs are hardcoded strings, given the simple and academic nature of the project.
  *
  * @author Michal Dvorak
@@ -85,6 +81,11 @@ public class ServerCommunications implements Observable {
     private boolean success;
     private List<Observer> observers;
 
+    // Control the number of trajectories the server will respond with; if set too low,
+    // the trajectory we want will never be returned (i.e. if it is > MAXIMUM_NUMBER_DOWNLOADS)
+    // If we appropriately set skip, we only ever need to download 1.
+    private final int MAXIMUM_NUMBER_DOWNLOADS = 1;
+
     // Static constants necessary for communications
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
@@ -93,7 +94,7 @@ public class ServerCommunications implements Observable {
                     + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
-                    + "?skip=0&limit=30&key=" + masterKey;
+                    + "?skip=%d&limit=%d&key=" + masterKey;
     private static final String infoRequestURL =
             "https://openpositioning.org/api/live/users/trajectories/" + userKey
                     + "?key=" + masterKey;
@@ -479,7 +480,7 @@ public class ServerCommunications implements Observable {
 
         // Create GET request with required header
         okhttp3.Request request = new okhttp3.Request.Builder()
-                .url(downloadURL)
+                .url(String.format(downloadURL, position, MAXIMUM_NUMBER_DOWNLOADS))
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .get()
                 .build();
@@ -496,30 +497,18 @@ public class ServerCommunications implements Observable {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
-                    // Extract the nth entry from the zip
                     InputStream inputStream = responseBody.byteStream();
                     ZipInputStream zipInputStream = new ZipInputStream(inputStream);
-
-                    java.util.zip.ZipEntry zipEntry;
-                    int zipCount = 0;
-                    while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                        if (zipCount == position) {
-                            // break if zip entry position matches the desired position
-                            break;
-                        }
-                        zipCount++;
-                    }
-
+                    // Response will always be first index.
+                    java.util.zip.ZipEntry zipEntry = zipInputStream.getNextEntry();
                     // Initialise a byte array output stream
                     ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-
                     // Read the zipped data and write it to the byte array output stream
                     byte[] buffer = new byte[1024];
                     int bytesRead;
                     while ((bytesRead = zipInputStream.read(buffer)) != -1) {
                         byteArrayOutputStream.write(buffer, 0, bytesRead);
                     }
-
 
                     // Convert the byte array to protobuf
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
