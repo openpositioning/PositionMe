@@ -85,6 +85,12 @@ public class ServerCommunications implements Observable {
     private boolean success;
     private List<Observer> observers;
 
+    // Constants for the download URL.
+    private static final int SKIP = 0;
+    // Control the number of trajectories the server will respond with; if set too low,
+    // the trajectory we want will never be returned (i.e. if it is > MAXIMUM_NUMBER_DOWNLOADS)
+    private static final int MAXIMUM_NUMBER_DOWNLOADS = 300;
+
     // Static constants necessary for communications
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
@@ -93,7 +99,7 @@ public class ServerCommunications implements Observable {
                     + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
-                    + "?skip=0&limit=30&key=" + masterKey;
+                    + "?skip=" + SKIP + "&limit=" + MAXIMUM_NUMBER_DOWNLOADS + "&key=" + masterKey;
     private static final String infoRequestURL =
             "https://openpositioning.org/api/live/users/trajectories/" + userKey
                     + "?key=" + masterKey;
