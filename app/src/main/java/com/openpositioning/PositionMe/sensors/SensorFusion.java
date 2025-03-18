@@ -18,6 +18,7 @@ import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.utils.CoordinateTransformer;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
@@ -26,6 +27,7 @@ import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.locationtech.proj4j.ProjCoordinate;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -84,7 +86,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // String for creating WiFi fingerprint JSO N object
     private static final String WIFI_FINGERPRINT= "wf";
 
-    private static final float OUTLIER_THRESHOLD = 10;
+    private static final float OUTLIER_DISTANCE_THRESHOLD = 10;
     //endregion
 
     //region Instance variables
@@ -130,6 +132,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     private int counter;
     private int secondCounter;
 
+    // Coordinate transformer instance to convert WGS84 (Latitude, Longitude) coordinates into
+    // a Northing-Easting space.
+    // Initialized when given the start location.
+    private CoordinateTransformer coordinateTransformer;
+
     // Sensor values
     private float[] acceleration;
     private float[] filteredAcc;
@@ -152,6 +159,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
+
+    private LatLng currentWifiLocation;
+    private boolean isWifiLocationOutlier = false;
 
 
     // Over time accelerometer magnitude values since last step
@@ -199,8 +209,14 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.startLocation = new float[2];
     }
 
-    private void isOutlier(LatLng currentPoint, LatLng update) {
-
+    private boolean isOutlier(LatLng currentPoint, LatLng update) {
+        ProjCoordinate currentPointXY = this.coordinateTransformer
+                .convertWGS84ToTarget(currentPoint.latitude, currentPoint.longitude);
+        ProjCoordinate updatePointXY = this.coordinateTransformer
+                .convertWGS84ToTarget(update.latitude, update.longitude);
+        double distance = CoordinateTransformer.calculateDistance(currentPointXY,
+                updatePointXY);
+        return distance > OUTLIER_DISTANCE_THRESHOLD;
     }
 
 
@@ -475,7 +491,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     @Override
     public void update(Object[] wifiList) {
         // Save newest wifi values to local variable
-        this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
+        List<Wifi> newWifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
         if(this.saveRecording) {
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
@@ -488,7 +504,11 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
         }
-      createWifiPositioningRequest();
+      // Only create a positioning request if new wifi list actually contains new data.
+      if (!newWifiList.equals(this.wifiList)) {
+          this.wifiList = newWifiList;
+          createWifiPositionRequestCallback();
+      }
     }
 
     /**
@@ -532,11 +552,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     // Handle the success response
+                    if (wifiLocation != currentWifiLocation)
+                        currentWifiLocation = wifiLocation;
+                    isWifiLocationOutlier = isOutlier(new LatLng(latitude, longitude), wifiLocation);
                 }
 
                 @Override
                 public void onError(String message) {
                     // Handle the error response
+                    Log.e("SensorFusion.WifiPositioning", "Wifi Positioning request" +
+                            "returned an error! " + message);
                 }
             });
         } catch (JSONException e) {
@@ -547,7 +572,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     }
 
-    /**
+  /**
      * Method to get user position obtained using {@link WiFiPositioning}.
      *
      * @return {@link LatLng} corresponding to user's position.
@@ -678,6 +703,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public void setStartGNSSLatitude(float[] startPosition){
         startLocation = startPosition;
+        this.coordinateTransformer = new CoordinateTransformer(startPosition[0], startPosition[1]);
     }
 
 
@@ -731,10 +757,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         sensorValueMap.put(SensorTypes.PROXIMITY, new float[]{proximity});
         sensorValueMap.put(SensorTypes.GNSSLATLONG, this.getGNSSLatitude(false));
         sensorValueMap.put(SensorTypes.PDR, pdrProcessing.getPDRMovement());
-        float[] wifiLocation = this.getWifiLocation();
-        if(wifiLocation != null)
-          sensorValueMap.put(SensorTypes.WIFI, wifiLocation);
-          sensorValueMap.put(SensorTypes.WIFI_HEIGHT, new float[this.getWifiFloor()]);
+        if(currentWifiLocation != null) {
+            sensorValueMap.put(SensorTypes.WIFI, new float[]{
+                    (float) currentWifiLocation.latitude,
+                    (float) currentWifiLocation.longitude});
+            sensorValueMap.put(SensorTypes.WIFI_HEIGHT, new float[this.getWifiFloor()]);
+            sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[isWifiLocationOutlier ? 1 : 0]);
+        }
         sensorValueMap.put(SensorTypes.FUSED, null);
         return sensorValueMap;
     }
