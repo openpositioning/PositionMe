@@ -19,11 +19,13 @@ import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.data.remote.WiFiPositioning;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.utils.CoordinateTransform;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
+import com.openpositioning.PositionMe.FusionAlgorithms.EKF;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -159,6 +161,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
+    private double[] startRef;
+    private double[] ecefRefCoords;
+    private EKF extendedKalmanFilter;
 
     //region Initialisation
     /**
@@ -256,6 +261,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         } else {
             this.filter_coefficient = FILTER_COEFFICIENT;
         }
+
 
         // Keep app awake during the recording (using stored appContext)
         PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
@@ -374,47 +380,71 @@ public class SensorFusion implements SensorEventListener, Observer {
 
             case Sensor.TYPE_STEP_DETECTOR:
                 long stepTime = SystemClock.uptimeMillis() - bootTime;
-
-
                 if (currentTime - lastStepTime < 20) {
                     Log.e("SensorFusion", "Ignoring step event, too soon after last step event:" + (currentTime - lastStepTime) + " ms");
-                    // Ignore rapid successive step events
                     break;
-                }
-
-                else {
+                } else {
                     lastStepTime = currentTime;
-                    // Log if accelMagnitude is empty
                     if (accelMagnitude.isEmpty()) {
-                        Log.e("SensorFusion",
-                                "stepDetection triggered, but accelMagnitude is empty! " +
-                                        "This can cause updatePdr(...) to fail or return bad results.");
+                        Log.e("SensorFusion", "stepDetection triggered, but accelMagnitude is empty! This can cause updatePdr(...) to fail or return bad results.");
                     } else {
-                        Log.d("SensorFusion",
-                                "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
+                        Log.d("SensorFusion", "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
                     }
-
-                    float[] newCords = this.pdrProcessing.updatePdr(
-                            stepTime,
-                            this.accelMagnitude,
-                            this.orientation[0]
-                    );
-
-                    // Clear the accelMagnitude after using it
+                    float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
                     this.accelMagnitude.clear();
-
-
+                    float stepLen = this.pdrProcessing.getStepLength(); // 获取当前步长
+                    extendedKalmanFilter.predict(stepLen); // 调用 EKF 预测
                     if (saveRecording) {
-                        this.pathView.drawTrajectory(newCords);
+                        // 如果有 WiFi 定位信号，则利用 WiFi EKF 修正 PDR 数据
+                        if (wiFiPositioning.getWifiLocation() != null) {
+                            LatLng wifiPos = wiFiPositioning.getWifiLocation();
+                            JSONObject wifiResponse = new JSONObject();
+                            try {
+                                wifiResponse.put("lat", wifiPos.latitude);
+                                wifiResponse.put("lon", wifiPos.longitude);
+                                wifiResponse.put("floor", 0);
+                            } catch (JSONException e) {
+                                e.printStackTrace();
+                            }
+                            updateFusionWifi(wifiResponse);
+                            // 从融合算法中获取修正后的定位结果
+                            LatLng fusedPos = extendedKalmanFilter.getEstimatedPosition();
+                            pathView.drawTrajectory(new float[]{(float) fusedPos.latitude, (float) fusedPos.longitude});
+                            trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                                    .setX((float) fusedPos.latitude)
+                                    .setY((float) fusedPos.longitude));
+                        } else {
+                            // 如果无 WiFi 信号，则直接使用原始 PDR 数据
+                            pathView.drawTrajectory(newCords);
+                            trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                                    .setX(newCords[0])
+                                    .setY(newCords[1]));
+                        }
                         stepCounter++;
-                        trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
-                                .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                                .setX(newCords[0])
-                                .setY(newCords[1]));
                     }
                     break;
                 }
 
+        }
+    }
+
+    public void updateFusionWifi(JSONObject wifiResponse) {
+        try {
+            if (wifiResponse == null) {
+                return;
+            }
+            double lat = wifiResponse.getDouble("lat");
+            double lon = wifiResponse.getDouble("lon");
+            double floor = wifiResponse.getDouble("floor");
+            // 将地理坐标转换为 ENU 坐标，注意 getElevation()、startRef、startRef[2] 等必须正确初始化
+            double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, getElevation(), startRef[0], startRef[1], startRef[2]);
+            if (extendedKalmanFilter != null) {
+                extendedKalmanFilter.update(enuCoords[0], enuCoords[1]);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
         }
     }
 
@@ -884,6 +914,17 @@ public class SensorFusion implements SensorEventListener, Observer {
         } else {
             this.filter_coefficient = FILTER_COEFFICIENT;
         }
+        // 获取初始经纬度
+        float[] initLatLon = getGNSSLatitude(true);
+
+        // 进行地理坐标转换（如果 EKF 需要的是 ENU 坐标，而不是直接的经纬度）
+        double[] enuCoords = CoordinateTransform.geodeticToEnu(
+                initLatLon[0], initLatLon[1], 0.0,  // 这里假设高度=0
+                startRef[0], startRef[1], startRef[2]
+        );
+
+        // 传给 EKF
+        extendedKalmanFilter = new EKF(enuCoords[0], enuCoords[1], 0.0);
     }
 
     /**
