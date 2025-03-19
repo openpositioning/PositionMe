@@ -10,6 +10,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.NavController;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
@@ -133,6 +134,12 @@ public class HomeFragment extends Fragment {
                 NavDirections action = HomeFragmentDirections.actionHomeFragmentToFilesFragment();
                 Navigation.findNavController(view).navigate(action);
             }
+        });
+
+        // 为新增的 WiFi 定位按钮设置点击事件
+        view.findViewById(R.id.wifiPositioningButton).setOnClickListener(v -> {
+            NavController navController = Navigation.findNavController(view);
+            navController.navigate(R.id.action_homeFragment_to_wifiPositioningFragment);
         });
     }
 }

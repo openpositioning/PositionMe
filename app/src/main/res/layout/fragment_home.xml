@@ -6,19 +6,17 @@
     android:layout_height="match_parent"
     tools:context=".fragments.HomeFragment">
 
-
-
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <!-- 现有的 Sensor Info 按钮 -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/sensorInfoButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="16dp"
             android:layout_marginBottom="16dp"
-            android:clickable="true"
             android:contentDescription="@string/info_description"
             android:src="@drawable/ic_baseline_info_24"
             app:backgroundTint="?attr/colorPrimaryVariant"
@@ -26,6 +24,21 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:tint="@color/white" />
 
+        <!-- 新增 WiFi 定位入口按钮，位于左下角 -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/wifiPositioningButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginBottom="16dp"
+            android:contentDescription="@string/wifi_positioning"
+            android:src="@drawable/ic_baseline_wifi_24"
+        app:backgroundTint="?attr/colorPrimaryVariant"
+        app:tint="@color/white"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+        <!-- 中间大按钮 -->
         <Button
             android:id="@+id/startStopButton"
             android:layout_width="300dp"
@@ -50,12 +63,13 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
+        <!-- 底部其他按钮布局 -->
         <LinearLayout
             android:id="@+id/otherButtonLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
             android:gravity="center"
+            android:orientation="horizontal"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"

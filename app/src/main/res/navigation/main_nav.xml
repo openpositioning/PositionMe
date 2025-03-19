@@ -5,12 +5,13 @@
     android:id="@+id/main_nav"
     app:startDestination="@id/homeFragment">
 
+    <!-- HomeFragment 节点 -->
     <fragment
         android:id="@+id/homeFragment"
         android:name="com.openpositioning.PositionMe.fragments.HomeFragment"
-        android:label="HomeFragment
-"
+        android:label="HomeFragment"
         tools:layout="@layout/fragment_home" >
+        <!-- 原有的跳转 Action -->
         <action
             android:id="@+id/action_homeFragment_to_startLocationFragment"
             app:destination="@id/startLocationFragment"
@@ -31,7 +32,7 @@
             app:enterAnim="@anim/slide_in_right"
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right"/>
+            app:popExitAnim="@anim/slide_out_right" />
         <action
             android:id="@+id/action_homeFragment_to_filesFragment"
             app:destination="@id/filesFragment"
@@ -39,7 +40,17 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
+        <!-- 新增：从 HomeFragment 跳转到 WiFi 定位页面 -->
+        <action
+            android:id="@+id/action_homeFragment_to_wifiPositioningFragment"
+            app:destination="@id/wifiPositioningFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
     </fragment>
+
+    <!-- SettingsFragment 节点 -->
     <fragment
         android:id="@+id/settingsFragment"
         android:name="com.openpositioning.PositionMe.fragments.SettingsFragment"
@@ -48,6 +59,8 @@
             android:id="@+id/action_settingsFragment_to_homeFragment"
             app:destination="@id/homeFragment" />
     </fragment>
+
+    <!-- StartLocationFragment 节点 -->
     <fragment
         android:id="@+id/startLocationFragment"
         android:name="com.openpositioning.PositionMe.fragments.StartLocationFragment"
@@ -61,6 +74,8 @@
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right" />
     </fragment>
+
+    <!-- RecordingFragment 节点 -->
     <fragment
         android:id="@+id/recordingFragment"
         android:name="com.openpositioning.PositionMe.fragments.RecordingFragment"
@@ -77,11 +92,15 @@
             app:enterAnim="@anim/slide_in_left"
             app:exitAnim="@anim/slide_out_right" />
     </fragment>
+
+    <!-- InfoFragment 节点 -->
     <fragment
         android:id="@+id/infoFragment"
         android:name="com.openpositioning.PositionMe.fragments.InfoFragment"
         android:label="fragment_info"
         tools:layout="@layout/fragment_info" />
+
+    <!-- CorrectionFragment 节点 -->
     <fragment
         android:id="@+id/correctionFragment"
         android:name="com.openpositioning.PositionMe.fragments.CorrectionFragment"
@@ -93,11 +112,15 @@
             app:enterAnim="@anim/slide_in_right"
             app:exitAnim="@anim/slide_out_left" />
     </fragment>
+
+    <!-- MeasurementsFragment 节点 -->
     <fragment
         android:id="@+id/measurementsFragment"
         android:name="com.openpositioning.PositionMe.fragments.MeasurementsFragment"
         android:label="fragment_measurements"
         tools:layout="@layout/fragment_measurements" />
+
+    <!-- PlaybackFragment 节点 -->
     <fragment
         android:id="@+id/playbackFragment"
         android:name="com.openpositioning.PositionMe.fragments.PlaybackFragment"
@@ -107,6 +130,8 @@
             android:name="trajectoryId"
             app:argType="string" />
     </fragment>
+
+    <!-- FilesFragment 节点 -->
     <fragment
         android:id="@+id/filesFragment"
         android:name="com.openpositioning.PositionMe.fragments.FilesFragment"
@@ -126,12 +151,21 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
-    </fragment><action android:id="@+id/action_global_correctionFragment" app:destination="@id/correctionFragment"/>
+    </fragment>
+
+    <!-- 全局 CorrectionFragment 跳转 Action -->
+    <action
+        android:id="@+id/action_global_correctionFragment"
+        app:destination="@id/correctionFragment"/>
+
+    <!-- UploadFragment 节点 -->
     <fragment
         android:id="@+id/uploadFragment"
         android:name="com.openpositioning.PositionMe.fragments.UploadFragment"
         android:label="fragment_upload"
         tools:layout="@layout/fragment_upload" />
+
+    <!-- 全局 SettingsFragment 跳转 Action -->
     <action
         android:id="@+id/action_global_settingsFragment"
         app:destination="@id/settingsFragment"
@@ -139,4 +173,19 @@
         app:exitAnim="@anim/slide_out_bottom"
         app:popEnterAnim="@anim/slide_in_bottom"
         app:popExitAnim="@anim/slide_in_top" />
+
+    <!-- 新增的 WiFi 定位页面节点 -->
+    <fragment
+        android:id="@+id/wifiPositioningFragment"
+        android:name="com.openpositioning.PositionMe.fragments.WiFiPositioningFragment"
+        android:label="WiFi positioning"
+        tools:layout="@layout/fragment_wifi_positioning" >
+        <!-- 可选：从 WiFi 定位页面返回 HomeFragment 的 Action -->
+        <action
+            android:id="@+id/action_wifiPositioningFragment_to_homeFragment"
+            app:destination="@id/homeFragment"
+            app:enterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+    </fragment>
+
 </navigation>

@@ -121,5 +121,7 @@
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
     <string name="Playback">Playback</string>
+    <string name="wifi_positioning">wifi_positioning</string>
+    <string name="floor_image">floor_image</string>
 
 </resources>
