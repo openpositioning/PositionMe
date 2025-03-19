@@ -23,6 +23,11 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
+import com.openpositioning.PositionMe.utils.SensorFusionUpdates;
+import com.openpositioning.PositionMe.utils.CoordinateTransform;
+import com.openpositioning.PositionMe.algorithms.ExtendedKalmanFilter;
+import com.openpositioning.PositionMe.algorithms.ParticleFilter;
+
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -124,6 +129,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     private int counter;
     private int secondCounter;
 
+    private LatLng fusedPosition;
+
+    private LatLng positionWifi;
+    private double altitude;
+
     // Sensor values
     private float[] acceleration;
     private float[] filteredAcc;
@@ -159,6 +169,21 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
+    private List<SensorFusionUpdates> recordingUpdates;
+
+    // Boolean to control fusion algorithm selection
+    private boolean fusionAlgorithmSelection = true;
+    // Filter classes
+    private ParticleFilter particleFilter;
+    private ExtendedKalmanFilter extendedKalmanFilter;
+    private boolean noCoverage;
+    private double[] startRef;
+    private double[] ecefRefCoords;
+
+
+
+
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -191,6 +216,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.R = new float[9];
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
+        this.recordingUpdates = new ArrayList<>();
+        this.startRef = new double[3];
+        this.ecefRefCoords = new double[3];
+
+
     }
 
 
@@ -441,6 +471,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
             latitude = (float) location.getLatitude();
             longitude = (float) location.getLongitude();
+            altitude = (float) location.getAltitude();
             float altitude = (float) location.getAltitude();
             float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
@@ -454,6 +485,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .setSpeed(speed)
                         .setProvider(provider)
                         .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
+                updateFusionGNSS(latitude, longitude, altitude);
+                notifySensorUpdate(SensorFusionUpdates.update_type.GNSS_UPDATE);
             }
         }
     }
@@ -645,7 +678,32 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         return latLong;
     }
+    /**
+     * Getter function for core location data including altitude.
+     *
+     * @param start set true to get the initial location
+     * @return longitude and latitude data in a float[3].
+     */
+    public double[] getGNSSLatLngAlt(boolean start) {
+        double [] latLongAlt = new double[3];
+        if(!start) {
+            latLongAlt[0] = latitude;
+            latLongAlt[1] = longitude;
+            latLongAlt[2] = altitude;
+        }
+        else{
+            latLongAlt = startRef;
+        }
+        return latLongAlt;
+    }
 
+    /**
+     * A helper function to get the calculated ECEF coordinates as doubles for more accurate conversion between coordinates.
+     * @return a double array with the ECEF coordinates
+     */
+    public double[] getEcefRefCoords(){
+        return ecefRefCoords;
+    }
     /**
      * Setter function for core location data.
      *
@@ -654,7 +712,15 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void setStartGNSSLatitude(float[] startPosition){
         startLocation = startPosition;
     }
-
+    /**
+     * Setter function for core location data.
+     *
+     * @param startPosition contains the initial location set by the user
+     */
+    public void setStartGNSSLatLngAlt(double[] startPosition){
+        this.startRef = startPosition;
+        this.ecefRefCoords = CoordinateTransform.geodeticToEcef(startPosition[0],startPosition[1], startPosition[2]);
+    }
 
     /**
      * Function to redraw path in corrections fragment.
@@ -732,8 +798,65 @@ public class SensorFusion implements SensorEventListener, Observer {
         sensorInfoList.add(this.magnetometerSensor.sensorInfo);
         return sensorInfoList;
     }
+    /**
+     * A helper method that allows other classes to register to receive sensor updates from this class.
+     * @param observer The class that wishes to receive updates.
+     */
+    public void registerForSensorUpdates(SensorFusionUpdates observer) {
+        recordingUpdates.add(observer);
+    }
 
     /**
+     * A helper method that allows other classes to remove itself from receiving sensor updates from this class.
+     * @param observer The class that wishes to not receive updates.
+     */
+    public void removeSensorUpdate(SensorFusionUpdates observer) {
+        recordingUpdates.remove(observer);
+    }
+
+    /**
+     * A helper method used to notify all observers that an update is available.
+     * Allows recording fragment to be asynchronously notified when a change occurs.
+     *
+     * @param type The type of update, will determine which callback function to call.
+     */
+    public void notifySensorUpdate(SensorFusionUpdates.update_type type){
+        for (SensorFusionUpdates observer : recordingUpdates) {
+            switch (type) {
+                case PDR_UPDATE:
+                    observer.onPDRUpdate();
+                    break;
+                case ORIENTATION_UPDATE:
+                    observer.onOrientationUpdate();
+                    break;
+                case GNSS_UPDATE:
+                    observer.onGNSSUpdate();
+                    break;
+                case FUSED_UPDATE:
+                    observer.onFusedUpdate(fusedPosition);
+                    break;
+                case WIFI_UPDATE:
+                    observer.onWifiUpdate(positionWifi);
+            }
+        }
+    }
+
+    /**
+     * A helper method used to notify all observers that an update is available. It is a separate method
+     * to allow update method to take another parameter and be called from the fusion algorithm class.
+     */
+    public void notifyFusedUpdate(LatLng fused_pos){
+        fusedPosition = fused_pos;
+        for (SensorFusionUpdates observer : recordingUpdates) {
+            observer.onFusedUpdate(fused_pos);
+        }
+    }
+
+    /**
+     * @deprecated ServerCommunications is now a singleton, resolving the three way dependency as
+     * fragments had to register through sensor fusion. This was counterintuitive and the singleton
+     * resolves this.
+     *
      * Registers the caller observer to receive updates from the server instance.
      * Necessary when classes want to act on a trajectory being successfully or unsuccessfully send
      * to the server. This grants access to observing the {@link ServerCommunications} instance
@@ -745,6 +868,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void registerForServerUpdate(Observer observer) {
         serverCommunications.registerObserver(observer);
     }
+
+
+
 
     /**
      * Get the estimated elevation value in meters calculated by the PDR class.
@@ -939,6 +1065,122 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setVersion(sensor.sensorInfo.getVersion())
                 .setType(sensor.sensorInfo.getType());
     }
+    /**
+     * A helper function to get the calculated PDR coordinates as doubles
+     * for more accurate conversion between coordinates.
+     *
+     * @return a double array with the X and Y PDR coordinates
+     */
+    public float[] getCurrentPDRCalc(){
+        return pdrProcessing.getPDRMovement();
+    }
+
+    // region FUSION PROCESSING
+
+    /**
+     * Updates the fusion process with Pedestrian Dead Reckoning (PDR) data.
+     * Calculates new PDR values and elevation, then calls the appropriate fusion algorithm.
+     * Stores the resulting position and timestamps it.
+     */
+    public void updateFusionPDR(){
+
+        // calculate new PDR, save as global variable
+        float[] pdrValues = getCurrentPDRCalc();
+        float elevationVal = getElevation();
+
+        // local PDR LatLn point
+        LatLng positionPDR = CoordinateTransform.enuToGeodetic(pdrValues[0], pdrValues[1], elevationVal, startRef[0], startRef[1], ecefRefCoords);
+        double latitude = positionPDR.latitude;
+        double longitude = positionPDR.longitude;
+
+        // call fusion algorithm arg(double, double)
+        if (fusionAlgorithmSelection) {
+            this.extendedKalmanFilter.onStepDetected(pdrValues[0], pdrValues[1], elevationVal, (android.os.SystemClock.uptimeMillis()));
+        } else {
+            this.particleFilter.update(latitude, longitude);
+        }
+    }
+
+    /**
+     * Updates the fusion process with WiFi positioning data.
+     * Extracts latitude, longitude, and floor information from the given JSON object.
+     * Calls the appropriate fusion algorithm and stores the resulting position.
+     * If the server response failed notify with null to ensure no coverage is detected.
+     *
+     * @param wifiResponse The JSON object containing WiFi positioning data.
+     */
+    public void updateFusionWifi(JSONObject wifiResponse){
+
+        try {
+            if (wifiResponse == null){
+                this.positionWifi = null;
+
+                // display the position on UI
+                notifySensorUpdate(SensorFusionUpdates.update_type.WIFI_UPDATE);
+                return;
+            }
+
+            double latitude = wifiResponse.getDouble("lat");
+            double longitude = wifiResponse.getDouble("lon");
+            double floor = wifiResponse.getDouble("floor");
+            this.positionWifi = new LatLng(latitude, longitude);
+
+            // display the position on UI
+            notifySensorUpdate(SensorFusionUpdates.update_type.WIFI_UPDATE);
+
+            // call fusion algorithm
+            if (fusionAlgorithmSelection){
+                if(!noCoverage) {
+                    this.extendedKalmanFilter.onOpportunisticUpdate(
+                            CoordinateTransform.geodeticToEnu(latitude, longitude, getElevation(), startRef[0], startRef[1], startRef[2]), (android.os.SystemClock.uptimeMillis())
+                    );
+                }
+            } else {
+                this.particleFilter.update(latitude, longitude);
+            }
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    /**
+     * Updates the fusion process with Global Navigation Satellite System (GNSS) data.
+     * Calls the appropriate fusion algorithm and stores the resulting position.
+     *
+     * @param latitude  The latitude from GNSS data.
+     * @param longitude The longitude from GNSS data.
+     * @param altitude  The altitude from GNSS data.
+     */
+    public void updateFusionGNSS(double latitude,double longitude, double altitude){
+
+        // call fusion algorithm
+        if (fusionAlgorithmSelection) {
+            if (noCoverage) {
+                this.extendedKalmanFilter.onOpportunisticUpdate(
+                        CoordinateTransform.geodeticToEnu(latitude, longitude, altitude, startRef[0], startRef[1], startRef[2]), (android.os.SystemClock.uptimeMillis())
+                );
+            }
+        } else {
+            particleFilter.update(latitude, longitude);
+        }
+    }
+
+    /**
+     * Initializes the fusion algorithm based on user settings.
+     * Creates either an Extended Kalman Filter or a Particle Filter instance.
+     */
+    public void initialiseFusionAlgorithm() {
+        // Picks the Fusion Algorithm to run
+        fusionAlgorithmSelection = !(this.settings.getBoolean("fusion_enable", false));
+        this.noCoverage = true;
+        if (fusionAlgorithmSelection) {
+            this.extendedKalmanFilter = new ExtendedKalmanFilter();
+        }else{
+            this.particleFilter = new ParticleFilter();
+        }
+    }
 
     /**
      * Timer task to record data with the desired frequency in the trajectory class.
@@ -1008,6 +1250,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         }
     }
+
 
     //endregion
 
