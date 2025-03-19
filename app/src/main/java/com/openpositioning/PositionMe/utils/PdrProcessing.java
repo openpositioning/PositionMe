@@ -414,4 +414,13 @@ public class PdrProcessing {
         return averageStepLength;
     }
 
+    /**
+     * Returns the most recently calculated step length.
+     *
+     * @return the current step length in meters.
+     */
+    public float getStepLength() {
+        return this.stepLength;
+    }
+
 }
