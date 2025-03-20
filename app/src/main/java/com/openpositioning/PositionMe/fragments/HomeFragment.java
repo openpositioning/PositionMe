@@ -134,5 +134,22 @@ public class HomeFragment extends Fragment {
                 Navigation.findNavController(view).navigate(action);
             }
         });
+
+        // NEW: Set up WiFi Positioning button to open WifiFragment
+        Button wifiPositioning = getView().findViewById(R.id.wifiPositioningButton);
+        wifiPositioning.setOnClickListener(v -> {
+            NavDirections action = HomeFragmentDirections.actionHomeFragmentToWifiFragment();
+            Navigation.findNavController(v).navigate(action);
+        });
+
+        Button fusionButton = getView().findViewById(R.id.fusionPositioningButton);
+        fusionButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                NavDirections action = HomeFragmentDirections.actionHomeFragmentToFusionFragment();
+                Navigation.findNavController(v).navigate(action);
+            }
+        });
+
     }
 }
