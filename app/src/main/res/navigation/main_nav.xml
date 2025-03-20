@@ -39,6 +39,9 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
+        <action
+            android:id="@+id/action_homeFragment_to_dataDisplay"
+            app:destination="@id/dataDisplay" />
     </fragment>
     <fragment
         android:id="@+id/settingsFragment"
@@ -123,4 +126,9 @@
         app:exitAnim="@anim/slide_out_bottom"
         app:popEnterAnim="@anim/slide_in_bottom"
         app:popExitAnim="@anim/slide_in_top" />
+    <fragment
+        android:id="@+id/dataDisplay"
+        android:name="com.openpositioning.PositionMe.fragments.DataDisplay"
+        android:label="fragment_data_display"
+        tools:layout="@layout/fragment_data_display" />
 </navigation>

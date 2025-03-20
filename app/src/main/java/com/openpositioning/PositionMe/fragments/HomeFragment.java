@@ -240,5 +240,19 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             // If GNSS is disabled, show University of Edinburgh + message
             showEdinburghAndMessage("GNSS is disabled. Please enable in settings.");
         }
+
+        // Button to navigate to the Data Display fragment
+        this.dataDisplay = getView().findViewById(R.id.indoorButton);
+        this.dataDisplay.setOnClickListener(new View.OnClickListener() {
+            /**
+             * {@inheritDoc}
+             * Navigate to the {@link DataDisplay} using AndroidX Jetpack.
+             */
+            @Override
+            public void onClick(View view) {
+                NavDirections action = HomeFragmentDirections.actionHomeFragmentToDataDisplay();
+                Navigation.findNavController(view).navigate(action);
+            }
+        });
     }
 }
