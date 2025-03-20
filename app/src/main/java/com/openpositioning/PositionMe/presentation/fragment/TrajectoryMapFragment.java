@@ -251,6 +251,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .color(Color.RED)
                 .width(5f)
                 .add() // start empty
+                .zIndex(1000)
         );
 
         // GNSS path in blue
@@ -258,6 +259,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .color(Color.BLUE)
                 .width(5f)
                 .add() // start empty
+                .zIndex(1000)
         );
 
         // WiFi path in green
@@ -265,6 +267,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .color(Color.GREEN)
                 .width(5f)
                 .add() // start empty
+                .zIndex(1000)
         );
 
 
@@ -459,10 +462,15 @@ public class TrajectoryMapFragment extends Fragment {
         if (!isWifiOn) return; // Ignore updates if WiFi is turned off
 
         // Check if the new wifi location is an outlier
-        if (isOutlier(lastWifiLocation, wifiLocation)) {
-            Log.w("OutlierDetection", "Rejected outlier WiFi location: " + wifiLocation.toString());
-            return; // Skip updating the marker
-        }
+//        if (isOutlier(lastWifiLocation, wifiLocation)) {
+//            Log.w("OutlierDetection", "Rejected outlier WiFi location: " + wifiLocation.toString());
+//            // Add a red marker for the outlier for testing
+////            gMap.addMarker(new MarkerOptions()
+////                    .position(wifiLocation)
+////                    .title("Outlier Position")
+////                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
+//            return; // Skip updating the marker
+//        }
 
         if (wifiMarker == null) {
             // Create the WiFi marker for the first time
