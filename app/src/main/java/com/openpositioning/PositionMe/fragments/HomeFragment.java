@@ -1,19 +1,31 @@
 package com.openpositioning.PositionMe.fragments;
 
+import android.Manifest;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
 
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -30,13 +42,19 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
  *
  * @author Mate Stodulka
  */
-public class HomeFragment extends Fragment {
+public class HomeFragment extends Fragment implements OnMapReadyCallback {
 
     // Interactive UI elements to navigate to other fragments
     private MaterialButton goToInfo;
     private MaterialButton start;
     private MaterialButton measurements;
     private MaterialButton files;
+
+    private TextView gnssStatusTextView;
+
+    // For the map
+    private GoogleMap mMap;
+    private SupportMapFragment mapFragment;
 
     /**
      * Default empty constructor, unused.
@@ -135,5 +153,92 @@ public class HomeFragment extends Fragment {
                 Navigation.findNavController(view).navigate(action);
             }
         });
+        // TextView to display GNSS disabled message
+        gnssStatusTextView = view.findViewById(R.id.gnssStatusTextView);
+
+        // Locate the MapFragment nested in this fragment
+        mapFragment = (SupportMapFragment)
+                getChildFragmentManager().findFragmentById(R.id.mapFragmentContainer);
+        if (mapFragment != null) {
+            // Asynchronously initialize the map
+            mapFragment.getMapAsync(this);
+        }
+    }
+    @Override
+    public void onMapReady(@NonNull GoogleMap googleMap) {
+        mMap = googleMap;
+        checkAndUpdatePermissions();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        checkAndUpdatePermissions();
+    }
+
+    private boolean isGnssEnabled() {
+        LocationManager locationManager =
+                (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
+        // Checks both GPS and network provider. Adjust as needed.
+        boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        return (gpsEnabled || networkEnabled);
+    }
+    private void showEdinburghAndMessage(String message) {
+        gnssStatusTextView.setText(message);
+        gnssStatusTextView.setVisibility(View.VISIBLE);
+
+        LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
+        mMap.addMarker(new MarkerOptions()
+                .position(edinburghLatLng)
+                .title("University of Edinburgh"));
+    }
+
+    private void checkAndUpdatePermissions() {
+
+        if (mMap == null) {
+            return;
+        }
+
+        // Check if GNSS/Location is enabled
+        boolean gnssEnabled = isGnssEnabled();
+        if (gnssEnabled) {
+            // Hide the "GNSS Disabled" message
+            gnssStatusTextView.setVisibility(View.GONE);
+
+            // Check runtime permissions for location
+            if (ActivityCompat.checkSelfPermission(
+                    requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED ||
+                    ActivityCompat.checkSelfPermission(
+                            requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
+                            == PackageManager.PERMISSION_GRANTED) {
+
+                // Enable the MyLocation layer of Google Map
+                mMap.setMyLocationEnabled(true);
+
+                // Optionally move the camera to last known or default location:
+                //   (You could retrieve it from FusedLocationProvider or similar).
+                // Here, just leaving it on default.
+                // If you want to center on the user as soon as it loads, do something like:
+                /*
+                FusedLocationProviderClient fusedLocationClient =
+                    LocationServices.getFusedLocationProviderClient(requireContext());
+                fusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
+                    if (location != null) {
+                        LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f));
+                    }
+                });
+                */
+            } else {
+                // If no permission, simply show a default location or prompt for permissions
+                showEdinburghAndMessage("Permission not granted. Please enable in settings.");
+            }
+        } else {
+            // If GNSS is disabled, show University of Edinburgh + message
+            showEdinburghAndMessage("GNSS is disabled. Please enable in settings.");
+        }
     }
 }
