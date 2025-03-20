@@ -10,7 +10,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
-import androidx.navigation.NavController;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
@@ -136,10 +135,21 @@ public class HomeFragment extends Fragment {
             }
         });
 
-        // 为新增的 WiFi 定位按钮设置点击事件
-        view.findViewById(R.id.wifiPositioningButton).setOnClickListener(v -> {
-            NavController navController = Navigation.findNavController(view);
-            navController.navigate(R.id.action_homeFragment_to_wifiPositioningFragment);
+        // NEW: Set up WiFi Positioning button to open WifiFragment
+        Button wifiPositioning = getView().findViewById(R.id.wifiPositioningButton);
+        wifiPositioning.setOnClickListener(v -> {
+            NavDirections action = HomeFragmentDirections.actionHomeFragmentToWifiFragment();
+            Navigation.findNavController(v).navigate(action);
         });
+
+        Button fusionButton = getView().findViewById(R.id.fusionPositioningButton);
+        fusionButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                NavDirections action = HomeFragmentDirections.actionHomeFragmentToFusionFragment();
+                Navigation.findNavController(v).navigate(action);
+            }
+        });
+
     }
 }

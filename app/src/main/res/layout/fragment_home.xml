@@ -10,13 +10,14 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- 现有的 Sensor Info 按钮 -->
+        <!-- Floating Action Button for sensor info remains unchanged -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/sensorInfoButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="16dp"
             android:layout_marginBottom="16dp"
+            android:clickable="true"
             android:contentDescription="@string/info_description"
             android:src="@drawable/ic_baseline_info_24"
             app:backgroundTint="?attr/colorPrimaryVariant"
@@ -24,27 +25,13 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:tint="@color/white" />
 
-        <!-- 新增 WiFi 定位入口按钮，位于左下角 -->
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/wifiPositioningButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginBottom="16dp"
-            android:contentDescription="@string/wifi_positioning"
-            android:src="@drawable/ic_baseline_wifi_24"
-        app:backgroundTint="?attr/colorPrimaryVariant"
-        app:tint="@color/white"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
-
-        <!-- 中间大按钮 -->
+        <!-- Big round start/stop button -->
         <Button
             android:id="@+id/startStopButton"
             android:layout_width="300dp"
             android:layout_height="300dp"
             android:layout_marginTop="16dp"
-            android:layout_marginBottom="24dp"
+            android:layout_marginBottom="16dp"
             android:background="@drawable/round_button"
             android:enabled="false"
             android:paddingStart="15dp"
@@ -58,22 +45,63 @@
             app:icon="@drawable/ic_baseline_directions_walk_24"
             app:iconGravity="textTop"
             app:iconSize="170dp"
-            app:layout_constraintBottom_toTopOf="@+id/otherButtonLayout"
-            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/positioningButtonsLayout" />
 
-        <!-- 底部其他按钮布局 -->
+        <!-- New horizontal layout for positioning buttons -->
+        <LinearLayout
+            android:id="@+id/positioningButtonsLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            app:layout_constraintTop_toBottomOf="@id/startStopButton"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/otherButtonLayout"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp">
+
+            <Button
+                android:id="@+id/wifiPositioningButton"
+                android:layout_width="0dp"
+                android:layout_height="150dp"
+                android:layout_weight="1"
+                android:layout_margin="8dp"
+                android:background="@drawable/rounded_corner"
+                android:text="WiFi Positioning"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                app:icon="@drawable/ic_baseline_wifi_24"
+                app:iconGravity="textTop"
+                app:iconSize="50dp" />
+
+            <Button
+                android:id="@+id/fusionPositioningButton"
+                android:layout_width="0dp"
+                android:layout_height="150dp"
+                android:layout_weight="1"
+                android:layout_margin="8dp"
+                android:background="@drawable/rounded_corner"
+                android:text="Fusion Positioning"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- Existing horizontal button layout for measurements and files -->
         <LinearLayout
             android:id="@+id/otherButtonLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
             android:orientation="horizontal"
+            android:gravity="center"
+            app:layout_constraintTop_toBottomOf="@id/positioningButtonsLayout"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/startStopButton">
+            app:layout_constraintEnd_toEndOf="parent">
 
             <Button
                 android:id="@+id/measurementButton"
@@ -103,6 +131,5 @@
                 app:iconGravity="textTop"
                 app:iconSize="50dp" />
         </LinearLayout>
-
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>
