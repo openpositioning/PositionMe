@@ -394,7 +394,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
                     this.accelMagnitude.clear();
                     float stepLen = this.pdrProcessing.getStepLength(); // 获取当前步长
-<<<<<<< HEAD
+
                     double theta = wrapToPi(this.orientation[0]); // 获取当前方向角
                     if (extendedKalmanFilter != null) {
                         extendedKalmanFilter.predict(stepLen, theta);
@@ -402,9 +402,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                     } else {
                         Log.e("SensorFusion", "EKF is not initialized!");
                     }
-=======
-                    extendedKalmanFilter.predict(stepLen); // 调用 EKF 预测
->>>>>>> origin/EKF
+
+
                     if (saveRecording) {
                         // 如果有 WiFi 定位信号，则利用 WiFi EKF 修正 PDR 数据
                         if (wiFiPositioning.getWifiLocation() != null) {
@@ -459,8 +458,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 double penaltyFactor = calculatePenaltyFactor(rssi, timeSinceLastUpdate);
 
                 extendedKalmanFilter.update(enuCoords[0], enuCoords[1], penaltyFactor);
-
-                extendedKalmanFilter.update(enuCoords[0], enuCoords[1]);
+                
 
             }
         } catch (JSONException e) {
@@ -486,8 +484,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         return baseFactor * timePenalty;
     }
-=======
->>>>>>> origin/EKF
+
     /**
      * Utility function to log the event frequency of each sensor.
      * Call this periodically for debugging purposes.
