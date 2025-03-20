@@ -53,6 +53,7 @@ import java.util.List;
 
 public class TrajectoryMapFragment extends Fragment {
 
+    private static TrajectoryMapFragment instance;  // Static reference to store the instance of the fragment
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
@@ -85,6 +86,19 @@ public class TrajectoryMapFragment extends Fragment {
     public TrajectoryMapFragment() {
         // Required empty public constructor
     }
+  @Override
+  public void onCreate(@Nullable Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    instance = this;  // Set the instance when the fragment is created
+  }
+
+  /**
+   * Static method to retrieve the instance of the fragment.
+   * @return The instance of the TrajectoryMapFragment.
+   */
+  public static TrajectoryMapFragment getInstance() {
+    return instance;
+  }
 
     @Nullable
     @Override
@@ -541,6 +555,23 @@ public class TrajectoryMapFragment extends Fragment {
         gMap.addPolygon(buildingPolygonOptions4);
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
+
+  /**
+   * Function to add a tag marker to the map.
+   * @param tagLocation The `LatLng` coordinates where the tag should be placed
+   */
+  public void addTagMarker(LatLng tagLocation) {
+    if (gMap != null) {
+      gMap.addMarker(new MarkerOptions()
+              .position(tagLocation)
+              .title("Tag")
+              .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+      Log.d("TrajectoryMapFragment", "Tag marker added at: " + tagLocation.toString());
+    } else {
+      Log.e("TrajectoryMapFragment", "Google Map is not ready yet.");
+    }
+  }
+
 
 
 }
