@@ -255,7 +255,6 @@ public class WifiDataProcessor implements Observable {
             }
             else {
               scanInterval = SCAN_RATE_WITHOUT_THROTTLING;
-
             }
         }
     }
