@@ -100,8 +100,8 @@ public class MeasurementsFragment extends Fragment {
      */
     @Override
     public void onPause() {
-        refreshDataHandler.removeCallbacks(refreshTableTask);
         super.onPause();
+        this.refreshDataHandler.removeCallbacks(refreshTableTask);
     }
 
     /**
@@ -110,8 +110,8 @@ public class MeasurementsFragment extends Fragment {
      */
     @Override
     public void onResume() {
-        refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
         super.onResume();
+        this.refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
     }
 
     /**
@@ -143,25 +143,25 @@ public class MeasurementsFragment extends Fragment {
             Map<SensorTypes, float[]> sensorValueMap = sensorFusion.getSensorValueMap();
             // Loop through UI elements and update the values
             for(SensorTypes st : SensorTypes.values()) {
-                CardView cardView = (CardView) sensorMeasurementList.getChildAt(st.ordinal());
-                ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
-                float[] values = sensorValueMap.get(st);
-                for (int i = 0; i < values.length; i++) {
+                if (st.ordinal() <= 8) {
+                  CardView cardView = (CardView) sensorMeasurementList.getChildAt(st.ordinal());
+                  ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
+                  float[] values = sensorValueMap.get(st);
+                  for (int i = 0; i < values.length; i++) {
                     String valueString;
                     // Set string wrapper based on data type.
-                    if(values.length == 1) {
-                        valueString = getString(R.string.level, String.format("%.2f", values[0]));
-                    }
-                    else if(values.length == 2){
-                        if(st == SensorTypes.GNSSLATLONG)
-                            valueString = getString(gnssPrefaces[i], String.format("%.2f", values[i]));
-                        else
-                            valueString = getString(prefaces[i], String.format("%.2f", values[i]));
-                    }
-                    else{
+                    if (values.length == 1) {
+                      valueString = getString(R.string.level, String.format("%.2f", values[0]));
+                    } else if (values.length == 2) {
+                      if (st == SensorTypes.GNSSLATLONG)
+                        valueString = getString(gnssPrefaces[i], String.format("%.2f", values[i]));
+                      else
                         valueString = getString(prefaces[i], String.format("%.2f", values[i]));
+                    } else {
+                      valueString = getString(prefaces[i], String.format("%.2f", values[i]));
                     }
                     ((TextView) currentRow.getChildAt(i + 1)).setText(valueString);
+                  }
                 }
             }
             // Get all WiFi values - convert to list of strings

@@ -104,6 +104,7 @@
             android:layout_marginBottom="12dp" />
 
         <!-- Buttons Container -->
+        <!-- Buttons Container -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -111,34 +112,51 @@
             android:gravity="center">
 
             <!-- Cancel Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/cancelButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
-                android:layout_height="56dp"
-                android:layout_marginEnd="16dp"
-                app:icon="@drawable/ic_unavailable"
-                android:text="@string/cancel"
-                android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onError"
-                app:backgroundTint="@color/md_theme_error"
-                app:cornerRadius="16dp" />
 
             <!-- Stop Button -->
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/cancelButton"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="100dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="16dp"
+                android:text="@string/cancel"
+                android:textSize="11sp"
+                app:backgroundTint="@color/md_theme_error"
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_unavailable"
+                app:iconGravity="textStart"
+                app:iconSize="10dp"
+                app:iconTint="@color/md_theme_onError" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/stopButton"
                 style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
+                android:layout_width="115dp"
                 android:layout_height="56dp"
                 app:icon="@drawable/ic_baseline_assignment_turned_in_24"
                 android:text="@string/stop"
-                android:textSize="16sp"
-                app:iconSize="24dp"
+                android:textSize="11sp"
+                app:iconSize="10dp"
                 app:iconGravity="textStart"
                 app:iconTint="@color/md_theme_onPrimary"
                 app:backgroundTint="@color/md_theme_primary"
+                app:cornerRadius="16dp" />
+
+            <!-- "Add Tag" Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/addTagButton"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="100dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="16dp"
+                app:icon="@drawable/ic_baseline_add_location_24"
+                android:text="@string/AddTag"
+                android:textSize="11sp"
+                app:iconSize="10dp"
+                app:iconGravity="textStart"
+                app:iconTint="@color/md_theme_onPrimary"
+                app:backgroundTint="@color/md_theme_secondary"
                 app:cornerRadius="16dp" />
         </LinearLayout>
     </LinearLayout>
