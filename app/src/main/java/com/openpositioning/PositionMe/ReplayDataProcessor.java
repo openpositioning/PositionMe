@@ -19,7 +19,9 @@ import com.google.android.gms.maps.model.LatLng;
 
 public class ReplayDataProcessor {
 
-
+    /**
+     * A singleton class to store the replay trajectory
+     */
     public static class TrajRecorder extends ReplayDataProcessor {
         private static final TrajRecorder INSTANCE = new TrajRecorder();
 
@@ -70,7 +72,11 @@ public class ReplayDataProcessor {
     }
 
 
-
+    /**
+     * read the trajectory from the file, and return the trajectory, if it is not null
+     * @param file the file to read the trajectory from
+     * @return the trajectory, if it is not null
+     */
     //    public static void protoBinDecoder(String filePath) {
     public static Traj.Trajectory protoDecoder(File file) {
 //        String filePath_sf = filePath.toString();
@@ -115,6 +121,11 @@ public class ReplayDataProcessor {
         return trajectory;
     }
 
+    /**
+     * get the start location from the trajectory, and return it as a float array
+     * @param trajectory the trajectory to get the start location from
+     * @return the start location as a float array
+     */
     public static float[] getStartLocation(Traj.Trajectory trajectory) {
 
         float[] startLocation = new float[2];
@@ -154,6 +165,11 @@ public class ReplayDataProcessor {
         return pdrDataList;
     }
 
+    /**
+     * get the first gnss location from the trajectory, and return it as a float array
+     * @param trajectory the trajectory to get the first gnss location from
+     * @return the first gnss location as a float array
+     */
     public static float[] getFirstGnssLocation(Traj.Trajectory trajectory) {
         float[] startLocation = new float[2];
         if (trajectory == null){
@@ -189,6 +205,11 @@ public class ReplayDataProcessor {
         return SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, sortedPressures.get(1));
     }
 
+    /**
+     * translate the pdr path to a list of latlng, and add the start location to the list, and return the list
+     * @param trajectory the trajectory to translate
+     * @return the list of latlng, with the start location added
+     */
     public static List<LatLng> translatePdrPath(Traj.Trajectory trajectory) {
         List<LatLng> latLngList = new ArrayList<>();
         LatLng startLocation = new LatLng(0, 0);
@@ -217,9 +238,20 @@ public class ReplayDataProcessor {
         return latLngList;
     }
 
+    /**
+     * pressure sample adapter, calculate the altitude from the pressure sample, and add it to the pressure sample.
+     * The base altitude is calculated from the first pressure samples.
+     * @param PressureDataList the list of pressure samples to calculate the altitude from
+     * @return the list of pressure samples with the altitude added
+     */
     public static List<Traj.Pressure_Sample> pressureSampleAdapter(List<Traj.Pressure_Sample> PressureDataList) {
         if (PressureDataList == null || PressureDataList.isEmpty()) {
-            return PressureDataList;
+            Traj.Pressure_Sample.Builder builder = Traj.Pressure_Sample.newBuilder();
+            builder.setEstimatedElevation(0f);
+            builder.setPressure(0f);
+            List<Traj.Pressure_Sample> updatedList = new ArrayList<>();
+            updatedList.add(builder.build());
+            return updatedList;
         }
 
         float baseAltitude = calculateAltitude(PressureDataList.get(0));
@@ -235,11 +267,22 @@ public class ReplayDataProcessor {
         return updatedList; // return new list
     }
 
+    /**
+     * calculate the altitude from the pressure sample from the standard atmosphere
+     * @param pressureSample the pressure sample to calculate the altitude from
+     * @return the altitude of the pressure sample
+     */
     public static float calculateAltitude(Traj.Pressure_Sample pressureSample) {
         float pressure = pressureSample.getPressure();
         return SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure);
     }
 
+
+    /**
+     * check if the trajectory has pressure data
+     * @param trajectory the trajectory to check
+     * @return true if the trajectory has pressure data, false otherwise
+     */
     public static boolean hasEstimatedAltitude(Traj.Trajectory trajectory) {
         if (trajectory == null) {
             throw new IllegalArgumentException("Trajectory cannot be null");
@@ -252,6 +295,11 @@ public class ReplayDataProcessor {
         return false;
     }
 
+    /**
+     * check if the trajectory has pressure data
+     * @param trajectory the trajectory to check
+     * @return true if the trajectory has pressure data, false otherwise
+     */
     public static List<Traj.Pressure_Sample> getPressureDataList(Traj.Trajectory trajectory) {
         if (trajectory == null) {
             throw new IllegalArgumentException("Trajectory cannot be null");
@@ -260,9 +308,15 @@ public class ReplayDataProcessor {
         if (!ReplayDataProcessor.hasEstimatedAltitude(trajectory)) {
             pressureDataList = ReplayDataProcessor.pressureSampleAdapter(pressureDataList);
         }
+
         return pressureDataList;
     }
 
+    /**
+     * check if the trajectory has orientation data
+     * @param trajectory the trajectory to check
+     * @return true if the trajectory has orientation data, false otherwise
+     */
     public static boolean hasOrientationData(Traj.Trajectory trajectory) {
         if (trajectory == null) {
             throw new IllegalArgumentException("Trajectory cannot be null");
@@ -275,6 +329,11 @@ public class ReplayDataProcessor {
         return false;
     }
 
+    /**
+     * calculate the azimuth of the trajectory, using the rotation vector
+     * @param motionSample the motion sample to calculate the azimuth from
+     * @return the azimuth of the motion sample
+     */
     public static float calculateAzimuth(Traj.Motion_Sample motionSample) {
         float rx = motionSample.getRotationVectorX();
         float ry = motionSample.getRotationVectorY();
@@ -291,6 +350,11 @@ public class ReplayDataProcessor {
         return orientation[0];
     }
 
+    /**
+     * calculate the azimuth of the trajectory, and add it to the motion sample
+     * @param motionDataList the list of motion samples to calculate the azimuth from
+     * @return the list of motion samples with the azimuth added
+     */
     public static List<Traj.Motion_Sample> MotionSampleAdapter(List<Traj.Motion_Sample> motionDataList) {
         if (motionDataList == null || motionDataList.isEmpty()) {
             return motionDataList;
@@ -310,6 +374,11 @@ public class ReplayDataProcessor {
         return updatedList;
     }
 
+    /**
+     * get the motion data list from the trajectory, and add the azimuth if it doesn't exist
+     * @param trajectory the trajectory to get the motion data list from
+     * @return the list of motion samples with the azimuth added
+     */
     public static List<Traj.Motion_Sample> getMotionDataList(Traj.Trajectory trajectory) {
         if (trajectory == null) {
             throw new IllegalArgumentException("Trajectory cannot be null");

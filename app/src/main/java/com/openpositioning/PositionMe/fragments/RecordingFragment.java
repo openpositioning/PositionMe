@@ -344,11 +344,11 @@ public class RecordingFragment extends Fragment {
                     Log.d("TimerReset", "🔥 旧 Timer 被重置");
                 }
 
-                // 创建新的 CountDownTimer（30秒倒计时，每秒触发一次）
+                // new countdown button
                 timer = new CountDownTimer(33000, 1000) {
                     @Override
                     public void onTick(long millisUntilFinished) {
-                        // 每秒可执行一些任务（此处为空）
+                        // empty mission for second invoke
                     }
 
                     @Override
@@ -356,7 +356,7 @@ public class RecordingFragment extends Fragment {
                         if (recIcon != null) {
                             recIcon.setColorFilter(Color.GREEN);
                         }
-
+                        // ensure context is not null, and handel toast message
                         Context context = getContext();
                         if (context != null) {
                             Toast.makeText(context, "Recording reached 30sec, you may stop at anytime!", Toast.LENGTH_SHORT).show();
@@ -383,11 +383,11 @@ public class RecordingFragment extends Fragment {
                     if (timer != null) {
                         timer.cancel();
                         timer = null;
-                        Log.d("TimerReset", "🔥 旧 Timer 被重置");
+                        Log.d("TimerReset", "🔥 old timer is reset");
                     }
-                    Log.d("RecordingFragment", "🛑 SensorFusion 录制已停止");
+                    Log.d("RecordingFragment", "🛑 SensorFusion recording stopped");
                 } else {
-                    Log.e("RecordingFragment", "❌ SensorFusion 未初始化！");
+                    Log.e("RecordingFragment", "❌ SensorFusion is not initialised！");
                 }
 
                 // 停止 UI 更新任务
@@ -408,7 +408,7 @@ public class RecordingFragment extends Fragment {
                     transaction.addToBackStack(null);
                     transaction.commit();
                 } else {
-                    Log.w("RecordingFragment", "⚠️ Fragment 已销毁，无法跳转");
+                    Log.w("RecordingFragment", "⚠️ Fragment is destoried, unable to jump!");
                 }
             }else{
                 Toast.makeText(getContext(), "Recording not started yet!", Toast.LENGTH_SHORT).show();
@@ -437,9 +437,9 @@ public class RecordingFragment extends Fragment {
             autoFloor.setChecked(false); // 🚀 关闭 Auto Floor Turn off Auto Floor
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
-                Log.d("FloorControl", "📈 楼层上升");
+                Log.d("FloorControl", "📈 floor up");
             } else {
-                Log.e("FloorControl", "❌ indoorMapManager 为空，无法切换楼层！");
+                Log.e("FloorControl", "indoorMapManager is empty cannot change floor");
             }
         });
 
@@ -449,9 +449,9 @@ public class RecordingFragment extends Fragment {
             autoFloor.setChecked(false); // 🚀 关闭 Auto Floor Turn off Auto Floor
             if (indoorMapManager != null) {
                 indoorMapManager.decreaseFloor();
-                Log.d("FloorControl", "📉 楼层下降");
+                Log.d("FloorControl", "📉 floor down");
             } else {
-                Log.e("FloorControl", "❌ indoorMapManager 为空，无法切换楼层！");
+                Log.e("FloorControl", "indoorMapManager is empty cannot change floor");
             }
         });
 
@@ -459,9 +459,9 @@ public class RecordingFragment extends Fragment {
         //✅ **Automatic floor switching**
         this.autoFloor.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) {
-                Log.d("FloorControl", "✅ Auto Floor 已启用");
+                Log.d("FloorControl", "✅ Auto Floor is enabled");
             } else {
-                Log.d("FloorControl", "⚠️ Auto Floor 已禁用，用户需要手动切换楼层");
+                Log.d("FloorControl", "⚠️ Auto Floor is disabled");
             }
         });
 
@@ -477,7 +477,7 @@ public class RecordingFragment extends Fragment {
                 // Get all sensor data (GNSS data does not depend on pdrProcessing)
                 Map<SensorTypes, float[]> sensorData = sensorFusion.getSensorValueMap();
                 if (sensorData == null) {
-                    Toast.makeText(getContext(), "传感器数据不可用", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), "sensorData not available", Toast.LENGTH_SHORT).show();
                     gnss.setChecked(false);
                     return;
                 }
@@ -486,7 +486,7 @@ public class RecordingFragment extends Fragment {
                 // Get GNSS data
                 float[] gnssData = sensorData.get(SensorTypes.GNSSLATLONG);
                 if (gnssData == null || gnssData.length < 2) {
-                    Toast.makeText(getContext(), "GNSS 数据不可用", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), "GNSS data not available", Toast.LENGTH_SHORT).show();
                     gnss.setChecked(false);
                     return;
                 }
