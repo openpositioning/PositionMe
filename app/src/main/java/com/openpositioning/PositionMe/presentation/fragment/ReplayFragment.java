@@ -407,6 +407,10 @@ public class ReplayFragment extends Fragment {
                 if (p.gnssLocation != null) {
                     trajectoryMapFragment.updateGNSS(p.gnssLocation);
                 }
+                // Plot the latest WiFi datapoint
+                if (p.wifiLocation != null) {
+                    trajectoryMapFragment.updateWifi(p.wifiLocation);
+                }
             }
         } else {
             // Normal sequential forward step: add just the new point
@@ -414,6 +418,10 @@ public class ReplayFragment extends Fragment {
             trajectoryMapFragment.updateUserLocation(p.pdrLocation, initialLatLng, p.orientation);
             if (p.gnssLocation != null) {
                 trajectoryMapFragment.updateGNSS(p.gnssLocation);
+            }
+            // Plot the latest WiFi datapoint
+            if (p.wifiLocation != null) {
+                trajectoryMapFragment.updateWifi(p.wifiLocation);
             }
         }
 

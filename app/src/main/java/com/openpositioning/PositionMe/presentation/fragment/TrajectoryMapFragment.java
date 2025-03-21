@@ -62,6 +62,7 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
+    private boolean isWifiOn = false; // Tracks if GNSS tracking is enabled
 
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
@@ -77,6 +78,7 @@ public class TrajectoryMapFragment extends Fragment {
     private Spinner switchMapSpinner;
 
     private SwitchMaterial gnssSwitch;
+    private SwitchMaterial wifiSwitch;
     private SwitchMaterial autoFloorSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
@@ -105,6 +107,7 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
+        wifiSwitch      = view.findViewById(R.id.wifiSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
@@ -148,6 +151,14 @@ public class TrajectoryMapFragment extends Fragment {
             if (!isChecked && gnssMarker != null) {
                 gnssMarker.remove();
                 gnssMarker = null;
+            }
+        });
+        // Wifi Switch
+        wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isWifiOn = isChecked;
+            if (!isChecked && wifiMarker != null) {
+                wifiMarker.remove();
+                wifiMarker = null;
             }
         });
 
@@ -398,6 +409,7 @@ public class TrajectoryMapFragment extends Fragment {
      */
     public void updateWifi(@NonNull LatLng wifiLocation) {
         if (gMap == null) return;
+        if (!isWifiOn) return;
 
         if (wifiMarker == null) {
             // Create the WiFi marker if it doesn't already exist
@@ -436,17 +448,26 @@ public class TrajectoryMapFragment extends Fragment {
     /**
      * Remove GNSS marker if user toggles it off
      */
-    private Marker removeAndClear(Marker marker) {
-        if (marker != null) {
-            marker.remove();
+
+    public void clearGNSS() {
+        if (gnssMarker != null) {
+            gnssMarker.remove();
+            gnssMarker = null;
         }
-        return null;
     }
 
-    public void clearMarkers() {
-        gnssMarker = removeAndClear(gnssMarker);
-        wifiMarker = removeAndClear(wifiMarker);
-        fusedMarker = removeAndClear(fusedMarker);
+    public void clearWifi() {
+        if (wifiMarker != null) {
+            wifiMarker.remove();
+            wifiMarker = null;
+        }
+    }
+
+    public void clearFused() {
+        if (fusedMarker != null) {
+            fusedMarker.remove();
+            fusedMarker = null;
+        }
     }
 
 
@@ -455,6 +476,9 @@ public class TrajectoryMapFragment extends Fragment {
      */
     public boolean isGnssEnabled() {
         return isGnssOn;
+    }
+    public boolean isWifiEnabled() {
+        return isWifiOn;
     }
 
     private void setFloorControlsVisibility(int visibility) {
