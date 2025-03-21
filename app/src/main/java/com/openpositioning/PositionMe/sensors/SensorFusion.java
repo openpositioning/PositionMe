@@ -767,7 +767,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             sensorValueMap.put(SensorTypes.WIFI, new float[]{
                     (float) currentWifiLocation.latitude,
                     (float) currentWifiLocation.longitude});
-            sensorValueMap.put(SensorTypes.WIFI_HEIGHT, new float[this.getWifiFloor()]);
+            sensorValueMap.put(SensorTypes.WIFI_FLOOR, new float[this.getWifiFloor()]);
             sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[isWifiLocationOutlier ? 1 : 0]);
         }
         sensorValueMap.put(SensorTypes.FUSED, null);

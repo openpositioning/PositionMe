@@ -277,6 +277,30 @@ public class RecordingFragment extends Fragment {
             }
         }
 
+        // Get and plot wifi data
+        float[] wifi = sensorFusion.getSensorValueMap().get(SensorTypes.WIFI);
+        if (wifi != null && trajectoryMapFragment != null) {
+            // If user toggles showing GNSS in the map, call e.g.
+            if (trajectoryMapFragment.isWifiEnabled()) {
+                LatLng wifiLocation = new LatLng(wifi[0], wifi[1]);
+                trajectoryMapFragment.updateWifi(wifiLocation);
+            } else {
+                trajectoryMapFragment.clearWifi();
+            }
+        }
+
+        // Get and plot fused data
+        float[] fused = sensorFusion.getSensorValueMap().get(SensorTypes.WIFI);
+        if (fused != null && trajectoryMapFragment != null) {
+            // If user toggles showing GNSS in the map, call e.g.
+            if (trajectoryMapFragment.isGnssEnabled()) {
+                LatLng fusedLocation = new LatLng(fused[0], fused[1]);
+                trajectoryMapFragment.updateWifi(fusedLocation);
+            } else {
+                trajectoryMapFragment.clearFused();
+            }
+        }
+
         // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];

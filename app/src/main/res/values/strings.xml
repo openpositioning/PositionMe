@@ -112,6 +112,7 @@
     <string name="floor_height">Floor height in meters</string>
     <string name="color">Color</string>
     <string name="gnssSwitch">🛰 Show GNSS </string>
+    <string name="wifiSwitch">🛜 Show WiFi  </string>
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
     <string name="choose_map">Choose Map</string>
