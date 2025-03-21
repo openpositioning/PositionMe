@@ -554,7 +554,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // Handle the success response
                     if (wifiLocation != currentWifiLocation)
                         currentWifiLocation = wifiLocation;
-                    isWifiLocationOutlier = isOutlier(new LatLng(latitude, longitude), wifiLocation);
+                    if(coordinateTransformer != null) {
+                        isWifiLocationOutlier = isOutlier(new LatLng(latitude, longitude), wifiLocation);
+                    }
                 }
 
                 @Override

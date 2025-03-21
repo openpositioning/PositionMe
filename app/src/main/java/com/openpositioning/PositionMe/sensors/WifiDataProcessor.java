@@ -89,6 +89,7 @@ public class WifiDataProcessor implements Observable {
 //      //  if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
 //      //      wifiManager.setWifiEnabled(true);
 //      //  }
+        checkWifiThrottling();
 
         // Start wifi scan and return results via broadcast
         if(permissionsGranted) {
@@ -96,7 +97,6 @@ public class WifiDataProcessor implements Observable {
         }
 
         //Inform the user if wifi throttling is enabled on their device
-        checkWifiThrottling();
     }
 
     /**
@@ -255,6 +255,7 @@ public class WifiDataProcessor implements Observable {
             }
             else {
               scanInterval = SCAN_RATE_WITHOUT_THROTTLING;
+
             }
         }
     }
