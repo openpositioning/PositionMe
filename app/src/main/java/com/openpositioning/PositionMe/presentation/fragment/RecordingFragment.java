@@ -185,7 +185,7 @@ public class RecordingFragment extends Fragment {
             dialog.show(); // Finally, show the dialog
         });
 
-        // Add dat button
+        // Add tag button
       addTagButton.setOnClickListener(v -> {
         sensorFusion.addTag(); // Calls the method to store a GNSS tag
         showToast("Tag added successfully!"); // Notify the user
