@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
+import android.net.wifi.ScanResult;
+
 import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment;
 
 /**
@@ -22,6 +24,11 @@ public class Wifi {
      * Empty public default constructor of the Wifi object.
      */
     public Wifi(){}
+
+    public Wifi(ScanResult scanResult){
+      this.setBssid(convertBssidToLong(scanResult.BSSID));
+      this.setLevel(scanResult.level);
+    }
 
     /**
      * Getters for each property
@@ -48,5 +55,32 @@ public class Wifi {
     @Override
     public String toString() {
         return  "bssid: " + bssid +", level: " + level;
+    }
+
+    private long convertBssidToLong(String wifiMacAddress){
+      long intMacAddress =0;
+      int colonCount =5;
+      //Loop through each character
+      for(int j =0; j<17; j++){
+        //Identify character
+        char macByte = wifiMacAddress.charAt(j);
+        //convert string hex mac address with colons to decimal long integer
+        if(macByte != ':'){
+          //For characters 0-9 subtract 48 from ASCII code and multiply by 16^position
+          if((int) macByte >= 48 && (int) macByte <= 57){
+            intMacAddress = intMacAddress + (((int)macByte-48)*((long)Math.pow(16,16-j-colonCount)));
+          }
+
+          //For characters a-f subtract 87 (=97-10) from ASCII code and multiply by 16^index
+          else if ((int) macByte >= 97 && (int) macByte <= 102){
+            intMacAddress = intMacAddress + (((int)macByte-87)*((long)Math.pow(16,16-j-colonCount)));
+          }
+        }
+        else
+          //coloncount is used to obtain the index of each character
+          colonCount --;
+      }
+
+      return intMacAddress;
     }
 }

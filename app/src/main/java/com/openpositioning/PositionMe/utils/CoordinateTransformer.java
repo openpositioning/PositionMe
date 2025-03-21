@@ -187,4 +187,19 @@ public class CoordinateTransformer {
     return convertTargetToWGS84(newEasting, newNorthing);
   }
 
+  /**
+   *  Calculate the distance between two proj-coordinate points.
+   * @param point1
+   * @param point2
+   * @return distance as a double.
+   */
+  public static double calculateDistance(ProjCoordinate point1, ProjCoordinate point2) {
+    return Math.sqrt(
+            Math.pow(point1.x - point2.x,2) +
+            Math.pow(point1.y - point2.y,2)
+//            Math.pow(point1.z - point2.z,2)
+            );
+
+  }
+
 }

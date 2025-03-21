@@ -43,6 +43,7 @@ public class UtilFunctions {
               * Math.cos(Math.toRadians(initialLocation.latitude))));
       return new LatLng(newLatitude, newLongitude);
     }
+
     /**
      * Converts a degree value of Latitude into meters
      * (as per WGS84 datum)
