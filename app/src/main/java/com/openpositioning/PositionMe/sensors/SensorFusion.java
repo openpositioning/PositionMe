@@ -18,6 +18,7 @@ import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
@@ -62,6 +63,8 @@ import java.util.stream.Stream;
  * Particle filter integration done by
  * @author Wojciech Boncela
  * @author Philip Heptonstall
+ * @author Alexandros Zoupos (Adjusted for AddTag functionality)
+ *
  */
 public class SensorFusion implements SensorEventListener, Observer {
 
@@ -156,6 +159,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Location values
     private float latitude;
     private float longitude;
+    private float altitude;
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
@@ -1072,6 +1076,61 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
-    //endregion
+  /**
+   * Adds a GNSS tag to the trajectory when the user presses "Add Tag".
+   * This method captures the current GNSS location (latitude, longitude, altitude)
+   * and stores it inside the trajectory's `gnss_data` array.
+   *
+   * The tag represents a marked position, which can later be used for debugging,
+   * validation, or visualization on a map.
+   */
+  public void addTag() {
+
+    // Check if the trajectory object exists before attempting to add a tag
+    if (trajectory == null) {
+      Log.e("SensorFusion", "Trajectory object is null, cannot add tag.");
+      return;
+    }
+
+    // Capture the current timestamp relative to the start of the recording session
+    long currentTimestamp = System.currentTimeMillis() - absoluteStartTime;
+
+    // Fetch the latest GNSS coordinates from the sensor fusion system
+    float currentLatitude = latitude;  // Get the current latitude from GNSS sensor
+    float currentLongitude = longitude;  // Get the current longitude from GNSS sensor
+    float currentAltitude = altitude;  // Get the current altitude from GNSS sensor
+    String provider = "fusion";  // Set provider to "fusion" as per instructions
+
+
+    // Construct a new GNSS_Sample protobuf message with the captured data
+    Traj.GNSS_Sample tagSample = Traj.GNSS_Sample.newBuilder()
+            .setRelativeTimestamp(currentTimestamp)  // Set timestamp relative to start
+            .setLatitude(currentLatitude)  // Store latitude
+            .setLongitude(currentLongitude)  // Store longitude
+            .setAltitude(currentAltitude)  // Store altitude
+            .setProvider(provider)  // Set provider information
+            .build();
+
+    // Append the new GNSS sample to the trajectory's `gnss_data` list
+    trajectory.addGnssData(tagSample);
+
+    // Get the instance of `TrajectoryMapFragment` using the static method
+    TrajectoryMapFragment mapFragment = TrajectoryMapFragment.getInstance();
+
+    if (mapFragment != null) {
+      // If the map fragment exists, add the tag marker on the map
+      mapFragment.addTagMarker(new LatLng(currentLatitude, currentLongitude));
+    } else {
+      // If the map fragment is null, log an error message
+      Log.e("SensorFusion", "Map fragment is null. Cannot add tag marker.");
+    }
+
+    // Log the stored tag information for debugging and verification
+    Log.d("SensorFusion", "Added GNSS tag: " + tagSample.toString());
+  }
+
+
+
+  //endregion
 
 }
