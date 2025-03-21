@@ -137,5 +137,6 @@
     <string name="replay_frag_play">Play</string>
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
+    <string name="progressbar_text">Fetching Wifi Data...</string>
 
 </resources>

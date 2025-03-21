@@ -16,3 +16,4 @@ local.properties
 /.idea/
 secrets.properties
 app/src/main/res/values/googlemaps_api.xml
+

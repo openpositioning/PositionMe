@@ -39,9 +39,12 @@ import java.util.TimerTask;
  * @author Virginia Cangelosi
  */
 public class WifiDataProcessor implements Observable {
-
+    //
+    private static final long SCAN_RATE_WITH_THROTTLING = 5000; // ms
+    //
+    private static final long SCAN_RATE_WITHOUT_THROTTLING = 500; // ms
     //Time over which a new scan will be initiated
-    private static final long scanInterval = 5000;
+    private static long scanInterval = SCAN_RATE_WITH_THROTTLING;
 
     // Application context for handling permissions and WifiManager instances
     private final Context context;
@@ -86,6 +89,7 @@ public class WifiDataProcessor implements Observable {
 //      //  if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
 //      //      wifiManager.setWifiEnabled(true);
 //      //  }
+        checkWifiThrottling();
 
         // Start wifi scan and return results via broadcast
         if(permissionsGranted) {
@@ -93,7 +97,6 @@ public class WifiDataProcessor implements Observable {
         }
 
         //Inform the user if wifi throttling is enabled on their device
-        checkWifiThrottling();
     }
 
     /**
@@ -215,18 +218,17 @@ public class WifiDataProcessor implements Observable {
             //Register broadcast receiver for wifi scans
             context.registerReceiver(wifiScanReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
             wifiManager.startScan();
-
             //}
         }
     }
 
     /**
-     * Initiate scans for nearby networks every 5 seconds.
-     * The method declares a new timer instance to schedule a scan for nearby wifis every 5 seconds.
+     * Initiate scans for nearby networks every SCAN_INTERVAL seconds.
+     * The method declares a new timer instance to schedule a scan for nearby wifis every SCAN_INTERVAL seconds.
      */
     public void startListening() {
         this.scanWifiDataTimer = new Timer();
-        this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, scanInterval);
+        this.scanWifiDataTimer.schedule(new scheduledWifiScan(), 0, scanInterval);
     }
 
     /**
@@ -246,14 +248,13 @@ public class WifiDataProcessor implements Observable {
      */
     public void checkWifiThrottling(){
         if(checkWifiPermissions()) {
-            //If the device does not support wifi throttling an exception is thrown
-            try {
-                if(Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled")==1) {
-                    //Inform user to disable wifi throttling
-                    Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
-                }
-            } catch (Settings.SettingNotFoundException e) {
-                e.printStackTrace();
+            // If the device does not support wifi throttling an exception is thrown
+            if(this.wifiManager.isScanThrottleEnabled()) {
+                //Inform user to disable wifi throttling
+                Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
+            }
+            else {
+              scanInterval = SCAN_RATE_WITHOUT_THROTTLING;
             }
         }
     }

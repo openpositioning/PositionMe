@@ -10,6 +10,9 @@ import com.google.android.gms.maps.model.LatLng;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.List;
+
 /**
  * Class for creating and handling POST requests for obtaining the current position using
  * WiFi positioning API from https://openpositioning.org/api/position/fine
@@ -32,6 +35,7 @@ public class WiFiPositioning {
     private RequestQueue requestQueue;
     // URL for WiFi positioning API
     private static final String url="https://openpositioning.org/api/position/fine";
+    private static final String WIFI_FINGERPRINT= "wf";
 
     /**
      * Getter for the WiFi positioning coordinates obtained using openpositioning API
@@ -168,6 +172,33 @@ public class WiFiPositioning {
         );
         // Adds the request to the request queue
         requestQueue.add(jsonObjectRequest);
+    }
+
+  /**
+   * Return a JSONObject of the wifi features in wifiList.
+   * The JSON object can be used to request a wifi position.
+   * @param wifiList
+   * @return JSONObject of the wifi features
+   *         null if error creating the json object
+   */
+  public static JSONObject createWifiPositioningRequest(List<Wifi> wifiList){
+    // Try catch block to catch any errors and prevent app crashing
+    // Creating a JSON object to store the WiFi access points
+    try {
+        JSONObject wifiAccessPoints=new JSONObject();
+        for (Wifi data : wifiList){
+          wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+        }
+        // Creating POST Request
+        JSONObject wifiFingerPrint = new JSONObject();
+        wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+        return wifiFingerPrint;
+      } catch (JSONException e) {
+        // Catching error while making JSON object, to prevent crashes
+        // Error log to keep record of errors (for secure programming and maintainability)
+        Log.e("jsonErrors","Error creating json object"+e.toString());
+        return null;
+      }
     }
 
     /**
