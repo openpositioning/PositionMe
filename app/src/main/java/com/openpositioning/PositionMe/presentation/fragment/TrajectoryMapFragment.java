@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.app.AlertDialog;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -10,6 +11,8 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
+import android.widget.Toast;
+
 import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import androidx.annotation.NonNull;
@@ -472,6 +475,15 @@ public class TrajectoryMapFragment extends Fragment {
             return; // Skip updating the marker
         }
 
+        boolean isInsideWifiBounds = indoorMapManager.getIsIndoorMapSet(); // Check bounds
+        if (!isInsideWifiBounds) {
+            // WiFi readings are not available; show a message
+            showNoWiFiCoverageMessage();
+            clearWiFi(); // Clear the WiFi marker and polyline if any
+            wifiSwitch.setChecked(false);
+            return;
+        }
+
         if (wifiMarker == null) {
             // Create the WiFi marker for the first time
             wifiMarker = gMap.addMarker(new MarkerOptions()
@@ -501,6 +513,14 @@ public class TrajectoryMapFragment extends Fragment {
             wifiMarker.remove();
             wifiMarker = null;
         }
+    }
+
+    /**
+     * Displays a dialog to notify the user that there is no WiFi coverage.
+     * @author Laura Maryakhina
+     */
+    private void showNoWiFiCoverageMessage() {
+        Toast.makeText(requireContext(), "No WiFi coverage available in this area.", Toast.LENGTH_SHORT).show();
     }
 
     /**
