@@ -175,6 +175,9 @@ public class TrajectoryMapFragment extends Fragment {
                 gnssMarker.remove();
                 gnssMarker = null;
             }
+            if (gnssPolyline != null) {
+                gnssPolyline.setPoints(new ArrayList<>()); // Clear the polyline
+            }
         });
 
 
@@ -184,6 +187,9 @@ public class TrajectoryMapFragment extends Fragment {
             if (!isChecked && wifiMarker != null) {
                 wifiMarker.remove();
                 wifiMarker = null;
+            }
+            if (wifiPolyline != null) {
+                wifiPolyline.setPoints(new ArrayList<>()); // Clear the polyline
             }
         });
 
