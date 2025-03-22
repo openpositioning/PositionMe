@@ -47,6 +47,7 @@ import java.util.List;
  * - Displays a Google Map with support for different map types (Hybrid, Normal, Satellite).
  * - Tracks and visualizes user movement using polylines.
  * - Supports GNSS position updates and visual representation.
+ * - Supports Wifi position updates and visual representation.
  * - Includes indoor mapping with floor selection and auto-floor adjustments.
  * - Allows user interaction through map controls and UI elements.
  *
@@ -55,6 +56,8 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
  * @author Mate Stodulka
+ * @author Laura Maryakhina
+ * @author Kalliopi Vakali
  */
 
 public class TrajectoryMapFragment extends Fragment {
@@ -450,15 +453,13 @@ public class TrajectoryMapFragment extends Fragment {
     /**
      * Updates the WiFi marker and polyline on the map based on the provided location.
      *
-     * This method ensures that the WiFi marker is either created or updated at the given location.
-     * It also adds a segment to the polyline representing the WiFi path if the new location is
-     * different from the previous one. Updates are ignored if WiFi tracking is disabled.
+     * This method ensures that the WiFi marker is either created or updated at the given location,
+     * only if the user is inside a location with Wifi coverage. It also adds a segment to the polyline
+     * representing the WiFi path if the new location is different from the previous one. Updates are
+     * ignored if the Wifi location is an outlier or if WiFi tracking is disabled.
      *
      *
-     * @param wifiLocation The new WiFi location to update on the map. Must not be null.
-     *
-     * @author Laura Maryakhina
-     * @author Kalliopi Vakali
+     * @param wifiLocation
      */
     public void updateWiFi(@NonNull LatLng wifiLocation) {
         if (gMap == null) return;
@@ -517,7 +518,6 @@ public class TrajectoryMapFragment extends Fragment {
 
     /**
      * Displays a dialog to notify the user that there is no WiFi coverage.
-     * @author Laura Maryakhina
      */
     private void showNoWiFiCoverageMessage() {
         Toast.makeText(requireContext(), "No WiFi coverage available in this area.", Toast.LENGTH_SHORT).show();
@@ -528,8 +528,6 @@ public class TrajectoryMapFragment extends Fragment {
      * @param lastLocation - last wifi location
      * @param newLocation - current wifi location
      * @return boolean - True if new wifi location is too far from last location
-     *
-     * @author Laura Maryakhina
      */
     private boolean isOutlier(LatLng lastLocation, LatLng newLocation) {
         if (lastLocation == null || newLocation == null) return false; // No comparison possible
