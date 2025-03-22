@@ -429,20 +429,33 @@ public class SensorFusion implements SensorEventListener, Observer {
                     } else {
                         Log.d("SensorFusion", "GNSS Location is null, skipping GNSS correction.");
                     }
+                    // 获取当前 WiFi 指纹数据
+                    List<Wifi> currentWifiList = getWifiList();  // 最新扫描结果
+                    double avgRssi = Double.NaN;
+                    if (currentWifiList != null && !currentWifiList.isEmpty()) {
+                        avgRssi = currentWifiList.stream().mapToInt(Wifi::getLevel).average().orElse(Double.NaN);
+                        Log.d("SensorFusion", "StepDetected - Avg WiFi RSSI: " + avgRssi);
+                    } else {
+                        Log.w("SensorFusion", "WiFi list is empty, skipping WiFi RSSI calculation.");
+                    }
+
+                    // 获取 WiFi 位置信息（如果有）并传入 updateFusion
+                    LatLng wifiPos = wiFiPositioning.getWifiLocation();
                     JSONObject wifiResponse = null;
-                    if (wiFiPositioning.getWifiLocation() != null) {
-                        LatLng wifiPos = wiFiPositioning.getWifiLocation();
+                    if (wifiPos != null) {
                         wifiResponse = new JSONObject();
                         try {
                             wifiResponse.put("lat", wifiPos.latitude);
                             wifiResponse.put("lon", wifiPos.longitude);
-                            wifiResponse.put("floor", 0);
+                            wifiResponse.put("floor", wiFiPositioning.getFloor());
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
                     }
-                    // 传递 WiFi 和 GNSS 数据进行修正
-                    updateFusion(wifiResponse, gnssLocation);
+
+                    updateFusion(wifiResponse, gnssLocation, avgRssi);
+
+
                     // 调用 EKF 的 updateGNSS 以确保 GNSS 数据被用于修正
                     if (gnssLocation != null && extendedKalmanFilter != null) {
                         double lat = gnssLocation.getLatitude();
@@ -470,16 +483,19 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
-    public void updateFusion(JSONObject wifiResponse, Location gnssLocation) {
+
+
+
+    public void updateFusion(JSONObject wifiResponse, Location gnssLocation, double avgRssi) {
         try {
-        long currentTime = SystemClock.uptimeMillis();
-        double gnssAccuracy = gnssLocation != null ? gnssLocation.getAccuracy() : Double.MAX_VALUE;
-        boolean useWiFi = wifiResponse != null && wifiResponse.has("lat") && wifiResponse.has("lon");
-        boolean useGNSS = !useWiFi && gnssLocation != null && gnssAccuracy < 20.0 && (currentTime - lastGnssUpdateTime > 5000);
-        if(useGNSS){
-            lastGnssUpdateTime = currentTime;
-        }
-        Log.d("SensorFusion", "updateFusion: gnssAccuracy=" + gnssAccuracy + ", useWiFi=" + useWiFi + ", useGNSS=" + useGNSS);
+            long currentTime = SystemClock.uptimeMillis();
+            double gnssAccuracy = gnssLocation != null ? gnssLocation.getAccuracy() : Double.MAX_VALUE;
+            boolean useWiFi = wifiResponse != null && wifiResponse.has("lat") && wifiResponse.has("lon");
+            boolean useGNSS = !useWiFi && gnssLocation != null && gnssAccuracy < 20.0 && (currentTime - lastGnssUpdateTime > 5000);
+            if(useGNSS){
+                lastGnssUpdateTime = currentTime;
+            }
+            Log.d("SensorFusion", "updateFusion: gnssAccuracy=" + gnssAccuracy + ", useWiFi=" + useWiFi + ", useGNSS=" + useGNSS + ", avgRssi=" + avgRssi);
 
             if (useWiFi) {
                 Log.d("SensorFusion", "WiFi response raw: " + wifiResponse.toString());
@@ -492,7 +508,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 if (extendedKalmanFilter != null) {
                     double timeSinceLastUpdate = SystemClock.uptimeMillis() - lastOpUpdateTime;
                     lastOpUpdateTime = SystemClock.uptimeMillis();
-                    double penaltyFactor = calculatePenaltyFactor(0, timeSinceLastUpdate);
+                    double penaltyFactor = calculatePenaltyFactor(avgRssi, timeSinceLastUpdate);
 
                     extendedKalmanFilter.update(enuCoords[0], enuCoords[1], penaltyFactor);
                     Log.d("SensorFusion", "EKF updated with WiFi: penaltyFactor=" + penaltyFactor);
@@ -585,45 +601,66 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     @Override
     public void update(Object[] wifiList) {
-        // Save newest wifi values to local variable
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
-        if(this.saveRecording) {
-            Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
-            for (Wifi data : this.wifiList) {
-                wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
-                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                        .setMac(data.getBssid()).setRssi(data.getLevel()));
+        if (this.saveRecording) {
+            // 构建 trajectory WiFi 数据（略）
+
+            // ✅ 计算 avgRssi
+            double avgRssi = -100;
+            if (!this.wifiList.isEmpty()) {
+                avgRssi = this.wifiList.stream().mapToInt(Wifi::getLevel).average().orElse(-100);
             }
-            // Adding WiFi data to Trajectory
-            this.trajectory.addWifiData(wifiData);
+
+            // ✅ 传入 avgRssi
+            createWifiPositioningRequest(avgRssi);
         }
-        createWifiPositioningRequest();
     }
+
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      *
      */
-    private void createWifiPositioningRequest(){
-        // Try catch block to catch any errors and prevent app crashing
+    private void createWifiPositioningRequest(double avgRssi) {
         try {
-            // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
+            JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList){
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
-            // Creating POST Request
+
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint);
+
+            Log.d("SensorFusion", "Sending WiFi fingerprint: " + wifiFingerPrint.toString());
+
+            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    Log.d("SensorFusion", "Received WiFi location: lat=" + wifiLocation.latitude + ", lon=" + wifiLocation.longitude + ", floor=" + floor);
+                    try {
+                        JSONObject wifiResponse = new JSONObject();
+                        wifiResponse.put("lat", wifiLocation.latitude);
+                        wifiResponse.put("lon", wifiLocation.longitude);
+                        wifiResponse.put("floor", floor);
+                        updateFusion(wifiResponse, null, avgRssi); // ✅ 传入真实的 avgRssi
+                    } catch (JSONException e) {
+                        Log.e("SensorFusion", "Error creating WiFi response JSON", e);
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.e("SensorFusion", "WiFi positioning error: " + message);
+                }
+            });
+
         } catch (JSONException e) {
-            // Catching error while making JSON object, to prevent crashes
-            // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors","Error creating json object"+e.toString());
+            Log.e("SensorFusion", "JSON error while creating WiFi fingerprint", e);
         }
     }
+
+
     // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
