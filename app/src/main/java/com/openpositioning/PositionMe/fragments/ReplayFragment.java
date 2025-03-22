@@ -34,6 +34,7 @@ import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.PdrProcessing;
 import com.openpositioning.PositionMe.BuildingPolygon;
+import com.openpositioning.PositionMe.sensors.WiFiPositioning;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -42,10 +43,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * ReplayFragment: 在地图上回放 GNSS + PDR + Pressure 等轨迹数据。
- * 修复了“并行递增索引导致的时间错位”问题，改为基于相对时间戳 (relative_timestamp) 顺序回放。
+ * 修复了"并行递增索引导致的时间错位"问题，改为基于相对时间戳 (relative_timestamp) 顺序回放。
  */
 public class ReplayFragment extends Fragment implements OnMapReadyCallback {
 
@@ -63,13 +69,16 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     private List<Traj.GNSS_Sample> gnssPositions;
     private List<Traj.Pdr_Sample> pdrPositions;
     private List<Traj.Pressure_Sample> pressureinfos;
+    private List<Traj.WiFi_Sample> wifiSamples;
     private List<Float> altitudeList;
     private List<Float> relativeAltitudeList;
 
     private Polyline gnssPolyline;
     private Polyline pdrPolyline;
+    private Polyline wifiPolyline;
     private Marker gnssMarker;
     private Marker pdrMarker;
+    private Marker wifiMarker;
     private PdrProcessing pdrProcessing;
 
     private IndoorMapManager indoorMapManager;
@@ -81,7 +90,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     private int currentMeasuredFloor = 0;
     private final float FLOOR_HEIGHT = 4.2f;
     private final float TOLERANCE = 0.5f;
-    // 注意：为让楼层检测更“敏感”一点，这里把 CONSECUTIVE_THRESHOLD 设为 1
+    // 注意：为让楼层检测更"敏感"一点，这里把 CONSECUTIVE_THRESHOLD 设为 1
     private final int CONSECUTIVE_THRESHOLD = 1;
     private int upCounter = 0;
     private int downCounter = 0;
@@ -100,15 +109,28 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     // 用于合并 GNSS/PDR/Pressure 并按时间戳回放
     private List<Event> mergedEvents = new ArrayList<>();
     private int currentEventIndex = 0;  // 当前事件播放到哪一个
-    private long startReplayTimestamp;  // 用于“模拟真实间隔”时，记录回放开始的系统时间
+    private long startReplayTimestamp;  // 用于"模拟真实间隔"时，记录回放开始的系统时间
+
+    // WiFi定位服务
+    private WiFiPositioning wiFiPositioning;
+    // 存储WiFi样本对应的位置信息
+    private Map<Long, LatLng> wifiPositionCache = new HashMap<>();
+    // 标记位置请求是否完成
+    private boolean wifiPositionRequestsComplete = false;
+
+    private List<LatLng> wifiTrajectoryPoints = new ArrayList<>();
+
+    // 添加常量以匹配SensorFusion中的键名
+    private static final String WIFI_FINGERPRINT = "wf";
 
     /** 用于统一管理不同类型的轨迹事件 */
     private static class Event {
         long relativeTime;  // the relative_timestamp from the GNSS/PDR/Pressures
-        int eventType;      // 0=GNSS, 1=PDR, 2=Pressure
+        int eventType;      // 0=GNSS, 1=PDR, 2=Pressure, 3=WiFi
         Traj.GNSS_Sample gnss;
         Traj.Pdr_Sample pdr;
         Traj.Pressure_Sample pressure;
+        Traj.WiFi_Sample wifi;
     }
 
     @Override
@@ -138,6 +160,9 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
 
         // 初始化 pdrProcessing
         pdrProcessing = new PdrProcessing(getContext());
+        
+        // 初始化 WiFiPositioning
+        wiFiPositioning = new WiFiPositioning(getContext());
 
         // 获取传入的文件路径
         if (getArguments() != null) {
@@ -160,6 +185,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             gnssPositions = trajectory.getGnssDataList();
             pdrPositions = trajectory.getPdrDataList();
             pressureinfos = trajectory.getPressureDataList();
+            wifiSamples = trajectory.getWifiDataList();
 
             altitudeList = new ArrayList<>();
             relativeAltitudeList = new ArrayList<>();
@@ -173,6 +199,11 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             for (Float absoluteAlt : altitudeList) {
                 float relativeAlt = pdrProcessing.updateElevation(absoluteAlt);
                 relativeAltitudeList.add(relativeAlt);
+            }
+
+            // 预处理WiFi数据，获取位置信息
+            if (wifiSamples != null && !wifiSamples.isEmpty()) {
+                processWifiSamplesForPositioning();
             }
 
             // -----------------------------
@@ -237,7 +268,93 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         setFloorButtonVisibility(View.VISIBLE);
     }
 
-    /** 将 GNSS/PDR/Pressure 三类数据合并到一个列表 mergedEvents */
+    /**
+     * 预处理WiFi样本数据，获取位置信息
+     * 将所有WiFi样本发送到服务器获取位置，并缓存结果
+     */
+    private void processWifiSamplesForPositioning() {
+        // 显示进度提示
+        Toast.makeText(getContext(), "Processing WiFi data...", Toast.LENGTH_SHORT).show();
+        
+        final int[] completedRequests = {0};
+        final int totalRequests = wifiSamples.size();
+        
+        for (Traj.WiFi_Sample sample : wifiSamples) {
+            final long timestamp = sample.getRelativeTimestamp();
+            
+            // 创建WiFi指纹对象
+            try {
+                JSONObject wifiAccessPoints = new JSONObject();
+                for (Traj.Mac_Scan scan : sample.getMacScansList()) {
+                    wifiAccessPoints.put(String.valueOf(scan.getMac()), scan.getRssi());
+                }
+                
+                // 创建POST请求对象
+                JSONObject wifiFingerPrint = new JSONObject();
+                wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+                
+                // 发送请求到WiFiPositioning服务
+                wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                    @Override
+                    public void onSuccess(LatLng location, int floor) {
+                        // 缓存位置结果
+                        wifiPositionCache.put(timestamp, location);
+                        completedRequests[0]++;
+                        
+                        // 当所有请求完成时，更新UI并重建事件列表
+                        if (completedRequests[0] >= totalRequests) {
+                            wifiPositionRequestsComplete = true;
+                            // 在UI线程更新
+                            new Handler(Looper.getMainLooper()).post(() -> {
+                                Toast.makeText(getContext(), "WiFi positioning complete", Toast.LENGTH_SHORT).show();
+
+                                if (mMap != null) {
+
+                                }
+                            });
+                        }
+                    }
+                    
+                    @Override
+                    public void onError(String message) {
+                        // 处理错误情况
+                        completedRequests[0]++;
+                        Log.e("WiFiPositioning", "Error: " + message);
+                        
+                        // 即使有错误，当所有请求完成时也标记为完成
+                        if (completedRequests[0] >= totalRequests) {
+                            wifiPositionRequestsComplete = true;
+                            new Handler(Looper.getMainLooper()).post(() -> {
+                                Toast.makeText(getContext(), "WiFi positioning completed with some errors", Toast.LENGTH_SHORT).show();
+
+                                if (mMap != null) {
+
+                                }
+                            });
+                        }
+                    }
+                });
+                
+            } catch (JSONException e) {
+                Log.e("WiFiPositioning", "JSON Error: " + e.getMessage());
+                completedRequests[0]++;
+            }
+        }
+    }
+    
+    /**
+     * 构建WiFi轨迹点列表
+     * 按时间戳排序并应用平滑处理
+     */
+
+
+    /**
+     * 绘制WiFi轨迹
+     * 使用构建好的轨迹点列表绘制连续的轨迹线
+     */
+
+
+    /** 将 GNSS/PDR/Pressure/WiFi 四类数据合并到一个列表 mergedEvents */
     private void buildMergedEvents() {
         mergedEvents.clear();
 
@@ -273,6 +390,17 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 mergedEvents.add(e);
             }
         }
+        // WiFi
+        if (wifiSamples != null) {
+            for (int i = 0; i < wifiSamples.size(); i++) {
+                Traj.WiFi_Sample w = wifiSamples.get(i);
+                Event e = new Event();
+                e.relativeTime = w.getRelativeTimestamp();
+                e.eventType = 3;
+                e.wifi = w;
+                mergedEvents.add(e);
+            }
+        }
         // 排序：按 relativeTime 升序
         Collections.sort(mergedEvents, new Comparator<Event>() {
             @Override
@@ -302,9 +430,9 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     private void updateMarkersForEventIndex(int eventIndex) {
         if (mMap == null || indoorMapManager == null || mergedEvents.isEmpty()) return;
 
-        // 先从头到该 eventIndex，依次处理 event；这样能“模拟”到当前状态
+        // 先从头到该 eventIndex，依次处理 event；这样能"模拟"到当前状态
         // 由于用户可能频繁拖拽，为了简化，这里就直接从0播到eventIndex
-        // 若数据量很大，可以优化为“记住上一次的状态”，这里只求逻辑清晰
+        // 若数据量很大，可以优化为"记住上一次的状态"，这里只求逻辑清晰
 
         // 重置marker
         if (gnssMarker != null) {
@@ -314,6 +442,10 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         if (pdrMarker != null) {
             pdrMarker.remove();
             pdrMarker = null;
+        }
+        if (wifiMarker != null) {
+            wifiMarker.remove();
+            wifiMarker = null;
         }
 
         currentLocation = null;  // 每次重头更新
@@ -341,7 +473,9 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
 
         // 绘制 GNSS 轨迹（蓝色）
         if (gnssPositions != null && !gnssPositions.isEmpty()) {
-            PolylineOptions gnssOptions = new PolylineOptions().color(Color.BLUE);
+            PolylineOptions gnssOptions = new PolylineOptions()
+                .color(Color.BLUE)
+                .width(10);
             for (Traj.GNSS_Sample sample : gnssPositions) {
                 LatLng latLng = new LatLng(sample.getLatitude(), sample.getLongitude());
                 gnssOptions.add(latLng);
@@ -364,7 +498,9 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             LatLng pdrStart = (gnssPositions != null && !gnssPositions.isEmpty())
                     ? new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude())
                     : new LatLng(0, 0);
-            PolylineOptions pdrOptions = new PolylineOptions().color(Color.RED);
+            PolylineOptions pdrOptions = new PolylineOptions()
+                .color(Color.RED)
+                .width(10);
             for (Traj.Pdr_Sample sample : pdrPositions) {
                 float[] pdrOffset = new float[]{sample.getX(), sample.getY()};
                 LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
@@ -378,6 +514,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
             }
         }
+
+
 
         // 初始化 IndoorMapManager
         indoorMapManager = new IndoorMapManager(mMap);
@@ -478,8 +616,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     }
 
     /**
-     * 处理单个 Event：根据 eventType 更新 GNSS / PDR / Pressure（海拔+楼层检测）
-     * @param immediate 是否是自动播放时按节奏触发；如果是 “手动一次性处理” 则 immediate=false
+     * 处理单个 Event：根据 eventType 更新 GNSS / PDR / Pressure（海拔+楼层检测）/ WiFi
+     * @param immediate 是否是自动播放时按节奏触发；如果是 "手动一次性处理" 则 immediate=false
      */
     private void processEvent(Event e, boolean immediate) {
         switch (e.eventType) {
@@ -586,7 +724,73 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                     }
                 }
                 break;
+            case 3: // WIFI
+                if (e.wifi != null) {
+                    Traj.WiFi_Sample wifiSample = e.wifi;
+                    long timestamp = wifiSample.getRelativeTimestamp();
+
+                    // 从缓存中获取WiFi样本的位置
+                    LatLng wifiPosition = wifiPositionCache.get(timestamp);
+
+                    if (wifiPosition != null) {
+                        // 更新或创建 WiFi Marker
+                        if (wifiMarker != null) {
+                            wifiMarker.setPosition(wifiPosition);
+                            wifiMarker.setSnippet("Networks: " + wifiSample.getMacScansCount());
+                        } else {
+                            wifiMarker = mMap.addMarker(new MarkerOptions()
+                                    .position(wifiPosition)
+                                    .title("WiFi Position")
+                                    .snippet("Networks: " + wifiSample.getMacScansCount())
+                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                        }
+
+
+
+                        // 动态更新 WiFi 轨迹
+                        if (wifiPolyline == null) {
+                            // 第一次遇到 WiFi 数据，新建轨迹
+                            PolylineOptions options = new PolylineOptions()
+                                    .color(Color.GREEN)
+                                    .width(10)
+                                    .geodesic(true);
+                            options.add(wifiPosition);
+                            wifiPolyline = mMap.addPolyline(options);
+                        } else {
+                            // 轨迹已存在，追加当前点
+                            List<LatLng> points = wifiPolyline.getPoints();
+                            points.add(wifiPosition);
+                            wifiPolyline.setPoints(points);
+                        }
+
+                        // 若为立即触发，移动摄像头
+                        if (immediate) {
+                            mMap.animateCamera(CameraUpdateFactory.newLatLng(wifiPosition));
+                        }
+                    }
+                }
+                break;
         }
+    }
+
+    // 查找与给定时间戳最接近的GNSS样本
+    private Traj.GNSS_Sample findClosestGnssSample(long timestamp) {
+        if (gnssPositions == null || gnssPositions.isEmpty()) {
+            return null;
+        }
+        
+        Traj.GNSS_Sample closest = null;
+        long minTimeDiff = Long.MAX_VALUE;
+        
+        for (Traj.GNSS_Sample sample : gnssPositions) {
+            long timeDiff = Math.abs(sample.getRelativeTimestamp() - timestamp);
+            if (timeDiff < minTimeDiff) {
+                minTimeDiff = timeDiff;
+                closest = sample;
+            }
+        }
+        
+        return closest;
     }
 
     @Override
