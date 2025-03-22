@@ -309,7 +309,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                                 Toast.makeText(getContext(), "WiFi positioning complete", Toast.LENGTH_SHORT).show();
 
                                 if (mMap != null) {
-                                    drawFullWifiTrack();
+                                    drawFullWifiTrack();//draw the wifi track on the map
 
                                 }
                             });
@@ -570,7 +570,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             }
         }
 
-        
+
 
 
 
