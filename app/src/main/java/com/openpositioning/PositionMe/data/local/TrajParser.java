@@ -56,12 +56,13 @@ public class TrajParser {
     private static final String TAG = "TrajParser";
 
     /**
-     * Represents a single replay point containing estimated PDR position, GNSS location,
+     * Represents a single replay point containing estimated PDR position, GNSS location, WiFi location
      * orientation, speed, and timestamp.
      */
     public static class ReplayPoint {
         public LatLng pdrLocation;  // PDR-derived location estimate
         public LatLng gnssLocation; // GNSS location (may be null if unavailable)
+        public LatLng wifiLocation; // WiFi location (may be null if unavailable)
         public float orientation;   // Orientation in degrees
         public float speed;         // Speed in meters per second
         public long timestamp;      // Relative timestamp
@@ -75,9 +76,10 @@ public class TrajParser {
          * @param speed        The speed in meters per second.
          * @param timestamp    The timestamp associated with this point.
          */
-        public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, float orientation, float speed, long timestamp) {
+        public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, LatLng wifiLocation,float orientation, float speed, long timestamp) {
             this.pdrLocation = pdrLocation;
             this.gnssLocation = gnssLocation;
+            this.wifiLocation = wifiLocation;//更改构造函数，添加wifiLocation参数
             this.orientation = orientation;
             this.speed = speed;
             this.timestamp = timestamp;
@@ -102,6 +104,11 @@ public class TrajParser {
     private static class GnssRecord {
         public long relativeTimestamp;
         public double latitude, longitude; // GNSS coordinates
+    }
+    //wifi数据记录
+    private static class WifiRecord {
+        public long relativeTimestamp;
+        public double latitude, longitude;
     }
 
     /**
@@ -150,9 +157,9 @@ public class TrajParser {
             List<ImuRecord> imuList = parseImuData(root.getAsJsonArray("imuData"));
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
-
+            List<WifiRecord> wifiList = parseWifiData(root.getAsJsonArray("wifiData"));
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: "
-                    + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
+                    + pdrList.size() + " records, GNSS: " + gnssList.size() +  " records, WiFi: "+ wifiList.size()+" records");
 
             for (int i = 0; i < pdrList.size(); i++) {
                 PdrRecord pdr = pdrList.get(i);
@@ -184,8 +191,11 @@ public class TrajParser {
                 GnssRecord closestGnss = findClosestGnssRecord(gnssList, pdr.relativeTimestamp);
                 LatLng gnssLocation = closestGnss != null ?
                         new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
+                WifiRecord closestWifi = findClosestWifiRecord(wifiList, pdr.relativeTimestamp);
+                LatLng wifiLocation = closestWifi != null ?
+                        new LatLng(closestWifi.latitude, closestWifi.longitude) : null;
 
-                result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
+                result.add(new ReplayPoint(pdrLocation, gnssLocation, wifiLocation,orientationDeg,
                         0f, pdr.relativeTimestamp));
             }
 
@@ -229,7 +239,19 @@ private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
         gnssList.add(record);
     }
     return gnssList;
-}/** Finds the closest IMU record to the given timestamp. */
+
+}
+private static List<WifiRecord> parseWifiData(JsonArray wifiArray) {
+    List<WifiRecord> wifiList = new ArrayList<>();
+    if (wifiArray == null) return wifiList;
+    Gson gson = new Gson();
+    for (int i = 0; i < wifiArray.size(); i++) {
+            WifiRecord record = gson.fromJson(wifiArray.get(i), WifiRecord.class);
+            wifiList.add(record);
+    }
+    return wifiList;
+}
+/** Finds the closest IMU record to the given timestamp. */
 private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {
     return imuList.stream().min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp)))
             .orElse(null);
@@ -239,7 +261,12 @@ private static GnssRecord findClosestGnssRecord(List<GnssRecord> gnssList, long 
     return gnssList.stream().min(Comparator.comparingLong(gnss -> Math.abs(gnss.relativeTimestamp - targetTimestamp)))
             .orElse(null);
 
-}/** Computes the orientation from a rotation vector. */
+}/** Finds the closest WiFi record to the given timestamp.  */
+private static WifiRecord findClosestWifiRecord(List<WifiRecord> wifiList, long targetTimestamp) {
+    return wifiList.stream().min(Comparator.comparingLong(wifi -> Math.abs(wifi.relativeTimestamp - targetTimestamp)))
+            .orElse(null);
+}
+    /** Computes the orientation from a rotation vector. */
 private static float computeOrientationFromRotationVector(float rx, float ry, float rz, float rw, Context context) {
     float[] rotationVector = new float[]{rx, ry, rz, rw};
     float[] rotationMatrix = new float[9];

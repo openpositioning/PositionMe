@@ -357,12 +357,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 Math.pow(filteredAcc[2], 2)
                 );
                 this.accelMagnitude.add(accelMagFiltered);
-
-//                // Debug logging
-//                Log.v("SensorFusion",
-//                        "Added new linear accel magnitude: " + accelMagFiltered
-//                                + "; accelMagnitude size = " + accelMagnitude.size());
-
+                // Debug logging
+                //Log.v("SensorFusion", "Added new linear accel magnitude: " + accelMagFiltered + "; accelMagnitude size = " + accelMagnitude.size());
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
 
