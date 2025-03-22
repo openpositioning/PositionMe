@@ -20,5 +20,6 @@ public enum SensorTypes {
     PRESSURE,
     PROXIMITY,
     GNSSLATLONG,
-    PDR;
+    PDR,
+    WIFI;
 }
