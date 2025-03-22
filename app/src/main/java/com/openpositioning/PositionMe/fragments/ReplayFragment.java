@@ -309,6 +309,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                                 Toast.makeText(getContext(), "WiFi positioning complete", Toast.LENGTH_SHORT).show();
 
                                 if (mMap != null) {
+                                    drawFullWifiTrack();
 
                                 }
                             });
@@ -329,6 +330,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
 
                                 if (mMap != null) {
 
+
                                 }
                             });
                         }
@@ -346,6 +348,59 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
      * 构建WiFi轨迹点列表
      * 按时间戳排序并应用平滑处理
      */
+    private void drawFullWifiTrack() {
+        if (mMap == null) return;
+        if (!wifiPositionRequestsComplete) return; // 确保 WiFi 坐标已就绪
+
+        // 如果之前有 wifiPolyline，先移除
+        if (wifiPolyline != null) {
+            wifiPolyline.remove();
+            wifiPolyline = null;
+        }
+
+        // 新建绿色折线
+        PolylineOptions wifiOptions = new PolylineOptions()
+                .width(10)
+                .color(Color.GREEN)
+                .geodesic(true);
+
+        // 按时间戳顺序，依次把 WiFi 坐标点加进来
+        // （如果顺序不敏感也可直接遍历 wifiSamples，但最好先按 relativeTimestamp 排序）
+        List<Traj.WiFi_Sample> sortedWifiSamples = new ArrayList<>(wifiSamples);
+        Collections.sort(sortedWifiSamples, new Comparator<Traj.WiFi_Sample>() {
+            @Override
+            public int compare(Traj.WiFi_Sample o1, Traj.WiFi_Sample o2) {
+                return Long.compare(o1.getRelativeTimestamp(), o2.getRelativeTimestamp());
+            }
+        });
+
+        for (Traj.WiFi_Sample sample : sortedWifiSamples) {
+            long ts = sample.getRelativeTimestamp();
+            LatLng wifiLatLng = wifiPositionCache.get(ts);
+            if (wifiLatLng != null) {
+                wifiOptions.add(wifiLatLng);
+            }
+        }
+
+        // 最后 addPolyline
+        wifiPolyline = mMap.addPolyline(wifiOptions);
+
+        // 还可以给 WiFi 在第一个位置放个初始 Marker，跟 GNSS/PDR 做法一致
+        if (wifiMarker != null) {
+            wifiMarker.remove();
+            wifiMarker = null;
+        }
+        if (!sortedWifiSamples.isEmpty()) {
+            LatLng firstPos = wifiPositionCache.get(sortedWifiSamples.get(0).getRelativeTimestamp());
+            if (firstPos != null) {
+                wifiMarker = mMap.addMarker(new MarkerOptions()
+                        .position(firstPos)
+                        .title("WiFi Position")
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+            }
+        }
+    }
+
 
 
     /**
@@ -514,6 +569,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
             }
         }
+
+        
 
 
 
@@ -728,42 +785,21 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 if (e.wifi != null) {
                     Traj.WiFi_Sample wifiSample = e.wifi;
                     long timestamp = wifiSample.getRelativeTimestamp();
-
-                    // 从缓存中获取WiFi样本的位置
                     LatLng wifiPosition = wifiPositionCache.get(timestamp);
-
                     if (wifiPosition != null) {
-                        // 更新或创建 WiFi Marker
-                        if (wifiMarker != null) {
-                            wifiMarker.setPosition(wifiPosition);
-                            wifiMarker.setSnippet("Networks: " + wifiSample.getMacScansCount());
-                        } else {
+                        // 动态移动 Marker
+                        if (wifiMarker == null) {
                             wifiMarker = mMap.addMarker(new MarkerOptions()
                                     .position(wifiPosition)
                                     .title("WiFi Position")
-                                    .snippet("Networks: " + wifiSample.getMacScansCount())
                                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
-                        }
-
-
-
-                        // 动态更新 WiFi 轨迹
-                        if (wifiPolyline == null) {
-                            // 第一次遇到 WiFi 数据，新建轨迹
-                            PolylineOptions options = new PolylineOptions()
-                                    .color(Color.GREEN)
-                                    .width(10)
-                                    .geodesic(true);
-                            options.add(wifiPosition);
-                            wifiPolyline = mMap.addPolyline(options);
                         } else {
-                            // 轨迹已存在，追加当前点
-                            List<LatLng> points = wifiPolyline.getPoints();
-                            points.add(wifiPosition);
-                            wifiPolyline.setPoints(points);
+                            wifiMarker.setPosition(wifiPosition);
                         }
 
-                        // 若为立即触发，移动摄像头
+                        // 也可以更新 Marker 的 snippet
+                        wifiMarker.setSnippet("Networks: " + wifiSample.getMacScansCount());
+                        // 如果想回放时摄像头跟随 WiFi，可以加上
                         if (immediate) {
                             mMap.animateCamera(CameraUpdateFactory.newLatLng(wifiPosition));
                         }
