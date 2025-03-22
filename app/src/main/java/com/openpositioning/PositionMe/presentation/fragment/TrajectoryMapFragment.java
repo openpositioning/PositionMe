@@ -57,12 +57,15 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
+    private Marker wifiMarker;
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
+    private boolean isWiFiLocationOn = false;
 
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
+    private LatLng lastwifiLocation = null;
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
@@ -75,6 +78,7 @@ public class TrajectoryMapFragment extends Fragment {
     private Spinner switchMapSpinner;
 
     private SwitchMaterial gnssSwitch;
+    private SwitchMaterial WiFiLoactionSwitch;
     private SwitchMaterial autoFloorSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
@@ -103,6 +107,7 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
+        WiFiLoactionSwitch = view.findViewById(R.id.wifiSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
@@ -148,6 +153,15 @@ public class TrajectoryMapFragment extends Fragment {
             if (!isChecked && gnssMarker != null) {
                 gnssMarker.remove();
                 gnssMarker = null;
+            }
+        });
+
+        // wifi location display
+        WiFiLoactionSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isWiFiLocationOn = isChecked;
+            if (!isChecked && wifiMarker != null) {
+                wifiMarker.remove();
+                wifiMarker = null;
             }
         });
 
@@ -388,6 +402,34 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    /**
+     * Set/update WiFi position based on GNSS
+     */
+    public void updateWifiLocation(@NonNull LatLng wifiLocation) {
+        if (gMap == null) return;
+        if (!isWiFiLocationOn) return;
+
+        // Create a marker for WiFi location
+        if (wifiMarker == null){
+            wifiMarker = gMap.addMarker(new MarkerOptions()
+            .position(wifiLocation)
+            .title("WiFi Position")
+            .icon(BitmapDescriptorFactory
+                    .defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+            lastwifiLocation = wifiLocation;
+        } else {
+            // Move existing WiFi marker
+            wifiMarker.setPosition(wifiLocation);
+
+            // Add a segment to the blue GNSS line, if this is a new location
+            // if (lastwifiLocation != null && !lastwifiLocation.equals(wifiLocation)) {
+            //     List<LatLng> wifiPoints = new ArrayList<>(gnssPolyline.getPoints());
+            //     gnssPoints.add(gnssLocation);
+            //     gnssPolyline.setPoints(gnssPoints);
+            // }
+            lastwifiLocation = wifiLocation;
+        }
+    }
 
     /**
      * Remove GNSS marker if user toggles it off
@@ -404,6 +446,10 @@ public class TrajectoryMapFragment extends Fragment {
      */
     public boolean isGnssEnabled() {
         return isGnssOn;
+    }
+
+    public boolean isWiFiLocationOn(){
+        return isWiFiLocationOn;
     }
 
     private void setFloorControlsVisibility(int visibility) {
