@@ -52,10 +52,37 @@ import java.util.stream.Stream;
  * <p>
  * The class provides a number of setters and getters so that other classes can have access to the
  * sensor data and influence the behaviour of data collection.
- *
+ * 
+ * <p>
+ * functions in this class:
+ * <ul>
+ *     <li>{@link #getInstance()} - Returns the singleton instance of SensorFusion.</li>
+ *     <li>{@link #setContext(Context)} - Initializes the SensorFusion instance with the application context.</li>
+ *     <li>{@link #resumeListening()} - Registers all device listeners and starts data collection.</li>
+ *     <li>{@link #stopListening()} - Unregisters all device listeners and pauses data collection.</li>
+ *     <li>{@link #startRecording()} - Enables saving sensor values to the trajectory object.</li>
+ *     <li>{@link #stopRecording()} - Disables saving sensor values to the trajectory object.</li>
+ *     <li>{@link #sendTrajectoryToCloud()} - Sends the trajectory object to the server.</li>
+ *     <li>{@link #getGNSSLatitude(boolean)} - Returns the GNSS latitude and longitude data.</li>
+ *     <li>{@link #setStartGNSSLatitude(float[])} - Sets the initial GNSS latitude and longitude data.</li>
+ *     <li>{@link #redrawPath(float)} - Redraws the path in the corrections fragment.</li>
+ *     <li>{@link #passAverageStepLength()} - Returns the average step length calculated by PDR.</li>
+ *     <li>{@link #passOrientation()} - Returns the current device orientation.</li>
+ *     <li>{@link #getSensorValueMap()} - Returns a map of the most recent sensor readings.</li>
+ *     <li>{@link #getWifiList()} - Returns the most recent list of WiFi names and levels.</li>
+ *     <li>{@link #getSensorInfos()} - Returns information about all the sensors registered in SensorFusion.</li>
+ *     <li>{@link #registerForServerUpdate(Observer)} - Registers an observer to receive updates from the server.</li>
+ *     <li>{@link #getElevation()} - Returns the estimated elevation value in meters.</li>
+ *     <li>{@link #getElevator()} - Returns whether the user is currently in an elevator.</li>
+ *     <li>{@link #getHoldMode()} - Estimates the phone's position based on proximity and light sensors.</li>
+ *     <li>{@link #getLatLngWifiPositioning()} - Returns the user's position obtained using WiFi positioning.</li>
+ *     <li>{@link #getWifiFloor()} - Returns the current floor the user is on using WiFi positioning.</li>
+ * </ul>
+ * 
  * @author Michal Dvorak
  * @author Mate Stodulka
  * @author Virginia Cangelosi
+ * @author JackShenYt
  */
 public class SensorFusion implements SensorEventListener, Observer {
 
