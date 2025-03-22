@@ -1,19 +1,23 @@
 package com.openpositioning.PositionMe.sensors;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
@@ -150,6 +154,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Wifi values
     private List<Wifi> wifiList;
     private long lastOpUpdateTime = 0; // 存储 WiFi / GNSS 最后一次更新的时间戳
+    private long lastGnssUpdateTime = 0; // 记录上次 GNSS 更新时间
 
 
     // Over time accelerometer magnitude values since last step
@@ -242,6 +247,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(this);
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
+        // 尝试获取最新 GNSS 坐标并更新 ECEF 参考坐标
+        float[] latestLatLon = getGNSSLatitude(true);
+        if (latestLatLon[0] != 0.0 || latestLatLon[1] != 0.0) {
+            ecefRefCoords = CoordinateTransform.geodeticToEcef(latestLatLon[0], latestLatLon[1], 0.0);
+            Log.d("SensorFusion", "Updated ECEF reference at startup: " +
+                    "X=" + ecefRefCoords[0] + ", Y=" + ecefRefCoords[1] + ", Z=" + ecefRefCoords[2]);
+        }
         // Create object handling HTTPS communication
         this.serverCommunications = new ServerCommunications(context);
         // Save absolute and relative start time
@@ -256,6 +268,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.pathView = new PathView(context, null);
         this.wiFiPositioning = new WiFiPositioning(context);
+        if (startRef == null) {
+            Log.w("SensorFusion", "startRef is uninitialized, setting default ECEF reference.");
+            startRef = new double[]{0.0, 0.0, 0.0}; // 默认 ECEF 参考坐标
+        }
 
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
@@ -398,68 +414,102 @@ public class SensorFusion implements SensorEventListener, Observer {
                     double theta = wrapToPi(this.orientation[0]); // 获取当前方向角
                     if (extendedKalmanFilter != null) {
                         extendedKalmanFilter.predict(stepLen, theta);
-                        
+
                     } else {
                         Log.e("SensorFusion", "EKF is not initialized!");
                     }
 
 
-                    if (saveRecording) {
-                        // 如果有 WiFi 定位信号，则利用 WiFi EKF 修正 PDR 数据
-                        if (wiFiPositioning.getWifiLocation() != null) {
-                            LatLng wifiPos = wiFiPositioning.getWifiLocation();
-                            JSONObject wifiResponse = new JSONObject();
-                            try {
-                                wifiResponse.put("lat", wifiPos.latitude);
-                                wifiResponse.put("lon", wifiPos.longitude);
-                                wifiResponse.put("floor", 0);
-                            } catch (JSONException e) {
-                                e.printStackTrace();
-                            }
-                            updateFusionWifi(wifiResponse);
-                            // 从融合算法中获取修正后的定位结果
-                            LatLng fusedPos = extendedKalmanFilter.getEstimatedPosition();
-                            pathView.drawTrajectory(new float[]{(float) fusedPos.latitude, (float) fusedPos.longitude});
-                            trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
-                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                                    .setX((float) fusedPos.latitude)
-                                    .setY((float) fusedPos.longitude));
-                        } else {
-                            // 如果无 WiFi 信号，则直接使用原始 PDR 数据
-                            pathView.drawTrajectory(newCords);
-                            trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
-                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                                    .setX(newCords[0])
-                                    .setY(newCords[1]));
-                        }
-                        stepCounter++;
+                if (saveRecording) {
+                    // 获取最新 GNSS 位置
+                    Location gnssLocation = gnssProcessor.getLastKnownLocation();
+                    if (gnssLocation != null) {
+                        Log.d("SensorFusion", "GNSS Location available for update: Lat=" + gnssLocation.getLatitude() +
+                                ", Lon=" + gnssLocation.getLongitude() + ", Accuracy=" + gnssLocation.getAccuracy());
+                    } else {
+                        Log.d("SensorFusion", "GNSS Location is null, skipping GNSS correction.");
                     }
-                    break;
+                    JSONObject wifiResponse = null;
+                    if (wiFiPositioning.getWifiLocation() != null) {
+                        LatLng wifiPos = wiFiPositioning.getWifiLocation();
+                        wifiResponse = new JSONObject();
+                        try {
+                            wifiResponse.put("lat", wifiPos.latitude);
+                            wifiResponse.put("lon", wifiPos.longitude);
+                            wifiResponse.put("floor", 0);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    // 传递 WiFi 和 GNSS 数据进行修正
+                    updateFusion(wifiResponse, gnssLocation);
+                    // 调用 EKF 的 updateGNSS 以确保 GNSS 数据被用于修正
+                    if (gnssLocation != null && extendedKalmanFilter != null) {
+                        double lat = gnssLocation.getLatitude();
+                        double lon = gnssLocation.getLongitude();
+                        double alt = gnssLocation.getAltitude();
+                        double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, alt, startRef[0], startRef[1], startRef[2]);
+                        extendedKalmanFilter.updateGNSS(enuCoords[0], enuCoords[1], enuCoords[2], 1.0);
+                    }
+                    // 从融合算法中获取修正后的定位结果
+                    if (extendedKalmanFilter != null) {
+                        LatLng fusedPos = extendedKalmanFilter.getEstimatedPosition(startRef[0], startRef[1], startRef[2]);
+                        pathView.drawTrajectory(new float[]{(float) fusedPos.latitude, (float) fusedPos.longitude});
+                        trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+                                .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                                .setX((float) fusedPos.latitude)
+                                .setY((float) fusedPos.longitude));
+                    } else {
+                        Log.e("SensorFusion", "EKF is null when trying to get estimated position!");
+                    }
+                    stepCounter++;
+                }
+                break;
                 }
 
         }
     }
 
-    public void updateFusionWifi(JSONObject wifiResponse) {
+    public void updateFusion(JSONObject wifiResponse, Location gnssLocation) {
         try {
-            if (wifiResponse == null) {
-                return;
-            }
-            double lat = wifiResponse.getDouble("lat");
-            double lon = wifiResponse.getDouble("lon");
-            double floor = wifiResponse.getDouble("floor");
-            // 将地理坐标转换为 ENU 坐标，注意 getElevation()、startRef、startRef[2] 等必须正确初始化
-            double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, getElevation(), startRef[0], startRef[1], startRef[2]);
-            if (extendedKalmanFilter != null) {
+        long currentTime = SystemClock.uptimeMillis();
+        double gnssAccuracy = gnssLocation != null ? gnssLocation.getAccuracy() : Double.MAX_VALUE;
+        boolean useWiFi = wifiResponse != null && wifiResponse.has("lat") && wifiResponse.has("lon");
+        boolean useGNSS = !useWiFi && gnssLocation != null && gnssAccuracy < 20.0 && (currentTime - lastGnssUpdateTime > 5000);
+        if(useGNSS){
+            lastGnssUpdateTime = currentTime;
+        }
+        Log.d("SensorFusion", "updateFusion: gnssAccuracy=" + gnssAccuracy + ", useWiFi=" + useWiFi + ", useGNSS=" + useGNSS);
 
-                double rssi = wifiResponse.has("rssi") ? wifiResponse.getDouble("rssi") : -70;  // 获取 WiFi 信号强度，默认为 -70 dBm
-                double timeSinceLastUpdate = SystemClock.uptimeMillis() - lastOpUpdateTime;
-                lastOpUpdateTime = SystemClock.uptimeMillis();  // 记录 WiFi 最后更新的时间
-                double penaltyFactor = calculatePenaltyFactor(rssi, timeSinceLastUpdate);
+            if (useWiFi) {
+                Log.d("SensorFusion", "WiFi response raw: " + wifiResponse.toString());
+                double lat = wifiResponse.getDouble("lat");
+                double lon = wifiResponse.getDouble("lon");
+                double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, getElevation(), startRef[0], startRef[1], startRef[2]);
 
-                extendedKalmanFilter.update(enuCoords[0], enuCoords[1], penaltyFactor);
-                
+                Log.d("SensorFusion", "Using WiFi for EKF update: East=" + enuCoords[0] + ", North=" + enuCoords[1]);
 
+                if (extendedKalmanFilter != null) {
+                    double timeSinceLastUpdate = SystemClock.uptimeMillis() - lastOpUpdateTime;
+                    lastOpUpdateTime = SystemClock.uptimeMillis();
+                    double penaltyFactor = calculatePenaltyFactor(0, timeSinceLastUpdate);
+
+                    extendedKalmanFilter.update(enuCoords[0], enuCoords[1], penaltyFactor);
+                    Log.d("SensorFusion", "EKF updated with WiFi: penaltyFactor=" + penaltyFactor);
+                }
+            } else if (useGNSS && gnssLocation != null) {
+                double lat = gnssLocation.getLatitude();
+                double lon = gnssLocation.getLongitude();
+                double alt = gnssLocation.getAltitude();
+
+                double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, alt, startRef[0], startRef[1], startRef[2]);
+                Log.d("SensorFusion", "Using GNSS for EKF update: East=" + enuCoords[0] + ", North=" + enuCoords[1] + ", Alt=" + enuCoords[2]);
+                Log.d("SensorFusion", "Raw GNSS: Lat=" + lat + ", Lon=" + lon + ", Alt=" + alt + ", Accuracy=" + gnssLocation.getAccuracy());
+
+                if (extendedKalmanFilter != null) {
+                    extendedKalmanFilter.updateGNSS(enuCoords[0], enuCoords[1], enuCoords[2], 1.0);
+                    Log.d("SensorFusion", "EKF updated with GNSS.");
+                }
             }
         } catch (JSONException e) {
             e.printStackTrace();
@@ -957,17 +1007,77 @@ public class SensorFusion implements SensorEventListener, Observer {
         } else {
             this.filter_coefficient = FILTER_COEFFICIENT;
         }
-        // 获取初始经纬度
+
+        // 先检查 orientation 是否为空
+        if (orientation == null || orientation.length < 1) {
+            Log.e("SensorFusion", "Orientation array is null or uninitialized!");
+            return;
+        }
+
+        // 获取 GNSS 初始经纬度
         float[] initLatLon = getGNSSLatitude(true);
 
-        // 进行地理坐标转换（如果 EKF 需要的是 ENU 坐标，而不是直接的经纬度）
+        if (initLatLon[0] == 0.0 && initLatLon[1] == 0.0) {
+            Log.e("SensorFusion", "GNSS initial coordinates are invalid! Waiting for valid GNSS fix...");
+
+            // 增加监听，确保 GNSS 数据可用
+            LocationManager locationManager = (LocationManager) appContext.getSystemService(Context.LOCATION_SERVICE);
+
+            if (ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                if (lastKnownLocation != null) {
+                    initLatLon[0] = (float) lastKnownLocation.getLatitude();
+                    initLatLon[1] = (float) lastKnownLocation.getLongitude();
+                }
+            } else {
+                Log.e("SensorFusion", "Location permissions not granted. Cannot access last known location.");
+            }
+
+            // 仅在坐标仍然无效时，执行主动轮询获取
+            if (initLatLon[0] == 0.0 && initLatLon[1] == 0.0) {
+                for (int i = 0; i < 10; i++) {
+                    SystemClock.sleep(1000);
+                    initLatLon = getGNSSLatitude(true);
+                    if (initLatLon[0] != 0.0 || initLatLon[1] != 0.0) break;
+                }
+            }
+        }
+
+        if (initLatLon[0] == 0.0 && initLatLon[1] == 0.0) {
+            // After multiple attempts, still invalid: delay error logging until now.
+            Log.e("SensorFusion", "GNSS fix still unavailable after multiple attempts, using default reference!");
+            ecefRefCoords = new double[]{0.0, 0.0, 0.0};
+        } else {
+            Log.d("SensorFusion", "GNSS initial LatLon: " + initLatLon[0] + ", " + initLatLon[1]);
+            // 转换 GNSS 经纬度到 ECEF 坐标
+            ecefRefCoords = CoordinateTransform.geodeticToEcef(initLatLon[0], initLatLon[1], 0.0);
+            if (ecefRefCoords == null || ecefRefCoords.length < 3) {
+                Log.e("SensorFusion", "Failed to compute ECEF reference coordinates! Using default.");
+                ecefRefCoords = new double[]{0.0, 0.0, 0.0};
+            } else {
+                Log.d("SensorFusion", "Computed ECEF reference: X=" + ecefRefCoords[0] +
+                        ", Y=" + ecefRefCoords[1] + ", Z=" + ecefRefCoords[2]);
+            }
+        }
+        // Ensure startRef is set only once based on the final valid (or default) ECEF coordinates.
+        startRef = ecefRefCoords.clone();
+        Log.d("SensorFusion", "startRef initialized with ECEF reference: " +
+                "X=" + startRef[0] + ", Y=" + startRef[1] + ", Z=" + startRef[2]);
+
+        // 进行地理坐标转换
         double[] enuCoords = CoordinateTransform.geodeticToEnu(
-                initLatLon[0], initLatLon[1], 0.0,  // 这里假设高度=0
+                initLatLon[0], initLatLon[1], 0.0,
                 startRef[0], startRef[1], startRef[2]
         );
 
-        // 传给 EKF
-        extendedKalmanFilter = new EKF(enuCoords[0], enuCoords[1], 0.0);
+        // 获取当前设备方向
+        double initialTheta = wrapToPi(this.orientation[0]);
+
+        // 初始化 EKF
+        extendedKalmanFilter = new EKF(enuCoords[0], enuCoords[1], 0.0, initialTheta);
+        Log.d("SensorFusion", "EKF initialized successfully: " +
+                "East=" + enuCoords[0] + ", North=" + enuCoords[1] + ", Theta=" + initialTheta);
     }
 
     /**

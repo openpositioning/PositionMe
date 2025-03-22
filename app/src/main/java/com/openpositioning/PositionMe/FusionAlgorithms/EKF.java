@@ -216,13 +216,14 @@ public class EKF {
     }
 
     /**
-     * 返回 (x,y) 作为 LatLng (仅演示)
-     * 如果要包含 z, 需另外做 enuToGeodetic(x,y,z,refLat,refLon,refAlt)
+     * 返回 (x,y) 转换后的地理坐标 LatLng
+     * 实际调用者需传入 ENU->Geodetic 所需参考坐标
      */
-    public LatLng getEstimatedPosition() {
+    public LatLng getEstimatedPosition(double refLat, double refLon, double refAlt) {
         double x = state.get(0,0);
         double y = state.get(1,0);
-        return new LatLng(x, y);
+        double z = state.get(2,0);
+        return com.openpositioning.PositionMe.utils.CoordinateTransform.enuToGeodetic(x, y, z, refLat, refLon, refAlt);
     }
 
     /**
@@ -269,5 +270,54 @@ public class EKF {
         state.set(0, 0, smoothedCoords[0]);
         state.set(1, 0, smoothedCoords[1]);
         // 可将平滑结果用于后续处理
+    }
+
+    /**
+     * GNSS 更新 (更新 x, y, z)
+     * GNSS 误差通常比 WiFi 小，因此测量噪声较低
+     * => 观测模型 z_meas = [ x, y, z ]
+     * => H_gnss = 3x4
+     */
+    public void updateGNSS(double measX, double measY, double measZ, double penaltyFactor) {
+        // 3x4 观测矩阵
+        SimpleMatrix H_gnss = new SimpleMatrix(3, 4, true, new double[]{
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0
+        });
+
+        // 预测观测值
+        double x = state.get(0, 0);
+        double y = state.get(1, 0);
+        double z = state.get(2, 0);
+        SimpleMatrix zPred = new SimpleMatrix(3, 1);
+        zPred.set(0, 0, x);
+        zPred.set(1, 0, y);
+        zPred.set(2, 0, z);
+
+        // 实际测量值
+        SimpleMatrix zMeas = new SimpleMatrix(3, 1);
+        zMeas.set(0, 0, measX);
+        zMeas.set(1, 0, measY);
+        zMeas.set(2, 0, measZ);
+
+        // 计算创新
+        SimpleMatrix yVec = zMeas.minus(zPred);
+
+        // S = H P H^T + R(3x3)
+        SimpleMatrix S = H_gnss.mult(covariance).mult(H_gnss.transpose()).plus(SimpleMatrix.identity(3).scale(0.3 * penaltyFactor));
+
+        // K = P H^T S^-1
+        SimpleMatrix K = covariance.mult(H_gnss.transpose()).mult(S.invert());
+
+        // 更新状态
+        state = state.plus(K.mult(yVec));
+
+        // 更新协方差
+        SimpleMatrix IminusKH = I4.minus(K.mult(H_gnss));
+        covariance = IminusKH.mult(covariance);
+    }
+    public double[] getEstimatedPositionENU() {
+        return new double[]{state.get(0,0), state.get(1,0)};
     }
 }

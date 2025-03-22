@@ -4,8 +4,10 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -114,6 +116,17 @@ public class GNSSDataProcessor {
         }
     }
 
+    public Location getLastKnownLocation() {
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
+            LocationManager locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+            return locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        } else {
+            Log.e("GNSSDataProcessor", "Location permissions not granted. Cannot access last known location.");
+            return null;
+        }
+    }
     /**
      * Stops updates to the location listener via the location manager.
      */
