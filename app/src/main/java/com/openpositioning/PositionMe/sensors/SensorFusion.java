@@ -539,10 +539,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         // WiFi 误差自适应
         if (rssi > -50) {
             baseFactor = 0.5;  // 强 WiFi 信号时减少噪声影响
-        } else if (rssi > -70) {
+        } else if (rssi > -75) {
             baseFactor = 1.0;  // 普通 WiFi 信号，不做调整
         } else {
-            baseFactor = 2.0;  // 弱 WiFi 信号时增加噪声影响
+            baseFactor = 1.5;  // 弱 WiFi 信号时增加噪声影响
         }
 
         // 时间误差动态调整（0.1/秒，最多调整到 4.0）
