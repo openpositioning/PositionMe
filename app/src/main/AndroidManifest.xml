@@ -81,7 +81,10 @@
         android:name=".presentation.activity.RecordingActivity"
         android:exported="false" />
 
-    <!-- Google Maps API key metadata -->
+    <activity android:name=".presentation.activity.CollectionActivity" />
+
+
+        <!-- Google Maps API key metadata -->
     <meta-data
         android:name="com.google.android.geo.API_KEY"
         android:value="@string/google_maps_key"/>

@@ -438,7 +438,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     class myLocationListener implements LocationListener{
         @Override
-        public void onLocationChanged(@NonNull Location location) {
+        public void onLocationChanged(Location location) {
             //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
             latitude = (float) location.getLatitude();
             longitude = (float) location.getLongitude();
@@ -853,8 +853,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see Traj object for storing data.
      */
     public void startRecording() {
-        // If wakeLock is null (e.g. not initialized or was cleared), reinitialize it.
-        if (wakeLock == null) {
+        // If w`        ZakeLock is null (e.g. not initialized or was cleared), reinitialize it.
+                 if (wakeLock == null) {
             PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
         }
@@ -940,6 +940,114 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setVersion(sensor.sensorInfo.getVersion())
                 .setType(sensor.sensorInfo.getType());
     }
+
+    /**
+     * Returns a JSONObject containing all sensor data (IMU, GNSS, WiFi, PDR, etc.).
+     * This is a helper method to unify data retrieval for logs or training.
+     *
+     * @return JSONObject with keys for all sensor readings.
+     */
+    public JSONObject getAllSensorData() {
+        JSONObject record = new JSONObject();
+        long now = System.currentTimeMillis();
+
+        try {
+            // 1) Basic timing info
+            record.put("timestamp", now);
+
+            // 2) GNSS
+            float[] gnss = getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+            if (gnss != null) {
+                record.put("gnssLat", gnss[0]);
+                record.put("gnssLon", gnss[1]);
+            }
+
+            // 3) PDR movement
+            float[] pdr = getSensorValueMap().get(SensorTypes.PDR);
+            if (pdr != null) {
+                record.put("pdrX", pdr[0]);
+                record.put("pdrY", pdr[1]);
+            }
+
+            // 4) Accelerometer
+            float[] accel = getSensorValueMap().get(SensorTypes.ACCELEROMETER);
+            if (accel != null) {
+                record.put("accX", accel[0]);
+                record.put("accY", accel[1]);
+                record.put("accZ", accel[2]);
+            }
+
+            // 5) Gyroscope
+            float[] gyro = getSensorValueMap().get(SensorTypes.GYRO);
+            if (gyro != null) {
+                record.put("gyroX", gyro[0]);
+                record.put("gyroY", gyro[1]);
+                record.put("gyroZ", gyro[2]);
+            }
+
+            // 6) Magnetometer
+            float[] mag = getSensorValueMap().get(SensorTypes.MAGNETICFIELD);
+            if (mag != null) {
+                record.put("magX", mag[0]);
+                record.put("magY", mag[1]);
+                record.put("magZ", mag[2]);
+            }
+
+            // 7) Gravity
+            float[] grav = getSensorValueMap().get(SensorTypes.GRAVITY);
+            if (grav != null) {
+                record.put("gravX", grav[0]);
+                record.put("gravY", grav[1]);
+                record.put("gravZ", grav[2]);
+            }
+
+            // 8) Light, Proximity, Pressure
+            float[] lightArr = getSensorValueMap().get(SensorTypes.LIGHT);
+            if (lightArr != null) {
+                record.put("light", lightArr[0]);
+            }
+            float[] prox = getSensorValueMap().get(SensorTypes.PROXIMITY);
+            if (prox != null) {
+                record.put("proximity", prox[0]);
+            }
+            float[] press = getSensorValueMap().get(SensorTypes.PRESSURE);
+            if (press != null) {
+                record.put("pressure", press[0]);
+            }
+
+            // 9) Elevation, Elevator state
+            record.put("elevation", getElevation());
+            record.put("isElevator", getElevator());
+
+            // 10) WiFi data (optional: store the entire list or a summary)
+            List<Wifi> wifiList = getWifiList();
+            if (wifiList != null && !wifiList.isEmpty()) {
+                // example: store the first or all as JSON array
+                // or just store the current WiFi with highest RSSI
+                // for demonstration, let's store them all in an array
+                org.json.JSONArray wifiArray = new org.json.JSONArray();
+                for (Wifi w : wifiList) {
+                    JSONObject wObj = new JSONObject();
+                    wObj.put("bssid", w.getBssid());
+                    wObj.put("rssi", w.getLevel());
+                    wifiArray.put(wObj);
+                }
+                record.put("wifiList", wifiArray);
+            }
+
+            // 11) Orientation
+            record.put("orientationAzim", passOrientation()); // or orientation[0..2]
+
+            // 12) Possibly add hold mode, device info, battery, etc.
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Return partial or empty record
+        }
+
+        return record;
+    }
+
 
     /**
      * Timer task to record data with the desired frequency in the trajectory class.

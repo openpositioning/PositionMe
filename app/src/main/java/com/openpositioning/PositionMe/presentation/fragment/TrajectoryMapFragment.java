@@ -191,6 +191,18 @@ public class TrajectoryMapFragment extends Fragment {
         });
     }
 
+
+    /**
+     * Public getter to retrieve the underlying GoogleMap instance.
+     * Returns null if the map is not yet ready.
+     *
+     * @return the GoogleMap instance
+     */
+    public GoogleMap getGoogleMap() {
+        return gMap;
+    }
+
+
     /**
      * Initialize the map settings with the provided GoogleMap instance.
      * <p>

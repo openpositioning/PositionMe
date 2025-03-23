@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/collectionFragmentRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Fullscreen map container (holds TrajectoryMapFragment) -->
+    <FrameLayout
+        android:id="@+id/mapContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- TOP overlay: spinners + building name -->
+    <LinearLayout
+        android:id="@+id/topOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:background="#AAFFFFFF">
+
+        <!-- Floor level spinner -->
+        <Spinner
+            android:id="@+id/floorSpinner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:entries="@array/floor_levels"
+            android:prompt="@string/floor_level" />
+
+        <!-- Indoor state spinner -->
+        <Spinner
+            android:id="@+id/indoorStateSpinner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:entries="@array/indoor_states"
+            android:prompt="@string/indoor_state" />
+
+        <!-- Building name input -->
+        <EditText
+            android:id="@+id/buildingNameEditText"
+            android:layout_width="284dp"
+            android:layout_height="wrap_content"
+            android:ems="8"
+            android:hint="@string/building_name_hint"
+            android:inputType="text" />
+    </LinearLayout>
+
+    <!-- BOTTOM overlay: buttons -->
+    <LinearLayout
+        android:id="@+id/bottomOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:background="#AAFFFFFF">
+
+        <Button
+            android:id="@+id/cancelButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cancel" />
+
+        <Button
+            android:id="@+id/addCalibrationMarkerButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add Calibration Point" />
+
+        <Button
+            android:id="@+id/finishButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Finish" />
+    </LinearLayout>
+</FrameLayout>

@@ -32,4 +32,20 @@
         <item>cell</item>
         <item>wifi</item>
     </string-array>
+
+    <string-array name="floor_levels">
+        <item>-1 (Outdoors)</item>
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <!-- etc. -->
+    </string-array>
+
+    <string-array name="indoor_states">
+        <item>0 - Unknown</item>
+        <item>1 - Indoor</item>
+        <item>2 - Outdoor</item>
+        <item>3 - Transitional</item>
+    </string-array>
 </resources>
