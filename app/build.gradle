@@ -96,5 +96,7 @@ dependencies {
     // Proj4J
     implementation 'org.locationtech.proj4j:proj4j:1.1.0'
 
+    implementation "org.ejml:ejml-all:$ejml_version"
+
     testImplementation 'junit:junit:4.13.2'
 }

@@ -187,6 +187,14 @@ public class CoordinateTransformer {
     return convertTargetToWGS84(newEasting, newNorthing);
   }
 
+  public static double[] getRelativePosition(ProjCoordinate ref, ProjCoordinate point) {
+    return new double[] {
+            point.x - ref.x,
+            point.y - ref.y,
+            point.z - ref.z
+    };
+  }
+
   /**
    *  Calculate the distance between two proj-coordinate points.
    * @param point1

@@ -12,13 +12,17 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment;
+import com.openpositioning.PositionMe.sensors.filters.FilterAdapter;
+import com.openpositioning.PositionMe.sensors.filters.KalmanFilterAdapter;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
@@ -26,6 +30,7 @@ import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 
+import org.ejml.simple.SimpleMatrix;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.locationtech.proj4j.ProjCoordinate;
@@ -90,6 +95,18 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final String WIFI_FINGERPRINT= "wf";
 
     private static final float OUTLIER_DISTANCE_THRESHOLD = 10;
+    private static final SimpleMatrix INIT_POS_COVARIANCE = new SimpleMatrix(new double[][]{
+            {2.0, 0.0},
+            {0.0, 2.0}
+    });
+    private static final SimpleMatrix PDR_COVARIANCE = new SimpleMatrix(new double[][]{
+            {2.0, 0.0},
+            {0.0, 0.1}
+    });
+    private static final SimpleMatrix WIFI_COVARIANCE = new SimpleMatrix(new double[][]{
+            {1.0, 0.0},
+            {0.0, 1.0}
+    });
     //endregion
 
     //region Instance variables
@@ -160,12 +177,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float latitude;
     private float longitude;
     private float altitude;
-    private float[] startLocation;
+    private LatLng startLocation;
     // Wifi values
     private List<Wifi> wifiList;
 
     private LatLng currentWifiLocation;
     private boolean isWifiLocationOutlier = false;
+    private float[] fusedLocation;
+    private float fusedError;
 
 
     // Over time accelerometer magnitude values since last step
@@ -178,6 +197,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
+    // Actual sensor Fusion
+    private FilterAdapter filter;
 
     //region Initialisation
     /**
@@ -197,8 +218,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         // PDR elevation initial values
         this.elevation = 0;
         this.elevator = false;
-        // PDR position array
-        this.startLocation = new float[2];
         // Empty array initialisation
         this.acceleration = new float[3];
         this.filteredAcc = new float[3];
@@ -209,8 +228,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.rotation = new float[4];
         this.rotation[3] = 1.0f;
         this.R = new float[9];
-        // GNSS initial Long-Lat array
-        this.startLocation = new float[2];
     }
 
     private boolean isOutlier(LatLng currentPoint, LatLng update) {
@@ -279,6 +296,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.pathView = new PathView(context, null);
         this.wiFiPositioning = new WiFiPositioning(context);
+        this.filter = new KalmanFilterAdapter(new double[]{0.0, 0.0}, INIT_POS_COVARIANCE,
+                0.0, PDR_COVARIANCE);
 
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
@@ -508,11 +527,11 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
         }
-      // Only create a positioning request if new wifi list actually contains new data.
-      if (!newWifiList.equals(this.wifiList)) {
-          this.wifiList = newWifiList;
-          createWifiPositionRequestCallback();
-      }
+        // Only create a positioning request if new wifi list actually contains new data.
+        if (!newWifiList.equals(this.wifiList)) {
+            this.wifiList = newWifiList;
+            createWifiPositionRequestCallback();
+        }
     }
 
     /**
@@ -537,6 +556,48 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+    private double computeMSE(SimpleMatrix covariance) {
+        double mse = 0.0;
+        // sum of diagonal elements (trace)
+        for (int i = 0; i < covariance.numRows(); i++) {
+            mse += covariance.get(i, i);
+        }
+        return mse;
+    }
+
+
+    private void updateFusionData(LatLng wifiLocation, float[] pdrData) {
+        double[] pdrData64 = {pdrData[0], pdrData[1]};
+
+        // Convert the WiFi location to XY
+        ProjCoordinate startLocationNorthEast = coordinateTransformer.convertWGS84ToTarget(
+                startLocation.latitude,
+                startLocation.longitude);
+        ProjCoordinate wifiLocationNorthEast = coordinateTransformer.convertWGS84ToTarget(
+                wifiLocation.latitude,
+                wifiLocation.longitude);
+        double[] wifiXYZ  = CoordinateTransformer.getRelativePosition(
+                startLocationNorthEast,
+                wifiLocationNorthEast
+        );
+        double[] wifiXY = {wifiXYZ[0], wifiXYZ[1]};
+
+        // Get the current timestamp and update the filter
+        double timestamp = (System.currentTimeMillis() - absoluteStartTime) / 1e3;
+        if (!filter.update(pdrData64, wifiXY, timestamp, WIFI_COVARIANCE)) {
+            Log.w("SensorFusion", "Filter update failed");
+        }
+        double[] fusedPos = filter.getPos();
+
+        // Convert back to Lat-Long
+        ProjCoordinate fusedCoord = coordinateTransformer.applyDisplacementAndConvert(
+                startLocation.latitude, startLocation.longitude, fusedPos[0], fusedPos[1]);
+        fusedLocation = new float[]{(float) fusedCoord.y, (float) fusedCoord.x};
+
+        SimpleMatrix fusedCov = filter.getCovariance();
+        this.fusedError = (float) Math.sqrt(computeMSE(fusedCov));
+    }
+
     // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
@@ -556,8 +617,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     // Handle the success response
-                    if (wifiLocation != currentWifiLocation)
+                    if (wifiLocation != currentWifiLocation) {
+                        float[] pdrData = getSensorValueMap().get(SensorTypes.PDR);
                         currentWifiLocation = wifiLocation;
+                        if (startLocation != null && pdrData != null) {
+                            updateFusionData(wifiLocation, pdrData);
+                        }
+                    }
                     if(coordinateTransformer != null) {
                         isWifiLocationOutlier = isOutlier(new LatLng(latitude, longitude), wifiLocation);
                     }
@@ -679,7 +745,8 @@ public class SensorFusion implements SensorEventListener, Observer {
             latLong[1] = longitude;
         }
         else{
-            latLong = startLocation;
+            latLong[0] = (float) startLocation.latitude;
+            latLong[1] = (float) startLocation.longitude;
         }
         return latLong;
     }
@@ -689,8 +756,8 @@ public class SensorFusion implements SensorEventListener, Observer {
    * @return float[] of current latitude and longitude (WGS84)
    *         null if there have been no successful readings.
    */
-  public float[] getWifiLocation() {
-      float[] latlng = new float[2];
+  public double[] getWifiLocation() {
+      double[] latlng = new double[2];
       LatLng wifiPosition = this.wiFiPositioning.getWifiLocation();
       if(wifiPosition == null) {
         return null;
@@ -708,7 +775,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param startPosition contains the initial location set by the user
      */
     public void setStartGNSSLatitude(float[] startPosition){
-        startLocation = startPosition;
+        this.startLocation = new LatLng(startPosition[0], startPosition[1]);
         this.coordinateTransformer = new CoordinateTransformer(startPosition[0], startPosition[1]);
     }
 
@@ -770,7 +837,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             sensorValueMap.put(SensorTypes.WIFI_FLOOR, new float[this.getWifiFloor()]);
             sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[isWifiLocationOutlier ? 1 : 0]);
         }
-        sensorValueMap.put(SensorTypes.FUSED, null);
+        sensorValueMap.put(SensorTypes.FUSED, fusedLocation);
         return sensorValueMap;
     }
 
@@ -1129,7 +1196,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     Log.d("SensorFusion", "Added GNSS tag: " + tagSample.toString());
   }
 
-
+  public float getFusionError() {
+      return this.fusedError;
+  }
 
   //endregion
 

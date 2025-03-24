@@ -65,7 +65,7 @@ public class RecordingFragment extends Fragment {
     private MaterialButton completeButton, cancelButton, addTagButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
-    private TextView elevation, distanceTravelled, gnssError;
+    private TextView elevation, distanceTravelled, gnssError, fusionError;
 
     // App settings
     private SharedPreferences settings;
@@ -137,6 +137,7 @@ public class RecordingFragment extends Fragment {
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
+        fusionError = view.findViewById(R.id.fusionError);
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
@@ -146,6 +147,7 @@ public class RecordingFragment extends Fragment {
 
         // Hide or initialize default values
         gnssError.setVisibility(View.GONE);
+        fusionError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
@@ -274,6 +276,7 @@ public class RecordingFragment extends Fragment {
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
+                fusionError.setVisibility(View.GONE);
             }
         }
 
@@ -290,15 +293,13 @@ public class RecordingFragment extends Fragment {
         }
 
         // Get and plot fused data
-        float[] fused = sensorFusion.getSensorValueMap().get(SensorTypes.WIFI);
+        float[] fused = sensorFusion.getSensorValueMap().get(SensorTypes.FUSED);
         if (fused != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
-            if (trajectoryMapFragment.isGnssEnabled()) {
-                LatLng fusedLocation = new LatLng(fused[0], fused[1]);
-                trajectoryMapFragment.updateWifi(fusedLocation);
-            } else {
-                trajectoryMapFragment.clearFused();
-            }
+            LatLng fusedLocation = new LatLng(fused[0], fused[1]);
+            trajectoryMapFragment.updateFused(fusedLocation);
+            fusionError.setVisibility(View.VISIBLE);
+            fusionError.setText(String.format(getString(R.string.fusion_error) + "%.2fm",
+                    this.sensorFusion.getFusionError()));
         }
 
         // Update previous
