@@ -722,9 +722,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         sensorValueMap.put(SensorTypes.GNSSLATLONG, this.getGNSSLatitude(false));
         sensorValueMap.put(SensorTypes.PDR, pdrProcessing.getPDRMovement());
         float[] wifiLocation = this.getWifiLocation();
-        if(wifiLocation != null)
+        if(wifiLocation != null) {
           sensorValueMap.put(SensorTypes.WIFI, wifiLocation);
-          sensorValueMap.put(SensorTypes.WIFI_HEIGHT, new float[this.getWifiFloor()]);
+          sensorValueMap.put(SensorTypes.WIFI_FLOOR, new float[this.getWifiFloor()]);}
         sensorValueMap.put(SensorTypes.FUSED, null);
         return sensorValueMap;
     }

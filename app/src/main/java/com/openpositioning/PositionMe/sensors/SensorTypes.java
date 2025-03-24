@@ -22,6 +22,6 @@ public enum SensorTypes {
     GNSSLATLONG,
     PDR,
     WIFI,
-    WIFI_HEIGHT,
+    WIFI_FLOOR,
     FUSED;
 }
