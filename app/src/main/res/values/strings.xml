@@ -137,4 +137,9 @@
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
 
+
+    <string name="floor_level">Select Floor Level</string>
+    <string name="indoor_state">Select Indoor State</string>
+    <string name="building_name_hint">Building Name (optional)</string>
+
 </resources>

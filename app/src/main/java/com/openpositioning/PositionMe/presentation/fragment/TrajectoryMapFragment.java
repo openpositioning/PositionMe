@@ -191,6 +191,18 @@ public class TrajectoryMapFragment extends Fragment {
         });
     }
 
+
+    /**
+     * Public getter to retrieve the underlying GoogleMap instance.
+     * Returns null if the map is not yet ready.
+     *
+     * @return the GoogleMap instance
+     */
+    public GoogleMap getGoogleMap() {
+        return gMap;
+    }
+
+
     /**
      * Initialize the map settings with the provided GoogleMap instance.
      * <p>
@@ -326,6 +338,35 @@ public class TrajectoryMapFragment extends Fragment {
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
     }
+
+
+    public void updateCalibrationPinLocation(@NonNull LatLng newLocation, boolean pinConfirmed) {
+
+        if (gMap == null) return;
+
+        // Keep track of current location
+        this.currentLocation = newLocation;
+
+
+        if (pinConfirmed) {
+            orientationMarker = gMap.addMarker(new MarkerOptions()
+                    .position(newLocation)
+                    .flat(true)
+                    .title("Tagged Position")
+                    .icon(BitmapDescriptorFactory.fromBitmap(
+                            UtilFunctions.getBitmapFromVector(requireContext(),
+                                    R.drawable.ic_baseline_assignment_turned_in_24_red)))
+            );
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+        }
+
+        //update indoor map overlay
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(newLocation);
+            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+        }
+    }
+
 
 
 
