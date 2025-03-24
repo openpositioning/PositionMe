@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.SensorManager;
+import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
@@ -220,6 +221,11 @@ public class PdrProcessing {
      * @return                  float stride length in meters.
      */
     private float weibergMinMax(List<Double> accelMagnitude) {
+        // Check if the list is empty
+        if (accelMagnitude == null || accelMagnitude.isEmpty()) {
+            Log.e("weibergMinMax", "accelMagnitude list is empty! Returning default value.");
+            return 0; // Return a default value to avoid a crash
+        }
         double maxAccel = Collections.max(accelMagnitude);
         double minAccel = Collections.min(accelMagnitude);
         float bounce = (float) Math.pow((maxAccel-minAccel), 0.25);

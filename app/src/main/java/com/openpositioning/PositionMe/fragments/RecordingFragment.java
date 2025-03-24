@@ -51,6 +51,7 @@ import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -69,8 +70,11 @@ import java.util.List;
  * @author Mate Stodulka
  * @author Arun Gopalakrishnan
  */
-public class RecordingFragment extends Fragment {
-
+public class RecordingFragment extends Fragment implements SensorFusion.SensorFusionUpdates {
+    private Marker gnssMarker;
+    private List<Marker> gnssMarkers = new ArrayList<>();
+    private Marker wifiMarker;
+    private List<Marker> wifiMarkers = new ArrayList<>();
     //Button to end PDR recording
     private Button stopButton;
     private Button cancelButton;
@@ -121,8 +125,12 @@ public class RecordingFragment extends Fragment {
     public FloatingActionButton floorDownButton;
     // GNSS Switch
     private Switch gnss;
-    // GNSS marker
-    private Marker gnssMarker;
+    private Switch wifi;
+    private Switch fusionSwitch;
+    private Switch pdrSwitch;
+    private Polyline fusionPolyline;
+    private Polyline pdrPolyline;
+
     // Button used to switch colour
     private Button switchColor;
     // Current color of polyline
@@ -152,6 +160,54 @@ public class RecordingFragment extends Fragment {
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.refreshDataHandler = new Handler();
     }
+    //Wifi update from sensor fusion
+
+    @Override
+    public void onWifiUpdate(LatLng latlngFromWifiServer){
+        requireActivity().runOnUiThread(() -> {
+            if (latlngFromWifiServer == null) {
+                // Hide WiFi Marker
+                if (wifiMarker != null) {
+                    wifiMarker.remove();
+                    wifiMarker = null;
+                }
+                return;
+            }
+            // WiFi Marker
+            if (gMap != null) {
+//                if (wifiMarker != null) wifiMarker.remove();
+                wifiMarker = gMap.addMarker(new MarkerOptions()
+                        .position(latlngFromWifiServer)
+                        .title("WiFi Location")
+                        .icon(BitmapDescriptorFactory.fromBitmap(
+                                UtilFunctions.getBitmapFromVector(getContext(), R.drawable.blue_hollow_circle))));
+            }
+        });
+    }
+
+
+    @Override
+    public void onFusedUpdate(LatLng fusedCoordinate) {
+        requireActivity().runOnUiThread(() -> {
+            if (fusedCoordinate == null || gMap == null) return;
+
+            if (fusionPolyline == null) {
+                PolylineOptions fusionOptions = new PolylineOptions()
+                        .color(Color.BLUE)
+                        .width(8f)
+                        .add(fusedCoordinate);
+                fusionPolyline = gMap.addPolyline(fusionOptions);
+            } else {
+                List<LatLng> points = fusionPolyline.getPoints();
+                points.add(fusedCoordinate);
+                fusionPolyline.setPoints(points);
+            }
+
+            fusionPolyline.setVisible(fusionSwitch.isChecked());
+        });
+    }
+
+
 
     /**
      * {@inheritDoc}
@@ -199,6 +255,8 @@ public class RecordingFragment extends Fragment {
                 start = new LatLng(startPosition[0], startPosition[1]);
                 currentLocation=start;
                 orientationMarker=map.addMarker(new MarkerOptions().position(start).title("Current Position")
+                        .position(start)
+                        .title("Current Position")
                         .flat(true)
                         .icon(BitmapDescriptorFactory.fromBitmap(
                                 UtilFunctions.getBitmapFromVector(getContext(),R.drawable.ic_baseline_navigation_24))));
@@ -233,8 +291,9 @@ public class RecordingFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         // Set autoStop to null for repeat recordings
-        this.autoStop = null;
 
+        this.autoStop = null;
+        this.timeRemaining = getView().findViewById(R.id.timeRemainingBar);
         //Initialise UI components
         this.elevation = getView().findViewById(R.id.currentElevation);
         this.distanceTravelled = getView().findViewById(R.id.currentDistanceTraveled);
@@ -321,53 +380,32 @@ public class RecordingFragment extends Fragment {
                 indoorMapManager.decreaseFloor();
             }
         });
+
+        this.fusionSwitch = getView().findViewById(R.id.fusionSwitch);
+        this.pdrSwitch = getView().findViewById(R.id.pdrSwitch);
+
+        fusionSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (fusionPolyline != null) fusionPolyline.setVisible(isChecked);
+        });
+
+        pdrSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (pdrPolyline != null) pdrPolyline.setVisible(isChecked);
+        });
+
         //Obtain the GNSS toggle switch
         this.gnss= getView().findViewById(R.id.gnssSwitch);
 
-        this.gnss.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            /**
-             * {@inheritDoc}
-             * Listener to set GNSS marker and show GNSS vs PDR error.
-             */
+        this.wifi = getView().findViewById(R.id.Wifiswitch);
+
+        wifi.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
-            public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
-                if (isChecked){
-                    // Show GNSS eror
-                    float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-                    LatLng gnssLocation = new LatLng(location[0],location[1]);
-                    gnssError.setVisibility(View.VISIBLE);
-                    gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
-                            UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
-                    // Set GNSS marker
-                    gnssMarker=gMap.addMarker(
-                            new MarkerOptions().title("GNSS position")
-                                    .position(gnssLocation)
-                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-                }else {
-                    gnssMarker.remove();
-                    gnssError.setVisibility(View.GONE);
-                }
-            }
-        });
-        // Switch colour button
-        this.switchColor=getView().findViewById(R.id.lineColorButton);
-        this.switchColor.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Listener to button to switch the colour of the polyline
-             * to red/black
-             */
-            @Override
-            public void onClick(View view) {
-                if (isRed){
-                    switchColor.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
-                    isRed=false;
-                }
-                else {
-                    switchColor.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
-                    isRed=true;
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (!isChecked) {
+                    if (wifiMarker != null) {
+                        wifiMarker.remove();
+                        wifiMarker = null;
+                    }
+
                 }
             }
         });
@@ -505,13 +543,31 @@ public class RecordingFragment extends Fragment {
             indoorMapManager =new IndoorMapManager(gMap);
         }
         //Show GNSS marker and error if user enables it
-        if (gnss.isChecked() && gnssMarker!=null){
-            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-            LatLng gnssLocation = new LatLng(location[0],location[1]);
-            gnssError.setVisibility(View.VISIBLE);
-            gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
-                    UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
-            gnssMarker.setPosition(gnssLocation);
+        if (gnss.isChecked()) {
+            float[] gnssData = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+            // Bring back all GNSS markers from the map
+            for (Marker marker : gnssMarkers) {
+                marker.setVisible(true);
+            }
+            if (gnssData != null && gnssData.length >= 2) {
+                LatLng gnssLocation = new LatLng(gnssData[0], gnssData[1]);
+                gnssError.setVisibility(View.VISIBLE);
+                gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
+                        UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
+                Marker newGnssMarker = gMap.addMarker(new MarkerOptions()
+                        .title("GNSS")
+                        .position(gnssLocation)
+                        .icon(BitmapDescriptorFactory.fromBitmap(
+                                UtilFunctions.getBitmapFromVector(getContext(), R.drawable.green_hollow_circle)))
+                        .anchor(0.5f, 0.5f));
+                gnssMarkers.add(newGnssMarker);
+            }
+        } else {
+            // Remove all GNSS markers from the map
+            for (Marker marker : gnssMarkers) {
+                marker.setVisible(false);
+            }
+            gnssError.setVisibility(View.GONE);
         }
         //  Updates current location of user to show the indoor floor map (if applicable)
         indoorMapManager.setCurrentLocation(currentLocation);

@@ -103,6 +103,7 @@
     <string name="filter_coefficient_title">Orientation filter coefficient</string>
     <string name="wifi_scan_interval">Scan interval for wifi networks. A scan takes approximately two seconds.</string>
     <string name="wifi_scan_title">WiFi interval</string>
+    <string name="wifiSwitch">WiFi</string>
     <!-- Mobile data Preferences -->
     <string name="mobile_data_title">Sync using mobile data</string>
     <string name="mobile_data_summary_off">The app will only send data through a WiFi connection</string>

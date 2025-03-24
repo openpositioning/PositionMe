@@ -4,7 +4,9 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:backgroundTint="@color/ic_launcher_simple_background"
     tools:context=".fragments.RecordingFragment">
+
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/RecordingMap"
         android:name="com.google.android.gms.maps.SupportMapFragment"
@@ -18,92 +20,137 @@
         tools:ignore="ExtraText">
 
         <Switch
-            android:id="@+id/autoFloor"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginStart="292dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/rounded_corner_pastel_blue"
+            android:id="@+id/Wifiswitch"
+            android:layout_width="94dp"
+            android:layout_height="27dp"
+            android:background="@color/ic_launcher_simple_background"
             android:buttonTint="@android:color/holo_green_dark"
-            android:text="@string/auto_floor"
-            android:textColor="@color/black"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
+            android:text="WIFI"
+            android:textColor="@color/white"
+            app:layout_constraintStart_toEndOf="@+id/yellowdot"
+            app:layout_constraintTop_toBottomOf="@+id/gnssSwitch" />
 
-        <Button
-            android:id="@+id/stopButton"
-            android:layout_width="150dp"
-            android:layout_height="70dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="4dp"
-            android:text="@string/stop"
-            android:textSize="24sp"
-            android:background="@drawable/rounded_button"
-            app:icon="@drawable/ic_baseline_stop_24"
-            app:iconGravity="start"
-            app:iconSize="30dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+        <Switch
+            android:id="@+id/pdrSwitch"
+            android:layout_width="94dp"
+            android:layout_height="27dp"
+            android:layout_marginStart="27dp"
+            android:layout_marginTop="88dp"
+            android:background="@color/ic_launcher_simple_background"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="PDR"
+            android:textColor="@color/white"
+            app:layout_constraintStart_toStartOf="@+id/purpledot"
+            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
 
-        <Button
-            android:id="@+id/cancelButton"
-            android:layout_width="150dp"
-            android:layout_height="70dp"
-            android:layout_marginStart="16dp"
-            android:layout_marginBottom="4dp"
-            android:text="@string/cancel"
-            android:textSize="16sp"
-            android:background="@drawable/rounded_button"
-            app:icon="@drawable/ic_baseline_cancel_24"
-            app:iconGravity="start"
-            app:iconSize="28dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+        <ImageView
+            android:id="@+id/greendot"
+            android:layout_width="27dp"
+            android:layout_height="27dp"
+            android:background="@color/ic_launcher_simple_background"
+            android:src="@drawable/ic_baseline_red_dot_24"
+            app:layout_constraintTop_toBottomOf="@+id/purpledot"
+            app:tint="@color/green"
+            tools:layout_editor_absoluteX="70dp" />
 
-        <ProgressBar
-            android:id="@+id/timeRemainingBar"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+        <Switch
+            android:id="@+id/gnssSwitch"
+            android:layout_width="94dp"
+            android:layout_height="27dp"
+            android:background="@color/ic_launcher_simple_background"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="GNSS"
+            android:textColor="@color/white"
+            app:layout_constraintStart_toEndOf="@+id/greendot"
+            app:layout_constraintTop_toBottomOf="@+id/pdrSwitch" />
+
+        <ImageView
+            android:id="@+id/yellowdot"
+            android:layout_width="27dp"
+            android:layout_height="27dp"
+            android:background="@color/ic_launcher_simple_background"
+            android:src="@drawable/ic_baseline_red_dot_24"
+            app:layout_constraintTop_toBottomOf="@+id/greendot"
+            app:tint="@color/goldYellow"
+            tools:layout_editor_absoluteX="70dp" />
+
+        <ImageView
+            android:id="@+id/bluedot"
+            android:layout_width="27dp"
+            android:layout_height="27dp"
+            android:background="@color/ic_launcher_simple_background"
+            android:src="@drawable/ic_baseline_red_dot_24"
+            app:layout_constraintTop_toBottomOf="@+id/yellowdot"
+            app:tint="@color/lightLogoBlue"
+            tools:layout_editor_absoluteX="70dp" />
+
+        <Switch
+            android:id="@+id/fusionSwitch"
+            android:layout_width="94dp"
+            android:layout_height="27dp"
+            android:background="@color/ic_launcher_simple_background"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="Fusion"
+            android:textColor="@color/white"
+            app:layout_constraintStart_toEndOf="@+id/bluedot"
+            app:layout_constraintTop_toBottomOf="@+id/Wifiswitch" />
+
+        <ImageView
+            android:id="@+id/purpledot"
+            android:layout_width="27dp"
+            android:layout_height="27dp"
+            android:layout_marginTop="24dp"
+            android:background="@color/ic_launcher_simple_background"
+            android:src="@drawable/ic_baseline_red_dot_24"
+            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner"
+            app:tint="@color/purple_500"
+            tools:layout_editor_absoluteX="70dp" />
+
+        <Switch
+            android:id="@+id/autoFloor"
+            android:layout_width="143dp"
+            android:layout_height="41dp"
             android:layout_marginEnd="8dp"
-            android:layout_marginBottom="8dp"
-            android:elevation="2sp"
-            android:max="1800"
-            android:progress="0"
-            app:layout_constraintBottom_toTopOf="@+id/stopButton"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+            android:layout_marginBottom="16dp"
+            android:background="@color/ic_launcher_simple_background"
+            android:backgroundTint="@color/ic_launcher_simple_background"
+            android:buttonTint="@color/ic_launcher_simple_background"
+            android:text="     Auto Floor"
+            android:textColor="@color/white"
+            app:layout_constraintBottom_toTopOf="@+id/timeRemainingBar"
+            app:layout_constraintEnd_toEndOf="parent" />
 
         <androidx.cardview.widget.CardView
             android:id="@+id/currentPositionCard"
-            android:layout_width="411dp"
-            android:layout_height="60dp"
+            android:layout_width="367dp"
+            android:layout_height="84dp"
+            android:layout_marginStart="2dp"
             android:layout_marginTop="2dp"
-            app:cardBackgroundColor="@color/pastelBlue"
+            android:layout_marginEnd="2dp"
+            app:cardBackgroundColor="@color/ic_launcher_simple_background"
             app:cardCornerRadius="20dp"
             app:cardElevation="8dp"
             app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
 
             <androidx.constraintlayout.widget.ConstraintLayout
-                android:layout_width="357dp"
-                android:layout_height="81dp"
-                android:layout_marginTop="4dp"
-                android:layout_marginEnd="52dp"
-                app:layout_constraintEnd_toEndOf="@+id/currentPositionCard"
-                app:layout_constraintTop_toTopOf="parent">
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                tools:layout_editor_absoluteY="4dp">
 
                 <TextView
                     android:id="@+id/currentElevation"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginTop="2dp"
+                    android:layout_marginStart="24dp"
+                    android:layout_marginTop="10dp"
                     android:text="@string/elevation"
-                    android:textColor="@color/LightYellow"
+                    android:textColor="@color/white"
                     android:textSize="18sp"
                     android:textStyle="bold"
+                    app:layout_constraintEnd_toEndOf="@+id/distanceTravelledTitle"
+                    app:layout_constraintHorizontal_bias="0.0"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent" />
 
@@ -111,54 +158,63 @@
                     android:id="@+id/currentDistanceTraveled"
                     android:layout_width="wrap_content"
                     android:layout_height="24dp"
-                    android:layout_marginStart="4dp"
-                    android:layout_marginTop="20dp"
+                    android:layout_marginStart="16dp"
                     android:text="@string/meter"
-                    android:textColor="@color/LightYellow"
+                    android:textColor="@color/white"
                     android:textSize="20sp"
                     android:textStyle="bold"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toStartOf="@+id/redDot"
+                    app:layout_constraintHorizontal_bias="0.0"
                     app:layout_constraintStart_toEndOf="@+id/distanceTravelledTitle"
-                    app:layout_constraintTop_toTopOf="parent" />
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.666" />
 
                 <TextView
                     android:id="@+id/distanceTravelledTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
+                    android:layout_marginStart="24dp"
+                    android:layout_marginTop="28dp"
                     android:text="@string/distance_travelled"
-                    android:textColor="@color/LightYellow"
+                    android:textColor="@color/white"
                     android:textSize="18sp"
                     android:textStyle="bold"
+                    app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="0.05"
+                    app:layout_constraintHorizontal_bias="0.0"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="@+id/currentElevation" />
+                    app:layout_constraintTop_toTopOf="@+id/currentElevation"
+                    app:layout_constraintVertical_bias="0.0" />
 
                 <TextView
                     android:id="@+id/gnssError"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="16dp"
-                    android:layout_marginBottom="28dp"
+                    android:layout_marginStart="32dp"
+                    android:layout_marginBottom="2dp"
                     android:text="@string/gnss_error"
-                    android:textColor="@color/LightYellow"
+                    android:textColor="@color/white"
                     android:textSize="14sp"
                     android:textStyle="bold"
-                    app:layout_constraintBottom_toBottomOf="@+id/currentDistanceTraveled"
+                    app:layout_constraintBottom_toTopOf="@+id/currentDistanceTraveled"
+                    app:layout_constraintStart_toEndOf="@+id/currentElevation"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintVertical_bias="0.714" />
+
+                <ImageView
+                    android:id="@+id/redDot"
+                    android:layout_width="47dp"
+                    android:layout_height="41dp"
+                    android:contentDescription="@string/recording"
+                    android:src="@drawable/ic_baseline_red_dot_24"
+                    app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="1.0"
-                    app:layout_constraintStart_toEndOf="@+id/currentElevation" />
+                    app:layout_constraintHorizontal_bias="0.949"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
 
             </androidx.constraintlayout.widget.ConstraintLayout>
-
-            <ImageView
-                android:id="@+id/redDot"
-                android:layout_width="48dp"
-                android:layout_height="43dp"
-                android:layout_marginStart="350dp"
-                android:layout_marginTop="6dp"
-                android:contentDescription="@string/recording"
-                android:src="@drawable/ic_baseline_red_dot_24" />
 
 
         </androidx.cardview.widget.CardView>
@@ -168,13 +224,11 @@
             android:id="@+id/mapSwitchSpinner"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="68dp"
-            android:background="@color/white"
+            android:layout_marginTop="16dp"
+            android:background="@color/ic_launcher_simple_background"
             android:spinnerMode="dropdown"
-            android:text="@string/choose_map"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard"
+            tools:layout_editor_absoluteX="16dp" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
@@ -183,7 +237,9 @@
             android:layout_marginBottom="32dp"
             android:clickable="true"
             android:contentDescription="@string/floor_up_button"
-            android:src="@android:drawable/arrow_up_float"
+            android:rotation="90"
+            android:src="?attr/homeAsUpIndicator"
+            app:backgroundTint="@color/ic_launcher_simple_background"
             app:layout_constraintBottom_toTopOf="@+id/floorDownButton"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.954"
@@ -196,38 +252,79 @@
             android:layout_marginBottom="296dp"
             android:clickable="true"
             android:contentDescription="@string/floor_down_button"
-            android:src="@android:drawable/arrow_down_float"
+            android:rotation="-90"
+            android:src="?attr/homeAsUpIndicator"
+            app:backgroundTint="@color/ic_launcher_simple_background"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.954"
             app:layout_constraintStart_toStartOf="parent" />
 
-        <Switch
-            android:id="@+id/gnssSwitch"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/rounded_corner_pastel_blue"
-            android:buttonTint="@android:color/holo_green_dark"
-            android:text="@string/gnssSwitch"
-            android:textColor="@color/black"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
+        <ProgressBar
+            android:id="@+id/timeRemainingBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="96dp"
+            android:elevation="2sp"
+            android:max="1800"
+            android:progress="0"
+            app:layout_constraintBottom_toBottomOf="parent"
+            tools:layout_editor_absoluteX="0dp" />
 
         <Button
-            android:id="@+id/lineColorButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="244dp"
-            android:layout_marginTop="2dp"
-            android:text="@string/color"
-            android:background="@drawable/rounded_button_black"
-            android:backgroundTint="@color/black"
-            app:layout_constraintStart_toEndOf="@+id/mapSwitchSpinner"
-            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
+            android:id="@+id/cancelButton"
+            android:layout_width="150dp"
+            android:layout_height="70dp"
+            android:layout_marginStart="24dp"
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="@color/ic_launcher_simple_background"
+            android:text="@string/cancel"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            app:icon="@drawable/ic_baseline_cancel_24"
+            app:iconGravity="start"
+            app:iconSize="28dp"
+            app:iconTint="@color/white"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <Button
+            android:id="@+id/stopButton"
+            android:layout_width="150dp"
+            android:layout_height="70dp"
+            android:layout_marginEnd="24dp"
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="@color/ic_launcher_simple_background"
+            android:text="@string/stop"
+            android:textColor="@color/white"
+            android:textSize="24sp"
+            app:icon="@drawable/ic_baseline_stop_24"
+            app:iconGravity="start"
+            app:iconSize="30dp"
+            app:iconTint="@color/white"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toEndOf="@+id/cancelButton" /><![CDATA[
 
 
+
+
+
+        />
+
+
+
+
+
+
+
+
+
+        />
+
+    ]]>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </FrameLayout>

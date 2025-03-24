@@ -30,6 +30,7 @@ import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.sensors.Wifi;
 
 /**
  * The Main Activity of the application, handling setup, permissions and starting all other fragments
@@ -492,6 +493,10 @@ public class MainActivity extends AppCompatActivity implements Observer {
         this.sensorFusion = SensorFusion.getInstance();
         this.sensorFusion.setContext(getApplicationContext());
         sensorFusion.registerForServerUpdate(this);
+    }
+    @Override
+    public void updateWifi(Object[] objList) {
+        return;
     }
 
     //endregion
