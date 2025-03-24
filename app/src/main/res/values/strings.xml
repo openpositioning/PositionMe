@@ -16,6 +16,7 @@
     <string name="show_storage">Show locally</string>
     <string name="setLocation">Set</string>
     <string name="cancel">Cancel</string>
+    <string name="AddTag">Add Tag</string>
 
     <!-- Sensors -->
     <string name="accelerometer">Accelerometer</string>
@@ -117,6 +118,7 @@
     <string name="choose_map">Choose Map</string>
     <string name="auto_floor">❇️ Auto Floor </string>
     <string name="gnss_error">GNSS error:</string>
+    <string name="fusion_error">Fusion error:</string>
     <string name="satellite">Satellite</string>
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>

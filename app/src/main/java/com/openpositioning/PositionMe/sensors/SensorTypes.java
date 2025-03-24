@@ -23,5 +23,6 @@ public enum SensorTypes {
     PDR,
     WIFI,
     WIFI_FLOOR,
+    WIFI_OUTLIER,
     FUSED;
 }

@@ -153,9 +153,9 @@ public class TrajParser {
      * @param context   Android application context (used for sensor processing).
      */
     public static void parseTrajectoryData(String filePath,
-                                                        Context context,
-                                                        LatLng initialPos,
-                                                        TrajectoryParseCallback callback) {
+                                            Context context,
+                                            LatLng initialPos,
+                                            TrajectoryParseCallback callback) {
         List<ReplayPoint> result = new ArrayList<>();
 
         try {

@@ -18,6 +18,8 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
@@ -54,15 +56,16 @@ import com.google.android.gms.maps.model.LatLng;
  * @see SensorTypes Enumeration of available sensor types.
  *
  * @author Shu Gu
+ * @author Alexandros Zoupos (Adjusted for AddTag functionality)
  */
 
 public class RecordingFragment extends Fragment {
 
     // UI elements
-    private MaterialButton completeButton, cancelButton;
+    private MaterialButton completeButton, cancelButton, addTagButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
-    private TextView elevation, distanceTravelled, gnssError;
+    private TextView elevation, distanceTravelled, gnssError, fusionError;
 
     // App settings
     private SharedPreferences settings;
@@ -134,14 +137,17 @@ public class RecordingFragment extends Fragment {
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
+        fusionError = view.findViewById(R.id.fusionError);
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
+        addTagButton = view.findViewById(R.id.addTagButton);
 
         // Hide or initialize default values
         gnssError.setVisibility(View.GONE);
+        fusionError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
@@ -180,6 +186,13 @@ public class RecordingFragment extends Fragment {
 
             dialog.show(); // Finally, show the dialog
         });
+
+        // Add tag button
+      addTagButton.setOnClickListener(v -> {
+        sensorFusion.addTag(); // Calls the method to store a GNSS tag
+        showToast("Tag added successfully!"); // Notify the user
+      });
+
 
         // The blinking effect for recIcon
         blinkingRecordingIcon();
@@ -273,6 +286,7 @@ public class RecordingFragment extends Fragment {
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
+                fusionError.setVisibility(View.GONE);
             }
         }
 
@@ -291,13 +305,11 @@ public class RecordingFragment extends Fragment {
         // Get and plot fused data
         float[] fused = sensorFusion.getSensorValueMap().get(SensorTypes.FUSED);
         if (fused != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
-            if (trajectoryMapFragment.isGnssEnabled()) {
-                LatLng fusedLocation = new LatLng(fused[0], fused[1]);
-                trajectoryMapFragment.updateWifi(fusedLocation);
-            } else {
-                trajectoryMapFragment.clearFused();
-            }
+            LatLng fusedLocation = new LatLng(fused[0], fused[1]);
+            trajectoryMapFragment.updateFused(fusedLocation);
+            fusionError.setVisibility(View.VISIBLE);
+            fusionError.setText(String.format(getString(R.string.fusion_error) + "%.2fm",
+                    this.sensorFusion.getFusionError()));
         }
 
         // Update previous
@@ -330,4 +342,11 @@ public class RecordingFragment extends Fragment {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
     }
+
+  /**
+   * Utility function to show a toast message.
+   */
+  private void showToast(String message) {
+    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+  }
 }
