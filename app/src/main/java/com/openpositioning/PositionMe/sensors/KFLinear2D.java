@@ -2,10 +2,10 @@ package com.openpositioning.PositionMe.sensors;
 
 public class KFLinear2D {
     // State = [ x, y, vx, vy ] in meters
-    private double[] x;      // length=4
-    private double[][] P;    // 4x4
-    private double[][] Q;    // 4x4
-    private double[][] R;    // 2x2
+    private double[] x;      // 长度为4
+    private double[][] P;    // 4x4 协方差矩阵
+    private double[][] Q;    // 4x4 过程噪声
+    private double[][] R;    // 2x2 测量噪声
 
     public KFLinear2D(double[] initialState,
                       double[][] initialCov,
@@ -21,22 +21,13 @@ public class KFLinear2D {
         this.R = copyMatrix(newR);
     }
 
-    /**
-     * If you want to incorporate direct PDR displacement each cycle
-     * before or after predict().
-     */
     public void applyPdrDelta(double dx, double dy) {
-        x[0] += dx;   // add displacement to X
-        x[1] += dy;   // add displacement to Y
+        x[0] += dx;
+        x[1] += dy;
     }
 
-    /**
-     * Predict step for constant velocity.
-     * x = x + vx*dt,  y = y + vy*dt
-     */
     public void predict(double dt) {
         if (dt <= 0) dt = 0.001;
-        // F = [[1,0,dt,0],[0,1,0,dt],[0,0,1,0],[0,0,0,1]]
         double[][] F = {
                 {1, 0, dt, 0},
                 {0, 1, 0,  dt},
@@ -52,36 +43,21 @@ public class KFLinear2D {
         P = PPred;
     }
 
-    /**
-     * Update step with measurement z = [xm, ym] in meters
-     * (the identity H picks out X,Y from [X,Y,vx,vy]).
-     */
     public void update(double[] z) {
-        // H = [[1,0,0,0],[0,1,0,0]]
         double[][] H = {
                 {1,0,0,0},
                 {0,1,0,0}
         };
-        // zPred = H*x
         double[] zPred = multiplyMatrixVector(H, x);
-        // y = z - zPred
         double[] y = subtractVectors(z, zPred);
-
-        // S = H P H^T + R
         double[][] HP = multiplyMatrices(H, P);
         double[][] HPHt = multiplyMatrices(HP, transpose(H));
         double[][] S = addMatrices(HPHt, R);
-
         double[][] S_inv = invert2x2(S);
-        // K = P H^T S^-1
         double[][] PHt = multiplyMatrices(P, transpose(H));
         double[][] K = multiplyMatrices(PHt, S_inv);
-
-        // x = x + K*y
         double[] Ky = multiplyMatrixVector(K, y);
         x = addVectors(x, Ky);
-
-        // P = (I - K*H) P
         double[][] I = identityMatrix(4);
         double[][] KH = multiplyMatrices(K, H);
         double[][] IminusKH = subtractMatrices(I, KH);
@@ -92,16 +68,16 @@ public class KFLinear2D {
         return x.clone();
     }
 
-    /**
-     * Return [X, Y] for convenience
-     */
     public double[] getXY() {
         return new double[]{ x[0], x[1] };
     }
 
-    // ---------------------------------------
-    //     Matrix / Vector Utilities
-    // ---------------------------------------
+    // 新增方法：返回协方差矩阵 P 的副本
+    public double[][] getErrorCovariance() {
+        return copyMatrix(P);
+    }
+
+    // -------------- 辅助矩阵运算方法 ----------------
 
     private double[][] addMatrices(double[][] A, double[][] B) {
         int rows = A.length;

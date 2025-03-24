@@ -6,61 +6,105 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Google Map FragmentContainerView -->
+    <!-- 地图背景 -->
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/fusionMap"
         android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Top-level ConstraintLayout overlay for UI controls -->
+    <!-- UI 控件覆盖层 -->
     <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/overlayContainer"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:padding="16dp">
 
-        <!-- Map type spinner (Hybrid, Normal, Satellite, etc.) -->
+        <!-- 精度显示的 TextView -->
+        <TextView
+            android:id="@+id/accuracyTextView_fusion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Accuracy: -- m"
+            android:textColor="@android:color/white"
+            android:textSize="20sp"
+            android:background="#80000000"
+            android:padding="8dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            android:layout_marginTop="8dp" />
+
+        <!-- 室内/室外状态显示 -->
+        <TextView
+            android:id="@+id/indoorOutdoorTextView_fusion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Indoor/Outdoor: --"
+            android:textColor="@android:color/white"
+            android:textSize="20sp"
+            android:background="#80000000"
+            android:padding="8dp"
+            app:layout_constraintTop_toBottomOf="@id/accuracyTextView_fusion"
+            app:layout_constraintStart_toStartOf="parent"
+            android:layout_marginTop="8dp" />
+
+        <!-- Map Type 切换的 Spinner -->
         <Spinner
             android:id="@+id/mapSwitchSpinner_fusion"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="8dp"
             android:background="@android:color/white"
-            android:elevation="4dp"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+            android:padding="8dp"
+            app:layout_constraintTop_toBottomOf="@id/indoorOutdoorTextView_fusion"
+            app:layout_constraintStart_toStartOf="parent"
+            android:layout_marginTop="16dp" />
 
-        <!-- Floor Up Button -->
+        <!-- 楼层上升按钮 -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton_fusion"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
             android:src="@android:drawable/arrow_up_float"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="1.0" />
+            android:layout_marginTop="16dp"
+            android:layout_marginEnd="16dp" />
 
-        <!-- Floor Down Button -->
+        <!-- 楼层下降按钮 -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton_fusion"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
             android:src="@android:drawable/arrow_down_float"
             app:layout_constraintTop_toBottomOf="@id/floorUpButton_fusion"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="1.0" />
+            android:layout_marginTop="16dp"
+            android:layout_marginEnd="16dp" />
 
-        <!-- Exit Button at the Bottom -->
+        <!-- Add Tag 按钮 -->
+        <Button
+            android:id="@+id/addTagButton_fusion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add Tag"
+            android:backgroundTint="@android:color/holo_blue_light"
+            android:textColor="@android:color/white"
+            app:layout_constraintBottom_toTopOf="@id/exitButton_fusion"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginBottom="16dp"
+            android:layout_marginEnd="16dp"/>
+
+        <!-- Exit 按钮 -->
         <Button
             android:id="@+id/exitButton_fusion"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Exit"
-            android:layout_margin="16dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_margin="16dp" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
+
 </FrameLayout>
