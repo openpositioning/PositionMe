@@ -10,8 +10,9 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.util.Log;
-
+import com.openpositioning.PositionMe.utils.JsonConverter;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
@@ -69,6 +70,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final String WIFI_FINGERPRINT= "wf";
     //endregion
 
+    private List<SensorFusionUpdates> recordingUpdates = new ArrayList<>();
     //region Instance variables
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
@@ -249,7 +251,15 @@ public class SensorFusion implements SensorEventListener, Observer {
                 "MyApp::MyWakelockTag");
     }
     //endregion
+    public void registerForSensorUpdates(SensorFusionUpdates observer) {
+        if (!recordingUpdates.contains(observer)) {
+            recordingUpdates.add(observer);
+        }
+    }
 
+    public void removeSensorUpdate(SensorFusionUpdates observer) {
+        recordingUpdates.remove(observer);
+    }
     //region Sensor processing
     /**
      * {@inheritDoc}
@@ -391,24 +401,130 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @see WifiDataProcessor object for wifi scanning.
      */
+    /**
+     * Called when an update is received. This method expects either a JSONObject (server response)
+     * or a Wifi object (local scan result). The update is routed accordingly.
+     */
     @Override
-    public void update(Object[] wifiList) {
-        // Save newest wifi values to local variable
-        this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
-
-        if(this.saveRecording) {
-            Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
-                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime);
-            for (Wifi data : this.wifiList) {
-                wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
-                        .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
-                        .setMac(data.getBssid()).setRssi(data.getLevel()));
-            }
-            // Adding WiFi data to Trajectory
-            this.trajectory.addWifiData(wifiData);
+    public void update(Object[] responseList) {
+        if (!saveRecording) {
+            return;
         }
-        createWifiPositioningRequest();
+
+        if (responseList == null || responseList.length == 0 || responseList[0] == null) {
+            updateFusionWifi(null);
+            return;
+        }
+
+        Object response = responseList[0];
+        if (response instanceof JSONObject) {
+            // Process server response containing location data.
+            updateFusionWifi((JSONObject) response);
+        } else if (response instanceof Wifi) {
+            // If we received a Wifi object, route it to updateWifi.
+            // (This might happen if the data type wasn’t converted yet.)
+            Log.e("SensorFusion", "Received Wifi object in update(); routing to updateWifi()");
+            updateWifi(new Object[]{response});
+        } else {
+            Log.e("SensorFusion", "Unexpected data type: " + response.getClass().getName());
+        }
     }
+
+    /**
+     * Processes local WiFi scan results.
+     * Expects an array of Wifi objects.
+     */
+    @Override
+    public void updateWifi(Object[] wifiListArray) {
+        // Convert Object[] to List<Wifi> safely.
+        this.wifiList = Stream.of(wifiListArray)
+                .map(o -> (Wifi) o)
+                .collect(Collectors.toList());
+
+        if (saveRecording) {
+            // Record the WiFi scan into the trajectory.
+            Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
+                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
+            for (Wifi data : this.wifiList) {
+                wifiData.addMacScans(
+                        Traj.Mac_Scan.newBuilder()
+                                .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                                .setMac(data.getBssid())
+                                .setRssi(data.getLevel())
+                );
+            }
+            this.trajectory.addWifiData(wifiData);
+
+            // Convert the WiFi list to JSON and send it to the server.
+            try {
+                JSONObject jsonFingerprint = JsonConverter.toJson(this.wifiList);
+                String jsonString = jsonFingerprint.toString();
+                Log.d("WIFI JSON", jsonString);
+                sendWifiJsonToCloud(jsonFingerprint);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * Sends a JSON fingerprint (representing WiFi data) to the cloud.
+     */
+    public void sendWifiJsonToCloud(JSONObject fingerprint) {
+        serverCommunications.sendWifi(fingerprint);
+    }
+
+    /**
+     * Notifies all registered observers with the WiFi location update.
+     * @param type The type of update.
+     * @param wifiPosition The position calculated from the WiFi server response.
+     */
+    public void notifySensorUpdate(SensorFusionUpdates.update_type type, LatLng wifiPosition) {
+        for (SensorFusionUpdates observer : recordingUpdates) {
+            if (type == SensorFusionUpdates.update_type.WIFI_UPDATE) {
+                observer.onWifiUpdate(wifiPosition);
+            }
+        }
+    }
+
+    /**
+     * Processes the server response containing WiFi-based location information.
+     * @param wifiResponse A JSONObject with keys like "lat", "lon", and "floor".
+     */
+    public void updateFusionWifi(JSONObject wifiResponse) {
+        try {
+            if (wifiResponse == null) {
+                notifySensorUpdate(SensorFusionUpdates.update_type.WIFI_UPDATE, null);
+                return;
+            }
+
+            double latitude = wifiResponse.getDouble("lat");
+            double longitude = wifiResponse.getDouble("lon");
+            // The 'floor' value is extracted but not used for location display here.
+            double floor = wifiResponse.getDouble("floor");
+
+            LatLng wifiLatLng = new LatLng(latitude, longitude);
+            notifySensorUpdate(SensorFusionUpdates.update_type.WIFI_UPDATE, wifiLatLng);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Observer interface for sensor fusion updates.
+     */
+    public interface SensorFusionUpdates {
+        enum update_type {
+            PDR_UPDATE, ORIENTATION_UPDATE, GNSS_UPDATE, FUSED_UPDATE, WIFI_UPDATE
+        }
+
+        default void onPDRUpdate() {}
+        default void onOrientationUpdate() {}
+        default void onGNSSUpdate() {}
+        default void onFusedUpdate(LatLng fusedPosition) {}
+        default void onWifiUpdate(LatLng wifiPosition) {}
+    }
+
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint

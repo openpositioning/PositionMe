@@ -149,7 +149,10 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
                 .setIcon(R.drawable.ic_baseline_download_24)
                 .show();
     }
-
+    @Override
+    public void updateWifi(Object[] singletonStringList) {
+        return;
+    }
     @Override
     public void onReplayClick(int position) {
 

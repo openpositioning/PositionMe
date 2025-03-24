@@ -13,8 +13,13 @@ import androidx.preference.PreferenceManager;
 
 import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.fragments.FilesFragment;
+import com.openpositioning.PositionMe.fragments.StartLocationFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -52,12 +57,14 @@ public class ServerCommunications implements Observable {
 
     // Application context for handling permissions and devices
     private final Context context;
+    private JSONObject wifiResponse;
     // Network status checking
     private ConnectivityManager connMgr;
     private boolean isWifiConn;
     private boolean isMobileConn;
     private SharedPreferences settings;
     private String trajectoryFileName;
+    private static final String PROTOCOL_CONTENT_TYPE_FINGERPRINT = "application/json";
     private String infoResponse;
     private boolean success;
     private List<Observer> observers;
@@ -76,7 +83,9 @@ public class ServerCommunications implements Observable {
                     + "?key=" + masterKey;
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
-
+    private static final String fingerprintURL = "https://openpositioning.org/api/position/fine";
+    public static final MediaType JSON
+            = MediaType.parse("application/json; charset=utf-8");
 
 
     /**
@@ -203,6 +212,88 @@ public class ServerCommunications implements Observable {
             System.err.println("No uploading allowed right now!");
             success = false;
             notifyObservers(1);
+        }
+
+    }
+//Wifi
+
+    public void sendWifi(JSONObject fingerprint) {
+
+        // Convert the JSON fingerprint object to string
+        String stringFingerprint = fingerprint.toString();
+
+        // Check connections available before sending data
+        checkNetworkStatus();
+
+        // Check if device is connected to WiFi
+        if (this.isWifiConn) {
+            // Instantiate client for HTTP requests
+            OkHttpClient client = new OkHttpClient();
+
+            // Create a request body with a file to upload in JSON format
+            RequestBody body = RequestBody.create(stringFingerprint, JSON);
+
+            // Create a POST request with the required headers
+            okhttp3.Request request = new okhttp3.Request.Builder()
+                    .url(fingerprintURL)
+                    .post(body)
+                    .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+                    .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE_FINGERPRINT).build();
+
+            // Enqueue the request to be executed asynchronously and handle the response
+            client.newCall(request).enqueue(new okhttp3.Callback() {
+
+                // Handle failure to get response from the server
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    e.printStackTrace();
+                    System.err.println("Failure to get response");
+                    success = false;
+                    wifiResponse = null;
+                    notifyObservers(2);
+                }
+
+                // Process the server's response
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    try (ResponseBody responseBody = response.body()) {
+                        // If the response is unsuccessful, delete the local file and throw an
+                        // exception
+                        if (!response.isSuccessful()) {
+                            System.err.println("POST error response: " + responseBody.string());
+                            success = false;
+                            wifiResponse = null;
+                            notifyObservers(2);
+                            return;
+                        }
+
+                        // Print the response headers
+                        Headers responseHeaders = response.headers();
+                        for (int i = 0, size = responseHeaders.size(); i < size; i++) {
+                            System.out.println(responseHeaders.name(i) + ": " + responseHeaders.value(i));
+                        }
+
+                        String response_string = responseBody.string();
+
+                        // Print a confirmation of a successful POST to API
+                        System.out.println("Successful post response: " + response_string);
+
+                        // assign the response to a global variable
+                        wifiResponse = new JSONObject(response_string);
+                        notifyObservers(2);
+
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        } else {
+            // If the device is not connected to network or allowed to send, do not request
+            // and notify observers and user
+            System.err.println("No internet connection, No request allowed right now!");
+            success = false;
+            wifiResponse = null;
+            notifyObservers(2);
         }
 
     }
@@ -457,13 +548,15 @@ public class ServerCommunications implements Observable {
      * @param index Index for identifying the observer to be notified.
      */
     @Override
-    public void notifyObservers(int index) {
-        for(Observer o : observers) {
-            if(index == 0 && o instanceof FilesFragment) {
-                o.update(new String[] {infoResponse});
-            }
-            else if (index == 1 && o instanceof MainActivity) {
-                o.update(new Boolean[] {success});
+    public synchronized void notifyObservers(int index) {
+
+        for (Observer o : observers) {
+            if (index == 0 && o instanceof FilesFragment) {
+                o.update(new String[]{infoResponse});
+            } else if (index == 1 && o instanceof MainActivity) {
+                o.update(new Boolean[]{success});
+            } else if (index == 2 && (o instanceof SensorFusion || o instanceof StartLocationFragment)) {
+                o.update(new Object[]{wifiResponse});
             }
         }
     }
