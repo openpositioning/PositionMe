@@ -2,7 +2,6 @@ package com.openpositioning.PositionMe.utils;
 
 import android.graphics.Color;
 import android.util.Log;
-
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.GroundOverlay;
@@ -11,182 +10,175 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.openpositioning.PositionMe.R;
-
 import java.util.Arrays;
 import java.util.List;
 
 /**
  * Class used to manage indoor floor map overlays
- * Currently used by RecordingFragment
+ * Currently used by TrajectoryMapFragment to display indoor maps
  * @see BuildingPolygon Describes the bounds of buildings and the methods to check if point is
  * in the building
  * @author Arun Gopalakrishnan
+ * @author Shu Gu
+ * @version 1.1 - Bug fix for not updating the overlay if the location jumps from one building to another.
  */
 public class IndoorMapManager {
-    // To store the map instance
+    // Map instance and overlay
     private GoogleMap gMap;
-    //Stores the overlay of the indoor maps
     private GroundOverlay groundOverlay;
-    // Stores the current Location of user
+    // Current user location
     private LatLng currentLocation;
-    // Stores if indoor map overlay is currently set
-    private boolean isIndoorMapSet=false;
-    //Stores the current floor in building
+    // Indicates if an indoor map overlay is currently set
+    private boolean isIndoorMapSet = false;
+    // Current floor and floor height
     private int currentFloor;
-    // Floor height of current building
     private float floorHeight;
-    //Images of the Nucleus Building and Library indoor floor maps
-    private final List<Integer> NUCLEUS_MAPS =Arrays.asList(
+    // NEW: Track which building's overlay is currently shown ("nucleus", "library", or empty)
+    private String currentBuilding = "";
+
+    // Indoor map resource lists for Nucleus and Library
+    private final List<Integer> NUCLEUS_MAPS = Arrays.asList(
             R.drawable.nucleuslg, R.drawable.nucleusg, R.drawable.nucleus1,
-            R.drawable.nucleus2,R.drawable.nucleus3);
-    private final List<Integer> LIBRARY_MAPS =Arrays.asList(
+            R.drawable.nucleus2, R.drawable.nucleus3);
+    private final List<Integer> LIBRARY_MAPS = Arrays.asList(
             R.drawable.libraryg, R.drawable.library1, R.drawable.library2,
             R.drawable.library3);
-    // South-west and north east Bounds of Nucleus building and library to set the Overlay
-    LatLngBounds NUCLEUS=new LatLngBounds(
+
+    // Building bounds for overlay positioning
+    LatLngBounds NUCLEUS = new LatLngBounds(
             BuildingPolygon.NUCLEUS_SW,
             BuildingPolygon.NUCLEUS_NE
     );
-    LatLngBounds LIBRARY=new LatLngBounds(
+    LatLngBounds LIBRARY = new LatLngBounds(
             BuildingPolygon.LIBRARY_SW,
             BuildingPolygon.LIBRARY_NE
     );
-    //Average Floor Heights of the Buildings
-    public static final float NUCLEUS_FLOOR_HEIGHT=4.2F;
-    public static final float LIBRARY_FLOOR_HEIGHT=3.6F;
 
-    /**
-     * Constructor to set the map instance
-     * @param map The map on which the indoor floor map overlays are set
-     */
-    public IndoorMapManager(GoogleMap map){
-        this.gMap=map;
+    // Average floor heights for each building
+    public static final float NUCLEUS_FLOOR_HEIGHT = 4.2F;
+    public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
+
+    public IndoorMapManager(GoogleMap map) {
+        this.gMap = map;
     }
 
     /**
-     * Function to update the current location of user and display the indoor map
-     * if user in building with indoor map available
-     * @param currentLocation new location of user
+     * Updates the current location and sets the appropriate building overlay.
+     *
+     * @param currentLocation New location of the user.
      */
-    public void setCurrentLocation(LatLng currentLocation){
-        this.currentLocation=currentLocation;
+    public void setCurrentLocation(LatLng currentLocation) {
+        this.currentLocation = currentLocation;
         setBuildingOverlay();
     }
 
     /**
-     * Function to obtain the current building's floor height
-     * @return the floor height of the current building the user is in
+     * Returns the floor height of the current building.
      */
     public float getFloorHeight() {
         return floorHeight;
     }
 
     /**
-     * Getter to obtain if currently an indoor floor map is being displayed
-     * @return true if an indoor map is visible to the user, false otherwise
+     * Returns true if an indoor map overlay is visible, false otherwise.
      */
-    public boolean getIsIndoorMapSet(){
+    public boolean getIsIndoorMapSet() {
         return isIndoorMapSet;
     }
 
     /**
-     * Setting the new floor of a user and displaying the indoor floor map accordingly
-     * (if floor exists in building)
-     * @param newFloor the floor the user is at
-     * @param autoFloor flag if function called by auto-floor feature
+     * Sets the current floor and updates the indoor map overlay image.
+     *
+     * @param newFloor  The new floor the user is on.
+     * @param autoFloor True if this change comes from an auto-floor feature.
      */
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
-        if (BuildingPolygon.inNucleus(currentLocation)){
-            //Special case for nucleus when auto-floor is being used
+        if ("nucleus".equals(currentBuilding)) {
+            // Special case for Nucleus: auto-floor adds a bias (e.g., lower-ground is floor 0)
             if (autoFloor) {
-                // If nucleus add bias floor as lower-ground floor referred to as floor 0
                 newFloor += 1;
             }
-            // If within bounds and different from floor map currently being shown
-             if (newFloor>=0 && newFloor<NUCLEUS_MAPS.size() && newFloor!=this.currentFloor) {
-                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
-                 this.currentFloor=newFloor;
-             }
-        }
-        else if (BuildingPolygon.inLibrary(currentLocation)){
-            // If within bounds and different from floor map currently being shown
-            if (newFloor>=0 && newFloor<LIBRARY_MAPS.size() && newFloor!=this.currentFloor) {
+            if (newFloor >= 0 && newFloor < NUCLEUS_MAPS.size() && newFloor != this.currentFloor) {
+                groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
+                this.currentFloor = newFloor;
+            }
+        } else if ("library".equals(currentBuilding)) {
+            if (newFloor >= 0 && newFloor < LIBRARY_MAPS.size() && newFloor != this.currentFloor) {
                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(LIBRARY_MAPS.get(newFloor)));
-                this.currentFloor=newFloor;
+                this.currentFloor = newFloor;
             }
         }
+    }
 
+    public void increaseFloor() {
+        this.setCurrentFloor(currentFloor + 1, false);
+    }
+
+    public void decreaseFloor() {
+        this.setCurrentFloor(currentFloor - 1, false);
     }
 
     /**
-     * Increments the Current Floor and changes to higher floor's map (if a higher floor exists)
-     */
-    public void increaseFloor(){
-        this.setCurrentFloor(currentFloor+1,false);
-    }
-
-    /**
-     * Decrements the Current Floor and changes to the lower floor's map (if a lower floor exists)
-     */
-    public void decreaseFloor(){
-        this.setCurrentFloor(currentFloor-1,false);
-    }
-
-    /**
-     * Sets the map overlay for the building if user's current
-     * location is in building and is not already set
-     * Removes the overlay if user no longer in building
+     * Sets or updates the building overlay based on the user's current location.
+     * If the user jumps from one building to another, the overlay is refreshed.
      */
     private void setBuildingOverlay() {
-        // Try catch block to prevent fatal crashes
         try {
-            // Setting overlay if in Nucleus and not already set
-            if (BuildingPolygon.inNucleus(currentLocation) && !isIndoorMapSet) {
+            if (BuildingPolygon.inNucleus(currentLocation)) {
+                // If we're in Nucleus but either no overlay is set or a different building's overlay is active
+                if (!isIndoorMapSet || !"nucleus".equals(currentBuilding)) {
+                    // Remove existing overlay if present
+                    if (isIndoorMapSet && groundOverlay != null) {
+                        groundOverlay.remove();
+                    }
                     groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
                             .image(BitmapDescriptorFactory.fromResource(R.drawable.nucleusg))
                             .positionFromBounds(NUCLEUS));
                     isIndoorMapSet = true;
-                    // Nucleus has an LG floor so G floor is at index 1
-                    currentFloor=1;
-                    floorHeight=NUCLEUS_FLOOR_HEIGHT;
-            }
-            // Setting overlay if in Library and not already set
-            else if (BuildingPolygon.inLibrary(currentLocation) && !isIndoorMapSet) {
+                    currentFloor = 1; // Default floor for Nucleus
+                    floorHeight = NUCLEUS_FLOOR_HEIGHT;
+                    currentBuilding = "nucleus";
+                }
+            } else if (BuildingPolygon.inLibrary(currentLocation)) {
+                if (!isIndoorMapSet || !"library".equals(currentBuilding)) {
+                    if (isIndoorMapSet && groundOverlay != null) {
+                        groundOverlay.remove();
+                    }
                     groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
                             .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
                             .positionFromBounds(LIBRARY));
                     isIndoorMapSet = true;
-                    currentFloor=0;
-                    floorHeight=LIBRARY_FLOOR_HEIGHT;
+                    currentFloor = 0; // Default floor for Library
+                    floorHeight = LIBRARY_FLOOR_HEIGHT;
+                    currentBuilding = "library";
+                }
+            } else {
+                // If the user is no longer in any building with an indoor map
+                if (isIndoorMapSet && groundOverlay != null) {
+                    groundOverlay.remove();
+                    isIndoorMapSet = false;
+                    currentFloor = 0;
+                    currentBuilding = "";
+                }
             }
-            // Removing overlay if user no longer in area with indoor maps available
-            else if (!BuildingPolygon.inLibrary(currentLocation) &&
-                    !BuildingPolygon.inNucleus(currentLocation)&& isIndoorMapSet){
-                groundOverlay.remove();
-                isIndoorMapSet = false;
-                currentFloor=0;
-            }   
         } catch (Exception ex) {
             Log.e("Error with overlay, Exception:", ex.toString());
         }
     }
 
     /**
-     * Function used to set the indication of available floor maps for building using green Polylines
-     * along the building's boundaries.
+     * Sets an indication of available floor maps for the buildings using green polylines.
      */
-    public void setIndicationOfIndoorMap(){
-        //Indicator for Nucleus Building
-        List<LatLng> points=BuildingPolygon.NUCLEUS_POLYGON;
-        // Closing Boundary
-        points.add(BuildingPolygon.NUCLEUS_POLYGON.get(0));
+    public void setIndicationOfIndoorMap() {
+        // Indicator for Nucleus Building
+        List<LatLng> points = BuildingPolygon.NUCLEUS_POLYGON;
+        points.add(BuildingPolygon.NUCLEUS_POLYGON.get(0)); // Closing boundary
         gMap.addPolyline(new PolylineOptions().color(Color.GREEN)
                 .addAll(points));
 
         // Indicator for the Library Building
-        points=BuildingPolygon.LIBRARY_POLYGON;
-        // Closing Boundary
-        points.add(BuildingPolygon.LIBRARY_POLYGON.get(0));
+        points = BuildingPolygon.LIBRARY_POLYGON;
+        points.add(BuildingPolygon.LIBRARY_POLYGON.get(0)); // Closing boundary
         gMap.addPolyline(new PolylineOptions().color(Color.GREEN)
                 .addAll(points));
     }

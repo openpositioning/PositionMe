@@ -340,6 +340,35 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
+    public void updateCalibrationPinLocation(@NonNull LatLng newLocation, boolean pinConfirmed) {
+
+        if (gMap == null) return;
+
+        // Keep track of current location
+        this.currentLocation = newLocation;
+
+
+        if (pinConfirmed) {
+            orientationMarker = gMap.addMarker(new MarkerOptions()
+                    .position(newLocation)
+                    .flat(true)
+                    .title("Tagged Position")
+                    .icon(BitmapDescriptorFactory.fromBitmap(
+                            UtilFunctions.getBitmapFromVector(requireContext(),
+                                    R.drawable.ic_baseline_assignment_turned_in_24_red)))
+            );
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+        }
+
+        //update indoor map overlay
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(newLocation);
+            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+        }
+    }
+
+
+
 
     /**
      * Set the initial camera position for the map.

@@ -146,7 +146,7 @@ public class CollectionActivity extends AppCompatActivity {
      *
      * @param userLat      The user-labeled latitude.
      * @param userLng      The user-labeled longitude.
-     * @param floorLevel   The user-labeled floor (or -1 for outdoors).
+     * @param floorLevel   The user-labeled floor (or -255 for outdoors).
      * @param indoorState  The user-labeled indoor state (0=unknown, 1=indoor, 2=outdoor, 3=transitional/in-boundary).
      * @param buildingName The user-labeled building name (or null).
      */
