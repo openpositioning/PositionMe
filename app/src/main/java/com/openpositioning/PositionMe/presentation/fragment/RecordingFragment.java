@@ -245,7 +245,17 @@ public class RecordingFragment extends Fragment {
                 trajectoryMapFragment.updateUserLocation(newLocation, dummy,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
+            // Get the fused data lat-lng values
+            float[] fusedData = sensorFusion.getSensorValueMap().get(SensorTypes.FUSED);
+            if (fusedData != null && trajectoryMapFragment != null) {
+                LatLng fusedLocation = new LatLng(fusedData[0], fusedData[1]);
+                // Update the fused polyline with this fused location point
+                trajectoryMapFragment.updateFusedPolyline(fusedLocation);
+            }
+
         }
+
+        float[] fusedaaa = sensorFusion.getSensorValueMap().get(SensorTypes.FUSED);
 
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
@@ -279,7 +289,7 @@ public class RecordingFragment extends Fragment {
         }
 
         // Get and plot fused data
-        float[] fused = sensorFusion.getSensorValueMap().get(SensorTypes.WIFI);
+        float[] fused = sensorFusion.getSensorValueMap().get(SensorTypes.FUSED);
         if (fused != null && trajectoryMapFragment != null) {
             // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {

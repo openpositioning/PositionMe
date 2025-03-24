@@ -60,6 +60,8 @@ public class TrajectoryMapFragment extends Fragment {
     private Marker wifiMarker; // Wifi position marker
     private Marker fusedMarker; // Fused data position marker
     private Polyline polyline; // Polyline representing user's movement path
+    private Polyline fusedPolyline; // Polyline representing user's movement path using fused data
+
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
     private boolean isWifiOn = false; // Tracks if GNSS tracking is enabled
@@ -232,6 +234,14 @@ public class TrajectoryMapFragment extends Fragment {
                 .add() // start empty
         );
 
+        // Initialize the fused polyline
+        fusedPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.GREEN)
+                .width(5f)
+                .zIndex(10f)
+                .add() // start empty
+        );
+
         // GNSS path in blue
         gnssPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.BLUE)
@@ -339,8 +349,28 @@ public class TrajectoryMapFragment extends Fragment {
             indoorMapManager.setCurrentLocation(this.currentLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
+
+        // Update fused data polyline
+        if (oldLocation != null && !oldLocation.equals(this.currentLocation) && fusedPolyline != null) {
+            List<LatLng> greenPoints = new ArrayList<>(fusedPolyline.getPoints());
+            // Define a small offset to the right (increasing longitude moves east)
+            double offset = 0.00001; // Adjust as needed for desired shift
+            // Add the new point with an offset
+            greenPoints.add(new LatLng(this.currentLocation.latitude + offset, this.currentLocation.longitude + offset));
+            fusedPolyline.setPoints(greenPoints);
+        }
+
     }
 
+    /**
+     * Updates the fused-data polyline with the new fused location.
+     */
+    public void updateFusedPolyline(@NonNull LatLng fusedLocation) {
+        if (fusedPolyline == null) return;
+        List<LatLng> fusedPoints = new ArrayList<>(fusedPolyline.getPoints());
+        fusedPoints.add(fusedLocation);
+        fusedPolyline.setPoints(fusedPoints);
+    }
 
 
     /**
