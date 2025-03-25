@@ -13,50 +13,6 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!-- Legend for trajectory types -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:padding="4dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="PDR:"
-            android:layout_marginEnd="4dp"/>
-
-        <View
-            android:layout_width="20dp"
-            android:layout_height="4dp"
-            android:background="#FF0000"
-            android:layout_marginEnd="8dp"/>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="GNSS:"
-            android:layout_marginEnd="4dp"/>
-
-        <View
-            android:layout_width="20dp"
-            android:layout_height="4dp"
-            android:background="#0000FF"
-            android:layout_marginEnd="8dp"/>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Fused:"
-            android:layout_marginEnd="4dp"/>
-
-        <View
-            android:layout_width="20dp"
-            android:layout_height="4dp"
-            android:background="#00FF00"
-            android:layout_marginEnd="8dp"/>
-    </LinearLayout>
 
     <!-- Progress bar or seek bar to show current playback position -->
     <SeekBar
@@ -106,5 +62,7 @@
             android:text="@string/replay_frag_exit"
             android:layout_margin="2dp"/>
     </LinearLayout>
+
+
 
 </LinearLayout>
