@@ -23,6 +23,7 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -662,6 +663,10 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param start set true to get the initial location
      * @return longitude and latitude data in a float[2].
      */
+
+
+
+
     public float[] getGNSSLatitude(boolean start) {
         float [] latLong = new float[2];
         if(!start) {
@@ -760,6 +765,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         sensorInfoList.add(this.magnetometerSensor.sensorInfo);
         return sensorInfoList;
     }
+
+
 
     /**
      * Registers the caller observer to receive updates from the server instance.
@@ -974,6 +981,64 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
      * destroyed in {@link SensorFusion#stopRecording()}.
      */
+
+    // Code by Guilherme: Field to store the latest fused (batch-optimized) position.
+    private LatLng fusedPosition;
+
+    // Code by Guilherme: In-memory list to record raw positions over time.
+    private List<LatLng> recordedPositions = new ArrayList<>();
+
+    // Code by Guilherme: Helper method to convert a LatLng to local coordinates (meters)
+    // using your UtilFunctions conversion factor.
+    private double[] latLngToLocal(LatLng point) {
+        // Use the startLocation as reference; if not set, assume 0,0.
+        // Note: UtilFunctions.DEGREE_IN_M is defined in UtilFunctions (here assumed as 111111).
+        double refLat = (startLocation != null && startLocation.length >= 1) ? startLocation[0] : 0;
+        double refLon = (startLocation != null && startLocation.length >= 2) ? startLocation[1] : 0;
+        double dx = UtilFunctions.degreesToMetersLng(point.longitude - refLon, refLat);
+        double dy = UtilFunctions.degreesToMetersLat(point.latitude - refLat);
+        return new double[]{dx, dy};
+    }
+
+    // Code by Guilherme: Helper method to convert local coordinates (meters) back to LatLng.
+    private LatLng localToLatLng(double x, double y) {
+        double refLat = (startLocation != null && startLocation.length >= 1) ? startLocation[0] : 0;
+        double refLon = (startLocation != null && startLocation.length >= 2) ? startLocation[1] : 0;
+        // Convert meter offsets back to degrees.
+        double deltaLat = y / 111111.0;
+        double deltaLon = x / (111111.0 * Math.cos(Math.toRadians(refLat)));
+        return new LatLng(refLat + deltaLat, refLon + deltaLon);
+    }
+
+    // Code by Guilherme: Simple batch optimization: average the local coordinates.
+    // Replace this with a more advanced optimizer if needed.
+    private LatLng updateBatchOptimizedPosition(List<LatLng> rawPositions) {
+        if (rawPositions == null || rawPositions.isEmpty()) return null;
+        double sumX = 0, sumY = 0;
+        for (LatLng p : rawPositions) {
+            double[] local = latLngToLocal(p);
+            sumX += local[0];
+            sumY += local[1];
+        }
+        double avgX = sumX / rawPositions.size();
+        double avgY = sumY / rawPositions.size();
+        return localToLatLng(avgX, avgY);
+    }
+
+    // Code by Guilherme: Getter for the fused (optimized) position so that other fragments can access it.
+    public LatLng getFusedPosition() {
+        return fusedPosition;
+    }
+    private LatLng getStartLocationFromGNSS() {
+        float[] start = getGNSSLatitude(true); // returns startLocation when 'start' is true
+        if (start != null && start.length >= 2) {
+            return new LatLng(start[0], start[1]);
+        }
+        return new LatLng(0, 0); // fallback if not available
+    }
+
+
+
     private class storeDataInTrajectory extends TimerTask {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
@@ -1034,9 +1099,44 @@ public class SensorFusion implements SensorEventListener, Observer {
                 counter++;
             }
 
+            // Code by Guilherme: Record the current raw position.
+            // Here, we assume that the current position is given by the latest GNSS data if available, else by PDR.
+            LatLng currentRawPosition;
+            if (trajectory.getGnssDataCount() > 0) {
+                // Use the latest GNSS sample.
+                int lastIndex = trajectory.getGnssDataCount() - 1;
+                currentRawPosition = new LatLng(trajectory.getGnssData(lastIndex).getLatitude(),
+                        trajectory.getGnssData(lastIndex).getLongitude());
+            } else if (trajectory.getPdrDataCount() > 0) {
+                // Otherwise, use the latest PDR sample.
+                int lastIndex = trajectory.getPdrDataCount() - 1;
+                // Here, assume that the PDR sample (x,y) has been converted to a LatLng using our existing method:
+                // You may have already implemented a method for this conversion (e.g., UtilFunctions.calculateNewPos).
+                currentRawPosition = UtilFunctions.calculateNewPos(getStartLocationFromGNSS(), new float[]{
+                        trajectory.getPdrData(lastIndex).getX(),
+                        trajectory.getPdrData(lastIndex).getY()
+                });
+            } else {
+                currentRawPosition = null;
+            }
+            if (currentRawPosition != null) {
+                recordedPositions.add(currentRawPosition);
+            }
+
+            // Code by Guilherme: Update the fused position using batch optimization.
+            LatLng optimizedPos = updateBatchOptimizedPosition(recordedPositions);
+            if (optimizedPos != null) {
+                fusedPosition = optimizedPos;
+                Log.i("SensorFusion", "Fused position updated: " + fusedPosition.toString());
+            }
+
+
+
         }
     }
+}
+
 
     //endregion
 
-}
+
