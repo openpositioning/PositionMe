@@ -2,10 +2,10 @@ package com.openpositioning.PositionMe.sensors;
 
 public class KFLinear2D {
     // State = [ x, y, vx, vy ] in meters
-    private double[] x;      // 长度为4
-    private double[][] P;    // 4x4 协方差矩阵
-    private double[][] Q;    // 4x4 过程噪声
-    private double[][] R;    // 2x2 测量噪声
+    private double[] x;      // Length of 4
+    private double[][] P;    // 4x4 Covariance matrix
+    private double[][] Q;    // 4x4 Process noise
+    private double[][] R;    // 2x2 Measurement noise
 
     public KFLinear2D(double[] initialState,
                       double[][] initialCov,
@@ -72,13 +72,12 @@ public class KFLinear2D {
         return new double[]{ x[0], x[1] };
     }
 
-    // 新增方法：返回协方差矩阵 P 的副本
+    // New method: Return a copy of the covariance matrix P
     public double[][] getErrorCovariance() {
         return copyMatrix(P);
     }
 
-    // -------------- 辅助矩阵运算方法 ----------------
-
+    // -------------- Auxiliary matrix operation methods ----------------
     private double[][] addMatrices(double[][] A, double[][] B) {
         int rows = A.length;
         int cols = A[0].length;
