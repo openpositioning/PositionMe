@@ -15,8 +15,8 @@
         <androidx.fragment.app.FragmentContainerView
             android:id="@+id/mapFragmentContainer"
             android:name="com.google.android.gms.maps.SupportMapFragment"
-            android:layout_width="389dp"
-            android:layout_height="370dp"
+            android:layout_width="385dp"
+            android:layout_height="645dp"
             android:layout_marginTop="16dp"
             app:layout_constraintDimensionRatio="16:9"
             app:layout_constraintEnd_toEndOf="parent"
@@ -29,7 +29,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="32dp"
-            android:text="test text"
+            android:text="Scanning Wifi"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/mapFragmentContainer" />

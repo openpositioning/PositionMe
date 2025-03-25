@@ -10,6 +10,7 @@ import androidx.fragment.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -39,6 +40,17 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     // For the map
     private GoogleMap mMap;
     private SupportMapFragment mapFragment;
+    private final android.os.Handler handler = new android.os.Handler();
+    private final int updateInterval = 1000; // 1 second
+    private final Runnable updateWifiLocationRunnable = new Runnable() {
+        @Override
+        public void run() {
+            updateWifiLocationText();
+            handler.postDelayed(this, updateInterval);
+        }
+    };
+
+    private TextView statusText;
 
     public DataDisplay() {
         // Required empty public constructor
@@ -87,9 +99,6 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // 🔽 启动 WiFi 扫描和传感器监听
-        //SensorFusion.getInstance().resumeListening();
-
         // Initialize the SupportMapFragment and set the OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager()
                 .findFragmentById(R.id.mapFragmentContainer);
@@ -97,6 +106,10 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
+
+        statusText = view.findViewById(R.id.textView3);
+
+        handler.post(updateWifiLocationRunnable);
     }
 
     @Override
@@ -116,5 +129,29 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         }
 
     }
+
+    private void updateWifiLocationText() {
+        LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
+        int floor = SensorFusion.getInstance().getWifiFloor();
+
+        if (wifiLocation != null) {
+            String display = String.format(
+                    "WiFi Location:\nLatitude: %.6f\nLongitude: %.6f\nFloor: %d",
+                    wifiLocation.latitude,
+                    wifiLocation.longitude,
+                    floor
+            );
+            statusText.setText(display);
+        } else {
+            statusText.setText("WiFi Location: Unavailable");
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        handler.removeCallbacks(updateWifiLocationRunnable);
+    }
 }
+
 
