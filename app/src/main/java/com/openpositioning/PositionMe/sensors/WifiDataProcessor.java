@@ -249,16 +249,27 @@ public class WifiDataProcessor implements Observable {
      * If the device supports wifi throttling check if it is enabled and instruct the user to
      * disable it.
      */
-    public void checkWifiThrottling(){
-        if(checkWifiPermissions()) {
+    public void checkWifiThrottling() {
+        if (checkWifiPermissions()) {
             //If the device does not support wifi throttling an exception is thrown
-            try {
-                if(Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled")==1) {
-                    //Inform user to disable wifi throttling
+            if (Build.VERSION.SDK_INT >= 29) {
+                boolean isThrottled = true;
+                if (wifiManager != null) {
+                    isThrottled = wifiManager.isScanThrottleEnabled();
+                }
+
+                if (isThrottled) {
                     Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
                 }
-            } catch (Settings.SettingNotFoundException e) {
-                e.printStackTrace();
+            } else {
+                try {
+                    if (Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled") == 1) {
+                        //Inform user to disable wifi throttling
+                        Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Settings.SettingNotFoundException e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
@@ -268,10 +279,15 @@ public class WifiDataProcessor implements Observable {
      *
      * @param o     Classes which implement the Observer interface to receive updates from the class.
      */
-    @Override
-    public void registerObserver(Observer o) {
-        observers.add(o);
-    }
+        @Override
+        public void registerObserver (Observer o) {
+            observers.add(o);
+        }
+
+        @Override
+        public void unRegisterObserver (Observer o) {
+            observers.remove(o);
+        }
 
     /**
      * Implement default method from Observable Interface to add notify observers to the class.
