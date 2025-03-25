@@ -89,6 +89,7 @@ public class TrajParser {
             this.speed = speed;
             this.timestamp = timestamp;
             this.wifiSamples = wifiSamples != null ? wifiSamples : new ArrayList<>();
+
         }
 
     }

@@ -143,22 +143,27 @@ public class ReplayFragment extends Fragment {
             TrajParser.ReplayPoint firstReplayPoint = replayData.get(0);
 
             if (firstReplayPoint.wifiSamples != null && !firstReplayPoint.wifiSamples.isEmpty()) {
-                JSONObject wifiFingerprint = new JSONObject();
+                JSONObject wifiAccessPoints = new JSONObject();
 
                 // Build WiFi fingerprint JSON from first WiFi sample
                 for (Traj.WiFi_Sample sample : firstReplayPoint.wifiSamples) {
                     for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
                         try {
-                            wifiFingerprint.put(String.valueOf(macScan.getMac()), macScan.getRssi());
+                            wifiAccessPoints.put(String.valueOf(macScan.getMac()), macScan.getRssi());
                         } catch (JSONException e) {
                             Log.e(TAG, "Error creating WiFi fingerprint JSON: " + e.getMessage());
                         }
                     }
                 }
-
+                JSONObject wifiFingerPrint = new JSONObject();
+                try {
+                    wifiFingerPrint.put("wf", wifiAccessPoints);
+                } catch (JSONException e) {
+                    throw new RuntimeException(e);
+                }
                 // Attempt to retrieve WiFi position
                 WiFiPositioning wifiPositioning = new WiFiPositioning(getContext());
-                wifiPositioning.request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
+                wifiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                     @Override
                     public void onSuccess(LatLng wifiLocation, int floor) {
                         Log.i(TAG, "WiFi positioning successful. Location: " + wifiLocation);
@@ -182,6 +187,7 @@ public class ReplayFragment extends Fragment {
                     @Override
                     public void onError(String message) {
                         Log.e(TAG, "WiFi positioning failed: " + message);
+                        Log.d(TAG, "WiFi Fingerprint: " + wifiFingerPrint);
                         // If WiFi fails, proceed with the existing GNSS choice dialog
                         if (hasAnyGnssData(replayData)) {
                             showGnssChoiceDialog();
@@ -319,7 +325,11 @@ public class ReplayFragment extends Fragment {
             if (replayData.isEmpty()) return;
             currentIndex = replayData.size() - 1;
             playbackSeekBar.setProgress(currentIndex);
-            updateMapForIndex(currentIndex);
+            try {
+                updateMapForIndex(currentIndex);
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
             isPlaying = false;
             trajectoryMapFragment.clearMapAndReset();
             for (int i = 0; i <= currentIndex && i < replayData.size(); i++) {
@@ -469,6 +479,9 @@ public class ReplayFragment extends Fragment {
                 }
                 break;
             case "WiFi":
+                // add request for wifi data here as well to ensure it keeps getting the data
+                // TODO
+
                 if (p.wifiLocation != null) {
                     trajectoryMapFragment.updateUserLocation(p.wifiLocation, p.orientation);
                 } else {
@@ -492,7 +505,7 @@ public class ReplayFragment extends Fragment {
         }
     }
 
-    private void updateMapForIndex(int newIndex) {
+    private void updateMapForIndex(int newIndex) throws JSONException {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
 
         // Get the current replay point
@@ -504,17 +517,18 @@ public class ReplayFragment extends Fragment {
         // Check if WiFi samples exist for this index
         if (replayPoint.wifiSamples != null && !replayPoint.wifiSamples.isEmpty()) {
             // Create JSON fingerprint for WiFi positioning
-            JSONObject wifiFingerprint = new JSONObject();
+            JSONObject wifiAccessPoints = new JSONObject();
             for (Traj.WiFi_Sample sample : replayPoint.wifiSamples) {
                 for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
                     try {
-                        wifiFingerprint.put(String.valueOf(macScan.getMac()), macScan.getRssi());
+                        wifiAccessPoints.put(String.valueOf(macScan.getMac()), macScan.getRssi());
                     } catch (JSONException e) {
                         Log.e(TAG, "Error creating WiFi fingerprint JSON: " + e.getMessage());
                     }
                 }
             }
-
+            JSONObject wifiFingerprint = new JSONObject();
+            wifiFingerprint.put("wf", wifiAccessPoints);
             // Request WiFi position from API
             WiFiPositioning wifiPositioning = new WiFiPositioning(getContext());
             wifiPositioning.request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
