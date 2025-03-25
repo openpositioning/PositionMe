@@ -12,6 +12,8 @@ package com.openpositioning.PositionMe.sensors;
  */
 public class Wifi {
     private String ssid;
+
+    private String bssidStr;
     private long bssid;
     private int level;
     private long frequency;
@@ -37,6 +39,8 @@ public class Wifi {
     public void setLevel(int level) { this.level = level; }
     public void setFrequency(long frequency) { this.frequency = frequency; }
 
+    public void setBssidStr(String bssidStr) { this.bssidStr = bssidStr; }
+
     /**
      * Generates a string containing mac address and rssi of Wifi.
      *
@@ -47,4 +51,5 @@ public class Wifi {
     public String toString() {
         return  "bssid: " + bssid +", level: " + level;
     }
+    public String getBssidStr() { return bssidStr; }
 }

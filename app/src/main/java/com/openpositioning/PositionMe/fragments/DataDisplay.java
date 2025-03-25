@@ -18,6 +18,7 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -86,6 +87,9 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        // 🔽 启动 WiFi 扫描和传感器监听
+        //SensorFusion.getInstance().resumeListening();
+
         // Initialize the SupportMapFragment and set the OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager()
                 .findFragmentById(R.id.mapFragmentContainer);
@@ -99,14 +103,18 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
         showCurrentLocation();
+
     }
 
     public void showCurrentLocation(){
-        LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
-        mMap.addMarker(new MarkerOptions()
-                .position(edinburghLatLng)
-                .title("University of Edinburgh"));
+        LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
+        if (wifiLocation != null) {
+            mMap.addMarker(new MarkerOptions()
+                    .position(wifiLocation)
+                    .title("WiFi Estimated Position"));
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(wifiLocation, 18f));
+        }
+
     }
 }
 
