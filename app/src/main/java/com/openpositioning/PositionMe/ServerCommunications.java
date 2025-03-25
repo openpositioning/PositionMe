@@ -539,6 +539,11 @@ public class ServerCommunications implements Observable {
         this.observers.add(o);
     }
 
+    @Override
+    public void unRegisterObserver(Observer o) {
+        this.observers.remove(o);
+    }
+
     /**
      * {@inheritDoc}
      *

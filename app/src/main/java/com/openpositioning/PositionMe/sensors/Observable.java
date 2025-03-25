@@ -16,6 +16,8 @@ public interface Observable {
      */
     public void registerObserver(com.openpositioning.PositionMe.sensors.Observer o);
 
+    public void unRegisterObserver(com.openpositioning.PositionMe.sensors.Observer o);
+
     /**
      * Notify observers of changes to relevant data structures. If there are multiple data structures
      * and not all are relevant to all observers, use the input to differentiate.
