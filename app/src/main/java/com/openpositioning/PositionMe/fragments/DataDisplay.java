@@ -2,12 +2,21 @@ package com.openpositioning.PositionMe.fragments;
 
 import android.os.Bundle;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
 
 /**
@@ -15,7 +24,7 @@ import com.openpositioning.PositionMe.R;
  * Use the {@link DataDisplay#newInstance} factory method to
  * create an instance of this fragment.
  */
-public class DataDisplay extends Fragment {
+public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
     // TODO: Rename parameter arguments, choose names that match
     // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
@@ -25,6 +34,10 @@ public class DataDisplay extends Fragment {
     // TODO: Rename and change types of parameters
     private String mParam1;
     private String mParam2;
+
+    // For the map
+    private GoogleMap mMap;
+    private SupportMapFragment mapFragment;
 
     public DataDisplay() {
         // Required empty public constructor
@@ -60,7 +73,40 @@ public class DataDisplay extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
+        getActivity().setTitle("Live Position");
         // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_data_display, container, false);
     }
+
+    /**
+     * {@inheritDoc}
+     * Initialise UI elements and set onClick actions for the buttons.
+     */
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        // Initialize the SupportMapFragment and set the OnMapReadyCallback
+        SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager()
+                .findFragmentById(R.id.mapFragmentContainer);
+
+        if (mapFragment != null) {
+            mapFragment.getMapAsync(this);
+        }
+    }
+
+    @Override
+    public void onMapReady(@NonNull GoogleMap googleMap) {
+        mMap = googleMap;
+        showCurrentLocation();
+    }
+
+    public void showCurrentLocation(){
+        LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
+        mMap.addMarker(new MarkerOptions()
+                .position(edinburghLatLng)
+                .title("University of Edinburgh"));
+    }
 }
+

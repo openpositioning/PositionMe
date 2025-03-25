@@ -160,7 +160,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:backgroundTint="#9E9E9E"
-            android:text="Indoor Positioning \n (In Development)"
+            android:text="Live Position"
             android:textColor="@color/md_theme_onPrimary"
             android:textSize="14sp"
             app:cornerRadius="14dp"

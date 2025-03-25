@@ -50,6 +50,8 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private MaterialButton measurements;
     private MaterialButton files;
 
+    private MaterialButton dataDisplay;
+
     private TextView gnssStatusTextView;
 
     // For the map
@@ -153,6 +155,21 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                 Navigation.findNavController(view).navigate(action);
             }
         });
+
+        // Button to navigate to the Data Display fragment
+        this.dataDisplay = getView().findViewById(R.id.indoorButton);
+        this.dataDisplay.setOnClickListener(new View.OnClickListener() {
+            /**
+             * {@inheritDoc}
+             * Navigate to the {@link DataDisplay} using AndroidX Jetpack.
+             */
+            @Override
+            public void onClick(View view) {
+                NavDirections action = HomeFragmentDirections.actionHomeFragmentToDataDisplay();
+                Navigation.findNavController(view).navigate(action);
+            }
+        });
+
         // TextView to display GNSS disabled message
         gnssStatusTextView = view.findViewById(R.id.gnssStatusTextView);
 
@@ -241,18 +258,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             showEdinburghAndMessage("GNSS is disabled. Please enable in settings.");
         }
 
-        // Button to navigate to the Data Display fragment
-        this.dataDisplay = getView().findViewById(R.id.indoorButton);
-        this.dataDisplay.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Navigate to the {@link DataDisplay} using AndroidX Jetpack.
-             */
-            @Override
-            public void onClick(View view) {
-                NavDirections action = HomeFragmentDirections.actionHomeFragmentToDataDisplay();
-                Navigation.findNavController(view).navigate(action);
-            }
-        });
+
     }
 }
