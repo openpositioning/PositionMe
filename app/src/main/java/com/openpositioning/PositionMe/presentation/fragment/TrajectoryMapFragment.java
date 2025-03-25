@@ -58,6 +58,9 @@ public class TrajectoryMapFragment extends Fragment {
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
     private Polyline polyline; // Polyline representing user's movement path
+
+    private Marker fusedPositionMarker; // Marker for the fused position
+    private Polyline fusedPolyline;
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
 
@@ -389,6 +392,8 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
+
+
     /**
      * Remove GNSS marker if user toggles it off
      */
@@ -412,6 +417,53 @@ public class TrajectoryMapFragment extends Fragment {
         autoFloorSwitch.setVisibility(visibility);
     }
 
+    /**
+     * Updates the fused position marker and polyline on the map.
+     *
+     * @param fusedPosition The latest fused position from the sensor fusion algorithm
+     */
+    public void updateFusedPosition(@NonNull LatLng fusedPosition) {
+        if (gMap == null) return;
+
+        // Initialize the fused polyline if it doesn't exist
+        if (fusedPolyline == null) {
+            fusedPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.GREEN)  // Use green for the fused trajectory
+                    .width(5f)
+                    .add());
+        }
+
+        // Add the position to the fused trajectory polyline
+        List<LatLng> points = new ArrayList<>(fusedPolyline.getPoints());
+        points.add(fusedPosition);
+        fusedPolyline.setPoints(points);
+
+        // Create or update the fused position marker
+        if (fusedPositionMarker == null) {
+            fusedPositionMarker = gMap.addMarker(new MarkerOptions()
+                    .position(fusedPosition)
+                    .title("Fused Position")
+                    .icon(BitmapDescriptorFactory
+                            .defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+        } else {
+            fusedPositionMarker.setPosition(fusedPosition);
+        }
+    }
+
+    /**
+     * Clears the fused position data from the map.
+     */
+    public void clearFusedPosition() {
+        if (fusedPositionMarker != null) {
+            fusedPositionMarker.remove();
+            fusedPositionMarker = null;
+        }
+        if (fusedPolyline != null) {
+            fusedPolyline.remove();
+            fusedPolyline = null;
+        }
+    }
+
     public void clearMapAndReset() {
         if (polyline != null) {
             polyline.remove();
@@ -431,6 +483,24 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastGnssLocation = null;
         currentLocation  = null;
+
+        // Add these lines to clear fused data
+        if (fusedPositionMarker != null) {
+            fusedPositionMarker.remove();
+            fusedPositionMarker = null;
+        }
+        if (fusedPolyline != null) {
+            fusedPolyline.remove();
+            fusedPolyline = null;
+        }
+
+        // Then add the new empty fused polyline
+        if (gMap != null) {
+            fusedPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.GREEN)
+                    .width(5f)
+                    .add());
+        }
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
