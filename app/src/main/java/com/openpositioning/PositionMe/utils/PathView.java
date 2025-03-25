@@ -45,6 +45,11 @@ public class PathView extends View {
     private static boolean draw = true;
     //Variable to only draw when the variable is true
     private static boolean reDraw = false;
+    private final int ekfColor = Color.RED;
+    private Path ekfPath = new Path();
+    private static ArrayList<Float> ekfXCoords = new ArrayList<>();
+    private static ArrayList<Float> ekfYCoords = new ArrayList<>();
+
 
     /**
      * Public default constructor for PathView. The constructor initialises the view with a context

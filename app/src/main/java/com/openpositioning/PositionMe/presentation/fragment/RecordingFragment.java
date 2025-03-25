@@ -80,6 +80,7 @@ public class RecordingFragment extends Fragment {
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
+
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {

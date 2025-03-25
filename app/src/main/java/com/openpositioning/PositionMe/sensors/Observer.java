@@ -18,4 +18,6 @@ public interface Observer {
      * @param objList   an array of objects that were updated in the <code>Observable</code>
      */
     public void update(Object[] objList);
+
+    void update(Object data);
 }

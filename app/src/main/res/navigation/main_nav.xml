@@ -84,4 +84,20 @@
         app:exitAnim="@anim/slide_out_bottom"
         app:popEnterAnim="@anim/slide_in_bottom"
         app:popExitAnim="@anim/slide_in_top" />
+    <fragment
+        android:id="@+id/startLocationFragment"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment"
+        android:label="Start Location">
+
+        <action
+            android:id="@+id/action_startLocationFragment_to_recordingFragment"
+            app:destination="@id/recordingFragment" />
+    </fragment>
+
+    <!-- RecordingFragment -->
+    <fragment
+        android:id="@+id/recordingFragment"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.RecordingFragment"
+        android:label="Recording">
+    </fragment>
 </navigation>

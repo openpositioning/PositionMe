@@ -10,6 +10,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.NavDirections;
+import androidx.navigation.Navigation;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -50,6 +52,10 @@ public class StartLocationFragment extends Fragment {
     private NucleusBuildingManager nucleusBuildingManager;
     // Dummy variable for floor index
     private int FloorNK;
+    private double[] startRef = new double[3];
+    private Marker user_marker;
+    boolean wifiFound = false;
+    private Integer currentFloor = null;
 
     /**
      * Public Constructor for the class.
@@ -187,6 +193,18 @@ public class StartLocationFragment extends Fragment {
                     // Optional: log or handle error
                     // Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
                 }
+                sensorFusion.startRecording();
+                // Set the start location obtained
+                sensorFusion.setStartGNSSLatitude(new float[] {(float) startRef[0], (float) startRef[1]});
+                sensorFusion.setStartGNSSLatLngAlt(startRef);
+                sensorFusion.initialiseFusionAlgorithm();
+                if (currentFloor != null) {
+                    sensorFusion.setCurrentFloor(currentFloor);
+                }
+                // Navigate to the RecordingFragment
+                NavDirections action = StartLocationFragmentDirections.actionStartLocationFragmentToRecordingFragment();
+                Navigation.findNavController(view).navigate(action);
+
             }
         });
     }
