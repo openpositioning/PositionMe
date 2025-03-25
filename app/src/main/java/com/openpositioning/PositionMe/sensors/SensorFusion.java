@@ -938,4 +938,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
     //endregion
 
+    public void resetPdrStartingPosition() {
+        pdrProcessing.resetPDR();
+    }
 }

@@ -41,15 +41,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 融合了定位与室内楼层图切换功能的 FusionFragment：
- * 1. 使用卡尔曼滤波器融合 WiFi 与 GNSS 数据，并结合 PDR 增量更新位置；
- * 2. 对融合后的最佳位置进行指数平滑滤波，确保显示平稳；
- * 3. 分别记录最近 MAX_OBSERVATIONS 次 GNSS、WiFi 和 PDR 的绝对定位数据，并用不同颜色 Marker 显示；
- * 4. 显示融合位置全轨迹（红色折线），并调用 IndoorMapManager 更新楼层信息，
- *    保证楼层图保持不变（不使用 mMap.clear() 清除楼层图）。
- * 5. 新增 “Add tag” 按钮，允许用户将当前定位打上标签写入 Trajectory；
- * 6. 计算并显示定位精度（基于 KF 的协方差矩阵）；
- * 7. 根据当前融合位置判断室内/室外状态并显示。
+ * FusionFragment that fuses positioning and indoor floor map switching functionality:
+ * 1. Uses a Kalman filter to fuse WiFi and GNSS data, and updates the position using incremental PDR.
+ * 2. Applies exponential smoothing to the fused optimal position to ensure smooth display.
+ * 3. Records the most recent MAX_OBSERVATIONS absolute positioning data from GNSS, WiFi, and PDR,
+ *    displaying them using markers in different colors.
+ * 4. Displays the complete trajectory of the fused position (red polyline) and calls IndoorMapManager to update floor information,
+ *    ensuring that the floor map remains intact (without calling mMap.clear() to remove floor overlays).
+ * 5. Adds an "Add tag" button to allow users to tag the current position into the Trajectory.
+ * 6. Calculates and displays positioning accuracy (based on the KF covariance matrix).
+ * 7. Determines and displays indoor/outdoor status based on whether the fused position falls within a building.
  */
 public class FusionFragment extends Fragment implements OnMapReadyCallback {
 
@@ -60,42 +61,42 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
     private Polyline fusionPolyline;
     private List<LatLng> fusionPath = new ArrayList<>();
 
-    // 保存最近 N 次观测
+    // Stores the most recent N observations
     private List<LatLng> gnssObservations = new ArrayList<>();
     private List<LatLng> wifiObservations = new ArrayList<>();
     private List<LatLng> pdrObservations = new ArrayList<>();
     private static final int MAX_OBSERVATIONS = 10;
 
-    // 用于保存各传感器 Marker 的引用，方便清除
+    // Used to store references to each sensor's Marker for easy removal
     private List<Marker> gnssMarkers = new ArrayList<>();
     private List<Marker> wifiMarkers = new ArrayList<>();
     private List<Marker> pdrMarkers = new ArrayList<>();
 
     private Handler updateHandler = new Handler(Looper.getMainLooper());
     private Runnable fusionUpdateRunnable;
-    private static final long UPDATE_INTERVAL_MS = 1000; // 每秒更新一次
+    private static final long UPDATE_INTERVAL_MS = 1000; // Update every second
 
     private SensorFusion sensorFusion;
     private IndoorMapManager indoorMapManager;
     private Spinner mapSpinner;
 
-    // 新增用于显示定位精度和室内/室外状态的 TextView
+    // New TextViews for displaying positioning accuracy and indoor/outdoor status
     private TextView accuracyTextView;
     private TextView indoorOutdoorTextView;
 
-    // 卡尔曼滤波器 KF
+    // Kalman filter KF
     private KFLinear2D kf;
     private long lastUpdateTime = 0;
 
-    // 局部坐标转换原点（经纬度），用于将经纬度转换为局部 (x,y)（单位：米）
+    // Local coordinate conversion origin (lat/lon), used to convert lat/lon to local (x,y) coordinates in meters
     private double lat0Deg = 0.0;
     private double lon0Deg = 0.0;
     private boolean originSet = false;
 
-    // 保存上一次 PDR 数据（用于计算增量）
+    // Stores the last PDR data (used to calculate increments)
     private float[] lastPdr = null;
 
-    // 噪声参数
+    // Noise parameters
     private final double[][] R_wifi = { {20.0, 0.0}, {0.0, 20.0} };
     private final double[][] R_gnss = { {100.0, 0.0}, {0.0, 100.0} };
     private final double[][] Q = {
@@ -105,22 +106,47 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             {0,   0,   0,   0.1}
     };
 
-    // 指数平滑滤波参数（取值范围 [0,1]，值越小平滑越强）
+    // Exponential smoothing parameter (range [0,1], lower values yield stronger smoothing)
     private static final double SMOOTHING_ALPHA = 0.2;
     private LatLng smoothFusedPosition = null;
 
-    // 用于记录录制开始的时间
+    // Used to record the start time of recording
     private long startTimestamp;
 
     public FusionFragment() {
-        // required empty constructor
+        // Required empty constructor
     }
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // 初始化录制开始的时间
         startTimestamp = System.currentTimeMillis();
+        // Initialize sensorFusion so we can get the initial sensor readings.
+        sensorFusion = SensorFusion.getInstance();
+        pdrObservations.clear();
+
+        // Retrieve WiFi and GNSS positions.
+        LatLng wifiPos = sensorFusion.getLatLngWifiPositioning();
+        float[] gnssArr = sensorFusion.getGNSSLatitude(false);
+
+        if (wifiPos != null && gnssArr != null && gnssArr.length >= 2 && !(gnssArr[0] == 0 && gnssArr[1] == 0)) {
+            // Calculate the average latitude and longitude.
+            double avgLat = (wifiPos.latitude + gnssArr[0]) / 2.0;
+            double avgLon = (wifiPos.longitude + gnssArr[1]) / 2.0;
+
+            // Use wifiPos as the local origin for converting to local coordinates.
+            double metersPerLat = 111320.0;
+            double cosLat = Math.cos(Math.toRadians(wifiPos.latitude));
+            double metersPerLon = 111320.0 * cosLat;
+            double localX = (avgLon - wifiPos.longitude) * metersPerLon;
+            double localY = (avgLat - wifiPos.latitude) * metersPerLat;
+
+            // Set the PDR starting position (local coordinates) to the computed average.
+            lastPdr = new float[]{(float) localX, (float) localY};
+        } else {
+            lastPdr = null;
+        }
+        sensorFusion.resetPdrStartingPosition();
     }
 
     @Nullable
@@ -128,8 +154,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        // 请确保 fragment_fusion.xml 中包含 id 为 addTagButton_fusion, accuracyTextView_fusion,
-        // indoorOutdoorTextView_fusion 的控件
+        // Ensure that fragment_fusion.xml contains controls with IDs: addTagButton_fusion, accuracyTextView_fusion, and indoorOutdoorTextView_fusion
         return inflater.inflate(R.layout.fragment_fusion, container, false);
     }
 
@@ -140,7 +165,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         view.findViewById(R.id.exitButton_fusion).setOnClickListener(v ->
                 Navigation.findNavController(v).popBackStack(R.id.homeFragment, false));
 
-        // 楼层按钮点击事件
+        // Floor button click events
         view.findViewById(R.id.floorUpButton_fusion).setOnClickListener(v -> {
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
@@ -161,7 +186,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         mapSpinner = view.findViewById(R.id.mapSwitchSpinner_fusion);
         setupMapSpinner();
 
-        // 初始化新加的控件：Add Tag 按钮和两个 TextView
+        // Initialize the new controls: the Add Tag button and two TextViews
         Button addTagButton = view.findViewById(R.id.addTagButton_fusion);
         accuracyTextView = view.findViewById(R.id.accuracyTextView_fusion);
         indoorOutdoorTextView = view.findViewById(R.id.indoorOutdoorTextView_fusion);
@@ -174,7 +199,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
                     double lat = smoothFusedPosition.latitude;
                     double lon = smoothFusedPosition.longitude;
                     float altitude = sensorFusion.getElevation();
-                    // 调用 SensorFusion 中新增的 addFusionTag() 方法写入 Trajectory
+                    // Call the new addFusionTag() method in SensorFusion to write to the Trajectory
                     sensorFusion.addFusionTag(relativeTimestamp, lat, lon, altitude, "fusion");
                     Log.d(TAG, "Add tag: timestamp=" + relativeTimestamp + ", lat=" + lat + ", lon=" + lon + ", alt=" + altitude);
                 }
@@ -202,6 +227,8 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
     public void onResume() {
         super.onResume();
         lastUpdateTime = System.currentTimeMillis();
+        // Reset the PDR starting position each time the fragment resumes
+        resetPdrStartingPosition();
         updateHandler.postDelayed(fusionUpdateRunnable, UPDATE_INTERVAL_MS);
     }
 
@@ -218,7 +245,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         mMap.getUiSettings().setCompassEnabled(true);
         indoorMapManager = new IndoorMapManager(mMap);
         setupMapSpinner();
-        // 当地图准备好后，IndoorMapManager 会根据当前位置自动添加楼层图覆盖物
+        // Once the map is ready, IndoorMapManager will automatically add floor overlays based on the current position.
     }
 
     private void updateFusionUI() {
@@ -236,13 +263,13 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         lastUpdateTime = now;
         if (dt <= 0) dt = 0.001;
 
-        // 1) 应用 PDR 增量
+        // 1) Apply PDR increment
         applyPdrIncrement();
 
-        // 2) KF 预测
+        // 2) Kalman Filter prediction
         kf.predict(dt);
 
-        // 3) 融合 WiFi 数据（噪声较大）
+        // 3) Fuse WiFi data (with larger noise)
         LatLng wifiLatLon = sensorFusion.getLatLngWifiPositioning();
         if (wifiLatLon != null) {
             double[] localWifi = latLonToLocal(wifiLatLon.latitude, wifiLatLon.longitude);
@@ -252,7 +279,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             addObservation(wifiObservations, wifiLatLon);
         }
 
-        // 4) 融合 GNSS 数据（噪声较小）
+        // 4) Fuse GNSS data (with smaller noise)
         float[] gnssArr = sensorFusion.getGNSSLatitude(false);
         if (gnssArr != null && gnssArr.length >= 2) {
             float latGNSS = gnssArr[0];
@@ -267,12 +294,12 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             }
         }
 
-        // 5) 获取 KF 融合输出并转换为经纬度
+        // 5) Get KF fused output and convert it to latitude/longitude
         double[] xy = kf.getXY();
         double[] latlon = localToLatLon(xy[0], xy[1]);
         LatLng fusedLatLng = new LatLng(latlon[0], latlon[1]);
 
-        // 6) 对融合结果进行指数平滑
+        // 6) Apply exponential smoothing to the fused result
         if (smoothFusedPosition == null) {
             smoothFusedPosition = fusedLatLng;
         } else {
@@ -282,14 +309,14 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         }
         fusionPath.add(smoothFusedPosition);
 
-        // 7) 处理 PDR 数据（转换为绝对坐标）
+        // 7) Process PDR data (convert to absolute coordinates)
         float[] pdrData = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrData != null && pdrData.length >= 2) {
             LatLng pdrLatLng = convertLocalToLatLon(pdrData[0], pdrData[1]);
             addObservation(pdrObservations, pdrLatLng);
         }
 
-        // 8) 清除现有 Marker 与 Polyline（不调用 mMap.clear() 以保留楼层图覆盖物）
+        // 8) Clear existing Markers and Polyline (without calling mMap.clear() to preserve floor overlays)
         if (fusionMarker != null) {
             fusionMarker.remove();
             fusionMarker = null;
@@ -298,7 +325,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             fusionPolyline.remove();
             fusionPolyline = null;
         }
-        // 同时清除其他传感器 Marker（确保不会累积）
+        // Also clear markers for other sensors (to avoid accumulation)
         for (Marker m : gnssMarkers) { m.remove(); }
         gnssMarkers.clear();
         for (Marker m : wifiMarkers) { m.remove(); }
@@ -306,13 +333,14 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         for (Marker m : pdrMarkers) { m.remove(); }
         pdrMarkers.clear();
 
-        // 9) 绘制融合位置 Marker 与全轨迹（红色）
+        // 9) Draw fused position Marker and complete trajectory (red)
         if (smoothFusedPosition != null) {
             fusionMarker = mMap.addMarker(new MarkerOptions()
                     .position(smoothFusedPosition)
                     .title("Fused Position")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
-                    .zIndex(1000));
+                    // Set zIndex to 2000 so that it is above other markers
+                    .zIndex(2000));
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(smoothFusedPosition, 19f));
             if (fusionPath.size() > 1) {
                 fusionPolyline = mMap.addPolyline(new PolylineOptions()
@@ -323,7 +351,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             }
         }
 
-        // 10) 绘制 GNSS Marker（蓝色）
+        // 10) Draw GNSS markers (blue)
         for (LatLng pos : gnssObservations) {
             Marker marker = mMap.addMarker(new MarkerOptions()
                     .position(pos)
@@ -332,7 +360,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
                     .zIndex(1000));
             gnssMarkers.add(marker);
         }
-        // 11) 绘制 WiFi Marker（绿色）
+        // 11) Draw WiFi markers (green)
         for (LatLng pos : wifiObservations) {
             Marker marker = mMap.addMarker(new MarkerOptions()
                     .position(pos)
@@ -341,7 +369,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
                     .zIndex(1000));
             wifiMarkers.add(marker);
         }
-        // 12) 绘制 PDR Marker（橙色）
+        // 12) Draw PDR markers (orange)
         for (LatLng pos : pdrObservations) {
             Marker marker = mMap.addMarker(new MarkerOptions()
                     .position(pos)
@@ -351,8 +379,8 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             pdrMarkers.add(marker);
         }
 
-        // 13) 计算定位精度并更新显示（利用 KF 的协方差矩阵）
-        double[][] P = kf.getErrorCovariance(); // 新增方法，返回协方差矩阵 P
+        // 13) Calculate positioning accuracy and update display (using the KF covariance matrix)
+        double[][] P = kf.getErrorCovariance(); // New method that returns the covariance matrix P
         double stdX = Math.sqrt(P[0][0]);
         double stdY = Math.sqrt(P[1][1]);
         double accuracy = (stdX + stdY) / 2.0;
@@ -360,7 +388,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             accuracyTextView.setText(String.format("Accuracy: %.1f m", accuracy));
         }
 
-        // 14) 检测室内/室外状态（根据融合位置是否落在建筑内）
+        // 14) Determine indoor/outdoor status (based on whether the fused position falls within a building)
         if (indoorOutdoorTextView != null) {
             if (BuildingPolygon.inNucleus(smoothFusedPosition) || BuildingPolygon.inLibrary(smoothFusedPosition)) {
                 indoorOutdoorTextView.setText("Indoor");
@@ -369,7 +397,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             }
         }
 
-        // 15) 更新楼层显示（更新 IndoorMapManager 中的楼层信息，楼层图由 IndoorMapManager 控制，不调用 mMap.clear()）
+        // 15) Update floor display (update floor information in IndoorMapManager; floor map is controlled by IndoorMapManager without calling mMap.clear())
         updateFloor(smoothFusedPosition);
     }
 
@@ -430,17 +458,24 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
     private void applyPdrIncrement() {
         float[] pdrNow = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrNow == null) return;
-        if (!originSet) return;
+        if (!originSet) return;  // or if KF is not set
+
         if (lastPdr == null) {
             lastPdr = pdrNow.clone();
             return;
         }
-        float rawDx = pdrNow[0] - lastPdr[0];  // 前进/后退
-        float rawDy = pdrNow[1] - lastPdr[1];  // 左右
+
+        float rawDx = pdrNow[0] - lastPdr[0]; // "forward/back" from phone perspective
+        float rawDy = pdrNow[1] - lastPdr[1]; // "side-to-side"
         lastPdr[0] = pdrNow[0];
         lastPdr[1] = pdrNow[1];
-        float dx = rawDy;
+
+        // Try negating rawDy:
+        // If "rawDx" is forward => +Y, then "rawDy" is left/right => -X (or +X).
+        // We'll do dx = -rawDy, dy = rawDx, so forward translates to upward (north).
+        float dx = -rawDy;
         float dy = rawDx;
+
         kf.applyPdrDelta(dx, dy);
     }
 
@@ -491,5 +526,35 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             @Override
             public void onNothingSelected(AdapterView<?> parent) { }
         });
+    }
+
+    /**
+     * Resets the PDR starting position based on the average of the current GNSS and WiFi positions.
+     * This method is called each time the fragment resumes.
+     */
+    private void resetPdrStartingPosition() {
+        // Retrieve WiFi and GNSS positions
+        LatLng wifiPos = sensorFusion.getLatLngWifiPositioning();
+        float[] gnssArr = sensorFusion.getGNSSLatitude(false);
+
+        if (wifiPos != null && gnssArr != null && gnssArr.length >= 2 && !(gnssArr[0] == 0 && gnssArr[1] == 0)) {
+            // Compute the average of the two positions
+            double avgLat = (wifiPos.latitude + gnssArr[0]) / 2.0;
+            double avgLon = (wifiPos.longitude + gnssArr[1]) / 2.0;
+
+            // Use wifiPos as the reference for local coordinate conversion.
+            double metersPerLat = 111320.0;
+            double cosLat = Math.cos(Math.toRadians(wifiPos.latitude));
+            double metersPerLon = 111320.0 * cosLat;
+            double localX = (avgLon - wifiPos.longitude) * metersPerLon;
+            double localY = (avgLat - wifiPos.latitude) * metersPerLat;
+
+            // Set the PDR starting position (in local coordinates)
+            lastPdr = new float[]{(float) localX, (float) localY};
+        } else {
+            lastPdr = null;
+        }
+        pdrObservations.clear();
+        sensorFusion.resetPdrStartingPosition();
     }
 }
