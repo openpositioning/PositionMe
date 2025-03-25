@@ -69,7 +69,6 @@ public class TrajParser {
         public long timestamp;      // Relative timestamp
 
         public List<Traj.WiFi_Sample> wifiSamples = new ArrayList<>();
-        public LatLng wifiLocation;
 
 
         /**
@@ -282,7 +281,7 @@ public class TrajParser {
                 }
 
 
-// Add the ReplayPoint with WiFi data
+                // Add the ReplayPoint with WiFi data
                 result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
                         0f, pdr.relativeTimestamp, wifiSamples));
 

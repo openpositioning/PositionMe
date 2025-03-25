@@ -479,14 +479,47 @@ public class ReplayFragment extends Fragment {
                 }
                 break;
             case "WiFi":
-                // add request for wifi data here as well to ensure it keeps getting the data
-                // TODO
-
-                if (p.wifiLocation != null) {
-                    trajectoryMapFragment.updateUserLocation(p.wifiLocation, p.orientation);
-                } else {
-                    trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+                // Code  by Jamie Arnott
+                // Each replaypoint contains the full list of WiFi samples for that given location.
+                // Each location is a scan of wifi samples and the fingerprint needs to be passed to
+                // the API to obtain the latitude and longitude.
+                // Take the p.wifiSamples and iterate through them to get the Mac and RSSI data
+                // create JSONObject() wifiAccessPoints
+                JSONObject wifiAccessPoints = new JSONObject();
+                // Build WiFi fingerprint JSON from first WiFi sample
+                for (Traj.WiFi_Sample sample : p.wifiSamples) {
+                    for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
+                        try {
+                            wifiAccessPoints.put(String.valueOf(macScan.getMac()), macScan.getRssi());
+                        } catch (JSONException e) {
+                            Log.e(TAG, "Error creating WiFi fingerprint JSON: " + e.getMessage());
+                        }
+                    }
                 }
+
+                // create new JSONObject() for the wifi fingerprint
+                JSONObject wifiFingerPrint = new JSONObject();
+                try {
+                    wifiFingerPrint.put("wf", wifiAccessPoints);
+                } catch (JSONException e) {
+                    throw new RuntimeException(e);
+                }
+
+                // make a request to the API to obtain the LatLng location from the wifi sample
+                WiFiPositioning wifiPositioning = new WiFiPositioning(getContext());
+                wifiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                    @Override
+                    public void onSuccess(LatLng location, int floor) {
+                        trajectoryMapFragment.updateUserLocation(location, p.orientation);
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        Log.e("ReplayFragment: ", "WiFi Positioning failed: " + message );
+                        // revert to PDR
+                        fallbackToPdr(p);
+                    }
+                });
                 break;
             default: // "PDR"
                 // For PDR mode, use the first GNSS coordinate as the starting point if available.
@@ -515,6 +548,7 @@ public class ReplayFragment extends Fragment {
         final boolean[] wifiPositionSuccess = {false};
 
         // Check if WiFi samples exist for this index
+        // code by Jamie Arnott
         if (replayPoint.wifiSamples != null && !replayPoint.wifiSamples.isEmpty()) {
             // Create JSON fingerprint for WiFi positioning
             JSONObject wifiAccessPoints = new JSONObject();
