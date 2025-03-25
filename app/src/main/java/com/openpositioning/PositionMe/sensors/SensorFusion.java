@@ -68,7 +68,7 @@ import java.util.stream.Stream;
  * Particle filter integration done by
  * @author Wojciech Boncela
  * @author Philip Heptonstall
- * @author Alexandros Zoupos (Adjusted for AddTag functionality)
+ * @author Alexandros Zoupos
  *
  */
 public class SensorFusion implements SensorEventListener, Observer {
@@ -1145,8 +1145,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
   /**
    * Adds a GNSS tag to the trajectory when the user presses "Add Tag".
-   * This method captures the current GNSS location (latitude, longitude, altitude)
-   * and stores it inside the trajectory's `gnss_data` array.
+   * This method captures the current GNSS location, derived from the (latitude, longitude, altitude)
+   * fused data, and stores it inside the trajectory's `gnss_data` array.
    *
    * The tag represents a marked position, which can later be used for debugging,
    * validation, or visualization on a map.
@@ -1162,10 +1162,22 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Capture the current timestamp relative to the start of the recording session
     long currentTimestamp = System.currentTimeMillis() - absoluteStartTime;
 
-    // Fetch the latest GNSS coordinates from the sensor fusion system
-    float currentLatitude = latitude;  // Get the current latitude from GNSS sensor
-    float currentLongitude = longitude;  // Get the current longitude from GNSS sensor
-    float currentAltitude = altitude;  // Get the current altitude from GNSS sensor
+    // Use fused location if available; otherwise, fall back to GNSS data.
+    float currentLatitude;
+    float currentLongitude;
+    float currentAltitude; // Altitude is still taken from GNSS (or you could set a default if needed)
+
+    // If statement ot check that fused location is not null and has more than 2 elements
+    if (fusedLocation != null && fusedLocation.length >= 2) {
+      currentLatitude = fusedLocation[0];
+      currentLongitude = fusedLocation[1];
+      currentAltitude = altitude; // Fused data doesn't include altitude, so we reuse the GNSS altitude.
+    } else {
+      currentLatitude = latitude;
+      currentLongitude = longitude;
+      currentAltitude = altitude;
+    }
+
     String provider = "fusion";  // Set provider to "fusion" as per instructions
 
 
