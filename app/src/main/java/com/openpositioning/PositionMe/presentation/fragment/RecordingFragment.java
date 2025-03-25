@@ -248,7 +248,7 @@ public class RecordingFragment extends Fragment {
                     if (data.getBssid() == 0){
                         Log.e("RecordingFragment", "WiFi scan missing MAC value");
                     } else{
-                        Log.e("RecordingFragment", "Recording WiFi MAC" + data.getBssid());
+                        Log.d("RecordingFragment", "Recording WiFi MAC" + data.getBssid());
                     }
                 }
 
