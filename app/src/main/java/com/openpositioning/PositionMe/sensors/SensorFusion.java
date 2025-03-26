@@ -922,6 +922,23 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.serverCommunications.sendTrajectory(sentTrajectory);
     }
 
+
+    private float computeHeadingFromOrientation(float[] orientation) {
+        if (orientation == null || orientation.length < 1) {
+            return -1f; // invalid
+        }
+
+        // Convert radians to degrees
+        float azimuthRad = orientation[0];
+        float azimuthDeg = (float) Math.toDegrees(azimuthRad);
+
+        // Normalize to [0, 360)
+        float heading = (azimuthDeg + 360f) % 360f;
+
+        return heading;
+    }
+
+
     /**
      * Creates a {@link Traj.Sensor_Info} objects from the specified sensor's data.
      *
@@ -955,14 +972,14 @@ public class SensorFusion implements SensorEventListener, Observer {
             // 1) Basic timing info
             record.put("timestamp", now);
 
-            // 2) GNSS
+            // 2) GNSS (Lat/Lon)
             float[] gnss = getSensorValueMap().get(SensorTypes.GNSSLATLONG);
             if (gnss != null) {
                 record.put("gnssLat", gnss[0]);
                 record.put("gnssLon", gnss[1]);
             }
 
-            // 3) PDR movement
+            // 3) PDR estimation
             float[] pdr = getSensorValueMap().get(SensorTypes.PDR);
             if (pdr != null) {
                 record.put("pdrX", pdr[0]);
@@ -977,7 +994,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                 record.put("accZ", accel[2]);
             }
 
-            // 5) Gyroscope
+            // 5) Linear acceleration (filtered)
+            record.put("filteredAccX", filteredAcc[0]);
+            record.put("filteredAccY", filteredAcc[1]);
+            record.put("filteredAccZ", filteredAcc[2]);
+
+            // 6) Gyroscope
             float[] gyro = getSensorValueMap().get(SensorTypes.GYRO);
             if (gyro != null) {
                 record.put("gyroX", gyro[0]);
@@ -985,7 +1007,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 record.put("gyroZ", gyro[2]);
             }
 
-            // 6) Magnetometer
+            // 7) Magnetometer
             float[] mag = getSensorValueMap().get(SensorTypes.MAGNETICFIELD);
             if (mag != null) {
                 record.put("magX", mag[0]);
@@ -993,7 +1015,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 record.put("magZ", mag[2]);
             }
 
-            // 7) Gravity
+            // 8) Gravity
             float[] grav = getSensorValueMap().get(SensorTypes.GRAVITY);
             if (grav != null) {
                 record.put("gravX", grav[0]);
@@ -1001,30 +1023,36 @@ public class SensorFusion implements SensorEventListener, Observer {
                 record.put("gravZ", grav[2]);
             }
 
-            // 8) Light, Proximity, Pressure
-            float[] lightArr = getSensorValueMap().get(SensorTypes.LIGHT);
-            if (lightArr != null) {
-                record.put("light", lightArr[0]);
-            }
-            float[] prox = getSensorValueMap().get(SensorTypes.PROXIMITY);
-            if (prox != null) {
-                record.put("proximity", prox[0]);
-            }
-            float[] press = getSensorValueMap().get(SensorTypes.PRESSURE);
-            if (press != null) {
-                record.put("pressure", press[0]);
-            }
+            // 9) Rotation Vector
+            record.put("rotationX", rotation[0]);
+            record.put("rotationY", rotation[1]);
+            record.put("rotationZ", rotation[2]);
+            record.put("rotationW", rotation[3]);
 
-            // 9) Elevation, Elevator state
+            // 10) Orientation (azimuth, pitch, roll)
+            record.put("orientationAzim", orientation[0]);
+            record.put("orientationPitch", orientation[1]);
+            record.put("orientationRoll", orientation[2]);
+            record.put("orientationHeading", computeHeadingFromOrientation(orientation));
+
+            // 11) Step Count
+            record.put("stepCounter", stepCounter);
+
+            // 12) Environmental sensors
+            record.put("light", light);
+            record.put("proximity", proximity);
+            record.put("pressure", pressure);
+
+            // 13) Elevation & elevator flag
             record.put("elevation", getElevation());
             record.put("isElevator", getElevator());
 
-            // 10) WiFi data (optional: store the entire list or a summary)
+            // 14) Hold mode (in hand / by ear)
+            record.put("holdMode", getHoldMode());
+
+            // 15) WiFi readings
             List<Wifi> wifiList = getWifiList();
             if (wifiList != null && !wifiList.isEmpty()) {
-                // example: store the first or all as JSON array
-                // or just store the current WiFi with highest RSSI
-                // for demonstration, let's store them all in an array
                 org.json.JSONArray wifiArray = new org.json.JSONArray();
                 for (Wifi w : wifiList) {
                     JSONObject wObj = new JSONObject();
@@ -1035,18 +1063,28 @@ public class SensorFusion implements SensorEventListener, Observer {
                 record.put("wifiList", wifiArray);
             }
 
-            // 11) Orientation
-            record.put("orientationAzim", passOrientation()); // or orientation[0..2]
+            // 16) WiFi positioning (if available)
+            LatLng wifiPos = getLatLngWifiPositioning();
+            if (wifiPos != null) {
+                record.put("wifiLat", wifiPos.latitude);
+                record.put("wifiLon", wifiPos.longitude);
+                record.put("wifiFloor", getWifiFloor());
+            }
+            else{
+                record.put("wifiLat", JSONObject.NULL);
+                record.put("wifiLon", JSONObject.NULL);
+                record.put("wifiFloor", JSONObject.NULL);
+            }
+            record.put("deviceModel", Build.MODEL);
 
-            // 12) Possibly add hold mode, device info, battery, etc.
 
         } catch (Exception e) {
-            e.printStackTrace();
-            // Return partial or empty record
+            Log.e("getAllSensorData", "Error building JSON: " + e.getMessage());
         }
 
         return record;
     }
+
 
 
     /**

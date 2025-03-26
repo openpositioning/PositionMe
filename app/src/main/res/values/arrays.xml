@@ -53,7 +53,7 @@
         <item>1 - IndoorFlatFloor</item>
         <item>2 - Outdoor</item>
         <item>3 - InOutTransitional</item>
-        <item>4 - FloorTransitional</item>
+        <item>4 - Stairs</item>
         <item>5 - InsideElevator</item>
     </string-array>
 </resources>

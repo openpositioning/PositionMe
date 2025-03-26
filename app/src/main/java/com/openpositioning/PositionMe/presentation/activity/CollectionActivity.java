@@ -199,7 +199,7 @@ public class CollectionActivity extends AppCompatActivity {
      */
     private Uri getDownloadOutputFile(Context context) {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmm").format(new Date());
-        String fileName = "collection_data_" + timeStamp + ".json";
+        String fileName = "collection_data_"  + Build.MODEL + "_" + timeStamp +".json";
         Log.d(TAG, "Creating output file: " + fileName);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
