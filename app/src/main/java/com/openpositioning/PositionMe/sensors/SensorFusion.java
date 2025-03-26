@@ -100,12 +100,16 @@ public class SensorFusion implements SensorEventListener, Observer {
             {0.0, 2.0}
     });
     private static final SimpleMatrix PDR_COVARIANCE = new SimpleMatrix(new double[][]{
-            {2.0, 0.0},
-            {0.0, 0.1}
+            {1.0, 0.0},
+            {0.0, 5.0}
     });
     private static final SimpleMatrix WIFI_COVARIANCE = new SimpleMatrix(new double[][]{
-            {1.0, 0.0},
-            {0.0, 1.0}
+            {2.0, 0.0},
+            {0.0, 2.0}
+    });
+    private  static final SimpleMatrix GNSS_COVARIANCE = new SimpleMatrix(new double[][]{
+            {5.0, 0.0},
+            {0.0, 5.0}
     });
     //endregion
 
@@ -491,6 +495,10 @@ public class SensorFusion implements SensorEventListener, Observer {
             float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
+            float[] pdrData = getSensorValueMap().get(SensorTypes.PDR);
+            if (startLocation != null && pdrData != null) {
+                updateFusionData(new LatLng(latitude, longitude), GNSS_COVARIANCE, pdrData);
+            }
             if(saveRecording) {
                 trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
                         .setAccuracy(accuracy)
@@ -566,25 +574,25 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
-    private void updateFusionData(LatLng wifiLocation, float[] pdrData) {
+    private void updateFusionData(LatLng observation, SimpleMatrix observationCov, float[] pdrData) {
         double[] pdrData64 = {pdrData[0], pdrData[1]};
 
         // Convert the WiFi location to XY
         ProjCoordinate startLocationNorthEast = coordinateTransformer.convertWGS84ToTarget(
                 startLocation.latitude,
                 startLocation.longitude);
-        ProjCoordinate wifiLocationNorthEast = coordinateTransformer.convertWGS84ToTarget(
-                wifiLocation.latitude,
-                wifiLocation.longitude);
+        ProjCoordinate observationNorthEast = coordinateTransformer.convertWGS84ToTarget(
+                observation.latitude,
+                observation.longitude);
         double[] wifiXYZ  = CoordinateTransformer.getRelativePosition(
                 startLocationNorthEast,
-                wifiLocationNorthEast
+                observationNorthEast
         );
         double[] wifiXY = {wifiXYZ[0], wifiXYZ[1]};
 
         // Get the current timestamp and update the filter
         double timestamp = (System.currentTimeMillis() - absoluteStartTime) / 1e3;
-        if (!filter.update(pdrData64, wifiXY, timestamp, WIFI_COVARIANCE)) {
+        if (!filter.update(pdrData64, wifiXY, timestamp, observationCov)) {
             Log.w("SensorFusion", "Filter update failed");
         }
         double[] fusedPos = filter.getPos();
@@ -620,12 +628,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (wifiLocation != currentWifiLocation) {
                         float[] pdrData = getSensorValueMap().get(SensorTypes.PDR);
                         currentWifiLocation = wifiLocation;
-                        if (startLocation != null && pdrData != null) {
-                            updateFusionData(wifiLocation, pdrData);
+                        if (coordinateTransformer != null) {
+                            isWifiLocationOutlier = isOutlier(new LatLng(latitude, longitude), wifiLocation);
                         }
-                    }
-                    if(coordinateTransformer != null) {
-                        isWifiLocationOutlier = isOutlier(new LatLng(latitude, longitude), wifiLocation);
+                        if (startLocation != null && pdrData != null && !isWifiLocationOutlier) {
+                            updateFusionData(wifiLocation, WIFI_COVARIANCE, pdrData);
+                        }
                     }
                 }
 
