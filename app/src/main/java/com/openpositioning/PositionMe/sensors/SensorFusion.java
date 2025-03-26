@@ -12,6 +12,8 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
+import android.widget.Toast;
+
 import com.openpositioning.PositionMe.utils.JsonConverter;
 import androidx.preference.PreferenceManager;
 
@@ -393,7 +395,16 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
         }
     }
-
+    public void addTagFusionTrajectory(LatLng fusion_position){
+        if(saveRecording) {
+            trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
+                    .setAltitude(getElevation())
+                    .setLatitude((float) fusion_position.latitude)
+                    .setLongitude((float) fusion_position.longitude)
+                    .setProvider("fusion")
+                    .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
+        }
+    }
     /**
      * {@inheritDoc}
      *

@@ -43,6 +43,22 @@
             app:layout_constraintStart_toStartOf="@+id/purpledot"
             app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
 
+        <Button
+            android:id="@+id/position_tag_button"
+            android:layout_width="97dp"
+            android:layout_height="57dp"
+            android:layout_marginTop="25dp"
+            android:layout_marginBottom="16dp"
+            android:text="Add tag"
+            android:textSize="15sp"
+            app:iconSize="24dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/stopButton"
+            app:layout_constraintHorizontal_bias="0.477"
+            app:layout_constraintStart_toEndOf="@+id/cancelButton"
+            app:layout_constraintTop_toTopOf="@+id/timeRemainingBar"
+            app:layout_constraintVertical_bias="0.928" />
+
         <ImageView
             android:id="@+id/greendot"
             android:layout_width="27dp"
@@ -51,7 +67,7 @@
             android:src="@drawable/ic_baseline_red_dot_24"
             app:layout_constraintTop_toBottomOf="@+id/purpledot"
             app:tint="@color/green"
-            tools:layout_editor_absoluteX="70dp" />
+            tools:layout_editor_absoluteX="16dp" />
 
         <Switch
             android:id="@+id/gnssSwitch"
@@ -72,7 +88,7 @@
             android:src="@drawable/ic_baseline_red_dot_24"
             app:layout_constraintTop_toBottomOf="@+id/greendot"
             app:tint="@color/goldYellow"
-            tools:layout_editor_absoluteX="70dp" />
+            tools:layout_editor_absoluteX="16dp" />
 
         <ImageView
             android:id="@+id/bluedot"
@@ -82,7 +98,7 @@
             android:src="@drawable/ic_baseline_red_dot_24"
             app:layout_constraintTop_toBottomOf="@+id/yellowdot"
             app:tint="@color/lightLogoBlue"
-            tools:layout_editor_absoluteX="70dp" />
+            tools:layout_editor_absoluteX="16dp" />
 
         <Switch
             android:id="@+id/fusionSwitch"
@@ -104,7 +120,7 @@
             android:src="@drawable/ic_baseline_red_dot_24"
             app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner"
             app:tint="@color/purple_500"
-            tools:layout_editor_absoluteX="70dp" />
+            tools:layout_editor_absoluteX="16dp" />
 
         <Switch
             android:id="@+id/autoFloor"
@@ -274,39 +290,37 @@
 
         <Button
             android:id="@+id/cancelButton"
-            android:layout_width="150dp"
-            android:layout_height="70dp"
-            android:layout_marginStart="24dp"
+            android:layout_width="142dp"
+            android:layout_height="58dp"
+            android:layout_marginStart="4dp"
             android:layout_marginBottom="16dp"
             android:backgroundTint="@color/ic_launcher_simple_background"
             android:text="@string/cancel"
             android:textColor="@color/white"
-            android:textSize="16sp"
+            android:textSize="18sp"
             app:icon="@drawable/ic_baseline_cancel_24"
             app:iconGravity="start"
-            app:iconSize="28dp"
+            app:iconSize="24dp"
             app:iconTint="@color/white"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
         <Button
             android:id="@+id/stopButton"
-            android:layout_width="150dp"
-            android:layout_height="70dp"
-            android:layout_marginEnd="24dp"
-            android:layout_marginBottom="16dp"
+            android:layout_width="119dp"
+            android:layout_height="62dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="12dp"
             android:backgroundTint="@color/ic_launcher_simple_background"
             android:text="@string/stop"
             android:textColor="@color/white"
-            android:textSize="24sp"
+            android:textSize="18sp"
             app:icon="@drawable/ic_baseline_stop_24"
             app:iconGravity="start"
-            app:iconSize="30dp"
+            app:iconSize="24dp"
             app:iconTint="@color/white"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="1.0"
-            app:layout_constraintStart_toEndOf="@+id/cancelButton" /><![CDATA[
+            app:layout_constraintEnd_toEndOf="parent" /><![CDATA[
 
 
 
