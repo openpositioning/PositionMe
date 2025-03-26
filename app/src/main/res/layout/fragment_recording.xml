@@ -45,19 +45,18 @@
 
         <Button
             android:id="@+id/position_tag_button"
-            android:layout_width="97dp"
-            android:layout_height="57dp"
-            android:layout_marginTop="25dp"
+            android:layout_width="82dp"
+            android:layout_height="60dp"
             android:layout_marginBottom="16dp"
             android:text="Add tag"
-            android:textSize="15sp"
+            android:textSize="14sp"
             app:iconSize="24dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/stopButton"
-            app:layout_constraintHorizontal_bias="0.477"
+            app:layout_constraintHorizontal_chainStyle="packed"
             app:layout_constraintStart_toEndOf="@+id/cancelButton"
-            app:layout_constraintTop_toTopOf="@+id/timeRemainingBar"
-            app:layout_constraintVertical_bias="0.928" />
+            app:layout_constraintTop_toBottomOf="@+id/timeRemainingBar"
+            app:layout_constraintVertical_bias="1.0" />
 
         <ImageView
             android:id="@+id/greendot"
@@ -281,46 +280,51 @@
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="619dp"
             android:layout_marginBottom="96dp"
             android:elevation="2sp"
             android:max="1800"
             android:progress="0"
             app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
             tools:layout_editor_absoluteX="0dp" />
+
 
         <Button
             android:id="@+id/cancelButton"
-            android:layout_width="142dp"
+            android:layout_width="124dp"
             android:layout_height="58dp"
-            android:layout_marginStart="4dp"
             android:layout_marginBottom="16dp"
             android:backgroundTint="@color/ic_launcher_simple_background"
             android:text="@string/cancel"
             android:textColor="@color/white"
-            android:textSize="18sp"
+            android:textSize="13sp"
             app:icon="@drawable/ic_baseline_cancel_24"
             app:iconGravity="start"
             app:iconSize="24dp"
             app:iconTint="@color/white"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/position_tag_button"
+            app:layout_constraintHorizontal_bias="0" />
 
         <Button
             android:id="@+id/stopButton"
-            android:layout_width="119dp"
-            android:layout_height="62dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="12dp"
+            android:layout_width="114dp"
+            android:layout_height="56dp"
+            android:layout_marginBottom="16dp"
             android:backgroundTint="@color/ic_launcher_simple_background"
             android:text="@string/stop"
             android:textColor="@color/white"
-            android:textSize="18sp"
+            android:textSize="14sp"
             app:icon="@drawable/ic_baseline_stop_24"
             app:iconGravity="start"
             app:iconSize="24dp"
             app:iconTint="@color/white"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" /><![CDATA[
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/position_tag_button"
+            app:layout_constraintHorizontal_bias="1" /><![CDATA[
 
 
 
