@@ -58,11 +58,17 @@ public class TrajectoryMapFragment extends Fragment {
     private static TrajectoryMapFragment instance;  // Static reference to store the instance of the fragment
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
+    private LatLng fusedCurrentLocation;
+    private LatLng pdrCurrentLocation;
+
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
     private Marker wifiMarker; // Wifi position marker
     private Marker fusedMarker; // Fused data position marker
     private Polyline polyline; // Polyline representing user's movement path
+    private Polyline pdrPolyline; // Polyline for PDR trajectory with a dotted black line
+
+
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
     private boolean isWifiOn = false; // Tracks if GNSS tracking is enabled
@@ -274,6 +280,14 @@ public class TrajectoryMapFragment extends Fragment {
                 .add() // start empty
         );
 
+        pdrPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.BLACK)
+                .width(5f)
+                .zIndex(10f)
+                .add() // start empty
+        );
+
+
         // GNSS path in blue
         gnssPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.BLUE)
@@ -347,8 +361,8 @@ public class TrajectoryMapFragment extends Fragment {
       if (gMap == null) return;
 
         // Keep track of current location
-      LatLng oldLocation = this.currentLocation;
-      this.currentLocation = new LatLng(newLocation.latitude + initialPosition.latitude,
+      LatLng oldLocation = this.fusedCurrentLocation;
+      this.fusedCurrentLocation = new LatLng(newLocation.latitude + initialPosition.latitude,
                                         newLocation.longitude + initialPosition.longitude);
 
         // If no marker, create it
@@ -361,29 +375,49 @@ public class TrajectoryMapFragment extends Fragment {
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(this.currentLocation, 19f));
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(this.fusedCurrentLocation, 19f));
         } else {
             // Update marker position + orientation
-            orientationMarker.setPosition(this.currentLocation);
+            orientationMarker.setPosition(this.fusedCurrentLocation);
             orientationMarker.setRotation(orientation);
             // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(this.currentLocation));
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(this.fusedCurrentLocation));
         }
 
         // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(this.currentLocation) && polyline != null) {
+        if (oldLocation != null && !oldLocation.equals(this.fusedCurrentLocation) && polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            points.add(this.currentLocation);
+            points.add(this.fusedCurrentLocation);
             polyline.setPoints(points);
         }
         // Update indoor map overlay
         if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(this.currentLocation);
+            indoorMapManager.setCurrentLocation(this.fusedCurrentLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
+
     }
+    public void updatePdrLocation(@NonNull LatLng newLocation, LatLng initialPosition) {
+        if (gMap == null) return;
 
+        // Keep track of current location
+        LatLng oldLocation = this.pdrCurrentLocation;
+        this.pdrCurrentLocation = new LatLng(newLocation.latitude + initialPosition.latitude,
+                newLocation.longitude + initialPosition.longitude);
 
+        // Extend polyline if movement occurred
+        if (oldLocation != null && !oldLocation.equals(this.pdrCurrentLocation) && pdrPolyline != null) {
+            List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
+            points.add(this.pdrCurrentLocation);
+            pdrPolyline.setPoints(points);
+        }
+        // Update indoor map overlay
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(this.pdrCurrentLocation);
+            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+        }
+
+    }
 
     /**
      * Set the initial camera position for the map.
@@ -413,6 +447,10 @@ public class TrajectoryMapFragment extends Fragment {
      */
     public LatLng getCurrentLocation() {
         return currentLocation;
+    }
+
+    public LatLng getPdrCurrentLocation() {
+        return pdrCurrentLocation;
     }
 
     /**
