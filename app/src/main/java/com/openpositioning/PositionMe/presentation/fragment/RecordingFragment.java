@@ -57,6 +57,7 @@ import com.google.android.gms.maps.model.LatLng;
  *
  * @author Shu Gu
  * @author Alexandros Zoupos (Adjusted for AddTag functionality)
+ * @author Kleitos Kountouris (Wifi points, fused trajectory plotting)
  */
 
 public class RecordingFragment extends Fragment {
@@ -246,29 +247,20 @@ public class RecordingFragment extends Fragment {
         // For example:
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
+            LatLng oldLocation = trajectoryMapFragment.getPdrCurrentLocation(); // or store locally
             LatLng newLocation = UtilFunctions.calculateNewPos(
                     oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
                     new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
 
+
             // Pass the location + orientation to the map
             LatLng dummy = new LatLng(0,0);
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation, dummy,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
-            }
-            // Get the fused data lat-lng values
-            float[] fusedData = sensorFusion.getSensorValueMap().get(SensorTypes.FUSED);
-            if (fusedData != null && trajectoryMapFragment != null) {
-                LatLng fusedLocation = new LatLng(fusedData[0], fusedData[1]);
-                // Update the fused polyline with this fused location point
-                trajectoryMapFragment.updateFusedPolyline(fusedLocation);
-            }
+                trajectoryMapFragment.updatePdrLocation(newLocation, dummy);
 
+            }
         }
-
-        float[] fusedaaa = sensorFusion.getSensorValueMap().get(SensorTypes.FUSED);
 
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
@@ -306,7 +298,9 @@ public class RecordingFragment extends Fragment {
         float[] fused = sensorFusion.getSensorValueMap().get(SensorTypes.FUSED);
         if (fused != null && trajectoryMapFragment != null) {
             LatLng fusedLocation = new LatLng(fused[0], fused[1]);
-            trajectoryMapFragment.updateFused(fusedLocation);
+            LatLng dummy = new LatLng(0,0);
+            trajectoryMapFragment.updateUserLocation(fusedLocation, dummy,
+                    (float) Math.toDegrees(sensorFusion.passOrientation()));
             fusionError.setVisibility(View.VISIBLE);
             fusionError.setText(String.format(getString(R.string.fusion_error) + "%.2fm",
                     this.sensorFusion.getFusionError()));
