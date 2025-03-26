@@ -9,6 +9,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.Spinner;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 
@@ -49,6 +50,7 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
  * @author Mate Stodulka
+ * @autor Alexandros Zoupos
  */
 
 public class TrajectoryMapFragment extends Fragment {
@@ -126,6 +128,32 @@ public class TrajectoryMapFragment extends Fragment {
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         switchColorButton = view.findViewById(R.id.lineColorButton);
+
+      // NEW: Get the toggle button and controls container for collapsing/expanding
+      final ImageView toggleButton = view.findViewById(R.id.toggleButton);
+      final View controlsContainer = view.findViewById(R.id.controlsContainer);
+
+      // Set initial state (expanded)
+      controlsContainer.setVisibility(View.VISIBLE);
+      toggleButton.setImageResource(R.drawable.ic_expand_less);
+
+      // Set the toggle logic
+      toggleButton.setOnClickListener(new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+          if (controlsContainer.getVisibility() == View.VISIBLE) {
+            // Collapse the controls container
+            controlsContainer.setVisibility(View.GONE);
+            // Change icon to indicate expandable state (e.g., arrow down)
+            toggleButton.setImageResource(R.drawable.ic_expand_more);
+          } else {
+            // Expand the controls container
+            controlsContainer.setVisibility(View.VISIBLE);
+            // Change icon to indicate collapse state (e.g., arrow up)
+            toggleButton.setImageResource(R.drawable.ic_expand_less);
+          }
+        }
+      });
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);

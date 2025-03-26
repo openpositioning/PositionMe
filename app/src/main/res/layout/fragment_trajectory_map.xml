@@ -24,51 +24,74 @@
         app:layout_anchor="@id/trajectoryMap"
         app:layout_anchorGravity="top|start">
 
+        <!-- Container for header (toggle button) and controls -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center">
+            android:orientation="vertical">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/gnssSwitch"
+            <!-- Header with toggle button -->
+            <LinearLayout
+                android:id="@+id/headerLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:padding="4dp">
+                <ImageView
+                    android:id="@+id/toggleButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="@string/toggle_controls"
+                    android:src="@drawable/ic_expand_less" />
+            </LinearLayout>
+
+            <!-- Controls container that can be collapsed -->
+            <LinearLayout
+                android:id="@+id/controlsContainer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch" />
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:gravity="center">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/wifiSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/wifiSwitch" />
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/gnssSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/gnssSwitch" />
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/autoFloor"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/auto_floor" />
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/wifiSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/wifiSwitch" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/lineColorButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@color/md_theme_onPrimary"
-                android:text="@string/color"
-                app:elevation="5dp" />
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/autoFloor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/auto_floor" />
 
-            <Spinner
-                android:id="@+id/mapSwitchSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="0dp"
-                android:layout_marginTop="8dp"
-                android:background="@android:color/white"
-                android:spinnerMode="dropdown"
-                app:layout_constraintTop_toTopOf="parent"
-                android:elevation="5dp" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/lineColorButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:backgroundTint="@color/red"
+                    android:textColor="@color/md_theme_onPrimary"
+                    android:text="@string/color"
+                    app:elevation="5dp" />
 
+                <Spinner
+                    android:id="@+id/mapSwitchSpinner"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="0dp"
+                    android:layout_marginTop="8dp"
+                    android:background="@android:color/white"
+                    android:spinnerMode="dropdown"
+                    android:elevation="5dp" />
+
+            </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
