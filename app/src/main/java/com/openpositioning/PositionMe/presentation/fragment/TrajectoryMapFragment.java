@@ -49,6 +49,7 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
  * @author Mate Stodulka
+ * @author Alexandros Zoupos
  */
 
 public class TrajectoryMapFragment extends Fragment {
@@ -637,7 +638,7 @@ public class TrajectoryMapFragment extends Fragment {
       gMap.addMarker(new MarkerOptions()
               .position(tagLocation)
               .title("Tag")
-              .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+              .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
       Log.d("TrajectoryMapFragment", "Tag marker added at: " + tagLocation.toString());
     } else {
       Log.e("TrajectoryMapFragment", "Google Map is not ready yet.");
