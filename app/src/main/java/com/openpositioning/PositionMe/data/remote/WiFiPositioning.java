@@ -179,4 +179,5 @@ public class WiFiPositioning {
         void onError(String message);
     }
 
+
 }

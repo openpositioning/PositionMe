@@ -66,6 +66,7 @@ dependencies {
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
     implementation 'com.android.volley:volley:1.2.1'
     implementation 'androidx.gridlayout:gridlayout:1.0.0'
+    implementation "org.ejml:ejml-simple:0.41"
 
     // Material Components (Material 3 support is in 1.12.0+)
     testImplementation 'junit:junit:4.13.2'

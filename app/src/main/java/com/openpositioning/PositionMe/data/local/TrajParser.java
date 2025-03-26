@@ -85,7 +85,7 @@ public class TrajParser {
     }
 
     /** Represents an IMU (Inertial Measurement Unit) data record used for orientation calculations. */
-    private static class ImuRecord {
+    public static class ImuRecord {
         public long relativeTimestamp;
         public float accX, accY, accZ; // Accelerometer values
         public float gyrX, gyrY, gyrZ; // Gyroscope values
@@ -93,13 +93,13 @@ public class TrajParser {
     }
 
     /** Represents a Pedestrian Dead Reckoning (PDR) data record storing position shifts over time. */
-    private static class PdrRecord {
+    public static class PdrRecord {
         public long relativeTimestamp;
         public float x, y; // Position relative to the starting point
     }
 
     /** Represents a GNSS (Global Navigation Satellite System) data record with latitude/longitude. */
-    private static class GnssRecord {
+    public static class GnssRecord {
         public long relativeTimestamp;
         public double latitude, longitude; // GNSS coordinates
     }
