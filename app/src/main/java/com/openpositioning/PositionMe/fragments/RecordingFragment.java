@@ -23,6 +23,7 @@ import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -77,6 +78,7 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
     private List<Marker> wifiMarkers = new ArrayList<>();
     //Button to end PDR recording
     private Button stopButton;
+    private Button addtag;
     private Button cancelButton;
     //Recording icon to show user recording is in progress
     private ImageView recIcon;
@@ -309,7 +311,19 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
         this.distance = 0f;
         this.previousPosX = 0f;
         this.previousPosY = 0f;
-
+        // 初始化 "Add Tag" 按钮（id 为 position_tag_button）
+        addtag = getView().findViewById(R.id.position_tag_button);
+        addtag.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (currentLocation != null) {
+                    SensorFusion.getInstance().addTagFusionTrajectory(currentLocation);
+                    Toast.makeText(getContext(), "Tag Successfully added.", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(getContext(), "Tag Unsuccessfully added.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
         // Stop button to save trajectory and move to corrections
         this.stopButton = getView().findViewById(R.id.stopButton);
         this.stopButton.setOnClickListener(new View.OnClickListener() {
