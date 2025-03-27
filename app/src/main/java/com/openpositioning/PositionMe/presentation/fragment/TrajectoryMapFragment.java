@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -190,6 +191,29 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
     }
+
+    // Code by Guilherme: Adds a tag marker with a custom icon (using the createTagMarkerIcon method).
+    public void addTagMarker(LatLng location, String label) {
+        if (gMap != null) {
+            Bitmap tagIcon = UtilFunctions.createTagMarkerIcon(getContext(), label);
+            // Calculate the anchor: we want the marker's location to correspond to the center of the tag symbol.
+            // The anchor x value is (markerDiameter / totalWidth).
+            int markerDiameter = UtilFunctions.dpToPx(getContext(), 40);
+            float textWidth = UtilFunctions.getTextWidth(getContext(), label);
+            int padding = UtilFunctions.dpToPx(getContext(), 8);
+            int totalWidth = markerDiameter + padding + (int)textWidth + 2 * UtilFunctions.dpToPx(getContext(), 4);
+            float anchorX = (float) markerDiameter / totalWidth;
+            MarkerOptions options = new MarkerOptions()
+                    .position(location)
+                    .icon(BitmapDescriptorFactory.fromBitmap(tagIcon))
+                    .anchor(anchorX, 0.5f);  // vertically centered.
+            gMap.addMarker(options);
+        } else {
+            Log.e("TrajectoryMapFragment", "GoogleMap is not initialized yet.");
+        }
+    }
+
+
 
 
     public void setPolylineColor(int color) {
