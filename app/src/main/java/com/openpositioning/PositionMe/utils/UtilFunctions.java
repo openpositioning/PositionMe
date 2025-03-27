@@ -75,7 +75,7 @@ public class UtilFunctions {
             if (point.gnssLocation != null) {
                 return point.gnssLocation;
             }
-            if (point.wifiLocation != null) {
+            if (point.wifiSamples != null && !point.wifiSamples.isEmpty()) {
                 // Assume WiFi positioning is available (API call needed)
             }
         }
@@ -106,7 +106,7 @@ public class UtilFunctions {
                 weight *= gaussianProbability(distance, GNSS_STD);
             }
 
-            if (replayPoint.wifiLocation != null) {
+            if (replayPoint.wifiSamples != null && !replayPoint.wifiSamples.isEmpty()) {
                 // WiFi positioning should be fetched via API (not implemented here)
                 weight *= gaussianProbability(0, WIFI_STD); // Placeholder
             }

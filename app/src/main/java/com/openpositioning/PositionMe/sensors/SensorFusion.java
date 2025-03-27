@@ -996,10 +996,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setMagY(magneticField[1])
                             .setMagZ(magneticField[2])
                             .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-//                    .addGnssData(Traj.GNSS_Sample.newBuilder()
-//                            .setLatitude(latitude)
-//                            .setLongitude(longitude)
-//                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
+                    .addGnssData(Traj.GNSS_Sample.newBuilder()
+                            .setLatitude(latitude)
+                            .setLongitude(longitude)
+                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
+
             ;
 
             // Divide timer with a counter for storing data every 1 second

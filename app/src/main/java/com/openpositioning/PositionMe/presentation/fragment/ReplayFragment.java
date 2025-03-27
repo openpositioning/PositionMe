@@ -325,11 +325,7 @@ public class ReplayFragment extends Fragment {
             if (replayData.isEmpty()) return;
             currentIndex = replayData.size() - 1;
             playbackSeekBar.setProgress(currentIndex);
-            try {
-                updateMapForIndex(currentIndex);
-            } catch (JSONException e) {
-                throw new RuntimeException(e);
-            }
+            drawReplayPointWithMode(currentIndex);
             isPlaying = false;
             trajectoryMapFragment.clearMapAndReset();
             for (int i = 0; i <= currentIndex && i < replayData.size(); i++) {
@@ -517,7 +513,7 @@ public class ReplayFragment extends Fragment {
                     public void onError(String message) {
                         Log.e("ReplayFragment: ", "WiFi Positioning failed: " + message );
                         // revert to PDR
-                        fallbackToPdr(p);
+                        trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
                     }
                 });
                 break;
