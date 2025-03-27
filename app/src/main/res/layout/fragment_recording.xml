@@ -2,10 +2,11 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- 🔹 TOP SECTION: Status Display -->
+    <!-- TOP SECTION: Status Display -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/currentPositionCard"
         android:layout_width="match_parent"
@@ -58,7 +59,6 @@
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp" />
 
-
             <!-- GNSS Error -->
             <TextView
                 android:id="@+id/gnssError"
@@ -71,17 +71,23 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- 🔹 MIDDLE SECTION: Map Display -->
+    <!-- MIDDLE SECTION: Map Display -->
     <FrameLayout
         android:id="@+id/trajectoryMapFragmentContainer"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginStart="8dp"
         android:layout_marginEnd="8dp"
-        app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
-        app:layout_constraintBottom_toTopOf="@id/controlLayout" />
+        app:layout_constraintBottom_toTopOf="@id/controlLayout"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/currentPositionCard">
 
-    <!-- 🔹 BOTTOM SECTION: Controls (Progress Bar & Buttons) -->
+
+
+    </FrameLayout>
+
+    <!-- BOTTOM SECTION: Controls -->
     <LinearLayout
         android:id="@+id/controlLayout"
         android:layout_width="match_parent"
@@ -141,5 +147,14 @@
                 app:backgroundTint="@color/md_theme_primary"
                 app:cornerRadius="16dp" />
         </LinearLayout>
+        <Button
+            android:id="@+id/tagButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:background="@drawable/rounded_background2"
+            android:text="Add Tag"
+            android:textColor="#FFFFFF" />
     </LinearLayout>
+    <!-- Tag Button overlayed on the map (top center) -->
 </androidx.constraintlayout.widget.ConstraintLayout>

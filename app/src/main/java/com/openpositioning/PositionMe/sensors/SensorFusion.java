@@ -1177,6 +1177,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                 counter++;
             }
 
+
+
+
         }
     }
 }

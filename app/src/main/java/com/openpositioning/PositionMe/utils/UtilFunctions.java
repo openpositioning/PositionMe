@@ -3,11 +3,16 @@ package com.openpositioning.PositionMe.utils;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.util.TypedValue;
 
 import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 
@@ -298,6 +303,84 @@ public class UtilFunctions {
         double deltaLon = local[0] / (111111.0 * Math.cos(Math.toRadians(refLat)));
         return new LatLng(refLat + deltaLat, refLon + deltaLon);
     }
+
+    // Code by Guilherme: Creates a custom tag marker icon with a white background label to its left and a circle on the right.
+    // Code by Guilherme: Creates a composite tag marker icon with the tag symbol on the left and the label on the right.
+    public static Bitmap createTagMarkerIcon(Context context, String label) {
+        // Dimensions in dp:
+        int markerDiameterDp = 40;  // Desired size for the tag symbol.
+        int paddingDp = 8;          // Spacing between the tag symbol and the text.
+        int textPaddingDp = 4;      // Padding inside the text background.
+
+        // Convert dimensions to pixels.
+        int markerDiameter = dpToPx(context, markerDiameterDp);
+        int padding = dpToPx(context, paddingDp);
+        int textPadding = dpToPx(context, textPaddingDp);
+
+        // Load the custom tag vector drawable.
+        Drawable markerDrawable = ContextCompat.getDrawable(context, R.drawable.ic_custom_tag);
+        if (markerDrawable == null) {
+            throw new RuntimeException("Custom tag drawable (ic_custom_tag) not found.");
+        }
+
+        // We will draw the marker at a fixed size (markerDiameter x markerDiameter).
+        // Prepare text paint.
+        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14, context.getResources().getDisplayMetrics()));
+        textPaint.setColor(Color.BLACK);
+
+        // Measure text dimensions.
+        float textWidth = textPaint.measureText(label);
+        Paint.FontMetrics fm = textPaint.getFontMetrics();
+        float textHeight = fm.descent - fm.ascent;
+
+        // Total width = marker (on left) + padding + text width + text background padding on both sides.
+        int totalWidth = markerDiameter + padding + (int)textWidth + 2 * textPadding;
+        // Total height is the maximum of markerDiameter and text background height.
+        int totalHeight = Math.max(markerDiameter, (int)(textHeight + 2 * textPadding));
+
+        // Create the bitmap.
+        Bitmap bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        // Draw the tag symbol (marker) on the left.
+        markerDrawable.setBounds(0, (totalHeight - markerDiameter) / 2, markerDiameter, (totalHeight - markerDiameter) / 2 + markerDiameter);
+        markerDrawable.draw(canvas);
+
+        // Draw the white rounded rectangle for the label to the right of the marker.
+        float rectLeft = markerDiameter + padding;
+        float rectTop = (totalHeight - (textHeight + 2 * textPadding)) / 2f;
+        float rectRight = rectLeft + textWidth + 2 * textPadding;
+        float rectBottom = rectTop + textHeight + 2 * textPadding;
+        Paint rectPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        rectPaint.setColor(Color.WHITE);
+        RectF rect = new RectF(rectLeft, rectTop, rectRight, rectBottom);
+        float cornerRadius = dpToPx(context, 4);
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, rectPaint);
+
+        // Draw the label text on top of the white rectangle.
+        float textX = rectLeft + textPadding;
+        // Calculate baseline so that text is vertically centered in the rectangle.
+        float textY = rectTop - fm.ascent;
+        canvas.drawText(label, textX, textY, textPaint);
+
+        return bitmap;
+    }
+
+
+    // Code by Guilherme: Converts dp to pixels.
+    public static int dpToPx(Context context, int dp) {
+        return (int) (dp * context.getResources().getDisplayMetrics().density);
+    }
+
+    // Code by Guilherme: Measures text width for a given string.
+    public static float getTextWidth(Context context, String text) {
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14, context.getResources().getDisplayMetrics()));
+        return paint.measureText(text);
+    }
+
+
 
 
 
