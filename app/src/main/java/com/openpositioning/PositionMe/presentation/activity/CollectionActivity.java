@@ -32,6 +32,9 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+
+
+
 /**
  * CollectionActivity passively collects sensor data from SensorFusion, including:
  * IMU (accelerometer, gyro, magnetometer, pressure, light, proximity),
@@ -51,6 +54,10 @@ public class CollectionActivity extends AppCompatActivity {
     private SensorFusion sensorFusion;
     private Handler sensorUpdateHandler;
     private Runnable sensorUpdateTask;
+
+    private long lastWifiRequestTime = 0;
+    private static final long WIFI_REQUEST_INTERVAL_MS = 8000;  // 8s between updates
+
 
     // Buffer to store JSON records before writing to file
     private final List<JSONObject> dataBuffer = new ArrayList<>();
@@ -128,11 +135,18 @@ public class CollectionActivity extends AppCompatActivity {
      */
     private void collectFullSensorData() {
         try {
+            long now = System.currentTimeMillis();
+
+            // Trigger WiFi positioning if enough time has passed
+            if (now - lastWifiRequestTime > WIFI_REQUEST_INTERVAL_MS) {
+                lastWifiRequestTime = now;
+                requestWifiLocationUpdate();  // ← New method below
+            }
+
             JSONObject record = sensorFusion.getAllSensorData();
             dataBuffer.add(record);
             Log.d(TAG, "Collected sensor data. Buffer size: " + dataBuffer.size());
 
-            // Flush strategy: flush every 50 records
             if (dataBuffer.size() >= 50) {
                 flushDataBuffer();
             }
@@ -140,6 +154,41 @@ public class CollectionActivity extends AppCompatActivity {
             Log.e(TAG, "Error collecting sensor data", e);
         }
     }
+
+    private void requestWifiLocationUpdate() {
+        List<Wifi> wifiList = sensorFusion.getWifiList();
+        if (wifiList == null || wifiList.isEmpty()) {
+            Log.w(TAG, "No WiFi data available yet, skipping WiFi positioning request.");
+            return;
+        }
+
+        try {
+            JSONObject wifiAccessPoints = new JSONObject();
+            for (Wifi wifi : wifiList) {
+                wifiAccessPoints.put(String.valueOf(wifi.getBssid()), wifi.getLevel());
+            }
+
+            JSONObject fingerprint = new JSONObject();
+            fingerprint.put("wf", wifiAccessPoints);  // same key used in SensorFusion
+
+            sensorFusion.getWiFiPositioning().request(fingerprint, new com.openpositioning.PositionMe.data.remote.WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(com.google.android.gms.maps.model.LatLng wifiLocation, int floor) {
+                    Log.d(TAG, "WiFi Positioning Success: lat=" + wifiLocation.latitude + ", lon=" + wifiLocation.longitude + ", floor=" + floor);
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.e(TAG, "WiFi Positioning Failed: " + message);
+                }
+            });
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error building WiFi fingerprint request", e);
+        }
+    }
+
+
 
     /**
      * Called by CollectionFragment when the user triggers calibration.
@@ -273,5 +322,13 @@ public class CollectionActivity extends AppCompatActivity {
         }
 
         super.onDestroy();
+    }
+
+    public long getLastWifiRequestTime() {
+        return lastWifiRequestTime;
+    }
+
+    public void setLastWifiRequestTime(long lastWifiRequestTime) {
+        this.lastWifiRequestTime = lastWifiRequestTime;
     }
 }

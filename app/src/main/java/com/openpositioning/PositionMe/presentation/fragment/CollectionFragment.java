@@ -82,14 +82,14 @@ public class CollectionFragment extends Fragment {
         setupFloorSpinner();
         setupIndoorStateSpinner();
 
-        calibrationButton.setText("Add Calibration Marker");
+        calibrationButton.setText("Add Tag");
         calibrationButton.setOnClickListener(v -> {
             if (!markerPlaced) {
                 placeCalibrationMarker();
                 markerPlaced = true;
                 // change button color
                 calibrationButton.setBackgroundColor(Color.GREEN);
-                calibrationButton.setText("Confirm Calibration");
+                calibrationButton.setText("Confirm");
                 Log.d("CollectionFragment", "Calibration marker placed.");
             } else {
                 confirmCalibration();
@@ -97,7 +97,7 @@ public class CollectionFragment extends Fragment {
                 markerPlaced = false;
                 // change button color
                 calibrationButton.setBackgroundColor(Color.YELLOW);
-                calibrationButton.setText("Add Calibration Marker");
+                calibrationButton.setText("Add Tag");
             }
         });
 

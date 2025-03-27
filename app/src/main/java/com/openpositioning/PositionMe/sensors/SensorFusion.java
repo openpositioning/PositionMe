@@ -133,17 +133,17 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // Sensor values
     private float[] acceleration;
-    private float[] filteredAcc;
+    float[] filteredAcc;
     private float[] gravity;
     private float[] magneticField;
     private float[] angularVelocity;
-    private float[] orientation;
-    private float[] rotation;
-    private float pressure;
-    private float light;
-    private float proximity;
+    float[] orientation;
+    float[] rotation;
+    float pressure;
+    float light;
+    float proximity;
     private float[] R;
-    private int stepCounter ;
+    int stepCounter ;
     // Derived values
     private float elevation;
     private boolean elevator;
@@ -155,6 +155,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private List<Wifi> wifiList;
     private long lastOpUpdateTime = 0; // 存储 WiFi / GNSS 最后一次更新的时间戳
     private long lastGnssUpdateTime = 0; // 记录上次 GNSS 更新时间
+    private LatLng wifiPos;
 
 
     // Over time accelerometer magnitude values since last step
@@ -201,6 +202,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.rotation = new float[4];
         this.rotation[3] = 1.0f;
         this.R = new float[9];
+
+        // WIFI initial values
+        this.wifiPos = null;
+
+
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
     }
@@ -440,7 +446,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     }
 
                     // 获取 WiFi 位置信息（如果有）并传入 updateFusion
-                    LatLng wifiPos = wiFiPositioning.getWifiLocation();
+                    wifiPos = wiFiPositioning.getWifiLocation();
                     JSONObject wifiResponse = null;
                     if (wifiPos != null) {
                         wifiResponse = new JSONObject();
@@ -603,18 +609,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void update(Object[] wifiList) {
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
-        if (this.saveRecording) {
-            // 构建 trajectory WiFi 数据（略）
+        // 构建 trajectory WiFi 数据（略）
 
-            // ✅ 计算 avgRssi
-            double avgRssi = -100;
-            if (!this.wifiList.isEmpty()) {
-                avgRssi = this.wifiList.stream().mapToInt(Wifi::getLevel).average().orElse(-100);
-            }
-
-            // ✅ 传入 avgRssi
-            createWifiPositioningRequest(avgRssi);
+        // ✅ 计算 avgRssi
+        double avgRssi = -100;
+        if (!this.wifiList.isEmpty()) {
+            avgRssi = this.wifiList.stream().mapToInt(Wifi::getLevel).average().orElse(-100);
         }
+
+        // ✅ 传入 avgRssi
+        createWifiPositioningRequest(avgRssi);
     }
 
 
@@ -711,69 +715,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         return this.wiFiPositioning.getFloor();
     }
 
-    /**
-     * Method used for converting an array of orientation angles into a rotation matrix.
-     *
-     * @param o An array containing orientation angles in radians
-     * @return resultMatrix representing the orientation angles
-     */
-    private float[] getRotationMatrixFromOrientation(float[] o) {
-        float[] xM = new float[9];
-        float[] yM = new float[9];
-        float[] zM = new float[9];
-
-        float sinX = (float)Math.sin(o[1]);
-        float cosX = (float)Math.cos(o[1]);
-        float sinY = (float)Math.sin(o[2]);
-        float cosY = (float)Math.cos(o[2]);
-        float sinZ = (float)Math.sin(o[0]);
-        float cosZ = (float)Math.cos(o[0]);
-
-        // rotation about x-axis (pitch)
-        xM[0] = 1.0f; xM[1] = 0.0f; xM[2] = 0.0f;
-        xM[3] = 0.0f; xM[4] = cosX; xM[5] = sinX;
-        xM[6] = 0.0f; xM[7] = -sinX; xM[8] = cosX;
-
-        // rotation about y-axis (roll)
-        yM[0] = cosY; yM[1] = 0.0f; yM[2] = sinY;
-        yM[3] = 0.0f; yM[4] = 1.0f; yM[5] = 0.0f;
-        yM[6] = -sinY; yM[7] = 0.0f; yM[8] = cosY;
-
-        // rotation about z-axis (azimuth)
-        zM[0] = cosZ; zM[1] = sinZ; zM[2] = 0.0f;
-        zM[3] = -sinZ; zM[4] = cosZ; zM[5] = 0.0f;
-        zM[6] = 0.0f; zM[7] = 0.0f; zM[8] = 1.0f;
-
-        // rotation order is y, x, z (roll, pitch, azimuth)
-        float[] resultMatrix = matrixMultiplication(xM, yM);
-        resultMatrix = matrixMultiplication(zM, resultMatrix);
-        return resultMatrix;
-    }
-
-    /**
-     * Performs and matrix multiplication of two 3x3 matrices and returns the product.
-     *
-     * @param A An array representing a 3x3 matrix
-     * @param B An array representing a 3x3 matrix
-     * @return result representing the product of A and B
-     */
-    private float[] matrixMultiplication(float[] A, float[] B) {
-        float[] result = new float[9];
-
-        result[0] = A[0] * B[0] + A[1] * B[3] + A[2] * B[6];
-        result[1] = A[0] * B[1] + A[1] * B[4] + A[2] * B[7];
-        result[2] = A[0] * B[2] + A[1] * B[5] + A[2] * B[8];
-
-        result[3] = A[3] * B[0] + A[4] * B[3] + A[5] * B[6];
-        result[4] = A[3] * B[1] + A[4] * B[4] + A[5] * B[7];
-        result[5] = A[3] * B[2] + A[4] * B[5] + A[5] * B[8];
-
-        result[6] = A[6] * B[0] + A[7] * B[3] + A[8] * B[6];
-        result[7] = A[6] * B[1] + A[7] * B[4] + A[8] * B[7];
-        result[8] = A[6] * B[2] + A[7] * B[5] + A[8] * B[8];
-
-        return result;
-    }
 
     /**
      * {@inheritDoc}
@@ -845,6 +786,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     public float passOrientation(){
         return orientation[0];
     }
+
+    public WiFiPositioning getWiFiPositioning() {
+        return this.wiFiPositioning;
+    }
+
 
     /**
      * Return most recent sensor readings.
@@ -1153,23 +1099,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.serverCommunications.sendTrajectory(sentTrajectory);
     }
 
-
-    private float computeHeadingFromOrientation(float[] orientation) {
-        if (orientation == null || orientation.length < 1) {
-            return -1f; // invalid
-        }
-
-        // Convert radians to degrees
-        float azimuthRad = orientation[0];
-        float azimuthDeg = (float) Math.toDegrees(azimuthRad);
-
-        // Normalize to [0, 360)
-        float heading = (azimuthDeg + 360f) % 360f;
-
-        return heading;
-    }
-
-
     /**
      * Creates a {@link Traj.Sensor_Info} objects from the specified sensor's data.
      *
@@ -1180,14 +1109,9 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see MovementSensor  class abstracting SensorManager based sensors
      */
     private Traj.Sensor_Info.Builder createInfoBuilder(MovementSensor sensor) {
-        return Traj.Sensor_Info.newBuilder()
-                .setName(sensor.sensorInfo.getName())
-                .setVendor(sensor.sensorInfo.getVendor())
-                .setResolution(sensor.sensorInfo.getResolution())
-                .setPower(sensor.sensorInfo.getPower())
-                .setVersion(sensor.sensorInfo.getVersion())
-                .setType(sensor.sensorInfo.getType());
+        return SensorFusionUtils.createInfoBuilder(sensor);
     }
+
 
     /**
      * Returns a JSONObject containing all sensor data (IMU, GNSS, WiFi, PDR, etc.).
@@ -1196,125 +1120,9 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return JSONObject with keys for all sensor readings.
      */
     public JSONObject getAllSensorData() {
-        JSONObject record = new JSONObject();
-        long now = System.currentTimeMillis();
-
-        try {
-            // 1) Basic timing info
-            record.put("timestamp", now);
-
-            // 2) GNSS (Lat/Lon)
-            float[] gnss = getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-            if (gnss != null) {
-                record.put("gnssLat", gnss[0]);
-                record.put("gnssLon", gnss[1]);
-            }
-
-            // 3) PDR estimation
-            float[] pdr = getSensorValueMap().get(SensorTypes.PDR);
-            if (pdr != null) {
-                record.put("pdrX", pdr[0]);
-                record.put("pdrY", pdr[1]);
-            }
-
-            // 4) Accelerometer
-            float[] accel = getSensorValueMap().get(SensorTypes.ACCELEROMETER);
-            if (accel != null) {
-                record.put("accX", accel[0]);
-                record.put("accY", accel[1]);
-                record.put("accZ", accel[2]);
-            }
-
-            // 5) Linear acceleration (filtered)
-            record.put("filteredAccX", filteredAcc[0]);
-            record.put("filteredAccY", filteredAcc[1]);
-            record.put("filteredAccZ", filteredAcc[2]);
-
-            // 6) Gyroscope
-            float[] gyro = getSensorValueMap().get(SensorTypes.GYRO);
-            if (gyro != null) {
-                record.put("gyroX", gyro[0]);
-                record.put("gyroY", gyro[1]);
-                record.put("gyroZ", gyro[2]);
-            }
-
-            // 7) Magnetometer
-            float[] mag = getSensorValueMap().get(SensorTypes.MAGNETICFIELD);
-            if (mag != null) {
-                record.put("magX", mag[0]);
-                record.put("magY", mag[1]);
-                record.put("magZ", mag[2]);
-            }
-
-            // 8) Gravity
-            float[] grav = getSensorValueMap().get(SensorTypes.GRAVITY);
-            if (grav != null) {
-                record.put("gravX", grav[0]);
-                record.put("gravY", grav[1]);
-                record.put("gravZ", grav[2]);
-            }
-
-            // 9) Rotation Vector
-            record.put("rotationX", rotation[0]);
-            record.put("rotationY", rotation[1]);
-            record.put("rotationZ", rotation[2]);
-            record.put("rotationW", rotation[3]);
-
-            // 10) Orientation (azimuth, pitch, roll)
-            record.put("orientationAzim", orientation[0]);
-            record.put("orientationPitch", orientation[1]);
-            record.put("orientationRoll", orientation[2]);
-            record.put("orientationHeading", computeHeadingFromOrientation(orientation));
-
-            // 11) Step Count
-            record.put("stepCounter", stepCounter);
-
-            // 12) Environmental sensors
-            record.put("light", light);
-            record.put("proximity", proximity);
-            record.put("pressure", pressure);
-
-            // 13) Elevation & elevator flag
-            record.put("elevation", getElevation());
-            record.put("isElevator", getElevator());
-
-            // 14) Hold mode (in hand / by ear)
-            record.put("holdMode", getHoldMode());
-
-            // 15) WiFi readings
-            List<Wifi> wifiList = getWifiList();
-            if (wifiList != null && !wifiList.isEmpty()) {
-                org.json.JSONArray wifiArray = new org.json.JSONArray();
-                for (Wifi w : wifiList) {
-                    JSONObject wObj = new JSONObject();
-                    wObj.put("bssid", w.getBssid());
-                    wObj.put("rssi", w.getLevel());
-                    wifiArray.put(wObj);
-                }
-                record.put("wifiList", wifiArray);
-            }
-
-            // 16) WiFi positioning (if available)
-            LatLng wifiPos = getLatLngWifiPositioning();
-            if (wifiPos != null) {
-                record.put("wifiLat", wifiPos.latitude);
-                record.put("wifiLon", wifiPos.longitude);
-                record.put("wifiFloor", getWifiFloor());
-            }
-            else{
-                record.put("wifiLat", JSONObject.NULL);
-                record.put("wifiLon", JSONObject.NULL);
-                record.put("wifiFloor", JSONObject.NULL);
-            }
-            record.put("deviceModel", Build.MODEL);
-
-
-        } catch (Exception e) {
-            Log.e("getAllSensorData", "Error building JSON: " + e.getMessage());
-        }
-
-        return record;
+        return SensorFusionUtils.getAllSensorData(this, wiFiPositioning);  // "this" = current SensorFusion
     }
+
 
 
 
@@ -1386,7 +1194,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         }
     }
-
-    //endregion
-
 }
+
+
+

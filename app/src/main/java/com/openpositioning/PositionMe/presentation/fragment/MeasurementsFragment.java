@@ -37,7 +37,7 @@ import java.util.Map;
 public class MeasurementsFragment extends Fragment {
 
     // Static constant for refresh time in milliseconds
-    private static final long REFRESH_TIME = 5000;
+    private static final long REFRESH_TIME = 2000;
 
     // Singleton Sensor Fusion class handling all sensor data
     private SensorFusion sensorFusion;
