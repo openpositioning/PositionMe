@@ -4,7 +4,7 @@ import com.google.android.gms.maps.model.LatLng;
 
 /**
  * Interface for listening to position updates from various sources.
- * Implementing classes can receive updates from PDR, GNSS, WiFi, and fused positions.
+ * Implementing classes can receive updates from PDR, GNSS, and fused positions.
  */
 public interface PositionListener {
 
@@ -17,9 +17,6 @@ public interface PositionListener {
 
         /** Update from Global Navigation Satellite System */
         GNSS_POSITION,
-
-        /** Update from WiFi positioning */
-        WIFI_POSITION,
 
         /** Update from the fusion algorithm (combined position) */
         FUSED_POSITION,

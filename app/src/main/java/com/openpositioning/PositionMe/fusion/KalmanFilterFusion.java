@@ -8,8 +8,8 @@ import com.openpositioning.PositionMe.utils.CoordinateConverter;
 import org.ejml.simple.SimpleMatrix;
 
 /**
- * An implementation of a Kalman Filter for fusing position data from multiple sources.
- * This fusion algorithm combines PDR, GNSS, and WiFi positioning data to estimate the user's position.
+ * An implementation of a Kalman Filter for fusing position data from PDR and GNSS.
+ * This fusion algorithm will be extended to include WiFi positioning in future updates.
  */
 public class KalmanFilterFusion implements IPositionFusionAlgorithm {
     private static final String TAG = "KalmanFilterFusion";
@@ -17,7 +17,6 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
     // Constants for the Kalman filter
     private static final double PDR_NOISE_SCALE = 0.1;  // Process noise scale factor for PDR
     private static final double GNSS_NOISE = 5.0;       // Measurement noise for GNSS (in meters)
-    private static final double WIFI_NOISE = 10.0;      // Measurement noise for WiFi (in meters)
 
     // State variables
     private SimpleMatrix stateVector;     // [x, y, vx, vy]^T - position and velocity
@@ -190,69 +189,13 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
     }
 
     @Override
-    public void processWifiUpdate(LatLng position) {
-        long currentTime = System.currentTimeMillis();
-        double deltaTime = (currentTime - lastUpdateTime) / 1000.0; // Convert to seconds
-
-        if (deltaTime <= 0) {
-            Log.w(TAG, "Invalid time delta: " + deltaTime);
-            return;
-        }
-
-        // Convert WiFi position to ENU
-        double[] enu = CoordinateConverter.geodetic2Enu(
-                position.latitude, position.longitude, 0, // Assume altitude=0 for WiFi
-                referencePosition[0], referencePosition[1], referencePosition[2]
-        );
-
-        // If this is the first position, initialize the state
-        if (stateVector.get(0, 0) == 0 && stateVector.get(1, 0) == 0) {
-            stateVector.set(0, 0, enu[0]);
-            stateVector.set(1, 0, enu[1]);
-            lastUpdateTime = currentTime;
-            return;
-        }
-
-        // Update process matrix F with the time delta
-        updateProcessMatrix(deltaTime);
-
-        // Predict step
-        SimpleMatrix predictedState = processMatrix.mult(stateVector);
-        SimpleMatrix predictedCovariance = processMatrix.mult(covarianceMatrix).mult(processMatrix.transpose())
-                .plus(processNoiseMatrix);
-
-        // Create measurement vector from WiFi
-        SimpleMatrix measurementVector = new SimpleMatrix(2, 1);
-        measurementVector.set(0, 0, enu[0]);
-        measurementVector.set(1, 0, enu[1]);
-
-        // Create measurement noise matrix for WiFi (higher noise than GNSS)
-        SimpleMatrix measurementNoiseMatrix = SimpleMatrix.identity(2).scale(WIFI_NOISE * WIFI_NOISE);
-
-        // Update step
-        SimpleMatrix innovation = measurementVector.minus(measurementMatrix.mult(predictedState));
-        SimpleMatrix innovationCovariance = measurementMatrix.mult(predictedCovariance).mult(measurementMatrix.transpose())
-                .plus(measurementNoiseMatrix);
-        SimpleMatrix kalmanGain = predictedCovariance.mult(measurementMatrix.transpose()).mult(innovationCovariance.invert());
-
-        // Update state and covariance
-        stateVector = predictedState.plus(kalmanGain.mult(innovation));
-        covarianceMatrix = identityMatrix.minus(kalmanGain.mult(measurementMatrix)).mult(predictedCovariance);
-
-        lastUpdateTime = currentTime;
-
-        Log.d(TAG, "WiFi update: E=" + enu[0] + ", N=" + enu[1] +
-                " -> State=" + stateVector.get(0, 0) + ", " + stateVector.get(1, 0));
-    }
-
-    @Override
     public LatLng getFusedPosition() {
         double east = stateVector.get(0, 0);
         double north = stateVector.get(1, 0);
 
-        // Convert ENU back to Geodetic
+        // Convert ENU back to latitude/longitude
         return CoordinateConverter.enu2Geodetic(
-                east, north, 0,
+                east, north, 0, // Assume altitude=0 for the return value
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
     }
@@ -304,4 +247,11 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         processNoiseMatrix.set(3, 1, dt3 / 2);
         processNoiseMatrix.set(3, 3, dt2);
     }
+
+    // WiFi fusion will be added in future updates
+    /*
+    public void processWifiUpdate(LatLng position) {
+        // To be implemented in the future
+    }
+    */
 }

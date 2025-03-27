@@ -4,8 +4,10 @@ import com.google.android.gms.maps.model.LatLng;
 
 /**
  * Interface for position fusion algorithms.
- * Implementing classes should provide algorithms for fusing different
- * positioning sources (PDR, GNSS, WiFi) into a single estimate.
+ * Implementing classes should provide algorithms for fusing PDR and GNSS
+ * positioning sources into a single estimate.
+ *
+ * Note: WiFi fusion will be added in a future update.
  */
 public interface IPositionFusionAlgorithm {
 
@@ -27,13 +29,6 @@ public interface IPositionFusionAlgorithm {
     void processGnssUpdate(LatLng position, double altitude);
 
     /**
-     * Processes an update from the WiFi positioning system.
-     *
-     * @param position The WiFi position (latitude, longitude)
-     */
-    void processWifiUpdate(LatLng position);
-
-    /**
      * Gets the current fused position estimate.
      *
      * @return The fused position (latitude, longitude)
@@ -44,4 +39,11 @@ public interface IPositionFusionAlgorithm {
      * Resets the fusion algorithm to its initial state.
      */
     void reset();
+
+    /**
+     * Future implementation: Processes an update from the WiFi positioning system.
+     *
+     * @param position The WiFi position (latitude, longitude)
+     */
+    // void processWifiUpdate(LatLng position); - Will be implemented in future updates
 }

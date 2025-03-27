@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -29,6 +30,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.utils.PositionListener;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 
@@ -47,6 +49,7 @@ import com.google.android.gms.maps.model.LatLng;
  * - Provides UI controls to cancel or complete recording.
  * - Uses {@link TrajectoryMapFragment} to visualize recorded paths.
  * - Manages GNSS tracking and error display.
+ * - Visualizes fusion results from combined PDR and GNSS data.
  *
  * @see TrajectoryMapFragment The map fragment displaying the recorded trajectory.
  * @see RecordingActivity The activity managing the recording workflow.
@@ -56,13 +59,15 @@ import com.google.android.gms.maps.model.LatLng;
  * @author Shu Gu
  */
 
-public class RecordingFragment extends Fragment {
+public class RecordingFragment extends Fragment implements PositionListener {
+
+    private static final String TAG = "RecordingFragment";
 
     // UI elements
     private MaterialButton completeButton, cancelButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
-    private TextView elevation, distanceTravelled, gnssError;
+    private TextView elevation, distanceTravelled, gnssError, fusionInfoText;
 
     // App settings
     private SharedPreferences settings;
@@ -76,6 +81,9 @@ public class RecordingFragment extends Fragment {
     private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
+
+    // Fusion tracking
+    private LatLng lastFusionPosition = null;
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
@@ -135,6 +143,10 @@ public class RecordingFragment extends Fragment {
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
 
+        // Find fusion info text if it exists in your layout
+        // If it doesn't exist in your layout, you can add it
+
+
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
         recIcon = view.findViewById(R.id.redDot);
@@ -181,6 +193,11 @@ public class RecordingFragment extends Fragment {
             dialog.show(); // Finally, show the dialog
         });
 
+        if (!sensorFusion.isStepDetectionWorking()) {
+            Log.w(TAG, "Step detection may not be working - this will affect PDR tracking");
+            // Could show a warning to the user here
+        }
+
         // The blinking effect for recIcon
         blinkingRecordingIcon();
 
@@ -216,7 +233,10 @@ public class RecordingFragment extends Fragment {
      */
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
-        if (pdrValues == null) return;
+        if (pdrValues == null) {
+            Log.e(TAG, "PDR values are null in updateUIandPosition");
+            return;
+        }
 
         // Distance
         distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
@@ -228,9 +248,6 @@ public class RecordingFragment extends Fragment {
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
         // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
             LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
@@ -239,11 +256,24 @@ public class RecordingFragment extends Fragment {
                     new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
 
+            Log.d(TAG, "PDR update in updateUIandPosition: deltaX=" + (pdrValues[0] - previousPosX) +
+                    ", deltaY=" + (pdrValues[1] - previousPosY) +
+                    " -> newLocation=" + newLocation.latitude + ", " + newLocation.longitude);
+
             // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
                 trajectoryMapFragment.updateUserLocation(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
+
+                // Force polyline update if there are no points yet
+                if (trajectoryMapFragment.isPolylineEmpty()) {
+                    Log.d(TAG, "Forcing initial polyline update with location: " +
+                            newLocation.latitude + ", " + newLocation.longitude);
+                    trajectoryMapFragment.forcePolylineUpdate(newLocation);
+                }
             }
+        } else {
+            Log.e(TAG, "latLngArray is null in updateUIandPosition");
         }
 
         // GNSS logic if you want to show GNSS error, etc.
@@ -265,10 +295,22 @@ public class RecordingFragment extends Fragment {
             }
         }
 
+        // If there's a fusion position, we can calculate fusion-PDR error
+        if (lastFusionPosition != null && fusionInfoText != null) {
+            LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+            if (currentLoc != null) {
+                double fusionPdrError = UtilFunctions.distanceBetweenPoints(currentLoc, lastFusionPosition);
+                fusionInfoText.setVisibility(View.VISIBLE);
+                fusionInfoText.setText(String.format("Fusion-PDR error: %.2fm", fusionPdrError));
+            }
+        }
+
         // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
     }
+
+
 
     /**
      * Start the blinking effect for the recording icon.
@@ -283,6 +325,20 @@ public class RecordingFragment extends Fragment {
     }
 
     @Override
+    public void onStart() {
+        super.onStart();
+        // Register for position updates
+        sensorFusion.registerPositionListener(this);
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        // Unregister when fragment stops
+        sensorFusion.unregisterPositionListener(this);
+    }
+
+    @Override
     public void onPause() {
         super.onPause();
         refreshDataHandler.removeCallbacks(refreshDataTask);
@@ -293,6 +349,59 @@ public class RecordingFragment extends Fragment {
         super.onResume();
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
+        }
+    }
+
+    // Implementation of PositionListener interface
+    // In RecordingFragment.java, enhance the onPositionUpdate method:
+
+    @Override
+    public void onPositionUpdate(UpdateType updateType, LatLng position) {
+        if (position == null) {
+            Log.w(TAG, "Received null position update for type: " + updateType);
+            return;
+        }
+
+        // Process different types of position updates
+        switch (updateType) {
+            case PDR_POSITION:
+                // PDR updates are already handled in updateUIandPosition
+                Log.d(TAG, "PDR position update: " + position.latitude + ", " + position.longitude);
+                break;
+
+            case GNSS_POSITION:
+                // GNSS updates are already handled in updateUIandPosition
+                Log.d(TAG, "GNSS position update: " + position.latitude + ", " + position.longitude);
+                break;
+
+            case FUSED_POSITION:
+                // Update fusion position on map with additional logging
+                Log.d(TAG, "Fusion position update received: " + position.latitude + ", " + position.longitude);
+
+                if (trajectoryMapFragment != null) {
+                    trajectoryMapFragment.updateFusionPosition(position);
+
+                    // Save for error calculation
+                    lastFusionPosition = position;
+
+
+
+                    // Update fusion-PDR error display if possible
+                    LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+                    if (currentLoc != null && fusionInfoText != null) {
+                        double fusionPdrError = UtilFunctions.distanceBetweenPoints(currentLoc, position);
+                        fusionInfoText.setVisibility(View.VISIBLE);
+                        fusionInfoText.setText(String.format("Fusion-PDR error: %.2fm", fusionPdrError));
+                        Log.d(TAG, "Fusion-PDR error: " + fusionPdrError + "m");
+                    }
+                } else {
+                    Log.e(TAG, "Cannot update fusion position: trajectoryMapFragment is null");
+                }
+                break;
+
+            case ORIENTATION_UPDATE:
+                // Orientation updates are handled elsewhere
+                break;
         }
     }
 }
