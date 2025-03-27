@@ -25,6 +25,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -145,6 +146,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
+
 
     //region Initialisation
     /**
@@ -272,10 +274,30 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_PRESSURE:
-                // Barometer processing - filter
-                pressure = (1- ALPHA) * pressure + ALPHA * sensorEvent.values[0];
-//                System.err.println("Pressure: " + pressure);
-                // Store pressure data in protobuf trajectory class
+                float rawPressure = sensorEvent.values[0];
+
+                // ✅ 1. 判空或非法值
+                if (Float.isNaN(rawPressure) || rawPressure <= 0) {
+                    Log.w("PDR", "Invalid pressure reading, skipped.");
+                    break;
+                }
+
+                // ✅ 2. 判定范围是否合理（地球大气压力范围大致是 850~1100 hPa）
+                if (rawPressure < 850f || rawPressure > 1100f) {
+                    Log.w("PDR", "Out-of-range pressure value: " + rawPressure);
+                    break;
+                }
+
+                // ✅ 3. 判断突变（与上一帧差值过大）
+                if (Math.abs(rawPressure - pressure) > 10f) {  // 可调阈值，比如超过10 hPa
+                    Log.w("PDR", "Sudden jump in pressure value, skipped.");
+                    break;
+                }
+
+                // ✅ 4. 平滑气压
+                pressure = (1 - ALPHA) * pressure + ALPHA * rawPressure;
+
+                // ✅ 5. 更新 elevation
                 if (saveRecording) {
                     this.elevation = pdrProcessing.updateElevation(SensorManager.getAltitude(
                             SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure));
@@ -337,14 +359,29 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
-                //Store time of step
+                // Store time of step
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
+
+                // ✅ 添加判断：如果加速度点太少，就跳过这次步长估计
+                int MIN_ACCEL_SAMPLES = 10;  // 可根据你采样率和步频实际情况调整
+                if (this.accelMagnitude.size() < MIN_ACCEL_SAMPLES) {
+                    // 不调用 updatePdr，跳过位置更新
+                    Log.w("PDR", "Skipped step: not enough accel samples (" + accelMagnitude.size() + ")");
+                    this.accelMagnitude.clear(); // 仍要清空缓存，准备下一步
+                    break;
+                }
+
+                // ✅ 加速度数据量足够，正常执行 PDR 更新
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
+
                 if (saveRecording) {
                     // Store the PDR coordinates for plotting the trajectory
                     this.pathView.drawTrajectory(newCords);
                 }
+
+                // ✅ 步长估计后，清空加速度缓存
                 this.accelMagnitude.clear();
+
                 if (saveRecording) {
                     stepCounter++;
                     trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
@@ -352,6 +389,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setX(newCords[0]).setY(newCords[1]));
                 }
                 break;
+
         }
     }
 
@@ -399,8 +437,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void update(Object[] wifiList) {
         // Save newest wifi values to local variable
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
+        Log.d("Wifi List", this.wifiList.toString());
 
         if(this.saveRecording) {
+            Log.e("Wifi", "Wifi data saved");
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
                     .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime);
             for (Wifi data : this.wifiList) {
@@ -411,7 +451,8 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
         }
-        createWifiPositioningRequest();
+//        createWifiPositioningRequest();
+        createWifiPositionRequestCallback();
     }
 
     /**
@@ -419,55 +460,75 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      */
     private void createWifiPositioningRequest(){
-        // Try catch block to catch any errors and prevent app crashing
         try {
-            // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
-            for (Wifi data : this.wifiList){
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
-            }
-            // Creating POST Request
+            // 1️⃣ 创建 POST 请求的 JSON 数据结构
             JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+            JSONObject wf = new JSONObject();
+
+            // 2️⃣ 直接使用之前已过滤好的 this.wifiList（已经是干净的、排序过的、最多 MAX_WIFI_APS 个）
+            for (Wifi data : this.wifiList) {
+                Log.e("WiFi-Bssid", String.valueOf(data.getBssid()));
+                Log.e("WiFi-Level", String.valueOf(data.getLevel()));
+                wf.put(String.valueOf(data.getBssid()), data.getLevel());
+            }
+
+            wifiFingerPrint.put("wf", wf);
+
+            if (wifiFingerPrint.length() == 0) {
+                Log.e("wifiFingerPrint", "Empty");
+            } else {
+                Log.e("wifiFingerPrint", wifiFingerPrint.toString());
+            }
+
+            Log.d("wifiFingerPrint", "JSON Length: " + wifiFingerPrint.toString().length());
+
+            // 3️⃣ 发送定位请求
             this.wiFiPositioning.request(wifiFingerPrint);
+
+            // 4️⃣ 可选：输出返回结果（注意：这部分是异步请求之后才会更新的，立即获取可能为 null）
+            if (this.wiFiPositioning.getWifiLocation() != null) {
+                Log.e("WiFi-Location", this.wiFiPositioning.getWifiLocation().toString());
+                Log.e("WiFi-Floor", String.valueOf(this.wiFiPositioning.getFloor()));
+            }
+
         } catch (JSONException e) {
-            // Catching error while making JSON object, to prevent crashes
-            // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors","Error creating json object"+e.toString());
+            Log.e("jsonErrors", "Error creating json object: " + e.toString());
         }
     }
+
     // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      * using Volley Callback
      */
-    private void createWifiPositionRequestCallback(){
+    private void createWifiPositionRequestCallback() {
         try {
-            // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
-            for (Wifi data : this.wifiList){
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+            JSONObject wf = new JSONObject();
+            for (Wifi data : this.wifiList) {
+                wf.put(String.valueOf(data.getBssid()), data.getLevel());
             }
-            // Creating POST Request
+
             JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+            wifiFingerPrint.put("wf", wf);
+
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Handle the success response
+                    Log.i("WiFiCallback", "定位成功: 位置 = " + wifiLocation + ", 楼层 = " + floor);
+                    // 👉 在这里更新地图或 UI
+                    // map.moveCamera(CameraUpdateFactory.newLatLngZoom(wifiLocation, 18));
                 }
 
                 @Override
                 public void onError(String message) {
-                    // Handle the error response
+                    Log.e("WiFiCallback", "定位失败: " + message);
+                    // 👉 显示 Toast / 弹窗 / 自动重试
                 }
             });
-        } catch (JSONException e) {
-            // Catching error while making JSON object, to prevent crashes
-            // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors","Error creating json object"+e.toString());
-        }
 
+        } catch (JSONException e) {
+            Log.e("jsonErrors", "构建定位请求失败：" + e.toString());
+        }
     }
 
     /**

@@ -90,6 +90,7 @@ public class WiFiPositioning {
                     try {
                             wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
                             floor = response.getInt("floor");
+                            Log.e("Received", "Location: "+wifiLocation+" Floor: "+floor);
                     } catch (JSONException e) {
                         // Error log to keep record of errors (for secure programming and maintainability)
                         Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);

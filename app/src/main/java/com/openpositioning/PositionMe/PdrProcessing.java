@@ -3,9 +3,11 @@ package com.openpositioning.PositionMe;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.SensorManager;
+import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -123,7 +125,7 @@ public class PdrProcessing {
         }
 
         // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", 4);
+        this.floorHeight = 3;
         // Array for holding initial values
         this.startElevationBuffer = new Float[elevation_buffer_size];
         // Start floor - assumed to be zero
@@ -175,88 +177,125 @@ public class PdrProcessing {
     }
 
     /**
-     * Calculates the relative elevation compared to the start position.
-     * The start elevation is the median of the first three seconds of data to give the sensor time
-     * to settle. The sea level is irrelevant as only values relative to the initial position are
-     * reported.
+     * Calculates the relative elevation compared to a dynamic reference point.
+     * Uses the median of the first few seconds as the start height, then uses sliding window
+     * average to detect floor changes. Sea level is irrelevant; all values are relative.
      *
-     * @param absoluteElevation absolute elevation in meters compared to sea level.
-     * @return                  current elevation in meters relative to the start position.
+     * @param absoluteElevation absolute elevation in meters (from pressure).
+     * @return                  current relative elevation in meters.
      */
     public float updateElevation(float absoluteElevation) {
-        // Set start to median of first three values
-        if(setupIndex < elevation_buffer_size) {
-            // Add values to buffer until it's full
+        // ✅ 1. 异常值过滤：气压异常时转换出的海拔可能是无效的
+        if (Float.isNaN(absoluteElevation) || Math.abs(absoluteElevation) > 10000f) {
+            return this.elevation;  // 保留上次值，不更新
+        }
+
+        // ✅ 2. 初始化阶段：构建初始参考海拔（使用中位数）
+        if (setupIndex < elevation_buffer_size) {
             this.startElevationBuffer[setupIndex] = absoluteElevation;
-            // When buffer is full, find median, assign as startElevation
-            if(setupIndex == elevation_buffer_size - 1) {
+            setupIndex++;
+
+            if (setupIndex == elevation_buffer_size) {
                 Arrays.sort(startElevationBuffer);
-                startElevation = startElevationBuffer[(int) elevation_buffer_size/2];
-            }
-            this.setupIndex++;
-        }
-        else {
-            // Get relative elevation in meters
-            this.elevation = absoluteElevation - startElevation;
-            // Add to buffer
-            this.elevationList.putNewest(absoluteElevation);
-
-            // Check if there was floor movement
-            // Check if there is enough data to evaluate
-            if(this.elevationList.isFull()) {
-                // Check average of elevation array
-                List<Float> elevationMemory = this.elevationList.getListCopy();
-                OptionalDouble currentAvg = elevationMemory.stream().mapToDouble(f -> f).average();
-                float finishAvg = currentAvg.isPresent() ? (float) currentAvg.getAsDouble() : 0;
-
-                // Check if we moved floor by comparing with start position
-                if(Math.abs(finishAvg - startElevation) > this.floorHeight) {
-                    // Change floors - 'floor' division
-                    this.currentFloor += (finishAvg - startElevation)/this.floorHeight;
+                // 中位数计算（考虑偶数情况）
+                if (elevation_buffer_size % 2 == 1) {
+                    startElevation = startElevationBuffer[elevation_buffer_size / 2];
+                } else {
+                    int mid = elevation_buffer_size / 2;
+                    startElevation = (startElevationBuffer[mid - 1] + startElevationBuffer[mid]) / 2f;
                 }
+                currentFloor = 0;  // 初始化楼层
             }
-            // Return current elevation
-            return elevation;
+
+            return 0;  // 初始阶段默认高度为 0
         }
-        // Keep elevation at zero if there is no calculated value
-        return 0;
+
+        // ✅ 3. 正常状态下：计算相对高度
+        this.elevation = absoluteElevation - startElevation;
+
+        // ✅ 4. 更新滑动窗口：用于判断是否上下楼
+        this.elevationList.putNewest(absoluteElevation);
+
+        if (this.elevationList.isFull()) {
+            List<Float> elevationMemory = this.elevationList.getListCopy();
+            OptionalDouble currentAvgOpt = elevationMemory.stream().mapToDouble(f -> f).average();
+            float currentAvg = currentAvgOpt.isPresent() ? (float) currentAvgOpt.getAsDouble() : startElevation;
+
+            // ✅ 5. 计算与当前楼层参考的高度差
+            float delta = currentAvg - startElevation;
+            float floorHeight = this.floorHeight;       // 一层楼的高度阈值（如 3.0 米）
+            float floorMargin = 0.8f;                   // 容忍误差（防止误判）
+
+            if (Math.abs(delta) > floorHeight + floorMargin) {
+                int floorChange = Math.round(delta / floorHeight);
+                currentFloor += floorChange;
+
+                // ✅ 6. 更新当前楼层的海拔基准为当前窗口平均值，防止反复触发
+                startElevation = currentAvg;
+
+                Log.i("PDR", "Floor changed: now at floor " + currentFloor);
+            }
+        }
+
+        // ✅ 7. 返回当前相对海拔（供可视化或记录使用）
+        return this.elevation;
+    }
+
+    private double medianOf3(double a, double b, double c) {
+        return Math.max(Math.min(a, b), Math.min(Math.max(a, b), c));
     }
 
     /**
-     * Uses the Weiberg Stride Length formula to calculate step length from accelerometer values.
+     * Uses the Weiberg Stride Length formula to calculate step length from accelerometer values,
+     * with added filtering and outlier handling.
      *
-     * @param accelMagnitude    magnitude of acceleration values between the last and current step.
-     * @return                  float stride length in meters.
+     * @param accelMagnitude    Raw acceleration magnitude values between last and current step.
+     * @return                  Estimated stride length in meters.
      */
     private float weibergMinMax(List<Double> accelMagnitude) {
-        // if the list itself is null or empty, return 0 (or return other default values as needed)
+        // if the list itself is null or empty, return 0
         if (accelMagnitude == null || accelMagnitude.isEmpty()) {
             return 0f;
         }
 
-        // filter out null values from the list
+        // filter out null values
         List<Double> validAccel = accelMagnitude.stream()
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-        if (validAccel.isEmpty()) {
-            return 0f;
+        if (validAccel.size() < 5) {
+            return 0f; // Not enough data to be reliable
         }
 
-        // calculate max and min values
-        double maxAccel = Collections.max(validAccel);
-        double minAccel = Collections.min(validAccel);
+        // ✅ Step 1: Apply simple median filter (window size = 3)
+        List<Double> filteredAccel = new ArrayList<>();
+        for (int i = 0; i < validAccel.size(); i++) {
+            if (i == 0 || i == validAccel.size() - 1) {
+                filteredAccel.add(validAccel.get(i)); // Keep edges
+            } else {
+                double median = medianOf3(validAccel.get(i - 1), validAccel.get(i), validAccel.get(i + 1));
+                filteredAccel.add(median);
+            }
+        }
 
-        // calculate bounce
+        // ✅ Step 2: Remove top/bottom 5% outliers
+        int N = filteredAccel.size();
+        List<Double> sorted = new ArrayList<>(filteredAccel);
+        Collections.sort(sorted);
+        int trim = Math.max(1, N / 20);  // trim 5% (at least 1 point)
+        List<Double> trimmed = sorted.subList(trim, N - trim); // Keep middle 90%
+
+        // ✅ Step 3: Calculate bounce from trimmed list
+        double maxAccel = Collections.max(trimmed);
+        double minAccel = Collections.min(trimmed);
         float bounce = (float) Math.pow((maxAccel - minAccel), 0.25);
 
-        // determine which constant to use based on settings
+        // ✅ Step 4: Preserve original K-setting logic
         if (this.settings.getBoolean("overwrite_constants", false)) {
             return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
         }
 
         return bounce * K * 2;
     }
-
 
     /**
      * Get the current X and Y coordinates from the PDR processing class.
