@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.sensors;
 import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
+import com.openpositioning.PositionMe.processing.SensorFusion;
 
 /**
  * Movement sensor class representing all Sensor Manager based devices.

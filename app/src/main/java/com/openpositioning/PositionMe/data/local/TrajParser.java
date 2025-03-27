@@ -10,8 +10,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
-import com.openpositioning.PositionMe.sensors.WiFiPositioning;
+import com.openpositioning.PositionMe.processing.SensorFusion;
+import com.openpositioning.PositionMe.processing.WiFiPositioning;
 import com.openpositioning.PositionMe.utils.TimedData;
 
 import org.json.JSONException;
@@ -21,7 +21,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;

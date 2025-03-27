@@ -6,7 +6,7 @@ import android.hardware.SensorManager;
 
 import androidx.preference.PreferenceManager;
 
-import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.processing.SensorFusion;
 
 import java.util.Arrays;
 import java.util.Collections;

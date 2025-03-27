@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.sensors.filters;
+package com.openpositioning.PositionMe.processing.filters;
 
 import org.ejml.simple.SimpleMatrix;
 
