@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.fragments;
 
+import static androidx.core.view.ViewCompat.getElevation;
+
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -48,6 +50,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;

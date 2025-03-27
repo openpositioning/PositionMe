@@ -318,7 +318,12 @@ public class PdrProcessing {
         return false;
 
     }
+    public float getStepLength(){ return stepLength; }
+    public double[] getAccPDRMovement() {
+        double [] pdrPosition= new double[] {positionX,positionY};
+        return pdrPosition;
 
+    }
     /**
      * Resets all values stored in the PDR function and re-initialises all buffers.
      * Used to reset to zero position and remove existing history.
