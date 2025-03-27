@@ -27,7 +27,7 @@ import com.openpositioning.PositionMe.utils.SensorFusionUpdates;
 import com.openpositioning.PositionMe.utils.CoordinateTransform;
 import com.openpositioning.PositionMe.algorithms.ExtendedKalmanFilter;
 import com.openpositioning.PositionMe.algorithms.ParticleFilter;
-import com.openpositioning.PositionMe.sensors.WifiPositioning;
+import com.openpositioning.PositionMe.sensors.WiFiPositioning;
 
 
 import org.json.JSONException;
@@ -169,7 +169,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Trajectory displaying class
     private PathView pathView;
     // WiFi positioning object
-    private WifiPositioning wifiPositioning;
+    private WiFiPositioning wifiPositioning;
 
     private List<SensorFusionUpdates> recordingUpdates;
 
@@ -282,7 +282,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.pdrProcessing = new PdrProcessing(context);
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.pathView = new PathView(context, null);
-        this.wifiPositioning = new WifiPositioning(context);
+        this.wifiPositioning = new WiFiPositioning(context);
 
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
@@ -545,7 +545,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint);
+            this.wifiPositioning.request(wifiFingerPrint);
         } catch (JSONException e) {
             // Catching error while making JSON object, to prevent crashes
             // Error log to keep record of errors (for secure programming and maintainability)
@@ -567,7 +567,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wifiPositioning.request(wifiFingerPrint, new WifiPositioning.VolleyCallback() {
+            this.wifiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     // Handle the success response
@@ -595,7 +595,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * Method to get current floor the user is at, obtained using WiFiPositioning
-     * @see WifiPositioning for WiFi positioning
+     * @see WiFiPositioning for WiFi positioning
      * @return Current floor user is at using WiFiPositioning
      */
     public int getWifiFloor(){
