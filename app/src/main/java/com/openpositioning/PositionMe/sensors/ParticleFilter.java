@@ -35,7 +35,7 @@ public class ParticleFilter {
     }
 
     // 固定的粒子数量，可以根据需要进行配置
-    private static final int NUM_PARTICLES = 100;
+    private static final int NUM_PARTICLES = 50;
 
     /**
      * 更新粒子滤波器状态的核心函数。融合当前的传感器数据（WiFi/GNSS定位和PDR位移），
@@ -84,7 +84,7 @@ public class ParticleFilter {
             double moveX = pdrDelta.x;
             double moveY = pdrDelta.y;
             // 设置运动模型噪声，用于模拟运动过程的不确定性
-            double motionNoiseStd = 0.5;  // 运动噪声标准差，可根据需要调整
+            double motionNoiseStd = 0.1;  // 运动噪声标准差，可根据需要调整
             for (Particle p : particles) {
                 // 对每个粒子应用相同的位移增量，并加入随机噪声扰动
                 double dxNoise = rand.nextGaussian() * motionNoiseStd;
@@ -100,11 +100,11 @@ public class ParticleFilter {
         if (wifiPos != null) {
             // 使用 WiFi 数据进行观测校正
             measurement = wifiPos;
-            measurementStd = 3.0;    // 假设 WiFi 定位误差的标准差为约3个单位（可调参数）
+            measurementStd = 4.0;    // 假设 WiFi 定位误差的标准差为约3个单位（可调参数）
         } else if (gnssPos != null) {
             // WiFi 数据不可用，使用 GNSS 数据进行校正
             measurement = gnssPos;
-            measurementStd = 5.0;    // 假设 GNSS 定位误差标准差为约5个单位
+            measurementStd = 6.0;    // 假设 GNSS 定位误差标准差为约5个单位
         }
         if (measurement != null) {
             // 如果有观测数据，计算每个粒子相对于观测位置的概率（距离越近权重越大）
