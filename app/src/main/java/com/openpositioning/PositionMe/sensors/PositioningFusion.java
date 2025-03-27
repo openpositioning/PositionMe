@@ -74,6 +74,7 @@ public class PositioningFusion {
         LatLng glssLatLnglocation = new LatLng(gnssLatLon[0], gnssLatLon[1]);
         updateFromGNSS(glssLatLnglocation);
         float[] pdrXY = SensorFusion.getInstance().getSensorValueMap().get(SensorTypes.PDR);
+
         updateFromPDR(pdrXY);
     }
 

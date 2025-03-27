@@ -19,6 +19,7 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.PositioningFusion;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
@@ -47,6 +48,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     private final int updateInterval = 1000; // 1 second
 
     private PositioningFusion positioningFusion = PositioningFusion.getInstance();
+
+    private IndoorMapManager indoorMapManager;
 
     private final Runnable updateWifiLocationRunnable = new Runnable() {
         @Override
@@ -125,6 +128,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
         showCurrentLocation();
+        indoorMapManager = new IndoorMapManager(mMap);
+        indoorMapManager.setIndicationOfIndoorMap();
 
     }
 
