@@ -18,6 +18,8 @@ import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.data.local.TrajParser;
+import com.openpositioning.PositionMe.sensors.SensorFusion.WiFiPositioningCallback;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -65,9 +67,15 @@ public class ReplayFragment extends Fragment {
     private int currentIndex = 0;
     private boolean isPlaying = false;
 
+    // 添加SensorFusion实例声明
+    private SensorFusion sensorFusion;
+
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // 初始化SensorFusion实例
+        sensorFusion = SensorFusion.getInstance();
 
         // Retrieve transferred data from ReplayActivity
         if (getArguments() != null) {
@@ -130,8 +138,26 @@ public class ReplayFragment extends Fragment {
                     .replace(R.id.replayMapFragmentContainer, trajectoryMapFragment)
                     .commit();
         }
+        
+        // 设置WiFi定位回调
+        sensorFusion.setWiFiPositioningCallback(new WiFiPositioningCallback() {
+            @Override
+            public void onWiFiPosition(LatLng wifiPosition, int floor) {
+                // 将WiFi位置更新到地图上
+                if (trajectoryMapFragment != null) {
+                    // 在UI线程中更新UI
+                    requireActivity().runOnUiThread(() -> {
+                        trajectoryMapFragment.updateWiFiLocation(wifiPosition);
+                    });
+                }
+            }
 
-
+            @Override
+            public void onWiFiPositionError(String errorMessage) {
+                // 记录WiFi定位错误
+                Log.e("ReplayFragment", "WiFi positioning error: " + errorMessage);
+            }
+        });
 
         // 1) Check if the file contains any GNSS data
         boolean gnssExists = hasAnyGnssData(replayData);

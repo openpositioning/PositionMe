@@ -23,6 +23,7 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
+import com.example.ekf.EKFManager;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -159,6 +160,12 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
+    // EKF Manager instance
+    private EKFManager ekfManager;
+    
+    // WiFi positioning callback
+    private WiFiPositioningCallback wifiPositioningCallback;
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -191,6 +198,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.R = new float[9];
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
+        
+        // 初始化EKF管理器
+        this.ekfManager = EKFManager.getInstance();
     }
 
 
@@ -524,12 +534,29 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Handle the success response
+                    // 记录获取的WiFi位置
+                    Log.i("SensorFusion", "Got WiFi position from server: " + wifiLocation + ", floor: " + floor);
+                    
+                    // 如果有回调则通知外部
+                    if (wifiPositioningCallback != null) {
+                        wifiPositioningCallback.onWiFiPosition(wifiLocation, floor);
+                    }
+                    
+                    // 更新EKF中的WiFi位置
+                    if (ekfManager != null) {
+                        ekfManager.updateWifiPosition(wifiLocation);
+                    }
                 }
 
                 @Override
                 public void onError(String message) {
-                    // Handle the error response
+                    // 记录WiFi位置获取错误
+                    Log.e("SensorFusion", "Error with WiFi positioning: " + message);
+                    
+                    // 如果有回调则通知外部
+                    if (wifiPositioningCallback != null) {
+                        wifiPositioningCallback.onWiFiPositionError(message);
+                    }
                 }
             });
         } catch (JSONException e) {
@@ -537,7 +564,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Error log to keep record of errors (for secure programming and maintainability)
             Log.e("jsonErrors","Error creating json object"+e.toString());
         }
-
     }
 
     /**
@@ -1010,5 +1036,21 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     //endregion
+
+    /**
+     * 定义WiFi定位回调接口
+     */
+    public interface WiFiPositioningCallback {
+        void onWiFiPosition(LatLng wifiPosition, int floor);
+        void onWiFiPositionError(String errorMessage);
+    }
+    
+    /**
+     * 设置WiFi定位回调
+     * @param callback WiFi定位回调接口
+     */
+    public void setWiFiPositioningCallback(WiFiPositioningCallback callback) {
+        this.wifiPositioningCallback = callback;
+    }
 
 }

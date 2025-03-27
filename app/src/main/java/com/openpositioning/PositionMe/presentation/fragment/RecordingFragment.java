@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -31,6 +32,7 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.sensors.SensorFusion.WiFiPositioningCallback;
 
 
 /**
@@ -144,6 +146,26 @@ public class RecordingFragment extends Fragment {
         gnssError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
+
+        // 设置WiFi定位回调
+        sensorFusion.setWiFiPositioningCallback(new WiFiPositioningCallback() {
+            @Override
+            public void onWiFiPosition(LatLng wifiPosition, int floor) {
+                // 将WiFi位置更新到地图上
+                if (trajectoryMapFragment != null) {
+                    // 在UI线程中更新UI
+                    requireActivity().runOnUiThread(() -> {
+                        trajectoryMapFragment.updateWiFiLocation(wifiPosition);
+                    });
+                }
+            }
+
+            @Override
+            public void onWiFiPositionError(String errorMessage) {
+                // 记录WiFi定位错误
+                Log.e("RecordingFragment", "WiFi positioning error: " + errorMessage);
+            }
+        });
 
         // Buttons
         completeButton.setOnClickListener(v -> {

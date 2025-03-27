@@ -25,6 +25,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
+import com.example.ekf.EKFManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,12 +58,16 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
+    private Marker ekfMarker; // EKF fusion position marker
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
+    private boolean isEkfOn = false; // Tracks if EKF is enabled
 
     private Polyline gnssPolyline; // Polyline for GNSS path
+    private Polyline ekfPolyline; // Polyline for EKF fusion path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
+    private LatLng lastEkfLocation = null; // Stores the last EKF location
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
@@ -70,12 +75,14 @@ public class TrajectoryMapFragment extends Fragment {
     private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
 
+    private EKFManager ekfManager; // EKF manager
 
     // UI
     private Spinner switchMapSpinner;
 
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
+    private SwitchMaterial ekfSwitch; // EKF switch
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
@@ -104,9 +111,13 @@ public class TrajectoryMapFragment extends Fragment {
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
+        ekfSwitch       = view.findViewById(R.id.EKF_Switch); // 添加对EKF开关的引用
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         switchColorButton = view.findViewById(R.id.lineColorButton);
+
+        // 初始化EKF管理器
+        ekfManager = EKFManager.getInstance();
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -148,6 +159,23 @@ public class TrajectoryMapFragment extends Fragment {
             if (!isChecked && gnssMarker != null) {
                 gnssMarker.remove();
                 gnssMarker = null;
+            }
+        });
+
+        // EKF Switch
+        ekfSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isEkfOn = isChecked;
+            ekfManager.setEkfEnabled(isChecked);
+            
+            if (!isChecked && ekfMarker != null) {
+                ekfMarker.remove();
+                ekfMarker = null;
+            }
+            
+            if (!isChecked && ekfPolyline != null) {
+                ekfPolyline.remove();
+                ekfPolyline = null;
+                lastEkfLocation = null;
             }
         });
 
@@ -226,6 +254,13 @@ public class TrajectoryMapFragment extends Fragment {
                 .width(5f)
                 .add() // start empty
         );
+
+        // EKF fusion path in green
+        ekfPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.GREEN)
+                .width(5f)
+                .add() // start empty
+        );
     }
 
 
@@ -281,49 +316,66 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Update the user's current location on the map, create or move orientation marker,
-     * and append to polyline if the user actually moved.
+     * Update the user's location on the map.
+     * <p>
+     *     The method creates or moves a marker representing the user's current position
+     *     and orientation. It also updates the camera position to follow the user's movement
+     *     and adds the current position to the polyline path if the position has changed.
+     *     The method handles both the creation of new markers and the updating of existing ones.
+     *     The orientation is represented by the rotation of the marker.
      *
-     * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
+     * @param newLocation The new LatLng position of the user.
+     * @param orientation The user's current orientation in degrees.
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
 
-        // Keep track of current location
-        LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
+        currentLocation = newLocation;
 
-        // If no marker, create it
+        // Angle for marker rotation (in degrees, clockwise from north)
+        float markerRotation = orientation;
+
+        // If the marker doesn't exist yet, create it
         if (orientationMarker == null) {
-            orientationMarker = gMap.addMarker(new MarkerOptions()
+            MarkerOptions markerOptions = new MarkerOptions()
                     .position(newLocation)
-                    .flat(true)
-                    .title("Current Position")
-                    .icon(BitmapDescriptorFactory.fromBitmap(
-                            UtilFunctions.getBitmapFromVector(requireContext(),
-                                    R.drawable.ic_baseline_navigation_24)))
-            );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+                    .flat(true)  // Make sure the marker is flat on the map
+                    .anchor(0.5f, 0.5f) // Center the icon
+                    .rotation(markerRotation) // Set the rotation based on gyro/compass
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
+
+            orientationMarker = gMap.addMarker(markerOptions);
         } else {
-            // Update marker position + orientation
+            // If it exists, update its position and rotation
             orientationMarker.setPosition(newLocation);
-            orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+            orientationMarker.setRotation(markerRotation);
         }
 
-        // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
+        // Move camera to follow the user (smooth animation)
+        gMap.animateCamera(CameraUpdateFactory.newLatLng(newLocation));
+
+        // Update polyline path
+        List<LatLng> points = polyline.getPoints();
+        if (points.isEmpty() || !points.get(points.size() - 1).equals(newLocation)) {
             points.add(newLocation);
             polyline.setPoints(points);
         }
-
-        // Update indoor map overlay
-        if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+        
+        // 更新EKF位置 - 使用当前用户位置和航向更新PDR位置
+        if (isEkfOn && ekfManager != null) {
+            // 将航向角转换为弧度
+            float headingRadians = (float) Math.toRadians(orientation);
+            
+            // 更新EKF中的PDR位置
+            ekfManager.updatePdrPosition(newLocation, headingRadians);
+            
+            // 如果EKF尚未初始化，尝试使用当前位置初始化
+            if (ekfManager.getFusedPosition() == null) {
+                ekfManager.initialize(newLocation, headingRadians);
+            }
+            
+            // 获取并显示融合后的位置
+            updateEKFLocation();
         }
     }
 
@@ -360,50 +412,112 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Called when we want to set or update the GNSS marker position
+     * Update the GNSS position on the map.
+     * <p>
+     *     The method creates or moves a marker representing the current GNSS position.
+     *     It also adds the position to the GNSS polyline path if it has changed.
+     *     The GNSS marker and path are only updated if GNSS tracking is enabled.
+     *     The method handles the creation and updating of both the marker and the polyline.
+     *
+     * @param gnssLocation The new LatLng position reported by GNSS.
      */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;
-        if (!isGnssOn) return;
 
-        if (gnssMarker == null) {
-            // Create the GNSS marker for the first time
-            gnssMarker = gMap.addMarker(new MarkerOptions()
-                    .position(gnssLocation)
-                    .title("GNSS Position")
-                    .icon(BitmapDescriptorFactory
-                            .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-            lastGnssLocation = gnssLocation;
-        } else {
-            // Move existing GNSS marker
-            gnssMarker.setPosition(gnssLocation);
+        // Only update GNSS visuals if enabled
+        if (isGnssOn) {
+            // GNSS marker (create or update)
+            if (gnssMarker == null) {
+                MarkerOptions markerOptions = new MarkerOptions()
+                        .position(gnssLocation)
+                        .title("GNSS Position")
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
 
-            // Add a segment to the blue GNSS line, if this is a new location
-            if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
-                List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
-                gnssPoints.add(gnssLocation);
-                gnssPolyline.setPoints(gnssPoints);
+                gnssMarker = gMap.addMarker(markerOptions);
+            } else {
+                gnssMarker.setPosition(gnssLocation);
             }
-            lastGnssLocation = gnssLocation;
+
+            // Update GNSS polyline if position has changed
+            if (lastGnssLocation == null || !lastGnssLocation.equals(gnssLocation)) {
+                List<LatLng> points = gnssPolyline.getPoints();
+                points.add(gnssLocation);
+                gnssPolyline.setPoints(points);
+                lastGnssLocation = gnssLocation;
+            }
+        }
+        
+        // 更新EKF的GNSS位置数据
+        if (isEkfOn && ekfManager != null) {
+            ekfManager.updateGnssPosition(gnssLocation);
+            updateEKFLocation(); // 更新融合后的位置显示
         }
     }
 
+    /**
+     * 更新WiFi位置数据到EKF
+     * @param wifiLocation WiFi定位得到的位置
+     */
+    public void updateWiFiLocation(@NonNull LatLng wifiLocation) {
+        // 更新EKF的WiFi位置数据
+        if (isEkfOn && ekfManager != null) {
+            ekfManager.updateWifiPosition(wifiLocation);
+            updateEKFLocation(); // 更新融合后的位置显示
+        }
+    }
 
     /**
-     * Remove GNSS marker if user toggles it off
+     * Clear GNSS markers and polyline from the map.
+     * <p>
+     *     The method removes the GNSS marker and clears the GNSS polyline.
+     *     It is called when GNSS tracking is disabled or when the map is reset.
+     *     The method handles the case where the marker or polyline may not exist.
+     *     It also resets the lastGnssLocation to null.
      */
     public void clearGNSS() {
         if (gnssMarker != null) {
             gnssMarker.remove();
             gnssMarker = null;
         }
+        if (gnssPolyline != null) {
+            gnssPolyline.setPoints(new ArrayList<>());
+        }
+        lastGnssLocation = null;
+    }
+    
+    /**
+     * 清除EKF标记和路径
+     */
+    public void clearEKF() {
+        if (ekfMarker != null) {
+            ekfMarker.remove();
+            ekfMarker = null;
+        }
+        if (ekfPolyline != null) {
+            ekfPolyline.setPoints(new ArrayList<>());
+        }
+        lastEkfLocation = null;
+        
+        // 重置EKF管理器
+        if (ekfManager != null) {
+            ekfManager.reset();
+        }
     }
 
     /**
-     * Whether user is currently showing GNSS or not
+     * Check if GNSS tracking is enabled.
+     * @return True if GNSS tracking is enabled, false otherwise.
      */
     public boolean isGnssEnabled() {
         return isGnssOn;
+    }
+    
+    /**
+     * 检查EKF是否启用
+     * @return EKF是否启用
+     */
+    public boolean isEkfEnabled() {
+        return isEkfOn;
     }
 
     private void setFloorControlsVisibility(int visibility) {
@@ -413,36 +527,61 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     public void clearMapAndReset() {
-        if (polyline != null) {
-            polyline.remove();
-            polyline = null;
-        }
-        if (gnssPolyline != null) {
-            gnssPolyline.remove();
-            gnssPolyline = null;
-        }
+        if (gMap == null) return;
+
+        // Remove markers
         if (orientationMarker != null) {
             orientationMarker.remove();
             orientationMarker = null;
         }
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
-        }
-        lastGnssLocation = null;
-        currentLocation  = null;
 
-        // Re-create empty polylines with your chosen colors
-        if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.RED)
-                    .width(5f)
-                    .add());
-            gnssPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.BLUE)
-                    .width(5f)
-                    .add());
+        // Clear GNSS data
+        clearGNSS();
+        
+        // Clear EKF data
+        clearEKF();
+
+        // Remove polyline and recreate
+        if (polyline != null) {
+            polyline.remove();
         }
+        polyline = gMap.addPolyline(new PolylineOptions()
+                .color(isRed ? Color.RED : Color.BLACK)
+                .width(5f)
+                .add() // start empty
+        );
+
+        // Reset GNSS polyline
+        if (gnssPolyline != null) {
+            gnssPolyline.remove();
+        }
+        gnssPolyline = gMap.addPolyline(new PolylineOptions()
+                .color(Color.BLUE)
+                .width(5f)
+                .add() // start empty
+        );
+        
+        // Reset EKF polyline
+        if (ekfPolyline != null) {
+            ekfPolyline.remove();
+        }
+        ekfPolyline = gMap.addPolyline(new PolylineOptions()
+                .color(Color.GREEN)
+                .width(5f)
+                .add() // start empty
+        );
+
+        // Reset indoor map if present
+        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
+            // 设置当前位置为远离任何建筑物的位置，触发清除覆盖物
+            LatLng farAwayLocation = new LatLng(0, 0); // 赤道和本初子午线交点
+            indoorMapManager.setCurrentLocation(farAwayLocation);
+        }
+
+        // Reset current location
+        currentLocation = null;
+        lastGnssLocation = null;
+        lastEkfLocation = null;
     }
 
     /**
@@ -537,5 +676,36 @@ public class TrajectoryMapFragment extends Fragment {
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
 
+    /**
+     * 更新EKF融合位置在地图上的显示
+     */
+    private void updateEKFLocation() {
+        if (gMap == null || !isEkfOn || ekfManager == null) return;
+        
+        LatLng ekfLocation = ekfManager.getFusedPosition();
+        if (ekfLocation == null) return;
+        
+        // 更新或创建EKF位置标记
+        if (ekfMarker == null) {
+            MarkerOptions markerOptions = new MarkerOptions()
+                    .position(ekfLocation)
+                    .title("Fusion Position")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
+            
+            ekfMarker = gMap.addMarker(markerOptions);
+        } else {
+            ekfMarker.setPosition(ekfLocation);
+        }
+        
+        // 更新EKF轨迹
+        if (ekfPolyline != null) {
+            List<LatLng> points = ekfPolyline.getPoints();
+            if (points.isEmpty() || !points.get(points.size() - 1).equals(ekfLocation)) {
+                points.add(ekfLocation);
+                ekfPolyline.setPoints(points);
+                lastEkfLocation = ekfLocation;
+            }
+        }
+    }
 
 }
