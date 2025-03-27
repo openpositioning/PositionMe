@@ -21,10 +21,11 @@ import androidx.fragment.app.Fragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
-import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
+import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.WiFiPositioning;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -36,23 +37,46 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Sub fragment of Replay Activity. Fragment that replays trajectory data on a map.
+ *
+ * The ReplayFragment is responsible for visualizing and replaying trajectory data captured during
+ * previous recordings. It loads trajectory data from a JSON file, updates the map with user movement,
+ * and provides UI controls for playback, pause, and seek functionalities.
+ *
+ * Features:
+ * - Loads trajectory data from a file and displays it on a map.
+ * - Provides playback controls including separate play and pause buttons, replay (rewind), and go to end.
+ * - Updates the trajectory dynamically as playback progresses.
+ * - Allows users to manually seek through the recorded trajectory.
+ * - Integrates with {@link TrajectoryMapFragment} for map visualization.
+ *
+ * @see ReplayActivity The activity managing the replay workflow.
+ * @see TrajParser Utility class for parsing trajectory data.
+ */
 public class ReplayFragment extends Fragment {
 
     private static final String TAG = "ReplayFragment";
 
+    // GPS start location (received from ReplayActivity)
     private float initialLat = 0f;
     private float initialLon = 0f;
     private String filePath = "";
+    private int lastIndex = -1;
 
+    // UI Controls
     private TrajectoryMapFragment trajectoryMapFragment;
     private ImageButton playButton, pauseButton, replayButton, goToEndButton;
-    private Button speedHalfButton, speedDoubleButton;
+    private Button speedHalfButton, speedDoubleButton, viewStatsButton;
     private SeekBar playbackSeekBar;
+    // Spinner for selecting data source.
     private Spinner dataSourceSpinner;
-
+    // Holds the selected mode ("PDR", "GNSS", or "WiFi")
     private String selectedMode = "PDR";
+
+    // Playback-related
     private final Handler playbackHandler = new Handler();
-    private long playbackInterval = 500;
+    private long playbackInterval = 500; // Default interval (ms)
     private List<TrajParser.ReplayPoint> replayData = new ArrayList<>();
     private int currentIndex = 0;
     private boolean isPlaying = false;
@@ -62,6 +86,8 @@ public class ReplayFragment extends Fragment {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Retrieve transferred data from ReplayActivity
         if (getArguments() != null) {
             filePath = getArguments().getString(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, "");
             initialLat = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LAT, 0f);
@@ -84,6 +110,7 @@ public class ReplayFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        // Initialize map fragment
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.replayMapFragmentContainer);
         if (trajectoryMapFragment == null) {
@@ -125,6 +152,8 @@ public class ReplayFragment extends Fragment {
         });
 
         updateSeekBarMax();
+
+
 
         playButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
@@ -180,6 +209,14 @@ public class ReplayFragment extends Fragment {
         if (!replayData.isEmpty()) {
             drawReplayPointWithMode(0);
         }
+
+        //Code By Guilherme: Add tags to map
+        List<com.openpositioning.PositionMe.utils.Tag> tags = SensorFusion.getInstance().getTagList();
+        if (tags != null && !tags.isEmpty()) {
+            for (com.openpositioning.PositionMe.utils.Tag tag : tags) {
+                trajectoryMapFragment.addTagMarker(tag.getLocation(), tag.getLabel());
+            }
+        }
     }
 
     private void restartPlaybackIfPlaying() {
@@ -188,6 +225,8 @@ public class ReplayFragment extends Fragment {
             playbackHandler.postDelayed(playbackRunnable, playbackInterval);
         }
     }
+
+
 
     private void updateSeekBarMax() {
         int size = getVisibleDataSize(selectedMode);
