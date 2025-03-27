@@ -90,12 +90,21 @@
 
         <Switch
             android:id="@+id/switch_gnss"
-            android:layout_width="wrap_content"
+            android:layout_width="128dp"
             android:layout_height="wrap_content"
             android:layout_marginBottom="5dp"
             android:background="@drawable/button_background"
             android:backgroundTint="#F0A6E8"
             android:text="GNSS" />
+
+        <Switch
+            android:id="@+id/switch_wifi"
+            android:layout_width="128dp"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="5dp"
+            android:background="@drawable/button_background"
+            android:backgroundTint="#F0A6E8"
+            android:text="WiFi Position" />
 
         <Spinner
             android:id="@+id/spinner_map_type"

@@ -147,7 +147,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
-
+    int MAX_WIFI_APS = 60;
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -437,10 +437,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void update(Object[] wifiList) {
         // Save newest wifi values to local variable
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
-        Log.d("Wifi List", this.wifiList.toString());
+        Log.d("Wifi List", this.wifiList.toString()); // Added to print wifi list
 
         if(this.saveRecording) {
-            Log.e("Wifi", "Wifi data saved");
+            Log.e("Wifi", "Wifi data saved"); // Added to notify the data is saved
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
                     .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime);
             for (Wifi data : this.wifiList) {
@@ -461,32 +461,49 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     private void createWifiPositioningRequest(){
         try {
-            // 1️⃣ 创建 POST 请求的 JSON 数据结构
+            //take no. of MAX_WIFI_APS, and sort them from higher power to lower
+            List<Wifi> sortedWifiList = this.wifiList.stream()
+                    .sorted(Comparator.comparingInt(Wifi::getLevel).reversed())  // -30 is higher than -90
+                    .limit(MAX_WIFI_APS)
+                    .collect(Collectors.toList());
+
+//            // Creating a JSON object to store the WiFi access points
+//            JSONObject wifiAccessPoints=new JSONObject();
+//
+//            for (Wifi data : sortedWifiList) {
+//                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+//            }
+
+//            // Creating a JSON object to store the WiFi access points
+//            JSONObject wifiAccessPoints=new JSONObject();
+//            for (Wifi data : this.wifiList){
+//                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+//            }
+            // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             JSONObject wf = new JSONObject();
+//            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
 
-            // 2️⃣ 直接使用之前已过滤好的 this.wifiList（已经是干净的、排序过的、最多 MAX_WIFI_APS 个）
-            for (Wifi data : this.wifiList) {
-                Log.e("WiFi-Bssid", String.valueOf(data.getBssid()));
-                Log.e("WiFi-Level", String.valueOf(data.getLevel()));
-                wf.put(String.valueOf(data.getBssid()), data.getLevel());
+            for (Wifi data : sortedWifiList) {
+//                Log.e("WiFi-Bssid", String.valueOf(data.getBssid()));
+//                Log.e("WiFi-Level", String.valueOf(data.getLevel()));
+                wf.put(String.valueOf(data.getBssid()), String.valueOf(data.getLevel()));
             }
-
             wifiFingerPrint.put("wf", wf);
 
-            if (wifiFingerPrint.length() == 0) {
-                Log.e("wifiFingerPrint", "Empty");
-            } else {
-                Log.e("wifiFingerPrint", wifiFingerPrint.toString());
+            // Check if the wifiFinerPrint is empty
+            if(wifiFingerPrint.length()==0){
+                Log.e("wifiFingerPrint","Empty");
+            }else {
+                // Logging the wifi fingerprint
+                Log.e("wifiFingerPrint",wifiFingerPrint.toString());
             }
+            Log.d("wifiFingerPrint", String.valueOf(wifiFingerPrint.toString().length()));
 
-            Log.d("wifiFingerPrint", "JSON Length: " + wifiFingerPrint.toString().length());
-
-            // 3️⃣ 发送定位请求
             this.wiFiPositioning.request(wifiFingerPrint);
 
-            // 4️⃣ 可选：输出返回结果（注意：这部分是异步请求之后才会更新的，立即获取可能为 null）
-            if (this.wiFiPositioning.getWifiLocation() != null) {
+            // Get Location and Floor if not null
+            if(this.wiFiPositioning.getWifiLocation()!=null){
                 Log.e("WiFi-Location", this.wiFiPositioning.getWifiLocation().toString());
                 Log.e("WiFi-Floor", String.valueOf(this.wiFiPositioning.getFloor()));
             }
