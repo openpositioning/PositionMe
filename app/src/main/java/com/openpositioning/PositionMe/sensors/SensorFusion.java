@@ -485,7 +485,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .setRssi(data.getLevel()));
             }
 
-            // ✅ Correctly add WiFi data to Trajectory
+            //  Correctly add WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData.build());  // <-- Fix: Ensure `.build()` is called
         }
 
@@ -981,6 +981,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
      * destroyed in {@link SensorFusion#stopRecording()}.
      */
+
 
     // Code by Guilherme: Field to store the latest fused (batch-optimized) position.
     private LatLng fusedPosition;

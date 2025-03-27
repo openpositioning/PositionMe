@@ -261,4 +261,32 @@ public class UtilFunctions {
         return bitmap;
     }
 
+    /**
+     * Created By Guilherme Barreiros
+     * Converts a list of LatLng points (in WGS84) to local North-East coordinates (in meters),
+     * using the first point in the list as the reference.
+     *
+     * @param points List of LatLng points from a sensor (e.g., GNSS or WiFi).
+     * @return A list of double arrays, where each array is [north, east] in meters relative to the first point.
+     */
+    public static List<double[]> convertLatLngListToNorthEast(List<LatLng> points) {
+        List<double[]> northEastCoordinates = new ArrayList<>();
+        if (points == null || points.isEmpty()) {
+            return northEastCoordinates;
+        }
+        // Use the first point as the reference.
+        LatLng reference = points.get(0);
+        for (LatLng p : points) {
+            double deltaLat = p.latitude - reference.latitude;
+            double deltaLon = p.longitude - reference.longitude;
+            // 1 degree of latitude ~ 111,111 meters.
+            double north = deltaLat * 111111;
+            // For longitude, adjust for the cosine of the reference latitude.
+            double east = deltaLon * 111111 * Math.cos(Math.toRadians(reference.latitude));
+            northEastCoordinates.add(new double[]{north, east});
+        }
+        return northEastCoordinates;
+    }
+
+
 }
