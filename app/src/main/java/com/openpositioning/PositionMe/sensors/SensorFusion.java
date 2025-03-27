@@ -96,6 +96,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Settings
     private SharedPreferences settings;
 
+
     // Movement sensor instances
     private MovementSensor accelerometerSensor;
     private MovementSensor barometerSensor;
@@ -850,6 +851,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         return orientation[0];
     }
 
+
+    // Code by Guilherme: List to store recorded tags.
+    private List<com.openpositioning.PositionMe.utils.Tag> tagList = new ArrayList<>();
+
     /**
      * Return most recent sensor readings.
      *
@@ -1249,6 +1254,21 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
+    /**
+     * Adds a new tag to the list.
+     */
+    public void addTag(com.openpositioning.PositionMe.utils.Tag tag) {
+        tagList.add(tag);
+    }
+
+    /**
+     * Returns the list of recorded tags.
+     */
+    public List<com.openpositioning.PositionMe.utils.Tag> getTagList() {
+        return tagList;
+    }
+
+
     private class storeDataInTrajectory extends TimerTask {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
@@ -1271,10 +1291,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setMagY(magneticField[1])
                             .setMagZ(magneticField[2])
                             .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-//                    .addGnssData(Traj.GNSS_Sample.newBuilder()
-//                            .setLatitude(latitude)
-//                            .setLongitude(longitude)
-//                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
+                    .addGnssData(Traj.GNSS_Sample.newBuilder()
+                            .setLatitude(latitude)
+                            .setLongitude(longitude)
+                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
+
             ;
 
             // Divide timer with a counter for storing data every 1 second
@@ -1308,7 +1329,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             else {
                 counter++;
             }
-
 
 
 
