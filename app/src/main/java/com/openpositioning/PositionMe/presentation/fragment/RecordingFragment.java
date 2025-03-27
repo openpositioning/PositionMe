@@ -39,6 +39,7 @@ import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 
 import java.util.List;
+import java.util.UUID;
 
 
 /**
@@ -194,21 +195,33 @@ public class RecordingFragment extends Fragment {
             dialog.show(); // Finally, show the dialog
 
         });
-        // Code by Guilherme: Tag Button listener in RecordingFragment.
+        // Import UUID at the top if not already imported:
+// import java.util.UUID;
+
+// ... inside onViewCreated (or after initializing UI controls)
+        Button tagButton = view.findViewById(R.id.tagButton); // Make sure your layout has this ID.
         tagButton.setOnClickListener(v -> {
             LatLng currentLocation = trajectoryMapFragment.getCurrentLocation();
             if (currentLocation != null) {
                 long elapsedMillis = SystemClock.uptimeMillis() - sensorFusion.bootTime;
-                int minutes = (int) (elapsedMillis / 60000);
-                int seconds = (int) ((elapsedMillis / 1000) % 60);
+                int minutes = (int)(elapsedMillis / 60000);
+                int seconds = (int)((elapsedMillis / 1000) % 60);
                 String elapsedStr = String.format("%02d:%02d", minutes, seconds);
                 String tagLabel = "Time: " + elapsedStr + "\nLat: " + currentLocation.latitude + "\nLon: " + currentLocation.longitude;
+                // Generate a unique ID.
+                String tagId = UUID.randomUUID().toString();
+                // Create the Tag object.
+                com.openpositioning.PositionMe.utils.Tag tag = new com.openpositioning.PositionMe.utils.Tag(tagId, elapsedMillis, currentLocation, tagLabel);
+                // Store the tag in SensorFusion.
+                sensorFusion.addTag(tag);
+                // Add the tag marker on the map.
                 trajectoryMapFragment.addTagMarker(currentLocation, tagLabel);
                 Toast.makeText(getContext(), "Tag added:\n" + tagLabel, Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(getContext(), "Current location not available", Toast.LENGTH_SHORT).show();
             }
         });
+
 
 
 

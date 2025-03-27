@@ -23,7 +23,9 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.data.local.TrajParser;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.WiFiPositioning;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -368,6 +370,15 @@ public class ReplayFragment extends Fragment {
             trajectoryMapFragment.clearMapAndReset();
             drawReplayPointWithMode(0);
         }
+
+        //Code By Guilherme: Add tags to map
+        List<com.openpositioning.PositionMe.utils.Tag> tags = SensorFusion.getInstance().getTagList();
+        if (tags != null && !tags.isEmpty()) {
+            for (com.openpositioning.PositionMe.utils.Tag tag : tags) {
+                trajectoryMapFragment.addTagMarker(tag.getLocation(), tag.getLabel());
+            }
+        }
+
     }
 
     /**
