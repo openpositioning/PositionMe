@@ -82,18 +82,18 @@ def plot_results(data, lat0, lon0, use_wifi=False):
     plt.plot(aligned_pdr[:, 0], aligned_pdr[:, 1], 'm--', alpha=0.4, label='Aligned PDR')
     plt.scatter(aligned_pdr[:, 0], aligned_pdr[:, 1], c='m', s=5, alpha=0.7)
 
-    # EKF original
-    plt.plot(ekf[:, 0], ekf[:, 1], 'b-', alpha=0.4, label='Original EKF')
-    plt.scatter(ekf[:, 0], ekf[:, 1], c='b', s=5, alpha=0.7)
+    # # EKF original
+    # plt.plot(ekf[:, 0], ekf[:, 1], 'b-', alpha=0.4, label='Original EKF')
+    # plt.scatter(ekf[:, 0], ekf[:, 1], c='b', s=5, alpha=0.7)
 
-    # EKF aligned
-    if not np.isnan(aligned_ekf[:, 0]).all():
-        plt.plot(aligned_ekf[:, 0], aligned_ekf[:, 1], 'g-', alpha=0.4, label='Aligned EKF')
-        plt.scatter(aligned_ekf[:, 0], aligned_ekf[:, 1], c='g', s=5, alpha=0.7)
+    # # EKF aligned
+    # if not np.isnan(aligned_ekf[:, 0]).all():
+    #     plt.plot(aligned_ekf[:, 0], aligned_ekf[:, 1], 'g-', alpha=0.4, label='Aligned EKF')
+    #     plt.scatter(aligned_ekf[:, 0], aligned_ekf[:, 1], c='g', s=5, alpha=0.7)
 
-    # GNSS/WiFi positions
-    valid_pos = ~np.isnan(pos_ll[:, 0])
-    plt.scatter(pos_ll[valid_pos, 0], pos_ll[valid_pos, 1], c='r', s=20, label=pos_label)
+    # # GNSS/WiFi positions
+    # valid_pos = ~np.isnan(pos_ll[:, 0])
+    # plt.scatter(pos_ll[valid_pos, 0], pos_ll[valid_pos, 1], c='r', s=20, label=pos_label)
 
     # Calibration True
     if calib_true.size > 0:
