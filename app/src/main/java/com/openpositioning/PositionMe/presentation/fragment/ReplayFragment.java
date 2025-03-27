@@ -25,6 +25,7 @@ import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.WiFiPositioning;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import org.json.JSONException;
 import org.json.JSONObject;
