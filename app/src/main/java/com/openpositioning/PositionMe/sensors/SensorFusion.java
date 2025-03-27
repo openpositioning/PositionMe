@@ -718,6 +718,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         return this.elevation;
     }
 
+
+    public void pdrReset() {this.pdrProcessing.resetPDR(); }
+
     /**
      * Get an estimate by the PDR class whether it estimates the user is currently taking an elevator.
      *

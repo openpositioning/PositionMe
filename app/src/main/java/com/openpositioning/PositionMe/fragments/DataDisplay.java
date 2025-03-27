@@ -121,13 +121,14 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
         positioningFusion.initCoordSystem(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
 
-        handler.post(updateWifiLocationRunnable);
+        SensorFusion.getInstance().pdrReset();
     }
 
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
         showCurrentLocation();
+        handler.post(updateWifiLocationRunnable);
         indoorMapManager = new IndoorMapManager(mMap);
         indoorMapManager.setIndicationOfIndoorMap();
 
@@ -149,7 +150,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 //        LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
         int floor = SensorFusion.getInstance().getWifiFloor();
 
-//        Log.d("DataDisplay", "Fused Location: " + fusedLocation);
+        Log.d("DataDisplay", "Fused Location: " + fusedLocation);
 
         if (fusedLocation != null) {
 
