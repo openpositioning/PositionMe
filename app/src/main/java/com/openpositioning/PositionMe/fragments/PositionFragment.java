@@ -107,7 +107,6 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
 
         // initialize interest zones
         initializeInterestZonesData();
-
         return view;
     }
 

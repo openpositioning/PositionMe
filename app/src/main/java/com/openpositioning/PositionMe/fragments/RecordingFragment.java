@@ -1,7 +1,10 @@
 package com.openpositioning.PositionMe.fragments;
 
 
+import static com.openpositioning.PositionMe.UtilFunctions.convertLatLangToNorthingEasting;
+
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -19,6 +22,7 @@ import android.view.animation.LinearInterpolator;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.Switch;
@@ -47,6 +51,7 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.openpositioning.PositionMe.sensors.Wifi;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -58,6 +63,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 
+@SuppressLint("UseSwitchCompatOrMaterialCode")
 public class RecordingFragment extends Fragment {
 
     //Button to end PDR recording
@@ -88,6 +94,9 @@ public class RecordingFragment extends Fragment {
     private Spinner switchMapSpinner;
     //Map Marker
     private Marker orientationMarker;
+
+    private Switch wifi;
+    private Marker wifiPositionMarker;
     // Current Location coordinates
     private LatLng currentLocation;
     // Next Location coordinates
@@ -465,9 +474,45 @@ public class RecordingFragment extends Fragment {
             }
         });
 
-        // ✅ **绑定 GNSS 开关**
-        //✅ **Bind GNSS switch**
+        // ✅ **绑定开关**
+        //**Bind GNSS switch**
         this.gnss = view.findViewById(R.id.switch_gnss);
+        //**Bind WiFi switch**
+        this.wifi = view.findViewById(R.id.switch_wifi);
+
+        //WiFi switch listener
+        this.wifi.setOnCheckedChangeListener((compoundButton, isChecked) -> {
+            if (isChecked) {
+                Map<SensorTypes, float[]> sensorData = sensorFusion.getSensorValueMap();
+                if (sensorData == null) {
+                    Toast.makeText(getContext(), "sensorData not available", Toast.LENGTH_SHORT).show();
+                    wifi.setChecked(false);
+                    return;
+                }
+                // get wifi data
+                LatLng wifiPosition = sensorFusion.getLatLngWifiPositioning();
+                if (wifiPosition == null) {
+                    Toast.makeText(getContext(), "WiFi data not available", Toast.LENGTH_SHORT).show();
+                    wifi.setChecked(false);
+                    return;
+                }
+                if (orientationMarker == null) {
+                    if (wifiPositionMarker == null) {
+                        wifiPositionMarker = gMap.addMarker(new MarkerOptions()
+                                .title("WiFi Position")
+                                .position(wifiPosition)
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                    } else {
+                        wifiPositionMarker.setPosition(wifiPosition);
+                    }
+                }
+            }else{
+                if (wifiPositionMarker != null) {
+                    wifiPositionMarker.remove();
+                    wifiPositionMarker = null;
+                }
+            }
+        });
 
         // GNSS 开关监听器
         //GNSS switch listener
@@ -757,6 +802,31 @@ public class RecordingFragment extends Fragment {
         if (indoorMapManager == null) {
             indoorMapManager = new IndoorMapManager(gMap);
         }
+
+        //  WiFi marker position update
+        if(wifi != null && wifi.isChecked()) {
+            LatLng wifiPosition = sensorFusion.getLatLngWifiPositioning();
+            if (wifiPosition != null) {
+                if (wifiPositionMarker != null) {
+                    wifiPositionMarker.setPosition(wifiPosition);
+
+                    double[] result = convertLatLangToNorthingEasting(start, wifiPosition);
+                    Log.d("LocationConversion", "Easting: " + result[0] + " meters");
+                    Log.d("LocationConversion", "Northing: " + result[1] + " meters");
+                } else {
+                    wifiPositionMarker = gMap.addMarker(new MarkerOptions()
+                            .position(wifiPosition)
+                            .title("WiFi Position")
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                }
+            } else {
+                if (wifiPositionMarker != null) {
+                    wifiPositionMarker.remove();
+                    wifiPositionMarker = null;
+                }
+            }
+        }
+
 
         // ✅ **GNSS 误差计算 & GNSS Marker 位置更新**
         // ✅ **GNSS error calculation & GNSS Marker position update**
