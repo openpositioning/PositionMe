@@ -20,6 +20,8 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
@@ -86,6 +88,9 @@ public class RecordingFragment extends Fragment {
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
+    // Code by Guilherme: New button for adding a tag
+    private Button tagButton;
+
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
@@ -145,6 +150,8 @@ public class RecordingFragment extends Fragment {
         cancelButton = view.findViewById(R.id.cancelButton);
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
+        // Code by Guilherme: Find the new Tag button (added in XML)
+        tagButton = view.findViewById(R.id.tagButton);
 
         // Hide or initialize default values
         gnssError.setVisibility(View.GONE);
@@ -185,7 +192,26 @@ public class RecordingFragment extends Fragment {
             });
 
             dialog.show(); // Finally, show the dialog
+
         });
+        // Code by Guilherme: Tag Button listener in RecordingFragment.
+        tagButton.setOnClickListener(v -> {
+            LatLng currentLocation = trajectoryMapFragment.getCurrentLocation();
+            if (currentLocation != null) {
+                long elapsedMillis = SystemClock.uptimeMillis() - sensorFusion.bootTime;
+                int minutes = (int) (elapsedMillis / 60000);
+                int seconds = (int) ((elapsedMillis / 1000) % 60);
+                String elapsedStr = String.format("%02d:%02d", minutes, seconds);
+                String tagLabel = "Time: " + elapsedStr + "\nLat: " + currentLocation.latitude + "\nLon: " + currentLocation.longitude;
+                trajectoryMapFragment.addTagMarker(currentLocation, tagLabel);
+                Toast.makeText(getContext(), "Tag added:\n" + tagLabel, Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(getContext(), "Current location not available", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+
+
 
         // The blinking effect for recIcon
         blinkingRecordingIcon();

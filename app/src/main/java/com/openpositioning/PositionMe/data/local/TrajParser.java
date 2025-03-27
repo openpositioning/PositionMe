@@ -209,7 +209,7 @@ public class TrajParser {
                     for (JsonElement wifiElement : wifiArray) {
                         JsonObject wifiObject = wifiElement.getAsJsonObject();
 
-                        // ✅ Prevent null crashes when accessing timestamps
+                        // Prevent null crashes when accessing timestamps
                         long timestamp = 0;
                         if (wifiObject.has("relativeTimestamp") && !wifiObject.get("relativeTimestamp").isJsonNull()) {
                             timestamp = wifiObject.get("relativeTimestamp").getAsLong();

@@ -23,6 +23,7 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -484,7 +485,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .setRssi(data.getLevel()));
             }
 
-            // ✅ Correctly add WiFi data to Trajectory
+            //  Correctly add WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData.build());  // <-- Fix: Ensure `.build()` is called
         }
 
@@ -662,6 +663,10 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param start set true to get the initial location
      * @return longitude and latitude data in a float[2].
      */
+
+
+
+
     public float[] getGNSSLatitude(boolean start) {
         float [] latLong = new float[2];
         if(!start) {
@@ -760,6 +765,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         sensorInfoList.add(this.magnetometerSensor.sensorInfo);
         return sensorInfoList;
     }
+
+
 
     /**
      * Registers the caller observer to receive updates from the server instance.
@@ -974,6 +981,142 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
      * destroyed in {@link SensorFusion#stopRecording()}.
      */
+
+
+    //Code By Guilherme: Finds the GNSS start location to be used as the initial location
+    private LatLng getStartLocationFromGNSS() {
+        float[] start = getGNSSLatitude(true); // returns startLocation when 'start' is true
+        if (start != null && start.length >= 2) {
+            return new LatLng(start[0], start[1]);
+        }
+        return new LatLng(0, 0); // fallback if not available
+    }
+
+/**
+ * Code By Guilherme
+ */
+
+    // New inner class to store a fused sample with its timestamp.
+    public static class FusedSample {
+        public LatLng fusedPosition;
+        public long timestamp;
+        public FusedSample(LatLng fusedPosition, long timestamp) {
+            this.fusedPosition = fusedPosition;
+            this.timestamp = timestamp;
+        }
+    }
+    // Helper method to get the reference point for conversion.
+// We use the first GNSS sample (when available) from the trajectory builder.
+// If not, we use the first PDR sample by converting it using our own conversion.
+    private LatLng getReferencePoint() {
+        if (trajectory.getGnssDataCount() > 0) {
+            Traj.GNSS_Sample firstGnss = trajectory.getGnssData(0);
+            return new LatLng(firstGnss.getLatitude(), firstGnss.getLongitude());
+        } else if (trajectory.getPdrDataCount() > 0) {
+            // If no GNSS, we assume the very first PDR sample can be used as reference.
+            // Note: This assumes that PDR data is stored in a coordinate system relative to the reference.
+            Traj.Pdr_Sample firstPdr = trajectory.getPdrData(0);
+            // Here you might need to convert the (x,y) to lat/lon using an approximate method.
+            // For simplicity, we assume the first PDR sample already corresponds to the start location.
+            return new LatLng(startLocation[0], startLocation[1]);
+        }
+        return new LatLng(0, 0); // Fallback.
+    }
+
+    // Update batch-optimized (fused) trajectory by fusing PDR, GNSS, and WiFi data.
+    // This method fuses data at each PDR time-step.
+    public List<FusedSample> updateBatchOptimizedPosition() {
+        List<FusedSample> fusedTrajectory = new ArrayList<>();
+
+        // Fixed weights for each sensor type.
+        double weightPDR = 0.2;
+        double weightGNSS = 0.5;
+        double weightWiFi = 0.3;
+
+        // Use the reference point from GNSS (if available), otherwise from PDR.
+        LatLng reference = getReferencePoint();
+
+        // Iterate over all PDR samples (assumed to be the most frequent).
+        for (int i = 0; i < trajectory.getPdrDataCount(); i++) {
+            Traj.Pdr_Sample pdrSample = trajectory.getPdrData(i);
+            long t = pdrSample.getRelativeTimestamp();
+            // For PDR, assume the x,y are already in local coordinates (meters).
+            double pdrX = pdrSample.getX();
+            double pdrY = pdrSample.getY();
+
+            // Find the closest GNSS sample.
+            double bestGnssDiff = Double.MAX_VALUE;
+            Traj.GNSS_Sample bestGnss = null;
+            for (int j = 0; j < trajectory.getGnssDataCount(); j++) {
+                long tGnss = trajectory.getGnssData(j).getRelativeTimestamp();
+                double diff = Math.abs(t - tGnss);
+                if (diff < bestGnssDiff) {
+                    bestGnssDiff = diff;
+                    bestGnss = trajectory.getGnssData(j);
+                }
+            }
+
+            // Find the closest WiFi sample.
+            double bestWifiDiff = Double.MAX_VALUE;
+            // Assuming your trajectory builder has a method getWifiDataCount()
+            // (if not, skip WiFi fusion).
+            Traj.WiFi_Sample bestWifi = null;
+            if (trajectory.getWifiDataCount() > 0) {
+                for (int j = 0; j < trajectory.getWifiDataCount(); j++) {
+                    long tWifi = trajectory.getWifiData(j).getRelativeTimestamp();
+                    double diff = Math.abs(t - tWifi);
+                    if (diff < bestWifiDiff) {
+                        bestWifiDiff = diff;
+                        bestWifi = trajectory.getWifiData(j);
+                    }
+                }
+            }
+
+            // Convert GNSS and WiFi data to local coordinates using UtilFunctions.
+            double[] gnssLocal = null;
+            if (bestGnss != null && bestGnssDiff < 1000) { // within 1 second
+                LatLng gnssLatLng = new LatLng(bestGnss.getLatitude(), bestGnss.getLongitude());
+                // Using the UtilFunctions method that converts lat/lon to North-East.
+                gnssLocal = UtilFunctions.convertLatLngToNorthEast(gnssLatLng, reference);
+            }
+
+            double[] wifiLocal = null;
+            if (bestWifi != null && bestWifiDiff < 1000) { // within 1 second
+                // Here, you need to have a method to get a representative LatLng from a WiFi sample.
+                // For this example, assume that bestWifi provides a valid lat/lon (e.g., via an API response).
+                // If not, skip WiFi fusion.
+                LatLng wifiLatLng = new LatLng(0, 0); // Replace with actual retrieval.
+                wifiLocal = UtilFunctions.convertLatLngToNorthEast(wifiLatLng, reference);
+            }
+
+            // For PDR, we already have (pdrX, pdrY) in local coordinates.
+            double fusedX = weightPDR * pdrX;
+            double fusedY = weightPDR * pdrY;
+            double totalWeight = weightPDR;
+            if (gnssLocal != null) {
+                fusedX += weightGNSS * gnssLocal[0];
+                fusedY += weightGNSS * gnssLocal[1];
+                totalWeight += weightGNSS;
+            }
+            if (wifiLocal != null) {
+                fusedX += weightWiFi * wifiLocal[0];
+                fusedY += weightWiFi * wifiLocal[1];
+                totalWeight += weightWiFi;
+            }
+            fusedX /= totalWeight;
+            fusedY /= totalWeight;
+
+            // Convert fused local coordinate back to WGS84 using UtilFunctions.
+            // Assume UtilFunctions has a method localToLatLng that takes local coordinate and a reference.
+            LatLng fusedLatLng = UtilFunctions.localToLatLng(new double[]{fusedX, fusedY}, reference);
+
+            fusedTrajectory.add(new FusedSample(fusedLatLng, t));
+        }
+
+        return fusedTrajectory;
+    }
+
+
     private class storeDataInTrajectory extends TimerTask {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
@@ -1035,9 +1178,14 @@ public class SensorFusion implements SensorEventListener, Observer {
                 counter++;
             }
 
+
+
+
         }
     }
+}
+
 
     //endregion
 
-}
+
