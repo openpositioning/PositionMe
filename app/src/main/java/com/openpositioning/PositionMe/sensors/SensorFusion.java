@@ -596,11 +596,16 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Written by Marco Bancalari-Ruiz
      */
 
-    public LatLng EKF(double pdrDeltaX, double pdrDeltaY){
+    public LatLng EKF(){
+
+        createWifiPositioningRequest();
 
         //Initialise local variables
         float wifiLat = this.latitude;
         float wifiLng = this.longitude;
+        float[] PDRMovement = PdrProcessing.getPDRMovement();
+        float pdrDeltaX = PDRMovement[0];
+        float pdrDeltaY = PDRMovement[1];
 
         // Initialize on first valid WiFi reading
         if (!isInitialized && wifiLat != 0 && wifiLng != 0) {
