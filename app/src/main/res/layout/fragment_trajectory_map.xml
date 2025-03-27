@@ -58,29 +58,29 @@
 
         <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/autoFloor"
-            android:layout_width="147dp"
-            android:layout_height="42dp"
+            android:layout_width="158dp"
+            android:layout_height="49dp"
             android:text="@string/auto_floor"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.06"
             app:layout_constraintStart_toStartOf="parent"
-            tools:layout_editor_absoluteY="95dp" />
+            app:layout_constraintTop_toBottomOf="@+id/gnssSwitch" />
 
         <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/gnssSwitch"
-            android:layout_width="148dp"
-            android:layout_height="46dp"
+            android:layout_width="158dp"
+            android:layout_height="51dp"
             android:text="@string/gnssSwitch"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.06"
             app:layout_constraintStart_toStartOf="parent"
-            tools:layout_editor_absoluteY="49dp" />
+            app:layout_constraintTop_toBottomOf="@+id/EKF_Switch" />
 
         <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/EKF_Switch"
-            android:layout_width="148dp"
-            android:layout_height="45dp"
-            android:layout_marginTop="4dp"
+            android:layout_width="158dp"
+            android:layout_height="56dp"
+            android:layout_marginTop="10dp"
             android:text="@string/EKF_Switch"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.06"
@@ -94,10 +94,12 @@
             android:background="@android:color/white"
             android:elevation="5dp"
             android:spinnerMode="dropdown"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.149"
+            app:layout_constraintHorizontal_bias="0.143"
             app:layout_constraintStart_toStartOf="parent"
-            tools:layout_editor_absoluteY="185dp" />
+            app:layout_constraintTop_toBottomOf="@+id/lineColorButton"
+            app:layout_constraintVertical_bias="0.0" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/lineColorButton"
@@ -110,7 +112,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.122"
             app:layout_constraintStart_toStartOf="parent"
-            tools:layout_editor_absoluteY="137dp" />
+            app:layout_constraintTop_toBottomOf="@+id/autoFloor" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
