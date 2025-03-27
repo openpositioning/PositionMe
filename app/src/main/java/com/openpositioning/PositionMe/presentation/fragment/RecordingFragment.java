@@ -249,6 +249,9 @@ public class RecordingFragment extends Fragment implements PositionListener {
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
         // Current location
+        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
+        // Or simply pass relative data for the TrajectoryMapFragment to handle
+        // For example:
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
             LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
@@ -305,6 +308,16 @@ public class RecordingFragment extends Fragment implements PositionListener {
                 fusionInfoText.setText(String.format("Fusion-PDR error: %.2fm", fusionPdrError));
             }
         }
+
+        LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+        // Update WiFi marker if the switch is enabled
+        if (trajectoryMapFragment.isWifiEnabled() && wifiLocation != null) {
+            trajectoryMapFragment.updateWiFi(wifiLocation);
+        } else {
+            trajectoryMapFragment.clearWiFi();
+        }
+
+
 
         // Update previous
         previousPosX = pdrValues[0];
