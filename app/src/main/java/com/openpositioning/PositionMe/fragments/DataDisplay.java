@@ -7,6 +7,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -20,6 +21,8 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.sensors.LocalCoordinateSystem;  // ← 确保路径正确
+
 
 /**
  * A simple {@link Fragment} subclass.
@@ -42,6 +45,9 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     private SupportMapFragment mapFragment;
     private final android.os.Handler handler = new android.os.Handler();
     private final int updateInterval = 1000; // 1 second
+
+    private LocalCoordinateSystem coordSystem = new LocalCoordinateSystem();
+
     private final Runnable updateWifiLocationRunnable = new Runnable() {
         @Override
         public void run() {
@@ -135,17 +141,30 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         int floor = SensorFusion.getInstance().getWifiFloor();
 
         if (wifiLocation != null) {
+            // GNSS 原点设置（只设置一次）
+            float[] gnssLatLon = SensorFusion.getInstance().getGNSSLatitude(false);
+            if (gnssLatLon != null && gnssLatLon[0] != 0.0f && gnssLatLon[1] != 0.0f && !coordSystem.isInitialized()) {
+                coordSystem.initReference(gnssLatLon[0], gnssLatLon[1]);
+            }
+
+            // WiFi → 本地 XY
+            double[] xy = coordSystem.toLocal(wifiLocation.latitude, wifiLocation.longitude);
+
+            // 显示 WiFi 经纬度 + 相对坐标
             String display = String.format(
-                    "WiFi Location:\nLatitude: %.6f\nLongitude: %.6f\nFloor: %d",
+                    "WiFi Location:\nLat: %.6f\nLon: %.6f\nFloor: %d\n\nXY relative to GNSS origin:\nX: %.2f m\nY: %.2f m",
                     wifiLocation.latitude,
                     wifiLocation.longitude,
-                    floor
+                    floor,
+                    xy[0], xy[1]
             );
             statusText.setText(display);
         } else {
             statusText.setText("WiFi Location: Unavailable");
         }
     }
+
+
 
     @Override
     public void onDestroyView() {

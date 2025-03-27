@@ -15,8 +15,8 @@
         <androidx.fragment.app.FragmentContainerView
             android:id="@+id/mapFragmentContainer"
             android:name="com.google.android.gms.maps.SupportMapFragment"
-            android:layout_width="385dp"
-            android:layout_height="645dp"
+            android:layout_width="395dp"
+            android:layout_height="424dp"
             android:layout_marginTop="16dp"
             app:layout_constraintDimensionRatio="16:9"
             app:layout_constraintEnd_toEndOf="parent"
