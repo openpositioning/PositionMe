@@ -26,6 +26,7 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
 import com.example.ekf.EKFManager;
+import com.example.ekf.GNSSProcessor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -76,6 +77,9 @@ public class TrajectoryMapFragment extends Fragment {
     private SensorFusion sensorFusion;
 
     private EKFManager ekfManager; // EKF manager
+    
+    // GNSS处理器，用于平滑GNSS数据
+    private GNSSProcessor gnssProcessor;
 
     // UI
     private Spinner switchMapSpinner;
@@ -118,6 +122,9 @@ public class TrajectoryMapFragment extends Fragment {
 
         // 初始化EKF管理器
         ekfManager = EKFManager.getInstance();
+        
+        // 初始化GNSS处理器
+        gnssProcessor = GNSSProcessor.getInstance();
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -439,32 +446,38 @@ public class TrajectoryMapFragment extends Fragment {
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;
 
+        // 使用GNSS处理器处理原始GNSS位置，得到平滑后的位置
+        LatLng processedGnssLocation = gnssProcessor.processGNSSPosition(gnssLocation);
+        
+        // 如果处理后位置为null，直接返回
+        if (processedGnssLocation == null) return;
+
         // Only update GNSS visuals if enabled
         if (isGnssOn) {
             // GNSS marker (create or update)
             if (gnssMarker == null) {
                 MarkerOptions markerOptions = new MarkerOptions()
-                        .position(gnssLocation)
+                        .position(processedGnssLocation)
                         .title("GNSS Position")
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
 
                 gnssMarker = gMap.addMarker(markerOptions);
             } else {
-                gnssMarker.setPosition(gnssLocation);
+                gnssMarker.setPosition(processedGnssLocation);
             }
 
             // Update GNSS polyline if position has changed
-            if (lastGnssLocation == null || !lastGnssLocation.equals(gnssLocation)) {
+            if (lastGnssLocation == null || !lastGnssLocation.equals(processedGnssLocation)) {
                 List<LatLng> points = gnssPolyline.getPoints();
-                points.add(gnssLocation);
+                points.add(processedGnssLocation);
                 gnssPolyline.setPoints(points);
-                lastGnssLocation = gnssLocation;
+                lastGnssLocation = processedGnssLocation;
             }
         }
         
-        // 更新EKF的GNSS位置数据
+        // 更新EKF的GNSS位置数据 - 使用处理后的平滑位置
         if (isEkfOn && ekfManager != null) {
-            ekfManager.updateGnssPosition(gnssLocation);
+            ekfManager.updateGnssPosition(processedGnssLocation);
             updateEKFLocation(); // 更新融合后的位置显示
         }
     }
@@ -483,11 +496,6 @@ public class TrajectoryMapFragment extends Fragment {
 
     /**
      * Clear GNSS markers and polyline from the map.
-     * <p>
-     *     The method removes the GNSS marker and clears the GNSS polyline.
-     *     It is called when GNSS tracking is disabled or when the map is reset.
-     *     The method handles the case where the marker or polyline may not exist.
-     *     It also resets the lastGnssLocation to null.
      */
     public void clearGNSS() {
         if (gnssMarker != null) {
@@ -498,6 +506,11 @@ public class TrajectoryMapFragment extends Fragment {
             gnssPolyline.setPoints(new ArrayList<>());
         }
         lastGnssLocation = null;
+        
+        // 重置GNSS处理器状态
+        if (gnssProcessor != null) {
+            gnssProcessor.reset();
+        }
     }
     
     /**

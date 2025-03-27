@@ -64,6 +64,14 @@ public class EKFManager {
     private double currentSpeed = 0.0; // 当前速度(米/秒)
     private double[] speedHistory = new double[5]; // 速度历史记录，用于平滑
     private int speedHistoryIndex = 0; // 速度历史记录索引
+    private int speedHistoryCount = 0; // 速度历史记录计数
+    
+    // 新增变量
+    private long lastGnssUpdateTime = 0; // 上次更新GNSS位置的时间
+    private double[] displacementHistory = new double[10]; // 位移历史记录
+    private int displacementHistoryIndex = 0; // 位移历史记录索引
+    private int displacementHistoryCount = 0; // 位移历史记录计数
+    private float lastOrientation = 0; // 上次GNSS的航向角
     
     /**
      * 私有构造函数，遵循单例模式
@@ -76,6 +84,8 @@ public class EKFManager {
         for (int i = 0; i < speedHistory.length; i++) {
             speedHistory[i] = 0.0;
         }
+        speedHistoryCount = 0;
+        speedHistoryIndex = 0;
     }
     
     /**
@@ -200,12 +210,18 @@ public class EKFManager {
                 speedHistory[speedHistoryIndex] = instantSpeed;
                 speedHistoryIndex = (speedHistoryIndex + 1) % speedHistory.length;
                 
+                // 更新历史记录计数
+                if (speedHistoryCount < speedHistory.length) {
+                    speedHistoryCount++;
+                }
+                
                 // 计算平均速度
                 double totalSpeed = 0;
-                for (double speed : speedHistory) {
-                    totalSpeed += speed;
+                for (int i = 0; i < speedHistoryCount; i++) {
+                    int idx = (speedHistoryIndex - 1 - i + speedHistory.length) % speedHistory.length;
+                    totalSpeed += speedHistory[idx];
                 }
-                currentSpeed = totalSpeed / speedHistory.length;
+                currentSpeed = totalSpeed / speedHistoryCount;
                 
                 // 重置时间和累积位移
                 lastDisplacementTime = currentTime;
@@ -236,47 +252,75 @@ public class EKFManager {
     }
     
     /**
-     * 更新GNSS位置
-     * @param gnssPosition GNSS位置
+     * 更新来自GNSS的位置
+     * 已经由GNSSProcessor预处理，减少了跳变
+     * @param gnssLocation GNSS的位置(LatLng格式)
      */
-    public void updateGnssPosition(LatLng gnssPosition) {
-        if (!isInitialized || !isEkfEnabled || gnssPosition == null) {
-            this.lastGnssPosition = gnssPosition;  // 即使未初始化也保存最新的GNSS位置
-            return;
-        }
+    public void updateGnssPosition(LatLng gnssLocation) {
+        if (gnssLocation == null) return;
         
-        // 如果处于静止状态，减小GNSS更新的影响
-        if (isStaticState) {
-            // 静止状态下，仅小幅度修正位置，不进行大范围调整
-            // 可以通过修改EKF中的观测噪声协方差来实现，或者简单地减少更新频率
-            if (Math.random() > 0.2) { // 静止时仅使用20%的GNSS数据
-                return;
-            }
-        }
+        // 计算与上一个GNSS位置的位移
+        double displacement = 0;
+        double speed = 0;
         
-        // 检查GNSS位置跳变
         if (lastGnssPosition != null) {
-            double distance = calculateDistance(lastGnssPosition, gnssPosition);
-            double timeElapsed = (System.currentTimeMillis() - lastDisplacementTime) / 1000.0; // 转换为秒
+            long currentTime = System.currentTimeMillis();
+            double timeDelta = (currentTime - lastGnssUpdateTime) / 1000.0; // 转为秒
             
-            if (timeElapsed > 0) {
-                double gnssSpeed = distance / timeElapsed;
-                
-                // 如果GNSS速度明显高于当前速度，可能是位置跳变
-                if (gnssSpeed > MAX_SPEED && gnssSpeed > currentSpeed * 2) {
-                    Log.d(TAG, "检测到GNSS位置跳变: " + gnssSpeed + "m/s > " + MAX_SPEED + "m/s，减小GNSS权重");
-                    // 减小GNSS位置权重，这里简单地通过随机筛选来实现
-                    if (Math.random() > 0.1) { // 只有10%的跳变数据会被使用
-                        return;
-                    }
-                }
+            // 计算位移
+            displacement = calculateDistance(lastGnssPosition, gnssLocation);
+            
+            // 计算速度
+            if (timeDelta > 0.1) { // 避免除以很小的数
+                speed = displacement / timeDelta;
+            }
+            
+            // 更新当前速度估计（使用加权平均进行平滑）
+            currentSpeed = 0.7 * currentSpeed + 0.3 * speed;
+            
+            // 记录速度历史
+            speedHistory[speedHistoryIndex] = speed;
+            speedHistoryIndex = (speedHistoryIndex + 1) % speedHistory.length;
+            if (speedHistoryCount < speedHistory.length) {
+                speedHistoryCount++;
             }
         }
         
-        // 更新EKF使用GNSS数据
-        ekf.updateWithGNSS(gnssPosition);
-        this.lastGnssPosition = gnssPosition;
-        Log.d(TAG, "EKF更新: 使用GNSS位置 " + gnssPosition);
+        // 应用位移限制（已经由GNSSProcessor处理，这里作为额外保障）
+        if (displacement > MAX_DISPLACEMENT_PER_UPDATE) {
+            Log.d(TAG, "EKF: GNSS displacement exceeds limit: " + displacement + "m > " + 
+                  MAX_DISPLACEMENT_PER_UPDATE + "m - applying limit");
+            
+            // 已经由GNSSProcessor平滑处理过，这里的限制作用更小
+            double ratio = MAX_DISPLACEMENT_PER_UPDATE / displacement;
+            double latDiff = (gnssLocation.latitude - lastGnssPosition.latitude) * ratio;
+            double lonDiff = (gnssLocation.longitude - lastGnssPosition.longitude) * ratio;
+            
+            gnssLocation = new LatLng(
+                    lastGnssPosition.latitude + latDiff,
+                    lastGnssPosition.longitude + lonDiff
+            );
+        }
+        
+        // 更新EKF中的GNSS位置
+        lastGnssPosition = gnssLocation;
+        lastGnssUpdateTime = System.currentTimeMillis();
+        
+        // 记录位移历史（用于统计分析）
+        displacementHistory[displacementHistoryIndex] = displacement;
+        displacementHistoryIndex = (displacementHistoryIndex + 1) % displacementHistory.length;
+        if (displacementHistoryCount < displacementHistory.length) {
+            displacementHistoryCount++;
+        }
+        
+        // 如果EKF已初始化，对接收到的GNSS位置进行更新
+        if (isInitialized) {
+            ekf.update_gnss(gnssLocation.latitude, gnssLocation.longitude);
+        } else {
+            // 如果EKF未初始化，且GNSS接收到有效位置，则初始化EKF
+            ekf.initialize(new LatLng(gnssLocation.latitude, gnssLocation.longitude), (double)lastOrientation);
+            isInitialized = true;
+        }
     }
     
     /**
@@ -448,6 +492,7 @@ public class EKFManager {
             speedHistory[i] = 0.0;
         }
         speedHistoryIndex = 0;
+        speedHistoryCount = 0;
         
         ekf = new EKF();  // 创建新的EKF实例
         Log.d(TAG, "EKF已重置");

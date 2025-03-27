@@ -222,6 +222,19 @@ public class EKF {
     }
     
     /**
+     * 使用GNSS经纬度位置进行测量更新
+     * @param latitude GNSS纬度
+     * @param longitude GNSS经度
+     */
+    public void update_gnss(double latitude, double longitude) {
+        // 使用经纬度创建LatLng对象
+        LatLng gnssLatLng = new LatLng(latitude, longitude);
+        
+        // 调用已有的updateWithGNSS方法处理
+        updateWithGNSS(gnssLatLng);
+    }
+    
+    /**
      * 获取当前融合后的位置
      * @return 融合后的LatLng位置
      */
