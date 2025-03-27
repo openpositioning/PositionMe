@@ -16,7 +16,8 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     private static final String TAG = "ParticleFilterFusion";
 
     // Process noise scale (PDR) update {X, Y}
-    private static final double[] pdrRelativeStds = {0.1, 0.1};
+    private static final double[] staticPDRStds = {1, 1, Math.PI/12};
+    private static final double[] dynamicPDRStds = {0.1, 0.1, Math.PI/36};
     private SimpleMatrix forwardVariance;
     private static final double GNSS_NOISE = 5.0;       // Measurement noise for GNSS (in meters)
     private static final double WIFI_NOISE = 10.0;      // Measurement noise for WiFi (in meters)
@@ -32,23 +33,22 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     // Particle parameters
     private long lastUpdateTime;
 
+    private LatLng FusedPosition;
+
 
     // Constructor
-    public ParticleFilterFusion(int numParticles, float[] mapBoundaries) {
+    public ParticleFilterFusion(int numParticles, float[] initialPosition) {
 
         // Get particle positions
         this.numParticles = numParticles;
-        this.mapBoundaries = mapBoundaries;
+        //this.mapBoundaries = mapBoundaries;
         this.particles = new ArrayList<>();
-
-        // Get distribution parameters
-        this.forwardVariance = SimpleMatrix.diag(pdrRelativeStds).mult(SimpleMatrix.diag(pdrRelativeStds));
 
         // Initialize timestamp
         lastUpdateTime = System.currentTimeMillis();
 
         // Set initial particle distribution
-        initializeParticles();
+        initializeParticles(initialPosition);
     }
 
 
@@ -58,7 +58,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
 
         // Update particle parameters
-        moveParticles(stepLength, headingChange);
+        moveParticlesDynamic(stepLength, headingChange);
 
         // Reweight and resample
 
@@ -67,7 +67,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         lastUpdateTime = currentTime;
     }
 
-    public LatLng getFusedPosition() {return};
+    public LatLng getFusedPosition() {return FusedPosition;};
 
     public void processGnssUpdate(LatLng position, double altitude) {};
 
@@ -85,9 +85,9 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     }
 
     // Simulate motion update of particles
-    public void moveParticles(double stepLength, double headingValue) {
+    public void moveParticlesStatic(double[] staticPDRStds) {
         for (Particle particle : particles) {
-            particle.update(stepLength, headingValue, pdrRelativeStds);
+            particle.updateStatic(staticPDRStds);
         }
     }
 
