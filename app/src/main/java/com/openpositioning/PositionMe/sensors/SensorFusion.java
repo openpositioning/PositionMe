@@ -923,7 +923,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
-    // 新增方法：将当前“fusion”标签数据写入 Trajectory 的 gnss_data 数组中
+    // Write the current "fusion" tag data into the gnss_data array of Trajectory
     public void addFusionTag(long relativeTimestamp, double lat, double lon, float altitude, String provider) {
         trajectory.addGnssData(
                 Traj.GNSS_Sample.newBuilder()
@@ -938,4 +938,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
     //endregion
 
+    public void resetPdrStartingPosition() {
+        pdrProcessing.resetPDR();
+    }
 }

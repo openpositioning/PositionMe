@@ -1,3 +1,5 @@
+//Authored by Ashley Dong, Sriram Jagathisan, Yuxuan Liu
+
 package com.openpositioning.PositionMe.fragments;
 
 import android.location.Location;
@@ -184,7 +186,7 @@ public class WifiFragment extends Fragment implements OnMapReadyCallback {
                         float[] results = new float[1];
                         Location.distanceBetween(lastPosition.latitude, lastPosition.longitude,
                                 location.latitude, location.longitude, results);
-                        if (results[0] > 20) {
+                        if (results[0] > 50) {
                             Toast.makeText(getContext(), "Outlier detected", Toast.LENGTH_SHORT).show();
                             return;
                         }
