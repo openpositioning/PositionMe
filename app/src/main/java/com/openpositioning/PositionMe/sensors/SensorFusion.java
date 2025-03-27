@@ -30,6 +30,7 @@ import com.openpositioning.PositionMe.fusion.KalmanFilterFusion;
 import com.openpositioning.PositionMe.fusion.ParticleFilterFusion;
 import com.openpositioning.PositionMe.utils.PositionListener;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
+import com.openpositioning.PositionMe.utils.SimpleFusionConverter;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -398,20 +399,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                 Log.d("SensorFusion", "Step detected at time: " + currentTime);
 
                 if (currentTime - lastStepTime < 200) {
-                    Log.e("SensorFusion", "Ignoring step event, too soon after last step event: " + (currentTime - lastStepTime) + " ms");
-                    // Ignore rapid successive step events
+                    Log.e("SensorFusion", "Ignoring step event, too soon after last step");
                     break;
                 }
                 else {
                     lastStepTime = currentTime;
-
-                    // Log if accelMagnitude is empty
-                    if (accelMagnitude.isEmpty()) {
-                        Log.e("SensorFusion", "stepDetection triggered, but accelMagnitude is empty! " +
-                                "This can cause updatePdr(...) to fail or return bad results.");
-                    } else {
-                        Log.d("SensorFusion", "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
-                    }
 
                     float[] newCords = this.pdrProcessing.updatePdr(
                             stepTime,
@@ -421,9 +413,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     Log.d("SensorFusion", "PDR update calculated: X=" + newCords[0] + ", Y=" + newCords[1]);
 
-                    // Clear the accelMagnitude after using it
-                    this.accelMagnitude.clear();
-
                     if (saveRecording) {
                         this.pathView.drawTrajectory(newCords);
                         stepCounter++;
@@ -431,22 +420,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                 .setX(newCords[0])
                                 .setY(newCords[1]));
+
+                        // Call our simple fusion update
+                        updateFusionWithPdr();
                     }
 
-                    // Update fusion with PDR data
-                    updateFusionWithPdr();
-
-                    // Notify listeners of PDR update
-                    float[] pdrPosition = pdrProcessing.getPDRMovement();
-                    LatLng pdrLatLng = CoordinateConverter.enu2Geodetic(
-                            pdrPosition[0], pdrPosition[1], getElevation(),
-                            referencePosition[0], referencePosition[1], referencePosition[2]
-                    );
-
-                    Log.d("SensorFusion", "Notifying listeners of PDR position update: " +
-                            pdrLatLng.latitude + ", " + pdrLatLng.longitude);
-
-                    notifyPositionListeners(PositionListener.UpdateType.PDR_POSITION, pdrLatLng);
+                    // Clear the accelMagnitude after using it
+                    this.accelMagnitude.clear();
                     break;
                 }
         }
@@ -473,13 +453,13 @@ public class SensorFusion implements SensorEventListener, Observer {
     class myLocationListener implements LocationListener{
         @Override
         public void onLocationChanged(@NonNull Location location) {
-            //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
             latitude = (float) location.getLatitude();
             longitude = (float) location.getLongitude();
             altitude = (float) location.getAltitude();
             float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
+
             if(saveRecording) {
                 trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
                         .setAccuracy(accuracy)
@@ -489,10 +469,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .setSpeed(speed)
                         .setProvider(provider)
                         .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
-            }
 
-            // Update fusion with GNSS data
-            updateFusionWithGnss();
+                // Call our simple fusion update
+                updateFusionWithGnss();
+            }
 
             // Notify GNSS position update
             notifyPositionListeners(PositionListener.UpdateType.GNSS_POSITION, new LatLng(latitude, longitude));
@@ -1167,38 +1147,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Called when a new step is detected.
      */
     private void updateFusionWithPdr() {
-        if (fusionAlgorithm == null) {
-            Log.e("SensorFusion", "Cannot update fusion: fusionAlgorithm is null");
-            return;
-        }
-
-        if (!useFusion) {
-            Log.w("SensorFusion", "Fusion is disabled in settings, PDR update skipped");
-            return;
-        }
-
-        // Get current PDR position
-        float[] pdrPosition = pdrProcessing.getPDRMovement();
-        float pdrElevation = getElevation();
-
-        // Log PDR position for debugging
-        Log.d("SensorFusion", "PDR update: E=" + pdrPosition[0] + ", N=" + pdrPosition[1]);
-
-        // Update the fusion algorithm with new PDR data
-        fusionAlgorithm.processPdrUpdate(pdrPosition[0], pdrPosition[1], pdrElevation);
-
-        // Get the fused position
-        fusedPosition = fusionAlgorithm.getFusedPosition();
-
-        // Enhanced logging
-        if (fusedPosition != null) {
-            Log.d("SensorFusion", "Fusion after PDR: " + fusedPosition.latitude + ", " + fusedPosition.longitude);
-
-            // Notify listeners
-            notifyPositionListeners(PositionListener.UpdateType.FUSED_POSITION, fusedPosition);
-        } else {
-            Log.e("SensorFusion", "Fusion algorithm returned null position after PDR update");
-        }
+        updateSimpleFusion();
     }
 
     /**
@@ -1206,36 +1155,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Called from the location listener when new GNSS data is available.
      */
     private void updateFusionWithGnss() {
-        if (fusionAlgorithm == null) {
-            Log.e("SensorFusion", "Cannot update fusion: fusionAlgorithm is null");
-            return;
-        }
-
-        if (!useFusion) {
-            Log.w("SensorFusion", "Fusion is disabled in settings, GNSS update skipped");
-            return;
-        }
-
-        LatLng gnssPosition = new LatLng(latitude, longitude);
-
-        // Log GNSS position for debugging
-        Log.d("SensorFusion", "GNSS update: " + latitude + ", " + longitude);
-
-        // Update the fusion algorithm with new GNSS data
-        fusionAlgorithm.processGnssUpdate(gnssPosition, altitude);
-
-        // Get the fused position
-        fusedPosition = fusionAlgorithm.getFusedPosition();
-
-        // Enhanced logging
-        if (fusedPosition != null) {
-            Log.d("SensorFusion", "Fusion after GNSS: " + fusedPosition.latitude + ", " + fusedPosition.longitude);
-
-            // Notify listeners
-            notifyPositionListeners(PositionListener.UpdateType.FUSED_POSITION, fusedPosition);
-        } else {
-            Log.e("SensorFusion", "Fusion algorithm returned null position after GNSS update");
-        }
+        updateSimpleFusion();
     }
 
     public boolean hasPositionListeners() {
@@ -1244,6 +1164,26 @@ public class SensorFusion implements SensorEventListener, Observer {
                 " (Count: " + positionListeners.size() + ")");
         return hasListeners;
     }
+
+
+    /**
+     * This replaces any previous implementation of this method
+     */
+
+    public void onStepDetected(double pdrEast, double pdrNorth, double altitude, long refTime) {
+        // Call our simple fusion method - overrides any reference to fusionAlgorithm
+        updateSimpleFusion();
+    }
+
+    public void processGnssUpdate(LatLng position, double altitude) {
+        // Call our simple fusion method instead of using fusionAlgorithm
+        updateSimpleFusion();
+    }
+    public void processPdrUpdate(float eastMeters, float northMeters, float altitude) {
+        updateSimpleFusion();
+    }
+
+
 
     /**
      * Updates the fusion algorithm with new WiFi positioning data.
@@ -1260,16 +1200,25 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
-     * Initializes the fusion algorithm based on user preferences.
+     * Initialize the fusion algorithm
      */
     public void initializeFusionAlgorithm() {
-        // Use Kalman Filter for fusion
-        fusionAlgorithm = new KalmanFilterFusion(referencePosition);
+        // Ensure reference position is valid
+        if (referencePosition[0] == 0 && referencePosition[1] == 0) {
+            // If we have a valid GNSS position, use it
+            if (latitude != 0 || longitude != 0) {
+                referencePosition[0] = latitude;
+                referencePosition[1] = longitude;
+                referencePosition[2] = altitude;
+                Log.d("SimpleFusion", "Using current GNSS position as reference: " +
+                        latitude + ", " + longitude);
+            } else {
+                Log.w("SimpleFusion", "No valid reference position available for fusion");
+                return;
+            }
+        }
 
-        // Force fusion to be enabled regardless of settings
-        useFusion = true;
-
-        Log.d("SensorFusion", "Fusion algorithm initialized with reference position: " +
+        Log.d("SimpleFusion", "Initialized fusion algorithm with reference position: " +
                 referencePosition[0] + ", " + referencePosition[1] + ", " + referencePosition[2]);
     }
 
@@ -1277,8 +1226,67 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Getter for current fusion position
      */
     public LatLng getFusedPosition() {
-        return fusedPosition;
+        // Check if we have a valid fusedPosition from our simple fusion
+        if (fusedPosition != null) {
+            return fusedPosition;
+        }
+
+        // Return current location as fallback
+        if (latitude != 0 || longitude != 0) {
+            return new LatLng(latitude, longitude);
+        }
+
+        // Return reference position as last resort
+        return new LatLng(referencePosition[0], referencePosition[1]);
     }
 
+    /**
+     * Simple test fusion method that averages PDR and GNSS positions
+     * This is for debugging purposes only
+     */
+    /**
+     * Simple fusion method that averages PDR and GNSS positions
+     * Used for testing coordinate transformation issues
+     */
+    private void updateSimpleFusion() {
+        // Get current PDR position
+        float[] pdrPosition = pdrProcessing.getPDRMovement();
 
+        // Skip if PDR or GNSS data is invalid (0,0)
+        if ((pdrPosition[0] == 0 && pdrPosition[1] == 0) ||
+                (latitude == 0 && longitude == 0)) {
+            Log.d("SimpleFusion", "Can't fuse: missing valid positions");
+            return;
+        }
+
+        // Get reference position
+        if (referencePosition[0] == 0 && referencePosition[1] == 0) {
+            // No reference position set, try to use current position
+            Log.e("SimpleFusion", "No reference position, using current GNSS as reference");
+            referencePosition[0] = latitude;
+            referencePosition[1] = longitude;
+            referencePosition[2] = altitude;
+        }
+
+        try {
+            // Use our SimpleFusionConverter to do the fusion
+            LatLng fusedPos = SimpleFusionConverter.fusePdrAndGnss(
+                    pdrPosition[0], pdrPosition[1], getElevation(),
+                    latitude, longitude,
+                    referencePosition[0], referencePosition[1], referencePosition[2]
+            );
+
+            // Set the fused position and notify listeners
+            fusedPosition = fusedPos;
+
+            // Log successful fusion
+            Log.d("SimpleFusion", "Successfully calculated fusion position: " +
+                    fusedPosition.latitude + ", " + fusedPosition.longitude);
+
+            // Notify listeners - this is critical for updating the map
+            notifyPositionListeners(PositionListener.UpdateType.FUSED_POSITION, fusedPosition);
+        } catch (Exception e) {
+            Log.e("SimpleFusion", "Error in fusion calculation: " + e.getMessage(), e);
+        }
+    }
 }

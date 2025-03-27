@@ -219,36 +219,38 @@ public class TrajectoryMapFragment extends Fragment {
      */
     // 2. In the updateFusionPosition method, add style enhancements:
     public void updateFusionPosition(@NonNull LatLng fusionLocation) {
-        if (gMap == null || fusionLocation == null) return;
+        if (gMap == null || fusionLocation == null) {
+            Log.e("TrajectoryMapFragment", "Cannot update fusion: gMap or fusionLocation is null");
+            return;
+        }
 
         Log.d("TrajectoryMapFragment", "updateFusionPosition called with: " +
                 fusionLocation.latitude + ", " + fusionLocation.longitude);
 
-        // If fusion marker doesn't exist, create it with a distinctive icon
+        // If fusion marker doesn't exist, create it
         if (fusionMarker == null) {
             fusionMarker = gMap.addMarker(new MarkerOptions()
                     .position(fusionLocation)
                     .title("Fusion Position")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
-                    .zIndex(10f)  // Higher z-index than other markers
-                    .alpha(1.0f)  // Full opacity
-            );
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
         } else {
             // Update marker position
             fusionMarker.setPosition(fusionLocation);
         }
 
-        // Add new point to fusion path if it's different from the last one
-        if (lastFusionLocation == null ||
-                !lastFusionLocation.equals(fusionLocation) ||
-                fusionPolyline.getPoints().isEmpty()) {
-
+        // Check if fusionPolyline is null and create it if needed
+        if (fusionPolyline == null) {
+            fusionPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.GREEN)
+                    .width(8f)
+                    .add(fusionLocation));
+            Log.d("TrajectoryMapFragment", "Created new fusion polyline");
+        } else {
+            // Add new point to fusion path
             List<LatLng> fusionPoints = new ArrayList<>(fusionPolyline.getPoints());
             fusionPoints.add(fusionLocation);
             fusionPolyline.setPoints(fusionPoints);
-            lastFusionLocation = fusionLocation;
-
-            Log.d("TrajectoryMapFragment", "Fusion polyline updated, total points: " + fusionPoints.size());
+            Log.d("TrajectoryMapFragment", "Added point to fusion polyline, total points: " + fusionPoints.size());
         }
     }
 
@@ -295,33 +297,27 @@ public class TrajectoryMapFragment extends Fragment {
         // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
 
-        // Initialize the main PDR polyline (red) - base layer
+        // Initialize the main PDR polyline (red)
         polyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
                 .width(6f)
-                .zIndex(1)
                 .add() // start empty
         );
 
-        // Initialize the GNSS polyline (blue) - middle layer
+        // Initialize the GNSS polyline (blue)
         gnssPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.BLUE)
-                .width(8f)
-                .zIndex(2)
+                .width(6f)
                 .add() // start empty
         );
 
-        // Initialize fusion polyline (bright green) - top layer with pattern
+        // Initialize the fusion polyline (green) - make it prominent
         fusionPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.rgb(0, 255, 0))  // Bright green for better visibility
-                .width(10f)                   // Even thicker for visibility
-                .zIndex(3)                    // Top layer
-                .pattern(Arrays.asList(
-                        new Dot(), new Gap(20f)   // Dotted pattern for distinction
-                ))
-                .add());  // start empty
+                .color(Color.GREEN)
+                .width(8f)  // Slightly thicker for visibility
+                .add());    // start empty
 
-        Log.d("TrajectoryMapFragment", "Initialized polylines with enhanced visibility settings");
+        Log.d("TrajectoryMapFragment", "Map initialized with fusion polyline");
     }
 
 
@@ -524,56 +520,38 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
-        // Remove and clear existing objects
-        if (polyline != null) {
-            polyline.remove();
-            polyline = null;
-        }
-        if (gnssPolyline != null) {
-            gnssPolyline.remove();
-            gnssPolyline = null;
-        }
-        if (orientationMarker != null) {
-            orientationMarker.remove();
-            orientationMarker = null;
-        }
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
-        }
-        if (fusionPolyline != null) {
-            fusionPolyline.remove();
-            fusionPolyline = null;
-        }
-        if (fusionMarker != null) {
-            fusionMarker.remove();
-            fusionMarker = null;
-        }
+        // Clear all polylines
+        if (polyline != null) polyline.remove();
+        if (gnssPolyline != null) gnssPolyline.remove();
+        if (fusionPolyline != null) fusionPolyline.remove();
 
+        // Clear all markers
+        if (orientationMarker != null) orientationMarker.remove();
+        if (gnssMarker != null) gnssMarker.remove();
+        if (fusionMarker != null) fusionMarker.remove();
+
+        // Reset state variables
         lastGnssLocation = null;
         currentLocation = null;
-        lastFusionLocation = null;
+        fusionMarker = null;
 
-        // Re-create empty polylines with improved visibility settings
+        // Create new polylines
         polyline = gMap.addPolyline(new PolylineOptions()
                 .color(Color.RED)
-                .width(5f)
-                .zIndex(1)
+                .width(6f)
                 .add());
 
         gnssPolyline = gMap.addPolyline(new PolylineOptions()
                 .color(Color.BLUE)
                 .width(6f)
-                .zIndex(2)
                 .add());
 
         fusionPolyline = gMap.addPolyline(new PolylineOptions()
                 .color(Color.GREEN)
                 .width(8f)
-                .zIndex(3)  // Highest z-index to ensure it's on top
                 .add());
 
-        Log.d("TrajectoryMapFragment", "Map cleared and polylines reset with improved visibility");
+        Log.d("TrajectoryMapFragment", "Map cleared and reset");
     }
 
     /**

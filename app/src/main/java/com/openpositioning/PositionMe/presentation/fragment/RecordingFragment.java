@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -356,52 +357,43 @@ public class RecordingFragment extends Fragment implements PositionListener {
     // In RecordingFragment.java, enhance the onPositionUpdate method:
 
     @Override
-    public void onPositionUpdate(UpdateType updateType, LatLng position) {
+    public void onPositionUpdate(PositionListener.UpdateType updateType, LatLng position) {
         if (position == null) {
-            Log.w(TAG, "Received null position update for type: " + updateType);
+            Log.w("RecordingFragment", "Received null position update for type: " + updateType);
             return;
         }
 
-        // Process different types of position updates
-        switch (updateType) {
-            case PDR_POSITION:
-                // PDR updates are already handled in updateUIandPosition
-                Log.d(TAG, "PDR position update: " + position.latitude + ", " + position.longitude);
-                break;
+        // Use a handler to ensure UI updates happen on the main thread
+        new Handler(Looper.getMainLooper()).post(() -> {
+            // Process different types of position updates
+            switch (updateType) {
+                case PDR_POSITION:
+                    // PDR updates are already handled in updateUIandPosition
+                    Log.d("RecordingFragment", "PDR position update: " + position.latitude + ", " + position.longitude);
+                    break;
 
-            case GNSS_POSITION:
-                // GNSS updates are already handled in updateUIandPosition
-                Log.d(TAG, "GNSS position update: " + position.latitude + ", " + position.longitude);
-                break;
+                case GNSS_POSITION:
+                    // GNSS updates are already handled in updateUIandPosition
+                    Log.d("RecordingFragment", "GNSS position update: " + position.latitude + ", " + position.longitude);
+                    break;
 
-            case FUSED_POSITION:
-                // Update fusion position on map with additional logging
-                Log.d(TAG, "Fusion position update received: " + position.latitude + ", " + position.longitude);
+                case FUSED_POSITION:
+                    // Update fusion position on map
+                    Log.d("RecordingFragment", "Fusion position update received: " + position.latitude + ", " + position.longitude);
 
-                if (trajectoryMapFragment != null) {
-                    trajectoryMapFragment.updateFusionPosition(position);
-
-                    // Save for error calculation
-                    lastFusionPosition = position;
-
-
-
-                    // Update fusion-PDR error display if possible
-                    LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
-                    if (currentLoc != null && fusionInfoText != null) {
-                        double fusionPdrError = UtilFunctions.distanceBetweenPoints(currentLoc, position);
-                        fusionInfoText.setVisibility(View.VISIBLE);
-                        fusionInfoText.setText(String.format("Fusion-PDR error: %.2fm", fusionPdrError));
-                        Log.d(TAG, "Fusion-PDR error: " + fusionPdrError + "m");
+                    if (trajectoryMapFragment != null) {
+                        trajectoryMapFragment.updateFusionPosition(position);
+                    } else {
+                        Log.e("RecordingFragment", "Cannot update fusion position: trajectoryMapFragment is null");
                     }
-                } else {
-                    Log.e(TAG, "Cannot update fusion position: trajectoryMapFragment is null");
-                }
-                break;
+                    break;
 
-            case ORIENTATION_UPDATE:
-                // Orientation updates are handled elsewhere
-                break;
-        }
+                case ORIENTATION_UPDATE:
+                    // Orientation updates are handled elsewhere
+                    break;
+            }
+        });
     }
+
+
 }
