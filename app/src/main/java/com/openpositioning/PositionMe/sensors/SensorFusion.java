@@ -983,53 +983,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
 
 
-    // Code by Guilherme: Field to store the latest fused (batch-optimized) position.
-    private LatLng fusedPosition;
-
-    // Code by Guilherme: In-memory list to record raw positions over time.
-    private List<LatLng> recordedPositions = new ArrayList<>();
-
-    // Code by Guilherme: Helper method to convert a LatLng to local coordinates (meters)
-    // using your UtilFunctions conversion factor.
-    private double[] latLngToLocal(LatLng point) {
-        // Use the startLocation as reference; if not set, assume 0,0.
-        // Note: UtilFunctions.DEGREE_IN_M is defined in UtilFunctions (here assumed as 111111).
-        double refLat = (startLocation != null && startLocation.length >= 1) ? startLocation[0] : 0;
-        double refLon = (startLocation != null && startLocation.length >= 2) ? startLocation[1] : 0;
-        double dx = UtilFunctions.degreesToMetersLng(point.longitude - refLon, refLat);
-        double dy = UtilFunctions.degreesToMetersLat(point.latitude - refLat);
-        return new double[]{dx, dy};
-    }
-
-    // Code by Guilherme: Helper method to convert local coordinates (meters) back to LatLng.
-    private LatLng localToLatLng(double x, double y) {
-        double refLat = (startLocation != null && startLocation.length >= 1) ? startLocation[0] : 0;
-        double refLon = (startLocation != null && startLocation.length >= 2) ? startLocation[1] : 0;
-        // Convert meter offsets back to degrees.
-        double deltaLat = y / 111111.0;
-        double deltaLon = x / (111111.0 * Math.cos(Math.toRadians(refLat)));
-        return new LatLng(refLat + deltaLat, refLon + deltaLon);
-    }
-
-    // Code by Guilherme: Simple batch optimization: average the local coordinates.
-    // Replace this with a more advanced optimizer if needed.
-    private LatLng updateBatchOptimizedPosition(List<LatLng> rawPositions) {
-        if (rawPositions == null || rawPositions.isEmpty()) return null;
-        double sumX = 0, sumY = 0;
-        for (LatLng p : rawPositions) {
-            double[] local = latLngToLocal(p);
-            sumX += local[0];
-            sumY += local[1];
-        }
-        double avgX = sumX / rawPositions.size();
-        double avgY = sumY / rawPositions.size();
-        return localToLatLng(avgX, avgY);
-    }
-
-    // Code by Guilherme: Getter for the fused (optimized) position so that other fragments can access it.
-    public LatLng getFusedPosition() {
-        return fusedPosition;
-    }
+    //Code By Guilherme: Finds the GNSS start location to be used as the initial location
     private LatLng getStartLocationFromGNSS() {
         float[] start = getGNSSLatitude(true); // returns startLocation when 'start' is true
         if (start != null && start.length >= 2) {
@@ -1038,6 +992,129 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new LatLng(0, 0); // fallback if not available
     }
 
+/**
+ * Code By Guilherme
+ */
+
+    // New inner class to store a fused sample with its timestamp.
+    public static class FusedSample {
+        public LatLng fusedPosition;
+        public long timestamp;
+        public FusedSample(LatLng fusedPosition, long timestamp) {
+            this.fusedPosition = fusedPosition;
+            this.timestamp = timestamp;
+        }
+    }
+    // Helper method to get the reference point for conversion.
+// We use the first GNSS sample (when available) from the trajectory builder.
+// If not, we use the first PDR sample by converting it using our own conversion.
+    private LatLng getReferencePoint() {
+        if (trajectory.getGnssDataCount() > 0) {
+            Traj.GNSS_Sample firstGnss = trajectory.getGnssData(0);
+            return new LatLng(firstGnss.getLatitude(), firstGnss.getLongitude());
+        } else if (trajectory.getPdrDataCount() > 0) {
+            // If no GNSS, we assume the very first PDR sample can be used as reference.
+            // Note: This assumes that PDR data is stored in a coordinate system relative to the reference.
+            Traj.Pdr_Sample firstPdr = trajectory.getPdrData(0);
+            // Here you might need to convert the (x,y) to lat/lon using an approximate method.
+            // For simplicity, we assume the first PDR sample already corresponds to the start location.
+            return new LatLng(startLocation[0], startLocation[1]);
+        }
+        return new LatLng(0, 0); // Fallback.
+    }
+
+    // Update batch-optimized (fused) trajectory by fusing PDR, GNSS, and WiFi data.
+    // This method fuses data at each PDR time-step.
+    public List<FusedSample> updateBatchOptimizedPosition() {
+        List<FusedSample> fusedTrajectory = new ArrayList<>();
+
+        // Fixed weights for each sensor type.
+        double weightPDR = 0.2;
+        double weightGNSS = 0.5;
+        double weightWiFi = 0.3;
+
+        // Use the reference point from GNSS (if available), otherwise from PDR.
+        LatLng reference = getReferencePoint();
+
+        // Iterate over all PDR samples (assumed to be the most frequent).
+        for (int i = 0; i < trajectory.getPdrDataCount(); i++) {
+            Traj.Pdr_Sample pdrSample = trajectory.getPdrData(i);
+            long t = pdrSample.getRelativeTimestamp();
+            // For PDR, assume the x,y are already in local coordinates (meters).
+            double pdrX = pdrSample.getX();
+            double pdrY = pdrSample.getY();
+
+            // Find the closest GNSS sample.
+            double bestGnssDiff = Double.MAX_VALUE;
+            Traj.GNSS_Sample bestGnss = null;
+            for (int j = 0; j < trajectory.getGnssDataCount(); j++) {
+                long tGnss = trajectory.getGnssData(j).getRelativeTimestamp();
+                double diff = Math.abs(t - tGnss);
+                if (diff < bestGnssDiff) {
+                    bestGnssDiff = diff;
+                    bestGnss = trajectory.getGnssData(j);
+                }
+            }
+
+            // Find the closest WiFi sample.
+            double bestWifiDiff = Double.MAX_VALUE;
+            // Assuming your trajectory builder has a method getWifiDataCount()
+            // (if not, skip WiFi fusion).
+            Traj.WiFi_Sample bestWifi = null;
+            if (trajectory.getWifiDataCount() > 0) {
+                for (int j = 0; j < trajectory.getWifiDataCount(); j++) {
+                    long tWifi = trajectory.getWifiData(j).getRelativeTimestamp();
+                    double diff = Math.abs(t - tWifi);
+                    if (diff < bestWifiDiff) {
+                        bestWifiDiff = diff;
+                        bestWifi = trajectory.getWifiData(j);
+                    }
+                }
+            }
+
+            // Convert GNSS and WiFi data to local coordinates using UtilFunctions.
+            double[] gnssLocal = null;
+            if (bestGnss != null && bestGnssDiff < 1000) { // within 1 second
+                LatLng gnssLatLng = new LatLng(bestGnss.getLatitude(), bestGnss.getLongitude());
+                // Using the UtilFunctions method that converts lat/lon to North-East.
+                gnssLocal = UtilFunctions.convertLatLngToNorthEast(gnssLatLng, reference);
+            }
+
+            double[] wifiLocal = null;
+            if (bestWifi != null && bestWifiDiff < 1000) { // within 1 second
+                // Here, you need to have a method to get a representative LatLng from a WiFi sample.
+                // For this example, assume that bestWifi provides a valid lat/lon (e.g., via an API response).
+                // If not, skip WiFi fusion.
+                LatLng wifiLatLng = new LatLng(0, 0); // Replace with actual retrieval.
+                wifiLocal = UtilFunctions.convertLatLngToNorthEast(wifiLatLng, reference);
+            }
+
+            // For PDR, we already have (pdrX, pdrY) in local coordinates.
+            double fusedX = weightPDR * pdrX;
+            double fusedY = weightPDR * pdrY;
+            double totalWeight = weightPDR;
+            if (gnssLocal != null) {
+                fusedX += weightGNSS * gnssLocal[0];
+                fusedY += weightGNSS * gnssLocal[1];
+                totalWeight += weightGNSS;
+            }
+            if (wifiLocal != null) {
+                fusedX += weightWiFi * wifiLocal[0];
+                fusedY += weightWiFi * wifiLocal[1];
+                totalWeight += weightWiFi;
+            }
+            fusedX /= totalWeight;
+            fusedY /= totalWeight;
+
+            // Convert fused local coordinate back to WGS84 using UtilFunctions.
+            // Assume UtilFunctions has a method localToLatLng that takes local coordinate and a reference.
+            LatLng fusedLatLng = UtilFunctions.localToLatLng(new double[]{fusedX, fusedY}, reference);
+
+            fusedTrajectory.add(new FusedSample(fusedLatLng, t));
+        }
+
+        return fusedTrajectory;
+    }
 
 
     private class storeDataInTrajectory extends TimerTask {
@@ -1099,39 +1176,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             else {
                 counter++;
             }
-
-            // Code by Guilherme: Record the current raw position.
-            // Here, we assume that the current position is given by the latest GNSS data if available, else by PDR.
-            LatLng currentRawPosition;
-            if (trajectory.getGnssDataCount() > 0) {
-                // Use the latest GNSS sample.
-                int lastIndex = trajectory.getGnssDataCount() - 1;
-                currentRawPosition = new LatLng(trajectory.getGnssData(lastIndex).getLatitude(),
-                        trajectory.getGnssData(lastIndex).getLongitude());
-            } else if (trajectory.getPdrDataCount() > 0) {
-                // Otherwise, use the latest PDR sample.
-                int lastIndex = trajectory.getPdrDataCount() - 1;
-                // Here, assume that the PDR sample (x,y) has been converted to a LatLng using our existing method:
-                // You may have already implemented a method for this conversion (e.g., UtilFunctions.calculateNewPos).
-                currentRawPosition = UtilFunctions.calculateNewPos(getStartLocationFromGNSS(), new float[]{
-                        trajectory.getPdrData(lastIndex).getX(),
-                        trajectory.getPdrData(lastIndex).getY()
-                });
-            } else {
-                currentRawPosition = null;
-            }
-            if (currentRawPosition != null) {
-                recordedPositions.add(currentRawPosition);
-            }
-
-            // Code by Guilherme: Update the fused position using batch optimization.
-            LatLng optimizedPos = updateBatchOptimizedPosition(recordedPositions);
-            if (optimizedPos != null) {
-                fusedPosition = optimizedPos;
-                Log.i("SensorFusion", "Fused position updated: " + fusedPosition.toString());
-            }
-
-
 
         }
     }

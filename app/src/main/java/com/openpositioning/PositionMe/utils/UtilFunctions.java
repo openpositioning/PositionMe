@@ -263,30 +263,42 @@ public class UtilFunctions {
 
     /**
      * Created By Guilherme Barreiros
-     * Converts a list of LatLng points (in WGS84) to local North-East coordinates (in meters),
-     * using the first point in the list as the reference.
+     * Converts a single LatLng point (in WGS84) to local North-East coordinates (in meters)
+     * relative to the provided reference point.
      *
-     * @param points List of LatLng points from a sensor (e.g., GNSS or WiFi).
-     * @return A list of double arrays, where each array is [north, east] in meters relative to the first point.
+     * @param point     The LatLng point to convert.
+     * @param reference The reference LatLng point to use as the origin.
+     * @return A double array with [north, east] in meters.
      */
-    public static List<double[]> convertLatLngListToNorthEast(List<LatLng> points) {
-        List<double[]> northEastCoordinates = new ArrayList<>();
-        if (points == null || points.isEmpty()) {
-            return northEastCoordinates;
-        }
-        // Use the first point as the reference.
-        LatLng reference = points.get(0);
-        for (LatLng p : points) {
-            double deltaLat = p.latitude - reference.latitude;
-            double deltaLon = p.longitude - reference.longitude;
-            // 1 degree of latitude ~ 111,111 meters.
-            double north = deltaLat * 111111;
-            // For longitude, adjust for the cosine of the reference latitude.
-            double east = deltaLon * 111111 * Math.cos(Math.toRadians(reference.latitude));
-            northEastCoordinates.add(new double[]{north, east});
-        }
-        return northEastCoordinates;
+    public static double[] convertLatLngToNorthEast(LatLng point, LatLng reference) {
+        double deltaLat = point.latitude - reference.latitude;
+        double deltaLon = point.longitude - reference.longitude;
+        // 1 degree of latitude is approximately 111,111 meters.
+        double north = deltaLat * 111111;
+        // For longitude, adjust using the cosine of the reference latitude.
+        double east = deltaLon * 111111 * Math.cos(Math.toRadians(reference.latitude));
+        return new double[]{north, east};
     }
+
+    /**
+     * Code By Guilherme Barreiros
+     * Converts local North-East coordinates (in meters) back to a WGS84 LatLng,
+     * using the provided reference point as the origin.
+     *
+     * @param local     A double array with [north, east] in meters.
+     * @param reference The reference LatLng point (origin).
+     * @return The converted LatLng in WGS84.
+     */
+    public static LatLng localToLatLng(double[] local, LatLng reference) {
+        double refLat = reference.latitude;
+        double refLon = reference.longitude;
+        // 1 degree of latitude is approximately 111,111 meters.
+        double deltaLat = local[1] / 111111.0;
+        // Convert east offset to degrees using the cosine of the reference latitude.
+        double deltaLon = local[0] / (111111.0 * Math.cos(Math.toRadians(refLat)));
+        return new LatLng(refLat + deltaLat, refLon + deltaLon);
+    }
+
 
 
 }
