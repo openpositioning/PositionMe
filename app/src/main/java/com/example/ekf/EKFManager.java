@@ -42,12 +42,40 @@ public class EKFManager {
     // 上一次航向角(弧度)
     private float previousHeading = 0;
     
+    // 静止状态相关参数
+    private static final double STATIC_THRESHOLD = 0.2; // 静止速度阈值(米/秒)
+    private static final long STATIC_TIME_THRESHOLD = 2000; // 静止时间阈值(毫秒)
+    private boolean isStaticState = false; // 是否处于静止状态
+    private long lastMovementTime = 0; // 上次移动的时间
+    
+    // 位置平滑处理
+    private LatLng smoothedPosition = null; // 平滑后的位置
+    private static final double SMOOTHING_FACTOR = 0.3; // 平滑因子(0-1)，值越小平滑效果越强
+    
+    // 位移限制相关参数
+    private static final double MAX_DISPLACEMENT_PER_UPDATE = 1.5; // 每次更新最大位移(米)
+    private static final long DISPLACEMENT_TIME_WINDOW = 500; // 位移时间窗口(毫秒)
+    private long lastDisplacementTime = 0; // 上次发生位移的时间
+    private double accumulatedDisplacement = 0; // 累积位移(米)
+    private LatLng lastFusedPosition = null; // 上次融合后的位置
+    
+    // 速度限制参数
+    private static final double MAX_SPEED = 2.0; // 最大允许速度(米/秒)
+    private double currentSpeed = 0.0; // 当前速度(米/秒)
+    private double[] speedHistory = new double[5]; // 速度历史记录，用于平滑
+    private int speedHistoryIndex = 0; // 速度历史记录索引
+    
     /**
      * 私有构造函数，遵循单例模式
      */
     private EKFManager() {
         ekf = new EKF();
         sensorFusion = SensorFusion.getInstance();
+        
+        // 初始化速度历史记录
+        for (int i = 0; i < speedHistory.length; i++) {
+            speedHistory[i] = 0.0;
+        }
     }
     
     /**
@@ -95,6 +123,16 @@ public class EKFManager {
         // 设置初始PDR和航向角
         this.lastPdrPosition = initialPosition;
         this.previousHeading = initialHeading;
+        this.smoothedPosition = initialPosition;
+        this.lastFusedPosition = initialPosition;
+        
+        // 重置位移和速度相关参数
+        this.lastDisplacementTime = System.currentTimeMillis();
+        this.accumulatedDisplacement = 0;
+        this.currentSpeed = 0;
+        for (int i = 0; i < speedHistory.length; i++) {
+            speedHistory[i] = 0.0;
+        }
         
         // 标记为已初始化
         isInitialized = true;
@@ -138,6 +176,42 @@ public class EKFManager {
             stepLength = calculateDistance(lastPdrPosition, pdrPosition);
         }
         
+        // 检测静止状态
+        long currentTime = System.currentTimeMillis();
+        if (stepLength < STATIC_THRESHOLD) {
+            // 如果移动距离小于阈值，可能处于静止状态
+            if (!isStaticState && (currentTime - lastMovementTime) > STATIC_TIME_THRESHOLD) {
+                // 超过静止时间阈值，进入静止状态
+                isStaticState = true;
+                currentSpeed = 0.0; // 静止状态下速度为0
+                Log.d(TAG, "检测到静止状态");
+            }
+        } else {
+            // 有明显移动，更新最后移动时间并标记为非静止状态
+            lastMovementTime = currentTime;
+            isStaticState = false;
+            
+            // 计算移动速度 (米/秒)
+            double timeElapsed = (currentTime - lastDisplacementTime) / 1000.0; // 转换为秒
+            if (timeElapsed > 0) {
+                double instantSpeed = stepLength / timeElapsed;
+                
+                // 更新速度历史记录
+                speedHistory[speedHistoryIndex] = instantSpeed;
+                speedHistoryIndex = (speedHistoryIndex + 1) % speedHistory.length;
+                
+                // 计算平均速度
+                double totalSpeed = 0;
+                for (double speed : speedHistory) {
+                    totalSpeed += speed;
+                }
+                currentSpeed = totalSpeed / speedHistory.length;
+                
+                // 重置时间和累积位移
+                lastDisplacementTime = currentTime;
+            }
+        }
+        
         // 计算航向变化
         double headingChange = heading - previousHeading;
         // 确保航向变化在-π到π之间
@@ -145,9 +219,15 @@ public class EKFManager {
         while (headingChange < -Math.PI) headingChange += 2*Math.PI;
         
         // 更新EKF
-        if (stepLength > 0) {
-            ekf.predict(stepLength, headingChange);
-            Log.d(TAG, "EKF预测更新: 步长=" + stepLength + "m, 航向变化=" + Math.toDegrees(headingChange) + "°");
+        if (stepLength > 0 && !isStaticState) {
+            // 限制步长，防止突变
+            double limitedStepLength = Math.min(stepLength, MAX_DISPLACEMENT_PER_UPDATE);
+            if (stepLength > MAX_DISPLACEMENT_PER_UPDATE) {
+                Log.d(TAG, "PDR步长被限制: " + stepLength + "m -> " + limitedStepLength + "m");
+            }
+            
+            ekf.predict(limitedStepLength, headingChange);
+            Log.d(TAG, "EKF预测更新: 步长=" + limitedStepLength + "m, 航向变化=" + Math.toDegrees(headingChange) + "°");
         }
         
         // 保存当前值为下一次使用
@@ -163,6 +243,34 @@ public class EKFManager {
         if (!isInitialized || !isEkfEnabled || gnssPosition == null) {
             this.lastGnssPosition = gnssPosition;  // 即使未初始化也保存最新的GNSS位置
             return;
+        }
+        
+        // 如果处于静止状态，减小GNSS更新的影响
+        if (isStaticState) {
+            // 静止状态下，仅小幅度修正位置，不进行大范围调整
+            // 可以通过修改EKF中的观测噪声协方差来实现，或者简单地减少更新频率
+            if (Math.random() > 0.2) { // 静止时仅使用20%的GNSS数据
+                return;
+            }
+        }
+        
+        // 检查GNSS位置跳变
+        if (lastGnssPosition != null) {
+            double distance = calculateDistance(lastGnssPosition, gnssPosition);
+            double timeElapsed = (System.currentTimeMillis() - lastDisplacementTime) / 1000.0; // 转换为秒
+            
+            if (timeElapsed > 0) {
+                double gnssSpeed = distance / timeElapsed;
+                
+                // 如果GNSS速度明显高于当前速度，可能是位置跳变
+                if (gnssSpeed > MAX_SPEED && gnssSpeed > currentSpeed * 2) {
+                    Log.d(TAG, "检测到GNSS位置跳变: " + gnssSpeed + "m/s > " + MAX_SPEED + "m/s，减小GNSS权重");
+                    // 减小GNSS位置权重，这里简单地通过随机筛选来实现
+                    if (Math.random() > 0.1) { // 只有10%的跳变数据会被使用
+                        return;
+                    }
+                }
+            }
         }
         
         // 更新EKF使用GNSS数据
@@ -181,6 +289,33 @@ public class EKFManager {
             return;
         }
         
+        // 如果处于静止状态，减小WiFi更新的影响
+        if (isStaticState) {
+            // 静止状态下，仅小幅度修正位置，不进行大范围调整
+            if (Math.random() > 0.1) { // 静止时仅使用10%的WiFi数据
+                return;
+            }
+        }
+        
+        // 检查WiFi位置跳变
+        if (lastWifiPosition != null) {
+            double distance = calculateDistance(lastWifiPosition, wifiPosition);
+            double timeElapsed = (System.currentTimeMillis() - lastDisplacementTime) / 1000.0; // 转换为秒
+            
+            if (timeElapsed > 0) {
+                double wifiSpeed = distance / timeElapsed;
+                
+                // 如果WiFi速度明显高于当前速度，可能是位置跳变
+                if (wifiSpeed > MAX_SPEED && wifiSpeed > currentSpeed * 2) {
+                    Log.d(TAG, "检测到WiFi位置跳变: " + wifiSpeed + "m/s > " + MAX_SPEED + "m/s，减小WiFi权重");
+                    // 减小WiFi位置权重，这里简单地通过随机筛选来实现
+                    if (Math.random() > 0.1) { // 只有10%的跳变数据会被使用
+                        return;
+                    }
+                }
+            }
+        }
+        
         // 更新EKF使用WiFi数据
         ekf.updateWithWiFi(wifiPosition);
         this.lastWifiPosition = wifiPosition;
@@ -195,7 +330,65 @@ public class EKFManager {
         if (!isInitialized || !isEkfEnabled) {
             return null;
         }
-        return ekf.getFusedPosition();
+        
+        // 获取EKF原始融合结果
+        LatLng rawPosition = ekf.getFusedPosition();
+        if (rawPosition == null) {
+            return null;
+        }
+        
+        // 应用位移限制
+        LatLng limitedPosition = rawPosition;
+        if (lastFusedPosition != null) {
+            double distance = calculateDistance(lastFusedPosition, rawPosition);
+            long currentTime = System.currentTimeMillis();
+            double timeElapsed = (currentTime - lastDisplacementTime) / 1000.0; // 秒
+            
+            if (timeElapsed > 0) {
+                // 计算当前速度
+                double speed = distance / timeElapsed;
+                
+                // 如果速度超过最大限制，进行限制
+                if (speed > MAX_SPEED) {
+                    // 计算限制后的距离
+                    double limitedDistance = MAX_SPEED * timeElapsed;
+                    
+                    // 按比例缩小位移
+                    double ratio = limitedDistance / distance;
+                    double latDiff = (rawPosition.latitude - lastFusedPosition.latitude) * ratio;
+                    double lngDiff = (rawPosition.longitude - lastFusedPosition.longitude) * ratio;
+                    
+                    // 创建限制后的位置
+                    limitedPosition = new LatLng(
+                            lastFusedPosition.latitude + latDiff,
+                            lastFusedPosition.longitude + lngDiff
+                    );
+                    
+                    Log.d(TAG, "位置跳变被限制: " + speed + "m/s -> " + MAX_SPEED + "m/s");
+                }
+            }
+            
+            // 更新时间
+            lastDisplacementTime = currentTime;
+        }
+        
+        // 应用位置平滑
+        if (smoothedPosition == null) {
+            smoothedPosition = limitedPosition;
+        } else {
+            // 指数平滑公式: newValue = α * currentValue + (1-α) * previousValue
+            double smoothFactor = isStaticState ? 0.05 : SMOOTHING_FACTOR; // 静止时使用更强的平滑效果
+            
+            double lat = smoothFactor * limitedPosition.latitude + (1 - smoothFactor) * smoothedPosition.latitude;
+            double lng = smoothFactor * limitedPosition.longitude + (1 - smoothFactor) * smoothedPosition.longitude;
+            
+            smoothedPosition = new LatLng(lat, lng);
+        }
+        
+        // 更新上次融合位置
+        lastFusedPosition = smoothedPosition;
+        
+        return smoothedPosition;
     }
     
     /**
@@ -242,6 +435,20 @@ public class EKFManager {
         lastWifiPosition = null;
         previousHeading = 0;
         previousStepLength = 0;
+        isStaticState = false;
+        lastMovementTime = 0;
+        smoothedPosition = null;
+        lastFusedPosition = null;
+        lastDisplacementTime = 0;
+        accumulatedDisplacement = 0;
+        currentSpeed = 0;
+        
+        // 重置速度历史
+        for (int i = 0; i < speedHistory.length; i++) {
+            speedHistory[i] = 0.0;
+        }
+        speedHistoryIndex = 0;
+        
         ekf = new EKF();  // 创建新的EKF实例
         Log.d(TAG, "EKF已重置");
     }

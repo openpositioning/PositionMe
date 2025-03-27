@@ -134,18 +134,26 @@ public class TrajectoryMapFragment extends Fragment {
                     // Initialize map settings with the now non-null gMap
                     initMapSettings(gMap);
 
-                    // If we had a pending camera move, apply it now
+                    // 设置默认位置和缩放级别 (如果没有特定位置，可以使用一个默认位置)
+                    // 缩放级别范围通常是1-20，其中1是世界级别，20是建筑物级别
+                    // 街道级别通常在15-18之间
+                    float defaultZoom = 18.0f; // 街道级别的缩放
+                    
+                    // 如果有待处理的相机移动，使用该位置；否则使用默认位置
                     if (hasPendingCameraMove && pendingCameraPosition != null) {
-                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, 19f));
+                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, defaultZoom));
                         hasPendingCameraMove = false;
                         pendingCameraPosition = null;
+                    } else {
+                        // 如果没有特定位置，可以尝试使用最后一个已知位置
+                        LatLng defaultPosition = (currentLocation != null) ? currentLocation : 
+                                                 new LatLng(39.9042, 116.4074); // 默认位置(可以是北京或其他地点)
+                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultPosition, defaultZoom));
                     }
 
                     drawBuildingPolygon();
 
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
-
-
                 }
             });
         }
@@ -345,14 +353,18 @@ public class TrajectoryMapFragment extends Fragment {
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
 
             orientationMarker = gMap.addMarker(markerOptions);
+            
+            // 初次创建标记时，使用较高的缩放级别移动相机
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 18.0f));
         } else {
             // If it exists, update its position and rotation
             orientationMarker.setPosition(newLocation);
             orientationMarker.setRotation(markerRotation);
+            
+            // 移动相机跟随用户位置，但保持当前缩放级别
+            // 这样用户手动缩放后不会被重置
+            gMap.animateCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
-
-        // Move camera to follow the user (smooth animation)
-        gMap.animateCamera(CameraUpdateFactory.newLatLng(newLocation));
 
         // Update polyline path
         List<LatLng> points = polyline.getPoints();
@@ -382,22 +394,25 @@ public class TrajectoryMapFragment extends Fragment {
 
 
     /**
-     * Set the initial camera position for the map.
+     * Set the initial camera position (before map is ready).
      * <p>
-     *     The method sets the initial camera position for the map when it is first loaded.
-     *     If the map is already ready, the camera is moved immediately.
-     *     If the map is not ready, the camera position is stored until the map is ready.
-     *     The method also tracks if there is a pending camera move.
-     * </p>
-     * @param startLocation The initial camera position to set.
+     *     If the map is already initialized, it will move to the position immediately.
+     *     Otherwise, it will save the position and move there when the map becomes ready.
+     *
+     * @param position The LatLng position to center the map on.
      */
-    public void setInitialCameraPosition(@NonNull LatLng startLocation) {
-        // If the map is already ready, move camera immediately
+    public void setInitialCameraPosition(LatLng position) {
+        if (position == null) return;
+
+        // 定义街道级别的缩放值
+        float streetLevelZoom = 18.0f; // 街道级别的缩放
+
         if (gMap != null) {
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLocation, 19f));
+            // Map is ready, move now
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(position, streetLevelZoom));
         } else {
-            // Otherwise, store it until onMapReady
-            pendingCameraPosition = startLocation;
+            // Save for later
+            pendingCameraPosition = position;
             hasPendingCameraMove = true;
         }
     }
