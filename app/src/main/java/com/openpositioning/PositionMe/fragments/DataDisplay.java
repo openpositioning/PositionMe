@@ -20,8 +20,8 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.PositioningFusion;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
-import com.openpositioning.PositionMe.sensors.LocalCoordinateSystem;  // ← 确保路径正确
 
 
 /**
@@ -31,14 +31,14 @@ import com.openpositioning.PositionMe.sensors.LocalCoordinateSystem;  // ← 确
  */
 public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
-    // TODO: Rename parameter arguments, choose names that match
-    // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-    private static final String ARG_PARAM1 = "param1";
-    private static final String ARG_PARAM2 = "param2";
-
-    // TODO: Rename and change types of parameters
-    private String mParam1;
-    private String mParam2;
+//    // TODO: Rename parameter arguments, choose names that match
+//    // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
+//    private static final String ARG_PARAM1 = "param1";
+//    private static final String ARG_PARAM2 = "param2";
+//
+//    // TODO: Rename and change types of parameters
+//    private String mParam1;
+//    private String mParam2;
 
     // For the map
     private GoogleMap mMap;
@@ -46,7 +46,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     private final android.os.Handler handler = new android.os.Handler();
     private final int updateInterval = 1000; // 1 second
 
-    private LocalCoordinateSystem coordSystem = new LocalCoordinateSystem();
+    private PositioningFusion positioningFusion = PositioningFusion.getInstance();
 
     private final Runnable updateWifiLocationRunnable = new Runnable() {
         @Override
@@ -73,25 +73,26 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     // TODO: Rename and change types and number of parameters
     public static DataDisplay newInstance(String param1, String param2) {
         DataDisplay fragment = new DataDisplay();
-        Bundle args = new Bundle();
-        args.putString(ARG_PARAM1, param1);
-        args.putString(ARG_PARAM2, param2);
-        fragment.setArguments(args);
+//        Bundle args = new Bundle();
+//        args.putString(ARG_PARAM1, param1);
+//        args.putString(ARG_PARAM2, param2);
+//        fragment.setArguments(args);
         return fragment;
     }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (getArguments() != null) {
-            mParam1 = getArguments().getString(ARG_PARAM1);
-            mParam2 = getArguments().getString(ARG_PARAM2);
-        }
+//        if (getArguments() != null) {
+//            mParam1 = getArguments().getString(ARG_PARAM1);
+//            mParam2 = getArguments().getString(ARG_PARAM2);
+//        }
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
+        // Set activity title
         getActivity().setTitle("Live Position");
         // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_data_display, container, false);
@@ -115,6 +116,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
         statusText = view.findViewById(R.id.textView3);
 
+        positioningFusion.initCoordSystem(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
+
         handler.post(updateWifiLocationRunnable);
     }
 
@@ -137,30 +140,30 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     }
 
     private void updateWifiLocationText() {
-        LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
+        LatLng fusedLocation = PositioningFusion.getInstance().getFusedPosition();
+//        LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
         int floor = SensorFusion.getInstance().getWifiFloor();
 
-        if (wifiLocation != null) {
-            // GNSS 原点设置（只设置一次）
-            float[] gnssLatLon = SensorFusion.getInstance().getGNSSLatitude(false);
-            if (gnssLatLon != null && gnssLatLon[0] != 0.0f && gnssLatLon[1] != 0.0f && !coordSystem.isInitialized()) {
-                coordSystem.initReference(gnssLatLon[0], gnssLatLon[1]);
-            }
+//        Log.d("DataDisplay", "Fused Location: " + fusedLocation);
 
-            // WiFi → 本地 XY
-            double[] xy = coordSystem.toLocal(wifiLocation.latitude, wifiLocation.longitude);
+        if (fusedLocation != null) {
 
             // 显示 WiFi 经纬度 + 相对坐标
             String display = String.format(
-                    "WiFi Location:\nLat: %.6f\nLon: %.6f\nFloor: %d\n\nXY relative to GNSS origin:\nX: %.2f m\nY: %.2f m",
-                    wifiLocation.latitude,
-                    wifiLocation.longitude,
-                    floor,
-                    xy[0], xy[1]
+                    "Location:\nLat: %.6f\nLon: %.6f\nFloor: %d",
+                    fusedLocation.latitude,
+                    fusedLocation.longitude,
+                    floor
             );
             statusText.setText(display);
+
+            mMap.addMarker(new MarkerOptions()
+                    .position(fusedLocation)
+                    .title("Estimated Position"));
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
+
         } else {
-            statusText.setText("WiFi Location: Unavailable");
+            statusText.setText("Location: Unavailable");
         }
     }
 

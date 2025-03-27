@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
+import com.google.android.gms.maps.model.LatLng;
+
 import java.lang.Math;
 
 public class LocalCoordinateSystem {
@@ -27,10 +29,10 @@ public class LocalCoordinateSystem {
     /**
      * 将 lat/lon 转换为相对坐标（单位：米）
      */
-    public double[] toLocal(double latitude, double longitude) {
+    public float[] toLocal(double latitude, double longitude) {
         if (!initialized) {
             initReference(latitude, longitude);  // 自动初始化
-            return new double[]{0.0, 0.0};
+            return new float[]{0.0F, 0.0F};
         }
 
         double dLat = Math.toRadians(latitude - refLat);
@@ -39,13 +41,13 @@ public class LocalCoordinateSystem {
 
         double x = EARTH_RADIUS * dLon * Math.cos(meanLat);
         double y = EARTH_RADIUS * dLat;
-        return new double[]{x, y};
+        return new float[]{(float) x, (float) y};
     }
 
     /**
      * 将本地坐标转换回经纬度
      */
-    public double[] toGlobal(double x, double y) {
+    public LatLng toGlobal(double x, double y) {
         if (!initialized) {
             throw new IllegalStateException("Reference point not initialized.");
         }
@@ -55,7 +57,7 @@ public class LocalCoordinateSystem {
 
         double lat = refLat + Math.toDegrees(dLat);
         double lon = refLon + Math.toDegrees(dLon);
-        return new double[]{lat, lon};
+        return new LatLng(lat, lon);
     }
 
     public double[] getReferenceLatLon() {
