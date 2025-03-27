@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.sensors;
 import android.util.Log;
 import com.google.android.gms.maps.model.LatLng;
 
+import java.util.Arrays;
 import java.util.Map;
 
 public class PositioningFusion {
@@ -63,7 +64,7 @@ public class PositioningFusion {
 
     public void updateFromPDR(float[] pdrXY) {
         this.pdrPosition = pdrXY;
-        Log.d("Fusion", "PDR updated: " + pdrXY);
+        Log.d("Fusion", "PDR updated: " + Arrays.toString(pdrXY));
 //        fusePosition();
     }
 
