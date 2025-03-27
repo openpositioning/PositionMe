@@ -44,7 +44,7 @@ public class WifiFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_wifi, container, false);
 
-        // 初始化 RecyclerView
+        // initialise RecyclerView
         wifiRecyclerView = view.findViewById(R.id.wifi_recycler_view);
         wifiRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
@@ -57,14 +57,14 @@ public class WifiFragment extends Fragment {
 
         wifiManager = (WifiManager) requireContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
-        // 按钮监听
+        // button listeners
         startButton.setOnClickListener(v -> startWifiScan());
         stopButton.setOnClickListener(v -> stopWifiScan());
 
         return view;
     }
 
-    // 🔥 开始 WiFi 扫描
+    // Start WiFi scan
     private void startWifiScan() {
         if (!isScanning) {
             isScanning = true;
@@ -80,7 +80,7 @@ public class WifiFragment extends Fragment {
                 wifiManager.setWifiEnabled(true);
             }
 
-            // 注册广播接收器
+            // create a broadcast receiver to receive the scan results
             wifiReceiver = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
@@ -93,13 +93,13 @@ public class WifiFragment extends Fragment {
 
             requireContext().registerReceiver(wifiReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
 
-            // 开始扫描
+            // start the scan
             wifiManager.startScan();
             Toast.makeText(getContext(), "Scanning WiFi...", Toast.LENGTH_SHORT).show();
         }
     }
 
-    // 🔥 更新 WiFi 列表
+    // update the RecyclerView with the new WiFi scan results
     private void updateWifiList(List<ScanResult> scanResults) {
         wifiList.clear();
         for (ScanResult scanResult : scanResults) {
@@ -108,7 +108,7 @@ public class WifiFragment extends Fragment {
         wifiAdapter.notifyDataSetChanged();
     }
 
-    // 🔥 停止 WiFi 扫描
+    // stop the WiFi scan
     private void stopWifiScan() {
         if (isScanning) {
             isScanning = false;

@@ -20,6 +20,7 @@ import com.openpositioning.PositionMe.PdrProcessing;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.UtilFunctions;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -147,6 +148,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
+    private FilterUtils.ParticleFilter pf;
+
     int MAX_WIFI_APS = 60;
     //region Initialisation
     /**
@@ -250,6 +253,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
                 "MyApp::MyWakelockTag");
+
+        FilterUtils utils = new FilterUtils();
+        pf = utils.new ParticleFilter(300, 0, 0);
     }
     //endregion
 
@@ -342,6 +348,30 @@ public class SensorFusion implements SensorEventListener, Observer {
                 //Store time of step
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
+                Log.e("PDR", "x: " + newCords[0] + ", y: " + newCords[1]);
+                // *** new
+                pf.predict(newCords[0], newCords[1]);
+                if (getLatLngWifiPositioning() != null) {
+                    LatLng latLng = getLatLngWifiPositioning();
+                    LatLng startLocation = new LatLng(this.startLocation[0], this.startLocation[1]);
+                    double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocation, latLng);
+                    Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
+                    pf.update(wifiPos[0], wifiPos[1]);
+                }
+
+//                // 3. 如果有 GPS 测量，则进行更新
+//                if (gpsDataAvailable()) {
+//                    double[] gpsPos = getGPSPosition();
+//                    pf.update(gpsPos[0], gpsPos[1]);
+//                }
+                // 4. 重采样
+                pf.resample();
+
+                // 5. 估计当前状态
+                FilterUtils.Particle currentState = pf.estimate();
+                newCords = new float[]{(float) currentState.x, (float) currentState.y};
+                Log.e("Particle Filter", "x: " + currentState.x + ", y: " + currentState.y);
+
                 if (saveRecording) {
                     // Store the PDR coordinates for plotting the trajectory
                     this.pathView.drawTrajectory(newCords);
@@ -415,7 +445,8 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
         }
-        createWifiPositioningRequest();
+//        createWifiPositioningRequest();
+        createWifiPositionRequestCallback();
     }
 
     /**
@@ -497,11 +528,14 @@ public class SensorFusion implements SensorEventListener, Observer {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     // Handle the success response
+//                    Log.e("Call back WiFi-Location", wifiLocation.toString());
+//                    Log.e("Call back WiFi-Floor", String.valueOf(floor));
                 }
 
                 @Override
                 public void onError(String message) {
                     // Handle the error response
+//                    Log.e("Call back WiFi-Error", message);
                 }
             });
         } catch (JSONException e) {

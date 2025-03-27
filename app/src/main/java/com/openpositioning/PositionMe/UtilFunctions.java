@@ -115,6 +115,34 @@ public class UtilFunctions {
     }
 
     /**
+     * Translate a pair of LatLng points to northing and easting based on a reference point
+     * @param start start point in LatLng format
+     * @param target target point in LatLng format
+     * @return northing and easting in meters
+     */
+    public static double[] convertLatLangToNorthingEasting(final LatLng start, final LatLng target) {
+        if (start == null || target == null) {
+            throw new IllegalArgumentException("Start and target points cannot be null");
+        }
+
+        // 计算经纬度差值
+        // Compute the differences in latitude and longitude (in degrees)
+        double deltaLat = target.latitude - start.latitude;
+        double deltaLon = target.longitude - start.longitude;
+
+        // 将纬度差转换为北向距离（单位：米）
+        // Convert the latitude difference to northing (meters)
+        double northing = deltaLat * DEGREE_IN_M;
+
+        // 将经度差转换为东向距离（单位：米），考虑纬度对经度实际距离的影响
+        // Convert the longitude difference to easting (meters), taking into account the latitude
+//        double easting = deltaLon * DEGREE_IN_M * Math.cos(Math.toRadians(start.latitude));
+        double easting = deltaLon * DEGREE_IN_M / Math.cos(Math.toRadians(start.latitude));
+
+        return new double[]{easting, northing};
+    }
+
+    /**
      * 将 Vector Drawable 转换为 Bitmap
      * @param context 应用的 `Context`
      * @param vectorResourceID 矢量资源 ID

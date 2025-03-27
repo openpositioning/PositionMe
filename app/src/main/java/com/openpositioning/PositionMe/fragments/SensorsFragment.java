@@ -45,7 +45,7 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
     private SensorManager sensorManager;
     private Map<String, SensorData> sensorDataMap;
     private Button startButton, stopButton;
-    private boolean isMeasuring = false; // 是否开启测量
+    private boolean isMeasuring = false; // measurement enable toggle
     private LocationListener locationListener;
     private LocationManager locationManager;
 
