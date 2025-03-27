@@ -7,7 +7,9 @@ import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.TextView;
@@ -36,6 +38,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolygonOptions;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.util.Arrays;
 import java.util.List;
@@ -67,6 +70,8 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
     private LatLng necleus_NE;
     private LatLng necleus_SW;
 
+    private SensorFusion sensorFusion;
+
 
     // position permission launcher
     private final ActivityResultLauncher<String> locationPermissionLauncher =
@@ -77,6 +82,25 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
                     Toast.makeText(getContext(), "Location permission denied.", Toast.LENGTH_SHORT).show();
                 }
             });
+//
+//    @Override
+//    public void onCreate(Bundle savedInstanceState) {
+//        super.onCreate(savedInstanceState);
+//
+//        // ✅ 确保 SensorFusion 正确初始化
+//        // ✅ Make sure SensorFusion is initialized correctly
+//        this.sensorFusion = SensorFusion.getInstance();
+//        // 设置应用程序上下文
+//        // Set up the application context
+//        sensorFusion.setContext(getActivity().getApplicationContext());
+//        if (this.sensorFusion == null) {
+//            Log.e("SensorFusion", "❌ SensorFusion is NULL! Retrying initialization...");
+//            this.sensorFusion = SensorFusion.getInstance(); // 重新获取实例 Re-obtain the instance
+//            sensorFusion.setContext(getActivity().getApplicationContext());
+//            sensorFusion.resumeListening();  // 注册所有传感器监听器 Register all sensor listeners
+//        }
+//
+//    }
 
     @Nullable
     @Override
@@ -104,6 +128,20 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
+//
+//        if (sensorFusion != null) {
+//            sensorFusion.setContext(getActivity().getApplicationContext());
+//            sensorFusion.resumeListening();  // 注册所有传感器监听器 Register all sensor listeners
+//            Toast.makeText(getContext(), "Recording Started", Toast.LENGTH_SHORT).show();
+//            Log.d("RecordingFragment", "🚀 SensorFusion 录制已启动");
+//            isRecording = true; // 标记正在录制 Mark recording
+//            // 开始更新 UI
+//            // Start updating the UI
+//            refreshDataHandler.post(refreshDataTask);
+//
+//        } else {
+//            Log.e("RecordingFragment", "❌ SensorFusion 未初始化！");
+//        }
 
         // initialize interest zones
         initializeInterestZonesData();
@@ -166,6 +204,14 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         } else {
             Log.w("GNSS", "⚠️ LocationManager unavailable or permission not granted.");
         }
+
+//        // ******** new wifi initial position ********
+//        if (sensorFusion != null) {
+//            if (sensorFusion.getLatLngWifiPositioning() != null) {
+//                initialPosition = sensorFusion.getLatLngWifiPositioning();
+//            }
+//        }
+//        // ******** END new wifi initial position ********
 
         // add maker to map
         currentMarker = mMap.addMarker(new MarkerOptions()
