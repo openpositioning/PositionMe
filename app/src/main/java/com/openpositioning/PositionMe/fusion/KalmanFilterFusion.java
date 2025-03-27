@@ -4,16 +4,20 @@ import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
-import com.openpositioning.PositionMe.utils.MovementModel;
 import com.openpositioning.PositionMe.utils.MeasurementModel;
-import com.openpositioning.PositionMe.utils.ExponentialSmoothingFilter;
 
 import org.ejml.simple.SimpleMatrix;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+
 /**
- * An enhanced Kalman Filter implementation for fusing position data from PDR and GNSS.
- * This implementation provides more accurate position estimates by incorporating
- * sophisticated movement models, outlier detection, and adaptive measurement handling.
+ * A Kalman Filter implementation for fusing position data from PDR and GNSS.
+ * This implementation provides accurate position estimates by incorporating
+ * movement models, outlier detection, and adaptive measurement handling.
  */
 public class KalmanFilterFusion implements IPositionFusionAlgorithm {
     private static final String TAG = "KalmanFilterFusion";
@@ -32,8 +36,8 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
     private static final int MEAS_SIZE = 2;          // Total measurement vector size
 
     // Filter parameters
-    private static final double SMOOTHING_FACTOR = 0.3;  // Smoothing factor for output (0.0-1.0)
-    private static final int MAX_STEP_COUNT = 100;       // Maximum steps before forcing an update
+    private static final double SMOOTHING_FACTOR = 0.3;  // Smoothing factor for output
+    private static final int MAX_STEP_COUNT = 100;       // Maximum steps before forcing update
     private static final long MAX_TIME_WITHOUT_UPDATE = 10000; // Max time (ms) without updates
 
     // State variables
@@ -47,19 +51,25 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
 
     // The reference point for ENU coordinates
     private double[] referencePosition;        // [lat, lng, alt]
+    private boolean referenceInitialized;      // Flag to track if reference is properly set
 
     // Helper models
     private MovementModel movementModel;
     private MeasurementModel measurementModel;
-    private ExponentialSmoothingFilter smoothingFilter;
+    private FusionFilter smoothingFilter;
+    private FusionOutlierDetector fusionOutlierDetector;
 
     // Timing and step variables
     private long lastUpdateTime;               // Time of last measurement update (ms)
     private long lastPredictTime;              // Time of last prediction (ms)
     private int stepsSinceLastUpdate;          // Steps since last measurement update
 
+    // First position values to handle initialization correctly
+    private LatLng firstGnssPosition;
+    private boolean hasInitialGnssPosition;
+
     // Pending measurement variables
-    private double[] pendingMeasurement;       // Pending opportunistic measurement [east, north]
+    private double[] pendingMeasurement;       // Pending measurement [east, north]
     private long pendingMeasurementTime;       // Time of pending measurement (ms)
     private boolean hasPendingMeasurement;     // Flag for pending measurement
     private boolean usePendingMeasurement;     // Flag to use pending measurement
@@ -70,12 +80,24 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
      * @param referencePosition The reference position [lat, lng, alt] for ENU coordinates
      */
     public KalmanFilterFusion(double[] referencePosition) {
-        this.referencePosition = referencePosition;
+        this.referencePosition = referencePosition.clone(); // Clone to prevent modification
+        this.referenceInitialized = (referencePosition[0] != 0 || referencePosition[1] != 0);
+
+        if (!referenceInitialized) {
+            Log.w(TAG, "Reference position not initialized properly: " +
+                    "lat=" + referencePosition[0] + ", lng=" + referencePosition[1] +
+                    ", alt=" + referencePosition[2]);
+        } else {
+            Log.d(TAG, "Reference position initialized: " +
+                    "lat=" + referencePosition[0] + ", lng=" + referencePosition[1] +
+                    ", alt=" + referencePosition[2]);
+        }
 
         // Initialize models
         this.movementModel = new MovementModel();
         this.measurementModel = new MeasurementModel();
-        this.smoothingFilter = new ExponentialSmoothingFilter(SMOOTHING_FACTOR, 2);
+        this.smoothingFilter = new FusionFilter(SMOOTHING_FACTOR, 2);
+        this.fusionOutlierDetector = new FusionOutlierDetector();
 
         // Initialize state vector [heading, x, y, vx, vy]ᵀ
         stateVector = new SimpleMatrix(STATE_SIZE, 1);
@@ -107,6 +129,9 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         lastPredictTime = lastUpdateTime;
         stepsSinceLastUpdate = 0;
 
+        // Initialize first position tracking
+        hasInitialGnssPosition = false;
+
         // Initialize pending measurement variables
         pendingMeasurement = null;
         pendingMeasurementTime = 0;
@@ -120,6 +145,17 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
     @Override
     public void processPdrUpdate(float eastMeters, float northMeters, float altitude) {
         long currentTime = System.currentTimeMillis();
+
+        // Handle reference position if not initialized
+        if (!referenceInitialized && hasInitialGnssPosition) {
+            initializeReferencePosition();
+        }
+
+        // If reference still not initialized, we can't process
+        if (!referenceInitialized) {
+            Log.w(TAG, "Skipping PDR update: reference position not initialized");
+            return;
+        }
 
         // If this is the first PDR update, initialize the state
         if (stateVector.get(STATE_IDX_EAST, 0) == 0 && stateVector.get(STATE_IDX_NORTH, 0) == 0) {
@@ -153,11 +189,11 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         double dy = northMeters - prevNorth;
         double stepLength = Math.sqrt(dx * dx + dy * dy);
 
-        // Calculate bearing from movement direction
+        // Calculate bearing from movement direction (compensating for ENU frame)
         double bearing = Math.atan2(dx, dy); // 0 = North, positive clockwise
 
         // Update movement model with step information
-        movementModel.setStepLength(stepLength);
+        movementModel.updateLastStepLength(stepLength);
         MovementModel.MovementType movementType = detectMovementType(bearing,
                 stateVector.get(STATE_IDX_BEARING, 0));
 
@@ -169,8 +205,8 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         double vy = dy / deltaTime;
 
         // Get noise parameters
-        double movementStdDev = movementModel.getOrientationStdDev(movementType);
-        double timePenalty = movementModel.calculateTimePenalty(currentTime);
+        double movementStdDev = movementModel.getBearingUncertainty(movementType);
+        double timePenalty = movementModel.computeTemporalPenaltyFactor(currentTime);
 
         // Predict state using model
         predictState(bearing, stepLength, movementStdDev, timePenalty, currentTime, movementType);
@@ -191,11 +227,33 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
     public void processGnssUpdate(LatLng position, double altitude) {
         long currentTime = System.currentTimeMillis();
 
-        // Convert GNSS position to ENU
-        double[] enu = CoordinateConverter.geodetic2Enu(
+        // Store first GNSS position for reference initialization if needed
+        if (!hasInitialGnssPosition) {
+            firstGnssPosition = position;
+            hasInitialGnssPosition = true;
+
+            // Try to initialize reference position if needed
+            if (!referenceInitialized) {
+                initializeReferencePosition();
+            }
+        }
+
+        // If reference still not initialized, we can't process
+        if (!referenceInitialized) {
+            Log.w(TAG, "Skipping GNSS update: reference position not initialized");
+            return;
+        }
+
+        // Convert GNSS position to ENU (using the reference position)
+        double[] enu = CoordinateConverter.convertGeodeticToEnu(
                 position.latitude, position.longitude, altitude,
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
+
+        // Debug the conversion
+        Log.d(TAG, "GNSS geodetic->ENU: " +
+                position.latitude + "," + position.longitude + " -> " +
+                "E=" + enu[0] + ", N=" + enu[1]);
 
         // If this is the first position, initialize the state
         if (stateVector.get(STATE_IDX_EAST, 0) == 0 && stateVector.get(STATE_IDX_NORTH, 0) == 0) {
@@ -222,6 +280,17 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         measurementNoiseMatrix.set(MEAS_IDX_EAST, MEAS_IDX_EAST, gnssVar);
         measurementNoiseMatrix.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, gnssVar);
 
+        // Check for outliers by comparing GNSS with current state
+        double currentEast = stateVector.get(STATE_IDX_EAST, 0);
+        double currentNorth = stateVector.get(STATE_IDX_NORTH, 0);
+        double distance = Math.sqrt(Math.pow(enu[0] - currentEast, 2) +
+                Math.pow(enu[1] - currentNorth, 2));
+
+        if (fusionOutlierDetector.evaluateDistance(distance)) { // NEW
+            Log.w(TAG, "Skipping GNSS update: detected as outlier (distance=" + distance + "m)");
+            return;
+        }
+
         // Perform Kalman update
         performUpdate(measurementVector, currentTime);
 
@@ -235,17 +304,41 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
 
     @Override
     public LatLng getFusedPosition() {
+        if (!referenceInitialized) {
+            if (hasInitialGnssPosition) {
+                Log.w(TAG, "Using initial GNSS position as fusion result (reference not initialized)");
+                return firstGnssPosition;
+            } else {
+                Log.e(TAG, "Cannot get fused position: no reference position and no GNSS position");
+                return null;
+            }
+        }
+
+        // If we haven't received any updates yet, return the reference position
+        if (stateVector.get(STATE_IDX_EAST, 0) == 0 && stateVector.get(STATE_IDX_NORTH, 0) == 0) {
+            Log.d(TAG, "Returning reference position as fusion result (no updates yet)");
+            return new LatLng(referencePosition[0], referencePosition[1]);
+        }
+
         double east = stateVector.get(STATE_IDX_EAST, 0);
         double north = stateVector.get(STATE_IDX_NORTH, 0);
 
         // Apply smoothing if needed
-        double[] smoothed = smoothingFilter.applySmoothing(new double[]{east, north});
+        double[] smoothed = smoothingFilter.update(new double[]{east, north});
+
+        // Debug the state before conversion
+        Log.d(TAG, "Fused position (before conversion): E=" + smoothed[0] + ", N=" + smoothed[1]);
 
         // Convert ENU back to latitude/longitude
-        return CoordinateConverter.enu2Geodetic(
+        LatLng result = CoordinateConverter.convertEnuToGeodetic(
                 smoothed[0], smoothed[1], 0, // Assume altitude=0 for the return value
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
+
+        Log.d(TAG, "Fused position (after conversion): " +
+                result.latitude + "," + result.longitude);
+
+        return result;
     }
 
     @Override
@@ -262,6 +355,9 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         lastPredictTime = lastUpdateTime;
         stepsSinceLastUpdate = 0;
 
+        // Keep reference position but reset first GNSS position
+        hasInitialGnssPosition = false;
+
         // Reset pending measurement variables
         pendingMeasurement = null;
         pendingMeasurementTime = 0;
@@ -269,15 +365,16 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         usePendingMeasurement = false;
 
         // Reset helper models
-        movementModel.reset();
+        movementModel.resetState();
         measurementModel.reset();
         smoothingFilter.reset();
+        fusionOutlierDetector.clearHistory();
 
         Log.d(TAG, "Kalman filter reset");
     }
 
     /**
-     * Handles opportunistic updates (like WiFi) to the state estimation process.
+     * Handles opportunistic updates to the state estimation process.
      * This allows the filter to utilize additional data points when available.
      *
      * @param position An array containing the East and North positions in meters
@@ -317,13 +414,13 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         }
 
         // Calculate distance between PDR and opportunistic measurement
-        double distance = CoordinateConverter.enuDistance(
+        double distance = CoordinateConverter.calculateEnuDistance(
                 pdrEast, pdrNorth,
                 pendingMeasurement[0], pendingMeasurement[1]
         );
 
         // Check if this is an outlier
-        if (movementModel.isOutlier(distance)) {
+        if (fusionOutlierDetector.evaluateDistance(distance)) { // NEW
             Log.d(TAG, "Skipping opportunistic update: detected as outlier (distance=" + distance + "m)");
             hasPendingMeasurement = false;
             return;
@@ -349,6 +446,27 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
 
         Log.d(TAG, "Processed opportunistic update: E=" + pendingMeasurement[0] +
                 ", N=" + pendingMeasurement[1]);
+    }
+
+    /**
+     * Initializes the reference position if it wasn't provided or was zeros.
+     * Uses the first GNSS position as the reference.
+     */
+    private void initializeReferencePosition() {
+        if (referenceInitialized || !hasInitialGnssPosition) {
+            return;
+        }
+
+        // Use the first GNSS position as reference
+        referencePosition[0] = firstGnssPosition.latitude;
+        referencePosition[1] = firstGnssPosition.longitude;
+        referencePosition[2] = 0; // Assume zero altitude if not provided
+
+        referenceInitialized = true;
+
+        Log.d(TAG, "Reference position initialized from GNSS: " +
+                "lat=" + referencePosition[0] + ", lng=" + referencePosition[1] +
+                ", alt=" + referencePosition[2]);
     }
 
     /**
@@ -388,7 +506,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         covarianceMatrix = predictedCovariance;
 
         // Normalize bearing to [-π, π]
-        double normalizedBearing = CoordinateConverter.wrapToPi(stateVector.get(STATE_IDX_BEARING, 0));
+        double normalizedBearing = CoordinateConverter.normalizeAngleToPi(stateVector.get(STATE_IDX_BEARING, 0));
         stateVector.set(STATE_IDX_BEARING, 0, normalizedBearing);
     }
 
@@ -423,7 +541,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
     private void updateProcessNoiseMatrix(double deltaTime, double stepLength, double orientationStdDev,
                                           double timePenalty, MovementModel.MovementType movementType) {
         // Calculate step error based on movement model
-        double stepError = movementModel.calculateStepError(stepLength, timePenalty);
+        double stepError = movementModel.estimateStepError(stepLength, timePenalty);
 
         // Calculate position process noise (from velocity uncertainty)
         double dt2 = deltaTime * deltaTime;
@@ -479,7 +597,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
                 .mult(covarianceMatrix);
 
         // Normalize bearing to [-π, π]
-        double normalizedBearing = CoordinateConverter.wrapToPi(stateVector.get(STATE_IDX_BEARING, 0));
+        double normalizedBearing = CoordinateConverter.normalizeAngleToPi(stateVector.get(STATE_IDX_BEARING, 0));
         stateVector.set(STATE_IDX_BEARING, 0, normalizedBearing);
 
         // Update timing
@@ -495,7 +613,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
      */
     private MovementModel.MovementType detectMovementType(double newBearing, double oldBearing) {
         // Calculate absolute bearing change
-        double bearingChange = Math.abs(CoordinateConverter.wrapToPi(newBearing - oldBearing));
+        double bearingChange = Math.abs(CoordinateConverter.normalizeAngleToPi(newBearing - oldBearing));
 
         // Classify movement based on bearing change thresholds
         if (bearingChange > Math.toRadians(30)) {
@@ -504,6 +622,443 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
             return MovementModel.MovementType.PSEUDO_TURN;
         } else {
             return MovementModel.MovementType.STRAIGHT;
+        }
+    }
+
+    /**
+     * Implements an exponential smoothing filter designed to mitigate noise
+     * in sequential data streams, such as position estimates. By averaging current
+     * measurements with previous filtered values, it produces smoother trajectories,
+     * reducing the visual jitter often present in raw sensor outputs.
+     */
+    public static class FusionFilter {
+        private static final String TAG = FusionFilter.class.getSimpleName(); // Use class name for TAG
+
+        /**
+         * The smoothing factor (often denoted as 'alpha') controls the balance
+         * between responsiveness to new data and the degree of smoothing.
+         * A value of 1.0 means only the current input is used (no smoothing).
+         * A value of 0.0 means the output never changes (infinite smoothing).
+         * Values typically range from 0.1 (heavy smoothing) to 0.6 (moderate smoothing).
+         */
+        private final double smoothingFactor;
+
+        /**
+         * The number of independent dimensions in the data being filtered
+         * (e.g., 2 for 2D coordinates, 3 for 3D coordinates).
+         */
+        private final int numDimensions;
+
+        /**
+         * Stores the most recently calculated smoothed values for each dimension.
+         * This state is used in the subsequent filtering step.
+         */
+        private double[] previousFilteredState;
+
+        /**
+         * Tracks whether the filter has processed its first data point.
+         * The first point is used directly to initialize the filter's state.
+         */
+        private boolean isInitialized;
+
+        /**
+         * Constructs a new exponential smoothing filter.
+         *
+         * @param alpha     The desired smoothing factor, clamped between 0.0 and 1.0.
+         * @param dimension The dimensionality of the data vectors to be filtered.
+         *                  Must be a positive integer.
+         */
+        public FusionFilter(double alpha, int dimension) {
+            if (dimension <= 0) {
+                throw new IllegalArgumentException("Dimension must be positive.");
+            }
+            // Ensure the smoothing factor is within the valid range [0.0, 1.0]
+            this.smoothingFactor = Math.max(0.0, Math.min(1.0, alpha));
+            this.numDimensions = dimension;
+            this.previousFilteredState = new double[dimension];
+            this.isInitialized = false;
+
+            Log.i(TAG, "FusionFilter initialized with factor=" + this.smoothingFactor +
+                    ", dimensions=" + this.numDimensions);
+        }
+
+        /**
+         * Processes a new data point (vector) using the configured smoothing factor.
+         *
+         * @param currentInput A double array representing the latest measurement vector.
+         *                     Its length must match the filter's dimensionality.
+         * @return A double array containing the newly computed smoothed values.
+         *         Returns the input array unmodified if dimensions mismatch or on error.
+         */
+        public double[] update(double[] currentInput) {
+            // Validate input dimensions
+            if (currentInput == null || currentInput.length != this.numDimensions) {
+                Log.e(TAG, "Input array dimension mismatch or null. Expected: " +
+                        this.numDimensions + ", Got: " +
+                        (currentInput == null ? "null" : currentInput.length));
+                // Return input defensively, though throwing might be alternative
+                return (currentInput != null) ? currentInput.clone() : new double[this.numDimensions];
+            }
+
+            // Handle the first data point: Initialize state and return input directly
+            if (!this.isInitialized) {
+                System.arraycopy(currentInput, 0, this.previousFilteredState, 0, this.numDimensions);
+                this.isInitialized = true;
+                Log.d(TAG, "Filter initialized with first values.");
+                // Return a clone to prevent external modification of the input array
+                // affecting future initializations if the caller reuses the array.
+                return currentInput.clone();
+            }
+
+            // Apply the exponential smoothing formula for each dimension
+            double[] filteredOutput = new double[this.numDimensions];
+            for (int i = 0; i < this.numDimensions; i++) {
+                // smoothed = alpha * new + (1 - alpha) * previous_smoothed
+                filteredOutput[i] = this.smoothingFactor * currentInput[i] +
+                        (1.0 - this.smoothingFactor) * this.previousFilteredState[i];
+            }
+
+            // Update the internal state for the next iteration
+            // It's safe to directly assign filteredOutput here if we ensure it's not modified externally
+            // However, using arraycopy is safer if there were complex return paths.
+            // Let's use System.arraycopy for consistency and explicit state update.
+            System.arraycopy(filteredOutput, 0, this.previousFilteredState, 0, this.numDimensions);
+
+            return filteredOutput;
+        }
+
+        /**
+         * Processes a new data point using a temporarily specified smoothing factor,
+         * overriding the instance's default factor for this single operation.
+         * Useful for adaptive smoothing scenarios.
+         *
+         * @param currentInput    A double array representing the latest measurement vector.
+         *                        Its length must match the filter's dimensionality.
+         * @param temporalFactor The smoothing factor to use for this specific update,
+         *                        clamped between 0.0 and 1.0.
+         * @return A double array containing the newly computed smoothed values using the temporal factor.
+         *         Returns the input array unmodified if dimensions mismatch or on error.
+         */
+        public double[] updateWithTemporalFactor(double[] currentInput, double temporalFactor) {
+            // Validate input dimensions
+            if (currentInput == null || currentInput.length != this.numDimensions) {
+                Log.e(TAG, "Input array dimension mismatch or null. Expected: " +
+                        this.numDimensions + ", Got: " +
+                        (currentInput == null ? "null" : currentInput.length));
+                return (currentInput != null) ? currentInput.clone() : new double[this.numDimensions];
+            }
+
+            // Ensure the temporal factor is valid
+            double effectiveFactor = Math.max(0.0, Math.min(1.0, temporalFactor));
+
+            // Handle the first data point (same as regular update)
+            if (!this.isInitialized) {
+                System.arraycopy(currentInput, 0, this.previousFilteredState, 0, this.numDimensions);
+                this.isInitialized = true;
+                Log.d(TAG, "Filter initialized with first values (using temporal factor update).");
+                return currentInput.clone();
+            }
+
+            // Apply exponential smoothing using the *temporal* factor
+            double[] filteredOutput = new double[this.numDimensions];
+            for (int i = 0; i < this.numDimensions; i++) {
+                filteredOutput[i] = effectiveFactor * currentInput[i] +
+                        (1.0 - effectiveFactor) * this.previousFilteredState[i];
+            }
+
+            // CRITICAL: Update the internal state using the result calculated
+            // with the temporal factor. This means the *next* regular 'update'
+            // call will use this value as its 'previousFilteredState'.
+            System.arraycopy(filteredOutput, 0, this.previousFilteredState, 0, this.numDimensions);
+
+            return filteredOutput;
+        }
+
+        /**
+         * Retrieves the configured default smoothing factor (alpha) of the filter.
+         *
+         * @return The smoothing factor used by the {@link #update(double[])} method.
+         */
+        public double getSmoothingFactor() {
+            return this.smoothingFactor;
+        }
+
+        /**
+         * Retrieves the last calculated filtered state vector.
+         *
+         * @return A *copy* of the double array containing the most recent smoothed values.
+         *         Returns a zeroed array if the filter hasn't been initialized yet.
+         */
+        public double[] getCurrentEstimate() {
+            // Return a clone to prevent external modification of the internal state
+            if (this.isInitialized) {
+                return this.previousFilteredState.clone();
+            } else {
+                // Return a new zero array of the correct dimension if not initialized
+                Log.w(TAG, "getCurrentEstimate called before filter initialization. Returning zero vector.");
+                return new double[this.numDimensions];
+            }
+        }
+
+        /**
+         * Manually sets the internal state of the filter. This effectively initializes
+         * or re-initializes the filter with a specific known state.
+         *
+         * @param state A double array representing the desired state vector. Its length
+         *              must match the filter's dimensionality.
+         */
+        public void setState(double[] state) {
+            if (state == null || state.length != this.numDimensions) {
+                Log.e(TAG, "Cannot set filter state: dimension mismatch or null input. Expected: " +
+                        this.numDimensions + ", Got: " + (state == null ? "null" : state.length));
+                return; // Do not change state if input is invalid
+            }
+
+            // Copy the provided state into the internal state array
+            System.arraycopy(state, 0, this.previousFilteredState, 0, this.numDimensions);
+            this.isInitialized = true; // Mark as initialized since we now have a valid state
+            Log.d(TAG, "Filter state manually set.");
+        }
+
+        /**
+         * Resets the filter to its initial, uninitialized state.
+         * The internal state vector is cleared (typically to zeros), and the
+         * filter will require a new data point to become initialized again.
+         */
+        public void reset() {
+            // Consider filling with NaN or another indicator, but zeros are common.
+            Arrays.fill(this.previousFilteredState, 0.0);
+            this.isInitialized = false;
+            Log.i(TAG, "FusionFilter has been reset.");
+        }
+    }
+
+    /**
+     * Detects statistical outliers within a stream of distance measurements.
+     *
+     * This implementation employs a robust modified Z-score methodology based on the
+     * Median Absolute Deviation (MAD) calculated over a sliding window of recent measurements.
+     * It includes a hard limit check for immediate rejection of implausible values.
+     */
+    public static class FusionOutlierDetector {
+        private static final String TAG = FusionOutlierDetector.class.getSimpleName();
+
+        // --- Configuration Constants ---
+
+        /** The modified Z-score threshold above which a measurement is considered an outlier. */
+        private static final double MODIFIED_Z_SCORE_THRESHOLD = 3.5;
+        /** The normalization constant used in the modified Z-score calculation (1 / Φ⁻¹(3/4) ≈ 0.6745). */
+        private static final double MAD_NORMALIZATION_FACTOR = 0.6745;
+        /** An absolute maximum distance allowed; measurements exceeding this are immediately flagged as outliers. */
+        private static final double ABSOLUTE_DISTANCE_THRESHOLD = 15.0; // meters
+        /** A small value to prevent division by zero or near-zero MAD values. */
+        private static final double MINIMUM_MAD_VALUE = 1e-4;
+        /** The minimum number of samples required in the buffer before statistical analysis can be performed. */
+        private static final int MINIMUM_SAMPLES_FOR_STATS = 4;
+        /** The default size of the sliding window used for statistical calculations. */
+        private static final int DEFAULT_BUFFER_SIZE = 10;
+
+        // --- State Variables ---
+
+        /** The maximum number of distance measurements to retain in the sliding window. */
+        private final int bufferCapacity;
+        /** Stores the recent distance measurements within the sliding window. */
+        private final List<Double> distanceWindow;
+        /** A reusable list for performing median calculations without repeated allocations. */
+        private final List<Double> calculationWorkList;
+
+        /**
+         * Constructs a FusionOutlierDetector with the default window size.
+         *
+         * @see #DEFAULT_BUFFER_SIZE
+         */
+        public FusionOutlierDetector() {
+            this(DEFAULT_BUFFER_SIZE);
+        }
+
+        /**
+         * Constructs a FusionOutlierDetector with a specified window size.
+         *
+         * @param windowSize The number of recent distance measurements to consider for outlier detection.
+         *                   Must be at least 5.
+         * @throws IllegalArgumentException if windowSize is less than 5.
+         */
+        public FusionOutlierDetector(int windowSize) {
+            if (windowSize < 5) {
+                // Ensure a reasonable minimum size for statistical stability and median calculation.
+                Log.w(TAG, "Requested window size " + windowSize + " is too small. Using minimum of 5.");
+                this.bufferCapacity = 5;
+            } else {
+                this.bufferCapacity = windowSize;
+            }
+            this.distanceWindow = new ArrayList<>(this.bufferCapacity);
+            this.calculationWorkList = new ArrayList<>(this.bufferCapacity);
+
+            Log.i(TAG, "Initialized with buffer capacity: " + this.bufferCapacity);
+        }
+
+        /**
+         * Evaluates a new distance measurement to determine if it is an outlier relative
+         * to the recent history of measurements.
+         *
+         * The method first checks against an absolute hard limit. If the value is plausible,
+         * it's added to a sliding window. Once enough samples are collected, it calculates
+         * the modified Z-score based on the median and MAD of the window data.
+         *
+         * @param newDistance The distance measurement (in meters) to evaluate.
+         * @return {@code true} if the measurement is identified as an outlier, {@code false} otherwise.
+         */
+        public boolean evaluateDistance(double newDistance) {
+            // 1. Absolute Hard Limit Check
+            if (newDistance > ABSOLUTE_DISTANCE_THRESHOLD) {
+                Log.d(TAG, String.format("Outlier (Hard Limit): Distance %.2fm exceeds threshold %.2fm",
+                        newDistance, ABSOLUTE_DISTANCE_THRESHOLD));
+                // Note: We don't add this obviously invalid measurement to the buffer.
+                return true;
+            }
+
+            // 2. Add to Sliding Window & Maintain Size
+            addToWindow(newDistance);
+
+            // 3. Check Minimum Sample Requirement
+            if (distanceWindow.size() < MINIMUM_SAMPLES_FOR_STATS) {
+                // Not enough data for reliable statistics yet.
+                return false;
+            }
+
+            // 4. Calculate Statistics
+            double median = computeMedian(distanceWindow);
+            double mad = computeMedianAbsoluteDeviation(median);
+
+            // Prevent division by very small MAD values
+            double effectiveMad = Math.max(mad, MINIMUM_MAD_VALUE);
+
+            // 5. Calculate Modified Z-Score
+            // Formula: M_i = (0.6745 * |x_i - median|) / MAD
+            double modifiedZScore = MAD_NORMALIZATION_FACTOR * Math.abs(newDistance - median) / effectiveMad;
+
+            // 6. Compare Score to Threshold
+            boolean isOutlier = modifiedZScore > MODIFIED_Z_SCORE_THRESHOLD;
+
+            // 7. Logging
+            if (isOutlier) {
+                Log.d(TAG, String.format("Outlier (Statistical): Distance %.2fm, Median %.2fm, MAD %.2f, Z-Score %.2f > %.2f",
+                        newDistance, median, mad, modifiedZScore, MODIFIED_Z_SCORE_THRESHOLD));
+            } else {
+                // Optional: Log non-outliers for debugging if needed
+                // Log.v(TAG, String.format("Inlier: Distance %.2fm, Median %.2fm, MAD %.2f, Z-Score %.2f <= %.2f",
+                //       newDistance, median, mad, modifiedZScore, MODIFIED_Z_SCORE_THRESHOLD));
+            }
+
+            return isOutlier;
+        }
+
+        /**
+         * Adds a new distance measurement to the sliding window, removing the oldest
+         * measurement if the buffer capacity is exceeded.
+         *
+         * @param distance The distance measurement to add.
+         */
+        private void addToWindow(double distance) {
+            distanceWindow.add(distance);
+            if (distanceWindow.size() > bufferCapacity) {
+                distanceWindow.remove(0); // Remove the oldest element
+            }
+        }
+
+        /**
+         * Computes the median value from a list of numerical values.
+         * Uses a reusable internal list to avoid allocations and sorts it.
+         *
+         * @param values The list of values for which to compute the median. Cannot be empty.
+         * @return The median value.
+         */
+        private double computeMedian(List<Double> values) {
+            Objects.requireNonNull(values, "Input list cannot be null");
+            if (values.isEmpty()) {
+                throw new IllegalArgumentException("Input list cannot be empty for median calculation");
+            }
+
+            // Use the work list to avoid modifying the original and reduce allocations
+            calculationWorkList.clear();
+            calculationWorkList.addAll(values);
+            Collections.sort(calculationWorkList);
+
+            int size = calculationWorkList.size();
+            int midIndex = size / 2;
+
+            if (size % 2 == 0) {
+                // Even number of elements: average the two middle elements
+                return (calculationWorkList.get(midIndex - 1) + calculationWorkList.get(midIndex)) / 2.0;
+            } else {
+                // Odd number of elements: return the middle element
+                return calculationWorkList.get(midIndex);
+            }
+        }
+
+        /**
+         * Computes the Median Absolute Deviation (MAD) for the current distance window,
+         * relative to a provided median value.
+         *
+         * @param median The pre-calculated median of the {@code distanceWindow}.
+         * @return The Median Absolute Deviation.
+         */
+        private double computeMedianAbsoluteDeviation(double median) {
+            if (distanceWindow.isEmpty()) {
+                return 0.0; // Or handle as an error case if appropriate
+            }
+
+            // Reuse the work list for calculating absolute deviations
+            calculationWorkList.clear();
+            for (double value : distanceWindow) {
+                calculationWorkList.add(Math.abs(value - median));
+            }
+
+            // The MAD is the median of these absolute deviations
+            // Relying on computeMedian's logic which uses calculationWorkList
+            Collections.sort(calculationWorkList); // Need to sort the deviations before finding their median
+
+            int size = calculationWorkList.size();
+            int midIndex = size / 2;
+
+            if (size % 2 == 0) {
+                // Even number of elements: average the two middle elements
+                return (calculationWorkList.get(midIndex - 1) + calculationWorkList.get(midIndex)) / 2.0;
+            } else {
+                // Odd number of elements: return the middle element
+                return calculationWorkList.get(midIndex);
+            }
+            // Note: Could also call computeMedian(calculationWorkList) here,
+            // but direct implementation avoids redundant checks and clearing.
+        }
+
+        /**
+         * Clears all recorded distance measurements from the internal buffer.
+         * Resets the detector to its initial state.
+         */
+        public void clearHistory() {
+            distanceWindow.clear();
+            calculationWorkList.clear(); // Also clear the work list
+            Log.i(TAG, "History cleared.");
+        }
+
+        /**
+         * Retrieves a copy of the current list of distance measurements stored in the window.
+         *
+         * @return A new {@link List} containing the distances currently in the buffer.
+         *         Modifying this list will not affect the internal state of the detector.
+         */
+        public List<Double> getDistanceHistory() {
+            return new ArrayList<>(distanceWindow);
+        }
+
+        /**
+         * Gets the configured capacity of the internal sliding window buffer.
+         *
+         * @return The maximum number of measurements the buffer can hold.
+         */
+        public int getBufferCapacity() {
+            return bufferCapacity;
         }
     }
 }

@@ -165,31 +165,39 @@ public class StartLocationFragment extends Fragment {
              */
             @Override
             public void onClick(View view) {
-                // Convert to double for better precision
-                double chosenLat = startPosition[0];
-                double chosenLon = startPosition[1];
+                // Get the chosen location from the map
+                float chosenLat = startPosition[0];
+                float chosenLon = startPosition[1];
 
+                // Log the start location
                 Log.d("StartLocation", "Setting start location: " + chosenLat + ", " + chosenLon);
 
-                // Set both reference positions correctly
+                // Set both reference positions consistently
+                // 1. Set as float array (used by pdrProcessing)
                 sensorFusion.setStartGNSSLatitude(startPosition);
 
-                // Important: Make sure to set the reference position for coordinate transformation
+                // 2. Set as double array (used by fusion algorithm)
                 double[] referencePosition = new double[]{chosenLat, chosenLon, 0.0};
                 sensorFusion.setStartGNSSLatLngAlt(referencePosition);
 
                 // Initialize the fusion algorithm with the correct reference position
                 sensorFusion.initializeFusionAlgorithm();
 
-                // Start recording
+                // Start recording sensors
                 sensorFusion.startRecording();
 
-                // For RecordingActivity
+                // If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
+                    // Now switch to the recording screen
                     ((RecordingActivity) requireActivity()).showRecordingScreen();
-                }  else {
+                }
+                // For other activity types (handling based on your app flow)
+                else if (requireActivity() instanceof ReplayActivity) {
+                    ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);
+                }
+                else {
                     // Optional: log or handle error
-                    // Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
+                    Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
                 }
             }
         });
