@@ -1007,12 +1007,19 @@ public class RecordingFragment extends Fragment {
             refreshDataHandler.removeCallbacks(refreshDataTask);
             Log.d("RecordingFragment", "⏹ onPause: 停止 UI 刷新任务");
         }
-        sensorFusion.stopListening(); // 停止所有传感器监听器 Stop all sensor listeners
+        if (sensorFusion != null) {
+            sensorFusion.stopListening(); // 停止所有传感器监听器 Stop all sensor listeners
+            sensorFusion.stopRecording();
+        }
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
+        if (sensorFusion != null) {
+            sensorFusion.stopListening(); // 停止所有传感器监听器 Stop all sensor listeners
+            sensorFusion.stopRecording();
+        }
         // 清除所有 Handler 回调，防止内存泄漏
         // Clear all Handler callbacks to prevent memory leaks
         if (refreshDataHandler != null) {

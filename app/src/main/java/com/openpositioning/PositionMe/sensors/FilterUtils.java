@@ -23,9 +23,9 @@ public class FilterUtils {
         Random random = new Random();
 
         // 噪声参数
-        double processNoisePos = 0.1;
+        double processNoisePos = 0.5;
         double processNoiseTheta = 0.05;
-        double measurementNoise = 1.0; // 根据实际传感器调整
+        double measurementNoise = 3.0; // 根据实际传感器调整
 
         public ParticleFilter(int numParticles, double initX, double initY) {
             this.numParticles = numParticles;
