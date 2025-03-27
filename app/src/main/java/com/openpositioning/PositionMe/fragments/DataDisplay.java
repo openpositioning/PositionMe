@@ -118,6 +118,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
         positioningFusion.initCoordSystem(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
 
+        SensorFusion.getInstance().pdrReset();
     }
 
     @Override

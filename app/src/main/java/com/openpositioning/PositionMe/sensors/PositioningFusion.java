@@ -56,6 +56,18 @@ public class PositioningFusion {
 //        fusePosition();
     }
 
+    public boolean isWifiPositionSet() {
+        return wifiPosition != null;
+    }
+
+    public boolean isGNSSPositionSet() {
+        return gnssPosition != null;
+    }
+
+    public boolean isPDRPositionSet() {
+        return pdrPosition != null;
+    }
+
     public void updateFromGNSS(LatLng gnssLocation) {
         this.gnssPosition = gnssLocation;
         Log.d("Fusion", "GNSS updated: " + gnssLocation);
@@ -95,9 +107,9 @@ public class PositioningFusion {
 //    // --- Fusion Logic ---
 //
     private void fusePosition() {
-//        if (wifiPositionLocal != null && gnssPositionLocal != null && pdrPosition != null) {
-            this.fusedPositionLocal = this.wifiPositionLocal;;
-//        }
+        if (wifiPositionLocal != null && gnssPositionLocal != null && pdrPosition != null) {
+            this.fusedPositionLocal = this.pdrPosition;;
+        }
     }
 
     // --- Accessor for fused result ---
