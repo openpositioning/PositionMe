@@ -103,12 +103,12 @@ def plot_results(data, lat0, lon0, use_wifi=False):
     if calib_raw.size > 0:
         plt.scatter(calib_raw[:, 0], calib_raw[:, 1], facecolors='none', edgecolors='cyan', s=100, marker='o', label='Raw PDR Calibration')
 
-    # Arrows: raw → aligned calibration
-    for i in range(min(len(calib_raw), len(calib_aligned))):
-        plt.annotate("",
-                     xy=calib_aligned[i],
-                     xytext=calib_raw[i],
-                     arrowprops=dict(arrowstyle="->", color="cyan", lw=1.8))
+    # # Arrows: raw → aligned calibration
+    # for i in range(min(len(calib_raw), len(calib_aligned))):
+    #     plt.annotate("",
+    #                  xy=calib_aligned[i],
+    #                  xytext=calib_raw[i],
+    #                  arrowprops=dict(arrowstyle="->", color="cyan", lw=1.8))
 
     # ==== Labels ====
     plt.xlabel("Longitude")

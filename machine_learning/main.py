@@ -10,7 +10,7 @@ from alignment import piecewise_procrustes_alignment
 
 def main():
     # 1) 读取数据
-    data_path = "./data/collection_data_BVL-N49_20250327_1749.json"
+    data_path = "./data/collection_data_Pixel 8a_20250327_1819.json"
     data = load_json_records(data_path)
     if not data:
         print("No data loaded, exiting.")
