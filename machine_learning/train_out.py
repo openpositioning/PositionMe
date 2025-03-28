@@ -30,12 +30,13 @@ def main():
             print(f"文件 {json_file} 数据为空, 跳过。")
             continue
         
+        # 获取本文件内的参考原点（基于 GNSS 或 WiFi anchor）
         lat0_file, lon0_file = get_origin(data, use_wifi=False)
         if lat0_file is None or lon0_file is None:
             print(f"文件 {json_file} 无法确定参考原点, 跳过。")
             continue
         
-        # 保存一份原始PDR (对比用)
+        # 保存一份原始 PDR 数据（对比用）
         for r in data:
             r["rawPdrX"] = r.get("pdrX", 0.0)
             r["rawPdrY"] = r.get("pdrY", 0.0)
@@ -58,17 +59,17 @@ def main():
             print(f"文件 {json_file} 对齐后数据为空, 跳过。")
             continue
         
-        # 找到第一个、最后一个校准点(锚点)，对数据进行trim
+        # 找到第一个和最后一个校准点（锚点），对数据进行 trim
         anchor_indices = [i for i, r in enumerate(data_aligned) if r.get("isCalibration") is True]
         if len(anchor_indices) < 2:
-            print(f"文件 {json_file} 锚点数量不足2个, 无法trim, 跳过。")
+            print(f"文件 {json_file} 锚点数量不足2个, 无法 trim, 跳过。")
             continue
         
         first_anchor_idx = anchor_indices[0]
         last_anchor_idx = anchor_indices[-1]
         trimmed = data_aligned[first_anchor_idx:last_anchor_idx+1]
         
-        # 转回“该文件原点”的经纬度
+        # 将本文件数据的对齐后的局部坐标转换回绝对经纬度（alignedLat, alignedLng）
         for r in trimmed:
             r["fileLat0"] = lat0_file
             r["fileLon0"] = lon0_file
@@ -80,7 +81,7 @@ def main():
             r["alignedLat"] = aligned_lat
             r["alignedLng"] = aligned_lng
 
-            # 原始 pdr 同样转换
+            # 同时也转换原始 PDR 坐标
             raw_lat, raw_lng = local_xy_to_latlon(
                 r["rawPdrX"], r["rawPdrY"], lat0_file, lon0_file
             )
@@ -90,12 +91,13 @@ def main():
         all_aligned_trimmed.extend(trimmed)
     
     if not all_aligned_trimmed:
-        print("所有文件都无法得到有效对齐+修剪数据, 退出。")
+        print("所有文件都无法得到有效对齐+trim数据, 退出。")
         sys.exit(1)
     
-    print(f"对齐并修剪后的记录总数: {len(all_aligned_trimmed)}")
+    print(f"对齐并trim后的记录总数: {len(all_aligned_trimmed)}")
 
-    # ========== (B) 选一个全局原点，将所有数据统一到同一张“局部坐标系”里 ==========
+    # ========== (B) 选取全局原点（Global Origin） ==========
+    # 这里选取第一个 calibration 点的绝对经纬度作为全局原点（仅用于后续可视化）
     global_lat0 = None
     global_lon0 = None
     for r in all_aligned_trimmed:
@@ -122,7 +124,7 @@ def main():
     plot_results(all_aligned_trimmed, global_lat0, global_lon0, use_wifi=False)
     print("已生成对齐前后PDR对比图 (debug_plot.png).")
     
-    # ========== (D) 基于对齐后PDR + WiFi RSSI (Top N) 训练 kNN ==========
+    # ========== (D) 基于对齐后 PDR + WiFi RSSI (Top N) 训练 kNN ==========
     TOP_N = 20
     dataset = []
     for r in all_aligned_trimmed:
@@ -137,17 +139,18 @@ def main():
         if len(rssi_features) < TOP_N:
             rssi_features += [-100]*(TOP_N - len(rssi_features))
         
-        x_aligned = r["pdrX"]
-        y_aligned = r["pdrY"]
+        # 注意：这里标签改为直接使用对齐后的绝对经纬度
+        lat_true = r["alignedLat"]
+        lon_true = r["alignedLng"]
         
         dataset.append({
             "features": rssi_features,
-            "x_true": x_aligned,
-            "y_true": y_aligned
+            "lat_true": lat_true,
+            "lon_true": lon_true
         })
     
-    X = np.array([d["features"] for d in dataset])
-    Y = np.array([[d["x_true"], d["y_true"]] for d in dataset])
+    X = np.array([d["features"] for d in dataset])  # (N, TOP_N)
+    Y = np.array([[d["lat_true"], d["lon_true"]] for d in dataset])  # (N, 2) 经纬度
     
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.3, random_state=42)
     
@@ -156,13 +159,13 @@ def main():
     
     Y_pred = knn.predict(X_test)
     
-    # ========== (E) 可视化 kNN 预测 vs 对齐后 PDR ==========
+    # ========== (E) 可视化 kNN 预测 vs 对齐后经纬度 ==========
     plt.figure(figsize=(8,6))
-    plt.scatter(Y_test[:,0], Y_test[:,1], marker='o', alpha=0.6, label='True (Aligned PDR)')
+    plt.scatter(Y_test[:,0], Y_test[:,1], marker='o', alpha=0.6, label='True (Aligned Lat/Lon)')
     plt.scatter(Y_pred[:,0], Y_pred[:,1], marker='x', alpha=0.6, label='kNN Predicted')
-    plt.title("WiFi RSSI → Position Prediction\n(Using Aligned+Trimmed PDR as Labels)")
-    plt.xlabel("Global Local X (meters)")
-    plt.ylabel("Global Local Y (meters)")
+    plt.title("WiFi RSSI → Position Prediction\n(Using Aligned+Trimmed Lat/Lon as Labels)")
+    plt.xlabel("Latitude")
+    plt.ylabel("Longitude")
     plt.legend()
     plt.grid(True)
     plt.axis("equal")
@@ -174,8 +177,8 @@ def main():
     errors = np.linalg.norm(Y_pred - Y_test, axis=1)
     mean_error = np.mean(errors)
     std_error = np.std(errors)
-    print(f"kNN 预测误差均值: {mean_error:.2f} 米")
-    print(f"kNN 预测误差标准差: {std_error:.2f} 米")
+    print(f"kNN 预测误差均值: {mean_error:.6f} 度")
+    print(f"kNN 预测误差标准差: {std_error:.6f} 度")
     print("kNN 预测完成.")
     
     # ========== (F) 使用 TensorFlow 训练模型并导出 TensorFlow Lite 模型 ==========
@@ -183,14 +186,14 @@ def main():
     tf_model = Sequential([
         Dense(64, activation='relu', input_shape=(TOP_N,)),
         Dense(64, activation='relu'),
-        Dense(2)  # 输出全局局部坐标 (x, y)
+        Dense(2)  # 输出经纬度： (lat, lon)
     ])
     tf_model.compile(optimizer='adam', loss='mse', metrics=['mae'])
     
     tf_model.fit(X_train, Y_train, epochs=50, batch_size=32, validation_split=0.2)
     
     tf_loss, tf_mae = tf_model.evaluate(X_test, Y_test, verbose=0)
-    print(f"TensorFlow 模型测试集 MAE: {tf_mae:.2f} 米")
+    print(f"TensorFlow 模型测试集 MAE: {tf_mae:.6f} 度")
     
     # 导出 TensorFlow Lite 模型
     converter = tf.lite.TFLiteConverter.from_keras_model(tf_model)
