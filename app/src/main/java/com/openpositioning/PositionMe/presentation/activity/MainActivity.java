@@ -347,6 +347,11 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
     }
 
+    @Override
+    public void update(Object data) {
+
+    }
+
     /**
      * Task that displays positive toast on the main UI thread.
      * Called when {@link ServerCommunications} successfully uploads a trajectory.

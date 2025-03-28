@@ -10,6 +10,7 @@ import com.openpositioning.PositionMe.utils.OutlierDetector;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.TurnDetector;
 
+import org.ejml.data.SingularMatrixException;
 import org.ejml.simple.SimpleMatrix;
 
 /**
@@ -142,7 +143,8 @@ public class ExtendedKalmanFilter{
         this.Xk = new SimpleMatrix(new double[][]{{0}, {0}, {0}});
 
         // Initialize the error covariance matrix (Pk) with zeros on the diagonal, indicating no initial certainty in the estimates.
-        this.Pk = SimpleMatrix.diag(0, 0, 0);
+        this.Pk = SimpleMatrix.diag(1000, 1000, 1000);
+
 
         // Initialize the process noise covariance matrix (Qk) based on the variances of process noises (theta and displacement).
         this.Qk = SimpleMatrix.diag((sigma_dTheta * sigma_dTheta), sigma_ds);
@@ -257,6 +259,30 @@ public class ExtendedKalmanFilter{
         }
     }
 
+    private void resetFilter() {
+        Log.w("EKF", "⚠️ EKF 状态异常，正在重置滤波器...");
+        this.Xk = new SimpleMatrix(new double[][]{{0}, {0}, {0}});
+        this.Pk = SimpleMatrix.diag(1000, 1000, 1000);
+    }
+
+    private boolean hasInvalidState() {
+        for (int i = 0; i < Xk.getNumElements(); i++) {
+            double val = Xk.get(i);
+            if (Double.isNaN(val) || Double.isInfinite(val)) {
+                Log.e("EKF-Monitor", "❗️ Xk state invalid: " + val);
+                return true;
+            }
+        }
+        for (int i = 0; i < Pk.getNumElements(); i++) {
+            double val = Pk.get(i);
+            if (Double.isNaN(val) || Double.isInfinite(val)) {
+                Log.e("EKF-Monitor", "❗️ Pk state invalid: " + val);
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Performs a prediction step within the Extended Kalman Filter to estimate the system's future state.
      * This involves updating the state estimate and error covariance based on the movement and orientation data.
@@ -267,61 +293,58 @@ public class ExtendedKalmanFilter{
      * @param refTime The reference time for the current prediction, typically the time of the last update.
      * @param userMovementInStep The type of movement detected (e.g., walking, running), affecting the state prediction.
      */
+    // 在 predict() 结束后，也加入 condition number 监控
     public void predict(double theta_k, double step_k, double averageStepLength, long refTime, TurnDetector.MovementType userMovementInStep) {
-        // Stop the prediction if the EKF has been flagged to stop.
         if (stopEKF) return;
 
-        // Delegate the prediction computation to the handler thread to keep UI responsive.
-        ekfHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                // Log the prediction initiation.
-                Log.d("EKF", "======== PREDICT ========");
+        ekfHandler.post(() -> {
+            Log.d("EKF", "======== PREDICT ========");
 
-                // Calculate the adapted heading by wrapping the angle to a standard range.
-                double adaptedHeading = wrapToPi((Math.PI/2 - theta_k));
-                Log.d("EKF", "Adapted bearing "+ (Math.PI/2 - theta_k)+" wrapped bearing "+adaptedHeading);
+            double adaptedHeading = wrapToPi((Math.PI / 2 - theta_k));
+            Log.d("EKF", "Adapted bearing " + (Math.PI / 2 - theta_k) + " wrapped bearing " + adaptedHeading);
 
-                // Define a transformation matrix based on the current orientation angle, used for control inputs.
-                SimpleMatrix T_mat = new SimpleMatrix(new double[][]{
-                        {1, 0},
-                        {0, Math.sin(theta_k)},
-                        {0, Math.cos(theta_k)}
-                });
+            SimpleMatrix T_mat = new SimpleMatrix(new double[][]{
+                    {1, 0},
+                    {0, Math.sin(theta_k)},
+                    {0, Math.cos(theta_k)}
+            });
 
-                // Create the control input matrix from the current orientation and the previous step length.
-                SimpleMatrix control_inputs = new SimpleMatrix(new double[][]{
-                        {theta_k},
-                        {prevStepLength}
-                });
+            SimpleMatrix control_inputs = new SimpleMatrix(new double[][]{
+                    {theta_k},
+                    {prevStepLength}
+            });
 
-                // Calculate the additional state change from control inputs.
-                SimpleMatrix add = T_mat.mult(control_inputs);
+            SimpleMatrix add = T_mat.mult(control_inputs);
 
-                // Update the state estimate (Xk) with the new calculated values.
-                double Xk_bearing = Xk.get(0,0);
-                double Xk_x = Xk.get(1,0);
-                double Xk_y = Xk.get(2, 0);
-                Xk.set(0,0, Xk_bearing + add.get(0, 0));
-                Xk.set(1,0, Xk_x + add.get(1, 0));
-                Xk.set(2,0, Xk_y + add.get(2, 0));
+            Xk.set(0, 0, Xk.get(0, 0) + add.get(0, 0));
+            Xk.set(1, 0, Xk.get(1, 0) + add.get(1, 0));
+            Xk.set(2, 0, Xk.get(2, 0) + add.get(2, 0));
 
-                // Update the state transition matrix and process noise covariance matrix.
-                updateFk(adaptedHeading, prevStepLength);
-                updateQk(averageStepLength, adaptedHeading, (refTime-initialiseTime), getThetaStd(userMovementInStep));
+            updateFk(adaptedHeading, prevStepLength);
+            updateQk(averageStepLength, adaptedHeading, (refTime - initialiseTime), getThetaStd(userMovementInStep));
 
-                // Define a transformation matrix for process noise application.
-                SimpleMatrix L_k = new SimpleMatrix(new double[][]{
-                        {1, 0},
-                        {0, Math.sin(theta_k)},
-                        {0, Math.cos(theta_k)}
-                });
+            SimpleMatrix L_k = new SimpleMatrix(new double[][]{
+                    {1, 0},
+                    {0, Math.sin(theta_k)},
+                    {0, Math.cos(theta_k)}
+            });
 
-                // Update the error covariance matrix (Pk) to predict future uncertainties.
-                Pk = Fk.mult(Pk).mult(Fk.transpose()).plus(L_k.mult(Qk).mult(L_k.transpose()));
+            Pk = Fk.mult(Pk).mult(Fk.transpose()).plus(L_k.mult(Qk).mult(L_k.transpose()));
+            prevStepLength = step_k;
 
-                // Update the step length for the next prediction.
-                prevStepLength = step_k;
+            try {
+                double pkCondition = Pk.conditionP2();
+                double pkMinEig = Pk.svd().getW().get(Pk.numRows() - 1, Pk.numCols() - 1);
+                Log.d("EKF-Monitor", "Post-Predict Pk condition number: " + pkCondition);
+                Log.d("EKF-Monitor", "Post-Predict Pk min singular value: " + pkMinEig);
+
+                if (pkCondition > 1e12 || pkMinEig < 1e-10 || hasInvalidState()) {
+                    Log.w("EKF-Monitor", "⚠️ Pk数值异常 (Predict)，condition=" + pkCondition + ", minEig=" + pkMinEig + " [AUTO-RECOVERED]");
+                    resetFilter();
+                }
+            } catch (Exception e) {
+                Log.e("EKF-Monitor", "❗️ Pk SVD 失败 (Predict) → 自动重置", e);
+                resetFilter();
             }
         });
     }
@@ -333,40 +356,50 @@ public class ExtendedKalmanFilter{
      * @param observation_k An array containing the new observations.
      * @param penaltyFactor A factor used to modify the observation noise covariance matrix based on external conditions.
      */
-    public void update(double[] observation_k, double penaltyFactor){
-
-        // Identity matrix used in calculation of the innovation covariance matrix (Sk).
+    public void update(double[] observation_k, double penaltyFactor) {
         SimpleMatrix Mk = SimpleMatrix.identity(2);
-
-        // Construct the observation matrix Zk from the observation data.
         SimpleMatrix Zk = new SimpleMatrix(new double[][]{{observation_k[0]}, {observation_k[1]}});
 
-        // Update the observation noise covariance matrix with the current penalty factor.
         updateRk(penaltyFactor);
 
-        // Compute the prediction error (innovation) as the difference between actual observations and predictions.
         SimpleMatrix y_pred = Zk.minus(Hk.mult(Xk));
-
-        // Calculate the innovation covariance matrix (Sk) which includes the effect of both
-        // the measurement noise and the uncertainty of the prediction.
         SimpleMatrix Sk = Hk.mult(Pk).mult(Hk.transpose()).plus(Mk.mult(Rk).mult(Mk.transpose()));
+        Sk = Sk.plus(SimpleMatrix.identity(Sk.numRows()).scale(1e-6));
 
-        // Calculate the Kalman Gain, which determines how much the predictions should be corrected based on the new observations.
-        SimpleMatrix KalmanGain = Pk.mult(Hk.transpose().mult(Sk.invert()));
+        SimpleMatrix KalmanGain;
+        try {
+            KalmanGain = Pk.mult(Hk.transpose().mult(Sk.pseudoInverse()));
+        } catch (Exception e) {
+            Log.e("EKF", "伪逆失败，重置滤波器避免崩溃", e);
+            resetFilter();
+            return;
+        }
 
-        // Update the state estimate by applying the Kalman Gain to the innovation.
         Xk = Xk.plus(KalmanGain.mult(y_pred));
+        Xk.set(0, 0, wrapToPi(Xk.get(0, 0)));
 
-        // Correct the bearing to ensure it remains within the appropriate range.
-        double adaptedHeading = wrapToPi(Xk.get(0, 0));
-        Xk.set(0, 0, adaptedHeading);
-
-        // Update the estimate error covariance matrix (Pk) using the Kalman Gain and the observation matrix.
-        SimpleMatrix I = SimpleMatrix.identity(Pk.getNumRows()); // Identity matrix for dimension of Pk.
+        SimpleMatrix I = SimpleMatrix.identity(Pk.getNumRows());
         Pk = (I.minus(KalmanGain.mult(Hk))).mult(Pk);
+
+        try {
+            double pkCondition = Pk.conditionP2();
+            double pkMinEig = Pk.svd().getW().get(Pk.numRows() - 1, Pk.numCols() - 1);
+            Log.d("EKF-Monitor", "Post-Update Pk condition number: " + pkCondition);
+            Log.d("EKF-Monitor", "Post-Update Pk min singular value: " + pkMinEig);
+
+            if (pkCondition > 1e12 || pkMinEig < 1e-10 || hasInvalidState()) {
+                Log.w("EKF-Monitor", "⚠️ Pk数值异常 (Update)，condition=" + pkCondition + ", minEig=" + pkMinEig + " [AUTO-RECOVERED]");
+                resetFilter();
+            }
+        } catch (Exception e) {
+            Log.e("EKF-Monitor", "❗️ Pk SVD 失败 (Update) → 自动重置", e);
+            resetFilter();
+        }
     }
 
-    /**
+
+
+/**
      * Handles opportunistic updates to the state estimation process when new observations are available at unexpected times.
      * This method allows the EKF to utilize additional data points that may improve the accuracy of the state estimate.
      *
@@ -664,4 +697,13 @@ public class ExtendedKalmanFilter{
         this.smoothingFilter.reset(); // Reset the smoothing filter to clear any retained state.
         ekfThread.quitSafely(); // Safely quit the handler thread, ensuring all messages are processed before closure.
     }
+
+    public void setInitialPosition(double east, double north) {
+        this.Xk.set(1, 0, east);
+        this.Xk.set(2, 0, north);
+    }
+    public double[] getCurrentState() {
+        return new double[] { Xk.get(0,0), Xk.get(1,0), Xk.get(2,0) };
+    }
+
 }

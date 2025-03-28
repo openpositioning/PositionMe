@@ -290,6 +290,7 @@ public class TrajectoryMapFragment extends Fragment {
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+
         if (gMap == null) return;
 
         // Keep track of current location
@@ -328,7 +329,15 @@ public class TrajectoryMapFragment extends Fragment {
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
     }
-
+    public void updateUserLocationSafe(@NonNull LatLng newLocation, float orientation) {
+        if (gMap == null || newLocation == null) return;
+        if (Double.isNaN(newLocation.latitude) || Double.isNaN(newLocation.longitude) || Float.isNaN(orientation)) {
+            Log.w("TrajectoryMap", "⚠️ Skip location update due to NaN values: "
+                    + newLocation + ", orientation=" + orientation);
+            return;
+        }
+        updateUserLocation(newLocation, orientation);
+    }
 
 
     /**

@@ -29,8 +29,21 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.sensors.Wifi;
+import com.openpositioning.PositionMe.utils.CoordinateTransform;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
+
+
+import android.util.Log;
+
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+
+
 
 
 /**
@@ -76,6 +89,8 @@ public class RecordingFragment extends Fragment {
     private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
+
+    private int stepCounter = 0;
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
@@ -219,38 +234,29 @@ public class RecordingFragment extends Fragment {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
-        // Distance
         distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
                 + Math.pow(pdrValues[1] - previousPosY, 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
-        // Elevation
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
+            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation();
             LatLng newLocation = UtilFunctions.calculateNewPos(
                     oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
+                    new float[]{pdrValues[0] - previousPosX, pdrValues[1] - previousPosY}
             );
 
-            // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
+                trajectoryMapFragment.updateUserLocationSafe(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
                 LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
@@ -266,12 +272,51 @@ public class RecordingFragment extends Fragment {
             }
         }
 
-        // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
+
+        double[] state = sensorFusion.getCurrentEKFState();
+        double east = state[1];
+        double north = state[2];
+        double[] latLngAlt = sensorFusion.getGNSSLatLngAlt(true);
+        LatLng ekfLocation = CoordinateTransform.enuToGeodetic(east, north, 0, latLngAlt[0], latLngAlt[1], latLngAlt[2]);
+
+        trajectoryMapFragment.updateUserLocationSafe(ekfLocation,
+                (float) Math.toDegrees(sensorFusion.passOrientation()));
+
+        // ===== WiFi定位触发 =====
+        stepCounter++;
+        if (stepCounter % 10 == 0) { // 每10步触发一次，可自行调整
+            JSONObject fingerprint = buildCurrentWiFiFingerprint();
+            if (fingerprint != null) {
+                sensorFusion.requestWiFiPosition(fingerprint, requireContext());
+            }
+        }
     }
 
-    /**
+    private JSONObject buildCurrentWiFiFingerprint() {
+        Wifi[] wifiData = sensorFusion.getWifiData();
+        if (wifiData == null || wifiData.length == 0) return null;
+
+        JSONArray wifiArray = new JSONArray();
+        try {
+            for (Wifi wifi : wifiData) {
+                JSONObject obj = new JSONObject();
+                obj.put("bssid", wifi.getBssid());
+                obj.put("level", wifi.getLevel());
+                wifiArray.put(obj);
+            }
+            JSONObject fingerprint = new JSONObject();
+            fingerprint.put("wifis", wifiArray);
+            return fingerprint;
+        } catch (JSONException e) {
+            Log.e("WiFiFingerprint", "构建WiFi指纹失败", e);
+            return null;
+        }
+    }
+
+
+/**
      * Start the blinking effect for the recording icon.
      */
     private void blinkingRecordingIcon() {

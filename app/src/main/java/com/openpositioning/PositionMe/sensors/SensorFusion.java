@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -134,6 +135,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private LatLng fusedPosition;
 
     private LatLng positionWifi;
+    private WifiDataProcessor wifiDataProcessor;
     private double altitude;
 
     // Sensor values
@@ -187,6 +189,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
 
 
+
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -222,6 +226,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.recordingUpdates = new ArrayList<>();
         this.startRef = new double[3];
         this.ecefRefCoords = new double[3];
+
 
 
     }
@@ -283,6 +288,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.pathView = new PathView(context, null);
         this.wifiPositioning = new WiFiPositioning(context);
+        this.wifiDataProcessor = new WifiDataProcessor(context);
 
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
@@ -522,7 +528,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
         }
-        createWifiPositioningRequest();
+        createWifiPositionRequestCallback();
     }
 
     @Override
@@ -534,24 +540,17 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      *
      */
-    private void createWifiPositioningRequest(){
-        // Try catch block to catch any errors and prevent app crashing
-        try {
-            // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
-            for (Wifi data : this.wifiList){
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
-            }
-            // Creating POST Request
-            JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wifiPositioning.request(wifiFingerPrint);
-        } catch (JSONException e) {
-            // Catching error while making JSON object, to prevent crashes
-            // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors","Error creating json object"+e.toString());
+
+
+    public void setInitialPositionENU(double east, double north) {
+        if (this.extendedKalmanFilter != null) {
+            this.extendedKalmanFilter.setInitialPosition(east, north);
         }
     }
+    public double[] getCurrentEKFState() {
+        return this.extendedKalmanFilter.getCurrentState();
+    }
+
     // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
@@ -584,6 +583,12 @@ public class SensorFusion implements SensorEventListener, Observer {
             Log.e("jsonErrors","Error creating json object"+e.toString());
         }
 
+    }
+    public Wifi[] getWifiData() {
+        if (wifiDataProcessor != null) {
+            return new Wifi[]{wifiDataProcessor.getCurrentWifiData()};
+        }
+        return null;
     }
 
     /**
@@ -828,6 +833,26 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
+     * Trigger WiFi Positioning request
+     *
+     * @param fingerprint WiFi fingerprint data
+     */
+    public void requestWiFiPosition(JSONObject fingerprint,Context context) {
+        wifiPositioning.request(fingerprint, new WiFiPositioning.VolleyCallback() {
+            @Override
+            public void onSuccess(LatLng location, int floor) {
+                Log.d("SensorFusion", "✅ WiFi定位成功: " + location + ", floor: " + floor);
+                // 可在这里通知 UI 更新位置
+            }
+
+            @Override
+            public void onError(String message) {
+                Log.w("SensorFusion", "❗️ WiFi定位失败: " + message);
+                Toast.makeText(context, "WiFi定位失败: " + message, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    /**
      * A helper method used to notify all observers that an update is available.
      * Allows recording fragment to be asynchronously notified when a change occurs.
      *
@@ -878,6 +903,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param observer  Instance implementing {@link Observer} class who wants to be notified of
      *                  events relating to sending and receiving trajectories.
      */
+    @Deprecated
     public void registerForServerUpdate(Observer observer) {
         serverCommunications.registerObserver(observer);
     }
@@ -1269,5 +1295,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void setCurrentFloor(int updatedFloor){
         pdrProcessing.setCurrentFloor(updatedFloor);
     }
+
 
 }

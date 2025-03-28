@@ -173,6 +173,18 @@ public class StartLocationFragment extends Fragment {
                 float chosenLat = startPosition[0];
                 float chosenLon = startPosition[1];
 
+                double[] startRef = new double[]{
+                        startPosition[0], // latitude
+                        startPosition[1], // longitude
+                        0.0  // 没有高程数据，直接设为 0
+                };
+                sensorFusion.setStartGNSSLatitude(startPosition);
+                sensorFusion.setStartGNSSLatLngAlt(startRef);
+
+                // 设置 EKF 初始 ENU 坐标为 (0,0)
+                sensorFusion.setInitialPositionENU(0, 0);
+
+
                 // If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
                     // Start sensor recording + set the start location
@@ -201,12 +213,11 @@ public class StartLocationFragment extends Fragment {
                 if (currentFloor != null) {
                     sensorFusion.setCurrentFloor(currentFloor);
                 }
-                // Navigate to the RecordingFragment
-                NavDirections action = StartLocationFragmentDirections.actionStartLocationFragmentToRecordingFragment();
-                Navigation.findNavController(view).navigate(action);
+                ((RecordingActivity) requireActivity()).showRecordingScreen();
 
             }
         });
+
     }
 
     /**

@@ -149,6 +149,11 @@ public class FilesFragment extends Fragment implements Observer {
         }
     }
 
+    @Override
+    public void update(Object data) {
+
+    }
+
     /**
      * Parses the info response string from the HTTP communication.
      * Process the data using the Json library and return the matching Java data structure as a
