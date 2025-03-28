@@ -74,7 +74,7 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline pdrPolyline; // Polyline for PDR trajectory with a dotted black line
 
 
-    private boolean isRed = true; // Tracks whether the polyline color is red
+    private boolean isPdrOn = false; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
     private boolean isWifiOn = false; // Tracks if GNSS tracking is enabled
 
@@ -94,9 +94,8 @@ public class TrajectoryMapFragment extends Fragment {
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial wifiSwitch;
     private SwitchMaterial autoFloorSwitch;
-
+    private SwitchMaterial pdrSwitch;
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
-    private Button switchColorButton;
     private Polygon buildingPolygon;
 
 
@@ -138,7 +137,7 @@ public class TrajectoryMapFragment extends Fragment {
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
-        switchColorButton = view.findViewById(R.id.lineColorButton);
+        pdrSwitch       = view.findViewById(R.id.pdrSwitch);
 
       // NEW: Get the toggle button and controls container for collapsing/expanding
       final ImageView toggleButton = view.findViewById(R.id.toggleButton);
@@ -205,6 +204,9 @@ public class TrajectoryMapFragment extends Fragment {
                 gnssMarker.remove();
                 gnssMarker = null;
             }
+            if (gnssPolyline != null) {
+                gnssPolyline.setVisible(isChecked);
+            }
         });
         // Wifi Switch
         wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -215,18 +217,11 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // Color switch
-        switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
-                if (isRed) {
-                    switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
-                    isRed = false;
-                } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
-                    isRed = true;
-                }
+        // PDR Switch
+        pdrSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isPdrOn = isChecked;
+            if (pdrPolyline != null) {
+                pdrPolyline.setVisible(isChecked);
             }
         });
 
@@ -287,7 +282,7 @@ public class TrajectoryMapFragment extends Fragment {
 
         interpolatedPolyLine = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
-                .width(5f)
+                .width(8f)
                 .zIndex(10f)
                 .add() // start empty
                 .pattern(Arrays.asList(new Dot(), new Gap(10))) // Dotted line
@@ -299,6 +294,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .zIndex(10f)
                 .add() // start empty
         );
+        pdrPolyline.setVisible(isPdrOn);
 
 
         // GNSS path in blue
@@ -308,6 +304,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .width(5f)
                 .add() // start empty
         );
+        gnssPolyline.setVisible(isGnssOn);
     }
 
 
