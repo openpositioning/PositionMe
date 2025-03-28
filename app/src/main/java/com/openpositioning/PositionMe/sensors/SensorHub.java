@@ -7,6 +7,7 @@ import android.hardware.SensorManager;
 import android.location.LocationProvider;
 import android.net.wifi.WifiManager;
 import android.util.Log;
+import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -19,7 +20,7 @@ public class SensorHub implements SensorEventListener {
   private final Map<Integer, List<SensorDataListener<?>>> listeners = new HashMap<>();
 
   // Store all StreamSensor types.
-  private final Map<StreamSensor, SensorModule> sensorModules = new HashMap<>();
+  private final Map<StreamSensor, SensorModule<?>> sensorModules = new HashMap<>();
 
 
   // Store listeners for sensors defined by StreamSensors
@@ -105,7 +106,7 @@ public class SensorHub implements SensorEventListener {
   }
 
   @SuppressWarnings("unchecked")
-  private <T> void notifyListener(SensorDataListener<T> listener, Object data) {
+  private <T extends SensorData> void notifyListener(SensorDataListener<T> listener, Object data) {
     listener.onSensorDataReceived((T) data);
   }
 

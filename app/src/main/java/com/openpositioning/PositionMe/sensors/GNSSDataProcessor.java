@@ -4,12 +4,15 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import com.openpositioning.PositionMe.processing.SensorFusion;
+import com.openpositioning.PositionMe.sensors.SensorData.GNSSLocationData;
 
 /**
  * Class for handling and recording location data.
@@ -20,16 +23,12 @@ import com.openpositioning.PositionMe.processing.SensorFusion;
  * @author Virginia Cangelosi
  * @author Mate Stodulka
  */
-public class GNSSDataProcessor extends SensorModule {
+public class GNSSDataProcessor extends SensorModule<GNSSLocationData> implements LocationListener {
 
   // Application context for handling permissions and locationManager instances
   private final Context context;
   // Locations manager to enable access to GNSS and cellular location data via the android system
   private LocationManager locationManager;
-  // Location listener to receive the location data broadcast by the system
-  private LocationListener locationListener;
-
-
   /**
    * Public default constructor of the GNSSDataProcessor class.
    * <p>
@@ -41,11 +40,11 @@ public class GNSSDataProcessor extends SensorModule {
    * information gathering process.
    *
    * @param context          Application Context to be used for permissions and device accesses.
-   * @param locationListener Location listener that will receive the location information from the
-   *                         device broadcasts.
    * @see SensorFusion the intended parent class.
    */
-  public GNSSDataProcessor(Context context, LocationListener locationListener) {
+  public GNSSDataProcessor(Context context, SensorHub sensorHub) {
+    super(sensorHub, StreamSensor.GNSS);
+
     this.context = context;
 
     // Check for permissions
@@ -53,7 +52,6 @@ public class GNSSDataProcessor extends SensorModule {
 
     //Location manager and listener
     this.locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
-    this.locationListener = locationListener;
 
     // Turn on gps if it is currently disabled
     if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
@@ -79,12 +77,13 @@ public class GNSSDataProcessor extends SensorModule {
   @SuppressLint("MissingPermission")
   public void start() {
     boolean permissionGranted = checkLocationPermissions();
-    if (permissionGranted && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+    if (permissionGranted
+        && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
         && locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
       locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
-          0, 0, locationListener);
+          0, 0, this);
       locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,
-          0, 0, locationListener);
+          0, 0, this);
     } else if (permissionGranted
         && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
       Toast.makeText(context, "Open GPS", Toast.LENGTH_LONG).show();
@@ -99,7 +98,7 @@ public class GNSSDataProcessor extends SensorModule {
    */
   @Override
   public void stop() {
-    locationManager.removeUpdates(locationListener);
+    locationManager.removeUpdates(this);
   }
 
 
@@ -123,5 +122,10 @@ public class GNSSDataProcessor extends SensorModule {
     return coarseLocationPermission == PackageManager.PERMISSION_GRANTED
         && fineLocationPermission == PackageManager.PERMISSION_GRANTED
         && internetPermission == PackageManager.PERMISSION_GRANTED;
+  }
+
+  @Override
+  public void onLocationChanged(@NonNull Location location) {
+    super.notifyListeners(new GNSSLocationData(location));
   }
 }

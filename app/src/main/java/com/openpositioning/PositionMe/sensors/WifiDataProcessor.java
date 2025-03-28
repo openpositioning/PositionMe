@@ -15,10 +15,13 @@ import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 
 import com.openpositioning.PositionMe.processing.SensorFusion;
+import com.openpositioning.PositionMe.sensors.SensorData.WiFiScanResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The WifiDataProcessor class is the Wi-Fi data gathering and processing class of the application.
@@ -39,7 +42,7 @@ import java.util.TimerTask;
  * @author Mate Stodulka
  * @author Virginia Cangelosi
  */
-public class WifiDataProcessor extends SensorModule implements Observable {
+public class WifiDataProcessor extends SensorModule<WiFiScanResult> {
   private static final long SCAN_RATE_WITH_THROTTLING = 5000; // ms
   //
   private static final long SCAN_RATE_WITHOUT_THROTTLING = 500; // ms
@@ -72,13 +75,14 @@ public class WifiDataProcessor extends SensorModule implements Observable {
    * @author Mate Stodulka
    * @see SensorFusion the intended parent class.
    */
-  public WifiDataProcessor(Context context) {
+  public WifiDataProcessor(Context context, SensorHub sensorHub) {
+    super(sensorHub, StreamSensor.WIFI);
+
     this.context = context;
     // Check for permissions
     boolean permissionsGranted = checkWifiPermissions();
     this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
     this.scanWifiDataTimer = new Timer();
-    this.observers = new ArrayList<>();
 
     // Decreapted method after API 29
     // Turn on wifi if it is currently disabled
@@ -86,14 +90,15 @@ public class WifiDataProcessor extends SensorModule implements Observable {
 //      //  if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
 //      //      wifiManager.setWifiEnabled(true);
 //      //  }
+
+    //Inform the user if wifi throttling is enabled on their device
     checkWifiThrottling();
 
     // Start wifi scan and return results via broadcast
     if (permissionsGranted) {
-      this.scanWifiDataTimer.schedule(new scheduledWifiScan(), 0, scanInterval);
+      this.scanWifiDataTimer.schedule(new ScheduledWifiScan(), 0, scanInterval);
     }
 
-    //Inform the user if wifi throttling is enabled on their device
   }
 
   /**
@@ -103,7 +108,7 @@ public class WifiDataProcessor extends SensorModule implements Observable {
   @Override
   public void start() {
     this.scanWifiDataTimer = new Timer();
-    this.scanWifiDataTimer.schedule(new scheduledWifiScan(), 0, scanInterval);
+    this.scanWifiDataTimer.schedule(new ScheduledWifiScan(), 0, scanInterval);
   }
 
   /**
@@ -129,11 +134,10 @@ public class WifiDataProcessor extends SensorModule implements Observable {
      *
      *
      * @param context           Application Context to be used for permissions and device accesses.
-     * @param intent            ???.
+     * @param intent
      */
     @Override
     public void onReceive(Context context, Intent intent) {
-
       if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
           != PackageManager.PERMISSION_GRANTED) {
         // Unregister this listener
@@ -159,7 +163,8 @@ public class WifiDataProcessor extends SensorModule implements Observable {
       }
 
       //Notify observers of change in wifiData variable
-      notifyObservers(0);
+      List<Wifi> newData = Stream.of(wifiScanList).map(o -> (Wifi) o).collect(Collectors.toList());
+      WifiDataProcessor.super.notifyListeners(new WiFiScanResult(newData));
     }
   };
 
@@ -253,30 +258,6 @@ public class WifiDataProcessor extends SensorModule implements Observable {
     }
   }
 
-  /**
-   * Implement default method from Observable Interface to add new observers to the class.
-   *
-   * @param o Classes which implement the Observer interface to receive updates from the class.
-   */
-  @Override
-  public void registerObserver(Observer o) {
-    observers.add(o);
-  }
-
-  /**
-   * Implement default method from Observable Interface to add notify observers to the class.
-   * Changes to the wifiData variable are passed to observers of the class.
-   *
-   * @param idx Unused.
-   */
-  @Override
-  public void notifyObservers(int idx) {
-    for (Observer o : observers) {
-      o.update(wifiData);
-    }
-  }
-
-
 
   /**
    * Class to schedule wifi scans.
@@ -284,7 +265,7 @@ public class WifiDataProcessor extends SensorModule implements Observable {
    * Implements default method in {@link TimerTask} class which it implements. It begins to start
    * calling wifi scans every 5 seconds.
    */
-  private class scheduledWifiScan extends TimerTask {
+  private class ScheduledWifiScan extends TimerTask {
 
     @Override
     public void run() {

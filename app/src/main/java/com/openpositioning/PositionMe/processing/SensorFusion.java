@@ -289,7 +289,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Listener based devices
     this.wifiProcessor = new WifiDataProcessor(context);
     wifiProcessor.registerObserver(this);
-    this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
+    this.gnssProcessor = new GNSSDataProcessor(context, locationListener );
     // Create object handling HTTPS communication
     this.serverCommunications = new ServerCommunications(context);
     // Save absolute and relative start time

@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
+import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
+
 /**
  * Generic Interface for Sensor Modules that do not fit into
  * those defined by android.hardware.Sensor.
