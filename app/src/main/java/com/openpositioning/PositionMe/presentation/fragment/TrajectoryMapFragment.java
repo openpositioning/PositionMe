@@ -275,7 +275,7 @@ public class TrajectoryMapFragment extends Fragment {
         // Initialize an empty polyline
         polyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
-                .width(5f)
+                .width(10f)
                 .zIndex(10f)
                 .add() // start empty
         );
