@@ -89,6 +89,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final String WIFI_FINGERPRINT= "wf";
     //endregion
 
+    private static final int NUM_PARTICLES=2000;
+
     //region Instance variables
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
@@ -498,6 +500,9 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
+
+            // Call fusion update with WiFi
+            updateFusionWithWifi();
         }
         createWifiPositioningRequest();
     }
@@ -1222,6 +1227,48 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+    /**
+     * Updates the fusion algorithm with new WiFi positioning data.
+     * Called when new WiFi positioning data is available.
+     */
+    public void updateFusionWithWifi() {
+        if (fusionAlgorithm == null) {
+            Log.e("SensorFusion", "Cannot update fusion: fusionAlgorithm is null");
+
+            // Initialize fusion algorithm if not already done
+            initializeFusionAlgorithm();
+
+            // If still null, return
+            if (fusionAlgorithm == null) return;
+        }
+
+        // Retrieve WiFi LatLng position and floor
+        LatLng wifiPosition = getLatLngWifiPositioning();
+        int floor = getWifiFloor();
+
+        // If no WiFi position available. return
+        if (wifiPosition == null) return;
+
+        // Log WiFi position for debugging
+        Log.d("SensorFusion", "Wifi LatLng update: " + wifiPosition.latitude + ", " + wifiPosition.longitude);
+
+        // Update the fusion algorithm with new GNSS data
+        fusionAlgorithm.processWifiUpdate(wifiPosition, floor);
+
+        // Get the fused position
+        fusedPosition = fusionAlgorithm.getFusedPosition();
+
+        // Enhanced logging
+        if (fusedPosition != null) {
+            Log.d("SensorFusion", "Fusion after WiFi: " + fusedPosition.latitude + ", " + fusedPosition.longitude);
+
+            // Notify listeners
+            notifyPositionListeners(PositionListener.UpdateType.FUSED_POSITION, fusedPosition);
+        } else {
+            Log.e("SensorFusion", "Fusion algorithm returned null position after WiFi update");
+        }
+    }
+
     public boolean hasPositionListeners() {
         boolean hasListeners = !positionListeners.isEmpty();
         Log.d("SensorFusion", "Position listeners registered: " + hasListeners +
@@ -1248,20 +1295,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
-
-    /**
-     * Updates the fusion algorithm with new WiFi positioning data.
-     * Called when new WiFi positioning data is available.
-     *
-     * @param position The WiFi position
-     * @param floor The floor number
-     */
-    public void updateFusionWithWifi(LatLng position, int floor) {
-        this.wifiPosition = position;
-
-        // Only notify listeners of WiFi position, but don't update fusion
-        //notifyPositionListeners(PositionListener.UpdateType.WIFI_POSITION, position);
-    }
 
     /**
      * Initialize the fusion algorithm

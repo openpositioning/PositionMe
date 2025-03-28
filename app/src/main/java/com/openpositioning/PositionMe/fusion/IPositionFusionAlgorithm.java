@@ -29,6 +29,14 @@ public interface IPositionFusionAlgorithm {
     void processGnssUpdate(LatLng position, double altitude);
 
     /**
+     * Processes an update from the GNSS system.
+     *
+     * @param position The WiFi position in LatLng format (latitude, longitude)
+     * @param floor The floor index
+     */
+    void processWifiUpdate(LatLng position, int floor);
+
+    /**
      * Gets the current fused position estimate.
      *
      * @return The fused position (latitude, longitude)

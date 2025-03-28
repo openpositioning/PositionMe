@@ -12,6 +12,7 @@ public class MeasurementModel {
     // Standard deviations for different measurement sources (in meters)
     private static final double PDR_BASE_STD = 0.5;  // Base PDR noise per step
     private static final double GNSS_BASE_STD = 5.0; // Typical GPS accuracy
+    private static final double WIFI_BASE_STD = 4.0; // Typical WiFi fingerprinting accuracy
 
     // Maximum uncertainty (meters) to consider a measurement
     private static final double MAX_UNCERTAINTY = 50.0;
@@ -19,15 +20,18 @@ public class MeasurementModel {
     // Time relevance thresholds (milliseconds)
     private static final long PDR_RELEVANCE_THRESHOLD = 2000;    // 2 seconds
     private static final long GNSS_RELEVANCE_THRESHOLD = 20000;  // 20 seconds
+    private static final long WIFI_RELEVANCE_THRESHOLD = 20000;  // 20 seconds
 
     // Current measurement uncertainties
     private double pdrEastStd;
     private double pdrNorthStd;
     private double gnssStd;
+    private double wifiStd;
 
     // Timestamp of last measurements
     private long lastPdrTimestamp;
     private long lastGnssTimestamp;
+    private long lastWifiTimestamp;
 
     /**
      * Constructor to initialize the measurement model with default values.
@@ -36,8 +40,10 @@ public class MeasurementModel {
         this.pdrEastStd = PDR_BASE_STD;
         this.pdrNorthStd = PDR_BASE_STD;
         this.gnssStd = GNSS_BASE_STD;
+        this.wifiStd = WIFI_BASE_STD;
         this.lastPdrTimestamp = 0;
         this.lastGnssTimestamp = 0;
+        this.lastWifiTimestamp = 0;
     }
 
     /**
@@ -100,6 +106,31 @@ public class MeasurementModel {
                 " (baseAccuracy=" + baseUncertainty + ", timeFactor=" + timeFactor + ")");
     }
 
+    public void updateWifiUncertainty(Float accuracy, long currentTimeMillis) {
+        double baseUncertainty = WIFI_BASE_STD;
+
+        // Use reported accuracy if available, otherwise use default
+        if (accuracy != null && accuracy > 0) {
+            baseUncertainty = accuracy;
+        }
+
+        // Apply time factor if we have a previous measurement
+        double timeFactor = 1.0;
+        if (lastWifiTimestamp > 0) {
+            long timeDiff = currentTimeMillis - lastWifiTimestamp;
+            timeFactor = 1.0 + Math.min(2.0, timeDiff / 1000.0 / 30.0); // Max 3x increase after 60 seconds
+        }
+
+        // Update uncertainty
+        this.wifiStd = baseUncertainty * timeFactor;
+
+        // Update timestamp
+        this.lastWifiTimestamp = currentTimeMillis;
+
+        Log.d(TAG, "Updated WiFi uncertainty: " + wifiStd +
+                " (baseAccuracy=" + baseUncertainty + ", timeFactor=" + timeFactor + ")");
+    }
+
     /**
      * Checks if a PDR measurement is still relevant based on time.
      *
@@ -155,6 +186,15 @@ public class MeasurementModel {
      */
     public double getGnssStd() {
         return gnssStd;
+    }
+
+    /**
+     * Gets the current GNSS uncertainty.
+     *
+     * @return Standard deviation in meters
+     */
+    public double getWifiStd() {
+        return wifiStd;
     }
 
     /**

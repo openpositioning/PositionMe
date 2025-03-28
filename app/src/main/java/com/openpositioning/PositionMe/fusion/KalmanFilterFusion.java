@@ -46,7 +46,9 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
     private SimpleMatrix processMatrix;        // State transition matrix F
     private SimpleMatrix processNoiseMatrix;   // Process noise matrix Q
     private SimpleMatrix measurementMatrix;    // Measurement matrix H
-    private SimpleMatrix measurementNoiseMatrix; // Measurement noise matrix R
+    private SimpleMatrix measurementNoiseMatrixGnss; // Measurement noise matrix R_GNSS
+    private SimpleMatrix measurementNoiseMatrixWifi; // Measurement noise matrix R_WIFI
+
     private SimpleMatrix identityMatrix;       // Identity matrix for calculations
 
     // The reference point for ENU coordinates
@@ -109,14 +111,17 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         // Identity matrix for calculations
         identityMatrix = SimpleMatrix.identity(STATE_SIZE);
 
-        // Initialize measurement matrix - we measure position (x, y)
+        // Initialize measurement matrix  - we measure position (x, y)
         measurementMatrix = new SimpleMatrix(MEAS_SIZE, STATE_SIZE);
         measurementMatrix.set(MEAS_IDX_EAST, STATE_IDX_EAST, 1.0);   // Measure east position
         measurementMatrix.set(MEAS_IDX_NORTH, STATE_IDX_NORTH, 1.0); // Measure north position
 
-        // Initialize measurement noise matrix
-        measurementNoiseMatrix = SimpleMatrix.identity(MEAS_SIZE);
-        measurementNoiseMatrix = measurementNoiseMatrix.scale(25); // Default 5m std
+        // Initialize measurement noise matrices for GNSS and WIFI
+        measurementNoiseMatrixGnss = SimpleMatrix.identity(MEAS_SIZE);
+        measurementNoiseMatrixGnss = measurementNoiseMatrixGnss.scale(25); // Default 5m std
+
+        measurementNoiseMatrixWifi = SimpleMatrix.identity(MEAS_SIZE);
+        measurementNoiseMatrixWifi = measurementNoiseMatrixWifi.scale(16); // Default 4m std
 
         // Initialize process matrix (will be updated with each time step)
         processMatrix = SimpleMatrix.identity(STATE_SIZE);
@@ -277,8 +282,8 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
 
         // Prepare measurement noise matrix
         double gnssVar = measurementModel.getGnssStd() * measurementModel.getGnssStd();
-        measurementNoiseMatrix.set(MEAS_IDX_EAST, MEAS_IDX_EAST, gnssVar);
-        measurementNoiseMatrix.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, gnssVar);
+        measurementNoiseMatrixGnss.set(MEAS_IDX_EAST, MEAS_IDX_EAST, gnssVar);
+        measurementNoiseMatrixGnss.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, gnssVar);
 
         // Check for outliers by comparing GNSS with current state
         double currentEast = stateVector.get(STATE_IDX_EAST, 0);
@@ -292,7 +297,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         }
 
         // Perform Kalman update
-        performUpdate(measurementVector, currentTime);
+        performUpdate(measurementVector, measurementNoiseMatrixGnss, currentTime);
 
         // Reset step counter since we've had a GNSS update
         stepsSinceLastUpdate = 0;
@@ -300,6 +305,65 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         Log.d(TAG, "GNSS update: E=" + enu[0] + ", N=" + enu[1] +
                 " -> State=" + stateVector.get(STATE_IDX_EAST, 0) + ", " +
                 stateVector.get(STATE_IDX_NORTH, 0));
+    }
+
+    @Override
+    public void processWifiUpdate(LatLng position, int floor) {
+        long currentTime = System.currentTimeMillis();
+
+        // If reference still not initialized, we can't process
+        if (!referenceInitialized) {
+            Log.w(TAG, "Skipping WiFi update: reference position not initialized");
+            return;
+        }
+
+        // Convert WiFi position to ENU (using the reference position)
+        // TODO: Fix altitude estimate for wifi
+        double[] enu = CoordinateConverter.convertGeodeticToEnu(
+                position.latitude, position.longitude, referencePosition[2],
+                referencePosition[0], referencePosition[1], referencePosition[2]
+        );
+
+        // Debug the conversion
+        Log.d(TAG, "WiFi geodetic->ENU: " +
+                position.latitude + "," + position.longitude + " -> " +
+                "E=" + enu[0] + ", N=" + enu[1]);
+
+        // If this is the first position, initialize the state
+        if (stateVector.get(STATE_IDX_EAST, 0) == 0 && stateVector.get(STATE_IDX_NORTH, 0) == 0) {
+            stateVector.set(STATE_IDX_EAST, 0, enu[0]);
+            stateVector.set(STATE_IDX_NORTH, 0, enu[1]);
+            lastPredictTime = currentTime;
+            lastUpdateTime = currentTime;
+
+            Log.d(TAG, "First WiFi update: initializing state with E=" + enu[0] + ", N=" + enu[1]);
+            return;
+        }
+
+        // Update measurement model
+        measurementModel.updateWifiUncertainty(null, currentTime);
+
+        // Apply Kalman update with WiFi measurement
+        // (Create measurement vector and noise matrix)
+        SimpleMatrix measurementVector = new SimpleMatrix(MEAS_SIZE, 1);
+        measurementVector.set(MEAS_IDX_EAST, 0, enu[0]);
+        measurementVector.set(MEAS_IDX_NORTH, 0, enu[1]);
+
+        // Prepare measurement noise matrix
+        double gnssVar = measurementModel.getWifiStd() * measurementModel.getWifiStd();
+        measurementNoiseMatrixWifi.set(MEAS_IDX_EAST, MEAS_IDX_EAST, gnssVar);
+        measurementNoiseMatrixWifi.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, gnssVar);
+
+        // Perform Kalman update
+        performUpdate(measurementVector, measurementNoiseMatrixWifi, currentTime);
+
+        // Reset step counter since we've had a WiFi update
+        stepsSinceLastUpdate = 0;
+
+        Log.d(TAG, "WiFi update: E=" + enu[0] + ", N=" + enu[1] +
+                " -> State=" + stateVector.get(STATE_IDX_EAST, 0) + ", " +
+                stateVector.get(STATE_IDX_NORTH, 0));
+
     }
 
     @Override
@@ -434,11 +498,11 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         // Create measurement noise matrix (higher uncertainty for opportunistic updates)
         double uncertaintyFactor = 2.0; // Increase uncertainty for opportunistic updates
         double variance = Math.pow(measurementModel.getGnssStd() * uncertaintyFactor, 2);
-        measurementNoiseMatrix.set(MEAS_IDX_EAST, MEAS_IDX_EAST, variance);
-        measurementNoiseMatrix.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, variance);
+        measurementNoiseMatrixGnss.set(MEAS_IDX_EAST, MEAS_IDX_EAST, variance);
+        measurementNoiseMatrixGnss.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, variance);
 
         // Perform Kalman update
-        performUpdate(measurementVector, currentTime);
+        performUpdate(measurementVector, measurementNoiseMatrixGnss, currentTime);
 
         // Reset state
         hasPendingMeasurement = false;
@@ -576,7 +640,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
      * @param measurementVector The measurement vector (East, North)
      * @param currentTime Current system time in milliseconds
      */
-    private void performUpdate(SimpleMatrix measurementVector, long currentTime) {
+    private void performUpdate(SimpleMatrix measurementVector, SimpleMatrix measurementNoiseMatrix, long currentTime) {
         // Calculate innovation: y_k = z_k - H_k * x_k|k-1
         SimpleMatrix innovation = measurementVector.minus(measurementMatrix.mult(stateVector));
 
