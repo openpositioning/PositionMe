@@ -23,6 +23,7 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.Switch;
@@ -69,6 +70,7 @@ public class RecordingFragment extends Fragment {
     //Button to end PDR recording
     private Button stopButton;
     private Button startButton;
+    private ImageButton addTagButton;
     //Text views to display distance travelled and elevation since beginning of recording
     private TextView elevation;
     private TextView distanceTravelled;
@@ -285,6 +287,7 @@ public class RecordingFragment extends Fragment {
         this.gnssError = view.findViewById(R.id.tv_gnss_error);
         this.startButton = view.findViewById(R.id.button_start);
         this.stopButton = view.findViewById(R.id.button_stop);
+        this.addTagButton = view.findViewById(R.id.AddTagButton);
 
         // ✅ **设置默认 UI 值**
         // ✅ **Set default UI values**
@@ -377,6 +380,10 @@ public class RecordingFragment extends Fragment {
                 Toast.makeText(getContext(), "Recording in Progress", Toast.LENGTH_SHORT).show();
             }
         });
+
+
+        this.addTagButton.setOnClickListener(view1 -> addCurrentLocationMarker());
+
 
         // ✅ **Stop 按钮（结束录制 & 跳转）**
         // ✅ **Stop button (stop recording & jump)**
@@ -609,6 +616,17 @@ public class RecordingFragment extends Fragment {
             }
         });
 
+    }
+
+    private void addCurrentLocationMarker() {
+        if(currentLocation != null){
+            if(isRecording){
+                Marker marker = gMap.addMarker(new MarkerOptions()
+                        .position(currentLocation)
+                        .title("Added Tag")
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+            }
+        }
     }
 
     private void resetMap() {
