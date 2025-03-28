@@ -68,7 +68,7 @@ import java.util.stream.Stream;
  * Particle filter integration done by
  * @author Wojciech Boncela
  * @author Philip Heptonstall
- * @author Alexandros Zoupos (Adjusted for AddTag functionality)
+ * @author Alexandros Zoupos
  *
  */
 public class SensorFusion implements SensorEventListener, Observer {
@@ -100,12 +100,16 @@ public class SensorFusion implements SensorEventListener, Observer {
             {0.0, 2.0}
     });
     private static final SimpleMatrix PDR_COVARIANCE = new SimpleMatrix(new double[][]{
-            {2.0, 0.0},
-            {0.0, 0.1}
+            {1.0, 0.0},
+            {0.0, 5.0}
     });
     private static final SimpleMatrix WIFI_COVARIANCE = new SimpleMatrix(new double[][]{
-            {1.0, 0.0},
-            {0.0, 1.0}
+            {2.0, 0.0},
+            {0.0, 2.0}
+    });
+    private  static final SimpleMatrix GNSS_COVARIANCE = new SimpleMatrix(new double[][]{
+            {5.0, 0.0},
+            {0.0, 5.0}
     });
     //endregion
 
@@ -491,6 +495,10 @@ public class SensorFusion implements SensorEventListener, Observer {
             float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
+            float[] pdrData = getSensorValueMap().get(SensorTypes.PDR);
+            if (startLocation != null && pdrData != null) {
+                updateFusionData(new LatLng(latitude, longitude), GNSS_COVARIANCE, pdrData);
+            }
             if(saveRecording) {
                 trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
                         .setAccuracy(accuracy)
@@ -566,25 +574,25 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
-    private void updateFusionData(LatLng wifiLocation, float[] pdrData) {
+    private void updateFusionData(LatLng observation, SimpleMatrix observationCov, float[] pdrData) {
         double[] pdrData64 = {pdrData[0], pdrData[1]};
 
         // Convert the WiFi location to XY
         ProjCoordinate startLocationNorthEast = coordinateTransformer.convertWGS84ToTarget(
                 startLocation.latitude,
                 startLocation.longitude);
-        ProjCoordinate wifiLocationNorthEast = coordinateTransformer.convertWGS84ToTarget(
-                wifiLocation.latitude,
-                wifiLocation.longitude);
+        ProjCoordinate observationNorthEast = coordinateTransformer.convertWGS84ToTarget(
+                observation.latitude,
+                observation.longitude);
         double[] wifiXYZ  = CoordinateTransformer.getRelativePosition(
                 startLocationNorthEast,
-                wifiLocationNorthEast
+                observationNorthEast
         );
         double[] wifiXY = {wifiXYZ[0], wifiXYZ[1]};
 
         // Get the current timestamp and update the filter
         double timestamp = (System.currentTimeMillis() - absoluteStartTime) / 1e3;
-        if (!filter.update(pdrData64, wifiXY, timestamp, WIFI_COVARIANCE)) {
+        if (!filter.update(pdrData64, wifiXY, timestamp, observationCov)) {
             Log.w("SensorFusion", "Filter update failed");
         }
         double[] fusedPos = filter.getPos();
@@ -620,12 +628,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (wifiLocation != currentWifiLocation) {
                         float[] pdrData = getSensorValueMap().get(SensorTypes.PDR);
                         currentWifiLocation = wifiLocation;
-                        if (startLocation != null && pdrData != null) {
-                            updateFusionData(wifiLocation, pdrData);
+                        if (coordinateTransformer != null) {
+                            isWifiLocationOutlier = isOutlier(new LatLng(latitude, longitude), wifiLocation);
                         }
-                    }
-                    if(coordinateTransformer != null) {
-                        isWifiLocationOutlier = isOutlier(new LatLng(latitude, longitude), wifiLocation);
+                        if (startLocation != null && pdrData != null && !isWifiLocationOutlier) {
+                            updateFusionData(wifiLocation, WIFI_COVARIANCE, pdrData);
+                        }
                     }
                 }
 
@@ -1145,8 +1153,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
   /**
    * Adds a GNSS tag to the trajectory when the user presses "Add Tag".
-   * This method captures the current GNSS location (latitude, longitude, altitude)
-   * and stores it inside the trajectory's `gnss_data` array.
+   * This method captures the current GNSS location, derived from the (latitude, longitude, altitude)
+   * fused data, and stores it inside the trajectory's `gnss_data` array.
    *
    * The tag represents a marked position, which can later be used for debugging,
    * validation, or visualization on a map.
@@ -1162,10 +1170,22 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Capture the current timestamp relative to the start of the recording session
     long currentTimestamp = System.currentTimeMillis() - absoluteStartTime;
 
-    // Fetch the latest GNSS coordinates from the sensor fusion system
-    float currentLatitude = latitude;  // Get the current latitude from GNSS sensor
-    float currentLongitude = longitude;  // Get the current longitude from GNSS sensor
-    float currentAltitude = altitude;  // Get the current altitude from GNSS sensor
+    // Use fused location if available; otherwise, fall back to GNSS data.
+    float currentLatitude;
+    float currentLongitude;
+    float currentAltitude; // Altitude is still taken from GNSS (or you could set a default if needed)
+
+    // If statement ot check that fused location is not null and has more than 2 elements
+    if (fusedLocation != null && fusedLocation.length >= 2) {
+      currentLatitude = fusedLocation[0];
+      currentLongitude = fusedLocation[1];
+      currentAltitude = altitude; // Fused data doesn't include altitude, so we reuse the GNSS altitude.
+    } else {
+      currentLatitude = latitude;
+      currentLongitude = longitude;
+      currentAltitude = altitude;
+    }
+
     String provider = "fusion";  // Set provider to "fusion" as per instructions
 
 

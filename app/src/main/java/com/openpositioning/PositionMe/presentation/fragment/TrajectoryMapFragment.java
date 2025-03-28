@@ -51,7 +51,6 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
  * @author Mate Stodulka
- * @autor Alexandros Zoupos
  */
 
 public class TrajectoryMapFragment extends Fragment {
