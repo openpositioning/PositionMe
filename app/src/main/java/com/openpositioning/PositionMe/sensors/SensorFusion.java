@@ -172,6 +172,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     private double[] ecefRefCoords;
     private EKF extendedKalmanFilter;
 
+    private LatLng pendingWifiPosition = null;
+    private long wifiPositionTimestamp = 0;
+    private long wifiReceivedTime = 0;
+    private int wifiFloor = 0;
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -445,20 +449,19 @@ public class SensorFusion implements SensorEventListener, Observer {
                         Log.w("SensorFusion", "WiFi list is empty, skipping WiFi RSSI calculation.");
                     }
 
-                    // 获取 WiFi 位置信息（如果有）并传入 updateFusion
-                    wifiPos = wiFiPositioning.getWifiLocation();
                     JSONObject wifiResponse = null;
-                    if (wifiPos != null) {
+                    if (pendingWifiPosition != null &&
+                            SystemClock.uptimeMillis() - wifiPositionTimestamp < 3000) {
                         wifiResponse = new JSONObject();
                         try {
-                            wifiResponse.put("lat", wifiPos.latitude);
-                            wifiResponse.put("lon", wifiPos.longitude);
-                            wifiResponse.put("floor", wiFiPositioning.getFloor());
+                            wifiResponse.put("lat", pendingWifiPosition.latitude);
+                            wifiResponse.put("lon", pendingWifiPosition.longitude);
+                            wifiResponse.put("floor", wifiFloor);
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
+                        pendingWifiPosition = null;
                     }
-
                     updateFusion(wifiResponse, gnssLocation, avgRssi);
 
 
@@ -510,6 +513,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                 double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, getElevation(), startRef[0], startRef[1], startRef[2]);
 
                 Log.d("SensorFusion", "Using WiFi for EKF update: East=" + enuCoords[0] + ", North=" + enuCoords[1]);
+                long fusionTime = System.currentTimeMillis();
+                Log.d("SensorFusion", "WiFi定位结果使用时间: " + fusionTime + "，相对延迟: " + (fusionTime - wifiReceivedTime) + " ms");
 
                 if (extendedKalmanFilter != null) {
                     double timeSinceLastUpdate = SystemClock.uptimeMillis() - lastOpUpdateTime;
@@ -627,6 +632,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      */
     private void createWifiPositioningRequest(double avgRssi) {
+        final long requestStartTime = System.currentTimeMillis();
         try {
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList){
@@ -642,15 +648,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     Log.d("SensorFusion", "Received WiFi location: lat=" + wifiLocation.latitude + ", lon=" + wifiLocation.longitude + ", floor=" + floor);
-                    try {
-                        JSONObject wifiResponse = new JSONObject();
-                        wifiResponse.put("lat", wifiLocation.latitude);
-                        wifiResponse.put("lon", wifiLocation.longitude);
-                        wifiResponse.put("floor", floor);
-                        updateFusion(wifiResponse, null, avgRssi); // ✅ 传入真实的 avgRssi
-                    } catch (JSONException e) {
-                        Log.e("SensorFusion", "Error creating WiFi response JSON", e);
-                    }
+
+                    pendingWifiPosition = wifiLocation;
+                    wifiFloor = floor;
+                    wifiPositionTimestamp = SystemClock.uptimeMillis();
+                    wifiReceivedTime = System.currentTimeMillis();  // 用于日志分析
+                    Log.d("SensorFusion", "WiFi store success, store time: " + wifiReceivedTime);
+                    long responseTime = System.currentTimeMillis();
+                    long delay = responseTime - requestStartTime;
+                    Log.d("SensorFusion", "WiFi请求总延迟: " + delay + "ms");
+
                 }
 
                 @Override
