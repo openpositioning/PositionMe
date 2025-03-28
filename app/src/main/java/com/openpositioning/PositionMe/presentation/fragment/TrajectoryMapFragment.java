@@ -62,6 +62,7 @@ public class TrajectoryMapFragment extends Fragment {
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
 
     private Polyline gnssPolyline; // Polyline for GNSS path
+    private Polyline fusionPolyline; // Polygon for the building
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
@@ -238,6 +239,14 @@ public class TrajectoryMapFragment extends Fragment {
                 .width(5f)
                 .add() // start empty
         );
+
+        // Fusion path in green
+        fusionPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.GREEN)
+                .width(5f)
+                .add() // start empty
+        );
+
     }
 
 
@@ -338,6 +347,56 @@ public class TrajectoryMapFragment extends Fragment {
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
     }
+
+
+    /**
+     * Update the user's current fused location on the map, create or move orientation marker,
+     * and append to polyline if the user actually moved.
+     *
+     * @param newLocation The new location to plot.
+     * @param orientation The user’s heading (e.g. from sensor fusion).
+     */
+    public void updateFusionLocation(@NonNull LatLng newLocation, float orientation) {
+        if (gMap == null) return;
+
+        // Keep track of current location
+        LatLng oldLocation = this.currentLocation;
+        this.currentLocation = newLocation;
+
+        // If no marker, create it
+        if (orientationMarker == null) {
+            orientationMarker = gMap.addMarker(new MarkerOptions()
+                    .position(newLocation)
+                    .flat(true)
+                    .title("Current Position")
+                    .icon(BitmapDescriptorFactory.fromBitmap(
+                            UtilFunctions.getBitmapFromVector(requireContext(),
+                                    R.drawable.ic_baseline_navigation_24_green)))
+            );
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+        } else {
+            // Update marker position + orientation
+            orientationMarker.setPosition(newLocation);
+            orientationMarker.setRotation(orientation);
+            // Move camera a bit
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+        }
+
+        // Extend polyline if movement occurred
+        if (oldLocation != null && !oldLocation.equals(newLocation) && fusionPolyline != null) {
+            List<LatLng> points = new ArrayList<>(fusionPolyline.getPoints());
+            points.add(newLocation);
+            fusionPolyline.setPoints(points);
+        }
+
+        // Update indoor map overlay
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(newLocation);
+            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+        }
+    }
+
+
 
 
     public void updateCalibrationPinLocation(@NonNull LatLng newLocation, boolean pinConfirmed) {
