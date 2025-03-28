@@ -2,7 +2,7 @@ package com.openpositioning.PositionMe.sensors.SensorData;
 
 import android.hardware.SensorManager;
 
-public class RotationVectorData extends SensorData {
+public class RotationVectorData extends PhysicalSensorData {
   public final float[] rotation;
   public final float[] orientation = new float[3];
 

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.sensors;
+package com.openpositioning.PositionMe.sensors.SensorListeners;
 
 import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
 

@@ -22,6 +22,7 @@ import com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragmen
 import com.openpositioning.PositionMe.sensors.GNSSDataProcessor;
 import com.openpositioning.PositionMe.sensors.MovementSensor;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorInfo;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
@@ -208,6 +209,14 @@ public class SensorFusion implements SensorEventListener, Observer {
   // Actual sensor Fusion
   private FilterAdapter filter;
 
+  // Object Composition, Sensor Hub.
+  private SensorHub sensorHub;
+
+  private WifiDataProcessor wifiDataProcessor;
+
+  private GNSSDataProcessor gnssDataProcessor;
+
+
   //region Initialisation
 
   /**
@@ -273,6 +282,13 @@ public class SensorFusion implements SensorEventListener, Observer {
    * @see WifiDataProcessor for network data processing.
    */
   public void setContext(Context context) {
+    SensorManager sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+    this.sensorHub = new SensorHub(sensorManager);
+    this.wifiDataProcessor = new WifiDataProcessor(context, sensorHub);
+    this.gnssDataProcessor = new GNSSDataProcessor(context, sensorHub);
+
+    this.sensorHub.addListener(Sensor.TYPE_ACCELEROMETER, )
+
     this.appContext = context.getApplicationContext(); // store app context for later use
 
     // Initialise data collection devices (unchanged)...

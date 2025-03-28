@@ -1,6 +1,8 @@
 package com.openpositioning.PositionMe.sensors.SensorData;
 
-public class StepDetectorData extends SensorData {
+import android.os.SystemClock;
+
+public class StepDetectorData extends PhysicalSensorData {
   public final long stepTime;
 
   public StepDetectorData() {

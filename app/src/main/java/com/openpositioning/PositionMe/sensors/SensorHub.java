@@ -4,10 +4,10 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.location.LocationProvider;
-import android.net.wifi.WifiManager;
 import android.util.Log;
+import com.openpositioning.PositionMe.sensors.SensorData.PhysicalSensorData;
 import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
+import com.openpositioning.PositionMe.sensors.SensorListeners.SensorDataListener;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,7 +17,8 @@ public class SensorHub implements SensorEventListener {
   private final SensorManager sensorManager;
 
   // Store listeners for all physical sensors as defined by android.hardware.Sensor
-  private final Map<Integer, List<SensorDataListener<?>>> listeners = new HashMap<>();
+  private final Map<Integer, List<SensorDataListener<? extends PhysicalSensorData>>> listeners =
+      new HashMap<>();
 
   // Store all StreamSensor types.
   private final Map<StreamSensor, SensorModule<?>> sensorModules = new HashMap<>();
@@ -27,34 +28,38 @@ public class SensorHub implements SensorEventListener {
   private final Map<StreamSensor, List<SensorDataListener<?>>> streamSensorListeners =
       new HashMap<>();
 
-  public SensorHub(SensorManager sensorManager, WifiManager wifiManager,
-      LocationProvider locationProvider) {
+  public SensorHub(SensorManager sensorManager) {
     this.sensorManager = sensorManager;
   }
 
   // Subscribe to a specific sensor type.
-  public <T extends SensorData> void addListener(int sensorType, SensorDataListener<T> listener) {
+  public <T extends PhysicalSensorData> void addListener(int sensorType,
+      SensorDataListener<T> listener) {
     // Register sensor if not already initialized
     if (!listeners.containsKey(sensorType)) {
       registerSensor(sensorType, SensorManager.SENSOR_DELAY_NORMAL);
     }
 
     // Add listener
-    listeners.computeIfAbsent(sensorType, k -> new ArrayList<>()).add(listener);  }
+    listeners.computeIfAbsent(sensorType, k -> new ArrayList<>()).add(listener);
+  }
 
-  public <T extends SensorData> void addListener(StreamSensor sensorType, SensorDataListener<T> listener) {
+  public <T extends SensorData> void addListener(StreamSensor sensorType,
+      SensorDataListener<T> listener) {
     streamSensorListeners.computeIfAbsent(sensorType, k -> new ArrayList<>()).add(listener);
   }
 
   // Unsubscribe to your sensor type.
-  public <T extends SensorData> void removeListener(int sensorType, SensorDataListener<T> listener) {
-    List<SensorDataListener<?>> list = listeners.get(sensorType);
+  public <T extends PhysicalSensorData> void removeListener(int sensorType,
+      SensorDataListener<T> listener) {
+    List<SensorDataListener<? extends PhysicalSensorData>> list = listeners.get(sensorType);
     if (list != null) {
       list.remove(listener);
     }
   }
 
-  public <T extends SensorData> void removeListener(StreamSensor sensorType, SensorDataListener<T> listener) {
+  public <T extends SensorData> void removeListener(StreamSensor sensorType,
+      SensorDataListener<T> listener) {
     List<SensorDataListener<?>> list = streamSensorListeners.get(sensorType);
     if (list != null) {
       list.remove(listener);
@@ -93,11 +98,12 @@ public class SensorHub implements SensorEventListener {
 
   @Override
   public void onSensorChanged(SensorEvent event) {
-    notifyListeners(event.sensor.getType(), event.values);
+    notifyListeners(event.sensor.getType(), PhysicalSensorData.fromEvent(event));
   }
 
-  private <T> void notifyListeners(Integer sensorType, T data) {
-    List<SensorDataListener<?>> sensorListeners = listeners.get(sensorType);
+  private void notifyListeners(Integer sensorType, PhysicalSensorData data) {
+    List<SensorDataListener<? extends PhysicalSensorData>> sensorListeners =
+        listeners.get(sensorType);
     if (sensorListeners != null) {
       for (SensorDataListener<?> listener : sensorListeners) {
         notifyListener(listener, data);
@@ -106,7 +112,8 @@ public class SensorHub implements SensorEventListener {
   }
 
   @SuppressWarnings("unchecked")
-  private <T extends SensorData> void notifyListener(SensorDataListener<T> listener, Object data) {
+  private <T extends SensorData> void notifyListener(SensorDataListener<T> listener,
+      Object data) {
     listener.onSensorDataReceived((T) data);
   }
 
