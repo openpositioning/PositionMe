@@ -159,7 +159,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Coordinate transformer instance to convert WGS84 (Latitude, Longitude) coordinates into
     // a Northing-Easting space.
     // Initialized when given the start location.
-    private CoordinateTransformer coordinateTransformer;
+    public CoordinateTransformer coordinateTransformer;
 
     // Sensor values
     private float[] acceleration;

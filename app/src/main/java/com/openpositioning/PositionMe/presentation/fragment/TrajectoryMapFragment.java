@@ -9,6 +9,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.Spinner;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 
@@ -27,6 +28,7 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -49,7 +51,6 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
  * @author Mate Stodulka
- * @author Alexandros Zoupos
  */
 
 public class TrajectoryMapFragment extends Fragment {
@@ -57,11 +58,20 @@ public class TrajectoryMapFragment extends Fragment {
     private static TrajectoryMapFragment instance;  // Static reference to store the instance of the fragment
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
+    private LatLng estimatedLocation;
+    private LatLng fusedCurrentLocation;
+    private LatLng pdrCurrentLocation;
+
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
     private Marker wifiMarker; // Wifi position marker
     private Marker fusedMarker; // Fused data position marker
     private Polyline polyline; // Polyline representing user's movement path
+    private Polyline interpolatedPolyLine; // Polyline extending from current fusion position estimated
+                                           // from PDR.
+    private Polyline pdrPolyline; // Polyline for PDR trajectory with a dotted black line
+
+
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
     private boolean isWifiOn = false; // Tracks if GNSS tracking is enabled
@@ -127,6 +137,32 @@ public class TrajectoryMapFragment extends Fragment {
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         switchColorButton = view.findViewById(R.id.lineColorButton);
+
+      // NEW: Get the toggle button and controls container for collapsing/expanding
+      final ImageView toggleButton = view.findViewById(R.id.toggleButton);
+      final View controlsContainer = view.findViewById(R.id.controlsContainer);
+
+      // Set initial state (expanded)
+      controlsContainer.setVisibility(View.VISIBLE);
+      toggleButton.setImageResource(R.drawable.ic_expand_less);
+
+      // Set the toggle logic
+      toggleButton.setOnClickListener(new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+          if (controlsContainer.getVisibility() == View.VISIBLE) {
+            // Collapse the controls container
+            controlsContainer.setVisibility(View.GONE);
+            // Change icon to indicate expandable state (e.g., arrow down)
+            toggleButton.setImageResource(R.drawable.ic_expand_more);
+          } else {
+            // Expand the controls container
+            controlsContainer.setVisibility(View.VISIBLE);
+            // Change icon to indicate collapse state (e.g., arrow up)
+            toggleButton.setImageResource(R.drawable.ic_expand_less);
+          }
+        }
+      });
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -247,6 +283,22 @@ public class TrajectoryMapFragment extends Fragment {
                 .add() // start empty
         );
 
+        interpolatedPolyLine = map.addPolyline(new PolylineOptions()
+                .color(Color.RED)
+                .width(5f)
+                .zIndex(10f)
+                .add() // start empty
+                .pattern(Arrays.asList(new Dot(), new Gap(10))) // Dotted line
+        );
+
+        pdrPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.BLACK)
+                .width(5f)
+                .zIndex(10f)
+                .add() // start empty
+        );
+
+
         // GNSS path in blue
         gnssPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.BLUE)
@@ -308,55 +360,95 @@ public class TrajectoryMapFragment extends Fragment {
         });
     }
 
+  public void interpolateFusedLocation(@NonNull LatLng newLocation) {
+    if (gMap == null) return;
+    // Keep track of current location
+    LatLng oldLocation = this.estimatedLocation;
+    this.estimatedLocation = newLocation;
+
+    // Extend polyline if movement occurred
+    if (oldLocation != null && !oldLocation.equals(this.estimatedLocation)
+            && interpolatedPolyLine != null) {
+      List<LatLng> points = new ArrayList<>(interpolatedPolyLine.getPoints());
+      points.add(this.estimatedLocation);
+      interpolatedPolyLine.setPoints(points);
+    }
+  }
+
+
+  /**
+   * Update user's location in the map. Handles the polyline and orientation marker
+   * @param newLocation New location to plot
+   * @param orientation User's heading
+   */
+  public void updateUserLocation(LatLng newLocation, float orientation) {
+    if (gMap == null) return;
+
+    // Keep track of current location
+    LatLng oldLocation = this.fusedCurrentLocation;
+    this.fusedCurrentLocation = newLocation;
+
+    // If no marker, create it
+    if (orientationMarker == null) {
+      orientationMarker = gMap.addMarker(new MarkerOptions()
+              .position(newLocation)
+              .flat(true)
+              .title("Current Position")
+              .icon(BitmapDescriptorFactory.fromBitmap(
+                      UtilFunctions.getBitmapFromVector(requireContext(),
+                              R.drawable.ic_baseline_navigation_24)))
+      );
+      gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(this.fusedCurrentLocation, 19f));
+    } else {
+      // Update marker position + orientation
+      orientationMarker.setPosition(this.fusedCurrentLocation);
+      orientationMarker.setRotation(orientation);
+      // Move camera a bit
+      gMap.moveCamera(CameraUpdateFactory.newLatLng(this.fusedCurrentLocation));
+    }
+
+    // Extend polyline if movement occurred
+    if (oldLocation != null && !oldLocation.equals(this.fusedCurrentLocation) && polyline != null) {
+      this.estimatedLocation = newLocation;
+      interpolatedPolyLine.setPoints(new ArrayList<>());
+
+      List<LatLng> points = new ArrayList<>(polyline.getPoints());
+      points.add(this.fusedCurrentLocation);
+      polyline.setPoints(points);
+    }
+    // Update indoor map overlay
+    if (indoorMapManager != null) {
+      indoorMapManager.setCurrentLocation(this.fusedCurrentLocation);
+      setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+    }
+  }
     /**
      * Update the user's current location on the map, create or move orientation marker,
      * and append to polyline if the user actually moved.
      *
      * @param newLocation The new location to plot.
+     * @param initialPosition to offset the new location if needed
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
     public void updateUserLocation(@NonNull LatLng newLocation, LatLng initialPosition,
                                    float orientation) {
-      if (gMap == null) return;
-
+      LatLng offsetNewLocation = new LatLng(newLocation.latitude + initialPosition.latitude,
+              newLocation.longitude + initialPosition.longitude);
+      updateUserLocation(offsetNewLocation, orientation);
+    }
+    public void updatePdrLocation(@NonNull LatLng newLocation, LatLng initialPosition) {
+        if (gMap == null) return;
         // Keep track of current location
-      LatLng oldLocation = this.currentLocation;
-      this.currentLocation = new LatLng(newLocation.latitude + initialPosition.latitude,
-                                        newLocation.longitude + initialPosition.longitude);
-
-        // If no marker, create it
-        if (orientationMarker == null) {
-            orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
-                    .flat(true)
-                    .title("Current Position")
-                    .icon(BitmapDescriptorFactory.fromBitmap(
-                            UtilFunctions.getBitmapFromVector(requireContext(),
-                                    R.drawable.ic_baseline_navigation_24)))
-            );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(this.currentLocation, 19f));
-        } else {
-            // Update marker position + orientation
-            orientationMarker.setPosition(this.currentLocation);
-            orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(this.currentLocation));
-        }
-
+        LatLng oldLocation = this.pdrCurrentLocation;
+        this.pdrCurrentLocation = new LatLng(newLocation.latitude + initialPosition.latitude,
+                newLocation.longitude + initialPosition.longitude);
         // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(this.currentLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            points.add(this.currentLocation);
-            polyline.setPoints(points);
-        }
-        // Update indoor map overlay
-        if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(this.currentLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+        if (oldLocation != null && !oldLocation.equals(this.pdrCurrentLocation) && pdrPolyline != null) {
+            List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
+            points.add(this.pdrCurrentLocation);
+            pdrPolyline.setPoints(points);
         }
     }
-
-
 
     /**
      * Set the initial camera position for the map.
@@ -385,9 +477,16 @@ public class TrajectoryMapFragment extends Fragment {
      * @return The current user location as a LatLng object.
      */
     public LatLng getCurrentLocation() {
-        return currentLocation;
+        return fusedCurrentLocation;
     }
 
+    public LatLng getPdrCurrentLocation() {
+        return pdrCurrentLocation;
+    }
+
+    public LatLng getEstimatedLocation() {
+      return estimatedLocation;
+    }
     /**
      * Called when we want to set or update the GNSS marker position
      */
@@ -638,7 +737,7 @@ public class TrajectoryMapFragment extends Fragment {
       gMap.addMarker(new MarkerOptions()
               .position(tagLocation)
               .title("Tag")
-              .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+              .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
       Log.d("TrajectoryMapFragment", "Tag marker added at: " + tagLocation.toString());
     } else {
       Log.e("TrajectoryMapFragment", "Google Map is not ready yet.");
