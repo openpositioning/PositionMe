@@ -62,6 +62,8 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng fusedCurrentLocation;
     private LatLng pdrCurrentLocation;
 
+    private float currentElevation;
+
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
     private Marker wifiMarker; // Wifi position marker
@@ -375,7 +377,6 @@ public class TrajectoryMapFragment extends Fragment {
     }
   }
 
-
   /**
    * Update user's location in the map. Handles the polyline and orientation marker
    * @param newLocation New location to plot
@@ -403,15 +404,12 @@ public class TrajectoryMapFragment extends Fragment {
       // Update marker position + orientation
       orientationMarker.setPosition(this.fusedCurrentLocation);
       orientationMarker.setRotation(orientation);
-      // Move camera a bit
-      gMap.moveCamera(CameraUpdateFactory.newLatLng(this.fusedCurrentLocation));
     }
 
     // Extend polyline if movement occurred
     if (oldLocation != null && !oldLocation.equals(this.fusedCurrentLocation) && polyline != null) {
       this.estimatedLocation = newLocation;
       interpolatedPolyLine.setPoints(new ArrayList<>());
-
       List<LatLng> points = new ArrayList<>(polyline.getPoints());
       points.add(this.fusedCurrentLocation);
       polyline.setPoints(points);
@@ -557,6 +555,15 @@ public class TrajectoryMapFragment extends Fragment {
             // Update the existing fused marker's position
             fusedMarker.setPosition(fusedLocation);
         }
+    }
+    public void updateFloor(int floor) {
+      if(indoorMapManager != null && this.autoFloorSwitch.isChecked()) {
+          indoorMapManager.setCurrentFloor(floor, true);
+      }
+    }
+
+    public void updateElevation(float elevation) {
+
     }
 
     /**

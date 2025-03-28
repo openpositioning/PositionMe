@@ -37,6 +37,8 @@ import com.google.android.gms.maps.model.LatLng;
 
 import org.locationtech.proj4j.ProjCoordinate;
 
+import java.util.Objects;
+
 
 /**
  * Fragment responsible for managing the recording process of trajectory data.
@@ -334,6 +336,13 @@ public class RecordingFragment extends Fragment {
                     this.sensorFusion.getFusionError()));
         }
 
+        // Get and use floor provided by WIFI
+        float floor = Objects.requireNonNull(
+                sensorFusion.getSensorValueMap().
+                        getOrDefault(SensorTypes.WIFI_FLOOR,new float[]{(float) -10.0}))[0];
+        if (floor != -10) {
+            trajectoryMapFragment.updateFloor(Math.round(floor));
+        }
 
     }
 
