@@ -35,7 +35,7 @@ public class ParticleFilter {
     }
 
     // 固定的粒子数量，可以根据需要进行配置
-    private static final int NUM_PARTICLES = 50;
+    private static final int NUM_PARTICLES = 100;
 
     /**
      * 更新粒子滤波器状态的核心函数。融合当前的传感器数据（WiFi/GNSS定位和PDR位移），

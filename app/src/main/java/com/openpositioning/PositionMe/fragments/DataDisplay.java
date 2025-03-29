@@ -167,10 +167,19 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                     .position(fusedLocation)
                     .title("Estimated Position"));
             mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
+            if (indoorMapManager != null) {
+                indoorMapManager.setCurrentLocation(fusedLocation);
+            }
+            if (indoorMapManager.getIsIndoorMapSet()) {
+                indoorMapManager.setCurrentFloor(2, false);
+            }
 
         } else {
             statusText.setText("Location: Unavailable");
         }
+
+
+
     }
 
 
