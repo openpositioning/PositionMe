@@ -71,9 +71,12 @@ public class ReplayActivity extends AppCompatActivity {
             Log.i(TAG, "Trajectory file exists: " + filePath);
         }
 
-        // Show StartLocationFragment first to let user pick location
+        // 直接显示ReplayFragment，不再显示StartLocationFragment
         if (savedInstanceState == null) {
-            showStartLocationFragment();
+            // 使用默认初始位置值
+            float defaultLat = 0f;
+            float defaultLon = 0f;
+            showReplayFragment(filePath, defaultLat, defaultLon);
         }
     }
 

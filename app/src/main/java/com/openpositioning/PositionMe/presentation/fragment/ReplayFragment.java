@@ -21,7 +21,9 @@ import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.sensors.SensorFusion.WiFiPositioningCallback;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -103,6 +105,23 @@ public class ReplayFragment extends Fragment {
 
         Log.i(TAG, "Trajectory file confirmed to exist and is readable.");
 
+        // 如果初始位置为(0,0)，尝试从文件中提取GNSS位置作为初始值
+        if (initialLat == 0f && initialLon == 0f) {
+            try {
+                // 先读取文件内容，查找第一个有效的GNSS数据
+                LatLng firstGnssPoint = extractFirstGnssLocation(filePath);
+                if (firstGnssPoint != null) {
+                    initialLat = (float) firstGnssPoint.latitude;
+                    initialLon = (float) firstGnssPoint.longitude;
+                    Log.i(TAG, "Using first GNSS position as origin: " + initialLat + ", " + initialLon);
+                } else {
+                    Log.w(TAG, "No GNSS data found in trajectory file, using (0,0) as origin");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error reading GNSS data from trajectory file", e);
+            }
+        }
+
         // Parse the JSON file and prepare replayData using TrajParser
         replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
 
@@ -114,6 +133,38 @@ public class ReplayFragment extends Fragment {
         }
     }
 
+    /**
+     * 从轨迹文件中提取第一个有效的GNSS位置
+     * @param filePath 轨迹文件路径
+     * @return 第一个有效的GNSS位置，如果没有则返回null
+     */
+    private LatLng extractFirstGnssLocation(String filePath) {
+        try {
+            File file = new File(filePath);
+            BufferedReader br = new BufferedReader(new FileReader(file));
+            com.google.gson.JsonObject root = new com.google.gson.JsonParser().parse(br).getAsJsonObject();
+            br.close();
+
+            if (root.has("gnssData")) {
+                com.google.gson.JsonArray gnssArray = root.getAsJsonArray("gnssData");
+                if (gnssArray != null && gnssArray.size() > 0) {
+                    for (int i = 0; i < gnssArray.size(); i++) {
+                        com.google.gson.JsonObject gnssObj = gnssArray.get(i).getAsJsonObject();
+                        if (gnssObj.has("latitude") && gnssObj.has("longitude")) {
+                            double lat = gnssObj.get("latitude").getAsDouble();
+                            double lng = gnssObj.get("longitude").getAsDouble();
+                            if (lat != 0 || lng != 0) {
+                                return new LatLng(lat, lng);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error extracting GNSS location", e);
+        }
+        return null;
+    }
 
     @Nullable
     @Override
