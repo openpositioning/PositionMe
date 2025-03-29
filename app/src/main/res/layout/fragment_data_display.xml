@@ -20,7 +20,6 @@
             android:layout_marginTop="16dp"
             app:layout_constraintDimensionRatio="16:9"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.484"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
@@ -33,5 +32,19 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/mapFragmentContainer" />
+
+        <Spinner
+            android:id="@+id/spinner2"
+            android:layout_width="67dp"
+            android:layout_height="38dp"
+            android:background="@color/white"
+            
+            android:text="@string/choose_map"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.093"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.095" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>

@@ -11,6 +11,9 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -51,6 +54,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
     private IndoorMapManager indoorMapManager;
 
+    private Spinner mapTypeSpinner;
+
     private final Runnable updateWifiLocationRunnable = new Runnable() {
         @Override
         public void run() {
@@ -86,10 +91,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-//        if (getArguments() != null) {
-//            mParam1 = getArguments().getString(ARG_PARAM1);
-//            mParam2 = getArguments().getString(ARG_PARAM2);
-//        }
+
+
     }
 
     @Override
@@ -122,6 +125,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         positioningFusion.initCoordSystem(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
 
         SensorFusion.getInstance().pdrReset();
+        mapTypeSpinner = view.findViewById(R.id.spinner2);
+        setupMapTypeSpinner();
     }
 
     @Override
@@ -166,7 +171,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
             mMap.addMarker(new MarkerOptions()
                     .position(fusedLocation)
                     .title("Estimated Position"));
-            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
+            //mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
             if (indoorMapManager != null) {
                 indoorMapManager.setCurrentLocation(fusedLocation);
             }
@@ -180,6 +185,39 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
 
 
+    }
+
+    private void setupMapTypeSpinner() {
+        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
+                requireContext(), R.array.map_types, android.R.layout.simple_spinner_item);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        mapTypeSpinner.setAdapter(adapter);
+        mapTypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (mMap == null) return;
+                switch (position) {
+                    case 0:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                        break;
+                    case 1:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+                        break;
+                    case 2:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
+                        break;
+                    default:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                        break;
+                }
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                if (mMap != null) {
+                    mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                }
+            }
+        });
     }
 
 
