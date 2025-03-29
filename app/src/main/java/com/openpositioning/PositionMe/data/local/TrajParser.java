@@ -4,6 +4,7 @@ import android.content.Context;
 import android.hardware.SensorManager;
 import android.util.Log;
 
+import android.util.Pair;
 import android.widget.Toast;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.Gson;
@@ -91,7 +92,7 @@ public class TrajParser {
 
     public LatLng pdrLocation;  // PDR-derived location estimate
     public LatLng gnssLocation; // GNSS location (may be null if unavailable)
-    public LatLng wifiLocation; // Wifi-Location
+    public Pair<LatLng, Integer> wifiLocation; // Wifi-Location
     public LatLng fusedLocation; // TODO: Haven't used it.
     public float orientation;   // Orientation in degrees
     public float speed;         // Speed in meters per second
@@ -107,7 +108,7 @@ public class TrajParser {
      * @param timestamp    The timestamp associated with this point.
      */
     public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation,
-        LatLng wifiLocation, LatLng fusedLocation,
+        Pair<LatLng, Integer> wifiLocation, LatLng fusedLocation,
         float orientation, float speed, long timestamp) {
       this.pdrLocation = pdrLocation;
       this.gnssLocation = gnssLocation;
@@ -149,6 +150,7 @@ public class TrajParser {
   private static class WifiLocation extends TimedData {
 
     public LatLng latLng; // Wifi Location coordinates
+    public int floor;
   }
 
   private static class WifiRecord extends TimedData {
@@ -213,14 +215,20 @@ public class TrajParser {
           + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
 
       LatLng initialPosition;
-      if (!gnssList.isEmpty() && useGnssAsInitial) {
-        initialPosition = new LatLng(gnssList.get(0).latitude, gnssList.get(0).longitude);
+      if (useGnssAsInitial) {
+        if(!gnssList.isEmpty()) {
+          initialPosition = new LatLng(gnssList.get(0).latitude, gnssList.get(0).longitude);
+        } else if (!wifiLocations.isEmpty()) {
+          initialPosition = wifiLocations.get(0).latLng;
+          Toast.makeText(context, "No GNSS samples found. "
+              + "Using Wifi Location instead", Toast.LENGTH_LONG).show();
+        } else {
+          Toast.makeText(context, "No GNSS or WIFI samples found. "
+              + "Defaulting to user-set location", Toast.LENGTH_LONG).show();
+          initialPosition = initialPos;
+        }
       } else {
         initialPosition = initialPos;
-        if (useGnssAsInitial) {
-          Toast.makeText(context, "No GNSS samples found. "
-              + "Defaulting to user-set location", Toast.LENGTH_LONG).show();
-        }
       }
       result = constructReplayPoints(context, initialPosition, pdrList, imuList,
           gnssList, startTimestamp, wifiLocations);
@@ -305,6 +313,9 @@ public class TrajParser {
             fusedLocation = updateFusionData(gnssLocation, coordinateTransformer,
                 startTimestamp, initialPos, SensorFusion.GNSS_COVARIANCE,
                 new float[]{pdr.x, pdr.y});
+          } else {
+            Log.i("TrajParser","Outlier GNSS Sample, current " + fusedLocation
+                + "GNSS: " + gnssLocation);
           }
           previousGnssLoc = gnssLocation;
         }
@@ -312,22 +323,27 @@ public class TrajParser {
 
       WifiLocation closestWifiLoc = TimedData.findClosestRecord(
           wifiLocations, pdr.relativeTimestamp);
-      LatLng wifiLocation = closestWifiLoc == null ? null : closestWifiLoc.latLng;
+      Pair<LatLng, Integer> wifiLocAndFloor = closestWifiLoc == null ? null :
+          new Pair<>(closestWifiLoc.latLng, closestWifiLoc.floor);
 
-      if (wifiLocation != null) {
+      if (wifiLocAndFloor != null) {
+        LatLng wifiLocation = wifiLocAndFloor.first;
         if (previousWifiLoc == null || !previousWifiLoc.equals(wifiLocation)) {
           // New GNSS observation. Run sensor fusion IF it is not an outlier
           if (!SensorFusion.isOutlier(coordinateTransformer, fusedLocation, wifiLocation)) {
             fusedLocation = updateFusionData(wifiLocation, coordinateTransformer,
                 startTimestamp, initialPos, SensorFusion.WIFI_COVARIANCE,
                 new float[]{pdr.x, pdr.y});
+          } else {
+            Log.i("TrajParser","Outlier WIFI Sample, current " + fusedLocation
+                + "GNSS: " + wifiLocation);
           }
           previousWifiLoc = wifiLocation;
         }
       }
       // TODO: Think about optionals rather than passing around nulls everywhere. What should
       // the application do when there is no point to plot?
-      result.add(new ReplayPoint(pdrLocation, gnssLocation, wifiLocation, fusedLocation,
+      result.add(new ReplayPoint(pdrLocation, gnssLocation, wifiLocAndFloor, fusedLocation,
           orientationDeg, 0f, pdr.relativeTimestamp));
     }
     result.sort(Comparator.comparingLong(rp -> rp.timestamp));
@@ -408,6 +424,7 @@ public class TrajParser {
           public void onSuccess(LatLng wifiLocation, int floor) {
             // Handle the success response
             location.latLng = wifiLocation;
+            location.floor = floor;
             wifiLocationsWithNulls[index] = location;
             // Signal completion on wifiResponses (decrement the count)
             wifiResponses.countDown();

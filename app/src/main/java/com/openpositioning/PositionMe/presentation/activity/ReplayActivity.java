@@ -78,15 +78,7 @@ public class ReplayActivity extends AppCompatActivity {
     } else {
       Log.i(TAG, "Trajectory file exists: " + filePath);
     }
-
     promptForStartingLocation();
-
-    // Show StartLocationFragment first to let user pick location
-    if (savedInstanceState == null && !takeGnssLoc) {
-      showStartLocationFragment();
-    } else {
-      showReplayFragment(filePath, takeGnssLoc, 0,0);
-    }
   }
 
   /**
@@ -118,8 +110,14 @@ public class ReplayActivity extends AppCompatActivity {
   private void promptForStartingLocation() {
     new AlertDialog.Builder(this)
         .setTitle("Starting Location Source")
-        .setPositiveButton("First GNSS Sample", (dialog, which) -> takeGnssLoc = true)
-        .setNegativeButton("Manually Set", (dialog, which) -> takeGnssLoc = false)
+        .setPositiveButton("First GNSS Sample", (dialog, which) -> {
+          takeGnssLoc = true;
+          showReplayFragment(filePath, takeGnssLoc,  0, 0 );
+        })
+        .setNegativeButton("Use Manually Set", (dialog, which) -> {
+          takeGnssLoc = false;
+          showStartLocationFragment();
+        })
         .setCancelable(false)
         .show();
   }

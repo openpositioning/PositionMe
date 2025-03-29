@@ -412,27 +412,29 @@ public class ReplayFragment extends Fragment {
       for (int i = 0; i <= newIndex; i++) {
         TrajParser.ReplayPoint p = replayData.get(i);
         // TODO: Allow setting to disable fusion.
-        trajectoryMapFragment.updateUserLocation(p.fusedLocation, initialLatLng, p.orientation);
-        trajectoryMapFragment.updatePdrLocation(p.pdrLocation, initialLatLng);
+        trajectoryMapFragment.updateUserLocation(p.fusedLocation, p.orientation);
+        trajectoryMapFragment.updatePdrLocation(p.pdrLocation);
         if (p.gnssLocation != null) {
           trajectoryMapFragment.updateGNSS(p.gnssLocation);
         }
         // Plot the latest WiFi datapoint
         if (p.wifiLocation != null) {
-          trajectoryMapFragment.updateWifi(p.wifiLocation);
+          trajectoryMapFragment.updateWifi(p.wifiLocation.first);
+          trajectoryMapFragment.updateFloor(p.wifiLocation.second);
         }
       }
     } else {
       // Normal sequential forward step: add just the new point
       TrajParser.ReplayPoint p = replayData.get(newIndex);
-      trajectoryMapFragment.updateUserLocation(p.fusedLocation, initialLatLng, p.orientation);
-      trajectoryMapFragment.updatePdrLocation(p.pdrLocation, initialLatLng);
+      trajectoryMapFragment.updateUserLocation(p.fusedLocation, p.orientation);
+      trajectoryMapFragment.updatePdrLocation(p.pdrLocation);
       if (p.gnssLocation != null) {
         trajectoryMapFragment.updateGNSS(p.gnssLocation);
       }
       // Plot the latest WiFi datapoint
       if (p.wifiLocation != null) {
-        trajectoryMapFragment.updateWifi(p.wifiLocation);
+        trajectoryMapFragment.updateWifi(p.wifiLocation.first);
+        trajectoryMapFragment.updateFloor(p.wifiLocation.second);
       }
     }
 
