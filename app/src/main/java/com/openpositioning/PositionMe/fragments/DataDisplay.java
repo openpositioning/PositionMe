@@ -18,6 +18,7 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
@@ -43,6 +44,10 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
     // For the map
     private GoogleMap mMap;
+
+    // Add a field for the marker
+    private Marker fusedMarker = null;
+
     private SupportMapFragment mapFragment;
     private final android.os.Handler handler = new android.os.Handler();
     private final int updateInterval = 1000; // 1 second
@@ -127,7 +132,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
-        showCurrentLocation();
+//        showCurrentLocation();
         handler.post(updateWifiLocationRunnable);
         indoorMapManager = new IndoorMapManager(mMap);
         indoorMapManager.setIndicationOfIndoorMap();
@@ -154,7 +159,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
         if (fusedLocation != null) {
 
-            // 显示 WiFi 经纬度 + 相对坐标
+            // 显示 estimated 经纬度 + 楼层
             String display = String.format(
                     "Location:\nLat: %.6f\nLon: %.6f\nFloor: %d",
                     fusedLocation.latitude,
@@ -163,10 +168,17 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
             );
             statusText.setText(display);
 
-            mMap.addMarker(new MarkerOptions()
-                    .position(fusedLocation)
-                    .title("Estimated Position"));
-            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
+            if (fusedMarker == null) {
+                // Create marker only once
+                fusedMarker = mMap.addMarker(new MarkerOptions()
+                        .position(fusedLocation)
+                        .title("Estimated Position"));
+                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
+            } else {
+                // Just move the marker
+                fusedMarker.setPosition(fusedLocation);
+            }
+//            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
             if (indoorMapManager != null) {
                 indoorMapManager.setCurrentLocation(fusedLocation);
             }
