@@ -28,6 +28,7 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -59,6 +60,9 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
     // Add a field for the marker
     private Marker fusedMarker = null;
+    private Marker wifiMarker = null;
+    private Marker gnssMarker = null;
+    private Marker pdrMarker = null;
 
     private SupportMapFragment mapFragment;
     private final android.os.Handler handler = new android.os.Handler();
@@ -144,8 +148,6 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
         statusText = view.findViewById(R.id.textView3);
 
-        positioningFusion.initCoordSystem(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
-
         SensorFusion.getInstance().pdrReset();
         mapTypeSpinner = view.findViewById(R.id.spinner2);
         setupMapTypeSpinner();
@@ -160,6 +162,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         indoorMapManager.setIndicationOfIndoorMap();
         trajectoryDrawer = new TrajectoryDrawer(mMap);
 
+        positioningFusion.initCoordSystem(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
 
     }
 
@@ -184,6 +187,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         if (fusedLocation != null) {
             trajectoryDrawer.addPoint(fusedLocation);
 
+            // 显示 estimated 经纬度 + 楼层
             String display = String.format(
                     "Location:\nLat: %.6f\nLon: %.6f\nFloor: %d",
                     fusedLocation.latitude,
@@ -192,6 +196,18 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
             );
             statusText.setText(display);
 
+//            if (fusedMarker == null) {
+//                // Create marker only once
+//                fusedMarker = mMap.addMarker(new MarkerOptions()
+//                        .position(fusedLocation)
+//                        .title("Estimated Position"));
+//                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
+//            } else {
+//                // Just move the marker
+//                fusedMarker.setPosition(fusedLocation);
+//            }
+
+            // --- Fused ---
             float bearing = SensorFusion.getInstance().getHeading(); // 获取朝向角度（度）
 
             // 初始化图标
@@ -200,8 +216,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
 
             if (fusedMarker == null) {
-                //BitmapDescriptor blueDotIcon = vectorToBitmap(requireContext(), R.drawable.ic_blue_dot);
-
+                // Create marker only once
                 fusedMarker = mMap.addMarker(new MarkerOptions()
                         .position(fusedLocation)
                         .title("Estimated Position")
@@ -211,8 +226,49 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
                 mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
             } else {
+                // Just move the marker
                 fusedMarker.setPosition(fusedLocation);
             }
+
+            // --- WiFi ---
+            LatLng wifiLocation = positioningFusion.getWifiPosition();
+            if (positioningFusion.isWifiPositionSet()) {
+                if (wifiMarker == null) {
+                    wifiMarker = mMap.addMarker(new MarkerOptions()
+                            .position(wifiLocation)
+                            .title("WiFi Position")
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+                } else {
+                    wifiMarker.setPosition(wifiLocation);
+                }
+            }
+
+            // --- GNSS ---
+            LatLng gnssLocation = positioningFusion.getGnssPosition();
+            if (positioningFusion.isGNSSPositionSet()) {
+                if (gnssMarker == null) {
+                    gnssMarker = mMap.addMarker(new MarkerOptions()
+                            .position(gnssLocation)
+                            .title("GNSS Position")
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                } else {
+                    gnssMarker.setPosition(gnssLocation);
+                }
+            }
+
+            // --- PDR ---
+            LatLng pdrLocation = positioningFusion.getPdrPosition();
+            if (positioningFusion.isPDRPositionSet()) {
+                if (pdrMarker == null) {
+                    pdrMarker = mMap.addMarker(new MarkerOptions()
+                            .position(pdrLocation)
+                            .title("PDR Position")
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+                } else {
+                    pdrMarker.setPosition(pdrLocation);
+                }
+            }
+
 
             if (directionMarker == null) {
                 directionMarker = mMap.addMarker(new MarkerOptions()
@@ -230,13 +286,12 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                 indoorMapManager.setCurrentLocation(fusedLocation);
             }
             if (indoorMapManager.getIsIndoorMapSet()) {
-                indoorMapManager.setCurrentFloor(2, false);
+                indoorMapManager.setCurrentFloor(floor, true);
             }
 
         } else {
             statusText.setText("Location: Unavailable");
         }
-
 
 
 
