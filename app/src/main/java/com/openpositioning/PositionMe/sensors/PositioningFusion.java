@@ -5,6 +5,8 @@ import android.location.Location;
 import android.util.Log;
 import com.google.android.gms.maps.model.LatLng;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -73,15 +75,42 @@ public class PositioningFusion {
     }
 
     public boolean isWifiPositionSet() {
-        return wifiPosition != null;
+        boolean initialized = coordSystem.isInitialized();
+        return wifiPosition != null && initialized;
     }
 
     public boolean isGNSSPositionSet() {
-        return gnssPosition != null;
+        boolean initialized = coordSystem.isInitialized();
+        return gnssPosition != null && initialized;
     }
 
     public boolean isPDRPositionSet() {
-        return pdrPosition != null;
+        boolean initialized = coordSystem.isInitialized();
+        return pdrPosition != null && initialized;
+    }
+
+    public boolean isFusedPositionSet() {
+        boolean initialized = coordSystem.isInitialized();
+        return fusedPosition != null && coordSystem.isInitialized();
+    }
+
+    // Get WiFi Position (Global)
+    public LatLng getWifiPosition() {
+        return this.wifiPosition;
+    }
+
+    // Get GNSS Position (Global)
+    public LatLng getGnssPosition() {
+        return this.gnssPosition;
+    }
+
+    // Get PDR Position
+    public LatLng getPdrPosition() {
+        boolean initialized = coordSystem.isInitialized();
+        if (!initialized) {
+            return null;
+        }
+        return coordSystem.toGlobal(this.pdrPosition[0], this.pdrPosition[1]);
     }
 
     public void updateFromGNSS(LatLng gnssLocation) {
@@ -92,7 +121,7 @@ public class PositioningFusion {
 
     public void updateFromPDR(float[] pdrXY) {
         this.pdrPosition = pdrXY;
-        Log.d("Fusion", "PDR updated: " + pdrXY);
+        Log.d("Fusion", "PDR updated: " + Arrays.toString(pdrXY));
 //        fusePosition();
     }
 
@@ -114,7 +143,7 @@ public class PositioningFusion {
     }
 
     public void coordinateConversionToGlobal() {
-        if (this.fusedPositionLocal != null) {
+        if (this.fusedPositionLocal != null && coordSystem.isInitialized()) {
             this.fusedPosition = coordSystem.toGlobal(this.fusedPositionLocal[0], this.fusedPositionLocal[1]);
         }
     }

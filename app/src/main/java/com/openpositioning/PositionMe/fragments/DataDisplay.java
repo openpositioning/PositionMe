@@ -11,13 +11,18 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
@@ -43,6 +48,13 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
     // For the map
     private GoogleMap mMap;
+
+    // Add a field for the marker
+    private Marker fusedMarker = null;
+    private Marker wifiMarker = null;
+    private Marker gnssMarker = null;
+    private Marker pdrMarker = null;
+
     private SupportMapFragment mapFragment;
     private final android.os.Handler handler = new android.os.Handler();
     private final int updateInterval = 1000; // 1 second
@@ -50,6 +62,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     private PositioningFusion positioningFusion = PositioningFusion.getInstance();
 
     private IndoorMapManager indoorMapManager;
+
+    private Spinner mapTypeSpinner;
 
     private final Runnable updateWifiLocationRunnable = new Runnable() {
         @Override
@@ -119,18 +133,19 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
         statusText = view.findViewById(R.id.textView3);
 
-        positioningFusion.initCoordSystem(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
-
         SensorFusion.getInstance().pdrReset();
+        mapTypeSpinner = view.findViewById(R.id.spinner2);
+        setupMapTypeSpinner();
     }
 
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
-        showCurrentLocation();
+//        showCurrentLocation();
         handler.post(updateWifiLocationRunnable);
         indoorMapManager = new IndoorMapManager(mMap);
         indoorMapManager.setIndicationOfIndoorMap();
+        positioningFusion.initCoordSystem(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
 
     }
 
@@ -147,14 +162,13 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
     private void updateWifiLocationText() {
         LatLng fusedLocation = PositioningFusion.getInstance().getFusedPosition();
-//        LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
         int floor = SensorFusion.getInstance().getWifiFloor();
 
         Log.d("DataDisplay", "Fused Location: " + fusedLocation);
 
         if (fusedLocation != null) {
 
-            // 显示 WiFi 经纬度 + 相对坐标
+            // 显示 estimated 经纬度 + 楼层
             String display = String.format(
                     "Location:\nLat: %.6f\nLon: %.6f\nFloor: %d",
                     fusedLocation.latitude,
@@ -163,15 +177,72 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
             );
             statusText.setText(display);
 
-            mMap.addMarker(new MarkerOptions()
-                    .position(fusedLocation)
-                    .title("Estimated Position"));
-            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
+//            if (fusedMarker == null) {
+//                // Create marker only once
+//                fusedMarker = mMap.addMarker(new MarkerOptions()
+//                        .position(fusedLocation)
+//                        .title("Estimated Position"));
+//                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
+//            } else {
+//                // Just move the marker
+//                fusedMarker.setPosition(fusedLocation);
+//            }
+
+            // --- Fused ---
+            if (fusedMarker == null) {
+                fusedMarker = mMap.addMarker(new MarkerOptions()
+                        .position(fusedLocation)
+                        .title("Fused Position")
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
+            } else {
+                fusedMarker.setPosition(fusedLocation);
+            }
+
+            // --- WiFi ---
+            LatLng wifiLocation = positioningFusion.getWifiPosition();
+            if (positioningFusion.isWifiPositionSet()) {
+                if (wifiMarker == null) {
+                    wifiMarker = mMap.addMarker(new MarkerOptions()
+                            .position(wifiLocation)
+                            .title("WiFi Position")
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+                } else {
+                    wifiMarker.setPosition(wifiLocation);
+                }
+            }
+
+            // --- GNSS ---
+            LatLng gnssLocation = positioningFusion.getGnssPosition();
+            if (positioningFusion.isGNSSPositionSet()) {
+                if (gnssMarker == null) {
+                    gnssMarker = mMap.addMarker(new MarkerOptions()
+                            .position(gnssLocation)
+                            .title("GNSS Position")
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                } else {
+                    gnssMarker.setPosition(gnssLocation);
+                }
+            }
+
+            // --- PDR ---
+            LatLng pdrLocation = positioningFusion.getPdrPosition();
+            if (positioningFusion.isPDRPositionSet()) {
+                if (pdrMarker == null) {
+                    pdrMarker = mMap.addMarker(new MarkerOptions()
+                            .position(pdrLocation)
+                            .title("PDR Position")
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+                } else {
+                    pdrMarker.setPosition(pdrLocation);
+                }
+            }
+
             if (indoorMapManager != null) {
                 indoorMapManager.setCurrentLocation(fusedLocation);
             }
             if (indoorMapManager.getIsIndoorMapSet()) {
-                indoorMapManager.setCurrentFloor(2, false);
+                indoorMapManager.setCurrentFloor(floor, true);
             }
 
         } else {
@@ -180,6 +251,39 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
 
 
+    }
+
+    private void setupMapTypeSpinner() {
+        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
+                requireContext(), R.array.map_types, android.R.layout.simple_spinner_item);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        mapTypeSpinner.setAdapter(adapter);
+        mapTypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (mMap == null) return;
+                switch (position) {
+                    case 0:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                        break;
+                    case 1:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+                        break;
+                    case 2:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
+                        break;
+                    default:
+                        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                        break;
+                }
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                if (mMap != null) {
+                    mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                }
+            }
+        });
     }
 
 
