@@ -47,7 +47,6 @@ import java.util.List;
  * - Displays a Google Map with support for different map types (Hybrid, Normal, Satellite).
  * - Tracks and visualizes user movement using polylines.
  * - Supports GNSS position updates and visual representation.
- * - Supports Wifi position updates and visual representation.
  * - Includes indoor mapping with floor selection and auto-floor adjustments.
  * - Allows user interaction through map controls and UI elements.
  *
@@ -76,13 +75,17 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline fusionPolyline; // Polyline for the fusion path
     private LatLng lastFusionLocation = null; // Last fusion position
     private Marker fusionMarker; // Marker for current fusion position
+    private Marker pdrMarker;
+    private Polyline pdrPolyline; // Polyline representing PDR trajectory
+    private boolean isPdrOn = false; // Tracks if PDR trajectory is enabled
+
+    private SwitchMaterial pdrSwitch; // PDR switch control
 
 
     private Marker wifiMarker;  // WiFi Position Marker
     private Polyline wifiPolyline;  // WiFi Position Path
     private LatLng lastWifiLocation = null; // Last WiFi position
     private boolean isWifiOn = false; // Toggle for WiFi tracking
-
 
 
 
@@ -128,8 +131,9 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
-
         wifiSwitch = view.findViewById(R.id.wifiSwitch);
+        pdrSwitch = view.findViewById(R.id.pdrSwitch);
+
 
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
@@ -194,6 +198,15 @@ public class TrajectoryMapFragment extends Fragment {
             }
             if (wifiPolyline != null) {
                 wifiPolyline.setPoints(new ArrayList<>()); // Clear the polyline
+            }
+        });
+
+        pdrSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isPdrOn = isChecked;
+
+            // Clear PDR trajectory if toggled off
+            if (!isChecked && pdrPolyline != null) {
+                pdrPolyline.setPoints(new ArrayList<>()); // Clear the polyline
             }
         });
 
@@ -274,10 +287,16 @@ public class TrajectoryMapFragment extends Fragment {
             fusionMarker = gMap.addMarker(new MarkerOptions()
                     .position(fusionLocation)
                     .title("Fusion Position")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                    .icon(BitmapDescriptorFactory.fromBitmap(
+                            UtilFunctions.getBitmapFromVector(requireContext(),
+                                    R.drawable.ic_baseline_navigation_24))));
+         gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusionLocation, 19f));
         } else {
-            // Update marker position
+            // Update marker position + orientation
             fusionMarker.setPosition(fusionLocation);
+            //fusionMarker.setRotation(orientation);
+            // Move camera a bit
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(fusionLocation));
         }
 
         // Check if fusionPolyline is null and create it if needed
@@ -355,13 +374,6 @@ public class TrajectoryMapFragment extends Fragment {
                 .zIndex(1000)
         );
 
-        // WiFi path in cyan
-        wifiPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.GREEN)
-                .width(5f)
-                .add() // start empty
-                .zIndex(1000)
-        );
 
         // Initialize the fusion polyline (green) - make it prominent
         fusionPolyline = map.addPolyline(new PolylineOptions()
@@ -370,6 +382,21 @@ public class TrajectoryMapFragment extends Fragment {
                 .add());    // start empty
 
         Log.d("TrajectoryMapFragment", "Map initialized with fusion polyline");
+
+        // WiFi path in green
+        wifiPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.MAGENTA)
+                .width(5f)
+                .add() // start empty
+                .zIndex(1000)
+        );
+        // PDR path in red
+        pdrPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.RED) // Use a distinct color for PDR
+                .width(5f)
+                .add() // Start empty
+                .zIndex(1000)
+        );
 
 
 
@@ -434,37 +461,29 @@ public class TrajectoryMapFragment extends Fragment {
      * @param newLocation The new location to plot.
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
-    public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+    public void pdrLocation(@NonNull LatLng newLocation) {
         if (gMap == null) return;
+        if (!isPdrOn) return;
 
         // Keep track of current location
         LatLng oldLocation = this.currentLocation;
         this.currentLocation = newLocation;
 
-        // If no marker, create it
-        if (orientationMarker == null) {
-            orientationMarker = gMap.addMarker(new MarkerOptions()
+        if (pdrMarker == null) {
+            pdrMarker = gMap.addMarker(new MarkerOptions()
                     .position(newLocation)
                     .flat(true)
-                    .title("Current Position")
-                    .icon(BitmapDescriptorFactory.fromBitmap(
-                            UtilFunctions.getBitmapFromVector(requireContext(),
-                                    R.drawable.ic_baseline_navigation_24)))
+                    .title("PDR Position")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
         } else {
-            // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
-            orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+            pdrMarker.setPosition(newLocation);
         }
 
-        // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
+        if (oldLocation != null && !oldLocation.equals(newLocation) && pdrPolyline != null) {
+            List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
             points.add(newLocation);
-            polyline.setPoints(points);
+            pdrPolyline.setPoints(points);
         }
 
         // Update indoor map overlay
@@ -474,7 +493,14 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-
+    /**
+     * Remove PDR trajectory if the user toggles it off.
+     */
+    public void clearPdrTrajectory() {
+        if (pdrPolyline != null) {
+            pdrPolyline.setPoints(new ArrayList<>()); // Clear the polyline
+        }
+    }
 
     /**
      * Set the initial camera position for the map.
@@ -593,7 +619,7 @@ public class TrajectoryMapFragment extends Fragment {
             wifiMarker = gMap.addMarker(new MarkerOptions()
                     .position(wifiLocation)
                     .title("WiFi Position")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA)));
             lastWifiLocation = wifiLocation;
         } else {
             // Move existing WiFi marker
@@ -652,6 +678,10 @@ public class TrajectoryMapFragment extends Fragment {
         return isWifiOn;
     }
 
+    public boolean isPdrEnabled() {
+        return isPdrOn;
+    }
+
 
 
     private void setFloorControlsVisibility(int visibility) {
@@ -662,84 +692,64 @@ public class TrajectoryMapFragment extends Fragment {
 
     // In TrajectoryMapFragment.java, update the clearMapAndReset method:
 
-
-
-
     public void clearMapAndReset() {
         if (gMap == null) {
             Log.e("TrajectoryMapFragment", "Cannot reset map, gMap is null");
             return;
         }
-        if (polyline != null) {
-            polyline.remove();
-            polyline = null;
-        }
-        if (gnssPolyline != null) {
-            gnssPolyline.remove();
-            gnssPolyline = null;
-        }
 
-        if (fusionPolyline != null) {
-            fusionPolyline.remove();
-            fusionPolyline = null;
-        }
+        // Clear all polylines
+        //if (polyline != null) polyline.remove();
+        if (gnssPolyline != null) gnssPolyline.remove();
+        if (fusionPolyline != null) fusionPolyline.remove();
+        if (wifiPolyline != null) wifiPolyline.remove();
+        if (pdrMarker != null) pdrPolyline.remove();
 
-        if (fusionMarker != null) {
-            fusionMarker.remove();
-            fusionMarker = null;
-        }
+        // Clear all markers
+        //if (orientationMarker != null) orientationMarker.remove();
+        if (gnssMarker != null) gnssMarker.remove();
+        if (fusionMarker != null) fusionMarker.remove();
+        if (wifiMarker != null) wifiMarker.remove();
+        if (pdrMarker != null) pdrMarker.remove();
+
 
         // Reset state variables
-        if (wifiPolyline != null) {
-            wifiPolyline.remove();
-            wifiPolyline = null;
-        }
-        if (orientationMarker != null) {
-            orientationMarker.remove();
-            orientationMarker = null;
-        }
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
-        }
-        if (wifiMarker != null) {
-            wifiMarker.remove();
-            wifiMarker = null;
-        }
+
         lastWifiLocation = null;
         lastGnssLocation = null;
         currentLocation = null;
         fusionMarker = null;
+        pdrMarker = null;
 
 
+        // Create new polylines
+//        polyline = gMap.addPolyline(new PolylineOptions()
+//                .color(Color.RED)
+//                .width(6f)
+//                .add());
 
+        gnssPolyline = gMap.addPolyline(new PolylineOptions()
+                .color(Color.BLUE)
+                .width(6f)
+                .add());
 
+        fusionPolyline = gMap.addPolyline(new PolylineOptions()
+                .color(Color.GREEN)
+                .width(8f)
+                .add());
+
+        wifiPolyline = gMap.addPolyline(new PolylineOptions()
+                .color(Color.MAGENTA)
+                .width(5f)
+                .add());
+
+        pdrPolyline = gMap.addPolyline(new PolylineOptions()
+                .color(Color.RED)
+                .width(5f)
+                .add());
 
         Log.d("TrajectoryMapFragment", "Map cleared and reset");
-        // Re-create empty polylines with your chosen colors
-        if (gMap != null) {
-            // Create new polylines
-            polyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.RED)
-                    .width(6f)
-                    .add());
 
-            gnssPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.BLUE)
-                    .width(6f)
-                    .add());
-
-            fusionPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.GREEN)
-                    .width(8f)
-                    .add());
-
-            wifiPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.CYAN)
-                    .width(5f)
-                    .add());
-
-        }
     }
 
     /**
