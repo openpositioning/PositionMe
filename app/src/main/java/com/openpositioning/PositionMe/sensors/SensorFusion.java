@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -69,6 +70,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Store the last event timestamps for each sensor type
     private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
     private HashMap<Integer, Integer> eventCounts = new HashMap<>();
+    // 回调接口，用于楼层变化通知
+    private Consumer<Integer> wifiFloorChangedListener;
 
     long maxReportLatencyNs = 0;  // Disable batching to deliver events immediately
 
@@ -171,6 +174,12 @@ public class SensorFusion implements SensorEventListener, Observer {
     private double[] startRef;
     private double[] ecefRefCoords;
     private EKF extendedKalmanFilter;
+
+    private LatLng pendingWifiPosition = null;
+    private long wifiPositionTimestamp = 0;
+    private long wifiReceivedTime = 0;
+    private int wifiFloor = 0;
+    private float gnssAccuracy = -1f;
 
     //region Initialisation
     /**
@@ -432,6 +441,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (gnssLocation != null) {
                         Log.d("SensorFusion", "GNSS Location available for update: Lat=" + gnssLocation.getLatitude() +
                                 ", Lon=" + gnssLocation.getLongitude() + ", Accuracy=" + gnssLocation.getAccuracy());
+                        gnssAccuracy = gnssLocation.getAccuracy();
                     } else {
                         Log.d("SensorFusion", "GNSS Location is null, skipping GNSS correction.");
                     }
@@ -445,20 +455,19 @@ public class SensorFusion implements SensorEventListener, Observer {
                         Log.w("SensorFusion", "WiFi list is empty, skipping WiFi RSSI calculation.");
                     }
 
-                    // 获取 WiFi 位置信息（如果有）并传入 updateFusion
-                    wifiPos = wiFiPositioning.getWifiLocation();
                     JSONObject wifiResponse = null;
-                    if (wifiPos != null) {
+                    if (pendingWifiPosition != null &&
+                            SystemClock.uptimeMillis() - wifiPositionTimestamp < 3000) {
                         wifiResponse = new JSONObject();
                         try {
-                            wifiResponse.put("lat", wifiPos.latitude);
-                            wifiResponse.put("lon", wifiPos.longitude);
-                            wifiResponse.put("floor", wiFiPositioning.getFloor());
+                            wifiResponse.put("lat", pendingWifiPosition.latitude);
+                            wifiResponse.put("lon", pendingWifiPosition.longitude);
+                            wifiResponse.put("floor", wifiFloor);
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
+                        pendingWifiPosition = null;
                     }
-
                     updateFusion(wifiResponse, gnssLocation, avgRssi);
 
 
@@ -510,6 +519,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                 double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, getElevation(), startRef[0], startRef[1], startRef[2]);
 
                 Log.d("SensorFusion", "Using WiFi for EKF update: East=" + enuCoords[0] + ", North=" + enuCoords[1]);
+                long fusionTime = System.currentTimeMillis();
+                Log.d("SensorFusion", "WiFi定位结果使用时间: " + fusionTime + "，相对延迟: " + (fusionTime - wifiReceivedTime) + " ms");
 
                 if (extendedKalmanFilter != null) {
                     double timeSinceLastUpdate = SystemClock.uptimeMillis() - lastOpUpdateTime;
@@ -627,6 +638,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      */
     private void createWifiPositioningRequest(double avgRssi) {
+        final long requestStartTime = System.currentTimeMillis();
         try {
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList){
@@ -642,15 +654,19 @@ public class SensorFusion implements SensorEventListener, Observer {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     Log.d("SensorFusion", "Received WiFi location: lat=" + wifiLocation.latitude + ", lon=" + wifiLocation.longitude + ", floor=" + floor);
-                    try {
-                        JSONObject wifiResponse = new JSONObject();
-                        wifiResponse.put("lat", wifiLocation.latitude);
-                        wifiResponse.put("lon", wifiLocation.longitude);
-                        wifiResponse.put("floor", floor);
-                        updateFusion(wifiResponse, null, avgRssi); // ✅ 传入真实的 avgRssi
-                    } catch (JSONException e) {
-                        Log.e("SensorFusion", "Error creating WiFi response JSON", e);
+
+                    pendingWifiPosition = wifiLocation;
+                    wifiFloor = floor;
+                    wifiPositionTimestamp = SystemClock.uptimeMillis();
+                    wifiReceivedTime = System.currentTimeMillis();  // 用于日志分析
+                    Log.d("SensorFusion", "WiFi store success, store time: " + wifiReceivedTime);
+                    long responseTime = System.currentTimeMillis();
+                    long delay = responseTime - requestStartTime;
+                    Log.d("SensorFusion", "WiFi请求总延迟: " + delay + "ms");
+                    if (wifiFloorChangedListener != null) {
+                        wifiFloorChangedListener.accept(floor);
                     }
+
                 }
 
                 @Override
@@ -721,7 +737,9 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {}
-
+    public float getGnssAccuracy() {
+        return gnssAccuracy;
+    }
     private double wrapToPi(double angle) {
         while(angle > Math.PI) angle -= 2*Math.PI;
         while(angle < -Math.PI) angle += 2*Math.PI;
@@ -1124,7 +1142,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
-
+    public void setOnWifiFloorChangedListener(Consumer<Integer> listener) {
+        this.wifiFloorChangedListener = listener;
+    }
 
     /**
      * Timer task to record data with the desired frequency in the trajectory class.
