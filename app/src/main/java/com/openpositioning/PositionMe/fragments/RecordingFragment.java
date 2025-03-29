@@ -384,6 +384,7 @@ public class RecordingFragment extends Fragment {
             if (ifstart){
                 if (sensorFusion != null) {
                     sensorFusion.stopRecording();
+                    sensorFusion.stopListening();
                     Toast.makeText(getContext(), "Recording Stopped", Toast.LENGTH_SHORT).show();
                     isRecording = false; // 标记录制已停止
                     if (recIcon != null) {
@@ -1031,6 +1032,10 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        if (sensorFusion != null) {
+            sensorFusion.stopListening(); // 停止所有传感器监听器 Stop all sensor listeners
+            sensorFusion.stopRecording();
+        }
         if (timer != null) {
             timer.cancel();
         }

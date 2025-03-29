@@ -136,7 +136,6 @@ public class UtilFunctions {
 
         // 将经度差转换为东向距离（单位：米），考虑纬度对经度实际距离的影响
         // Convert the longitude difference to easting (meters), taking into account the latitude
-//        double easting = deltaLon * DEGREE_IN_M * Math.cos(Math.toRadians(start.latitude));
         double easting = deltaLon * DEGREE_IN_M / Math.cos(Math.toRadians(start.latitude));
 
         return new double[]{easting, northing};

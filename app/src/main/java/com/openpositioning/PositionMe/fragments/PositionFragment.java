@@ -128,6 +128,16 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
+        this.sensorFusion = SensorFusion.getInstance();
+        sensorFusion.setContext(getActivity().getApplicationContext());
+//        sensorFusion.resumeListening();  // 注册所有传感器监听器 Register all sensor listeners
+        sensorFusion.startWifiScanOnly();
+        if (this.sensorFusion == null) {
+            Log.e("SensorFusion", "❌ SensorFusion is NULL! Retrying initialization...");
+            this.sensorFusion = SensorFusion.getInstance(); // 重新获取实例 Re-obtain the instance
+        } else {
+            Log.d("SensorFusion", "✅ SensorFusion 初始化成功");
+        }
 //
 //        if (sensorFusion != null) {
 //            sensorFusion.setContext(getActivity().getApplicationContext());
@@ -205,13 +215,15 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             Log.w("GNSS", "⚠️ LocationManager unavailable or permission not granted.");
         }
 
-//        // ******** new wifi initial position ********
-//        if (sensorFusion != null) {
-//            if (sensorFusion.getLatLngWifiPositioning() != null) {
-//                initialPosition = sensorFusion.getLatLngWifiPositioning();
-//            }
-//        }
-//        // ******** END new wifi initial position ********
+        // ******** new wifi initial position ********
+        if (sensorFusion != null) {
+            Log.e("GNSS", "Sensor Fusion Ready");
+            if (sensorFusion.getLatLngWifiPositioning() != null) {
+                initialPosition = sensorFusion.getLatLngWifiPositioning();
+                Log.e("GNSS", "✅ Wifi initial position: " + initialPosition);
+            }
+        }
+        // ******** END new wifi initial position ********
 
         // add maker to map
         currentMarker = mMap.addMarker(new MarkerOptions()
@@ -250,7 +262,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         setButton.setOnClickListener(v -> {
             if (currentMarker != null) {
                 LatLng markerPosition = currentMarker.getPosition();
-
+                sensorFusion.stopWifiScanOnly();
                 Toast.makeText(getContext(), "Location set!", Toast.LENGTH_SHORT).show();
 
                 // create bundle for RecordingFragment
@@ -276,6 +288,8 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         // Set reset button
         resetButton.setOnClickListener(v -> {
             if (currentMarker != null) {
+//                initialPosition = sensorFusion.getLatLngWifiPositioning();
+                this.rescanPosition();
                 currentMarker.setPosition(initialPosition);
                 currentMarkerPosition = initialPosition;
                 updateMarkerInfo(initialPosition);
@@ -529,6 +543,8 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             locationManager.removeUpdates(locationListener);
             Log.d("GNSS", "GNSS Listener stopped.");
         }
+        sensorFusion.stopListening();
+        sensorFusion.stopWifiScanOnly();
     }
 
     @Override
@@ -556,6 +572,45 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             Log.d("GNSS", "🔥 GNSS Listener Stopped in onPause()");
         }
     }
+
+    private void rescanPosition() {
+
+        // Ensure `locationManager` is initialized
+        if (locationManager == null) {
+            Log.e("GNSS", "❌ LocationManager is NULL!");
+            locationManager = (LocationManager) requireActivity().getSystemService(Context.LOCATION_SERVICE);
+        }
+
+        // ensure permission
+        if (locationManager != null && ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+
+            if (lastKnownLocation != null) {
+                // Gnss position discovered
+                initialPosition = new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
+                fixedMarkerPosition = initialPosition;
+                currentMarkerPosition = initialPosition;
+            } else {
+                Log.w("GNSS", "⚠️ No last known location available, using default.");
+            }
+        } else {
+            Log.w("GNSS", "⚠️ LocationManager unavailable or permission not granted.");
+        }
+
+
+        if (sensorFusion != null) {
+            Log.e("GNSS", "Sensor Fusion Ready");
+            if (sensorFusion.getLatLngWifiPositioning() != null) {
+                initialPosition = sensorFusion.getLatLngWifiPositioning();
+                Log.e("GNSS", "Wifi initial position: " + initialPosition);
+            }
+        }
+        // set initial position
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialPosition, 15));
+    }
+
+
 
 
 }

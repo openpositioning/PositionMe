@@ -149,6 +149,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private WiFiPositioning wiFiPositioning;
 
     private FilterUtils.ParticleFilter pf;
+    private FilterUtils.EKFFilter ekf;
 
     int MAX_WIFI_APS = 60;
     //region Initialisation
@@ -254,8 +255,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
                 "MyApp::MyWakelockTag");
 
-        FilterUtils utils = new FilterUtils();
-        pf = utils.new ParticleFilter(300, 0, 0);
+        pf = new FilterUtils.ParticleFilter(200, 0, 0, 5);
+        ekf = new FilterUtils.EKFFilter(0, 0, 1.0, 1, 5);
     }
     //endregion
 
@@ -345,6 +346,48 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
+
+//                long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
+//                float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
+//                Log.e("PDR", "x: " + newCords[0] + ", y: " + newCords[1]);
+//
+//                // 1. Prediction: update the EKF state with the new PDR reading.
+//                ekf.predict(newCords[0], newCords[1]);
+//
+//                // 2. Update: if a WiFi position is available, update the filter.
+//                if (getLatLngWifiPositioning() != null) {
+//                    LatLng latLng = getLatLngWifiPositioning();
+//                    LatLng startLocation = new LatLng(this.startLocation[0], this.startLocation[1]);
+//                    double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocation, latLng);
+//                    Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
+//                    ekf.update(wifiPos[0], wifiPos[1]);
+//                }
+//
+//                // 3. If GPS measurements are available
+//                // if (gpsDataAvailable()) {
+//                //     double[] gpsPos = getGPSPosition();
+//                //     ekf.update(gpsPos[0], gpsPos[1]);
+//                // }
+//
+//                // 4. Retrieve and log the current EKF estimate.
+//                Log.e("EKF Filter", "x: " + ekf.getX() + ", y: " + ekf.getY());
+//
+//                if (saveRecording) {
+//                    // Draw the updated trajectory.
+//                    this.pathView.drawTrajectory(new float[]{(float) ekf.getX(), (float) ekf.getY()});
+//                }
+//
+//                this.accelMagnitude.clear();
+//
+//                if (saveRecording) {
+//                    stepCounter++;
+//                    trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+//                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
+//                            .setX((float) ekf.getX())
+//                            .setY((float) ekf.getY()));
+//                }
+
+                // *** Particle start ***
                 //Store time of step
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
@@ -360,6 +403,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 }
 
 //                // 3. 如果有 GPS 测量，则进行更新
+
 //                if (gpsDataAvailable()) {
 //                    double[] gpsPos = getGPSPosition();
 //                    pf.update(gpsPos[0], gpsPos[1]);
@@ -384,6 +428,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setX(newCords[0]).setY(newCords[1]));
                 }
                 break;
+            // *** Particle END ***
         }
     }
 
@@ -1061,7 +1106,41 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         }
     }
+    //endregion
 
+    //region WiFi Scan Only Methods
+
+    /**
+     * Starts only the WiFi scanning process.
+     *
+     * This method initiates WiFi scanning without affecting the other sensors.
+     */
+    public void startWifiScanOnly() {
+        if (this.wifiProcessor != null) {
+            this.wifiProcessor.startListening();
+            Log.d("SensorFusion", "WiFi scanning started.");
+        } else {
+            Log.e("SensorFusion", "WiFi processor is not initialized.");
+        }
+    }
+
+    /**
+     * Stops the WiFi scanning process.
+     *
+     * This method stops the WiFi scanning and logs any potential errors.
+     */
+    public void stopWifiScanOnly() {
+        if (this.wifiProcessor != null) {
+            try {
+                this.wifiProcessor.stopListening();
+                Log.d("SensorFusion", "WiFi scanning stopped.");
+            } catch (Exception e) {
+                Log.e("SensorFusion", "Error while stopping WiFi scanning: " + e.getMessage());
+            }
+        } else {
+            Log.e("SensorFusion", "WiFi processor is not initialized.");
+        }
+    }
     //endregion
 
 }
