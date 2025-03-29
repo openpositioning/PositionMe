@@ -64,6 +64,7 @@ public class TrajectoryMapFragment extends Fragment {
     private boolean isWiFiLocationOn = false;
 
     private Polyline gnssPolyline; // Polyline for GNSS path
+    private Polyline wifiPolyline; // Polyline for WiFi path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
     private LatLng lastwifiLocation = null;
 
@@ -240,6 +241,13 @@ public class TrajectoryMapFragment extends Fragment {
                 .width(5f)
                 .add() // start empty
         );
+        // WiFi path in yellow
+        wifiPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.YELLOW)
+                .width(5f)
+                .add() // start empty
+        );
+
     }
 
 
@@ -421,12 +429,12 @@ public class TrajectoryMapFragment extends Fragment {
             // Move existing WiFi marker
             wifiMarker.setPosition(wifiLocation);
 
-            // Add a segment to the blue GNSS line, if this is a new location
-            // if (lastwifiLocation != null && !lastwifiLocation.equals(wifiLocation)) {
-            //     List<LatLng> wifiPoints = new ArrayList<>(gnssPolyline.getPoints());
-            //     gnssPoints.add(gnssLocation);
-            //     gnssPolyline.setPoints(gnssPoints);
-            // }
+            // Add a segment to the yellow WiFi line, if this is a new location
+            if (lastwifiLocation != null && !lastwifiLocation.equals(wifiLocation)) {
+                List<LatLng> wifiPoints = new ArrayList<>(wifiPolyline.getPoints());
+                wifiPoints.add(wifiLocation);
+                wifiPolyline.setPoints(wifiPoints);
+            }
             lastwifiLocation = wifiLocation;
         }
     }
@@ -440,6 +448,7 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker = null;
         }
     }
+
 
     /**
      * Whether user is currently showing GNSS or not
@@ -467,6 +476,10 @@ public class TrajectoryMapFragment extends Fragment {
             gnssPolyline.remove();
             gnssPolyline = null;
         }
+        if (wifiPolyline != null) {
+            wifiPolyline.remove();
+            wifiPolyline = null;
+        }
         if (orientationMarker != null) {
             orientationMarker.remove();
             orientationMarker = null;
@@ -476,6 +489,7 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker = null;
         }
         lastGnssLocation = null;
+        lastwifiLocation = null;
         currentLocation  = null;
 
         // Re-create empty polylines with your chosen colors
@@ -486,6 +500,10 @@ public class TrajectoryMapFragment extends Fragment {
                     .add());
             gnssPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.BLUE)
+                    .width(5f)
+                    .add());
+            wifiPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.YELLOW)
                     .width(5f)
                     .add());
         }

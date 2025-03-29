@@ -18,6 +18,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.data.local.TrajParser;
+import com.openpositioning.PositionMe.sensors.WiFiPositioning;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -64,6 +65,7 @@ public class ReplayFragment extends Fragment {
     private List<TrajParser.ReplayPoint> replayData = new ArrayList<>();
     private int currentIndex = 0;
     private boolean isPlaying = false;
+
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -134,18 +136,20 @@ public class ReplayFragment extends Fragment {
 
 
         // 1) Check if the file contains any GNSS data
-        boolean gnssExists = hasAnyGnssData(replayData);
-
-        if (gnssExists) {
-            showGnssChoiceDialog();
-        } else {
-            // No GNSS data -> automatically use param lat/lon
-            if (initialLat != 0f || initialLon != 0f) {
-                LatLng startPoint = new LatLng(initialLat, initialLon);
-                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-                trajectoryMapFragment.setInitialCameraPosition(startPoint);
-            }
-        }
+//        boolean gnssExists = hasAnyGnssData(replayData);
+//
+//        if (gnssExists) {
+//            showGnssChoiceDialog();
+//        } else {
+//            // No GNSS data -> automatically use param lat/lon
+//            if (initialLat != 0f || initialLon != 0f) {
+//                LatLng startPoint = new LatLng(initialLat, initialLon);
+//                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
+//                trajectoryMapFragment.setInitialCameraPosition(startPoint);
+//            }
+//        }
+        // Set initial map position
+        setupInitialMapPosition();
 
         // Initialize UI controls
         playPauseButton = view.findViewById(R.id.playPauseButton);
@@ -234,14 +238,14 @@ public class ReplayFragment extends Fragment {
     /**
      * Checks if any ReplayPoint contains a non-null gnssLocation.
      */
-    private boolean hasAnyGnssData(List<TrajParser.ReplayPoint> data) {
-        for (TrajParser.ReplayPoint point : data) {
-            if (point.gnssLocation != null) {
-                return true;
-            }
-        }
-        return false;
-    }
+//    private boolean hasAnyGnssData(List<TrajParser.ReplayPoint> data) {
+//        for (TrajParser.ReplayPoint point : data) {
+//            if (point.gnssLocation != null) {
+//                return true;
+//            }
+//        }
+//        return false;
+//    }
 
 
     /**
@@ -249,44 +253,72 @@ public class ReplayFragment extends Fragment {
      * 1) GNSS from file
      * 2) Lat/Lon from ReplayActivity arguments
      */
-    private void showGnssChoiceDialog() {
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Choose Starting Location")
-                .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or the one you manually picked?")
-                .setPositiveButton("Use File's GNSS", (dialog, which) -> {
-                    LatLng firstGnss = getFirstGnssLocation(replayData);
-                    if (firstGnss != null) {
-                        setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
-                    } else {
-                        // Fallback if no valid GNSS found
-                        setupInitialMapPosition(initialLat, initialLon);
-                    }
-                    dialog.dismiss();
-                })
-                .setNegativeButton("Use Manual Set", (dialog, which) -> {
-                    setupInitialMapPosition(initialLat, initialLon);
-                    dialog.dismiss();
-                })
-                .setCancelable(false)
-                .show();
-    }
+//    private void showGnssChoiceDialog() {
+//        new AlertDialog.Builder(requireContext())
+//                .setTitle("Choose Starting Location")
+//                .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or the one you manually picked?")
+//                .setPositiveButton("Use File's GNSS", (dialog, which) -> {
+//                    LatLng firstGnss = getFirstGnssLocation(replayData);
+//                    if (firstGnss != null) {
+//                        setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
+//                    } else {
+//                        // Fallback if no valid GNSS found
+//                        setupInitialMapPosition(initialLat, initialLon);
+//                    }
+//                    dialog.dismiss();
+//                })
+//                .setNegativeButton("Use Manual Set", (dialog, which) -> {
+//                    setupInitialMapPosition(initialLat, initialLon);
+//                    dialog.dismiss();
+//                })
+//                .setCancelable(false)
+//                .show();
+//    }
 
-    private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
+//    private void setupInitialMapPosition(float latitude, float longitude) {
+//        LatLng startPoint = new LatLng(initialLat, initialLon);
+//        Log.i(TAG, "Setting initial map position: " + startPoint.toString());
+//        trajectoryMapFragment.setInitialCameraPosition(startPoint);
+//    }
+    private void setupInitialMapPosition() {
+        LatLng startPoint = getFirstGnssLocation(replayData);
+        if (startPoint == null) {
+            startPoint = getFirstWifiLocation(replayData);
+        }
+        if (startPoint == null) {
+            startPoint = new LatLng(initialLat, initialLon);
+        }
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
     }
 
+
     /**
      * Retrieve the first available GNSS location from the replay data.
      */
+//    private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
+//        for (TrajParser.ReplayPoint point : data) {
+//            if (point.gnssLocation != null) {
+//                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+//            }
+//        }
+//        return null; // None found
+//    }
     private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
         for (TrajParser.ReplayPoint point : data) {
             if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+                return point.gnssLocation;
             }
         }
-        return null; // None found
+        return null;
+    }
+    private LatLng getFirstWifiLocation(List<TrajParser.ReplayPoint> data) {
+        for (TrajParser.ReplayPoint point : data) {
+            if (point.wifiLocation != null) {
+                return point.wifiLocation;
+            }
+        }
+        return null;
     }
 
 
@@ -337,6 +369,9 @@ public class ReplayFragment extends Fragment {
                 if (p.gnssLocation != null) {
                     trajectoryMapFragment.updateGNSS(p.gnssLocation);
                 }
+                if (p.wifiLocation != null) {
+                    trajectoryMapFragment.updateWifiLocation(p.wifiLocation);
+                }
             }
         } else {
             // Normal sequential forward step: add just the new point
@@ -344,6 +379,9 @@ public class ReplayFragment extends Fragment {
             trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
             if (p.gnssLocation != null) {
                 trajectoryMapFragment.updateGNSS(p.gnssLocation);
+            }
+            if (p.wifiLocation != null) {
+                trajectoryMapFragment.updateWifiLocation(p.wifiLocation);
             }
         }
 

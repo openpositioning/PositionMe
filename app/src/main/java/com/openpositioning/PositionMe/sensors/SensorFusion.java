@@ -551,6 +551,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             Log.e("jsonErrors","Error creating json object"+e.toString());
         }
     }
+
     // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
@@ -1068,6 +1069,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setMac(currentWifi.getBssid())
                             .setSsid(currentWifi.getSsid())
                             .setFrequency(currentWifi.getFrequency()));
+
+                    //trajectory.addAllWifiData
                 }
                 else {
                     secondCounter++;

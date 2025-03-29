@@ -4,6 +4,9 @@ import android.content.Context;
 import android.hardware.SensorManager;
 import android.util.Log;
 
+import com.android.volley.RequestQueue;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.Volley;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -11,6 +14,10 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.sensors.WiFiPositioning;
+import com.android.volley.Request;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -19,6 +26,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Handles parsing of trajectory data stored in JSON files, combining IMU, PDR, and GNSS data
@@ -46,7 +55,7 @@ import java.util.List;
  *
  * @see ReplayFragment which uses parsed trajectory data for visualization.
  * @see SensorFusion for motion processing and sensor integration.
- * @see com.openpositioning.PositionMe.presentation.fragment.ReplayFragment for implementation details.
+ * @see ReplayFragment for implementation details.
  *
  * @author Shu Gu
  * @author Lin Cheng
@@ -55,11 +64,14 @@ public class TrajParser {
 
     private static final String TAG = "TrajParser";
 
+    private WiFiPositioning wiFiPositioning;
+
     /**
      * Represents a single replay point containing estimated PDR position, GNSS location,
      * orientation, speed, and timestamp.
      */
     public static class ReplayPoint {
+        public LatLng wifiLocation;
         public LatLng pdrLocation;  // PDR-derived location estimate
         public LatLng gnssLocation; // GNSS location (may be null if unavailable)
         public float orientation;   // Orientation in degrees
@@ -75,9 +87,10 @@ public class TrajParser {
          * @param speed        The speed in meters per second.
          * @param timestamp    The timestamp associated with this point.
          */
-        public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, float orientation, float speed, long timestamp) {
+        public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, LatLng wifiLocation, float orientation, float speed, long timestamp) {
             this.pdrLocation = pdrLocation;
             this.gnssLocation = gnssLocation;
+            this.wifiLocation = wifiLocation;
             this.orientation = orientation;
             this.speed = speed;
             this.timestamp = timestamp;
@@ -102,6 +115,18 @@ public class TrajParser {
     private static class GnssRecord {
         public long relativeTimestamp;
         public double latitude, longitude; // GNSS coordinates
+    }
+
+
+    private static class MacScan {
+        public String mac;
+        public double rssi;
+        public int timestamp;
+    }
+
+    private static class WiFiRecord{
+        public long relativeTimestamp;
+        public List<MacScan> macScans;
     }
 
     /**
@@ -150,9 +175,10 @@ public class TrajParser {
             List<ImuRecord> imuList = parseImuData(root.getAsJsonArray("imuData"));
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
+            List<WiFiRecord> WiFiList = parseWiFiData(root.getAsJsonArray("wifiData"));
 
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: "
-                    + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
+                    + pdrList.size() + " records, GNSS: " + gnssList.size() + " records, WiFi: "+ WiFiList.size()+" records");
 
             for (int i = 0; i < pdrList.size(); i++) {
                 PdrRecord pdr = pdrList.get(i);
@@ -185,7 +211,76 @@ public class TrajParser {
                 LatLng gnssLocation = closestGnss != null ?
                         new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
 
-                result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
+                WiFiRecord closestWiFi = findClosestWiFiRecord(WiFiList, pdr.relativeTimestamp);
+                AtomicReference<LatLng> wifilocation = new AtomicReference<>();
+                AtomicInteger floor = new AtomicInteger();
+                try {
+                    // Creating a JSON object to store the WiFi access points
+                    JSONObject wifiAccessPoints = new JSONObject();
+                    for (MacScan scan : closestWiFi.macScans) {
+                        wifiAccessPoints.put(scan.mac, scan.rssi);
+                    }
+                    // Creating POST Request
+                    JSONObject wifiFingerPrint = new JSONObject();
+                    wifiFingerPrint.put("wf", wifiAccessPoints);
+                    JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(
+                            Request.Method.POST, "https://openpositioning.org/api/position/fine", wifiFingerPrint,
+                            // Parses the response to obtain the WiFi location and WiFi floor
+                            response -> {
+                                try {
+                                    wifilocation.set(new LatLng(response.getDouble("lat"), response.getDouble("lon")));
+                                    floor.set(response.getInt("floor"));
+                                } catch (JSONException e) {
+                                    // Error log to keep record of errors (for secure programming and maintainability)
+                                    Log.e("jsonErrors", "Error parsing response: " + e.getMessage() + " " + response);
+                                }
+                                // Block return when a message is received
+                                synchronized (TrajParser.class) {
+                                    TrajParser.class.notify();
+                                }
+                            },
+                            // Handles the errors obtained from the POST request
+                            error -> {
+                                // Validation Error
+                                if (error.networkResponse != null && error.networkResponse.statusCode == 422) {
+                                    Log.e("WiFiPositioning", "Validation Error " + error.getMessage());
+                                }
+                                // Other Errors
+                                else {
+                                    // When Response code is available
+                                    if (error.networkResponse != null) {
+                                        Log.e("WiFiPositioning", "Response Code: " + error.networkResponse.statusCode + ", " + error.getMessage());
+                                    } else {
+                                        Log.e("WiFiPositioning", "Error message: " + error.getMessage());
+                                    }
+                                }
+                                // Block return when an error occurs
+                                synchronized (TrajParser.class) {
+                                    TrajParser.class.notify();
+                                }
+                            }
+                    );
+
+                    // Add the request to the RequestQueue
+                    RequestQueue requestQueue = Volley.newRequestQueue(context);
+                    requestQueue.add(jsonObjectRequest);
+
+                } catch (JSONException e) {
+                    // Catching error while making JSON object, to prevent crashes
+                    // Error log to keep record of errors (for secure programming and maintainability)
+                    Log.e("jsonErrors","Error creating json object"+e.toString());
+                }
+
+                // Wait for the response or error to be processed
+                synchronized (TrajParser.class) {
+                    try {
+                        TrajParser.class.wait(1000); // Sleep for 1 second
+                    } catch (InterruptedException e) {
+                        Log.e(TAG, "Thread interrupted while waiting for WiFi positioning response", e);
+                    }
+                }
+
+                result.add(new ReplayPoint(pdrLocation, gnssLocation, wifilocation.get(), orientationDeg,
                         0f, pdr.relativeTimestamp));
             }
 
@@ -229,17 +324,31 @@ private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
         gnssList.add(record);
     }
     return gnssList;
-}/** Finds the closest IMU record to the given timestamp. */
+}/**
+     * Finds the closest IMU record to the given timestamp.
+     */
+private static List<WiFiRecord> parseWiFiData(JsonArray WiFiArray) {
+    List<WiFiRecord> WiFiList = new ArrayList<>();
+    if (WiFiArray == null) return WiFiList;
+    Gson gson = new Gson();
+    for (int i = 0; i < WiFiArray.size(); i++) {
+        WiFiRecord record = gson.fromJson(WiFiArray.get(i), WiFiRecord.class);
+        WiFiList.add(record);
+    }
+    return WiFiList;
+}
 private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {
     return imuList.stream().min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp)))
             .orElse(null);
-
 }/** Finds the closest GNSS record to the given timestamp. */
 private static GnssRecord findClosestGnssRecord(List<GnssRecord> gnssList, long targetTimestamp) {
     return gnssList.stream().min(Comparator.comparingLong(gnss -> Math.abs(gnss.relativeTimestamp - targetTimestamp)))
             .orElse(null);
-
 }/** Computes the orientation from a rotation vector. */
+private static WiFiRecord findClosestWiFiRecord(List<WiFiRecord> WiFiList, long targetTimestamp) {
+    return WiFiList.stream().min(Comparator.comparingLong(wifi -> Math.abs(wifi.relativeTimestamp - targetTimestamp)))
+            .orElse(null);
+}
 private static float computeOrientationFromRotationVector(float rx, float ry, float rz, float rw, Context context) {
     float[] rotationVector = new float[]{rx, ry, rz, rw};
     float[] rotationMatrix = new float[9];
