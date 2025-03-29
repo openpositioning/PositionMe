@@ -239,6 +239,10 @@ public class RecordingFragment extends Fragment implements PositionListener {
             return;
         }
 
+        if(!trajectoryMapFragment.isPdrEnabled()){
+            trajectoryMapFragment.clearPdrTrajectory();
+        }
+
         // Distance
         distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
                 + Math.pow(pdrValues[1] - previousPosY, 2));
@@ -263,8 +267,7 @@ public class RecordingFragment extends Fragment implements PositionListener {
 
             // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+                trajectoryMapFragment.pdrLocation(newLocation);
 
                 // Force polyline update if there are no points yet
                 if (trajectoryMapFragment.isPolylineEmpty()) {
