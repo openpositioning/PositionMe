@@ -5,6 +5,8 @@ import android.location.Location;
 import android.util.Log;
 import com.google.android.gms.maps.model.LatLng;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -119,7 +121,7 @@ public class PositioningFusion {
 
     public void updateFromPDR(float[] pdrXY) {
         this.pdrPosition = pdrXY;
-        Log.d("Fusion", "PDR updated: " + pdrXY);
+        Log.d("Fusion", "PDR updated: " + Arrays.toString(pdrXY));
 //        fusePosition();
     }
 
@@ -141,7 +143,7 @@ public class PositioningFusion {
     }
 
     public void coordinateConversionToGlobal() {
-        if (this.fusedPositionLocal != null) {
+        if (this.fusedPositionLocal != null && coordSystem.isInitialized()) {
             this.fusedPosition = coordSystem.toGlobal(this.fusedPositionLocal[0], this.fusedPositionLocal[1]);
         }
     }
