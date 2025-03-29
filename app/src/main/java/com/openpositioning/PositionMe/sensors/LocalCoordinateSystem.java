@@ -53,7 +53,7 @@ public class LocalCoordinateSystem {
         }
 
         double dLat = y / EARTH_RADIUS;
-        double dLon = x / (EARTH_RADIUS * Math.cos(Math.toRadians(refLat)));
+        double dLon =  x / (EARTH_RADIUS * Math.cos(Math.toRadians(refLat)));
 
         double lat = refLat + Math.toDegrees(dLat);
         double lon = refLon + Math.toDegrees(dLon);

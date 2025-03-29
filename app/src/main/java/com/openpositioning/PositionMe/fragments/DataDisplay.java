@@ -1,10 +1,16 @@
 package com.openpositioning.PositionMe.fragments;
 
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 
+import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import android.util.Log;
@@ -20,11 +26,14 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.TrajectoryDrawer;
 import com.openpositioning.PositionMe.sensors.PositioningFusion;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
@@ -60,6 +69,12 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     private IndoorMapManager indoorMapManager;
 
     private Spinner mapTypeSpinner;
+
+    TrajectoryDrawer trajectoryDrawer;
+
+    private Marker directionMarker;
+
+
 
     private final Runnable updateWifiLocationRunnable = new Runnable() {
         @Override
@@ -143,6 +158,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         handler.post(updateWifiLocationRunnable);
         indoorMapManager = new IndoorMapManager(mMap);
         indoorMapManager.setIndicationOfIndoorMap();
+        trajectoryDrawer = new TrajectoryDrawer(mMap);
+
 
     }
 
@@ -165,8 +182,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         Log.d("DataDisplay", "Fused Location: " + fusedLocation);
 
         if (fusedLocation != null) {
+            trajectoryDrawer.addPoint(fusedLocation);
 
-            // 显示 estimated 经纬度 + 楼层
             String display = String.format(
                     "Location:\nLat: %.6f\nLon: %.6f\nFloor: %d",
                     fusedLocation.latitude,
@@ -175,17 +192,40 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
             );
             statusText.setText(display);
 
+            float bearing = SensorFusion.getInstance().getHeading(); // 获取朝向角度（度）
+
+            // 初始化图标
+            BitmapDescriptor blueDotIcon = vectorToBitmap(requireContext(), R.drawable.ic_blue_dot);
+            BitmapDescriptor coneIcon = vectorToBitmap(requireContext(), R.drawable.ic_direction_cone);
+
+
             if (fusedMarker == null) {
-                // Create marker only once
+                //BitmapDescriptor blueDotIcon = vectorToBitmap(requireContext(), R.drawable.ic_blue_dot);
+
                 fusedMarker = mMap.addMarker(new MarkerOptions()
                         .position(fusedLocation)
-                        .title("Estimated Position"));
+                        .title("Estimated Position")
+                        .icon(blueDotIcon)
+                        .anchor(0.5f, 0.5f)
+                        .flat(true));
+
                 mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
             } else {
-                // Just move the marker
                 fusedMarker.setPosition(fusedLocation);
             }
-//            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
+
+            if (directionMarker == null) {
+                directionMarker = mMap.addMarker(new MarkerOptions()
+                        .position(fusedLocation)
+                        .icon(coneIcon)
+                        .anchor(0.5f, 0.5f)
+                        .flat(true)
+                        .rotation(bearing));
+            } else {
+                directionMarker.setPosition(fusedLocation);
+                directionMarker.setRotation(bearing);
+            }
+
             if (indoorMapManager != null) {
                 indoorMapManager.setCurrentLocation(fusedLocation);
             }
@@ -196,6 +236,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         } else {
             statusText.setText("Location: Unavailable");
         }
+
 
 
 
@@ -233,6 +274,20 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
             }
         });
     }
+
+    private BitmapDescriptor vectorToBitmap(Context context, @DrawableRes int vectorResId) {
+        Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
+        vectorDrawable.setBounds(0, 0, vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight());
+        Bitmap bitmap = Bitmap.createBitmap(
+                vectorDrawable.getIntrinsicWidth(),
+                vectorDrawable.getIntrinsicHeight(),
+                Bitmap.Config.ARGB_8888
+        );
+        Canvas canvas = new Canvas(bitmap);
+        vectorDrawable.draw(canvas);
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
+
 
 
 

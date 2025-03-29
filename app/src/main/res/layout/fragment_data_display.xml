@@ -38,7 +38,7 @@
             android:layout_width="67dp"
             android:layout_height="38dp"
             android:background="@color/white"
-            
+
             android:text="@string/choose_map"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
