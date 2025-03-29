@@ -189,6 +189,17 @@ public class TrajectoryMapFragment extends Fragment {
                 indoorMapManager.decreaseFloor();
             }
         });
+
+        // Initialize sensorFusion instance
+        sensorFusion = SensorFusion.getInstance();
+
+        // Register callback for Wi-Fi floor changes
+        sensorFusion.setOnWifiFloorChangedListener(newFloor -> {
+            if (autoFloorSwitch.isChecked() && indoorMapManager != null) {
+                Log.d("TrajectoryMapFragment", "Wi-Fi floor changed, updating floor to: " + newFloor);
+                indoorMapManager.setCurrentFloor(newFloor, true);
+            }
+        });
     }
 
 

@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -69,6 +70,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Store the last event timestamps for each sensor type
     private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
     private HashMap<Integer, Integer> eventCounts = new HashMap<>();
+    // 回调接口，用于楼层变化通知
+    private Consumer<Integer> wifiFloorChangedListener;
 
     long maxReportLatencyNs = 0;  // Disable batching to deliver events immediately
 
@@ -176,6 +179,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private long wifiPositionTimestamp = 0;
     private long wifiReceivedTime = 0;
     private int wifiFloor = 0;
+
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -657,6 +662,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                     long responseTime = System.currentTimeMillis();
                     long delay = responseTime - requestStartTime;
                     Log.d("SensorFusion", "WiFi请求总延迟: " + delay + "ms");
+                    if (wifiFloorChangedListener != null) {
+                        wifiFloorChangedListener.accept(floor);
+                    }
 
                 }
 
@@ -1131,7 +1139,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
-
+    public void setOnWifiFloorChangedListener(Consumer<Integer> listener) {
+        this.wifiFloorChangedListener = listener;
+    }
 
     /**
      * Timer task to record data with the desired frequency in the trajectory class.
