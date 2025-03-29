@@ -6,8 +6,13 @@ from collections import defaultdict
 
 # ==== 模拟加载已归一化后的 RSSI 和 坐标数据（你需要替换为你的数据） ====
 # 例如：X_rssi.shape = [N, 20]，Y.shape = [N, 2]
-X_rssi = np.load("X_rssi.npy")       # shape: [N, TOP_N], 归一化后的 RSSI
+X_rssi = np.load("X_rssi.npy")       # shape: [N, TOP_N], 原始 RSSI（单位 dBm）
 Y = np.load("Y_coord.npy")           # shape: [N, 2], 归一化后的 [lat, lon]
+
+# ==== 使用线性强度替代 dB 空间（如：P = 10^(RSSI/10)） ====
+print("\n========== 将 RSSI 从 dB 空间转换为线性强度 ==========")
+X_rssi = np.clip(X_rssi, -100, -30)  # 限制 RSSI 范围，防止极端值
+X_rssi = 10 ** (X_rssi / 10.0)       # 转换为线性强度（近似）
 
 # ==== 检查 1: RSSI 相似 → 位置差异大？ ====
 print("\n========== 检查 1：相似 RSSI 对应位置是否接近 ==========")

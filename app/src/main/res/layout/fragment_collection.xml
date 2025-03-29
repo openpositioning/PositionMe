@@ -4,11 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Fullscreen map container (holds TrajectoryMapFragment) -->
-    <FrameLayout
-        android:id="@+id/mapContainer"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+
 
     <!-- TOP overlay: spinners + building name -->
     <LinearLayout
@@ -45,6 +41,12 @@
             android:hint="@string/building_name_hint"
             android:inputType="text" />
     </LinearLayout>
+
+    <!-- Fullscreen map container (holds TrajectoryMapFragment) -->
+    <FrameLayout
+        android:id="@+id/mapContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <!-- BOTTOM overlay: buttons -->
     <LinearLayout

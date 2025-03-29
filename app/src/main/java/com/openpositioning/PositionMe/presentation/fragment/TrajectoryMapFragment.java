@@ -379,7 +379,7 @@ public class TrajectoryMapFragment extends Fragment {
             orientationMarker.setPosition(newLocation);
             orientationMarker.setRotation(orientation);
             // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+//            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
 
         // Extend polyline if movement occurred
@@ -389,11 +389,11 @@ public class TrajectoryMapFragment extends Fragment {
             fusionPolyline.setPoints(points);
         }
 
-        // Update indoor map overlay
-        if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
-        }
+//        // Update indoor map overlay
+//        if (indoorMapManager != null) {
+//            indoorMapManager.setCurrentLocation(newLocation);
+//            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+//        }
     }
 
 

@@ -90,7 +90,7 @@ public class CollectionActivity extends AppCompatActivity {
         sensorFusion.setContext(getApplicationContext());
         sensorFusion.resumeListening();
 
-        // 1.1) 初始化 Predictor（加载 tf_model.tflite）
+//        1.1) 初始化 Predictor（加载 tf_model.tflite）
         predictor = new SensorDataPredictor(this);
 
 

@@ -1,19 +1,100 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@color/md_theme_background"
     tools:context=".presentation.fragment.HomeFragment">
 
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent"
+    <!-- 左侧窄栏，用于放置若干按钮（activity 切换等） -->
+    <LinearLayout
+        android:id="@+id/leftButtonBar"
+        android:layout_width="72dp"
         android:layout_height="match_parent"
-        android:padding="24dp"
-        android:background="@color/md_theme_background">
+        android:orientation="vertical"
+        android:gravity="top|center"
+        android:padding="4dp"
+        android:background="?attr/colorSurface">
 
-        <!-- Extra-large page title -->
+        <!-- 按钮示例：开始/停止记录 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/startStopButton"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/start_recording"
+            android:textSize="11sp"
+            android:drawableTop="@drawable/ic_baseline_directions_walk_24"
+            app:iconGravity="textTop"
+            app:iconSize="24dp"/>
+
+        <!-- 按钮示例：历史文件 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/filesButton"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/files"
+            android:textSize="10sp"
+            android:drawableTop="@drawable/ic_baseline_folder_24"
+            app:iconGravity="top"
+            app:iconSize="24dp"/>
+
+        <!-- 按钮示例：传感器信息 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sensorInfoButton"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/info"
+            android:textSize="12sp"
+            android:drawableTop="@drawable/ic_baseline_info_24"
+            app:iconGravity="top"
+            app:iconSize="24dp"/>
+
+        <!-- 按钮示例：实时测量 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/measurementButton"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/measurements"
+            android:textSize="12sp"
+            android:drawableTop="@drawable/ic_baseline_data_array_24"
+            app:iconGravity="top"
+            app:iconSize="24dp"/>
+
+        <!-- 按钮示例：室内定位 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/indoorButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Indoor Positioning\n(In Development)"
+            android:textSize="12sp"
+            android:textAlignment="center"
+            android:backgroundTint="#9E9E9E"/>
+
+    </LinearLayout>
+
+    <!-- 右侧大块区域，放标题、GNSS状态以及 Google Map 等主要内容 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:padding="16dp"
+        tools:ignore="MissingConstraints">
+
+        <!-- 大标题 -->
         <TextView
             android:id="@+id/pageTitle"
             android:layout_width="wrap_content"
@@ -23,151 +104,41 @@
             android:textStyle="bold"
             android:textAlignment="center"
             android:textColor="@color/md_theme_primary"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            android:layout_gravity="center_horizontal"/>
 
-        <!-- Slogan beneath the title -->
+        <!-- Slogan -->
         <TextView
             android:id="@+id/sloganText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="16dp"
             android:text="@string/fragment_home_slogan"
             android:textSize="14sp"
             android:textStyle="italic"
             android:textAlignment="center"
             android:textColor="@color/md_theme_primary"
-            app:layout_constraintTop_toBottomOf="@id/pageTitle"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="20dp" />
+            android:layout_gravity="center_horizontal" />
 
-        <!-- GNSS status message (hidden by default) -->
+        <!-- GNSS状态提示信息（默认隐藏） -->
         <TextView
             android:id="@+id/gnssStatusTextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="8dp"
+            android:text="@string/gnss_disabled"
             android:textColor="@android:color/holo_red_dark"
             android:textSize="16sp"
-            android:visibility="gone"
-            android:text="@string/gnss_disabled"
-            app:layout_constraintTop_toBottomOf="@id/sloganText"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="8dp" />
+            android:visibility="gone" />
 
-        <!-- Google Map container -->
+        <!-- 地图容器（填充剩余空间） -->
         <androidx.fragment.app.FragmentContainerView
             android:id="@+id/mapFragmentContainer"
             android:name="com.google.android.gms.maps.SupportMapFragment"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="20dp"
-            app:layout_constraintTop_toBottomOf="@id/gnssStatusTextView"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintDimensionRatio="16:9" />
-
-        <!-- 2x2 Button Grid with equal-sized buttons -->
-        <androidx.gridlayout.widget.GridLayout
-            android:id="@+id/buttonGrid"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:minHeight="80dp"
-            android:layout_marginTop="24dp"
-            app:columnCount="2"
-            app:rowCount="2"
-            app:layout_constraintTop_toBottomOf="@id/mapFragmentContainer"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintBottom_toTopOf="@id/indoorButton">
-
-            <!-- Start Recording Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/startStopButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_margin="8dp"
-                android:backgroundTint="@color/md_theme_primary"
-                android:text="@string/start_recording"
-                android:textColor="@color/md_theme_onPrimary"
-                app:cornerRadius="16dp"
-                app:icon="@drawable/ic_baseline_directions_walk_24"
-                app:iconGravity="textTop"
-                app:iconSize="30dp"
-                app:layout_columnWeight="1"
-                app:layout_rowWeight="1" />
-
-            <!-- History Data Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/filesButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_margin="8dp"
-                android:backgroundTint="@color/md_theme_light_primary"
-                android:text="@string/files"
-                android:textColor="@color/md_theme_light_onPrimary"
-                app:cornerRadius="16dp"
-                app:icon="@drawable/ic_baseline_folder_24"
-                app:iconGravity="textTop"
-                app:iconSize="30dp"
-                app:layout_columnWeight="1"
-                app:layout_rowWeight="1" />
-
-            <!-- View Sensor Info Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/sensorInfoButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_margin="8dp"
-                android:backgroundTint="@color/md_theme_tertiary"
-                android:text="@string/info"
-                android:textColor="@color/md_theme_onTertiary"
-                app:cornerRadius="16dp"
-                app:icon="@drawable/ic_baseline_info_24"
-                app:iconGravity="textTop"
-                app:iconSize="30dp"
-                app:layout_columnWeight="1"
-                app:layout_rowWeight="1" />
-
-            <!-- View Real-Time Measurement Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/measurementButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_margin="8dp"
-                android:backgroundTint="@color/md_theme_tertiary"
-                android:text="@string/measurements"
-                android:textColor="@color/md_theme_onTertiary"
-                app:cornerRadius="16dp"
-                app:icon="@drawable/ic_baseline_data_array_24"
-                app:iconGravity="textTop"
-                app:iconSize="30dp"
-                app:layout_columnWeight="1"
-                app:layout_rowWeight="1" />
-        </androidx.gridlayout.widget.GridLayout>
-
-        <!-- Grey button for indoor positioning, anchored to the bottom. -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/indoorButton"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Indoor Positioning \n (In Development)"
-            android:textColor="@color/md_theme_onPrimary"
-            android:backgroundTint="#9E9E9E"
-            android:textSize="14sp"
-            app:cornerRadius="14dp"
-            app:layout_constraintTop_toBottomOf="@id/buttonGrid"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
-
-    </androidx.constraintlayout.widget.ConstraintLayout>
-</FrameLayout>
+            android:layout_weight="1"
+            android:layout_marginBottom="16dp"/>
+    </LinearLayout>
+</LinearLayout>

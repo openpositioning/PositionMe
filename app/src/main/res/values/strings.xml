@@ -6,7 +6,7 @@
     <string name="stop">Complete</string>
     <string name="start">Start</string>
     <string name="measurements">Live data</string>
-    <string name="files">History</string>
+    <string name="files">REPLAY</string>
     <string name="info_description">See sensor hardware information</string>
     <string name="refresh_read">Refresh readings</string>
     <string name="download">Download</string>
@@ -121,9 +121,9 @@
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
     <string name="home_slogan">\"Coordinates Start with Your First Move\"</string>
-    <string name="info">Sensor Info</string>
+    <string name="info">INFO</string>
     <string name="fragment_home_slogan">\"Coordinates Start with Your First Move\"</string>
-    <string name="start_recording">Record</string>
+    <string name="start_recording">REC</string>
     <string name="floor_up">Floor up button</string>
     <string name="floor_down">Floor down button</string>
     <string name="red_dot_description_text">Recording In Progress</string>
