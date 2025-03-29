@@ -296,6 +296,7 @@ public class RecordingFragment extends Fragment implements PositionListener {
             }
         }
 
+
         // If there's a fusion position, we can calculate fusion-PDR error
         if (lastFusionPosition != null && fusionInfoText != null) {
             LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
@@ -305,6 +306,15 @@ public class RecordingFragment extends Fragment implements PositionListener {
                 fusionInfoText.setText(String.format("Fusion-PDR error: %.2fm", fusionPdrError));
             }
         }
+
+        LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+        // Update WiFi marker if the switch is enabled
+        if (trajectoryMapFragment.isWifiEnabled() && wifiLocation != null) {
+            trajectoryMapFragment.updateWiFi(wifiLocation);
+        } else {
+            trajectoryMapFragment.clearWiFi();
+        }
+
 
         // Update previous
         previousPosX = pdrValues[0];

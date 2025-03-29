@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.app.AlertDialog;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -10,6 +11,8 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
+import android.widget.Toast;
+
 import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import androidx.annotation.NonNull;
@@ -25,6 +28,9 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
+
+import com.google.maps.android.SphericalUtil;
+
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,6 +48,7 @@ import java.util.List;
  * - Displays a Google Map with support for different map types (Hybrid, Normal, Satellite).
  * - Tracks and visualizes user movement using polylines.
  * - Supports GNSS position updates and visual representation.
+ * - Supports Wifi position updates and visual representation.
  * - Includes indoor mapping with floor selection and auto-floor adjustments.
  * - Allows user interaction through map controls and UI elements.
  *
@@ -50,6 +57,8 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
  * @author Mate Stodulka
+ * @author Laura Maryakhina
+ * @author Kalliopi Vakali
  */
 
 public class TrajectoryMapFragment extends Fragment {
@@ -65,9 +74,18 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
+
     private Polyline fusionPolyline; // Polyline for the fusion path
     private LatLng lastFusionLocation = null; // Last fusion position
     private Marker fusionMarker; // Marker for current fusion position
+
+
+    private Marker wifiMarker;  // WiFi Position Marker
+    private Polyline wifiPolyline;  // WiFi Position Path
+    private LatLng lastWifiLocation = null; // Last WiFi position
+    private boolean isWifiOn = false; // Toggle for WiFi tracking
+
+
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
@@ -81,6 +99,9 @@ public class TrajectoryMapFragment extends Fragment {
 
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
+    private SwitchMaterial wifiSwitch;
+    private static final double MAX_DISTANCE_THRESHOLD = 100; //wifi max distance between readings to detect outliers
+
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
@@ -108,6 +129,11 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
+
+
+        wifiSwitch = view.findViewById(R.id.wifiSwitch);
+
+
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
@@ -156,7 +182,26 @@ public class TrajectoryMapFragment extends Fragment {
                 gnssMarker.remove();
                 gnssMarker = null;
             }
+            if (gnssPolyline != null) {
+                gnssPolyline.setPoints(new ArrayList<>()); // Clear the polyline
+            }
         });
+
+
+        //wifi switch
+        wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isWifiOn = isChecked;
+            if (!isChecked && wifiMarker != null) {
+                wifiMarker.remove();
+                wifiMarker = null;
+            }
+            if (wifiPolyline != null) {
+                wifiPolyline.setPoints(new ArrayList<>()); // Clear the polyline
+            }
+        });
+
+
+
 
         // Color switch
         switchColorButton.setOnClickListener(v -> {
@@ -302,6 +347,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .color(Color.RED)
                 .width(6f)
                 .add() // start empty
+                .zIndex(1000)
         );
 
         // Initialize the GNSS polyline (blue)
@@ -309,7 +355,9 @@ public class TrajectoryMapFragment extends Fragment {
                 .color(Color.BLUE)
                 .width(6f)
                 .add() // start empty
+                .zIndex(1000)
         );
+
 
         // Initialize the fusion polyline (green) - make it prominent
         fusionPolyline = map.addPolyline(new PolylineOptions()
@@ -318,6 +366,17 @@ public class TrajectoryMapFragment extends Fragment {
                 .add());    // start empty
 
         Log.d("TrajectoryMapFragment", "Map initialized with fusion polyline");
+
+        // WiFi path in green
+        wifiPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.GREEN)
+                .width(5f)
+                .add() // start empty
+                .zIndex(1000)
+        );
+
+
+
     }
 
 
@@ -498,6 +557,91 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker = null;
         }
     }
+    /**
+     * Updates the WiFi marker and polyline on the map based on the provided location.
+     *
+     * This method ensures that the WiFi marker is either created or updated at the given location,
+     * only if the user is inside a location with Wifi coverage. It also adds a segment to the polyline
+     * representing the WiFi path if the new location is different from the previous one. Updates are
+     * ignored if the Wifi location is an outlier or if WiFi tracking is disabled.
+     *
+     *
+     * @param wifiLocation
+     */
+    public void updateWiFi(@NonNull LatLng wifiLocation) {
+        if (gMap == null) return;
+        if (!isWifiOn) return; // Ignore updates if WiFi is turned off
+
+        // Check if the new wifi location is an outlier
+        if (isOutlier(lastWifiLocation, wifiLocation)) {
+            Log.w("OutlierDetection", "Rejected outlier WiFi location: " + wifiLocation.toString());
+            // Add a red marker for the outlier for testing
+//            gMap.addMarker(new MarkerOptions()
+//                    .position(wifiLocation)
+//                    .title("Outlier Position")
+//                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
+            return; // Skip updating the marker
+        }
+
+        boolean isInsideWifiBounds = indoorMapManager.getIsIndoorMapSet(); // Check bounds
+        if (!isInsideWifiBounds) {
+            // WiFi readings are not available; show a message
+            showNoWiFiCoverageMessage();
+            clearWiFi(); // Clear the WiFi marker and polyline if any
+            wifiSwitch.setChecked(false);
+            return;
+        }
+
+        if (wifiMarker == null) {
+            // Create the WiFi marker for the first time
+            wifiMarker = gMap.addMarker(new MarkerOptions()
+                    .position(wifiLocation)
+                    .title("WiFi Position")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+            lastWifiLocation = wifiLocation;
+        } else {
+            // Move existing WiFi marker
+            wifiMarker.setPosition(wifiLocation);
+
+            // Add a segment to the WiFi polyline if this is a new location
+            if (lastWifiLocation != null && !lastWifiLocation.equals(wifiLocation)) {
+                List<LatLng> wifiPoints = new ArrayList<>(wifiPolyline.getPoints());
+                wifiPoints.add(wifiLocation);
+                wifiPolyline.setPoints(wifiPoints);
+            }
+            lastWifiLocation = wifiLocation;
+        }
+    }
+
+    /**
+     * Clears Wifi marker so only one is present on the map at a time
+     */
+    public void clearWiFi() {
+        if (wifiMarker != null) {
+            wifiMarker.remove();
+            wifiMarker = null;
+        }
+    }
+
+    /**
+     * Displays a dialog to notify the user that there is no WiFi coverage.
+     */
+    private void showNoWiFiCoverageMessage() {
+        Toast.makeText(requireContext(), "No WiFi coverage available in this area.", Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * Method to check if a Wifi location is an outlier
+     * @param lastLocation - last wifi location
+     * @param newLocation - current wifi location
+     * @return boolean - True if new wifi location is too far from last location
+     */
+    private boolean isOutlier(LatLng lastLocation, LatLng newLocation) {
+        if (lastLocation == null || newLocation == null) return false; // No comparison possible
+        double distance = SphericalUtil.computeDistanceBetween(lastLocation, newLocation);
+        return distance > MAX_DISTANCE_THRESHOLD; // True if the new location is too far
+    }
+
 
     /**
      * Whether user is currently showing GNSS or not
@@ -505,6 +649,14 @@ public class TrajectoryMapFragment extends Fragment {
     public boolean isGnssEnabled() {
         return isGnssOn;
     }
+    /**
+     * Whether user is currently showing Wifi or not
+     */
+    public boolean isWifiEnabled() {
+        return isWifiOn;
+    }
+
+
 
     private void setFloorControlsVisibility(int visibility) {
         floorUpButton.setVisibility(visibility);
@@ -524,16 +676,21 @@ public class TrajectoryMapFragment extends Fragment {
         if (polyline != null) polyline.remove();
         if (gnssPolyline != null) gnssPolyline.remove();
         if (fusionPolyline != null) fusionPolyline.remove();
+        if (wifiPolyline != null) wifiPolyline.remove();
 
         // Clear all markers
         if (orientationMarker != null) orientationMarker.remove();
         if (gnssMarker != null) gnssMarker.remove();
         if (fusionMarker != null) fusionMarker.remove();
+        if (wifiMarker != null) wifiMarker.remove();
 
         // Reset state variables
+
+        lastWifiLocation = null;
         lastGnssLocation = null;
         currentLocation = null;
         fusionMarker = null;
+
 
         // Create new polylines
         polyline = gMap.addPolyline(new PolylineOptions()
@@ -550,8 +707,14 @@ public class TrajectoryMapFragment extends Fragment {
                 .color(Color.GREEN)
                 .width(8f)
                 .add());
+      
+        wifiPolyline = gMap.addPolyline(new PolylineOptions()
+                .color(Color.GREEN)
+                .width(5f)
+                .add());
 
         Log.d("TrajectoryMapFragment", "Map cleared and reset");
+
     }
 
     /**
