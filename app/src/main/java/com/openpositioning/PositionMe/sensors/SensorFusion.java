@@ -179,7 +179,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private long wifiPositionTimestamp = 0;
     private long wifiReceivedTime = 0;
     private int wifiFloor = 0;
-
+    private float gnssAccuracy = -1f;
 
     //region Initialisation
     /**
@@ -441,6 +441,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (gnssLocation != null) {
                         Log.d("SensorFusion", "GNSS Location available for update: Lat=" + gnssLocation.getLatitude() +
                                 ", Lon=" + gnssLocation.getLongitude() + ", Accuracy=" + gnssLocation.getAccuracy());
+                        gnssAccuracy = gnssLocation.getAccuracy();
                     } else {
                         Log.d("SensorFusion", "GNSS Location is null, skipping GNSS correction.");
                     }
@@ -736,7 +737,9 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {}
-
+    public float getGnssAccuracy() {
+        return gnssAccuracy;
+    }
     private double wrapToPi(double angle) {
         while(angle > Math.PI) angle -= 2*Math.PI;
         while(angle < -Math.PI) angle += 2*Math.PI;

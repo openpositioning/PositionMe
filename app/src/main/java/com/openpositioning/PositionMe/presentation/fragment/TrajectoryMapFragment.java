@@ -57,6 +57,7 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
+    private Circle gnssAccuracyCircle;
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
@@ -414,29 +415,41 @@ public class TrajectoryMapFragment extends Fragment {
     /**
      * Called when we want to set or update the GNSS marker position
      */
-    public void updateGNSS(@NonNull LatLng gnssLocation) {
+    public void updateGNSS(@NonNull LatLng location) {
         if (gMap == null) return;
         if (!isGnssOn) return;
 
+        float accuracy = sensorFusion.getGnssAccuracy();
+
         if (gnssMarker == null) {
             // Create the GNSS marker for the first time
-            gnssMarker = gMap.addMarker(new MarkerOptions()
-                    .position(gnssLocation)
-                    .title("GNSS Position")
-                    .icon(BitmapDescriptorFactory
-                            .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-            lastGnssLocation = gnssLocation;
+        gnssMarker = gMap.addMarker(new MarkerOptions()
+                .position(location)
+                .title("GNSS Position")
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+        lastGnssLocation = location;
+        // Create accuracy circle
+        gnssAccuracyCircle = gMap.addCircle(new CircleOptions()
+                .center(location)
+                .radius(accuracy) // Accuracy in meters
+                .strokeColor(Color.BLUE)
+                .fillColor(Color.argb(50, 0, 0, 255)) // 半透明蓝色
+                .strokeWidth(2f));
         } else {
             // Move existing GNSS marker
-            gnssMarker.setPosition(gnssLocation);
+            gnssMarker.setPosition(location);
+            if (gnssAccuracyCircle != null) {
+                gnssAccuracyCircle.setCenter(location);
+                gnssAccuracyCircle.setRadius(accuracy);
+            }
 
             // Add a segment to the blue GNSS line, if this is a new location
-            if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
+            if (lastGnssLocation != null && !lastGnssLocation.equals(location)) {
                 List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
-                gnssPoints.add(gnssLocation);
+                gnssPoints.add(location);
                 gnssPolyline.setPoints(gnssPoints);
             }
-            lastGnssLocation = gnssLocation;
+            lastGnssLocation = location;
         }
     }
 
@@ -448,6 +461,10 @@ public class TrajectoryMapFragment extends Fragment {
         if (gnssMarker != null) {
             gnssMarker.remove();
             gnssMarker = null;
+        }
+        if (gnssAccuracyCircle != null) {
+            gnssAccuracyCircle.remove();
+            gnssAccuracyCircle = null;
         }
     }
 
