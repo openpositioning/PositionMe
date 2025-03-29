@@ -407,4 +407,9 @@ public class PdrProcessing {
         return averageStepLength;
     }
 
+    public void setCurrentLocation(float x, float y){
+        this.positionX = x;
+        this.positionY = y;
+    }
+
 }

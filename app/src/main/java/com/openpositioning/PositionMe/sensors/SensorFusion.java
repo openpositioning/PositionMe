@@ -9,6 +9,8 @@ import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Log;
 
@@ -151,6 +153,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private FilterUtils.ParticleFilter pf;
     private FilterUtils.EKFFilter ekf;
 
+    private float[] fusionLocation;
+
     int MAX_WIFI_APS = 60;
     //region Initialisation
     /**
@@ -255,8 +259,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
                 "MyApp::MyWakelockTag");
 
-        pf = new FilterUtils.ParticleFilter(200, 0, 0, 5);
-        ekf = new FilterUtils.EKFFilter(0, 0, 1.0, 1, 5);
+        pf = new FilterUtils.ParticleFilter(200, 0, 0, 1);
+        ekf = new FilterUtils.EKFFilter(0, 0, 1.0, 1, 2);
     }
     //endregion
 
@@ -399,6 +403,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                     LatLng startLocation = new LatLng(this.startLocation[0], this.startLocation[1]);
                     double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocation, latLng);
                     Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
+                    pf.setWifiRatio(ratio);
+                    Log.e("Ratio", String.valueOf(ratio));
                     pf.update(wifiPos[0], wifiPos[1]);
                 }
 
@@ -427,6 +433,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
                             .setX(newCords[0]).setY(newCords[1]));
                 }
+
+                fusionLocation = new float[]{newCords[0], newCords[1]};
+                this.pdrProcessing.setCurrentLocation(newCords[0], newCords[1]);
                 break;
             // *** Particle END ***
         }
@@ -561,35 +570,71 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     private void createWifiPositionRequestCallback(){
         try {
-            // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
-            for (Wifi data : this.wifiList){
+            // 创建用于存储WiFi接入点的JSON对象
+            JSONObject wifiAccessPoints = new JSONObject();
+            for (Wifi data : this.wifiList) {
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
-            // Creating POST Request
+            // 创建POST请求所需的JSON对象
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Handle the success response
-//                    Log.e("Call back WiFi-Location", wifiLocation.toString());
-//                    Log.e("Call back WiFi-Floor", String.valueOf(floor));
+                    // 成功回调时，重置计时器（更新成功时间，并启动ratioUpdater）
+                    lastWifiSuccessTime = System.currentTimeMillis();
+                    // 移除之前可能存在的更新任务，确保计时器重置
+                    ratioHandler.removeCallbacks(ratioUpdater);
+                    ratioHandler.post(ratioUpdater);
+
+                    // 其他成功逻辑处理
+                    Log.d("WiFiSuccess", "WiFi定位成功：" + wifiLocation.toString());
+                    Log.d("WiFiSuccess", "所在楼层：" + floor);
                 }
 
                 @Override
                 public void onError(String message) {
-                    // Handle the error response
-//                    Log.e("Call back WiFi-Error", message);
+                    // 错误回调处理
+                    Log.e("WiFiError", message);
                 }
             });
         } catch (JSONException e) {
-            // Catching error while making JSON object, to prevent crashes
-            // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors","Error creating json object"+e.toString());
+            // 捕获创建JSON对象过程中可能出现的异常，防止崩溃
+            Log.e("jsonErrors", "创建json对象错误: " + e.toString());
         }
-
     }
+
+//    private void createWifiPositionRequestCallback(){
+//        try {
+//            // Creating a JSON object to store the WiFi access points
+//            JSONObject wifiAccessPoints=new JSONObject();
+//            for (Wifi data : this.wifiList){
+//                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+//            }
+//            // Creating POST Request
+//            JSONObject wifiFingerPrint = new JSONObject();
+//            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+//            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+//                @Override
+//                public void onSuccess(LatLng wifiLocation, int floor) {
+//                    // Handle the success response
+////                    Log.e("Call back WiFi-Location", wifiLocation.toString());
+////                    Log.e("Call back WiFi-Floor", String.valueOf(floor));
+//                }
+//
+//                @Override
+//                public void onError(String message) {
+//                    // Handle the error response
+////                    Log.e("Call back WiFi-Error", message);
+//                }
+//            });
+//        } catch (JSONException e) {
+//            // Catching error while making JSON object, to prevent crashes
+//            // Error log to keep record of errors (for secure programming and maintainability)
+//            Log.e("jsonErrors","Error creating json object"+e.toString());
+//        }
+//
+//    }
 
     /**
      * Method to get user position obtained using {@link WiFiPositioning}.
@@ -969,6 +1014,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         }
         else {this.filter_coefficient = FILTER_COEFFICIENT;}
+        fusionLocation = new float[] {0,0};
     }
 
     /**
@@ -1142,5 +1188,46 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
     //endregion
+
+
+    public float[] getFusionLocation() {
+        return fusionLocation;
+    }
+
+    // 成员变量
+    private long lastWifiSuccessTime = 0;
+    private float ratio = 0f;
+    private Handler ratioHandler = new Handler(Looper.getMainLooper());
+
+    // 定时器任务：每隔一小段时间更新ratio值
+    private Runnable ratioUpdater = new Runnable() {
+        @Override
+        public void run() {
+            long currentTime = System.currentTimeMillis();
+            // 计算上一次wifi成功召回后的已用时间（秒）
+            float elapsedSeconds = (currentTime - lastWifiSuccessTime) / 1000f;
+
+            if (elapsedSeconds <= 1.5f) {
+                // 1.5秒以内保持为1
+                ratio = 1f;
+            } else if (elapsedSeconds >= 10f) {
+                // 超过10秒后，ratio直接为0
+                ratio = 0f;
+            } else {
+                // 介于1.5秒到10秒之间，采用指数衰减
+                // 此处选取的k值使得在10秒时ratio接近0（也可以调整k值实现你想要的衰减曲线）
+                float k = (float)(Math.log(1.0/0.01) / (10 - 1.5));
+                ratio = (float)Math.exp(-k * (elapsedSeconds - 1.5));
+            }
+
+            // 这里可以做一些UI更新或其他操作，例如打印当前ratio值
+            Log.d("RatioUpdater", "当前ratio值：" + ratio);
+
+            // 若计时器未超过10秒，继续更新
+            if (elapsedSeconds < 10f) {
+                ratioHandler.postDelayed(this, 100); // 每100毫秒更新一次
+            }
+        }
+    };
 
 }

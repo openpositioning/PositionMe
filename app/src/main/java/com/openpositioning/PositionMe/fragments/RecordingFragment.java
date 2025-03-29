@@ -772,10 +772,13 @@ public class RecordingFragment extends Fragment {
 //        Log.d("updateUI", "更新UI和位置...");
         // ✅ **获取 PDR 数据**（检查是否为 null）
         //✅ **Get PDR data** (check if it is null)
-        float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
+//        float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
+        float[] pdrValues = sensorFusion.getFusionLocation();
         if (pdrValues == null || pdrValues.length < 2) {
 //            Log.e("updateUI", "❌ PDR Data is NULL or Incomplete!");
             return;
+        } else {
+            Log.e("Fusion Value Temp", "Temp: " + pdrValues[0] + " Y: " + pdrValues[1]);
         }
 
         // ✅ **计算移动距离**
