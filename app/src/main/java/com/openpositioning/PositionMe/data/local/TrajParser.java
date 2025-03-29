@@ -67,13 +67,14 @@ public class TrajParser {
     private WiFiPositioning wiFiPositioning;
 
     /**
-     * Represents a single replay point containing estimated PDR position, GNSS location,
+     * Represents a single replay point containing estimated PDR position, GNSS location, WiFi location
      * orientation, speed, and timestamp.
      */
     public static class ReplayPoint {
         public LatLng wifiLocation;
         public LatLng pdrLocation;  // PDR-derived location estimate
         public LatLng gnssLocation; // GNSS location (may be null if unavailable)
+        public LatLng wifiLocation; // WiFi location (may be null if unavailable)
         public float orientation;   // Orientation in degrees
         public float speed;         // Speed in meters per second
         public long timestamp;      // Relative timestamp
@@ -90,7 +91,7 @@ public class TrajParser {
         public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, LatLng wifiLocation, float orientation, float speed, long timestamp) {
             this.pdrLocation = pdrLocation;
             this.gnssLocation = gnssLocation;
-            this.wifiLocation = wifiLocation;
+            this.wifiLocation = wifiLocation;//更改构造函数，添加wifiLocation参数
             this.orientation = orientation;
             this.speed = speed;
             this.timestamp = timestamp;
@@ -116,7 +117,6 @@ public class TrajParser {
         public long relativeTimestamp;
         public double latitude, longitude; // GNSS coordinates
     }
-
 
     private static class MacScan {
         public String mac;
@@ -175,10 +175,9 @@ public class TrajParser {
             List<ImuRecord> imuList = parseImuData(root.getAsJsonArray("imuData"));
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
-            List<WiFiRecord> WiFiList = parseWiFiData(root.getAsJsonArray("wifiData"));
 
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: "
-                    + pdrList.size() + " records, GNSS: " + gnssList.size() + " records, WiFi: "+ WiFiList.size()+" records");
+                    + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
 
             for (int i = 0; i < pdrList.size(); i++) {
                 PdrRecord pdr = pdrList.get(i);
@@ -210,6 +209,9 @@ public class TrajParser {
                 GnssRecord closestGnss = findClosestGnssRecord(gnssList, pdr.relativeTimestamp);
                 LatLng gnssLocation = closestGnss != null ?
                         new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
+                WifiRecord closestWifi = findClosestWifiRecord(wifiList, pdr.relativeTimestamp);
+                LatLng wifiLocation = closestWifi != null ?
+                        new LatLng(closestWifi.latitude, closestWifi.longitude) : null;
 
                 WiFiRecord closestWiFi = findClosestWiFiRecord(WiFiList, pdr.relativeTimestamp);
                 AtomicReference<LatLng> wifilocation = new AtomicReference<>();

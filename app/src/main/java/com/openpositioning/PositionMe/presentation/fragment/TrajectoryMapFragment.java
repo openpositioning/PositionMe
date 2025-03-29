@@ -157,7 +157,7 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // wifi location display
+        // wifi location display做了一个wifi开启的开关，可以开启或关闭使用wifi
         WiFiLoactionSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             isWiFiLocationOn = isChecked;
             if (!isChecked && wifiMarker != null) {
@@ -247,7 +247,6 @@ public class TrajectoryMapFragment extends Fragment {
                 .width(5f)
                 .add() // start empty
         );
-
     }
 
 
@@ -430,11 +429,11 @@ public class TrajectoryMapFragment extends Fragment {
             wifiMarker.setPosition(wifiLocation);
 
             // Add a segment to the yellow WiFi line, if this is a new location
-            if (lastwifiLocation != null && !lastwifiLocation.equals(wifiLocation)) {
-                List<LatLng> wifiPoints = new ArrayList<>(wifiPolyline.getPoints());
-                wifiPoints.add(wifiLocation);
-                wifiPolyline.setPoints(wifiPoints);
-            }
+             if (lastwifiLocation != null && !lastwifiLocation.equals(wifiLocation)) {
+                 List<LatLng> wifiPoints = new ArrayList<>(wifiPolyline.getPoints());
+                 wifiPoints.add(wifiLocation);
+                 wifiPolyline.setPoints(wifiPoints);
+             }
             lastwifiLocation = wifiLocation;
         }
     }
@@ -448,7 +447,6 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker = null;
         }
     }
-
 
     /**
      * Whether user is currently showing GNSS or not

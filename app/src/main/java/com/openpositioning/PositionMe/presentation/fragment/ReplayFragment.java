@@ -151,6 +151,8 @@ public class ReplayFragment extends Fragment {
         // Set initial map position
         setupInitialMapPosition();
 
+
+
         // Initialize UI controls
         playPauseButton = view.findViewById(R.id.playPauseButton);
         restartButton   = view.findViewById(R.id.restartButton);
@@ -248,11 +250,14 @@ public class ReplayFragment extends Fragment {
 //    }
 
 
+
+
     /**
      * Show a simple dialog asking user to pick:
      * 1) GNSS from file
      * 2) Lat/Lon from ReplayActivity arguments
      */
+
 //    private void showGnssChoiceDialog() {
 //        new AlertDialog.Builder(requireContext())
 //                .setTitle("Choose Starting Location")
@@ -274,6 +279,7 @@ public class ReplayFragment extends Fragment {
 //                .setCancelable(false)
 //                .show();
 //    }
+
 
 //    private void setupInitialMapPosition(float latitude, float longitude) {
 //        LatLng startPoint = new LatLng(initialLat, initialLon);
@@ -369,6 +375,7 @@ public class ReplayFragment extends Fragment {
                 if (p.gnssLocation != null) {
                     trajectoryMapFragment.updateGNSS(p.gnssLocation);
                 }
+                // 添加 WiFi 定位更新
                 if (p.wifiLocation != null) {
                     trajectoryMapFragment.updateWifiLocation(p.wifiLocation);
                 }
@@ -380,6 +387,7 @@ public class ReplayFragment extends Fragment {
             if (p.gnssLocation != null) {
                 trajectoryMapFragment.updateGNSS(p.gnssLocation);
             }
+             //添加 WiFi 定位更新
             if (p.wifiLocation != null) {
                 trajectoryMapFragment.updateWifiLocation(p.wifiLocation);
             }
