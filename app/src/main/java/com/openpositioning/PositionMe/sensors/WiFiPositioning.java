@@ -12,11 +12,15 @@ import com.google.android.gms.maps.model.LatLng;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.Objects;
 
+import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+
 /**
- * Class for creating and handling POST requests for obtaining the current position using
- * WiFi positioning API from https://openpositioning.org/api/position/fine
+ * Improved version: WiFi positioning with better duplicate detection.
  */
 public class WiFiPositioning {
     private RequestQueue requestQueue;
@@ -38,17 +42,16 @@ public class WiFiPositioning {
     }
 
     /**
-     * Creates a POST request using the WiFi fingerprint to obtain user's location
-     * Includes duplicate detection, outlier detection, and error callbacks
+     * Creates a POST request using the WiFi fingerprint to obtain user's location.
+     * Includes smarter duplicate detection and error callbacks.
      *
      * @param jsonWifiFeatures WiFi Fingerprint
      * @param callback Result callback
      */
     public void request(JSONObject jsonWifiFeatures, final VolleyCallback callback) {
-        // Duplicate detection
-        if (jsonWifiFeatures != null && jsonWifiFeatures.toString().equals(String.valueOf(lastRequestedFingerprint))) {
-            Log.w("WiFiPositioning", "⚠️ Duplicate WiFi fingerprint detected, skipping request");
-            callback.onError("Duplicate WiFi data (throttling likely)");
+        // Smarter Duplicate detection
+        if (isDuplicate(jsonWifiFeatures)) {
+            callback.onError("Duplicate WiFi data (no significant change)");
             return;
         }
 
@@ -61,7 +64,6 @@ public class WiFiPositioning {
                         wifiLocation = new LatLng(response.getDouble("lat"), response.getDouble("lon"));
                         floor = response.getInt("floor");
 
-                        // Outlier / No coverage detection
                         if (response.has("error") || Math.abs(response.getDouble("lat")) < 0.0001) {
                             Log.w("WiFiPositioning", "❗️ No coverage or invalid location detected");
                             callback.onError("No coverage or invalid location");
@@ -85,9 +87,48 @@ public class WiFiPositioning {
                         callback.onError("Network Error: " + error.getMessage());
                     }
                 }
-        );
+        ) {
+            @Override
+            public Map<String, String> getHeaders() {
+                Map<String, String> headers = new HashMap<>();
+                headers.put("key", ServerCommunications.getUserKey());
+                headers.put("Accept", "application/json");
+                headers.put("Content-Type", "application/json");
+                return headers;
+            }
+        };
         requestQueue.add(jsonObjectRequest);
+
     }
+
+    /**
+     * Checks if the new fingerprint is similar to the last one (within small RSSI changes).
+     */
+    private boolean isDuplicate(JSONObject newFingerprint) {
+        if (lastRequestedFingerprint == null) return false;
+
+        try {
+            JSONObject last = lastRequestedFingerprint.getJSONObject("wf");
+            JSONObject current = newFingerprint.getJSONObject("wf");
+
+            if (last.length() != current.length()) return false;
+
+            Iterator<String> keys = current.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                if (!last.has(key)) return false;
+                int lastRssi = last.getInt(key);
+                int currRssi = current.getInt(key);
+                if (Math.abs(lastRssi - currRssi) > 3) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (JSONException e) {
+            return false;
+        }
+    }
+
 
     public interface VolleyCallback {
         void onSuccess(LatLng location, int floor);

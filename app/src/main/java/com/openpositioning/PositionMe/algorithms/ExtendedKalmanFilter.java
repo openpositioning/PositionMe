@@ -13,6 +13,8 @@ import com.openpositioning.PositionMe.sensors.TurnDetector;
 import org.ejml.data.SingularMatrixException;
 import org.ejml.simple.SimpleMatrix;
 
+import java.util.Arrays;
+
 /**
  * The ExtendedKalmanFilter class implements an Extended Kalman Filter (EKF) for real-time state estimation
  * in navigation systems, particularly for applications involving pedestrian movements. This implementation
@@ -143,7 +145,7 @@ public class ExtendedKalmanFilter{
         this.Xk = new SimpleMatrix(new double[][]{{0}, {0}, {0}});
 
         // Initialize the error covariance matrix (Pk) with zeros on the diagonal, indicating no initial certainty in the estimates.
-        this.Pk = SimpleMatrix.diag(1000, 1000, 1000);
+        this.Pk = SimpleMatrix.diag(1000, 100, 10);
 
 
         // Initialize the process noise covariance matrix (Qk) based on the variances of process noises (theta and displacement).
@@ -262,7 +264,7 @@ public class ExtendedKalmanFilter{
     private void resetFilter() {
         Log.w("EKF", "⚠️ EKF 状态异常，正在重置滤波器...");
         this.Xk = new SimpleMatrix(new double[][]{{0}, {0}, {0}});
-        this.Pk = SimpleMatrix.diag(1000, 1000, 1000);
+        this.Pk = SimpleMatrix.diag(1000, 100, 10);
     }
 
     private boolean hasInvalidState() {
@@ -407,6 +409,8 @@ public class ExtendedKalmanFilter{
      * @param refTime Reference time when the observation was made, used to timestamp this update.
      */
     public void onOpportunisticUpdate(double[] observe, long refTime){
+        Log.d("EKF", "✅ Opportunistic Update triggered with ENU = " + Arrays.toString(observe) + ", timestamp = " + refTime);
+
         // Check if the EKF is set to stop and return immediately if true.
         if (stopEKF) return;
 

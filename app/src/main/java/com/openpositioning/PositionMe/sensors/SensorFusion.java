@@ -566,6 +566,9 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+
+            Log.d("WiFi指纹", "Fingerprint JSON: " + wifiFingerPrint.toString());
+
             this.wifiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {

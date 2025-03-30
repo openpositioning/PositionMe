@@ -11,6 +11,7 @@ import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.provider.Settings;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -57,6 +58,7 @@ public class WifiDataProcessor implements Observable {
     // Timer object
     private Timer scanWifiDataTimer;
 
+
     /**
      * Public default constructor of the WifiDataProcessor class.
      * The constructor saves the context, checks for permissions to use the location services,
@@ -101,6 +103,7 @@ public class WifiDataProcessor implements Observable {
      * Receives updates when a wifi scan is complete. Observers are notified when the broadcast is
      * received to update the list of wifis
      */
+
     BroadcastReceiver wifiScanReceiver = new BroadcastReceiver() {
         /**
          * Updates the list of nearby wifis when the broadcast is received.
@@ -116,30 +119,31 @@ public class WifiDataProcessor implements Observable {
         public void onReceive(Context context, Intent intent) {
 
             if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                // Unregister this listener
                 stopListening();
                 return;
             }
 
-            //Collect the list of nearby wifis
-            List<ScanResult> wifiScanList = wifiManager.getScanResults();
-            //Stop receiver as scan is complete
-            context.unregisterReceiver(this);
+            if (WifiManager.SCAN_RESULTS_AVAILABLE_ACTION.equals(intent.getAction())) {
 
-            //Loop though each item in wifi list
-            wifiData = new Wifi[wifiScanList.size()];
-            for(int i = 0; i < wifiScanList.size(); i++) {
-                wifiData[i] = new Wifi();
-                //Convert String mac address to an integer
-                String wifiMacAddress = wifiScanList.get(i).BSSID;
-                long intMacAddress = convertBssidToLong(wifiMacAddress);
-                //store mac address and rssi of wifi
-                wifiData[i].setBssid(intMacAddress);
-                wifiData[i].setLevel(wifiScanList.get(i).level);
+                // Collect the list of nearby wifis
+                List<ScanResult> wifiScanList = wifiManager.getScanResults();
+
+                // Loop through each item in wifi list
+                wifiData = new Wifi[wifiScanList.size()];
+                for (int i = 0; i < wifiScanList.size(); i++) {
+                    wifiData[i] = new Wifi();
+                    String wifiMacAddress = wifiScanList.get(i).BSSID;
+                    long intMacAddress = convertBssidToLong(wifiMacAddress);
+                    wifiData[i].setBssid(intMacAddress);
+                    wifiData[i].setLevel(wifiScanList.get(i).level);
+                }
+
+                // Notify observers of change in wifiData variable
+                notifyObservers(0);
+
+                // Unregister receiver after handling scan result
+                stopListening();
             }
-
-            //Notify observers of change in wifiData variable
-            notifyObservers(0);
         }
     };
 

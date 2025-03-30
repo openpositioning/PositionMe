@@ -283,36 +283,6 @@ public class RecordingFragment extends Fragment {
 
         trajectoryMapFragment.updateUserLocationSafe(ekfLocation,
                 (float) Math.toDegrees(sensorFusion.passOrientation()));
-
-        // ===== WiFi定位触发 =====
-        stepCounter++;
-        if (stepCounter % 10 == 0) { // 每10步触发一次，可自行调整
-            JSONObject fingerprint = buildCurrentWiFiFingerprint();
-            if (fingerprint != null) {
-                sensorFusion.requestWiFiPosition(fingerprint, requireContext());
-            }
-        }
-    }
-
-    private JSONObject buildCurrentWiFiFingerprint() {
-        Wifi[] wifiData = sensorFusion.getWifiData();
-        if (wifiData == null || wifiData.length == 0) return null;
-
-        JSONArray wifiArray = new JSONArray();
-        try {
-            for (Wifi wifi : wifiData) {
-                JSONObject obj = new JSONObject();
-                obj.put("bssid", wifi.getBssid());
-                obj.put("level", wifi.getLevel());
-                wifiArray.put(obj);
-            }
-            JSONObject fingerprint = new JSONObject();
-            fingerprint.put("wifis", wifiArray);
-            return fingerprint;
-        } catch (JSONException e) {
-            Log.e("WiFiFingerprint", "构建WiFi指纹失败", e);
-            return null;
-        }
     }
 
 

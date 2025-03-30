@@ -86,8 +86,8 @@ public class ServerCommunications implements Observable {
     private List<Observer> observers;
 
     // Static constants necessary for communications
-    private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
-    private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
+    private static final String userKey = "ygowxLsiAJEZ89_ZS6V2Ew";
+    private static final String masterKey = "ewireless";
     private static final String uploadURL =
             "https://openpositioning.org/api/live/trajectory/upload/" + userKey
                     + "/?key=" + masterKey;
@@ -97,6 +97,8 @@ public class ServerCommunications implements Observable {
     private static final String infoRequestURL =
             "https://openpositioning.org/api/live/users/trajectories/" + userKey
                     + "?key=" + masterKey;
+    private static final String wifiURL =
+            "https://openpositioning.org/api/position/fine?key=" + userKey;
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
 
@@ -563,6 +565,10 @@ public class ServerCommunications implements Observable {
 
     }
 
+    public static String getUserKey() {
+        return userKey;
+    }
+
     /**
      * API request for information about submitted trajectories. If the response is successful,
      * the {@link ServerCommunications#infoResponse} field is updated and observes notified.
@@ -664,4 +670,5 @@ public class ServerCommunications implements Observable {
             }
         }
     }
+
 }
