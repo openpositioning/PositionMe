@@ -58,13 +58,22 @@
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp" />
 
-
             <!-- GNSS Error -->
             <TextView
                 android:id="@+id/gnssError"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/gnss_error"
+                android:textColor="@color/md_theme_error"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:layout_marginStart="16dp" />
+
+            <!-- WiFi Error -->
+            <TextView
+                android:id="@+id/wifiError"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/wifi_error"
                 android:textColor="@color/md_theme_error"
                 android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
                 android:layout_marginStart="16dp" />
@@ -140,6 +149,50 @@
                 app:iconTint="@color/md_theme_onPrimary"
                 app:backgroundTint="@color/md_theme_primary"
                 app:cornerRadius="16dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/gnss_error"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/gnss_error"
+            android:textColor="@color/white"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/wifi_error"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/wifi_error"
+            android:textColor="@color/white"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/show_gnss_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Hide GNSS"
+                android:layout_marginEnd="8dp"/>
+
+            <Button
+                android:id="@+id/show_wifi_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Hide WiFi"/>
+
         </LinearLayout>
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

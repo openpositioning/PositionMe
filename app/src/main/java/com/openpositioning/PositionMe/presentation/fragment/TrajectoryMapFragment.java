@@ -75,6 +75,7 @@ public class TrajectoryMapFragment extends Fragment {
     private Spinner switchMapSpinner;
 
     private SwitchMaterial gnssSwitch;
+    private SwitchMaterial wifiSwitch;
     private SwitchMaterial autoFloorSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
@@ -85,6 +86,11 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline pfPolyline;
     private LatLng lastEKFLocation = null;
     private LatLng lastPFLocation = null;
+
+    private Marker wifiMarker;
+    private boolean wifiEnabled = true;
+
+    private Polyline trajectoryPolyline;
 
 
     public TrajectoryMapFragment() {
@@ -108,6 +114,7 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
+        wifiSwitch      = view.findViewById(R.id.wifiSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
@@ -138,8 +145,6 @@ public class TrajectoryMapFragment extends Fragment {
                     drawBuildingPolygon();
 
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
-
-
                 }
             });
         }
@@ -153,6 +158,15 @@ public class TrajectoryMapFragment extends Fragment {
             if (!isChecked && gnssMarker != null) {
                 gnssMarker.remove();
                 gnssMarker = null;
+            }
+        });
+
+        // WiFi Switch
+        wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            wifiEnabled = isChecked;
+            if (!isChecked && wifiMarker != null) {
+                wifiMarker.remove();
+                wifiMarker = null;
             }
         });
 
@@ -287,7 +301,7 @@ public class TrajectoryMapFragment extends Fragment {
      * and append to polyline if the user actually moved.
      *
      * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
+     * @param orientation The user's heading (e.g. from sensor fusion).
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
 
@@ -585,7 +599,85 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    public boolean isWifiEnabled() {
+        return wifiEnabled;
+    }
 
+    public void setWifiEnabled(boolean wifiEnabled) {
+        this.wifiEnabled = wifiEnabled;
+        if (!wifiEnabled) {
+            clearWifi();
+        }
+    }
 
+    public void updateWifi(LatLng location) {
+        if (gMap == null) return;
+        
+        if (wifiMarker == null) {
+            wifiMarker = gMap.addMarker(new MarkerOptions()
+                    .position(location)
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE))
+                    .title("WiFi位置"));
+        } else {
+            wifiMarker.setPosition(location);
+        }
+
+        // 更新WiFi轨迹线
+        List<LatLng> points = new ArrayList<>();
+        if (lastPFLocation != null) {
+            points.add(lastPFLocation);
+        }
+        points.add(location);
+        polyline.setPoints(points);
+    }
+
+    public void clearWifi() {
+        if (wifiMarker != null) {
+            wifiMarker.remove();
+            wifiMarker = null;
+        }
+    }
+
+    private void drawTrajectoryLine(List<LatLng> points) {
+        if (gMap == null || points.size() < 2) return;
+
+        // 清除现有的轨迹线
+        if (trajectoryPolyline != null) {
+            trajectoryPolyline.remove();
+        }
+
+        // 创建新的轨迹线，设置z-index为1使其显示在室内地图上层
+        PolylineOptions polylineOptions = new PolylineOptions()
+                .addAll(points)
+                .color(Color.RED)
+                .width(5f)
+                .zIndex(1);  // 设置z-index为1
+
+        trajectoryPolyline = gMap.addPolyline(polylineOptions);
+    }
+
+    private void updateTrajectoryLine(LatLng newPoint) {
+        if (gMap == null || newPoint == null) return;
+
+        List<LatLng> points = new ArrayList<>();
+        if (trajectoryPolyline != null) {
+            points.addAll(trajectoryPolyline.getPoints());
+        }
+        points.add(newPoint);
+
+        // 清除现有的轨迹线
+        if (trajectoryPolyline != null) {
+            trajectoryPolyline.remove();
+        }
+
+        // 创建新的轨迹线，设置z-index为1使其显示在室内地图上层
+        PolylineOptions polylineOptions = new PolylineOptions()
+                .addAll(points)
+                .color(Color.RED)
+                .width(5f)
+                .zIndex(1);  // 设置z-index为1
+
+        trajectoryPolyline = gMap.addPolyline(polylineOptions);
+    }
 
 }

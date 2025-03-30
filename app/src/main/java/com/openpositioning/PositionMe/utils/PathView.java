@@ -112,12 +112,14 @@ public class PathView extends View {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
 
-            //Draw path
+            // 设置绘制顺序，确保轨迹显示在最上层
+            canvas.save();
+            canvas.translate(0, 0); // 确保在最上层
             canvas.drawPath(path, drawPaint);
+            canvas.restore();
 
             //Ensure path not redrawn
             draw = false;
-
         }
         //If redrawing due to scaling of the average step length
         else if(reDraw){
@@ -144,13 +146,16 @@ public class PathView extends View {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
 
+            // 设置绘制顺序，确保轨迹显示在最上层
+            canvas.save();
+            canvas.translate(0, 0); // 确保在最上层
             canvas.drawPath(path, drawPaint);
+            canvas.restore();
 
             //Ensure path not redrawn when screen is resized
             reDraw = false;
         }
         else{
-
             // If there are no coordinates, don't draw anything
             if (xCoords.size() == 0)
                 return;
@@ -163,7 +168,11 @@ public class PathView extends View {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
 
+            // 设置绘制顺序，确保轨迹显示在最上层
+            canvas.save();
+            canvas.translate(0, 0); // 确保在最上层
             canvas.drawPath(path, drawPaint);
+            canvas.restore();
         }
     }
 
