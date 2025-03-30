@@ -1,6 +1,8 @@
 package com.openpositioning.PositionMe.sensors;
 
 import android.graphics.PointF;
+import android.util.Log;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -51,6 +53,8 @@ public class ParticleFilter {
                                               PointF wifiPos, PointF gnssPos, PointF pdrDelta) {
         int N = NUM_PARTICLES;
         Random rand = new Random();
+        double measurementStd = 0.0;
+        boolean isMoving = true;
 
         // 1. 如果粒子列表为空，则进行初始化
         if (particles == null || particles.isEmpty()) {
@@ -83,6 +87,14 @@ public class ParticleFilter {
             double moveX = pdrDelta.x;
             double moveY = pdrDelta.y;
             double motionNoiseStd = 0.5; // 运动噪声标准差，可根据需要调整
+            double absMovement = Math.sqrt(moveX * moveX + moveY * moveY);
+            Log.d("ParticleFilter", "Absolute movement: " + absMovement);
+            if (absMovement < 0.5) {
+                isMoving = false;
+                Log.d("ParticleFilter", "PDR moving detect"+isMoving);
+            }
+
+
             for (Particle p : particles) {
                 // 引入步长和方向的随机扰动
                 double stepNoise = rand.nextGaussian() * 0.05; // 步长误差
@@ -97,7 +109,7 @@ public class ParticleFilter {
 
         // 3. 观测更新：根据当前可用的 WiFi 或 GNSS 定位观测来更新粒子权重
         PointF measurement = null;
-        double measurementStd = 0.0;
+
         // 先计算当前估计位置（加权平均）
         double estX = 0.0;
         double estY = 0.0;
@@ -107,7 +119,12 @@ public class ParticleFilter {
         }
         if (wifiPos != null) {
             measurement = wifiPos;
-            measurementStd = 1.0; // 基础噪声
+            if (isMoving){
+                measurementStd = 1.0;
+            } else {
+                measurementStd = 99999;
+            }
+            Log.d("ParticleFilter", "measurementStd is" + measurementStd); // 基础噪声
             // 如果WiFi位置与当前估计位置差异过大，增大噪声
             double dxEst = estX - wifiPos.x;
             double dyEst = estY - wifiPos.y;
@@ -117,8 +134,11 @@ public class ParticleFilter {
             }
         } else if (gnssPos != null) {
             measurement = gnssPos;
-            measurementStd = 5.0; // GNSS 噪声
+            if (isMoving){
+            measurementStd = 5.0;}
+            else{measurementStd = 99999;}// GNSS 噪声
         }
+        Log.d("ParticleFilter", "measurementStd is" + measurementStd); // 基础噪声
         if (measurement != null) {
             double sigmaSq = measurementStd * measurementStd;
             double weightSum = 0.0;
