@@ -19,11 +19,15 @@ public class LocationLogger {
     private static final String FILE_PREFIX = "location_log_local_";
     private File logFile;
     private JSONArray locationArray;
+    private JSONArray ekfLocationArray;
+    private JSONArray gnssLocationArray;
     private final SimpleDateFormat dateFormat;
     
     public LocationLogger(Context context) {
         dateFormat = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault());
         locationArray = new JSONArray();
+        ekfLocationArray = new JSONArray();
+        gnssLocationArray = new JSONArray();
         createLogFile(context);
         Log.d(TAG, "LocationLogger initialized");
     }
@@ -58,8 +62,48 @@ public class LocationLogger {
         }
     }
     
+    public void logEkfLocation(long timestamp, double latitude, double longitude) {
+        try {
+            JSONObject locationObject = new JSONObject();
+            locationObject.put("timestamp", timestamp);
+            locationObject.put("latitude", latitude);
+            locationObject.put("longitude", longitude);
+            ekfLocationArray.put(locationObject);
+            
+            Log.d(TAG, String.format("Logged EKF location: time=%d, lat=%.6f, lng=%.6f", 
+                timestamp, latitude, longitude));
+            Log.d(TAG, "Current EKF array size: " + ekfLocationArray.length());
+            
+        } catch (JSONException e) {
+            Log.e(TAG, "Error creating EKF JSON object: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 记录GNSS位置
+     * @param timestamp 时间戳
+     * @param latitude 纬度
+     * @param longitude 经度
+     */
+    public void logGnssLocation(long timestamp, double latitude, double longitude) {
+        try {
+            JSONObject locationObject = new JSONObject();
+            locationObject.put("timestamp", timestamp);
+            locationObject.put("latitude", latitude);
+            locationObject.put("longitude", longitude);
+            gnssLocationArray.put(locationObject);
+            
+            Log.d(TAG, String.format("Logged GNSS location: time=%d, lat=%.6f, lng=%.6f", 
+                timestamp, latitude, longitude));
+            Log.d(TAG, "Current GNSS array size: " + gnssLocationArray.length());
+            
+        } catch (JSONException e) {
+            Log.e(TAG, "Error creating GNSS JSON object: " + e.getMessage());
+        }
+    }
+    
     public void saveToFile() {
-        if (locationArray.length() == 0) {
+        if (locationArray.length() == 0 && ekfLocationArray.length() == 0 && gnssLocationArray.length() == 0) {
             Log.w(TAG, "No locations to save!");
             return;
         }
@@ -67,6 +111,16 @@ public class LocationLogger {
         try (FileWriter writer = new FileWriter(logFile)) {
             JSONObject root = new JSONObject();
             root.put("locationData", locationArray);
+            
+            if (ekfLocationArray.length() > 0) {
+                root.put("ekfLocationData", ekfLocationArray);
+                Log.i(TAG, "Including " + ekfLocationArray.length() + " EKF locations in the log file");
+            }
+            
+            if (gnssLocationArray.length() > 0) {
+                root.put("gnssLocationData", gnssLocationArray);
+                Log.i(TAG, "Including " + gnssLocationArray.length() + " GNSS locations in the log file");
+            }
             
             String jsonString = root.toString(4);
             writer.write(jsonString);

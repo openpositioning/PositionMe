@@ -51,6 +51,8 @@ import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.LocationLogger;
+import com.example.ekf.EKFManager;
+import com.example.ekf.GNSSProcessor;
 
 import java.util.List;
 
@@ -124,11 +126,11 @@ public class RecordingFragment extends Fragment {
     public FloatingActionButton floorDownButton;
     // GNSS Switch
     private Switch gnss;
+    // EKF Switch
+    private Switch ekfSwitch;
     // GNSS marker
     private Marker gnssMarker;
     // Button used to switch colour
-    private Button switchColor;
-    // Current color of polyline
     private boolean isRed=true;
     // Switch used to set auto floor
     private Switch autoFloor;
@@ -136,6 +138,21 @@ public class RecordingFragment extends Fragment {
     private LocationLogger locationLogger;
 
     private LocationCallback locationCallback;
+
+    // EKF manager
+    private EKFManager ekfManager;
+    
+    // EKF轨迹
+    private Polyline ekfPolyline;
+    
+    // GNSS轨迹
+    private Polyline gnssPolyline;
+    
+    // GNSS处理器
+    private GNSSProcessor gnssProcessor;
+    
+    // GNSS历史位置 (用于避免重复添加相同位置)
+    private LatLng lastGnssPosition;
 
     /**
      * Public Constructor for the class.
@@ -155,6 +172,8 @@ public class RecordingFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         this.sensorFusion = SensorFusion.getInstance();
+        this.ekfManager = EKFManager.getInstance();
+        this.gnssProcessor = GNSSProcessor.getInstance();
         Context context = getActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.refreshDataHandler = new Handler();
@@ -336,7 +355,10 @@ public class RecordingFragment extends Fragment {
             }
         });
         //Obtain the GNSS toggle switch
-        this.gnss= getView().findViewById(R.id.gnssSwitch);
+        this.gnss = getView().findViewById(R.id.gnssSwitch);
+        
+        //Obtain the EKF toggle switch
+        this.ekfSwitch = getView().findViewById(R.id.EKF_Switch);
 
         this.gnss.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             /**
@@ -352,39 +374,85 @@ public class RecordingFragment extends Fragment {
                     gnssError.setVisibility(View.VISIBLE);
                     gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
                             UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
+                    
+                    // 使用GNSSProcessor处理GNSS位置
+                    LatLng processedGnssLocation = gnssProcessor.processGNSSPosition(gnssLocation);
+                    lastGnssPosition = processedGnssLocation; // 保存最后一个GNSS位置
+                    
                     // Set GNSS marker
                     gnssMarker=gMap.addMarker(
                             new MarkerOptions().title("GNSS position")
-                                    .position(gnssLocation)
+                                    .position(processedGnssLocation)
                                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-                }else {
+                    
+                    // 创建GNSS轨迹线 (蓝色)
+                    if (gnssPolyline == null) {
+                        PolylineOptions gnssPolylineOptions = new PolylineOptions()
+                                .color(Color.BLUE)  // 蓝色表示GNSS轨迹
+                                .add(processedGnssLocation)
+                                .width(8f)  // 宽度适中
+                                .zIndex(1200f);  // zIndex在PDR和EKF之间
+                        gnssPolyline = gMap.addPolyline(gnssPolylineOptions);
+                    }
+                } else {
                     gnssMarker.remove();
+                    gnssMarker = null;
                     gnssError.setVisibility(View.GONE);
+                    
+                    // 清除GNSS轨迹
+                    if (gnssPolyline != null) {
+                        gnssPolyline.remove();
+                        gnssPolyline = null;
+                    }
+                    
+                    // 重置GNSS处理器
+                    gnssProcessor.reset();
+                    lastGnssPosition = null;
                 }
             }
         });
-        // Switch colour button
-//        this.switchColor=getView().findViewById(R.id.lineColorButton);
-//        this.switchColor.setOnClickListener(new View.OnClickListener() {
-//            /**
-//             * {@inheritDoc}
-//             * Listener to button to switch the colour of the polyline
-//             * to red/black
-//             */
-//            @Override
-//            public void onClick(View view) {
-//                if (isRed){
-//                    switchColor.setBackgroundColor(Color.BLACK);
-//                    polyline.setColor(Color.BLACK);
-//                    isRed=false;
-//                }
-//                else {
-//                    switchColor.setBackgroundColor(Color.RED);
-//                    polyline.setColor(Color.RED);
-//                    isRed=true;
-//                }
-//            }
-//        });
+
+        // EKF开关监听器
+        this.ekfSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                ekfManager.setEkfEnabled(isChecked);
+                
+                if (isChecked) {
+                    // 启用EKF时初始化
+                    if (currentLocation != null) {
+                        // 使用当前PDR位置和朝向初始化EKF
+                        ekfManager.initialize(currentLocation, sensorFusion.passOrientation());
+                        
+                        // 创建EKF轨迹线
+                        if (ekfPolyline == null) {
+                            PolylineOptions ekfPolylineOptions = new PolylineOptions()
+                                    .color(Color.GREEN)  // 使用绿色，表示EKF融合轨迹
+                                    .add(currentLocation)
+                                    .width(12f)  // 增加宽度
+                                    .geodesic(true)  // 平滑轨迹
+                                    .zIndex(1500f);  // 确保EKF轨迹显示在PDR轨迹上方
+                            ekfPolyline = gMap.addPolyline(ekfPolylineOptions);
+                            
+                            // 仅在EKF初始启用时将地图中心设置为当前位置
+                            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, (float) 19f));
+                        }
+                        
+                        Log.d("RecordingFragment", "EKF initialized at: " + currentLocation.latitude + ", " + currentLocation.longitude);
+                    } else {
+                        Log.e("RecordingFragment", "Cannot initialize EKF: current location is null");
+                    }
+                } else {
+                    // 禁用EKF时清除EKF轨迹
+                    if (ekfPolyline != null) {
+                        ekfPolyline.remove();
+                        ekfPolyline = null;
+                    }
+                }
+                
+                Log.d("RecordingFragment", "EKF " + (isChecked ? "启用" : "禁用"));
+            }
+        });
 
         // Display the progress of the recording when a max record length is set
         this.timeRemaining = getView().findViewById(R.id.timeRemainingBar);
@@ -567,20 +635,89 @@ public class RecordingFragment extends Fragment {
         // if PDR has changed plot new line to indicate user movement
         if (pdrMoved[0]!=0 ||pdrMoved[1]!=0) {
             plotLines(pdrMoved);
+            
+            // 如果EKF已启用，更新EKF位置
+            if (ekfSwitch.isChecked() && ekfManager.isEkfEnabled()) {
+                // 更新EKF中的PDR位置和航向
+                if (currentLocation != null) {
+                    ekfManager.updatePdrPosition(currentLocation, sensorFusion.passOrientation());
+                }
+            }
         }
         // If not initialized, initialize
         if (indoorMapManager == null) {
             indoorMapManager =new IndoorMapManager(gMap);
         }
-        //Show GNSS marker and error if user enables it
-        if (gnss.isChecked() && gnssMarker!=null){
+        
+        // 处理WiFi位置更新 - 移到GNSS之前，以便GNSS可以覆盖WiFi更新
+        float[] wifiValues = sensorFusion.getSensorValueMap().get(SensorTypes.WIFILATLONG);
+        if (ekfSwitch.isChecked() && ekfManager.isEkfEnabled() && 
+            wifiValues != null && wifiValues.length >= 2 && wifiValues[0] != 0 && wifiValues[1] != 0) {
+            LatLng wifiPosition = new LatLng(wifiValues[0], wifiValues[1]);
+            ekfManager.updateWifiPosition(wifiPosition);
+        }
+        
+        // 处理GNSS位置更新
+        if (gnss.isChecked() && gnssMarker != null) {
             float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-            LatLng gnssLocation = new LatLng(location[0],location[1]);
+            LatLng gnssLocation = new LatLng(location[0], location[1]);
+            
+            // 显示PDR与GNSS之间的误差
             gnssError.setVisibility(View.VISIBLE);
             gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
-                    UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
-            gnssMarker.setPosition(gnssLocation);
+                    UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
+            
+            // 使用GNSSProcessor处理GNSS位置
+            LatLng processedGnssLocation = gnssProcessor.processGNSSPosition(gnssLocation);
+            
+            // 更新GNSS标记位置
+            gnssMarker.setPosition(processedGnssLocation);
+            
+            // 只有当位置有明显变化时才更新GNSS轨迹
+            if (lastGnssPosition == null || 
+                UtilFunctions.distanceBetweenPoints(lastGnssPosition, processedGnssLocation) > 0.5) {
+                
+                // 更新GNSS轨迹
+                if (gnssPolyline != null) {
+                    List<LatLng> gnssPoints = gnssPolyline.getPoints();
+                    gnssPoints.add(processedGnssLocation);
+                    gnssPolyline.setPoints(gnssPoints);
+                    
+                    // 记录GNSS位置
+                    locationLogger.logGnssLocation(
+                        System.currentTimeMillis(),
+                        processedGnssLocation.latitude,
+                        processedGnssLocation.longitude
+                    );
+                }
+                
+                // 保存最新GNSS位置
+                lastGnssPosition = processedGnssLocation;
+            }
+            
+            // 如果EKF已启用，更新EKF中的GNSS位置
+            if (ekfSwitch.isChecked() && ekfManager.isEkfEnabled()) {
+                ekfManager.updateGnssPosition(processedGnssLocation);
+            }
         }
+        
+        // 如果EKF启用，更新EKF轨迹
+        if (ekfSwitch.isChecked() && ekfManager.isEkfEnabled()) {
+            LatLng fusedPosition = ekfManager.getFusedPosition();
+            if (fusedPosition != null && ekfPolyline != null) {
+                List<LatLng> points = ekfPolyline.getPoints();
+                points.add(fusedPosition);
+                ekfPolyline.setPoints(points);
+                
+                // 记录融合位置
+                locationLogger.logEkfLocation(
+                    System.currentTimeMillis(),
+                    fusedPosition.latitude,
+                    fusedPosition.longitude
+                );
+            }
+        }
+        
         //  Updates current location of user to show the indoor floor map (if applicable)
         indoorMapManager.setCurrentLocation(currentLocation);
         
@@ -638,6 +775,7 @@ public class RecordingFragment extends Fragment {
                 orientationMarker.setPosition(nextLocation);
                 // 设置位置标记的 zIndex 也为较大值
                 orientationMarker.setZIndex(1000f);
+                // 移动相机到PDR位置 (保持用户可以自由拖动地图)
                 gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
             }
             catch (Exception ex){
