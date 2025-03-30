@@ -415,6 +415,7 @@ public class TrajectoryMapFragment extends Fragment {
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
         } else {
             fusionMarker.setPosition(newLocation);
+
             fusionMarker.setRotation(orientation);
             // Optionally move camera if needed
             // gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
