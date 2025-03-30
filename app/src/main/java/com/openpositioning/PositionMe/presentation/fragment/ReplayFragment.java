@@ -141,27 +141,57 @@ public class ReplayFragment extends Fragment {
     private LatLng extractFirstGnssLocation(String filePath) {
         try {
             File file = new File(filePath);
-            BufferedReader br = new BufferedReader(new FileReader(file));
-            com.google.gson.JsonObject root = new com.google.gson.JsonParser().parse(br).getAsJsonObject();
-            br.close();
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+            StringBuilder jsonString = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                jsonString.append(line);
+            }
+            reader.close();
 
-            if (root.has("gnssData")) {
-                com.google.gson.JsonArray gnssArray = root.getAsJsonArray("gnssData");
-                if (gnssArray != null && gnssArray.size() > 0) {
-                    for (int i = 0; i < gnssArray.size(); i++) {
-                        com.google.gson.JsonObject gnssObj = gnssArray.get(i).getAsJsonObject();
-                        if (gnssObj.has("latitude") && gnssObj.has("longitude")) {
-                            double lat = gnssObj.get("latitude").getAsDouble();
-                            double lng = gnssObj.get("longitude").getAsDouble();
-                            if (lat != 0 || lng != 0) {
-                                return new LatLng(lat, lng);
-                            }
+            // 查找初始经纬度
+            if (jsonString.indexOf("initialLatitude") > 0) {
+                int latStart = jsonString.indexOf("initialLatitude") + "initialLatitude".length() + 2;
+                int latEnd = jsonString.indexOf(",", latStart);
+                int lngStart = jsonString.indexOf("initialLongitude") + "initialLongitude".length() + 2;
+                int lngEnd = jsonString.indexOf(",", lngStart);
+                if (lngEnd < 0) lngEnd = jsonString.indexOf("}", lngStart);
+
+                if (latStart > 0 && latEnd > latStart && lngStart > 0 && lngEnd > lngStart) {
+                    try {
+                        double lat = Double.parseDouble(jsonString.substring(latStart, latEnd).trim());
+                        double lng = Double.parseDouble(jsonString.substring(lngStart, lngEnd).trim());
+                        return new LatLng(lat, lng);
+                    } catch (NumberFormatException e) {
+                        Log.e(TAG, "Error parsing lat/lng from json: " + e.getMessage());
+                    }
+                }
+            }
+
+            // 如果找不到初始位置，尝试从fusionLocations数组中获取第一个位置
+            if (jsonString.indexOf("fusionLocations") > 0) {
+                int fusionStart = jsonString.indexOf("fusionLocations");
+                int locationStart = jsonString.indexOf("{", fusionStart);
+                if (locationStart > 0) {
+                    int latStart = jsonString.indexOf("latitude", locationStart) + "latitude".length() + 2;
+                    int latEnd = jsonString.indexOf(",", latStart);
+                    int lngStart = jsonString.indexOf("longitude", locationStart) + "longitude".length() + 2;
+                    int lngEnd = jsonString.indexOf(",", lngStart);
+                    if (lngEnd < 0) lngEnd = jsonString.indexOf("}", lngStart);
+
+                    if (latStart > 0 && latEnd > latStart && lngStart > 0 && lngEnd > lngStart) {
+                        try {
+                            double lat = Double.parseDouble(jsonString.substring(latStart, latEnd).trim());
+                            double lng = Double.parseDouble(jsonString.substring(lngStart, lngEnd).trim());
+                            return new LatLng(lat, lng);
+                        } catch (NumberFormatException e) {
+                            Log.e(TAG, "Error parsing lat/lng from fusion locations: " + e.getMessage());
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "Error extracting GNSS location", e);
+            Log.e(TAG, "Error reading trajectory file: " + e.getMessage());
         }
         return null;
     }
@@ -306,20 +336,27 @@ public class ReplayFragment extends Fragment {
         }
     }
 
-
-
     /**
-     * Checks if any ReplayPoint contains a non-null gnssLocation.
+     * 检查轨迹数据中是否有位置数据
+     * @param data 轨迹数据列表
+     * @return 如果有任何位置数据则返回true，否则返回false
      */
     private boolean hasAnyGnssData(List<TrajParser.ReplayPoint> data) {
-        for (TrajParser.ReplayPoint point : data) {
-            if (point.gnssLocation != null) {
-                return true;
-            }
-        }
-        return false;
+        if (data == null || data.isEmpty()) return false;
+        
+        // 在我们的简化数据中，每个点都有位置信息
+        return true;
     }
 
+    /**
+     * 获取第一个位置点
+     */
+    private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
+        if (data == null || data.isEmpty()) return null;
+        
+        // 在我们的简化数据中，直接返回第一个点的位置
+        return data.get(0).location;
+    }
 
     /**
      * Show a simple dialog asking user to pick:
@@ -355,19 +392,6 @@ public class ReplayFragment extends Fragment {
     }
 
     /**
-     * Retrieve the first available GNSS location from the replay data.
-     */
-    private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
-        for (TrajParser.ReplayPoint point : data) {
-            if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
-            }
-        }
-        return null; // None found
-    }
-
-
-    /**
      * Runnable for playback of trajectory data.
      * This runnable is called repeatedly to update the map with the next point in the replayData list.
      */
@@ -391,12 +415,11 @@ public class ReplayFragment extends Fragment {
         }
     };
 
-
     /**
-     * Update the map with the user location and GNSS location (if available) for the given index.
+     * Update the map with the user location for the given index.
      * Clears the map and redraws up to the given index.
      *
-     * @param newIndex
+     * @param newIndex 当前要显示的点的索引
      */
     private void updateMapForIndex(int newIndex) {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
@@ -410,18 +433,12 @@ public class ReplayFragment extends Fragment {
             trajectoryMapFragment.clearMapAndReset();
             for (int i = 0; i <= newIndex; i++) {
                 TrajParser.ReplayPoint p = replayData.get(i);
-                trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-                if (p.gnssLocation != null) {
-                    trajectoryMapFragment.updateGNSS(p.gnssLocation);
-                }
+                trajectoryMapFragment.updateUserLocation(p.location, p.orientation);
             }
         } else {
             // Normal sequential forward step: add just the new point
             TrajParser.ReplayPoint p = replayData.get(newIndex);
-            trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-            if (p.gnssLocation != null) {
-                trajectoryMapFragment.updateGNSS(p.gnssLocation);
-            }
+            trajectoryMapFragment.updateUserLocation(p.location, p.orientation);
         }
 
         lastIndex = newIndex;

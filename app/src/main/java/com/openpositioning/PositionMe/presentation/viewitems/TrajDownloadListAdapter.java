@@ -50,8 +50,8 @@ import java.util.Map;
 public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder> {
 
     // Date-time formatter used to format date and time.
-    private static final DateTimeFormatter displayFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final DateTimeFormatter fileNameFormat = DateTimeFormatter.ofPattern("dd-MM-yy-HH-mm-ss");
+    private static final DateTimeFormatter displayFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final DateTimeFormatter fileNameFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
 
     private final Context context;
     private final List<Map<String, String>> responseItems;
@@ -213,22 +213,35 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             try {
                 String storedFileName = recordDetails.optString("file_name", null);
                 if (storedFileName != null) {
-                    // Get the path to the local_trajectories directory
-                    File path = null;
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-                        if (path == null) {
-                            path = context.getFilesDir();
-                        }
-                    } else {
+                    // 获取本地轨迹目录路径
+                    File path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+                    if (path == null) {
                         path = context.getFilesDir();
                     }
                     
                     File localTrajectoryDir = new File(path, "local_trajectories");
-                    // 使用存储的文件名，但将.txt替换为.json
-                    String jsonFileName = storedFileName.replace(".txt", ".json");
-                    filePath = new File(localTrajectoryDir, jsonFileName).getAbsolutePath();
-                    System.out.println("尝试查找文件: " + filePath);
+                    // 从storedFileName中提取时间部分（只保留到分钟）
+                    String timeStr = storedFileName.substring(storedFileName.indexOf("_") + 1);
+                    timeStr = timeStr.substring(0, 16); // 只保留到分钟 "yyyy-MM-dd'T'HH:mm"
+                    String jsonFileName = "trajectory_" + timeStr + ".json";
+                    File localFile = new File(localTrajectoryDir, jsonFileName);
+                    
+                    // 检查本地轨迹文件是否存在
+                    if (localFile.exists()) {
+                        filePath = localFile.getAbsolutePath();
+                        System.out.println("找到本地轨迹文件: " + filePath);
+                    } else {
+                        System.err.println("本地轨迹文件不存在: " + localFile.getAbsolutePath());
+                        // 如果本地文件不存在，尝试在下载目录中查找
+                        File downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                        File downloadedFile = new File(downloadsDir, storedFileName);
+                        if (downloadedFile.exists()) {
+                            filePath = downloadedFile.getAbsolutePath();
+                            System.out.println("找到下载的轨迹文件: " + filePath);
+                        } else {
+                            System.err.println("下载的轨迹文件也不存在: " + downloadedFile.getAbsolutePath());
+                        }
+                    }
                 }
                 // Set the button state to "downloaded".
                 setButtonState(holder.downloadButton, 1);

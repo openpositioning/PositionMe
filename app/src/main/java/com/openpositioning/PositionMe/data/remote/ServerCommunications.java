@@ -60,6 +60,8 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 /**
  * This class handles communications with the server through HTTPs. The class uses an
@@ -138,46 +140,122 @@ public class ServerCommunications implements Observable {
         // Convert trajectory to JSON string for local storage
         String jsonTrajectory;
         try {
-            // Create a structured JSON object that matches TrajParser's expected format
+            // 创建简化的JSON对象，只包含融合后的位置数据
             JsonObject trajectoryJson = new JsonObject();
             
-            // Add IMU data
-            JsonArray imuArray = new JsonArray();
-            for (Traj.Motion_Sample imuData : trajectory.getImuDataList()) {
-                JsonObject imuObject = new JsonObject();
-                imuObject.addProperty("relativeTimestamp", imuData.getRelativeTimestamp());
-                imuObject.addProperty("rotationVectorX", imuData.getRotationVectorX());
-                imuObject.addProperty("rotationVectorY", imuData.getRotationVectorY());
-                imuObject.addProperty("rotationVectorZ", imuData.getRotationVectorZ());
-                imuObject.addProperty("rotationVectorW", imuData.getRotationVectorW());
-                imuArray.add(imuObject);
-            }
-            trajectoryJson.add("imuData", imuArray);
+            // 添加基本元数据
+            trajectoryJson.addProperty("startTimestamp", trajectory.getStartTimestamp());
+            trajectoryJson.addProperty("endTimestamp", System.currentTimeMillis());
             
-            // Add PDR data
-            JsonArray pdrArray = new JsonArray();
-            for (Traj.Pdr_Sample pdrData : trajectory.getPdrDataList()) {
-                JsonObject pdrObject = new JsonObject();
-                pdrObject.addProperty("relativeTimestamp", pdrData.getRelativeTimestamp());
-                pdrObject.addProperty("x", pdrData.getX());
-                pdrObject.addProperty("y", pdrData.getY());
-                pdrArray.add(pdrObject);
-            }
-            trajectoryJson.add("pdrData", pdrArray);
+            // 创建融合位置数组
+            JsonArray fusionLocations = new JsonArray();
             
-            // Add GNSS data
-            JsonArray gnssArray = new JsonArray();
-            for (Traj.GNSS_Sample gnssData : trajectory.getGnssDataList()) {
-                JsonObject gnssObject = new JsonObject();
-                gnssObject.addProperty("relativeTimestamp", gnssData.getRelativeTimestamp());
-                gnssObject.addProperty("latitude", gnssData.getLatitude());
-                gnssObject.addProperty("longitude", gnssData.getLongitude());
-                gnssArray.add(gnssObject);
+            // 如果有GNSS数据，获取初始位置
+            double initialLat = 0;
+            double initialLng = 0;
+            if (!trajectory.getGnssDataList().isEmpty()) {
+                Traj.GNSS_Sample firstGnss = trajectory.getGnssDataList().get(0);
+                initialLat = firstGnss.getLatitude();
+                initialLng = firstGnss.getLongitude();
+                // 添加初始位置属性
+                trajectoryJson.addProperty("initialLatitude", initialLat);
+                trajectoryJson.addProperty("initialLongitude", initialLng);
             }
-            trajectoryJson.add("gnssData", gnssArray);
             
-            // Convert to string
-            jsonTrajectory = trajectoryJson.toString();
+            // 处理PDR数据
+            // 仅当PDR和GNSS数据都存在时才能生成融合位置
+            if (!trajectory.getPdrDataList().isEmpty()) {
+                float lastX = 0, lastY = 0;
+                long lastTimestamp = -1000;
+                
+                for (Traj.Pdr_Sample pdrData : trajectory.getPdrDataList()) {
+                    long currentTimestamp = pdrData.getRelativeTimestamp();
+                    float currentX = pdrData.getX();
+                    float currentY = pdrData.getY();
+                    
+                    // 找到最近的IMU数据获取方向
+                    float orientation = 0;
+                    for (Traj.Motion_Sample imuData : trajectory.getImuDataList()) {
+                        if (Math.abs(imuData.getRelativeTimestamp() - currentTimestamp) < 100) {
+                            // 简单计算方向角度（实际项目中可能需要更复杂的计算）
+                            orientation = (float) Math.toDegrees(
+                                Math.atan2(imuData.getRotationVectorZ(), imuData.getRotationVectorY()));
+                            if (orientation < 0) orientation += 360;
+                            break;
+                        }
+                    }
+                    
+                    // 只在位置变化超过阈值或时间间隔超过1秒时保存
+                    if (lastTimestamp + 1000 <= currentTimestamp || 
+                        Math.abs(currentX - lastX) > 0.1 || 
+                        Math.abs(currentY - lastY) > 0.1) {
+                        
+                        // 计算当前位置的融合经纬度
+                        // 这里使用简单的偏移计算，实际项目中可能需要更精确的转换
+                        double lat = initialLat + currentY * 1E-5;
+                        double lng = initialLng + currentX * 1E-5;
+                        
+                        // 找到最近的GNSS数据进行融合
+                        for (Traj.GNSS_Sample gnssData : trajectory.getGnssDataList()) {
+                            if (Math.abs(gnssData.getRelativeTimestamp() - currentTimestamp) < 500) {
+                                // 简单的50/50融合，实际项目中可能需要更复杂的融合算法
+                                lat = (lat + gnssData.getLatitude()) / 2;
+                                lng = (lng + gnssData.getLongitude()) / 2;
+                                break;
+                            }
+                        }
+                        
+                        // 创建并添加融合位置点
+                        JsonObject locationPoint = new JsonObject();
+                        locationPoint.addProperty("timestamp", currentTimestamp);
+                        locationPoint.addProperty("latitude", lat);
+                        locationPoint.addProperty("longitude", lng);
+                        locationPoint.addProperty("orientation", orientation);
+                        fusionLocations.add(locationPoint);
+                        
+                        lastTimestamp = currentTimestamp;
+                        lastX = currentX;
+                        lastY = currentY;
+                    }
+                }
+            } else if (!trajectory.getGnssDataList().isEmpty()) {
+                // 如果没有PDR数据，则只使用GNSS数据
+                long lastTimestamp = -1000;
+                double lastLat = 0, lastLng = 0;
+                
+                for (Traj.GNSS_Sample gnssData : trajectory.getGnssDataList()) {
+                    long currentTimestamp = gnssData.getRelativeTimestamp();
+                    double currentLat = gnssData.getLatitude();
+                    double currentLng = gnssData.getLongitude();
+                    
+                    // 只在位置变化超过阈值或时间间隔超过1秒时保存
+                    if (lastTimestamp == -1000 || 
+                        lastTimestamp + 1000 <= currentTimestamp || 
+                        Math.abs(currentLat - lastLat) > 0.00001 || 
+                        Math.abs(currentLng - lastLng) > 0.00001) {
+                        
+                        // 创建并添加GNSS位置点
+                        JsonObject locationPoint = new JsonObject();
+                        locationPoint.addProperty("timestamp", currentTimestamp);
+                        locationPoint.addProperty("latitude", currentLat);
+                        locationPoint.addProperty("longitude", currentLng);
+                        locationPoint.addProperty("orientation", 0); // GNSS无方向信息，默认为0
+                        fusionLocations.add(locationPoint);
+                        
+                        lastTimestamp = currentTimestamp;
+                        lastLat = currentLat;
+                        lastLng = currentLng;
+                    }
+                }
+            }
+            
+            // 添加融合位置数组到JSON对象
+            trajectoryJson.add("fusionLocations", fusionLocations);
+            
+            // 转换为带格式的JSON字符串（用于调试）
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            jsonTrajectory = gson.toJson(trajectoryJson);
+            System.out.println("保存的轨迹数据: " + jsonTrajectory);
         } catch (Exception ee) {
             System.err.println("Failed to convert trajectory to JSON: " + ee.getMessage());
             return;
@@ -203,15 +281,14 @@ public class ServerCommunications implements Observable {
         System.out.println(path.toString());
 
         // Format the file name according to date
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'+00:00'");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm");
         dateFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
         Date date = new Date();
         String fileName = "trajectory_" + dateFormat.format(date);
         
-        // Create temporary file for upload (binary format)
-        File tempFile = new File(path, fileName + ".txt");
-        // Create permanent local copy (JSON format)
-        File localFile = new File(localTrajectoryDir, fileName + ".json");
+        // Create temporary files for both upload and local storage
+        File tempFile = new File(path, "temp_upload.txt");
+        File tempLocalFile = new File(localTrajectoryDir, "temp_local.json");
 
         try {
             // Write the binary data to temp file for upload
@@ -219,22 +296,21 @@ public class ServerCommunications implements Observable {
             tempStream.write(binaryTrajectory);
             tempStream.close();
             
-            // Write JSON data to local file
-            FileWriter localWriter = new FileWriter(localFile);
+            // Write JSON data to temporary local file
+            FileWriter localWriter = new FileWriter(tempLocalFile);
             localWriter.write(jsonTrajectory);
             localWriter.close();
             
-            System.out.println("Recorded trajectory stored locally in JSON format at: " + localFile.getAbsolutePath());
+            System.out.println("临时文件创建成功，JSON文件路径: " + tempLocalFile.getAbsolutePath());
         } catch (IOException ee) {
-            // Catch and print if writing to the file fails
-            System.err.println("Storing of recorded trajectory failed: " + ee.getMessage());
+            System.err.println("创建临时文件失败: " + ee.getMessage());
+            return;
         }
 
         // Check connections available before sending data
         checkNetworkStatus();
 
         // Check if user preference allows for syncing with mobile data
-        // TODO: add sync delay and enforce settings
         boolean enableMobileData = this.settings.getBoolean("mobile_sync", false);
         // Check if device is connected to WiFi or to mobile data with enabled preference
         if(this.isWifiConn || (enableMobileData && isMobileConn)) {
@@ -243,7 +319,7 @@ public class ServerCommunications implements Observable {
 
             // Create a request body with a file to upload in multipart/form-data format
             RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                    .addFormDataPart("file", tempFile.getName(),
+                    .addFormDataPart("file", "trajectory.txt",
                             RequestBody.create(MediaType.parse("text/plain"), tempFile))
                     .build();
 
@@ -254,60 +330,120 @@ public class ServerCommunications implements Observable {
 
             // Enqueue the request to be executed asynchronously and handle the response
             client.newCall(request).enqueue(new Callback() {
-
-                // Handle failure to get response from the server
                 @Override public void onFailure(Call call, IOException e) {
                     e.printStackTrace();
-                    System.err.println("Failure to get response");
-                    // Delete the local file and set success to false
-                    //file.delete();
+                    System.err.println("上传失败: " + e.getMessage());
+                    
+                    // 在上传失败时，仍然保存本地文件
+                    try {
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm");
+                        dateFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                        String finalFileName = "trajectory_" + dateFormat.format(new Date());
+                        File localFile = new File(localTrajectoryDir, finalFileName + ".json");
+                        
+                        if (tempLocalFile.exists()) {
+                            if (tempLocalFile.renameTo(localFile)) {
+                                System.out.println("上传失败但JSON文件已保存: " + localFile.getAbsolutePath());
+                            } else {
+                                copyFile(tempLocalFile, localFile);
+                                tempLocalFile.delete();
+                                System.out.println("上传失败但JSON文件已复制: " + localFile.getAbsolutePath());
+                            }
+                        }
+                    } catch (Exception ex) {
+                        System.err.println("保存JSON文件失败: " + ex.getMessage());
+                    }
+                    
+                    // 清理临时文件
+                    if (tempFile.exists()) tempFile.delete();
+                    if (tempLocalFile.exists()) tempLocalFile.delete();
+                    
                     success = false;
                     notifyObservers(1);
                 }
 
-                private void copyFile(File src, File dst) throws IOException {
-                    try (InputStream in = new FileInputStream(src);
-                         OutputStream out = new FileOutputStream(dst)) {
-                        byte[] buf = new byte[1024];
-                        int len;
-                        while ((len = in.read(buf)) > 0) {
-                            out.write(buf, 0, len);
-                        }
-                    }
-                }
-
-                // Process the server's response
                 @Override public void onResponse(Call call, Response response) throws IOException {
                     try (ResponseBody responseBody = response.body()) {
                         if (!response.isSuccessful()) {
-                            // Print error message, set success to false and throw an exception
-                            String message = "Unexpected response " + response;
+                            String message = "服务器响应错误: " + response;
                             System.err.println(message);
                             success = false;
-                            throw new IOException("Unexpected response " + response);
+                            throw new IOException(message);
                         }
 
-                        // Print response headers
+                        // Get server response time from response headers
+                        String serverDate = response.header("Date");
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm");
+                        dateFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                        Date responseDate = new Date();
+                        if (serverDate != null) {
+                            try {
+                                SimpleDateFormat serverDateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z");
+                                responseDate = serverDateFormat.parse(serverDate);
+                            } catch (Exception e) {
+                                System.err.println("解析服务器时间失败: " + e.getMessage());
+                            }
+                        }
+                        
+                        String finalFileName = "trajectory_" + dateFormat.format(responseDate);
+                        File localFile = new File(localTrajectoryDir, finalFileName + ".json");
+                        
+                        // 重命名临时JSON文件为最终文件
+                        if (tempLocalFile.exists()) {
+                            if (tempLocalFile.renameTo(localFile)) {
+                                System.out.println("JSON文件重命名成功: " + localFile.getAbsolutePath());
+                            } else {
+                                copyFile(tempLocalFile, localFile);
+                                tempLocalFile.delete();
+                                System.out.println("JSON文件复制成功: " + localFile.getAbsolutePath());
+                            }
+                        } else {
+                            System.err.println("临时JSON文件不存在: " + tempLocalFile.getAbsolutePath());
+                        }
+
+                        // 打印响应头
                         Headers responseHeaders = response.headers();
                         for (int i = 0, size = responseHeaders.size(); i < size; i++) {
                             System.out.println(responseHeaders.name(i) + ": " + responseHeaders.value(i));
                         }
 
-                        // Print a confirmation of a successful POST to API
                         assert responseBody != null;
-                        System.out.println("UPLOAD SUCCESSFUL: " + responseBody.string());
+                        System.out.println("上传成功: " + responseBody.string());
 
-                        // Only delete the temporary file, keep the local copy
-                        success = tempFile.delete();
+                        // 删除临时文件
+                        if (tempFile.exists()) tempFile.delete();
+                        if (tempLocalFile.exists()) tempLocalFile.delete();
+                        
+                        success = true;
                         notifyObservers(1);
                     }
                 }
             });
-        }
-        else {
-            // If the device is not connected to network or allowed to send, do not send trajectory
-            // and notify observers and user
-            System.err.println("No uploading allowed right now!");
+        } else {
+            System.err.println("网络连接不可用，无法上传!");
+            
+            // 即使不上传，也保存本地文件
+            try {
+                String finalFileName = "trajectory_" + dateFormat.format(date);
+                File localFile = new File(localTrajectoryDir, finalFileName + ".json");
+                
+                if (tempLocalFile.exists()) {
+                    if (tempLocalFile.renameTo(localFile)) {
+                        System.out.println("离线模式：JSON文件已保存: " + localFile.getAbsolutePath());
+                    } else {
+                        copyFile(tempLocalFile, localFile);
+                        tempLocalFile.delete();
+                        System.out.println("离线模式：JSON文件已复制: " + localFile.getAbsolutePath());
+                    }
+                }
+            } catch (Exception ex) {
+                System.err.println("保存本地JSON文件失败: " + ex.getMessage());
+            }
+            
+            // 清理临时文件
+            if (tempFile.exists()) tempFile.delete();
+            if (tempLocalFile.exists()) tempLocalFile.delete();
+            
             success = false;
             notifyObservers(1);
         }
@@ -676,6 +812,23 @@ public class ServerCommunications implements Observable {
         Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
+    }
+
+    /**
+     * 复制文件的辅助方法
+     * @param src 源文件
+     * @param dst 目标文件
+     * @throws IOException 如果复制过程中发生IO错误
+     */
+    private void copyFile(File src, File dst) throws IOException {
+        try (InputStream in = new FileInputStream(src);
+             OutputStream out = new FileOutputStream(dst)) {
+            byte[] buf = new byte[1024];
+            int len;
+            while ((len = in.read(buf)) > 0) {
+                out.write(buf, 0, len);
+            }
+        }
     }
 
     /**
