@@ -94,6 +94,10 @@ public class TrajectoryMapFragment extends Fragment {
     private MaterialButton showRawButton;
     private MaterialButton showFusionButton;
 
+    private final List<Marker> emergencyExitMarkers = new ArrayList<>();
+    private final List<Marker> liftMarkers = new ArrayList<>();
+    private final List<Marker> toiletMarkers = new ArrayList<>();
+    private final List<Marker> accessibleRouteMarkers = new ArrayList<>();
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -212,6 +216,13 @@ public class TrajectoryMapFragment extends Fragment {
             autoFloorSwitch.setChecked(false);
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
+                //update indoor maker
+                this.updateEmergencyExitMarkers();
+                this.updateLiftMarkers();
+                this.updateToiletMarkers();
+                this.updateAccessibleRouteMarkers();
             }
         });
 
@@ -219,6 +230,13 @@ public class TrajectoryMapFragment extends Fragment {
             autoFloorSwitch.setChecked(false);
             if (indoorMapManager != null) {
                 indoorMapManager.decreaseFloor();
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
+                //update indoor maker
+                this.updateEmergencyExitMarkers();
+                this.updateLiftMarkers();
+                this.updateToiletMarkers();
+                this.updateAccessibleRouteMarkers();
             }
         });
 
@@ -230,6 +248,13 @@ public class TrajectoryMapFragment extends Fragment {
             if (autoFloorSwitch.isChecked() && indoorMapManager != null) {
                 Log.d("TrajectoryMapFragment", "Wi-Fi floor changed, updating floor to: " + newFloor);
                 indoorMapManager.setCurrentFloor(newFloor, true);
+                Log.d("currentfloor", "Register callback for Wi-Fi floor changes: " + this.getCurrentBuilding());
+                Log.d("currentfloor", "Register callback for Wi-Fi floor changes: " + this.getCurrentFloor());
+                //update indoor maker
+                this.updateEmergencyExitMarkers();
+                this.updateLiftMarkers();
+                this.updateToiletMarkers();
+                this.updateAccessibleRouteMarkers();
             }
         });
         sensorFusion.setTrajectoryMapFragment(this);
@@ -382,12 +407,27 @@ public class TrajectoryMapFragment extends Fragment {
             polyline.setPoints(points);
         }
 
-        // Update indoor map overlay
         if (indoorMapManager != null) {
+            // 只在 indoorMap 存在时才考虑更新
             indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+
+            boolean currentState = indoorMapManager.getIsIndoorMapSet();
+            if (currentState != lastIndoorMapState) {
+                setFloorControlsVisibility(currentState ? View.VISIBLE : View.GONE);
+                lastIndoorMapState = currentState;
+
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
+                //update indoor maker
+                this.updateEmergencyExitMarkers();
+                this.updateLiftMarkers();
+                this.updateToiletMarkers();
+                this.updateAccessibleRouteMarkers();
+            }
         }
     }
+
+    private boolean lastIndoorMapState = false;
 
 
     /**
@@ -467,10 +507,10 @@ public class TrajectoryMapFragment extends Fragment {
         //update indoor maker
         this.updateEmergencyExitMarkers();
         this.updateLiftMarkers();
+        this.updateToiletMarkers();
+        this.updateAccessibleRouteMarkers();
 
     }
-
-    private final List<Marker> emergencyExitMarkers = new ArrayList<>();
 
     public void updateEmergencyExitMarkers() {
         if (gMap == null) return;
@@ -480,7 +520,11 @@ public class TrajectoryMapFragment extends Fragment {
 
         List<LatLng> exitLocations = null; // 提前定义
 
-        if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
+        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
+            exitLocations = Arrays.asList(
+            );
+        }
+        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
             exitLocations = Arrays.asList(
                     new LatLng(55.922839326615474, -3.17451573908329),
                     new LatLng(55.92283913875728, -3.1742961332201958),
@@ -489,19 +533,16 @@ public class TrajectoryMapFragment extends Fragment {
         }
         else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
             exitLocations = Arrays.asList(
-                    new LatLng(55.922839326615474, -3.17451573908329),
-                    new LatLng(55.92283913875728, -3.1742961332201958),
-                    new LatLng(55.92330295784777, -3.174157999455929)
             );
         }
         else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
             exitLocations = Arrays.asList(
-                    new LatLng(55.922839326615474, -3.17451573908329),
-                    new LatLng(55.92283913875728, -3.1742961332201958),
-                    new LatLng(55.92330295784777, -3.174157999455929)
             );
         }
-        // 如果不是 1 楼，exitLocations 仍然是 null
+        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
+            exitLocations = Arrays.asList(
+            );
+        }
 
         // 清除旧的 marker
         for (Marker marker : emergencyExitMarkers) {
@@ -527,7 +568,6 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-    private final List<Marker> liftMarkers = new ArrayList<>();
     public void updateLiftMarkers() {
         if (gMap == null) return;
 
@@ -535,17 +575,41 @@ public class TrajectoryMapFragment extends Fragment {
         String currentBuilding = this.getCurrentBuilding();
 
         List<LatLng> liftLocations = null;
-
-        if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
+        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
+            liftLocations = Arrays.asList(
+                    new LatLng(55.92303883149652, -3.1743890047073364),
+                    new LatLng(55.923040334354255, -3.1743494421243668),
+                    new LatLng(55.92304277649792, -3.1743118911981583)
+            );
+        }
+        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
             liftLocations = Arrays.asList(
                     new LatLng(55.923027560061676, -3.1743665412068367),
                     new LatLng(55.92303075363521, -3.17432664334774),
                     new LatLng(55.923030565777935, -3.174288421869278)
-
             );
-
         }
-        // 其他楼层可按需添加逻辑
+        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
+            liftLocations = Arrays.asList(
+                    new LatLng(55.92304484292707, -3.17434910684824),
+                    new LatLng(55.923045970070206, -3.1743139028549194),
+                    new LatLng(55.92304390364111, -3.1743836402893066)
+            );
+        }
+        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
+            liftLocations = Arrays.asList(
+                    new LatLng(55.92304484292707, -3.17434910684824),
+                    new LatLng(55.923045970070206, -3.1743139028549194),
+                    new LatLng(55.92304390364111, -3.1743836402893066)
+            );
+        }
+        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
+            liftLocations = Arrays.asList(
+                    new LatLng(55.92304484292707, -3.17434910684824),
+                    new LatLng(55.923045970070206, -3.1743139028549194),
+                    new LatLng(55.92304390364111, -3.1743836402893066)
+            );
+        }
 
         // 清除旧的 marker
         for (Marker marker : liftMarkers) {
@@ -566,6 +630,117 @@ public class TrajectoryMapFragment extends Fragment {
                 );
                 if (marker != null) {
                     liftMarkers.add(marker);
+                }
+            }
+        }
+    }
+
+    public void updateToiletMarkers() {
+        if (gMap == null) return;
+
+        int currentFloor = this.getCurrentFloor();
+        String currentBuilding = this.getCurrentBuilding();
+
+        List<LatLng> toiletLocations = null;
+
+        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
+            toiletLocations = Arrays.asList(
+                    new LatLng(55.92308617148703, -3.174508698284626)
+            );
+        }
+        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
+            toiletLocations = Arrays.asList(
+            );
+        }
+        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
+            toiletLocations = Arrays.asList(
+                    new LatLng(55.92308617148703, -3.174508698284626)
+            );
+        }
+        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
+            toiletLocations = Arrays.asList(
+                    new LatLng(55.92308617148703, -3.174508698284626)
+            );
+        }
+        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
+            toiletLocations = Arrays.asList(
+            );
+        }
+
+        // 清除旧的 marker
+        for (Marker marker : toiletMarkers) {
+            marker.remove();
+        }
+        toiletMarkers.clear();
+
+        // 添加新的 marker
+        if (toiletLocations != null) {
+            for (LatLng location : toiletLocations) {
+                Marker marker = gMap.addMarker(new MarkerOptions()
+                        .position(location)
+                        .flat(true)
+                        .title("Toilet")
+                        .icon(BitmapDescriptorFactory.fromBitmap(
+                                UtilFunctions.getBitmapFromVector(requireContext(),
+                                        R.drawable.iso_toilet_icon))) // 记得准备 iso_toilet 图标
+                );
+                if (marker != null) {
+                    toiletMarkers.add(marker);
+                }
+            }
+        }
+    }
+
+    public void updateAccessibleRouteMarkers() {
+        if (gMap == null) return;
+
+        int currentFloor = this.getCurrentFloor();
+        String currentBuilding = this.getCurrentBuilding();
+
+        List<LatLng> accessibleLocations = null;
+
+        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
+            accessibleLocations = Arrays.asList(
+            );
+        }
+        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
+            accessibleLocations = Arrays.asList(
+                    new LatLng(55.92286243316557, -3.174589164555073),
+                    new LatLng(55.923280978696596, -3.174441307783127)
+            );
+        }
+        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
+            accessibleLocations = Arrays.asList(
+            );
+        }
+        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
+            accessibleLocations = Arrays.asList(
+            );
+        }
+        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
+            accessibleLocations = Arrays.asList(
+            );
+        }
+
+        // 清除旧的 marker
+        for (Marker marker : accessibleRouteMarkers) {
+            marker.remove();
+        }
+        accessibleRouteMarkers.clear();
+
+        // 添加新的 marker
+        if (accessibleLocations != null) {
+            for (LatLng location : accessibleLocations) {
+                Marker marker = gMap.addMarker(new MarkerOptions()
+                        .position(location)
+                        .flat(true)
+                        .title("Accessible Route")
+                        .icon(BitmapDescriptorFactory.fromBitmap(
+                                UtilFunctions.getBitmapFromVector(requireContext(),
+                                        R.drawable.iso_symbol_of_access))  // 换成你的无障碍图标
+                        ));
+                if (marker != null) {
+                    accessibleRouteMarkers.add(marker);
                 }
             }
         }

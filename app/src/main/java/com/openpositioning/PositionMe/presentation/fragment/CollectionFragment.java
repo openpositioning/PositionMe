@@ -273,7 +273,8 @@ public class CollectionFragment extends Fragment {
                 float orientation = 0f; // 示例中使用 0 度，实际应根据传感器数据调整
 
                 if (trajectoryMapFragment != null) {
-                    trajectoryMapFragment.updateFusionLocation(newLocation, orientation);
+//                    trajectoryMapFragment.updateFusionLocation(newLocation, orientation);
+//                    ToDo debug temporary comment out for building icons
                 }
                 // 每隔 UPDATE_INTERVAL 毫秒后再次执行
                 locationUpdateHandler.postDelayed(this, UPDATE_INTERVAL);

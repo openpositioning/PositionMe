@@ -438,7 +438,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                         newCords[0], newCords[1], 0.0,
                         refLat, refLon, refAlt
                     );
-                      trajectoryMapFragment.updateUserLocation(rawPdrLatLng, orientation[0]);
+//                      trajectoryMapFragment.updateUserLocation(rawPdrLatLng, orientation[0]);
+//                      ToDo debug temporary comment out for building icons
                     }
                     if (extendedKalmanFilter != null) {
                         extendedKalmanFilter.predict(stepLen, theta);
