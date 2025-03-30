@@ -366,16 +366,14 @@ public class TrajectoryMapFragment extends Fragment {
 
             orientationMarker = gMap.addMarker(markerOptions);
             
-            // 初次创建标记时，使用较高的缩放级别移动相机
+            // 仅在初次创建标记时移动相机到用户位置
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 18.0f));
         } else {
             // If it exists, update its position and rotation
             orientationMarker.setPosition(newLocation);
             orientationMarker.setRotation(markerRotation);
             
-            // 移动相机跟随用户位置，但保持当前缩放级别
-            // 这样用户手动缩放后不会被重置
-            gMap.animateCamera(CameraUpdateFactory.newLatLng(newLocation));
+            // 移除自动跟随功能，不再调用animateCamera
         }
 
         // Update polyline path
