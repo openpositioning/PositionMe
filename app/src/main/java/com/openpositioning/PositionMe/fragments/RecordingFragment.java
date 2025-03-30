@@ -35,6 +35,7 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
+import com.google.android.gms.maps.model.CircleOptions;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.UtilFunctions;
@@ -55,6 +56,7 @@ import com.openpositioning.PositionMe.sensors.Wifi;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -548,9 +550,28 @@ public class RecordingFragment extends Fragment {
                     // 计算 orientationMarker 与 GNSS 数据之间的距离（单位：米）
                     // Calculate the distance between orientationMarker and GNSS data (unit: meters)
                     double distance = UtilFunctions.distanceBetweenPoints(orientationPos, gnssLocation);
-                    // 设置一个距离阈值，判断两者是否“特别接近”
                     // Set a distance threshold to determine whether the two are "particularly close"
                     final double THRESHOLD_DISTANCE = 1.0; // 阈值为1米，可根据需要调整 The threshold is 1 meter and can be adjusted as needed
+
+
+                    // *****Debugging for geofence START*****
+                    List<LatLng> wallPointsLatLng = Arrays.asList(
+                            new LatLng(55.92301090863321, -3.174221045188629),
+                            new LatLng(55.92301094092557, -3.1742987516650873),
+                            new LatLng(55.92292858261526, -3.174298917609189),
+                            new LatLng(55.92292853699635, -3.174189214585424),
+                            new LatLng(55.92298698483965, -3.1741890966446484)
+                    );
+
+                    for (LatLng point : wallPointsLatLng) {
+                        gMap.addCircle(new CircleOptions()
+                                .center(point)
+                                .radius(0.5) // 单位：米，适当调整大小
+                                .strokeColor(Color.RED)
+                                .fillColor(Color.argb(100, 255, 0, 0)) // 半透明红色
+                                .zIndex(100)); // 确保在 overlay 上方
+                    }
+                    // *****Debugging for geofence END*****
 
                     if (distance < THRESHOLD_DISTANCE) {
                         // 如果两者非常接近，则只保留 orientationMarker，

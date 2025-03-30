@@ -16,6 +16,7 @@ import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
+import com.openpositioning.PositionMe.GeoUtils;
 import com.openpositioning.PositionMe.MainActivity;
 import com.openpositioning.PositionMe.PathView;
 import com.openpositioning.PositionMe.PdrProcessing;
@@ -28,6 +29,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -154,6 +156,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     private FilterUtils.EKFFilter ekf;
 
     private float[] fusionLocation;
+
+    List<LatLng> wallPointsLatLng = Arrays.asList(
+            new LatLng(55.92301090863321, -3.174221045188629),
+            new LatLng(55.92301094092557, -3.1742987516650873),
+            new LatLng(55.92292858261526, -3.174298917609189),
+            new LatLng(55.92292853699635, -3.174189214585424),
+            new LatLng(55.92298698483965, -3.1741890966446484)
+    );
 
     int MAX_WIFI_APS = 60;
     //region Initialisation
@@ -398,10 +408,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 Log.e("PDR", "x: " + newCords[0] + ", y: " + newCords[1]);
                 // *** new
                 pf.predict(newCords[0], newCords[1]);
+                LatLng startLocLatLng = new LatLng(this.startLocation[0], this.startLocation[1]);
                 if (getLatLngWifiPositioning() != null) {
                     LatLng latLng = getLatLngWifiPositioning();
-                    LatLng startLocation = new LatLng(this.startLocation[0], this.startLocation[1]);
-                    double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocation, latLng);
+                    double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
                     Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
                     pf.setWifiRatio(ratio);
                     Log.e("Ratio", String.valueOf(ratio));
@@ -421,6 +431,33 @@ public class SensorFusion implements SensorEventListener, Observer {
                 FilterUtils.Particle currentState = pf.estimate();
                 newCords = new float[]{(float) currentState.x, (float) currentState.y};
                 Log.e("Particle Filter", "x: " + currentState.x + ", y: " + currentState.y);
+
+                // ** test
+//                newCords = new float[]{(float) currentState.x, (float) currentState.y};
+                float [] startCords = new float[]{this.startLocation[0], this.startLocation[1]};
+
+                double refLat = this.startLocation[0]; // 当前纬度作为局部平面参考
+
+                List<float[]> wallPoints = new ArrayList<>();
+                for (LatLng point : wallPointsLatLng) {
+//                    wallPoints.add(GeoUtils.latLonToXY(point.latitude, point.longitude, refLat));
+                    double[] addPoint = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, point);
+                    float[] addPointfloat = new float[]{(float) addPoint[0], (float) addPoint[1]};
+                    wallPoints.add(addPointfloat);
+                }
+
+                for (int i = 0; i < wallPoints.size() - 1; i++) {
+                    float[] wallA = wallPoints.get(i);
+                    float[] wallB = wallPoints.get(i + 1);
+                    if (GeoUtils.segmentsIntersect(startCords, newCords, wallA, wallB)) {
+                        newCords = GeoUtils.projectPointOntoSegment(newCords, wallA, wallB);
+                        Log.d("WallCheck", "⚠️ 穿墙，正在更正坐标");
+                        break;
+                    }
+                }
+
+                Log.e("Particle Filter", "x: " + newCords[0] + ", y: " + newCords[1]);
+                // ** test end
 
                 if (saveRecording) {
                     // Store the PDR coordinates for plotting the trajectory
