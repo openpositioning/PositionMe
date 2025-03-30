@@ -130,8 +130,14 @@ public class ServerCommunications implements Observable {
     public void sendTrajectory(Traj.Trajectory trajectory){
         logDataSize(trajectory);
 
-        // Convert the trajectory to byte array
-        byte[] binaryTrajectory = trajectory.toByteArray();
+        // Convert the trajectory to JSON format
+        String jsonTrajectory = "";
+        try {
+            jsonTrajectory = JsonFormat.printer().print(trajectory);
+        } catch (Exception e) {
+            System.err.println("Error converting trajectory to JSON: " + e.getMessage());
+            return;
+        }
 
         File path = null;
         // for android 13 or higher use dedicated external storage
@@ -146,37 +152,52 @@ public class ServerCommunications implements Observable {
 
         System.out.println(path.toString());
 
+        // 创建专门用于保存轨迹文件的文件夹
+        File savedTrajectoriesDir = new File(context.getExternalFilesDir(null), "saved_trajectories");
+        if (!savedTrajectoriesDir.exists()) {
+            boolean dirCreated = savedTrajectoriesDir.mkdirs();
+            if (!dirCreated) {
+                Log.e("ServerCommunications", "Failed to create saved_trajectories directory");
+            }
+        }
+
         // Format the file name according to date
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
         Date date = new Date();
-        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
+        String timestampPart = dateFormat.format(date);
+        // 生成文件名，使用.json扩展名
+        String fileName = "trajectory_" + timestampPart + ".json";
+        File file = new File(path, fileName);
 
         try {
-            // Write the binary data to the file
-            FileOutputStream stream = new FileOutputStream(file);
-            stream.write(binaryTrajectory);
-            stream.close();
-            System.out.println("Recorded binary trajectory for debugging stored in: " + path);
+            // Write the JSON data to the file
+            FileWriter writer = new FileWriter(file);
+            writer.write(jsonTrajectory);
+            writer.close();
+            System.out.println("Recorded JSON trajectory stored in: " + path);
+            
+            // 将文件复制到保存轨迹的文件夹，保持相同的文件名
+            File savedFile = new File(savedTrajectoriesDir, fileName);
+            copyFile(file, savedFile);
+            System.out.println("Trajectory file saved to app storage: " + savedFile.getAbsolutePath());
         } catch (IOException ee) {
-            // Catch and print if writing to the file fails
-            System.err.println("Storing of recorded binary trajectory failed: " + ee.getMessage());
+            System.err.println("Storing of recorded JSON trajectory failed: " + ee.getMessage());
         }
 
         // Check connections available before sending data
         checkNetworkStatus();
 
         // Check if user preference allows for syncing with mobile data
-        // TODO: add sync delay and enforce settings
         boolean enableMobileData = this.settings.getBoolean("mobile_sync", false);
         // Check if device is connected to WiFi or to mobile data with enabled preference
         if(this.isWifiConn || (enableMobileData && isMobileConn)) {
             // Instantiate client for HTTP requests
             OkHttpClient client = new OkHttpClient();
 
-            // Creaet a equest body with a file to upload in multipart/form-data format
+            // Create a request body with a file to upload in multipart/form-data format
             RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", file.getName(),
-                            RequestBody.create(MediaType.parse("text/plain"), file))
+                            RequestBody.create(MediaType.parse("application/json"), file))
                     .build();
 
             // Create a POST request with the required headers
@@ -186,41 +207,20 @@ public class ServerCommunications implements Observable {
 
             // Enqueue the request to be executed asynchronously and handle the response
             client.newCall(request).enqueue(new Callback() {
-
-                // Handle failure to get response from the server
                 @Override public void onFailure(Call call, IOException e) {
                     e.printStackTrace();
                     System.err.println("Failure to get response");
-                    // Delete the local file and set success to false
-                    //file.delete();
                     success = false;
                     notifyObservers(1);
                 }
 
-                private void copyFile(File src, File dst) throws IOException {
-                    try (InputStream in = new FileInputStream(src);
-                         OutputStream out = new FileOutputStream(dst)) {
-                        byte[] buf = new byte[1024];
-                        int len;
-                        while ((len = in.read(buf)) > 0) {
-                            out.write(buf, 0, len);
-                        }
-                    }
-                }
-
-                // Process the server's response
                 @Override public void onResponse(Call call, Response response) throws IOException {
                     try (ResponseBody responseBody = response.body()) {
-                        // If the response is unsuccessful, delete the local file and throw an
-                        // exception
                         if (!response.isSuccessful()) {
-                            //file.delete();
-//                            System.err.println("POST error response: " + responseBody.string());
-
                             String errorBody = responseBody.string();
                             infoResponse = "Upload failed: " + errorBody;
                             new Handler(Looper.getMainLooper()).post(() ->
-                                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
+                                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
 
                             System.err.println("POST error response: " + errorBody);
                             success = false;
@@ -228,19 +228,17 @@ public class ServerCommunications implements Observable {
                             throw new IOException("Unexpected code " + response);
                         }
 
-                        // Print the response headers
                         Headers responseHeaders = response.headers();
                         for (int i = 0, size = responseHeaders.size(); i < size; i++) {
                             System.out.println(responseHeaders.name(i) + ": " + responseHeaders.value(i));
                         }
-                        // Print a confirmation of a successful POST to API
                         System.out.println("Successful post response: " + responseBody.string());
 
                         System.out.println("Get file: " + file.getName());
                         String originalPath = file.getAbsolutePath();
                         System.out.println("Original trajectory file saved at: " + originalPath);
 
-                        // Copy the file to the Downloads folder
+                        // Copy the file to the Downloads folder for legacy support
                         File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                         File downloadFile = new File(downloadsDir, file.getName());
                         try {
@@ -251,19 +249,37 @@ public class ServerCommunications implements Observable {
                             System.err.println("Failed to copy file to Downloads: " + e.getMessage());
                         }
 
-                        // Delete local file and set success to true
-                        success = file.delete();
+                        success = true;
                         notifyObservers(1);
                     }
                 }
             });
         }
         else {
-            // If the device is not connected to network or allowed to send, do not send trajectory
-            // and notify observers and user
             System.err.println("No uploading allowed right now!");
             success = false;
             notifyObservers(1);
+        }
+    }
+
+    /**
+     * 将源文件复制到目标文件
+     * @param src 源文件
+     * @param dst 目标文件
+     * @throws IOException 复制过程中可能出现的异常
+     */
+    private void copyFile(File src, File dst) throws IOException {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Files.copy(src.toPath(), dst.toPath());
+        } else {
+            try (FileInputStream in = new FileInputStream(src);
+                 FileOutputStream out = new FileOutputStream(dst)) {
+                byte[] buffer = new byte[1024];
+                int length;
+                while ((length = in.read(buffer)) > 0) {
+                    out.write(buffer, 0, length);
+                }
+            }
         }
     }
 
