@@ -433,12 +433,17 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     double theta = wrapToPi(this.orientation[0]); // 获取当前方向角
                     Log.d("SensorFusion", "Step detected: stepLen=" + stepLen + ", theta=" + theta);
-                  if (trajectoryMapFragment != null && newCords != null) {
-                    LatLng rawPdrLatLng = CoordinateTransform.enuToGeodetic(
-                        newCords[0], newCords[1], 0.0,
-                        refLat, refLon, refAlt
-                    );
-                      trajectoryMapFragment.updateUserLocation(rawPdrLatLng, orientation[0]);
+
+
+
+                if (saveRecording) {
+                    if (trajectoryMapFragment != null && newCords != null) {
+                        LatLng rawPdrLatLng = CoordinateTransform.enuToGeodetic(
+                                newCords[0], newCords[1], 0.0,
+                                refLat, refLon, refAlt
+                        );
+                        float headingDeg = (float) Math.toDegrees(this.orientation[0]);
+                        trajectoryMapFragment.updateUserLocation(rawPdrLatLng, headingDeg);
                     }
                     if (extendedKalmanFilter != null) {
                         extendedKalmanFilter.predict(stepLen, theta);
@@ -446,9 +451,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                     } else {
                         Log.e("SensorFusion", "EKF is not initialized!");
                     }
-
-
-                if (saveRecording) {
                     // 获取最新 GNSS 位置
                     Location gnssLocation = gnssProcessor.getLastKnownLocation();
                     if (gnssLocation != null) {
@@ -470,7 +472,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     JSONObject wifiResponse = null;
                     if (pendingWifiPosition != null &&
-                            SystemClock.uptimeMillis() - wifiPositionTimestamp < 3000) {
+                            SystemClock.uptimeMillis() - wifiPositionTimestamp < 2000) {
                         wifiResponse = new JSONObject();
                         try {
                             wifiResponse.put("lat", pendingWifiPosition.latitude);
@@ -500,9 +502,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                 .setX((float) fusedPos.latitude)
                                 .setY((float) fusedPos.longitude));
-                        if (trajectoryMapFragment != null) {
-                            trajectoryMapFragment.updateFusionLocation(fusedPos, orientation[0]);
-                        }
+                    if (trajectoryMapFragment != null) {
+                        // Example: use EKF heading, assume there's a method extendedKalmanFilter.getHeading()
+                        // that returns a double in radians. Convert it to degrees.
+                        double fusedTheta = extendedKalmanFilter.getHeading();
+                        float fusedHeadingDeg = (float) Math.toDegrees(fusedTheta);
+                        trajectoryMapFragment.updateFusionLocation(fusedPos, fusedHeadingDeg);
+                    }
                     } else {
                         Log.e("SensorFusion", "EKF is null when trying to get estimated position!");
                     }
@@ -522,7 +528,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             long currentTime = SystemClock.uptimeMillis();
             double gnssAccuracy = gnssLocation != null ? gnssLocation.getAccuracy() : Double.MAX_VALUE;
             boolean useWiFi = wifiResponse != null && wifiResponse.has("lat") && wifiResponse.has("lon");
-            boolean useGNSS = !useWiFi && gnssLocation != null && gnssAccuracy < 20.0 && (currentTime - lastGnssUpdateTime > 5000);
+            boolean useGNSS =!useWiFi && gnssLocation != null && gnssAccuracy < 20.0 && (currentTime - lastGnssUpdateTime > 5000);
             if(useGNSS){
                 lastGnssUpdateTime = currentTime;
             }
