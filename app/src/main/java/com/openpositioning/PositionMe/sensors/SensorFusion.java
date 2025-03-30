@@ -134,6 +134,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Location values
     private float latitude;
     private float longitude;
+    // Fusion values
+    private float[] currFusionCoordinates;
+    private LatLng currFusionLocation;
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
@@ -468,6 +471,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setX(newCords[0]).setY(newCords[1]));
                 }
 
+                currFusionCoordinates = newCords;
+                currFusionLocation = UtilFunctions.calculateNewPos(new LatLng(startLocation[0], startLocation[1]), newCords);
                 fusionLocation = new float[]{newCords[0], newCords[1]};
                 this.pdrProcessing.setCurrentLocation(newCords[0], newCords[1]);
                 break;
@@ -505,6 +510,32 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
                 }
             }
+        }
+    }
+
+    public void addTag() {
+        String provider = "fusion";
+        if(saveRecording) {
+            float lat = 0;
+            float lon = 0;
+            if (currFusionLocation != null) {
+                lat = (float) currFusionLocation.latitude;
+                lon = (float) currFusionLocation.longitude;
+            } else {
+                lat = startLocation[0];
+                lon = startLocation[1];
+            }
+            trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
+                    .setAccuracy(0)
+                    .setAltitude(0)
+                    .setLatitude(lat)
+                    .setLongitude(lon)
+                    .setSpeed(0)
+                    .setProvider(provider)
+                    .setRelativeTimestamp(System.currentTimeMillis() - absoluteStartTime));
+            Log.e("tag", "tag added");
+        } else {
+            Log.e("tag", "not recording, tag not added");
         }
     }
 
