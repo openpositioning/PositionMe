@@ -432,16 +432,16 @@ public class TrajectoryMapFragment extends Fragment {
       gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(this.fusedCurrentLocation, 19f));
     } else {
       // Update marker position + orientation
-      orientationMarker.setPosition(this.fusedCurrentLocation);
+      orientationMarker.setPosition(this.smoothedPosition);
       orientationMarker.setRotation(orientation);
     }
 
     // Extend polyline if movement occurred
-    if (oldLocation != null && !oldLocation.equals(this.fusedCurrentLocation) && polyline != null) {
-      this.estimatedLocation = newLocation;
+    if (oldSmoothedPosition != null && !oldSmoothedPosition.equals(this.smoothedPosition) && polyline != null) {
+      this.estimatedLocation = smoothedPosition;
       interpolatedPolyLine.setPoints(new ArrayList<>());
       List<LatLng> points = new ArrayList<>(polyline.getPoints());
-      points.add(this.fusedCurrentLocation);
+      points.add(this.smoothedPosition);
       polyline.setPoints(points);
     }
     // Update indoor map overlay
@@ -470,21 +470,18 @@ public class TrajectoryMapFragment extends Fragment {
     if (gMap == null) {
       return;
     }
-    public void updatePdrLocation(@NonNull LatLng newLocation, LatLng initialPosition) {
-        if (gMap == null) return;
-        // Keep track of current location
-        LatLng oldLocation = this.pdrCurrentLocation;
-        this.pdrCurrentLocation = new LatLng(newLocation.latitude + initialPosition.latitude,
-                newLocation.longitude + initialPosition.longitude);
-        // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(this.pdrCurrentLocation) && pdrPolyline != null) {
-            List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
-            points.add(this.pdrCurrentLocation);
-            while (points.size() > 50) {
-                points.remove(0);
-            }
-            pdrPolyline.setPoints(points);
+    // Keep track of current location
+    LatLng oldLocation = this.pdrCurrentLocation;
+    this.pdrCurrentLocation = newLocation;
+    // Extend polyline if movement occurred
+    if (oldLocation != null && !oldLocation.equals(this.pdrCurrentLocation) && pdrPolyline != null) {
+        List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
+        points.add(this.pdrCurrentLocation);
+        while (points.size() > 50) {
+            points.remove(0);
         }
+        pdrPolyline.setPoints(points);
+    }
     }
 
     /**
@@ -662,6 +659,7 @@ public class TrajectoryMapFragment extends Fragment {
   }
 
     public void clearMapAndReset() {
+        this.movingAverageBuffer.clear();
         if (polyline != null) {
             polyline.remove();
             polyline = null;
