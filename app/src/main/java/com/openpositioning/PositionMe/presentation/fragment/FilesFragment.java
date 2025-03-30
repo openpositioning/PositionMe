@@ -112,6 +112,7 @@ public class FilesFragment extends Fragment implements Observer {
                 Navigation.findNavController(view).navigate(action);
             }
         });
+        
         // Request list of uploaded trajectories from the server.
         serverCommunications.sendInfoRequest();
         // Force RecyclerView refresh to ensure icon states are correct

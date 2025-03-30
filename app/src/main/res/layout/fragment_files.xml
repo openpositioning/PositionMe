@@ -23,7 +23,6 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="4dp"
             app:strokeColor="@color/md_theme_light_onPrimary"
-            app:layout_constraintBottom_toTopOf="@id/filesList"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
