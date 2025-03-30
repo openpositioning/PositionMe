@@ -304,6 +304,7 @@ public class TrajectoryMapFragment extends Fragment {
             fusionPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.GREEN)
                     .width(8f)
+                    .zIndex(100)
                     .add(fusionLocation));
             Log.d("TrajectoryMapFragment", "Created new fusion polyline");
         } else {
@@ -312,6 +313,10 @@ public class TrajectoryMapFragment extends Fragment {
             fusionPoints.add(fusionLocation);
             fusionPolyline.setPoints(fusionPoints);
             Log.d("TrajectoryMapFragment", "Added point to fusion polyline, total points: " + fusionPoints.size());
+        }
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(fusionLocation);
+            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -379,6 +384,7 @@ public class TrajectoryMapFragment extends Fragment {
         fusionPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.GREEN)
                 .width(8f)  // Slightly thicker for visibility
+                .zIndex(100)
                 .add());    // start empty
 
         Log.d("TrajectoryMapFragment", "Map initialized with fusion polyline");
@@ -487,10 +493,10 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         // Update indoor map overlay
-        if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
-        }
+//        if (indoorMapManager != null) {
+//            indoorMapManager.setCurrentLocation(newLocation);
+//            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+//        }
     }
 
     /**
@@ -736,6 +742,7 @@ public class TrajectoryMapFragment extends Fragment {
         fusionPolyline = gMap.addPolyline(new PolylineOptions()
                 .color(Color.GREEN)
                 .width(8f)
+                .zIndex(100)
                 .add());
 
         wifiPolyline = gMap.addPolyline(new PolylineOptions()

@@ -1320,7 +1320,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 referencePosition[0] + ", " + referencePosition[1] + ", " + referencePosition[2]);
 
         // Create fusion algorithm with valid reference position
-        fusionAlgorithm = new ParticleFilterFusion(NUM_PARTICLES, referencePosition);
+        fusionAlgorithm = new KalmanFilterFusion(referencePosition);
     }
 
     /**
