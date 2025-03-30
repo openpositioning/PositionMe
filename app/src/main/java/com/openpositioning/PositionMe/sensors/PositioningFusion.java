@@ -11,7 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 
 
-public class PositioningFusion {
+public class PositioningFusion implements PositionObserver {
 
     // Singleton instance
     private static final PositioningFusion instance = new PositioningFusion();
@@ -60,6 +60,13 @@ public class PositioningFusion {
         return coordSystem.isInitialized();
     }
 
+    private boolean isReadyToFuse() {
+//        Log.d("Fusion", String.format("WiFi: %s, GNSS: %s, PDR: %s", isWifiPositionSet(), isGNSSPositionSet(), isPDRPositionSet()));
+//        Log.d("Fusion", String.format("Initialized: %s", coordSystem.isInitialized()));
+//        Log.d("Fusion", String.format("ready to fuse: %s", coordSystem.isInitialized() && pdrPosition != null && (wifiPositionLocal != null || gnssPositionLocal != null)));
+        return coordSystem.isInitialized() && pdrPosition != null && (wifiPosition != null || gnssPosition != null);
+    }
+
     // origin initialization
     public void initCoordSystem() {
         wifiPosition = null;
@@ -69,6 +76,7 @@ public class PositioningFusion {
         pdrPosition = null;
         fusedPositionLocal = null;
         fusedPosition = null;
+        SensorFusion.getInstance().pdrReset();
         if (SensorFusion.getInstance().getLatLngWifiPositioning() != null) {
             LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
             coordSystem.initReference(wifiLocation.latitude, wifiLocation.longitude);
@@ -80,13 +88,12 @@ public class PositioningFusion {
         else {
             coordSystem.initReference(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
         }
-        SensorFusion.getInstance().pdrReset();
     }
 
     // --- Update Methods ---
     public void updateFromWiFi(LatLng wifiLocation) {
         this.wifiPosition = wifiLocation;
-        Log.d("Fusion", "WiFi updated: " + wifiLocation);
+//        Log.d("Fusion", "WiFi updated: " + wifiLocation);
 //        fusePosition();
     }
 
@@ -104,7 +111,6 @@ public class PositioningFusion {
     }
 
     public boolean isFusedPositionSet() {
-        boolean initialized = coordSystem.isInitialized();
         return fusedPosition != null && coordSystem.isInitialized();
     }
 
@@ -129,13 +135,13 @@ public class PositioningFusion {
 
     public void updateFromGNSS(LatLng gnssLocation) {
         this.gnssPosition = gnssLocation;
-        Log.d("Fusion", "GNSS updated: " + gnssLocation);
+//        Log.d("Fusion", "GNSS updated: " + gnssLocation);
 //        fusePosition();
     }
 
     public void updateFromPDR(float[] pdrXY) {
         this.pdrPosition = pdrXY;
-        Log.d("Fusion", "PDR updated: " + Arrays.toString(pdrXY));
+//        Log.d("Fusion", "PDR updated: " + Arrays.toString(pdrXY));
 //        fusePosition();
     }
 
@@ -145,7 +151,6 @@ public class PositioningFusion {
         LatLng glssLatLnglocation = new LatLng(gnssLatLon[0], gnssLatLon[1]);
         updateFromGNSS(glssLatLnglocation);
         float[] pdrXY = SensorFusion.getInstance().getSensorValueMap().get(SensorTypes.PDR);
-
         updateFromPDR(pdrXY);
     }
 
@@ -238,12 +243,27 @@ public class PositioningFusion {
     }
 
     // --- Accessor for fused result ---
+//    public LatLng getFusedPosition() {
+//        updateAllSourse();
+//        coordinateConversionToLocal();
+////        outlierRemoval();
+//        fusePosition();
+//        coordinateConversionToGlobal();
+//        return this.fusedPosition;
+//    }
+
     public LatLng getFusedPosition() {
+        return this.fusedPosition; // 直接读，谁改过就读谁融合后的
+    }
+
+    @Override
+    public void onSensorFusionUpdate() {
         updateAllSourse();
-        coordinateConversionToLocal();
-//        outlierRemoval();
-        fusePosition();
-        coordinateConversionToGlobal();
-        return this.fusedPosition;
+
+        if (isReadyToFuse()) {
+            coordinateConversionToLocal();
+            fusePosition();
+            coordinateConversionToGlobal();
+        }
     }
 }

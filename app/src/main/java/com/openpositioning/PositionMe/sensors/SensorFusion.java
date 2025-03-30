@@ -148,6 +148,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
+    private List<PositionObserver> observers = new ArrayList<>();
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -190,6 +192,16 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public static SensorFusion getInstance() {
         return sensorFusion;
+    }
+
+    public void addObserver(PositionObserver observer) {
+        observers.add(observer);
+    }
+
+    private void notifyObservers() {
+        for (PositionObserver o : observers) {
+            o.onSensorFusionUpdate();
+        }
     }
 
     /**
@@ -250,6 +262,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
                 "MyApp::MyWakelockTag");
+
+        SensorFusion.getInstance().addObserver(PositioningFusion.getInstance());
     }
     //endregion
 
@@ -352,6 +366,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 }
                 break;
         }
+        notifyObservers();
     }
 
     /**
@@ -384,6 +399,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setProvider(provider)
                             .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
                 }
+                notifyObservers();
             }
         }
     }
@@ -436,6 +452,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Error log to keep record of errors (for secure programming and maintainability)
             Log.e("jsonErrors","Error creating json object"+e.toString());
         }
+        notifyObservers();
     }
     // Callback Example Function
     /**

@@ -42,9 +42,9 @@
             android:text="@string/choose_map"
             app:layout_constraintBottom_toBottomOf="@+id/mapFragmentContainer"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.081"
+            app:layout_constraintHorizontal_bias="0.953"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="@+id/mapFragmentContainer"
-            app:layout_constraintVertical_bias="0.022" />
+            app:layout_constraintVertical_bias="0.021" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>
