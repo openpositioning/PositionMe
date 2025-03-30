@@ -10,20 +10,19 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
 import android.os.PowerManager;
-import android.os.SystemClock;
 import android.util.Log;
 
-import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.openpositioning.PositionMe.presentation.activity.MainActivity;
-import com.openpositioning.PositionMe.utils.PathView;
-import com.openpositioning.PositionMe.utils.PdrProcessing;
-import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+import com.openpositioning.PositionMe.BuildingPolygon;
+import com.openpositioning.PositionMe.IndoorMapManager;
+import com.openpositioning.PositionMe.MainActivity;
+import com.openpositioning.PositionMe.PathView;
+import com.openpositioning.PositionMe.PdrProcessing;
+import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
-import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
-import com.example.ekf.EKFManager;
+import com.openpositioning.PositionMe.utils.LocationLogger;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -60,17 +59,26 @@ import java.util.stream.Stream;
  */
 public class SensorFusion implements SensorEventListener, Observer {
 
-    // Store the last event timestamps for each sensor type
-    private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
-    private HashMap<Integer, Integer> eventCounts = new HashMap<>();
-
-    long maxReportLatencyNs = 0;  // Disable batching to deliver events immediately
-
-    // Define a threshold for large time gaps (in milliseconds)
-    private static final long LARGE_GAP_THRESHOLD_MS = 500;  // Adjust this if needed
-
     //region Static variables
     // Singleton Class
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////
+    private List<float[]> trajectoryPoints = new ArrayList<>();
+
+    // 开始记录时清空轨迹数据
+
+    // 实时添加轨迹点
+    public void addTrajectoryPoint(float latitude, float longitude) {
+        trajectoryPoints.add(new float[]{latitude, longitude});
+    }
+
+    // 获取记录的轨迹点
+    public List<float[]> getTrajectoryPoints() {
+        return trajectoryPoints;
+    }
+
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////
     private static final SensorFusion sensorFusion = new SensorFusion();
     // Static constant for calculations with milliseconds
     private static final long TIME_CONST = 10;
@@ -85,7 +93,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     //region Instance variables
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
-    private Context appContext;
 
     // Settings
     private SharedPreferences settings;
@@ -118,7 +125,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Variables to help with timed events
     private long absoluteStartTime;
     private long bootTime;
-    long lastStepTime = 0;
     // Timer object for scheduling data recording
     private Timer storeTrajectoryTimer;
     // Counters for dividing timer to record data every 1 second/ every 5 seconds
@@ -160,11 +166,19 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
-    // EKF Manager instance
-    private EKFManager ekfManager;
-    
-    // WiFi positioning callback
-    private WiFiPositioningCallback wifiPositioningCallback;
+    private LocationLogger locationLogger;
+    private Context context;
+
+    // 修改常量定义
+    private static float STANDARD_PRESSURE = 1015.2f;
+    private static final float DEFAULT_FLOOR_HEIGHT = 2.5f; // 默认楼层高度
+    private static final float ALTITUDE_OFFSET = 0.0f; // 基准高度偏移量
+    private float currentFloorHeight = DEFAULT_FLOOR_HEIGHT; // 当前使用的楼层高度
+    private int currentFloor = 0;
+    private boolean isInSpecialBuilding = false; // 是否在特殊建筑物内
+
+    // 在 SensorFusion 类中添加观察者列表
+    private List<Observer> floorObservers = new ArrayList<>();
 
     //region Initialisation
     /**
@@ -199,8 +213,12 @@ public class SensorFusion implements SensorEventListener, Observer {
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
         
-        // 初始化EKF管理器
-        this.ekfManager = EKFManager.getInstance();
+        // 初始化位置变量为0
+        this.latitude = 0.0f;
+        this.longitude = 0.0f;
+
+        // 初始化气压值为设定的基准气压
+        this.pressure = STANDARD_PRESSURE;
     }
 
 
@@ -228,9 +246,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see WifiDataProcessor for network data processing.
      */
     public void setContext(Context context) {
-        this.appContext = context.getApplicationContext(); // store app context for later use
-
-        // Initialise data collection devices (unchanged)...
+        this.context = context;
+        // Initialise data collection devices
         this.accelerometerSensor = new MovementSensor(context, Sensor.TYPE_ACCELEROMETER);
         this.barometerSensor = new MovementSensor(context, Sensor.TYPE_PRESSURE);
         this.gyroscopeSensor = new MovementSensor(context, Sensor.TYPE_GYROSCOPE);
@@ -244,33 +261,39 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Listener based devices
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(this);
-        this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
+        this.gnssProcessor = new GNSSDataProcessor(context,locationListener);
         // Create object handling HTTPS communication
         this.serverCommunications = new ServerCommunications(context);
         // Save absolute and relative start time
         this.absoluteStartTime = System.currentTimeMillis();
-        this.bootTime = SystemClock.uptimeMillis();
-        // Initialise saveRecording to false
+        this.bootTime = android.os.SystemClock.uptimeMillis();
+        // Initialise saveRecording to false - only record when explicitly started.
         this.saveRecording = false;
 
-        // Other initialisations...
+        // Over time data holder
         this.accelMagnitude = new ArrayList<>();
+        // PDR
         this.pdrProcessing = new PdrProcessing(context);
+        //Settings
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
+
         this.pathView = new PathView(context, null);
-        this.wiFiPositioning = new WiFiPositioning(context);
+        // Initialising WiFi Positioning object
+        this.wiFiPositioning=new WiFiPositioning(context);
 
         if(settings.getBoolean("overwrite_constants", false)) {
-            this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
-        } else {
-            this.filter_coefficient = FILTER_COEFFICIENT;
+            this.filter_coefficient =Float.parseFloat(settings.getString("accel_filter", "0.96"));
         }
+        else {this.filter_coefficient = FILTER_COEFFICIENT;}
 
-        // Keep app awake during the recording (using stored appContext)
-        PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
+        // Keep app awake during the recording
+        PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                "MyApp::MyWakelockTag");
+
+        // 初始化位置记录器
+        locationLogger = new LocationLogger(context);
     }
-
     //endregion
 
     //region Sensor processing
@@ -285,78 +308,78 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
-        long currentTime = System.currentTimeMillis();  // Current time in milliseconds
-        int sensorType = sensorEvent.sensor.getType();
-
-        // Get the previous timestamp for this sensor type
-        Long lastTimestamp = lastEventTimestamps.get(sensorType);
-
-        if (lastTimestamp != null) {
-            long timeGap = currentTime - lastTimestamp;
-
-//            // Log a warning if the time gap is larger than the threshold
-//            if (timeGap > LARGE_GAP_THRESHOLD_MS) {
-//                Log.e("SensorFusion", "Large time gap detected for sensor " + sensorType +
-//                        " | Time gap: " + timeGap + " ms");
-//            }
-        }
-
-        // Update timestamp and frequency counter for this sensor
-        lastEventTimestamps.put(sensorType, currentTime);
-        eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
-
-
-
-        switch (sensorType) {
+        switch (sensorEvent.sensor.getType()) {
             case Sensor.TYPE_ACCELEROMETER:
+                // Accelerometer processing
                 acceleration[0] = sensorEvent.values[0];
                 acceleration[1] = sensorEvent.values[1];
                 acceleration[2] = sensorEvent.values[2];
                 break;
 
             case Sensor.TYPE_PRESSURE:
-                pressure = (1 - ALPHA) * pressure + ALPHA * sensorEvent.values[0];
-                if (saveRecording) {
-                    this.elevation = pdrProcessing.updateElevation(
-                            SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
-                    );
+                // 使用移动平均值平滑气压数据
+                float smoothedPressure = getSmoothedPressure(sensorEvent.values[0]);
+                pressure = (1- ALPHA) * pressure + ALPHA * smoothedPressure;
+                
+                // 计算海拔高度
+                float altitude = SensorManager.getAltitude(STANDARD_PRESSURE, pressure) - ALTITUDE_OFFSET;
+                
+                // 添加更详细的调试日志
+                Log.d("PRESSURE_DEBUG", String.format(
+                    "原始气压: %.2f hPa, 过滤后气压: %.2f hPa, 计算海拔: %.2f m, 位置: (%.6f, %.6f)", 
+                    sensorEvent.values[0],
+                    pressure,
+                    altitude,
+                    latitude,
+                    longitude
+                ));
+                
+                // 更新海拔高度
+                this.elevation = pdrProcessing.updateElevation(altitude);
+                
+                // 使用新的楼层计算方法
+                int newFloor = calculateFloor(altitude);
+                
+                // 如果楼层发生变化，通知观察者
+                if (newFloor != currentFloor) {
+                    currentFloor = newFloor;
+                    Log.d("FLOOR_CHANGE", String.format(
+                        "楼层变化 - 海拔: %.2f m, 新楼层: %d, 楼层高度: %.1f m, 特殊建筑: %b", 
+                        altitude,
+                        currentFloor,
+                        currentFloorHeight,
+                        isInSpecialBuilding
+                    ));
+                    notifyFloorObservers(currentFloor);
                 }
                 break;
 
             case Sensor.TYPE_GYROSCOPE:
+                // Gyro processing
+                //Store gyroscope readings
                 angularVelocity[0] = sensorEvent.values[0];
                 angularVelocity[1] = sensorEvent.values[1];
                 angularVelocity[2] = sensorEvent.values[2];
+                break;
+
 
             case Sensor.TYPE_LINEAR_ACCELERATION:
+                // Acceleration processing with gravity already removed
                 filteredAcc[0] = sensorEvent.values[0];
                 filteredAcc[1] = sensorEvent.values[1];
                 filteredAcc[2] = sensorEvent.values[2];
 
-                // Compute magnitude & add to accelMagnitude
-                double accelMagFiltered = Math.sqrt(
-                        Math.pow(filteredAcc[0], 2) +
-                                Math.pow(filteredAcc[1], 2) +
-                                Math.pow(filteredAcc[2], 2)
-                );
+                double accelMagFiltered = Math.sqrt(Math.pow(acceleration[0], 2) +
+                        Math.pow(acceleration[1], 2) + Math.pow(acceleration[2], 2));
                 this.accelMagnitude.add(accelMagFiltered);
-
-//                // Debug logging
-//                Log.v("SensorFusion",
-//                        "Added new linear accel magnitude: " + accelMagFiltered
-//                                + "; accelMagnitude size = " + accelMagnitude.size());
-
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
 
             case Sensor.TYPE_GRAVITY:
+                // Gravity processing obtained from acceleration
                 gravity[0] = sensorEvent.values[0];
                 gravity[1] = sensorEvent.values[1];
                 gravity[2] = sensorEvent.values[2];
-
-                // Possibly log gravity values if needed
-                //Log.v("SensorFusion", "Gravity: " + Arrays.toString(gravity));
-
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
 
@@ -369,71 +392,36 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_MAGNETIC_FIELD:
+                //Store magnetic field readings
                 magneticField[0] = sensorEvent.values[0];
                 magneticField[1] = sensorEvent.values[1];
                 magneticField[2] = sensorEvent.values[2];
                 break;
 
             case Sensor.TYPE_ROTATION_VECTOR:
+                // Save values
                 this.rotation = sensorEvent.values.clone();
                 float[] rotationVectorDCM = new float[9];
-                SensorManager.getRotationMatrixFromVector(rotationVectorDCM, this.rotation);
+                SensorManager.getRotationMatrixFromVector(rotationVectorDCM,this.rotation);
                 SensorManager.getOrientation(rotationVectorDCM, this.orientation);
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
-                long stepTime = SystemClock.uptimeMillis() - bootTime;
-
-
-                if (currentTime - lastStepTime < 20) {
-                    Log.e("SensorFusion", "Ignoring step event, too soon after last step event:" + (currentTime - lastStepTime) + " ms");
-                    // Ignore rapid successive step events
-                    break;
+                //Store time of step
+                long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
+                float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
+                if (saveRecording) {
+                    // Store the PDR coordinates for plotting the trajectory
+                    this.pathView.drawTrajectory(newCords);
                 }
-
-                else {
-                    lastStepTime = currentTime;
-                    // Log if accelMagnitude is empty
-                    if (accelMagnitude.isEmpty()) {
-                        Log.e("SensorFusion",
-                                "stepDetection triggered, but accelMagnitude is empty! " +
-                                        "This can cause updatePdr(...) to fail or return bad results.");
-                    } else {
-                        Log.d("SensorFusion",
-                                "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
-                    }
-
-                    float[] newCords = this.pdrProcessing.updatePdr(
-                            stepTime,
-                            this.accelMagnitude,
-                            this.orientation[0]
-                    );
-
-                    // Clear the accelMagnitude after using it
-                    this.accelMagnitude.clear();
-
-
-                    if (saveRecording) {
-                        this.pathView.drawTrajectory(newCords);
-                        stepCounter++;
-                        trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
-                                .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                                .setX(newCords[0])
-                                .setY(newCords[1]));
-                    }
-                    break;
+                this.accelMagnitude.clear();
+                if (saveRecording) {
+                    stepCounter++;
+                    trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
+                            .setX(newCords[0]).setY(newCords[1]));
                 }
-
-        }
-    }
-
-    /**
-     * Utility function to log the event frequency of each sensor.
-     * Call this periodically for debugging purposes.
-     */
-    public void logSensorFrequencies() {
-        for (int sensorType : eventCounts.keySet()) {
-            Log.d("SensorFusion", "Sensor " + sensorType + " | Event Count: " + eventCounts.get(sensorType));
+                break;
         }
     }
 
@@ -447,23 +435,44 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     class myLocationListener implements LocationListener{
         @Override
-        public void onLocationChanged(@NonNull Location location) {
-            //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
-            latitude = (float) location.getLatitude();
-            longitude = (float) location.getLongitude();
-            float altitude = (float) location.getAltitude();
-            float accuracy = (float) location.getAccuracy();
-            float speed = (float) location.getSpeed();
-            String provider = location.getProvider();
-            if(saveRecording) {
-                trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
-                        .setAccuracy(accuracy)
-                        .setAltitude(altitude)
-                        .setLatitude(latitude)
-                        .setLongitude(longitude)
-                        .setSpeed(speed)
-                        .setProvider(provider)
-                        .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
+        public void onLocationChanged(Location location) {
+            if(location != null){
+                latitude = (float) location.getLatitude();
+                longitude = (float) location.getLongitude();
+                
+                // 记录位置到日志
+                if(saveRecording && locationLogger != null) {
+                    locationLogger.logLocation(
+                        System.currentTimeMillis(),
+                        latitude,
+                        longitude
+                    );
+                }
+                
+                // 添加详细的日志
+                Log.d("LOCATION_UPDATE", String.format(
+                    "位置更新 - 提供者: %s, 纬度: %.6f, 经度: %.6f, 精度: %.1f米",
+                    location.getProvider(),
+                    latitude,
+                    longitude,
+                    location.getAccuracy()
+                ));
+                
+                if(saveRecording) {
+                    float altitude = (float) location.getAltitude();
+                    float accuracy = (float) location.getAccuracy();
+                    float speed = (float) location.getSpeed();
+                    String provider = location.getProvider();
+                    
+                    trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
+                            .setAccuracy(accuracy)
+                            .setAltitude(altitude)
+                            .setLatitude(latitude)
+                            .setLongitude(longitude)
+                            .setSpeed(speed)
+                            .setProvider(provider)
+                            .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
+                }
             }
         }
     }
@@ -482,10 +491,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         if(this.saveRecording) {
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
+                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime);
             for (Wifi data : this.wifiList) {
                 wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
-                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                        .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
                         .setMac(data.getBssid()).setRssi(data.getLevel()));
             }
             // Adding WiFi data to Trajectory
@@ -534,29 +543,12 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // 记录获取的WiFi位置
-                    Log.i("SensorFusion", "Got WiFi position from server: " + wifiLocation + ", floor: " + floor);
-                    
-                    // 如果有回调则通知外部
-                    if (wifiPositioningCallback != null) {
-                        wifiPositioningCallback.onWiFiPosition(wifiLocation, floor);
-                    }
-                    
-                    // 更新EKF中的WiFi位置
-                    if (ekfManager != null) {
-                        ekfManager.updateWifiPosition(wifiLocation);
-                    }
+                    // Handle the success response
                 }
 
                 @Override
                 public void onError(String message) {
-                    // 记录WiFi位置获取错误
-                    Log.e("SensorFusion", "Error with WiFi positioning: " + message);
-                    
-                    // 如果有回调则通知外部
-                    if (wifiPositioningCallback != null) {
-                        wifiPositioningCallback.onWiFiPositionError(message);
-                    }
+                    // Handle the error response
                 }
             });
         } catch (JSONException e) {
@@ -564,6 +556,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Error log to keep record of errors (for secure programming and maintainability)
             Log.e("jsonErrors","Error creating json object"+e.toString());
         }
+
     }
 
     /**
@@ -661,7 +654,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return longitude and latitude data in a float[2].
      */
     public float[] getGNSSLatitude(boolean start) {
-        float [] latLong = new float[2];
+        float[] latLong = new float[2];
         if(!start) {
             latLong[0] = latitude;
             latLong[1] = longitude;
@@ -806,6 +799,34 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+    /**
+     * 获取当前估计的楼层
+     * @return 当前楼层数(0表示地面层)
+     */
+    public int getCurrentFloor() {
+        return currentFloor;
+    }
+
+    /**
+     * 校准当前位置的基准气压值
+     * @param newPressure 新的基准气压值 (hPa)
+     */
+    public void calibrateBasePressure(float newPressure) {
+        STANDARD_PRESSURE = newPressure;
+        Log.d("PRESSURE_CALIBRATE", String.format(
+            "基准气压已更新为: %.2f hPa", 
+            STANDARD_PRESSURE
+        ));
+    }
+
+    /**
+     * 获取当前基准气压值
+     * @return 当前基准气压值 (hPa)
+     */
+    public float getBasePressure() {
+        return STANDARD_PRESSURE;
+    }
+
     //endregion
 
     //region Start/Stop
@@ -821,18 +842,22 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see GNSSDataProcessor handles location data.
      */
     public void resumeListening() {
-        accelerometerSensor.sensorManager.registerListener(this, accelerometerSensor.sensor, 10000, (int) maxReportLatencyNs);
-        accelerometerSensor.sensorManager.registerListener(this, linearAccelerationSensor.sensor, 10000, (int) maxReportLatencyNs);
-        accelerometerSensor.sensorManager.registerListener(this, gravitySensor.sensor, 10000, (int) maxReportLatencyNs);
+        accelerometerSensor.sensorManager.registerListener(this, accelerometerSensor.sensor, 10000);
+        accelerometerSensor.sensorManager.registerListener(this, linearAccelerationSensor.sensor, 10000);
+        accelerometerSensor.sensorManager.registerListener(this, gravitySensor.sensor, 10000);
         barometerSensor.sensorManager.registerListener(this, barometerSensor.sensor, (int) 1e6);
-        gyroscopeSensor.sensorManager.registerListener(this, gyroscopeSensor.sensor, 10000, (int) maxReportLatencyNs);
+        gyroscopeSensor.sensorManager.registerListener(this, gyroscopeSensor.sensor, 10000);
         lightSensor.sensorManager.registerListener(this, lightSensor.sensor, (int) 1e6);
         proximitySensor.sensorManager.registerListener(this, proximitySensor.sensor, (int) 1e6);
-        magnetometerSensor.sensorManager.registerListener(this, magnetometerSensor.sensor, 10000, (int) maxReportLatencyNs);
-        stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
+        magnetometerSensor.sensorManager.registerListener(this, magnetometerSensor.sensor, 10000);
+        stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_FASTEST);
         rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, (int) 1e6);
         wifiProcessor.startListening();
-        gnssProcessor.startLocationUpdates();
+        
+        // 确保GNSS处理器启动
+        if (gnssProcessor != null) {
+            gnssProcessor.startLocationUpdates();
+        }
     }
 
     /**
@@ -860,12 +885,14 @@ public class SensorFusion implements SensorEventListener, Observer {
             //The app often crashes here because the scan receiver stops after it has found the list.
             // It will only unregister one if there is to unregister
             try {
-                this.wifiProcessor.stopListening(); //error here?
+                this.wifiProcessor.stopListening();
             } catch (Exception e) {
                 System.err.println("Wifi resumed before existing");
             }
             // Stop receiving location updates
-            this.gnssProcessor.stopUpdating();
+            if (gnssProcessor != null) {
+                gnssProcessor.stopUpdating();
+            }
         }
     }
 
@@ -878,42 +905,38 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see Traj object for storing data.
      */
     public void startRecording() {
-        // If wakeLock is null (e.g. not initialized or was cleared), reinitialize it.
-        if (wakeLock == null) {
-            PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
-            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
-        }
-        wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
-
-        // 确保EKF管理器已启用
-        if (ekfManager != null) {
-            ekfManager.setEkfEnabled(true);
-        }
-        
+        // Acquire wakelock so the phone will record with a locked screen. Timeout after 31 minutes.
+        this.wakeLock.acquire(31*60*1000L /*31 minutes*/);
         this.saveRecording = true;
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();
-        this.bootTime = SystemClock.uptimeMillis();
+        this.bootTime = android.os.SystemClock.uptimeMillis();
+
+        // 清空轨迹点列表
+        trajectoryPoints.clear();
+
+
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
                 .setStartTimestamp(absoluteStartTime)
+                /*.addApsData(Traj.AP_Data.newBuilder().setMac(example_mac).setSsid(example_ssid)
+                        .setFrequency(example_frequency))*/
                 .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
                 .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
                 .setLightSensorInfo(createInfoBuilder(lightSensor));
-
-
-
         this.storeTrajectoryTimer = new Timer();
-        this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
+        this.storeTrajectoryTimer.scheduleAtFixedRate(new storeDataInTrajectory(), 0, TIME_CONST);
         this.pdrProcessing.resetPDR();
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
-        } else {
-            this.filter_coefficient = FILTER_COEFFICIENT;
         }
+        else {this.filter_coefficient = FILTER_COEFFICIENT;}
+
+        // 初始化位置记录器
+        locationLogger = new LocationLogger(context);
     }
 
     /**
@@ -923,13 +946,18 @@ public class SensorFusion implements SensorEventListener, Observer {
      * the timer objects.
      *
      * @see Traj object for storing data.
-     * @see SettingsFragment navigation that might cancel recording.
+     * @see com.openpositioning.PositionMe.fragments.SettingsFragment navigation that might cancel recording.
      */
     public void stopRecording() {
         // Only cancel if we are running
         if(this.saveRecording) {
             this.saveRecording = false;
             storeTrajectoryTimer.cancel();
+
+            // 保存位置日志
+            if (locationLogger != null) {
+                locationLogger.saveToFile();
+            }
         }
         if(wakeLock.isHeld()) {
             this.wakeLock.release();
@@ -981,7 +1009,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
             trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
+                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
                     .setAccX(acceleration[0])
                     .setAccY(acceleration[1])
                     .setAccZ(acceleration[2])
@@ -998,12 +1026,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setMagX(magneticField[0])
                             .setMagY(magneticField[1])
                             .setMagZ(magneticField[2])
-                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-//                    .addGnssData(Traj.GNSS_Sample.newBuilder()
-//                            .setLatitude(latitude)
-//                            .setLongitude(longitude)
-//                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-            ;
+                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime));
 
             // Divide timer with a counter for storing data every 1 second
             if (counter == 99) {
@@ -1012,10 +1035,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 if (barometerSensor.sensor != null) {
                     trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
                                     .setPressure(pressure)
-                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
+                                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime))
                             .addLightData(Traj.Light_Sample.newBuilder()
                                     .setLight(light)
-                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
                                     .build());
                 }
 
@@ -1043,19 +1066,188 @@ public class SensorFusion implements SensorEventListener, Observer {
     //endregion
 
     /**
-     * 定义WiFi定位回调接口
+     * 注册观察者以接收楼层更新
      */
-    public interface WiFiPositioningCallback {
-        void onWiFiPosition(LatLng wifiPosition, int floor);
-        void onWiFiPositionError(String errorMessage);
+    public void registerFloorObserver(Observer observer) {
+        if (!floorObservers.contains(observer)) {
+            floorObservers.add(observer);
+        }
     }
-    
+
     /**
-     * 设置WiFi定位回调
-     * @param callback WiFi定位回调接口
+     * 移除楼层更新观察者
      */
-    public void setWiFiPositioningCallback(WiFiPositioningCallback callback) {
-        this.wifiPositioningCallback = callback;
+    public void removeFloorObserver(Observer observer) {
+        floorObservers.remove(observer);
+    }
+
+    /**
+     * 通知所有观察者楼层变化
+     */
+    private void notifyFloorObservers(int floor) {
+        Log.d("FLOOR_NOTIFY", String.format(
+            "正在通知观察者楼层变化，观察者数量: %d, 新楼层: %d",
+            floorObservers.size(),
+            floor
+        ));
+        
+        for (Observer observer : floorObservers) {
+            Log.d("FLOOR_NOTIFY", "通知观察者: " + observer.getClass().getName());
+            Object[] updateData = new Object[]{floor};
+            observer.update(updateData);
+        }
+    }
+
+    /**
+     * 根据当前位置计算楼层
+     * @param altitude 当前海拔高度
+     * @return 计算得到的楼层数
+     */
+    private int calculateFloor(float altitude) {
+        LatLng currentPosition = new LatLng(latitude, longitude);
+        
+        // 检查是否在Nucleus大楼内
+        if (BuildingPolygon.inNucleus(currentPosition)) {
+            currentFloorHeight = IndoorMapManager.NUCLEUS_FLOOR_HEIGHT;
+            isInSpecialBuilding = true;
+            
+            // 计算楼层（Nucleus的特殊规则）
+            int calculatedFloor = (int)Math.floor(altitude / currentFloorHeight);
+            
+            // Nucleus的楼层对应关系：
+            // calculatedFloor: -1  0  1  2  3
+            // 实际显示:       LG  G  1  2  3
+            // 所以不需要额外调整，只需要限制范围
+            
+            // 限制楼层范围（-1到3，对应LG到3楼）
+            return Math.min(Math.max(calculatedFloor, -1), 3);
+        }
+        // 检查是否在图书馆内
+        else if (BuildingPolygon.inLibrary(currentPosition)) {
+            currentFloorHeight = IndoorMapManager.LIBRARY_FLOOR_HEIGHT;
+            isInSpecialBuilding = true;
+            
+            // 计算楼层（图书馆的特殊规则）
+            int calculatedFloor = (int)Math.floor(altitude / currentFloorHeight);
+            
+            // 限制楼层范围（0到3，对应G到3楼）
+            return Math.min(Math.max(calculatedFloor, 0), 3);
+        }
+        else {
+            // 不在特殊建筑物内，使用默认规则
+            isInSpecialBuilding = false;
+            currentFloorHeight = DEFAULT_FLOOR_HEIGHT;
+            
+            // 计算楼层
+            int calculatedFloor = (int)Math.floor(altitude / currentFloorHeight);
+            
+            // 对于其他位置，确保从0开始（G层）
+            return Math.max(calculatedFloor, 0); // 0=G, 1=1, 2=2, ...
+        }
+    }
+
+    /**
+     * 获取当前楼层的显示文本
+     * @return 楼层显示文本（如"LG", "G", "1", "2"等）
+     */
+    public String getFloorDisplay() {
+        LatLng currentPosition = new LatLng(latitude, longitude);
+        
+        if (BuildingPolygon.inNucleus(currentPosition)) {
+            // Nucleus的特殊显示规则
+            if (currentFloor == -1) {
+                return "LG";
+            } else if (currentFloor == 0) {
+                return "G";
+            } else {
+                return String.valueOf(currentFloor);
+            }
+        } else {
+            // 其他位置（包括图书馆）的显示规则
+            if (currentFloor == 0) {
+                return "G";
+            } else {
+                return String.valueOf(currentFloor);
+            }
+        }
+    }
+
+    /**
+     * 在已知楼层位置校准气压计
+     * @param knownFloor 当前已知的楼层（0=G, -1=LG, 1=1F, etc.）
+     */
+    public void calibrateAtKnownFloor(int knownFloor) {
+        // 获取当前位置
+        LatLng currentPosition = new LatLng(latitude, longitude);
+        float floorHeight;
+        
+        // 根据位置确定楼层高度
+        if (BuildingPolygon.inNucleus(currentPosition)) {
+            floorHeight = IndoorMapManager.NUCLEUS_FLOOR_HEIGHT;
+        } else if (BuildingPolygon.inLibrary(currentPosition)) {
+            floorHeight = IndoorMapManager.LIBRARY_FLOOR_HEIGHT;
+        } else {
+            floorHeight = DEFAULT_FLOOR_HEIGHT;
+        }
+
+        // 计算理论高度
+        float expectedAltitude = knownFloor * floorHeight;
+        
+        // 根据当前气压和已知高度，反向计算基准气压
+        float newStandardPressure = pressure * (float)Math.exp(expectedAltitude / -7400);
+        
+        // 更新基准气压
+        STANDARD_PRESSURE = newStandardPressure;
+        
+        Log.d("PRESSURE_CALIBRATE", String.format(
+            "在已知楼层%d校准 - 当前气压: %.2f hPa, 理论高度: %.2f m, 新基准气压: %.2f hPa",
+            knownFloor,
+            pressure,
+            expectedAltitude,
+            STANDARD_PRESSURE
+        ));
+    }
+
+    /**
+     * 使用移动平均值平滑气压数据
+     */
+    private static final int PRESSURE_WINDOW_SIZE = 10;
+    private final float[] pressureWindow = new float[PRESSURE_WINDOW_SIZE];
+    private int pressureWindowIndex = 0;
+    private boolean pressureWindowFull = false;
+
+    private float getSmoothedPressure(float rawPressure) {
+        // 更新滑动窗口
+        pressureWindow[pressureWindowIndex] = rawPressure;
+        pressureWindowIndex = (pressureWindowIndex + 1) % PRESSURE_WINDOW_SIZE;
+        if (pressureWindowIndex == 0) {
+            pressureWindowFull = true;
+        }
+
+        // 计算平均值
+        float sum = 0;
+        int count = pressureWindowFull ? PRESSURE_WINDOW_SIZE : pressureWindowIndex;
+        for (int i = 0; i < count; i++) {
+            sum += pressureWindow[i];
+        }
+        return sum / count;
+    }
+
+    // 添加获取经纬度的方法
+    /**
+     * 获取当前纬度
+     * @return 当前纬度值
+     */
+    public float getLatitude() {
+        return this.latitude;
+    }
+
+    /**
+     * 获取当前经度
+     * @return 当前经度值
+     */
+    public float getLongitude() {
+        return this.longitude;
     }
 
 }

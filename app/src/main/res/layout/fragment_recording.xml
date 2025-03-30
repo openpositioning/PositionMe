@@ -1,145 +1,271 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/Fl"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    tools:context=".fragments.RecordingFragment">
 
-    <!-- 🔹 TOP SECTION: Status Display -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/currentPositionCard"
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/RecordingMap"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="8dp"
-        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="4dp"
-        app:strokeColor="@color/md_theme_outline"
-        app:strokeWidth="1dp"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        android:layout_height="match_parent"
+        tools:context=".MapsActivity" />
 
-        <LinearLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        tools:ignore="ExtraText">
+
+        <Switch
+            android:id="@+id/autoFloor"
+            android:layout_width="119dp"
+            android:layout_height="51dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/rounded_corner_pastel_blue"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="@string/auto_floor"
+            android:textColor="@color/black"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.93"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/Floor" />
+
+        <Button
+            android:id="@+id/stopButton"
+            android:layout_width="196dp"
+            android:layout_height="47dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/rounded_button"
+            android:text="@string/stop"
+            android:textSize="18sp"
+            app:icon="@drawable/ic_baseline_stop_24"
+            app:iconGravity="start"
+            app:iconSize="30dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <Button
+            android:id="@+id/cancelButton"
+            android:layout_width="183dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/rounded_button"
+            android:text="@string/cancel"
+            android:textSize="16sp"
+            app:icon="@drawable/ic_baseline_cancel_24"
+            app:iconGravity="start"
+            app:iconSize="28dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <ProgressBar
+            android:id="@+id/timeRemainingBar"
+            style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="12dp"
-            android:gravity="center_vertical">
-
-            <!-- Red Dot -->
-            <ImageView
-                android:id="@+id/redDot"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:contentDescription="@string/red_dot_description_text"
-                android:src="@drawable/ic_baseline_red_dot_24"
-                android:layout_marginEnd="8dp" />
-
-            <!-- Distance Traveled -->
-            <TextView
-                android:id="@+id/currentDistanceTraveled"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/meter"
-                android:textColor="@color/md_theme_secondary"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textStyle="bold" />
-
-            <!-- Elevation -->
-            <TextView
-                android:id="@+id/currentElevation"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/elevation"
-                android:textColor="@color/md_theme_secondary"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textStyle="bold"
-                android:layout_marginStart="16dp"
-                android:layout_marginEnd="16dp" />
-
-
-            <!-- GNSS Error -->
-            <TextView
-                android:id="@+id/gnssError"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/gnss_error"
-                android:textColor="@color/md_theme_error"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                android:layout_marginStart="16dp" />
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-
-    <!-- 🔹 MIDDLE SECTION: Map Display -->
-    <FrameLayout
-        android:id="@+id/trajectoryMapFragmentContainer"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp"
-        app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
-        app:layout_constraintBottom_toTopOf="@id/controlLayout" />
-
-    <!-- 🔹 BOTTOM SECTION: Controls (Progress Bar & Buttons) -->
-    <LinearLayout
-        android:id="@+id/controlLayout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp"
-        android:gravity="center"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <!-- Progress Bar -->
-        <com.google.android.material.progressindicator.LinearProgressIndicator
-            android:id="@+id/timeRemainingBar"
-            style="@style/Widget.Material3.LinearProgressIndicator"
-            android:layout_width="match_parent"
-            android:layout_height="20dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="20dp"
+            android:elevation="2sp"
             android:max="1800"
             android:progress="0"
-            android:layout_marginBottom="12dp" />
+            app:layout_constraintBottom_toTopOf="@+id/stopButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="parent" />
 
-        <!-- Buttons Container -->
-        <LinearLayout
+        <androidx.cardview.widget.CardView
+            android:id="@+id/currentPositionCard"
+            android:layout_width="411dp"
+            android:layout_height="60dp"
+            android:layout_marginTop="2dp"
+            app:cardBackgroundColor="@color/pastelBlue"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="8dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="357dp"
+                android:layout_height="81dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginEnd="52dp"
+                app:layout_constraintEnd_toEndOf="@+id/currentPositionCard"
+                app:layout_constraintTop_toTopOf="parent">
+
+                <TextView
+                    android:id="@+id/currentElevation"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/elevation"
+                    android:textColor="@color/LightYellow"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <TextView
+                    android:id="@+id/currentDistanceTraveled"
+                    android:layout_width="wrap_content"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/meter"
+                    android:textColor="@color/LightYellow"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    app:layout_constraintStart_toEndOf="@+id/distanceTravelledTitle"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <TextView
+                    android:id="@+id/distanceTravelledTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/distance_travelled"
+                    android:textColor="@color/LightYellow"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="0.05"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="@+id/currentElevation" />
+
+                <TextView
+                    android:id="@+id/gnssError"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginBottom="28dp"
+                    android:text="@string/gnss_error"
+                    android:textColor="@color/LightYellow"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:layout_constraintBottom_toBottomOf="@+id/currentDistanceTraveled"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintHorizontal_bias="1.0"
+                    app:layout_constraintStart_toEndOf="@+id/currentElevation" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <ImageView
+                android:id="@+id/redDot"
+                android:layout_width="48dp"
+                android:layout_height="43dp"
+                android:layout_marginStart="350dp"
+                android:layout_marginTop="6dp"
+                android:contentDescription="@string/recording"
+                android:src="@drawable/ic_baseline_red_dot_24" />
+
+
+        </androidx.cardview.widget.CardView>
+
+
+        <Spinner
+            android:id="@+id/mapSwitchSpinner"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="68dp"
+            android:background="@color/white"
+            android:spinnerMode="dropdown"
+            android:text="@string/choose_map"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
+            android:layout_marginBottom="32dp"
+            android:clickable="true"
+            android:contentDescription="@string/floor_up_button"
+            android:src="@android:drawable/arrow_up_float"
+            app:layout_constraintBottom_toTopOf="@+id/floorDownButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.954"
+            app:layout_constraintStart_toStartOf="parent" />
 
-            <!-- Cancel Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/cancelButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
-                android:layout_height="56dp"
-                android:layout_marginEnd="16dp"
-                app:icon="@drawable/ic_unavailable"
-                android:text="@string/cancel"
-                android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onError"
-                app:backgroundTint="@color/md_theme_error"
-                app:cornerRadius="16dp" />
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorDownButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="296dp"
+            android:clickable="true"
+            android:contentDescription="@string/floor_down_button"
+            android:src="@android:drawable/arrow_down_float"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.954"
+            app:layout_constraintStart_toStartOf="parent" />
 
-            <!-- Stop Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/stopButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
-                android:layout_height="56dp"
-                app:icon="@drawable/ic_baseline_assignment_turned_in_24"
-                android:text="@string/stop"
-                android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onPrimary"
-                app:backgroundTint="@color/md_theme_primary"
-                app:cornerRadius="16dp" />
-        </LinearLayout>
-    </LinearLayout>
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <Switch
+            android:id="@+id/gnssSwitch"
+            android:layout_width="100dp"
+            android:layout_height="60dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/rounded_corner_pastel_blue"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="@string/gnssSwitch"
+            android:textColor="@color/black"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
+
+        <Button
+            android:id="@+id/lineColorButton3"
+            android:layout_width="152dp"
+            android:layout_height="33dp"
+            android:background="@drawable/rounded_button_black"
+            android:backgroundTint="@color/black"
+            android:text="Current floor:"
+            android:textSize="12sp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.644"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.117" />
+
+        <Button
+            android:id="@+id/Floor"
+            android:layout_width="91dp"
+            android:layout_height="33dp"
+            android:background="@drawable/rounded_button_black"
+            android:backgroundTint="@color/black"
+            android:checkable="false"
+            android:text="@string/color"
+            android:textSize="12sp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.937"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.118" />
+
+        <Switch
+            android:id="@+id/EKF_Switch"
+            android:layout_width="100dp"
+            android:layout_height="56dp"
+            android:layout_marginTop="76dp"
+            android:background="@drawable/rounded_corner_pastel_blue"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="@string/EKF"
+            android:textColor="@color/black"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.025"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
+
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</FrameLayout>

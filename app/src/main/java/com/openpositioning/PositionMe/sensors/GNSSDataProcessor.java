@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -76,17 +77,23 @@ public class GNSSDataProcessor {
      * @return  boolean true if all permissions are granted for location access, false otherwise.
      */
     private boolean checkLocationPermissions() {
-        int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.ACCESS_COARSE_LOCATION);
-        int fineLocationPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.ACCESS_FINE_LOCATION);
-        int internetPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.INTERNET);
+        if (Build.VERSION.SDK_INT >= 23) {
 
-        // Return missing permissions
-        return coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
-                fineLocationPermission == PackageManager.PERMISSION_GRANTED &&
-                internetPermission == PackageManager.PERMISSION_GRANTED;
+            int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION);
+            int fineLocationPermission = ActivityCompat.checkSelfPermission(this.context,
+                    Manifest.permission.ACCESS_FINE_LOCATION);
+            int internetPermission = ActivityCompat.checkSelfPermission(this.context,
+                    Manifest.permission.INTERNET);
+
+            // Return missing permissions
+            return coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
+                    fineLocationPermission == PackageManager.PERMISSION_GRANTED &&
+                    internetPermission == PackageManager.PERMISSION_GRANTED;
+        } else {
+            // Permissions are granted by default
+            return true;
+        }
     }
 
     /**
@@ -98,13 +105,22 @@ public class GNSSDataProcessor {
      */
     @SuppressLint("MissingPermission")
     public void startLocationUpdates() {
-        //if (sharedPreferences.getBoolean("location", true)) {
         boolean permissionGranted = checkLocationPermissions();
         if (permissionGranted && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
-                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){
+                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
 
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
+            locationManager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                100,  // 最小时间间隔（毫秒）
+                0,    // 最小距离变化（米）
+                locationListener
+            );
+            locationManager.requestLocationUpdates(
+                LocationManager.NETWORK_PROVIDER,
+                100,  // 最小时间间隔（毫秒）
+                0,    // 最小距离变化（米）
+                locationListener
+            );
         }
         else if(permissionGranted && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){
             Toast.makeText(context, "Open GPS", Toast.LENGTH_LONG).show();
