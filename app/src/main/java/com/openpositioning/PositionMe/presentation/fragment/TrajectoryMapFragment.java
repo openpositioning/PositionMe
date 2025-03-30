@@ -87,6 +87,7 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng lastWifiLocation = null; // Last WiFi position
     private boolean isWifiOn = false; // Toggle for WiFi tracking
 
+    private int lastAutoFloorLevel = Integer.MIN_VALUE;
 
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
@@ -233,13 +234,20 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
+        sensorFusion = SensorFusion.getInstance();
+
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-
-            //TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
-//            float elevationVal = sensorFusion.getElevation();
-//            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-//                    ,true);
+            if (indoorMapManager != null) {
+                if (isChecked) {
+                    // Get WiFi floor from SensorFusion and set it
+                    int wifiFloor = sensorFusion.getWifiFloor();
+                    Log.d("AutoFloor", "Auto floor enabled. WiFi floor = " + wifiFloor);
+                    indoorMapManager.setCurrentFloor(wifiFloor, true);
+                } else {
+                    Log.d("AutoFloor", "Auto floor disabled");
+                }
+            }
         });
 
         floorUpButton.setOnClickListener(v -> {
@@ -323,7 +331,27 @@ public class TrajectoryMapFragment extends Fragment {
             indoorMapManager.setCurrentLocation(fusionLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
+
+
+        UpdateAutoFloor();
+
     }
+
+    private void UpdateAutoFloor() {
+        if (autoFloorSwitch != null && autoFloorSwitch.isChecked()
+                && sensorFusion != null && indoorMapManager != null) {
+
+            int wifiFloor = sensorFusion.getWifiFloor();
+
+            if (wifiFloor != lastAutoFloorLevel) {
+                lastAutoFloorLevel = wifiFloor;
+                Log.d("AutoFloor", "Auto floor change detected. Setting floor to: " + wifiFloor);
+                indoorMapManager.setCurrentFloor(wifiFloor, true);
+            }
+        }
+    }
+
+
 
     /**
      * Checks if the main polyline is empty (has no points)
