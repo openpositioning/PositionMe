@@ -295,30 +295,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_PRESSURE:
-                float rawPressure = sensorEvent.values[0];
-
-                // ✅ 1. 判空或非法值
-                if (Float.isNaN(rawPressure) || rawPressure <= 0) {
-                    Log.w("PDR", "Invalid pressure reading, skipped.");
-                    break;
-                }
-
-                // ✅ 2. 判定范围是否合理（地球大气压力范围大致是 850~1100 hPa）
-                if (rawPressure < 850f || rawPressure > 1100f) {
-                    Log.w("PDR", "Out-of-range pressure value: " + rawPressure);
-                    break;
-                }
-
-                // ✅ 3. 判断突变（与上一帧差值过大）
-                if (Math.abs(rawPressure - pressure) > 10f) {  // 可调阈值，比如超过10 hPa
-                    Log.w("PDR", "Sudden jump in pressure value, skipped.");
-                    break;
-                }
-
-                // ✅ 4. 平滑气压
-                pressure = (1 - ALPHA) * pressure + ALPHA * rawPressure;
-
-                // ✅ 5. 更新 elevation
+                // Barometer processing - filter
+                pressure = (1- ALPHA) * pressure + ALPHA * sensorEvent.values[0];
+//                System.err.println("Pressure: " + pressure);
+                // Store pressure data in protobuf trajectory class
                 if (saveRecording) {
                     this.elevation = pdrProcessing.updateElevation(SensorManager.getAltitude(
                             SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure));
@@ -424,17 +404,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // *** Particle start ***
                 //Store time of step
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
-
-                // ✅ 添加判断：如果加速度点太少，就跳过这次步长估计
-                int MIN_ACCEL_SAMPLES = 10;  // 可根据你采样率和步频实际情况调整
-                if (this.accelMagnitude.size() < MIN_ACCEL_SAMPLES) {
-                    // 不调用 updatePdr，跳过位置更新
-                    Log.w("PDR", "Skipped step: not enough accel samples (" + accelMagnitude.size() + ")");
-                    this.accelMagnitude.clear(); // 仍要清空缓存，准备下一步
-                    break;
-                }
-
-                // ✅ 加速度数据量足够，正常执行 PDR 更新
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
                 Log.e("PDR", "x: " + newCords[0] + ", y: " + newCords[1]);
                 // *** new
@@ -494,10 +463,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // Store the PDR coordinates for plotting the trajectory
                     this.pathView.drawTrajectory(newCords);
                 }
-
-                // ✅ 步长估计后，清空加速度缓存
                 this.accelMagnitude.clear();
-
                 if (saveRecording) {
                     stepCounter++;
                     trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
@@ -579,6 +545,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      */
     private void createWifiPositioningRequest(){
+        // Try catch block to catch any errors and prevent app crashing
         try {
             //take no. of MAX_WIFI_APS, and sort them from higher power to lower
             List<Wifi> sortedWifiList = this.wifiList.stream()
@@ -628,16 +595,17 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
 
         } catch (JSONException e) {
-            Log.e("jsonErrors", "Error creating json object: " + e.toString());
+            // Catching error while making JSON object, to prevent crashes
+            // Error log to keep record of errors (for secure programming and maintainability)
+            Log.e("jsonErrors","Error creating json object"+e.toString());
         }
     }
-
     // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      * using Volley Callback
      */
-    private void createWifiPositionRequestCallback() {
+    private void createWifiPositionRequestCallback(){
         try {
             // 创建用于存储WiFi接入点的JSON对象
             JSONObject wifiAccessPoints = new JSONObject();
@@ -646,8 +614,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
             // 创建POST请求所需的JSON对象
             JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put("wf", wf);
-
+            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
