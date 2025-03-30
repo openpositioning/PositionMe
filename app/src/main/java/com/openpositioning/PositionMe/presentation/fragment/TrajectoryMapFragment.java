@@ -57,7 +57,8 @@ public class TrajectoryMapFragment extends Fragment {
 
     private static TrajectoryMapFragment instance;  // Static reference to store the instance of the fragment
     private GoogleMap gMap; // Google Maps instance
-    private LatLng currentLocation; // Stores the user's current location
+
+    private LatLng smoothedPosition; // Smoothed fused position
     private LatLng estimatedLocation;
     private LatLng fusedCurrentLocation;
     private LatLng pdrCurrentLocation;
@@ -73,7 +74,7 @@ public class TrajectoryMapFragment extends Fragment {
                                            // from PDR.
     private Polyline pdrPolyline; // Polyline for PDR trajectory with a dotted black line
     private List<LatLng> movingAverageBuffer = new ArrayList<>();
-    private static final int MOVING_AVERAGE_WINDOW = 80;
+    private static final int MOVING_AVERAGE_WINDOW = 10;
 
     private boolean isPdrOn = false; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
@@ -390,44 +391,47 @@ public class TrajectoryMapFragment extends Fragment {
     // Add the new location to a moving average buffer
     movingAverageBuffer.add(newLocation);
     if (movingAverageBuffer.size() > MOVING_AVERAGE_WINDOW) {
-        movingAverageBuffer.remove(0);
+      movingAverageBuffer.remove(0);
     }
+
     // Compute the average (smoothed) location from the buffer
     double sumLat = 0, sumLng = 0;
     for (LatLng point : movingAverageBuffer) {
         sumLat += point.latitude;
         sumLng += point.longitude;
     }
-    LatLng smoothedLocation = new LatLng(sumLat / movingAverageBuffer.size(), sumLng / movingAverageBuffer.size());
+    LatLng oldSmoothedPosition = this.smoothedPosition;
+    smoothedPosition = new LatLng(sumLat / movingAverageBuffer.size(),
+            sumLng / movingAverageBuffer.size());
 
     // If no marker, create it
     if (orientationMarker == null) {
       orientationMarker = gMap.addMarker(new MarkerOptions()
-              .position(smoothedLocation)
+              .position(smoothedPosition)
               .flat(true)
               .title("Current Position")
               .icon(BitmapDescriptorFactory.fromBitmap(
                       UtilFunctions.getBitmapFromVector(requireContext(),
                               R.drawable.ic_baseline_navigation_24)))
       );
-      gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(smoothedLocation, 19f));
+      gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(smoothedPosition, 19f));
     } else {
       // Update marker position + orientation
-      orientationMarker.setPosition(smoothedLocation);
+      orientationMarker.setPosition(smoothedPosition);
       orientationMarker.setRotation(orientation);
     }
 
     // Extend polyline if movement occurred
-    if (oldLocation != null && !oldLocation.equals(smoothedLocation) && polyline != null) {
-      this.estimatedLocation = smoothedLocation;
+    if (oldSmoothedPosition != null && !oldSmoothedPosition.equals(smoothedPosition) && polyline != null) {
+      this.estimatedLocation = smoothedPosition;
       interpolatedPolyLine.setPoints(new ArrayList<>());
       List<LatLng> points = new ArrayList<>(polyline.getPoints());
-      points.add(smoothedLocation);
+      points.add(smoothedPosition);
       polyline.setPoints(points);
     }
     // Update indoor map overlay
     if (indoorMapManager != null) {
-      indoorMapManager.setCurrentLocation(smoothedLocation);
+      indoorMapManager.setCurrentLocation(smoothedPosition);
       setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
     }
   }
@@ -640,7 +644,6 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker = null;
         }
         lastGnssLocation = null;
-        currentLocation  = null;
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
