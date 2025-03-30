@@ -1,6 +1,5 @@
 package com.openpositioning.PositionMe.fragments;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -27,7 +26,6 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.SwitchCompat;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
@@ -44,7 +42,6 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.UtilFunctions;
@@ -213,6 +210,7 @@ public class RecordingFragment extends Fragment {
                 indoorMapManager.setCurrentLocation(currentLocation);
                 //Showing an indication of available indoor maps using PolyLines
                 indoorMapManager.setIndicationOfIndoorMap();
+                polyline.setZIndex(500);
             }
         });
 
