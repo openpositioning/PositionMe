@@ -72,7 +72,8 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline interpolatedPolyLine; // Polyline extending from current fusion position estimated
                                            // from PDR.
     private Polyline pdrPolyline; // Polyline for PDR trajectory with a dotted black line
-
+    private List<LatLng> movingAverageBuffer = new ArrayList<>();
+    private static final int MOVING_AVERAGE_WINDOW = 80;
 
     private boolean isPdrOn = false; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
@@ -294,8 +295,8 @@ public class TrajectoryMapFragment extends Fragment {
                 .zIndex(10f)
                 .add() // start empty
         );
+        // ensures pdr trajectory is initialised in the invisible state
         pdrPolyline.setVisible(isPdrOn);
-
 
         // GNSS path in blue
         gnssPolyline = map.addPolyline(new PolylineOptions()
@@ -386,34 +387,47 @@ public class TrajectoryMapFragment extends Fragment {
     LatLng oldLocation = this.fusedCurrentLocation;
     this.fusedCurrentLocation = newLocation;
 
+    // Add the new location to a moving average buffer
+    movingAverageBuffer.add(newLocation);
+    if (movingAverageBuffer.size() > MOVING_AVERAGE_WINDOW) {
+        movingAverageBuffer.remove(0);
+    }
+    // Compute the average (smoothed) location from the buffer
+    double sumLat = 0, sumLng = 0;
+    for (LatLng point : movingAverageBuffer) {
+        sumLat += point.latitude;
+        sumLng += point.longitude;
+    }
+    LatLng smoothedLocation = new LatLng(sumLat / movingAverageBuffer.size(), sumLng / movingAverageBuffer.size());
+
     // If no marker, create it
     if (orientationMarker == null) {
       orientationMarker = gMap.addMarker(new MarkerOptions()
-              .position(newLocation)
+              .position(smoothedLocation)
               .flat(true)
               .title("Current Position")
               .icon(BitmapDescriptorFactory.fromBitmap(
                       UtilFunctions.getBitmapFromVector(requireContext(),
                               R.drawable.ic_baseline_navigation_24)))
       );
-      gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(this.fusedCurrentLocation, 19f));
+      gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(smoothedLocation, 19f));
     } else {
       // Update marker position + orientation
-      orientationMarker.setPosition(this.fusedCurrentLocation);
+      orientationMarker.setPosition(smoothedLocation);
       orientationMarker.setRotation(orientation);
     }
 
     // Extend polyline if movement occurred
-    if (oldLocation != null && !oldLocation.equals(this.fusedCurrentLocation) && polyline != null) {
-      this.estimatedLocation = newLocation;
+    if (oldLocation != null && !oldLocation.equals(smoothedLocation) && polyline != null) {
+      this.estimatedLocation = smoothedLocation;
       interpolatedPolyLine.setPoints(new ArrayList<>());
       List<LatLng> points = new ArrayList<>(polyline.getPoints());
-      points.add(this.fusedCurrentLocation);
+      points.add(smoothedLocation);
       polyline.setPoints(points);
     }
     // Update indoor map overlay
     if (indoorMapManager != null) {
-      indoorMapManager.setCurrentLocation(this.fusedCurrentLocation);
+      indoorMapManager.setCurrentLocation(smoothedLocation);
       setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
     }
   }
@@ -441,6 +455,9 @@ public class TrajectoryMapFragment extends Fragment {
         if (oldLocation != null && !oldLocation.equals(this.pdrCurrentLocation) && pdrPolyline != null) {
             List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
             points.add(this.pdrCurrentLocation);
+            while (points.size() > 50) {
+                points.remove(0);
+            }
             pdrPolyline.setPoints(points);
         }
     }
@@ -741,7 +758,7 @@ public class TrajectoryMapFragment extends Fragment {
       gMap.addMarker(new MarkerOptions()
               .position(tagLocation)
               .title("Tag")
-              .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+              .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
       Log.d("TrajectoryMapFragment", "Tag marker added at: " + tagLocation.toString());
     } else {
       Log.e("TrajectoryMapFragment", "Google Map is not ready yet.");
