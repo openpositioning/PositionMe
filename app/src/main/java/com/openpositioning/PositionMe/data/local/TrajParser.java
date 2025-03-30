@@ -6,6 +6,7 @@ import android.util.Log;
 
 import android.util.Pair;
 import android.widget.Toast;
+
 import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -62,7 +63,7 @@ import org.locationtech.proj4j.ProjCoordinate;
  * @author Lin Cheng
  * @see ReplayFragment which uses parsed trajectory data for visualization.
  * @see SensorFusion for motion processing and sensor integration.
- * @see com.openpositioning.PositionMe.presentation.fragment.ReplayFragment for implementation
+ * @see ReplayFragment for implementation
  * details.
  */
 public class TrajParser {
@@ -84,6 +85,9 @@ public class TrajParser {
     void onError(Exception e);
   }
 
+  public record WifiLocations(LatLng position, Integer floor, Boolean isOutlier) {};
+  public record GNSSLocations(LatLng position, Boolean isOutlier) {};
+
   /**
    * Represents a single replay point containing estimated PDR position, GNSS location, orientation,
    * speed, and timestamp.
@@ -91,8 +95,8 @@ public class TrajParser {
   public static class ReplayPoint {
 
     public LatLng pdrLocation;  // PDR-derived location estimate
-    public LatLng gnssLocation; // GNSS location (may be null if unavailable)
-    public Pair<LatLng, Integer> wifiLocation; // Wifi-Location
+    public GNSSLocations gnssLocation; // GNSS location (may be null if unavailable)
+    public WifiLocations wifiLocation; // Wifi-Location
     public LatLng fusedLocation; // TODO: Haven't used it.
     public float orientation;   // Orientation in degrees
     public float speed;         // Speed in meters per second
@@ -107,8 +111,8 @@ public class TrajParser {
      * @param speed        The speed in meters per second.
      * @param timestamp    The timestamp associated with this point.
      */
-    public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation,
-        Pair<LatLng, Integer> wifiLocation, LatLng fusedLocation,
+    public ReplayPoint(LatLng pdrLocation, GNSSLocations gnssLocation,
+                       WifiLocations wifiLocation, LatLng fusedLocation,
         float orientation, float speed, long timestamp) {
       this.pdrLocation = pdrLocation;
       this.gnssLocation = gnssLocation;
@@ -301,11 +305,13 @@ public class TrajParser {
       LatLng pdrLocation = new LatLng(newPdrLoc.y, newPdrLoc.x);
 
       GnssRecord closestGnss = TimedData.findClosestRecord(gnssList, pdr.relativeTimestamp);
+      GNSSLocations gnssLoc = null;
       LatLng gnssLocation = closestGnss == null ? null :
           new LatLng(closestGnss.latitude, closestGnss.longitude);
 
       if (gnssLocation != null) {
         if (previousGnssLoc == null || !previousGnssLoc.equals(gnssLocation)) {
+          boolean isOutlier = false;
           // New GNSS observation. Run sensor fusion if not an outlier
 //            SimpleMatrix currentGnssCovariance = SensorFusion.GNSS_COVARIANCE.copy();
 //            currentGnssCovariance.set(0, 0, Math.pow(closestGnss.get().accuracy,2));
@@ -316,34 +322,38 @@ public class TrajParser {
           } else {
             Log.i("TrajParser","Outlier GNSS Sample, current " + fusedLocation
                 + "GNSS: " + gnssLocation);
+            isOutlier = true;
           }
+          gnssLoc = new GNSSLocations(gnssLocation, isOutlier);
           previousGnssLoc = gnssLocation;
         }
       }
 
       WifiLocation closestWifiLoc = TimedData.findClosestRecord(
           wifiLocations, pdr.relativeTimestamp);
-      Pair<LatLng, Integer> wifiLocAndFloor = closestWifiLoc == null ? null :
-          new Pair<>(closestWifiLoc.latLng, closestWifiLoc.floor);
+      LatLng wifiLoc = closestWifiLoc == null ? null : closestWifiLoc.latLng;
+      WifiLocations wifiLocAndFloor = null;
 
-      if (wifiLocAndFloor != null) {
-        LatLng wifiLocation = wifiLocAndFloor.first;
-        if (previousWifiLoc == null || !previousWifiLoc.equals(wifiLocation)) {
+      if (wifiLoc != null) {
+        if (previousWifiLoc == null || !previousWifiLoc.equals(wifiLoc)) {
+          boolean outlier = false;
           // New GNSS observation. Run sensor fusion IF it is not an outlier
-          if (!SensorFusion.isOutlier(coordinateTransformer, fusedLocation, wifiLocation)) {
-            fusedLocation = updateFusionData(wifiLocation, coordinateTransformer,
+          if (!SensorFusion.isOutlier(coordinateTransformer, fusedLocation, wifiLoc)) {
+            fusedLocation = updateFusionData(wifiLoc, coordinateTransformer,
                 startTimestamp, initialPos, SensorFusion.WIFI_COVARIANCE,
                 new float[]{pdr.x, pdr.y});
           } else {
             Log.i("TrajParser","Outlier WIFI Sample, current " + fusedLocation
-                + "GNSS: " + wifiLocation);
+                + "GNSS: " + wifiLoc);
+            outlier = true;
           }
-          previousWifiLoc = wifiLocation;
+          wifiLocAndFloor = new WifiLocations(closestWifiLoc.latLng, closestWifiLoc.floor, outlier);
+          previousWifiLoc = wifiLoc;
         }
       }
       // TODO: Think about optionals rather than passing around nulls everywhere. What should
       // the application do when there is no point to plot?
-      result.add(new ReplayPoint(pdrLocation, gnssLocation, wifiLocAndFloor, fusedLocation,
+      result.add(new ReplayPoint(pdrLocation, gnssLoc, wifiLocAndFloor, fusedLocation,
           orientationDeg, 0f, pdr.relativeTimestamp));
     }
     result.sort(Comparator.comparingLong(rp -> rp.timestamp));

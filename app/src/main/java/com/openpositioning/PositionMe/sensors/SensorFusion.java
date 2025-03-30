@@ -91,7 +91,7 @@ public class SensorFusion implements SensorEventListener, Observer {
   // String for creating WiFi fingerprint JSO N object
   private static final String WIFI_FINGERPRINT = "wf";
 
-  private static final float OUTLIER_DISTANCE_THRESHOLD = 10;
+  private static final float OUTLIER_DISTANCE_THRESHOLD = 1;
   public static final SimpleMatrix INIT_POS_COVARIANCE = new SimpleMatrix(new double[][]{
       {2.0, 0.0},
       {0.0, 2.0}
@@ -496,7 +496,7 @@ public class SensorFusion implements SensorEventListener, Observer {
       if (fusedLocation == null) {
         // Initial fused location is GNSS latlng.
         fusedLocation = new float[]{gnssLatitude, gnssLongitude};
-      } else {
+      } else if (coordinateTransformer != null) {
         isGnssOutlier = isOutlier(coordinateTransformer,
                 new LatLng(fusedLocation[0],fusedLocation[1]),
                 new LatLng(gnssLatitude, gnssLongitude));
