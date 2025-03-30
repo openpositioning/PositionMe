@@ -163,6 +163,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         indoorMapManager = new IndoorMapManager(mMap);
         indoorMapManager.setIndicationOfIndoorMap();
         trajectoryDrawer = new TrajectoryDrawer(mMap);
+        positioningFusion.initCoordSystem();
     }
 
     public void showCurrentLocation(){
@@ -177,16 +178,6 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     }
 
     private void updateWifiLocationText() {
-        if (!positioningFusion.isInitialized()) {
-            if (positioningFusion.isWifiPositionSet()) {
-                LatLng wifiLocation = positioningFusion.getWifiPosition();
-                positioningFusion.initCoordSystem(wifiLocation.latitude, wifiLocation.longitude);
-            }
-            else if (positioningFusion.isGNSSPositionSet()) {
-                LatLng gnssLocation = positioningFusion.getGnssPosition();
-                positioningFusion.initCoordSystem(gnssLocation.latitude, gnssLocation.longitude);
-            }
-        }
         Log.d("DataDisplay", String.format("Inilization status: %s", positioningFusion.isInitialized()));
         LatLng fusedLocation = PositioningFusion.getInstance().getFusedPosition();
 //        LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();

@@ -60,7 +60,7 @@ public class PositioningFusion {
     }
 
     // origin initialization
-    public void initCoordSystem(double latitude, double longitude) {
+    public void initCoordSystem() {
         wifiPosition = null;
         gnssPosition = null;
         wifiPositionLocal = null;
@@ -68,7 +68,17 @@ public class PositioningFusion {
         pdrPosition = null;
         fusedPositionLocal = null;
         fusedPosition = null;
-        coordSystem.initReference(latitude, longitude);
+        if (SensorFusion.getInstance().getLatLngWifiPositioning() != null) {
+            LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
+            coordSystem.initReference(wifiLocation.latitude, wifiLocation.longitude);
+        }
+//        else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != null) {
+//            LatLng gnssLocation = positioningFusion.getGnssPosition();
+//            coordSystem.initReference(gnssLocation.latitude, gnssLocation.longitude);
+//        }
+        else {
+            coordSystem.initReference(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
+        }
     }
 
     // --- Update Methods ---
@@ -138,9 +148,12 @@ public class PositioningFusion {
     }
 
     public void coordinateConversionToLocal() {
-        if (this.wifiPosition != null && this.gnssPosition != null) {
+        if (this.wifiPosition != null) {
             this.wifiPositionLocal = coordSystem.toLocal(this.wifiPosition.latitude, this.wifiPosition.longitude);
+        }
+        if (this.gnssPosition != null) {
             this.gnssPositionLocal = coordSystem.toLocal(this.gnssPosition.latitude, this.gnssPosition.longitude);
+
         }
     }
 
@@ -183,9 +196,11 @@ public class PositioningFusion {
         } else {
             pdrMotion = pdrPosition;
         }
+        //Log.d("Posotioning Fusion",String.format("gnss local position: %s", gnssPositionLocal.toString()));
         if (gnssPositionLocal != null) {
             // 1. |EN: Construct Observation Data (WiFi/GNSS first)
             //    |CHS: 构造观测数据（WiFi/GNSS 优先使用）
+            Log.d("Posotioning Fusion",String.format("gnss local position: %s", gnssPositionLocal.toString()));
             PointF observation = null;
             if (wifiPositionLocal != null) {
                 observation = new PointF(wifiPositionLocal[0], wifiPositionLocal[1]);
@@ -214,6 +229,7 @@ public class PositioningFusion {
             //    |CHS: 更新粒子集合和融合位置
             currentParticles = result.particles;
             fusedPositionLocal = new float[]{(float) result.bestX, (float) result.bestY};
+            Log.d("Posotioning Fusion",String.format("fused position: %s", fusedPositionLocal.toString()));
 
             lastPdrPosition = pdrPosition;
         }
