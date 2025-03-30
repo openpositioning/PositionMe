@@ -78,8 +78,8 @@ public class EKF {
         // 计算新的航向角 theta_k = wrapToPi(theta_prev + gyroTheta)
         double newTheta = wrapToPi(theta + gyroTheta);
 
-        double newX = x + stepLen * Math.cos(newTheta);
-        double newY = y + stepLen * Math.sin(newTheta);
+        double newX = x + stepLen * Math.sin(newTheta);
+        double newY = y + stepLen * Math.cos(newTheta);
         double newZ = z;      // z 不变，可根据需要更新
 
         // 计算 4x4 的雅可比Fx
@@ -87,13 +87,13 @@ public class EKF {
         // partial(newX)/partial(y) = 0
         // partial(newX)/partial(z) = 0
         // partial(newX)/partial(theta) = -stepLen*sin(theta)
-        double f00 = 1;    double f01 = 0;    double f02 = 0;    double f03 = -stepLen*Math.sin(theta);
+        double f00 = 1;    double f01 = 0;    double f02 = 0;    double f03 = -stepLen*Math.sin(newTheta);
 
         // partial(newY)/partial(x) = 0
         // partial(newY)/partial(y) = 1
         // partial(newY)/partial(z) = 0
         // partial(newY)/partial(theta) = stepLen*cos(theta)
-        double f10 = 0;    double f11 = 1;    double f12 = 0;    double f13 = stepLen*Math.cos(theta);
+        double f10 = 0;    double f11 = 1;    double f12 = 0;    double f13 = stepLen*Math.cos(newTheta);
 
         // z 不变
         double f20 = 0;    double f21 = 0;    double f22 = 1;    double f23 = 0;
@@ -316,6 +316,11 @@ public class EKF {
         // 更新协方差
         SimpleMatrix IminusKH = I4.minus(K.mult(H_gnss));
         covariance = IminusKH.mult(covariance);
+
+        // 数据平滑：调用平滑滤波器并更新状态
+        double[] smoothedCoords = smoothingFilter.applySmoothing(new double[]{state.get(0,0), state.get(1,0)});
+        state.set(0, 0, smoothedCoords[0]);
+        state.set(1, 0, smoothedCoords[1]);
     }
     public double[] getEstimatedPositionENU() {
         return new double[]{state.get(0,0), state.get(1,0)};

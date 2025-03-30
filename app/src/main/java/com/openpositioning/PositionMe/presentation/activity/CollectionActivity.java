@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.domain.SensorDataPredictor;
 import com.openpositioning.PositionMe.presentation.fragment.CollectionFragment;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
@@ -55,6 +56,8 @@ public class CollectionActivity extends AppCompatActivity {
     private Handler sensorUpdateHandler;
     private Runnable sensorUpdateTask;
 
+    private SensorDataPredictor predictor;
+
     private long lastWifiRequestTime = 0;
     private static final long WIFI_REQUEST_INTERVAL_MS = 8000;  // 8s between updates
 
@@ -78,6 +81,7 @@ public class CollectionActivity extends AppCompatActivity {
         // Set layout containing the CollectionFragment container
         setContentView(R.layout.activity_collection);
 
+
         // Keep the screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
@@ -85,6 +89,11 @@ public class CollectionActivity extends AppCompatActivity {
         sensorFusion = SensorFusion.getInstance();
         sensorFusion.setContext(getApplicationContext());
         sensorFusion.resumeListening();
+
+//        1.1) 初始化 Predictor（加载 tf_model.tflite）
+        predictor = new SensorDataPredictor(this);
+
+
 
         // 2) Prepare the output file in the public Downloads folder with a timestamped filename.
         // For API >= Q we use MediaStore; for older devices we fall back to File API.
@@ -330,5 +339,16 @@ public class CollectionActivity extends AppCompatActivity {
 
     public void setLastWifiRequestTime(long lastWifiRequestTime) {
         this.lastWifiRequestTime = lastWifiRequestTime;
+    }
+
+    public SensorFusion getSensorFusion() {
+        return sensorFusion;
+    }
+    public void setSensorFusion(SensorFusion sensorFusion) {
+        this.sensorFusion = sensorFusion;
+    }
+
+    public SensorDataPredictor getPredictor() {
+        return predictor;
     }
 }

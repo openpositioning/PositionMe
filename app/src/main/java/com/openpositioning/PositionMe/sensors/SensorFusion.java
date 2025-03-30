@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -69,6 +70,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Store the last event timestamps for each sensor type
     private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
     private HashMap<Integer, Integer> eventCounts = new HashMap<>();
+    // 回调接口，用于楼层变化通知
+    private Consumer<Integer> wifiFloorChangedListener;
 
     long maxReportLatencyNs = 0;  // Disable batching to deliver events immediately
 
@@ -169,8 +172,17 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
     private double[] startRef;
+    private double refLat, refLon, refAlt;
     private double[] ecefRefCoords;
     private EKF extendedKalmanFilter;
+
+    private LatLng pendingWifiPosition = null;
+    private long wifiPositionTimestamp = 0;
+    private long wifiReceivedTime = 0;
+    private int wifiFloor = 0;
+    private float gnssAccuracy = 100f;
+
+    private com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment trajectoryMapFragment;
 
     //region Initialisation
     /**
@@ -256,9 +268,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         // 尝试获取最新 GNSS 坐标并更新 ECEF 参考坐标
         float[] latestLatLon = getGNSSLatitude(true);
         if (latestLatLon[0] != 0.0 || latestLatLon[1] != 0.0) {
-            ecefRefCoords = CoordinateTransform.geodeticToEcef(latestLatLon[0], latestLatLon[1], 0.0);
-            Log.d("SensorFusion", "Updated ECEF reference at startup: " +
-                    "X=" + ecefRefCoords[0] + ", Y=" + ecefRefCoords[1] + ", Z=" + ecefRefCoords[2]);
+            this.refLat = latestLatLon[0];
+            this.refLon = latestLatLon[1];
+            this.refAlt = 0.0;
+            // ecefRefCoords = CoordinateTransform.geodeticToEcef(latestLatLon[0], latestLatLon[1], 0.0);
+            Log.d("SensorFusion", "Set reference location: refLat=" + refLat + ", refLon=" + refLon + ", refAlt=" + refAlt);
         }
         // Create object handling HTTPS communication
         this.serverCommunications = new ServerCommunications(context);
@@ -418,6 +432,14 @@ public class SensorFusion implements SensorEventListener, Observer {
                     float stepLen = this.pdrProcessing.getStepLength(); // 获取当前步长
 
                     double theta = wrapToPi(this.orientation[0]); // 获取当前方向角
+                    Log.d("SensorFusion", "Step detected: stepLen=" + stepLen + ", theta=" + theta);
+                  if (trajectoryMapFragment != null && newCords != null) {
+                    LatLng rawPdrLatLng = CoordinateTransform.enuToGeodetic(
+                        newCords[0], newCords[1], 0.0,
+                        refLat, refLon, refAlt
+                    );
+                      trajectoryMapFragment.updateUserLocation(rawPdrLatLng, orientation[0]);
+                    }
                     if (extendedKalmanFilter != null) {
                         extendedKalmanFilter.predict(stepLen, theta);
 
@@ -432,6 +454,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (gnssLocation != null) {
                         Log.d("SensorFusion", "GNSS Location available for update: Lat=" + gnssLocation.getLatitude() +
                                 ", Lon=" + gnssLocation.getLongitude() + ", Accuracy=" + gnssLocation.getAccuracy());
+                        gnssAccuracy = gnssLocation.getAccuracy();
                     } else {
                         Log.d("SensorFusion", "GNSS Location is null, skipping GNSS correction.");
                     }
@@ -445,20 +468,19 @@ public class SensorFusion implements SensorEventListener, Observer {
                         Log.w("SensorFusion", "WiFi list is empty, skipping WiFi RSSI calculation.");
                     }
 
-                    // 获取 WiFi 位置信息（如果有）并传入 updateFusion
-                    wifiPos = wiFiPositioning.getWifiLocation();
                     JSONObject wifiResponse = null;
-                    if (wifiPos != null) {
+                    if (pendingWifiPosition != null &&
+                            SystemClock.uptimeMillis() - wifiPositionTimestamp < 3000) {
                         wifiResponse = new JSONObject();
                         try {
-                            wifiResponse.put("lat", wifiPos.latitude);
-                            wifiResponse.put("lon", wifiPos.longitude);
-                            wifiResponse.put("floor", wiFiPositioning.getFloor());
+                            wifiResponse.put("lat", pendingWifiPosition.latitude);
+                            wifiResponse.put("lon", pendingWifiPosition.longitude);
+                            wifiResponse.put("floor", wifiFloor);
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
+                        pendingWifiPosition = null;
                     }
-
                     updateFusion(wifiResponse, gnssLocation, avgRssi);
 
 
@@ -467,17 +489,20 @@ public class SensorFusion implements SensorEventListener, Observer {
                         double lat = gnssLocation.getLatitude();
                         double lon = gnssLocation.getLongitude();
                         double alt = gnssLocation.getAltitude();
-                        double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, alt, startRef[0], startRef[1], startRef[2]);
+                        double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, alt, refLat, refLon, refAlt);
                         extendedKalmanFilter.updateGNSS(enuCoords[0], enuCoords[1], enuCoords[2], 1.0);
                     }
                     // 从融合算法中获取修正后的定位结果
                     if (extendedKalmanFilter != null) {
-                        LatLng fusedPos = extendedKalmanFilter.getEstimatedPosition(startRef[0], startRef[1], startRef[2]);
+                        LatLng fusedPos = extendedKalmanFilter.getEstimatedPosition(refLat, refLon, refAlt);
                         pathView.drawTrajectory(new float[]{(float) fusedPos.latitude, (float) fusedPos.longitude});
                         trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
                                 .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                 .setX((float) fusedPos.latitude)
                                 .setY((float) fusedPos.longitude));
+                        if (trajectoryMapFragment != null) {
+                            trajectoryMapFragment.updateFusionLocation(fusedPos, orientation[0]);
+                        }
                     } else {
                         Log.e("SensorFusion", "EKF is null when trying to get estimated position!");
                     }
@@ -507,9 +532,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                 Log.d("SensorFusion", "WiFi response raw: " + wifiResponse.toString());
                 double lat = wifiResponse.getDouble("lat");
                 double lon = wifiResponse.getDouble("lon");
-                double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, getElevation(), startRef[0], startRef[1], startRef[2]);
+                double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, getElevation(), refLat, refLon, refAlt);
 
                 Log.d("SensorFusion", "Using WiFi for EKF update: East=" + enuCoords[0] + ", North=" + enuCoords[1]);
+                long fusionTime = System.currentTimeMillis();
+                Log.d("SensorFusion", "WiFi定位结果使用时间: " + fusionTime + "，相对延迟: " + (fusionTime - wifiReceivedTime) + " ms");
 
                 if (extendedKalmanFilter != null) {
                     double timeSinceLastUpdate = SystemClock.uptimeMillis() - lastOpUpdateTime;
@@ -524,7 +551,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 double lon = gnssLocation.getLongitude();
                 double alt = gnssLocation.getAltitude();
 
-                double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, alt, startRef[0], startRef[1], startRef[2]);
+                double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, alt, refLat, refLon, refAlt);
                 Log.d("SensorFusion", "Using GNSS for EKF update: East=" + enuCoords[0] + ", North=" + enuCoords[1] + ", Alt=" + enuCoords[2]);
                 Log.d("SensorFusion", "Raw GNSS: Lat=" + lat + ", Lon=" + lon + ", Alt=" + alt + ", Accuracy=" + gnssLocation.getAccuracy());
 
@@ -627,6 +654,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      */
     private void createWifiPositioningRequest(double avgRssi) {
+        final long requestStartTime = System.currentTimeMillis();
         try {
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList){
@@ -642,15 +670,19 @@ public class SensorFusion implements SensorEventListener, Observer {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     Log.d("SensorFusion", "Received WiFi location: lat=" + wifiLocation.latitude + ", lon=" + wifiLocation.longitude + ", floor=" + floor);
-                    try {
-                        JSONObject wifiResponse = new JSONObject();
-                        wifiResponse.put("lat", wifiLocation.latitude);
-                        wifiResponse.put("lon", wifiLocation.longitude);
-                        wifiResponse.put("floor", floor);
-                        updateFusion(wifiResponse, null, avgRssi); // ✅ 传入真实的 avgRssi
-                    } catch (JSONException e) {
-                        Log.e("SensorFusion", "Error creating WiFi response JSON", e);
+
+                    pendingWifiPosition = wifiLocation;
+                    wifiFloor = floor;
+                    wifiPositionTimestamp = SystemClock.uptimeMillis();
+                    wifiReceivedTime = System.currentTimeMillis();  // 用于日志分析
+                    Log.d("SensorFusion", "WiFi store success, store time: " + wifiReceivedTime);
+                    long responseTime = System.currentTimeMillis();
+                    long delay = responseTime - requestStartTime;
+                    Log.d("SensorFusion", "WiFi请求总延迟: " + delay + "ms");
+                    if (wifiFloorChangedListener != null) {
+                        wifiFloorChangedListener.accept(floor);
                     }
+
                 }
 
                 @Override
@@ -721,7 +753,9 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {}
-
+    public float getGnssAccuracy() {
+        return gnssAccuracy;
+    }
     private double wrapToPi(double angle) {
         while(angle > Math.PI) angle -= 2*Math.PI;
         while(angle < -Math.PI) angle += 2*Math.PI;
@@ -997,32 +1031,29 @@ public class SensorFusion implements SensorEventListener, Observer {
             return;
         }
 
-        // 获取 GNSS 初始经纬度
-        float[] initLatLon = getGNSSLatitude(true);
+        // 获取 GNSS 初始经纬度 using system lastKnownLocation first, then fallback to polling
+        float[] initLatLon = new float[2];
+        LocationManager locationManager = (LocationManager) appContext.getSystemService(Context.LOCATION_SERVICE);
 
-        if (initLatLon[0] == 0.0 && initLatLon[1] == 0.0) {
-            Log.e("SensorFusion", "GNSS initial coordinates are invalid! Waiting for valid GNSS fix...");
-
-            // 增加监听，确保 GNSS 数据可用
-            LocationManager locationManager = (LocationManager) appContext.getSystemService(Context.LOCATION_SERVICE);
-
-            if (ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-                if (lastKnownLocation != null) {
-                    initLatLon[0] = (float) lastKnownLocation.getLatitude();
-                    initLatLon[1] = (float) lastKnownLocation.getLongitude();
-                }
-            } else {
-                Log.e("SensorFusion", "Location permissions not granted. Cannot access last known location.");
+        if (ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (lastKnownLocation != null) {
+                initLatLon[0] = (float) lastKnownLocation.getLatitude();
+                initLatLon[1] = (float) lastKnownLocation.getLongitude();
+                Log.d("SensorFusion", "Using lastKnownLocation: " + initLatLon[0] + ", " + initLatLon[1]);
             }
+        }
 
-            // 仅在坐标仍然无效时，执行主动轮询获取
-            if (initLatLon[0] == 0.0 && initLatLon[1] == 0.0) {
-                for (int i = 0; i < 10; i++) {
-                    SystemClock.sleep(1000);
-                    initLatLon = getGNSSLatitude(true);
-                    if (initLatLon[0] != 0.0 || initLatLon[1] != 0.0) break;
+        double initAltitude = 0.0;
+        if (initLatLon[0] == 0.0 && initLatLon[1] == 0.0) {
+            Log.e("SensorFusion", "GNSS lastKnownLocation unavailable, trying polling fallback.");
+            for (int i = 0; i < 10; i++) {
+                SystemClock.sleep(1000);
+                float[] polled = getGNSSLatitude(true);
+                if (polled[0] != 0.0 || polled[1] != 0.0) {
+                    initLatLon = polled;
+                    break;
                 }
             }
         }
@@ -1031,18 +1062,29 @@ public class SensorFusion implements SensorEventListener, Observer {
             // After multiple attempts, still invalid: delay error logging until now.
             Log.e("SensorFusion", "GNSS fix still unavailable after multiple attempts, using default reference!");
             ecefRefCoords = new double[]{0.0, 0.0, 0.0};
-        } else {
-            Log.d("SensorFusion", "GNSS initial LatLon: " + initLatLon[0] + ", " + initLatLon[1]);
-            // 转换 GNSS 经纬度到 ECEF 坐标
-            ecefRefCoords = CoordinateTransform.geodeticToEcef(initLatLon[0], initLatLon[1], 0.0);
-            if (ecefRefCoords == null || ecefRefCoords.length < 3) {
-                Log.e("SensorFusion", "Failed to compute ECEF reference coordinates! Using default.");
-                ecefRefCoords = new double[]{0.0, 0.0, 0.0};
             } else {
-                Log.d("SensorFusion", "Computed ECEF reference: X=" + ecefRefCoords[0] +
-                        ", Y=" + ecefRefCoords[1] + ", Z=" + ecefRefCoords[2]);
+                Log.d("SensorFusion", "GNSS initial LatLon: " + initLatLon[0] + ", " + initLatLon[1]);
+                if (ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                    ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                    Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                    if (lastKnownLocation != null) {
+                        initAltitude = lastKnownLocation.getAltitude();
+                        Log.d("SensorFusion", "Using lastKnownLocation: " + initLatLon[0] + ", " + initLatLon[1] + ", Alt=" + initAltitude);
+                    }
+                }
+                refLat = initLatLon[0];
+                refLon = initLatLon[1];
+                refAlt = initAltitude;
+                // 转换 GNSS 经纬度到 ECEF 坐标
+                ecefRefCoords = CoordinateTransform.geodeticToEcef(initLatLon[0], initLatLon[1], initAltitude);
+                if (ecefRefCoords == null || ecefRefCoords.length < 3) {
+                    Log.e("SensorFusion", "Failed to compute ECEF reference coordinates! Using default.");
+                    ecefRefCoords = new double[]{0.0, 0.0, 0.0};
+                } else {
+                    Log.d("SensorFusion", "Computed ECEF reference: X=" + ecefRefCoords[0] +
+                            ", Y=" + ecefRefCoords[1] + ", Z=" + ecefRefCoords[2]);
+                }
             }
-        }
         // Ensure startRef is set only once based on the final valid (or default) ECEF coordinates.
         startRef = ecefRefCoords.clone();
         Log.d("SensorFusion", "startRef initialized with ECEF reference: " +
@@ -1050,12 +1092,15 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // 进行地理坐标转换
         double[] enuCoords = CoordinateTransform.geodeticToEnu(
-                initLatLon[0], initLatLon[1], 0.0,
-                startRef[0], startRef[1], startRef[2]
+                initLatLon[0], initLatLon[1], initAltitude,
+                refLat, refLon, refAlt
         );
 
         // 获取当前设备方向
         double initialTheta = wrapToPi(this.orientation[0]);
+
+        Log.d("SensorFusion", "First EKF Init: Lat=" + initLatLon[0] + ", Lon=" + initLatLon[1]);
+        Log.d("SensorFusion", "Initial Theta=" + initialTheta);
 
         // 初始化 EKF
         extendedKalmanFilter = new EKF(enuCoords[0], enuCoords[1], 0.0, initialTheta);
@@ -1081,6 +1126,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         if(wakeLock.isHeld()) {
             this.wakeLock.release();
         }
+    }
+
+    public void setTrajectoryMapFragment(com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment fragment) {
+        this.trajectoryMapFragment = fragment;
     }
 
     //endregion
@@ -1124,7 +1173,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
-
+    public void setOnWifiFloorChangedListener(Consumer<Integer> listener) {
+        this.wifiFloorChangedListener = listener;
+    }
 
     /**
      * Timer task to record data with the desired frequency in the trajectory class.

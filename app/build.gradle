@@ -68,6 +68,7 @@ dependencies {
     implementation 'androidx.gridlayout:gridlayout:1.0.0'
     implementation "org.ejml:ejml-simple:0.41"
 
+
     // Material Components (Material 3 support is in 1.12.0+)
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
@@ -95,5 +96,6 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 
     // Machine Learning (TensorFlow Lite)
-    implementation 'org.tensorflow:tensorflow-lite:2.13.0' // Or your version
+    implementation 'org.tensorflow:tensorflow-lite:2.13.0'
+    implementation 'org.tensorflow:tensorflow-lite-support:0.4.3'
 }

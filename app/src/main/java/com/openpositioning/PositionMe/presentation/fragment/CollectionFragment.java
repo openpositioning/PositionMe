@@ -4,6 +4,8 @@ import static android.graphics.BlendMode.COLOR;
 
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -23,15 +25,22 @@ import androidx.fragment.app.FragmentTransaction;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.domain.SensorDataPredictor;
 import com.openpositioning.PositionMe.presentation.activity.CollectionActivity;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * CollectionFragment with TrajectoryMapFragment support.
  * Allows multi-point calibration with draggable markers.
+ * 并持续更新显示当前位置信息（通过调用 TrajectoryMapFragment.updateFusionLocation）。
  */
 public class CollectionFragment extends Fragment {
 
@@ -47,6 +56,12 @@ public class CollectionFragment extends Fragment {
     private int selectedFloorLevel = -1;
     private int selectedIndoorState = 0;
     private String buildingName = null;
+
+    // 用于持续更新当前位置的 Handler 和 Runnable
+    private Handler locationUpdateHandler;
+    private Runnable locationUpdateRunnable;
+    // 更新间隔（毫秒）
+    private static final long UPDATE_INTERVAL = 1000;
 
     @Nullable
     @Override
@@ -87,7 +102,7 @@ public class CollectionFragment extends Fragment {
             if (!markerPlaced) {
                 placeCalibrationMarker();
                 markerPlaced = true;
-                // change button color
+                // 修改按钮颜色
                 calibrationButton.setBackgroundColor(Color.GREEN);
                 calibrationButton.setText("Confirm");
                 Log.d("CollectionFragment", "Calibration marker placed.");
@@ -95,7 +110,7 @@ public class CollectionFragment extends Fragment {
                 confirmCalibration();
                 calibrationMarker = null;
                 markerPlaced = false;
-                // change button color
+                // 修改按钮颜色
                 calibrationButton.setBackgroundColor(Color.YELLOW);
                 calibrationButton.setText("Add Tag");
             }
@@ -108,6 +123,16 @@ public class CollectionFragment extends Fragment {
         cancelButton.setOnClickListener(v -> {
             if (getActivity() != null) getActivity().finish();
         });
+
+        // 开始持续更新当前位置（调用 TrajectoryMapFragment.updateFusionLocation）
+        startLocationUpdates();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        // 停止持续更新，防止内存泄漏
+        stopLocationUpdates();
     }
 
     private void setupFloorSpinner() {
@@ -232,5 +257,62 @@ public class CollectionFragment extends Fragment {
         }
         // clear calibration marker
         calibrationMarker.remove();
+    }
+
+    /**
+     * 开始持续更新当前位置。这里示例使用 Handler 模拟位置更新，
+     * 实际使用中可接入 fused location 或其他位置服务。
+     */
+    private void startLocationUpdates() {
+        locationUpdateHandler = new Handler(Looper.getMainLooper());
+        locationUpdateRunnable = new Runnable() {
+            @Override
+            public void run() {
+                // 获取或模拟新的位置和朝向值
+                LatLng newLocation = getWifiPredictedLocation();
+                float orientation = 0f; // 示例中使用 0 度，实际应根据传感器数据调整
+
+                if (trajectoryMapFragment != null) {
+                    trajectoryMapFragment.updateFusionLocation(newLocation, orientation);
+                }
+                // 每隔 UPDATE_INTERVAL 毫秒后再次执行
+                locationUpdateHandler.postDelayed(this, UPDATE_INTERVAL);
+            }
+        };
+        locationUpdateHandler.post(locationUpdateRunnable);
+    }
+
+    /**
+     * 停止持续更新当前位置
+     */
+    private void stopLocationUpdates() {
+        if (locationUpdateHandler != null && locationUpdateRunnable != null) {
+            locationUpdateHandler.removeCallbacks(locationUpdateRunnable);
+        }
+    }
+
+    private LatLng getWifiPredictedLocation() {
+        // 若当前的 Activity 就是 CollectionActivity
+        if (getActivity() instanceof CollectionActivity) {
+            CollectionActivity activity = (CollectionActivity) getActivity();
+
+            // 1) 拿到 Predictor
+            SensorDataPredictor predictor = activity.getPredictor();
+
+            // 2) 拿到 SensorFusion
+            SensorFusion sensorFusion = activity.getSensorFusion();
+
+            // 3) 调用 predictor 进行预测
+            LatLng predictedPos = predictor.predictPosition(sensorFusion);
+
+            if (predictedPos != null) {
+                Log.d("CollectionFragment", "WiFi Predicted pos: "
+                        + predictedPos.latitude + ", " + predictedPos.longitude);
+                return predictedPos;
+            }
+        }
+
+        // 如果没有拿到或预测失败，就返回一个备用默认位置
+        return new LatLng(55.9228, -3.1746);
     }
 }

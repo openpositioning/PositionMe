@@ -4,11 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Fullscreen map container (holds TrajectoryMapFragment) -->
-    <FrameLayout
-        android:id="@+id/mapContainer"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+
 
     <!-- TOP overlay: spinners + building name -->
     <LinearLayout
@@ -24,7 +20,7 @@
         <Spinner
             android:id="@+id/floorSpinner"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:entries="@array/floor_levels"
             android:prompt="@string/floor_level" />
 
@@ -32,7 +28,7 @@
         <Spinner
             android:id="@+id/indoorStateSpinner"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="50dp"
             android:entries="@array/indoor_states"
             android:prompt="@string/indoor_state" />
 
@@ -45,6 +41,12 @@
             android:hint="@string/building_name_hint"
             android:inputType="text" />
     </LinearLayout>
+
+    <!-- Fullscreen map container (holds TrajectoryMapFragment) -->
+    <FrameLayout
+        android:id="@+id/mapContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <!-- BOTTOM overlay: buttons -->
     <LinearLayout
