@@ -526,21 +526,26 @@ public class TrajectoryMapFragment extends Fragment {
   /**
    * Called when we want to set or update the GNSS marker position
    */
-  public void updateGNSS(@NonNull LatLng gnssLocation) {
+  public void updateGNSS(@NonNull LatLng gnssLocation, @NonNull float[] isOutlier) {
     if (gMap == null) {
       return;
     }
     if (!isGnssOn) {
       return;
     }
+    BitmapDescriptor icon;
 
+    if (isOutlier[0] == 1) {
+      icon = BitmapDescriptorFactory.fromResource(R.drawable.gnss_outlier);
+    } else {
+      icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE);
+    }
     if (gnssMarker == null) {
       // Create the GNSS marker for the first time
       gnssMarker = gMap.addMarker(new MarkerOptions()
           .position(gnssLocation)
           .title("GNSS Position")
-          .icon(BitmapDescriptorFactory
-              .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+          .icon(icon));
       lastGnssLocation = gnssLocation;
     } else {
       // Move existing GNSS marker
@@ -561,7 +566,7 @@ public class TrajectoryMapFragment extends Fragment {
    *
    * @param wifiLocation The location where the WiFi marker should be placed.
    */
-  public void updateWifi(@NonNull LatLng wifiLocation) {
+  public void updateWifi(@NonNull LatLng wifiLocation, @NonNull float[] isOutlier) {
     if (gMap == null) {
       return;
     }
@@ -569,12 +574,20 @@ public class TrajectoryMapFragment extends Fragment {
       return;
     }
 
+    BitmapDescriptor icon;
+
+    if (isOutlier[0] == 1) {
+      icon = BitmapDescriptorFactory.fromResource(R.drawable.wifi_outlier);
+    } else {
+      icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE);
+    }
+
     if (wifiMarker == null) {
       // Create the WiFi marker if it doesn't already exist
       wifiMarker = gMap.addMarker(new MarkerOptions()
           .position(wifiLocation)
           .title("WiFi Access Point")
-          .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+          .icon(icon)
       );
     } else {
       // Update the existing WiFi marker's position
