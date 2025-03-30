@@ -207,7 +207,7 @@ public class PositioningFusion implements PositionObserver {
         if (gnssPositionLocal != null) {
             // 1. |EN: Construct Observation Data (WiFi/GNSS first)
             //    |CHS: 构造观测数据（WiFi/GNSS 优先使用）
-            Log.d("Posotioning Fusion",String.format("gnss local position: %s", gnssPositionLocal.toString()));
+//            Log.d("Posotioning Fusion",String.format("gnss local position: %s", gnssPositionLocal.toString()));
             PointF observation = null;
             if (wifiPositionLocal != null) {
                 observation = new PointF(wifiPositionLocal[0], wifiPositionLocal[1]);
@@ -236,7 +236,7 @@ public class PositioningFusion implements PositionObserver {
             //    |CHS: 更新粒子集合和融合位置
             currentParticles = result.particles;
             fusedPositionLocal = new float[]{(float) result.bestX, (float) result.bestY};
-            Log.d("Posotioning Fusion",String.format("fused position: %s", fusedPositionLocal.toString()));
+//            Log.d("Posotioning Fusion",String.format("fused position: %s", fusedPositionLocal.toString()));
 
             lastPdrPosition = pdrPosition;
         }
