@@ -17,6 +17,8 @@ import android.content.Context;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
+import android.widget.Toast;
+import android.os.Build;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
@@ -48,7 +50,8 @@ import java.util.Map;
 public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder> {
 
     // Date-time formatter used to format date and time.
-    private static final DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter displayFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter fileNameFormat = DateTimeFormatter.ofPattern("dd-MM-yy-HH-mm-ss");
 
     private final Context context;
     private final List<Map<String, String>> responseItems;
@@ -195,14 +198,11 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             holder.getTrajId().setTextSize(65);
         }
 
-        // Parse and format the submission date.
+        // Parse and format the submission date for display
         String dateSubmittedStr = responseItems.get(position).get("date_submitted");
         assert dateSubmittedStr != null;
-        holder.getTrajDate().setText(
-                dateFormat.format(
-                        LocalDateTime.parse(dateSubmittedStr.split("\\.")[0])
-                )
-        );
+        LocalDateTime dateTime = LocalDateTime.parse(dateSubmittedStr.split("\\.")[0]);
+        holder.getTrajDate().setText(displayFormat.format(dateTime));
 
         // Determine if the trajectory is already downloaded by checking the records.
         JSONObject recordDetails = ServerCommunications.downloadRecords.get(id);
@@ -211,10 +211,24 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
 
         if (matched) {
             try {
-                String fileName = recordDetails.optString("file_name", null);
-                if (fileName != null) {
-                    File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
-                    filePath = file.getAbsolutePath();
+                String storedFileName = recordDetails.optString("file_name", null);
+                if (storedFileName != null) {
+                    // Get the path to the local_trajectories directory
+                    File path = null;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+                        if (path == null) {
+                            path = context.getFilesDir();
+                        }
+                    } else {
+                        path = context.getFilesDir();
+                    }
+                    
+                    File localTrajectoryDir = new File(path, "local_trajectories");
+                    // 使用存储的文件名，但将.txt替换为.json
+                    String jsonFileName = storedFileName.replace(".txt", ".json");
+                    filePath = new File(localTrajectoryDir, jsonFileName).getAbsolutePath();
+                    System.out.println("尝试查找文件: " + filePath);
                 }
                 // Set the button state to "downloaded".
                 setButtonState(holder.downloadButton, 1);
@@ -240,9 +254,15 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
             if (finalMatched) {
                 // If the item is already downloaded, start ReplayActivity to display the trajectory.
                 if (finalFilePath != null) {
-                    Intent intent = new Intent(context, ReplayActivity.class);
-                    intent.putExtra(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, finalFilePath);
-                    context.startActivity(intent);
+                    File localFile = new File(finalFilePath);
+                    if (localFile.exists()) {
+                        Intent intent = new Intent(context, ReplayActivity.class);
+                        intent.putExtra(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, finalFilePath);
+                        context.startActivity(intent);
+                    } else {
+                        Toast.makeText(context, "本地轨迹文件未找到", Toast.LENGTH_SHORT).show();
+                        System.err.println("找不到文件: " + localFile.getAbsolutePath());
+                    }
                 }
             } else {
                 // If the item is not downloaded, trigger the download action.

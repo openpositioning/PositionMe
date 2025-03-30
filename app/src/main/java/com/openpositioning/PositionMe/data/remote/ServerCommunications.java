@@ -58,6 +58,8 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 
 /**
  * This class handles communications with the server through HTTPs. The class uses an
@@ -130,8 +132,56 @@ public class ServerCommunications implements Observable {
     public void sendTrajectory(Traj.Trajectory trajectory){
         logDataSize(trajectory);
 
-        // Convert the trajectory to byte array
+        // Convert the trajectory to byte array for upload
         byte[] binaryTrajectory = trajectory.toByteArray();
+
+        // Convert trajectory to JSON string for local storage
+        String jsonTrajectory;
+        try {
+            // Create a structured JSON object that matches TrajParser's expected format
+            JsonObject trajectoryJson = new JsonObject();
+            
+            // Add IMU data
+            JsonArray imuArray = new JsonArray();
+            for (Traj.Motion_Sample imuData : trajectory.getImuDataList()) {
+                JsonObject imuObject = new JsonObject();
+                imuObject.addProperty("relativeTimestamp", imuData.getRelativeTimestamp());
+                imuObject.addProperty("rotationVectorX", imuData.getRotationVectorX());
+                imuObject.addProperty("rotationVectorY", imuData.getRotationVectorY());
+                imuObject.addProperty("rotationVectorZ", imuData.getRotationVectorZ());
+                imuObject.addProperty("rotationVectorW", imuData.getRotationVectorW());
+                imuArray.add(imuObject);
+            }
+            trajectoryJson.add("imuData", imuArray);
+            
+            // Add PDR data
+            JsonArray pdrArray = new JsonArray();
+            for (Traj.Pdr_Sample pdrData : trajectory.getPdrDataList()) {
+                JsonObject pdrObject = new JsonObject();
+                pdrObject.addProperty("relativeTimestamp", pdrData.getRelativeTimestamp());
+                pdrObject.addProperty("x", pdrData.getX());
+                pdrObject.addProperty("y", pdrData.getY());
+                pdrArray.add(pdrObject);
+            }
+            trajectoryJson.add("pdrData", pdrArray);
+            
+            // Add GNSS data
+            JsonArray gnssArray = new JsonArray();
+            for (Traj.GNSS_Sample gnssData : trajectory.getGnssDataList()) {
+                JsonObject gnssObject = new JsonObject();
+                gnssObject.addProperty("relativeTimestamp", gnssData.getRelativeTimestamp());
+                gnssObject.addProperty("latitude", gnssData.getLatitude());
+                gnssObject.addProperty("longitude", gnssData.getLongitude());
+                gnssArray.add(gnssObject);
+            }
+            trajectoryJson.add("gnssData", gnssArray);
+            
+            // Convert to string
+            jsonTrajectory = trajectoryJson.toString();
+        } catch (Exception ee) {
+            System.err.println("Failed to convert trajectory to JSON: " + ee.getMessage());
+            return;
+        }
 
         File path = null;
         // for android 13 or higher use dedicated external storage
@@ -144,22 +194,40 @@ public class ServerCommunications implements Observable {
             path = context.getFilesDir();
         }
 
+        // Create a dedicated directory for storing local trajectories
+        File localTrajectoryDir = new File(path, "local_trajectories");
+        if (!localTrajectoryDir.exists()) {
+            localTrajectoryDir.mkdirs();
+        }
+
         System.out.println(path.toString());
 
         // Format the file name according to date
-        SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'+00:00'");
+        dateFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
         Date date = new Date();
-        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
+        String fileName = "trajectory_" + dateFormat.format(date);
+        
+        // Create temporary file for upload (binary format)
+        File tempFile = new File(path, fileName + ".txt");
+        // Create permanent local copy (JSON format)
+        File localFile = new File(localTrajectoryDir, fileName + ".json");
 
         try {
-            // Write the binary data to the file
-            FileOutputStream stream = new FileOutputStream(file);
-            stream.write(binaryTrajectory);
-            stream.close();
-            System.out.println("Recorded binary trajectory for debugging stored in: " + path);
+            // Write the binary data to temp file for upload
+            FileOutputStream tempStream = new FileOutputStream(tempFile);
+            tempStream.write(binaryTrajectory);
+            tempStream.close();
+            
+            // Write JSON data to local file
+            FileWriter localWriter = new FileWriter(localFile);
+            localWriter.write(jsonTrajectory);
+            localWriter.close();
+            
+            System.out.println("Recorded trajectory stored locally in JSON format at: " + localFile.getAbsolutePath());
         } catch (IOException ee) {
             // Catch and print if writing to the file fails
-            System.err.println("Storing of recorded binary trajectory failed: " + ee.getMessage());
+            System.err.println("Storing of recorded trajectory failed: " + ee.getMessage());
         }
 
         // Check connections available before sending data
@@ -173,10 +241,10 @@ public class ServerCommunications implements Observable {
             // Instantiate client for HTTP requests
             OkHttpClient client = new OkHttpClient();
 
-            // Creaet a equest body with a file to upload in multipart/form-data format
+            // Create a request body with a file to upload in multipart/form-data format
             RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                    .addFormDataPart("file", file.getName(),
-                            RequestBody.create(MediaType.parse("text/plain"), file))
+                    .addFormDataPart("file", tempFile.getName(),
+                            RequestBody.create(MediaType.parse("text/plain"), tempFile))
                     .build();
 
             // Create a POST request with the required headers
@@ -211,48 +279,26 @@ public class ServerCommunications implements Observable {
                 // Process the server's response
                 @Override public void onResponse(Call call, Response response) throws IOException {
                     try (ResponseBody responseBody = response.body()) {
-                        // If the response is unsuccessful, delete the local file and throw an
-                        // exception
                         if (!response.isSuccessful()) {
-                            //file.delete();
-//                            System.err.println("POST error response: " + responseBody.string());
-
-                            String errorBody = responseBody.string();
-                            infoResponse = "Upload failed: " + errorBody;
-                            new Handler(Looper.getMainLooper()).post(() ->
-                                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
-
-                            System.err.println("POST error response: " + errorBody);
+                            // Print error message, set success to false and throw an exception
+                            String message = "Unexpected response " + response;
+                            System.err.println(message);
                             success = false;
-                            notifyObservers(1);
-                            throw new IOException("Unexpected code " + response);
+                            throw new IOException("Unexpected response " + response);
                         }
 
-                        // Print the response headers
+                        // Print response headers
                         Headers responseHeaders = response.headers();
                         for (int i = 0, size = responseHeaders.size(); i < size; i++) {
                             System.out.println(responseHeaders.name(i) + ": " + responseHeaders.value(i));
                         }
+
                         // Print a confirmation of a successful POST to API
-                        System.out.println("Successful post response: " + responseBody.string());
+                        assert responseBody != null;
+                        System.out.println("UPLOAD SUCCESSFUL: " + responseBody.string());
 
-                        System.out.println("Get file: " + file.getName());
-                        String originalPath = file.getAbsolutePath();
-                        System.out.println("Original trajectory file saved at: " + originalPath);
-
-                        // Copy the file to the Downloads folder
-                        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                        File downloadFile = new File(downloadsDir, file.getName());
-                        try {
-                            copyFile(file, downloadFile);
-                            System.out.println("Trajectory file copied to Downloads: " + downloadFile.getAbsolutePath());
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            System.err.println("Failed to copy file to Downloads: " + e.getMessage());
-                        }
-
-                        // Delete local file and set success to true
-                        success = file.delete();
+                        // Only delete the temporary file, keep the local copy
+                        success = tempFile.delete();
                         notifyObservers(1);
                     }
                 }
