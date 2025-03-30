@@ -73,7 +73,7 @@ public class StartLocationFragment extends Fragment {
         }
         View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
 
-        // Obtain the start position from the GPS data from the SensorFusion class
+        // 获取当前GNSS位置作为初始位置
         startPosition = sensorFusion.getGNSSLatitude(false);
         // If no location found, zoom the map out
         if (startPosition[0] == 0 && startPosition[1] == 0) {
@@ -109,6 +109,13 @@ public class StartLocationFragment extends Fragment {
                 // Create NucleusBuildingManager instance (if needed)
                 nucleusBuildingManager = new NucleusBuildingManager(mMap);
                 nucleusBuildingManager.getIndoorMapManager().hideMap();
+
+                // 始终使用当前GNSS位置作为初始位置
+                float[] currentGnssPosition = sensorFusion.getGNSSLatitude(false);
+                if (currentGnssPosition[0] != 0 && currentGnssPosition[1] != 0) {
+                    // 如果有有效的GNSS位置，则使用它
+                    startPosition = currentGnssPosition;
+                }
 
                 // Add a marker at the current GPS location and move the camera
                 position = new LatLng(startPosition[0], startPosition[1]);
@@ -175,7 +182,16 @@ public class StartLocationFragment extends Fragment {
                     
                     // Start sensor recording + set the start location
                     sensorFusion.startRecording();
+                    
+                    // 设置PDR初始位置为当前选择的位置点
                     sensorFusion.setStartGNSSLatitude(startPosition);
+                    
+                    // 确保EKF也使用相同的初始位置
+                    float heading = sensorFusion.passOrientation();
+                    EKFManager.getInstance().initialize(
+                        new LatLng(startPosition[0], startPosition[1]), 
+                        heading
+                    );
 
                     // Now switch to the recording screen
                     ((RecordingActivity) requireActivity()).showRecordingScreen();
