@@ -62,8 +62,8 @@ public class TrajectoryMapFragment extends Fragment {
     private Marker ekfMarker; // EKF fusion position marker
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
-    private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
-    private boolean isEkfOn = false; // Tracks if EKF is enabled
+    private boolean isGnssOn = true; // Tracks if GNSS tracking is enabled
+    private boolean isEkfOn = true; // Tracks if EKF is enabled
 
     private Polyline gnssPolyline; // Polyline for GNSS path
     private Polyline ekfPolyline; // Polyline for EKF fusion path
@@ -120,8 +120,13 @@ public class TrajectoryMapFragment extends Fragment {
         floorDownButton = view.findViewById(R.id.floorDownButton);
         switchColorButton = view.findViewById(R.id.lineColorButton);
 
+        // 设置开关的初始状态为开启
+        gnssSwitch.setChecked(true);
+        ekfSwitch.setChecked(true);
+        
         // 初始化EKF管理器
         ekfManager = EKFManager.getInstance();
+        ekfManager.setEkfEnabled(true);
         
         // 初始化GNSS处理器
         gnssProcessor = GNSSProcessor.getInstance();

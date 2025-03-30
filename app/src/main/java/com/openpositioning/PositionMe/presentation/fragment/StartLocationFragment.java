@@ -23,6 +23,7 @@ import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
+import com.example.ekf.EKFManager;
 
 /**
  * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
@@ -102,7 +103,7 @@ public class StartLocationFragment extends Fragment {
                 mMap.getUiSettings().setRotateGesturesEnabled(true);
                 mMap.getUiSettings().setScrollGesturesEnabled(true);
 
-                // *** FIX: Clear any existing markers so the start marker isn’t duplicated ***
+                // *** FIX: Clear any existing markers so the start marker isn't duplicated ***
                 mMap.clear();
 
                 // Create NucleusBuildingManager instance (if needed)
@@ -169,6 +170,9 @@ public class StartLocationFragment extends Fragment {
 
                 // If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
+                    // 确保EKF管理器被启用
+                    EKFManager.getInstance().setEkfEnabled(true);
+                    
                     // Start sensor recording + set the start location
                     sensorFusion.startRecording();
                     sensorFusion.setStartGNSSLatitude(startPosition);

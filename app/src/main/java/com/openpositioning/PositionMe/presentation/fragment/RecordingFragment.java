@@ -20,6 +20,7 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -313,8 +314,53 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if(!this.settings.getBoolean("split_trajectory", false)) {
-            refreshDataHandler.postDelayed(refreshDataTask, 500);
+        
+        // 确保在Fragment恢复时TrajectoryMapFragment中的GNSS和Fusion功能是开启的
+        if (trajectoryMapFragment != null) {
+            // 等待trajectoryMapFragment完全初始化
+            new Handler().postDelayed(() -> {
+                // 确保开关状态正确
+                if (!trajectoryMapFragment.isGnssEnabled()) {
+                    View gnssSwitch = trajectoryMapFragment.getView().findViewById(R.id.gnssSwitch);
+                    if (gnssSwitch instanceof SwitchMaterial) {
+                        ((SwitchMaterial) gnssSwitch).setChecked(true);
+                    }
+                }
+                
+                if (!trajectoryMapFragment.isEkfEnabled()) {
+                    View ekfSwitch = trajectoryMapFragment.getView().findViewById(R.id.EKF_Switch);
+                    if (ekfSwitch instanceof SwitchMaterial) {
+                        ((SwitchMaterial) ekfSwitch).setChecked(true);
+                    }
+                }
+            }, 500); // 短暂延迟，确保UI已经初始化
+        }
+    }
+
+    private void startRefreshingData() {
+        if (this.settings.getBoolean("split_trajectory", false)) {
+            // A maximum recording time is set
+            long limit = this.settings.getInt("split_duration", 30) * 60000L;
+            timeRemaining.setMax((int) (limit / 1000));
+            timeRemaining.setProgress(0);
+            timeRemaining.setScaleY(3f);
+
+            autoStop = new CountDownTimer(limit, 1000) {
+                @Override
+                public void onTick(long millisUntilFinished) {
+                    timeRemaining.incrementProgressBy(1);
+                    updateUIandPosition();
+                }
+
+                @Override
+                public void onFinish() {
+                    sensorFusion.stopRecording();
+                    ((RecordingActivity) requireActivity()).showCorrectionScreen();
+                }
+            }.start();
+        } else {
+            // No set time limit, just keep refreshing
+            refreshDataHandler.post(refreshDataTask);
         }
     }
 }

@@ -885,6 +885,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
 
+        // 确保EKF管理器已启用
+        if (ekfManager != null) {
+            ekfManager.setEkfEnabled(true);
+        }
+        
         this.saveRecording = true;
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();
