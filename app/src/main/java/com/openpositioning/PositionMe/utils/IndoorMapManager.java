@@ -110,6 +110,16 @@ public class IndoorMapManager {
         }
     }
 
+    // get current floor - return current floor
+    public int getCurrentFloor() {
+        return this.currentFloor;
+    }
+
+    // get current building - return name of current building / int represent
+    public String getCurrentBuilding() {
+        return this.currentBuilding;
+    }
+
     public void increaseFloor() {
         this.setCurrentFloor(currentFloor + 1, false);
     }

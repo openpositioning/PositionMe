@@ -189,6 +189,8 @@ public class CollectionFragment extends Fragment {
                 if (calibrationMarker != null) {
                     calibrationMarker.setPosition(marker.getPosition());
                     trajectoryMapFragment.updateCalibrationPinLocation(marker.getPosition(), false);
+                    Log.d("currentfloor", "Building polygon added, vertex count: " + trajectoryMapFragment.getCurrentBuilding());
+                    Log.d("currentfloor", "Building polygon added, vertex count: " + trajectoryMapFragment.getCurrentFloor());
                 }
             }
         });

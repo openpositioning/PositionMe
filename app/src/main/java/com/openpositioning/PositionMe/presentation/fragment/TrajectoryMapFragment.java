@@ -27,7 +27,9 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 
 /**
@@ -365,8 +367,124 @@ public class TrajectoryMapFragment extends Fragment {
             indoorMapManager.setCurrentLocation(newLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
+
+        //update indoor maker
+        this.updateEmergencyExitMarkers();
+        this.updateLiftMarkers();
+
     }
 
+    private final List<Marker> emergencyExitMarkers = new ArrayList<>();
+
+    public void updateEmergencyExitMarkers() {
+        if (gMap == null) return;
+
+        int currentFloor = this.getCurrentFloor();
+        String currentBuilding = this.getCurrentBuilding();
+
+        List<LatLng> exitLocations = null; // 提前定义
+
+        if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
+            exitLocations = Arrays.asList(
+                    new LatLng(55.922839326615474, -3.17451573908329),
+                    new LatLng(55.92283913875728, -3.1742961332201958),
+                    new LatLng(55.92330295784777, -3.174157999455929)
+            );
+        }
+        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
+            exitLocations = Arrays.asList(
+                    new LatLng(55.922839326615474, -3.17451573908329),
+                    new LatLng(55.92283913875728, -3.1742961332201958),
+                    new LatLng(55.92330295784777, -3.174157999455929)
+            );
+        }
+        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
+            exitLocations = Arrays.asList(
+                    new LatLng(55.922839326615474, -3.17451573908329),
+                    new LatLng(55.92283913875728, -3.1742961332201958),
+                    new LatLng(55.92330295784777, -3.174157999455929)
+            );
+        }
+        // 如果不是 1 楼，exitLocations 仍然是 null
+
+        // 清除旧的 marker
+        for (Marker marker : emergencyExitMarkers) {
+            marker.remove();
+        }
+        emergencyExitMarkers.clear();
+
+        // 避免 nullPointerException
+        if (exitLocations != null) {
+            for (LatLng location : exitLocations) {
+                Marker marker = gMap.addMarker(new MarkerOptions()
+                        .position(location)
+                        .flat(true)
+                        .title("Emergency Exit")
+                        .icon(BitmapDescriptorFactory.fromBitmap(
+                                UtilFunctions.getBitmapFromVector(requireContext(),
+                                        R.drawable.iso_emergency_exit)))
+                );
+                if (marker != null) {
+                    emergencyExitMarkers.add(marker);
+                }
+            }
+        }
+    }
+
+    private final List<Marker> liftMarkers = new ArrayList<>();
+    public void updateLiftMarkers() {
+        if (gMap == null) return;
+
+        int currentFloor = this.getCurrentFloor();
+        String currentBuilding = this.getCurrentBuilding();
+
+        List<LatLng> liftLocations = null;
+
+        if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
+            liftLocations = Arrays.asList(
+                    new LatLng(55.923027560061676, -3.1743665412068367),
+                    new LatLng(55.92303075363521, -3.17432664334774),
+                    new LatLng(55.923030565777935, -3.174288421869278)
+
+            );
+
+        }
+        // 其他楼层可按需添加逻辑
+
+        // 清除旧的 marker
+        for (Marker marker : liftMarkers) {
+            marker.remove();
+        }
+        liftMarkers.clear();
+
+        // 添加新的 marker
+        if (liftLocations != null) {
+            for (LatLng location : liftLocations) {
+                Marker marker = gMap.addMarker(new MarkerOptions()
+                        .position(location)
+                        .flat(true)
+                        .title("Lift")
+                        .icon(BitmapDescriptorFactory.fromBitmap(
+                                UtilFunctions.getBitmapFromVector(requireContext(),
+                                        R.drawable.iso_lift)))
+                );
+                if (marker != null) {
+                    liftMarkers.add(marker);
+                }
+            }
+        }
+    }
+
+
+    // get current floor - return current floor
+    public int getCurrentFloor() {
+        return indoorMapManager.getCurrentFloor();
+    }
+
+    // get current fuilding - return name of current building / int represent
+    public String getCurrentBuilding() {
+        return indoorMapManager.getCurrentBuilding();
+    }
 
 
 
