@@ -30,7 +30,7 @@ import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.fragment.HomeFragment;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import com.openpositioning.PositionMe.sensors.Observer;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.utils.PermissionManager;
 
 

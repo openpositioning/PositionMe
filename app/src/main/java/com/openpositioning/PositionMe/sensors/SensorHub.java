@@ -4,6 +4,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.se.omapi.Session;
 import android.util.Log;
 import com.openpositioning.PositionMe.sensors.SensorData.PhysicalSensorData;
 import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
@@ -17,7 +18,7 @@ public class SensorHub implements SensorEventListener {
   private final SensorManager sensorManager;
 
   // Store listeners for all physical sensors as defined by android.hardware.Sensor
-  private final Map<Integer, List<SensorDataListener<? extends PhysicalSensorData>>> listeners =
+  private final Map<Integer, List<SensorDataListener<? extends SensorData>>> listeners =
       new HashMap<>();
 
   // Store all StreamSensor types.
@@ -33,7 +34,7 @@ public class SensorHub implements SensorEventListener {
   }
 
   // Subscribe to a specific sensor type.
-  public <T extends PhysicalSensorData> void addListener(int sensorType,
+  public <T extends SensorData> void addListener(int sensorType,
       SensorDataListener<T> listener) {
     // Register sensor if not already initialized
     if (!listeners.containsKey(sensorType)) {
@@ -50,9 +51,9 @@ public class SensorHub implements SensorEventListener {
   }
 
   // Unsubscribe to your sensor type.
-  public <T extends PhysicalSensorData> void removeListener(int sensorType,
+  public <T extends SensorData> void removeListener(int sensorType,
       SensorDataListener<T> listener) {
-    List<SensorDataListener<? extends PhysicalSensorData>> list = listeners.get(sensorType);
+    List<SensorDataListener<? extends SensorData>> list = listeners.get(sensorType);
     if (list != null) {
       list.remove(listener);
     }
@@ -101,8 +102,8 @@ public class SensorHub implements SensorEventListener {
     notifyListeners(event.sensor.getType(), PhysicalSensorData.fromEvent(event));
   }
 
-  private void notifyListeners(Integer sensorType, PhysicalSensorData data) {
-    List<SensorDataListener<? extends PhysicalSensorData>> sensorListeners =
+  private void notifyListeners(Integer sensorType, SensorData data) {
+    List<SensorDataListener<? extends SensorData>> sensorListeners =
         listeners.get(sensorType);
     if (sensorListeners != null) {
       for (SensorDataListener<?> listener : sensorListeners) {

@@ -11,6 +11,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
+import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorData.GNSSLocationData;
 
 /**
@@ -21,6 +22,7 @@ import com.openpositioning.PositionMe.sensors.SensorData.GNSSLocationData;
  *
  * @author Virginia Cangelosi
  * @author Mate Stodulka
+ * @author Philip Heptonstall to extend SensorModule to generify
  */
 public class GNSSDataProcessor extends SensorModule<GNSSLocationData> implements LocationListener {
 

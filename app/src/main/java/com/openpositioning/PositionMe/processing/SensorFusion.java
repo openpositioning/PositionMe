@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.sensors;
+package com.openpositioning.PositionMe.processing;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -21,9 +21,15 @@ import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment;
 import com.openpositioning.PositionMe.processing.filters.FilterAdapter;
 import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;
+import com.openpositioning.PositionMe.sensors.GNSSDataProcessor;
+import com.openpositioning.PositionMe.sensors.MovementSensor;
+import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.sensors.SensorInfo;
+import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.sensors.Wifi;
+import com.openpositioning.PositionMe.sensors.WifiDataProcessor;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
 import com.openpositioning.PositionMe.utils.PathView;
-import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
@@ -63,12 +69,12 @@ import java.util.stream.Stream;
  * @author Mate Stodulka
  * @author Virginia Cangelosi
  * <p>
- * Particle filter integration done by
+ * Kalman filter integration done by
  * @author Wojciech Boncela
  * @author Philip Heptonstall
  * @author Alexandros Zoupos
  */
-public class SensorFusion implements SensorEventListener, Observer {
+public class SensorFusion implements  {
 
   // Store the last event timestamps for each sensor type
   private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -424,7 +430,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 
       case Sensor.TYPE_STEP_DETECTOR:
         long stepTime = SystemClock.uptimeMillis() - bootTime;
-
         if (currentTime - lastStepTime < 20) {
           Log.e("SensorFusion",
               "Ignoring step event, too soon after last step event:" + (currentTime - lastStepTime)

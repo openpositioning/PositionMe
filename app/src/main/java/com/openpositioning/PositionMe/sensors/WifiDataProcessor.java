@@ -14,6 +14,7 @@ import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 
+import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiScanResult;
 import java.util.ArrayList;
 import java.util.List;

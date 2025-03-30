@@ -8,7 +8,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Spinner;
 import com.google.android.material.switchmaterial.SwitchMaterial;
@@ -19,7 +18,7 @@ import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.CameraUpdateFactory;
