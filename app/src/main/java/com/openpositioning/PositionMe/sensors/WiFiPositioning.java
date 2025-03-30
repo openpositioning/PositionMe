@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.processing;
+package com.openpositioning.PositionMe.sensors;
 
 import android.content.Context;
 import android.util.Log;
@@ -9,7 +9,6 @@ import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 import com.google.android.gms.maps.model.LatLng;
 
-import com.openpositioning.PositionMe.sensors.Wifi;
 import org.json.JSONException;
 import org.json.JSONObject;
 

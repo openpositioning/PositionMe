@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.viewitems.SensorInfoViewHolder;
-import com.openpositioning.PositionMe.processing.SensorFusion;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorInfo;
 import com.openpositioning.PositionMe.presentation.viewitems.SensorInfoListAdapter;
 

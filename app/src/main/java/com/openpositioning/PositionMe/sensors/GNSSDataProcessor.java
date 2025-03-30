@@ -11,7 +11,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
-import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorData.GNSSLocationData;
 
 /**

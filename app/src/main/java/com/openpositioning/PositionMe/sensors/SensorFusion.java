@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.processing;
+package com.openpositioning.PositionMe.sensors;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -19,14 +19,6 @@ import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment;
-import com.openpositioning.PositionMe.sensors.GNSSDataProcessor;
-import com.openpositioning.PositionMe.sensors.MovementSensor;
-import com.openpositioning.PositionMe.sensors.Observer;
-import com.openpositioning.PositionMe.sensors.SensorHub;
-import com.openpositioning.PositionMe.sensors.SensorInfo;
-import com.openpositioning.PositionMe.sensors.SensorTypes;
-import com.openpositioning.PositionMe.sensors.Wifi;
-import com.openpositioning.PositionMe.sensors.WifiDataProcessor;
 import com.openpositioning.PositionMe.processing.filters.FilterAdapter;
 import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
