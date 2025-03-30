@@ -1,6 +1,8 @@
 package com.openpositioning.PositionMe.sensors;
 
 import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * The Wifi object holds the Wifi parameters listed below.
@@ -49,4 +51,6 @@ public class Wifi {
     public String toString() {
         return  "bssid: " + bssid +", level: " + level;
     }
+
 }
+

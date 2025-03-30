@@ -12,6 +12,7 @@ import com.google.android.gms.maps.model.LatLng;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -33,15 +34,23 @@ public class WiFiPositioning {
         return wifiLocation;
     }
 
+    /**
+     * Getter for the floor.
+     */
     public int getFloor() {
         return floor;
     }
 
-    public WiFiPositioning(Context context) {
+
+    /**
+     * Constructor to initialize the WiFi positioning object.
+     */
+    public WiFiPositioning(Context context){
         this.requestQueue = Volley.newRequestQueue(context.getApplicationContext());
     }
 
     /**
+
      * Creates a POST request using the WiFi fingerprint to obtain user's location.
      * Includes smarter duplicate detection and error callbacks.
      *
@@ -70,6 +79,7 @@ public class WiFiPositioning {
                         } else {
                             callback.onSuccess(wifiLocation, floor);
                         }
+
                     } catch (JSONException e) {
                         Log.e("jsonErrors", "Error parsing response: " + e.getMessage() + " " + response);
                         callback.onError("Error parsing response: " + e.getMessage());
@@ -79,6 +89,7 @@ public class WiFiPositioning {
                     if (error.networkResponse != null && error.networkResponse.statusCode == 422) {
                         Log.e("WiFiPositioning", "Validation Error " + error.getMessage());
                         callback.onError("Validation Error (422): " + error.getMessage());
+
                     } else if (error.networkResponse != null) {
                         Log.e("WiFiPositioning", "Response Code: " + error.networkResponse.statusCode + ", " + error.getMessage());
                         callback.onError("Response Code: " + error.networkResponse.statusCode + ", " + error.getMessage());
@@ -97,12 +108,15 @@ public class WiFiPositioning {
                 return headers;
             }
         };
+
         requestQueue.add(jsonObjectRequest);
 
     }
 
     /**
+
      * Checks if the new fingerprint is similar to the last one (within small RSSI changes).
+
      */
     private boolean isDuplicate(JSONObject newFingerprint) {
         if (lastRequestedFingerprint == null) return false;
