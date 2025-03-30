@@ -394,7 +394,7 @@ public class RecordingFragment extends Fragment implements PositionListener {
                     Log.d("RecordingFragment", "Fusion position update received: " + position.latitude + ", " + position.longitude);
 
                     if (trajectoryMapFragment != null) {
-                        trajectoryMapFragment.updateFusionPosition(position);
+                        trajectoryMapFragment.updateFusionPosition(position, (float) Math.toDegrees(sensorFusion.passOrientation()));
                     } else {
                         Log.e("RecordingFragment", "Cannot update fusion position: trajectoryMapFragment is null");
                     }

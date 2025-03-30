@@ -208,6 +208,11 @@ public class TrajectoryMapFragment extends Fragment {
             if (!isChecked && pdrPolyline != null) {
                 pdrPolyline.setPoints(new ArrayList<>()); // Clear the polyline
             }
+            // Remove the PDR marker if it exists
+            if (pdrMarker != null) {
+                pdrMarker.remove();
+                pdrMarker = null;
+            }
         });
 
 
@@ -273,7 +278,7 @@ public class TrajectoryMapFragment extends Fragment {
      * @param fusionLocation The latest fusion position estimate
      */
     // 2. In the updateFusionPosition method, add style enhancements:
-    public void updateFusionPosition(@NonNull LatLng fusionLocation) {
+    public void updateFusionPosition(@NonNull LatLng fusionLocation, float orientation) {
         if (gMap == null || fusionLocation == null) {
             Log.e("TrajectoryMapFragment", "Cannot update fusion: gMap or fusionLocation is null");
             return;
@@ -294,7 +299,7 @@ public class TrajectoryMapFragment extends Fragment {
         } else {
             // Update marker position + orientation
             fusionMarker.setPosition(fusionLocation);
-            //fusionMarker.setRotation(orientation);
+            fusionMarker.setRotation(orientation);
             // Move camera a bit
             gMap.moveCamera(CameraUpdateFactory.newLatLng(fusionLocation));
         }
