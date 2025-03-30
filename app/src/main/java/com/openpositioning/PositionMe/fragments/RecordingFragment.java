@@ -382,7 +382,10 @@ public class RecordingFragment extends Fragment {
         });
 
 
-        this.addTagButton.setOnClickListener(view1 -> addCurrentLocationMarker());
+        this.addTagButton.setOnClickListener(view1 -> {
+            addCurrentLocationMarker();
+            sensorFusion.addTag();
+        });
 
 
         // ✅ **Stop 按钮（结束录制 & 跳转）**
