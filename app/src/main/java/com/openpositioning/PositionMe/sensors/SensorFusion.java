@@ -572,6 +572,16 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wifiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
+                    Log.d("SensorFusion", "📶 updateFusionWifi() called with location: " + wifiLocation);
+                    JSONObject wifiResponse = new JSONObject();
+                    try {
+                        wifiResponse.put("lat", wifiLocation.latitude);
+                        wifiResponse.put("lon", wifiLocation.longitude);
+                        wifiResponse.put("floor", floor);
+                        updateFusionWifi(wifiResponse);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
                     // Handle the success response
                 }
 
@@ -1152,6 +1162,10 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param wifiResponse The JSON object containing WiFi positioning data.
      */
     public void updateFusionWifi(JSONObject wifiResponse){
+        if (extendedKalmanFilter == null) {
+            Log.w("SensorFusion", "⚠️ EKF未初始化，忽略 WiFi更新");
+            return;
+        }
 
         try {
             if (wifiResponse == null){
@@ -1196,7 +1210,10 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param altitude  The altitude from GNSS data.
      */
     public void updateFusionGNSS(double latitude,double longitude, double altitude){
-
+        if (extendedKalmanFilter == null) {
+            Log.w("SensorFusion", "⚠️ EKF未初始化，忽略 GNSS更新");
+            return;
+        }
         // call fusion algorithm
         if (fusionAlgorithmSelection) {
             if (noCoverage) {
@@ -1215,7 +1232,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public void initialiseFusionAlgorithm() {
         // Picks the Fusion Algorithm to run
-        fusionAlgorithmSelection = !(this.settings.getBoolean("fusion_enable", false));
+        fusionAlgorithmSelection = this.settings.getBoolean("fusion_enable", true);  // 默认使用PF
         this.noCoverage = true;
         if (fusionAlgorithmSelection) {
             this.extendedKalmanFilter = new ExtendedKalmanFilter();
@@ -1234,19 +1251,19 @@ public class SensorFusion implements SensorEventListener, Observer {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
             trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
-                    .setAccX(acceleration[0])
-                    .setAccY(acceleration[1])
-                    .setAccZ(acceleration[2])
-                    .setGyrX(angularVelocity[0])
-                    .setGyrY(angularVelocity[1])
-                    .setGyrZ(angularVelocity[2])
-                    .setGyrZ(angularVelocity[2])
-                    .setRotationVectorX(rotation[0])
-                    .setRotationVectorY(rotation[1])
-                    .setRotationVectorZ(rotation[2])
-                    .setRotationVectorW(rotation[3])
-                    .setStepCount(stepCounter))
+                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
+                            .setAccX(acceleration[0])
+                            .setAccY(acceleration[1])
+                            .setAccZ(acceleration[2])
+                            .setGyrX(angularVelocity[0])
+                            .setGyrY(angularVelocity[1])
+                            .setGyrZ(angularVelocity[2])
+                            .setGyrZ(angularVelocity[2])
+                            .setRotationVectorX(rotation[0])
+                            .setRotationVectorY(rotation[1])
+                            .setRotationVectorZ(rotation[2])
+                            .setRotationVectorW(rotation[3])
+                            .setStepCount(stepCounter))
                     .addPositionData(Traj.Position_Sample.newBuilder()
                             .setMagX(magneticField[0])
                             .setMagY(magneticField[1])

@@ -299,40 +299,105 @@ public class ExtendedKalmanFilter{
     public void predict(double theta_k, double step_k, double averageStepLength, long refTime, TurnDetector.MovementType userMovementInStep) {
         if (stopEKF) return;
 
+        // 在lambda表达式外处理变量
+        final double finalStep_k = Double.isNaN(step_k) || Double.isInfinite(step_k) ? defaultStepLength : step_k;
+        final double finalPrevStepLength = Double.isNaN(prevStepLength) || Double.isInfinite(prevStepLength) ? defaultStepLength : prevStepLength;
+        final double finalTheta_k = theta_k;
+        final double finalAverageStepLength = averageStepLength;
+        final long finalRefTime = refTime;
+        final TurnDetector.MovementType finalUserMovementInStep = userMovementInStep;
+
         ekfHandler.post(() -> {
             Log.d("EKF", "======== PREDICT ========");
 
-            double adaptedHeading = wrapToPi((Math.PI / 2 - theta_k));
-            Log.d("EKF", "Adapted bearing " + (Math.PI / 2 - theta_k) + " wrapped bearing " + adaptedHeading);
+            double adaptedHeading = wrapToPi((Math.PI / 2 - finalTheta_k));
+            Log.d("EKF", "Adapted bearing " + (Math.PI / 2 - finalTheta_k) + " wrapped bearing " + adaptedHeading);
+
+            // 添加数值稳定性检查
+            if (Double.isNaN(adaptedHeading) || Double.isInfinite(adaptedHeading)) {
+                Log.e("EKF", "❗️ 无效的heading值,重置滤波器");
+                resetFilter();
+                return;
+            }
+
+            // 添加输入参数检查
+            Log.d("EKF", "输入参数: theta_k=" + finalTheta_k + ", step_k=" + finalStep_k + ", prevStepLength=" + finalPrevStepLength);
+
+            // 检查三角函数计算结果
+            double sinTheta = Math.sin(finalTheta_k);
+            double cosTheta = Math.cos(finalTheta_k);
+            Log.d("EKF", "三角函数值: sin(theta_k)=" + sinTheta + ", cos(theta_k)=" + cosTheta);
 
             SimpleMatrix T_mat = new SimpleMatrix(new double[][]{
                     {1, 0},
-                    {0, Math.sin(theta_k)},
-                    {0, Math.cos(theta_k)}
+                    {0, sinTheta},
+                    {0, cosTheta}
             });
+
+            // 检查T_mat的有效性
+            if (hasInvalidMatrix(T_mat)) {
+                Log.e("EKF", "❗️ T_mat包含无效值");
+                resetFilter();
+                return;
+            }
 
             SimpleMatrix control_inputs = new SimpleMatrix(new double[][]{
-                    {theta_k},
-                    {prevStepLength}
+                    {finalTheta_k},
+                    {finalPrevStepLength}
             });
 
+            // 检查control_inputs的有效性
+            if (hasInvalidMatrix(control_inputs)) {
+                Log.e("EKF", "❗️ control_inputs包含无效值");
+                resetFilter();
+                return;
+            }
+
+            // 打印矩阵内容
+            Log.d("EKF", "T_mat:\n" + T_mat.toString());
+            Log.d("EKF", "control_inputs:\n" + control_inputs.toString());
+
             SimpleMatrix add = T_mat.mult(control_inputs);
+            Log.d("EKF", "add矩阵:\n" + add.toString());
+
+            // 检查计算结果
+            if (hasInvalidMatrix(add)) {
+                Log.e("EKF", "❗️ 控制输入计算结果无效,重置滤波器");
+                resetFilter();
+                return;
+            }
+
+            // 检查Xk的当前状态
+            Log.d("EKF", "当前Xk状态:\n" + Xk.toString());
 
             Xk.set(0, 0, Xk.get(0, 0) + add.get(0, 0));
             Xk.set(1, 0, Xk.get(1, 0) + add.get(1, 0));
             Xk.set(2, 0, Xk.get(2, 0) + add.get(2, 0));
 
-            updateFk(adaptedHeading, prevStepLength);
-            updateQk(averageStepLength, adaptedHeading, (refTime - initialiseTime), getThetaStd(userMovementInStep));
+            // 检查更新后的Xk
+            Log.d("EKF", "更新后的Xk:\n" + Xk.toString());
+
+            updateFk(adaptedHeading, finalPrevStepLength);
+            updateQk(finalAverageStepLength, adaptedHeading, (finalRefTime - initialiseTime), getThetaStd(finalUserMovementInStep));
 
             SimpleMatrix L_k = new SimpleMatrix(new double[][]{
                     {1, 0},
-                    {0, Math.sin(theta_k)},
-                    {0, Math.cos(theta_k)}
+                    {0, sinTheta},
+                    {0, cosTheta}
             });
 
+            // 添加数值稳定性调整
             Pk = Fk.mult(Pk).mult(Fk.transpose()).plus(L_k.mult(Qk).mult(L_k.transpose()));
-            prevStepLength = step_k;
+
+            // 添加对角线元素的正定性保证
+            for (int i = 0; i < Pk.numRows(); i++) {
+                double diag = Pk.get(i, i);
+                if (diag < 1e-10) {
+                    Pk.set(i, i, 1e-10);
+                }
+            }
+
+            prevStepLength = finalStep_k;
 
             try {
                 double pkCondition = Pk.conditionP2();
@@ -349,6 +414,19 @@ public class ExtendedKalmanFilter{
                 resetFilter();
             }
         });
+    }
+
+    // 添加辅助方法检查矩阵是否包含无效值
+    private boolean hasInvalidMatrix(SimpleMatrix matrix) {
+        for (int i = 0; i < matrix.numRows(); i++) {
+            for (int j = 0; j < matrix.numCols(); j++) {
+                double val = matrix.get(i, j);
+                if (Double.isNaN(val) || Double.isInfinite(val)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -401,7 +479,7 @@ public class ExtendedKalmanFilter{
 
 
 
-/**
+    /**
      * Handles opportunistic updates to the state estimation process when new observations are available at unexpected times.
      * This method allows the EKF to utilize additional data points that may improve the accuracy of the state estimate.
      *
