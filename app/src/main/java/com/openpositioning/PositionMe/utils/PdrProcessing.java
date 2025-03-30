@@ -282,6 +282,9 @@ public class PdrProcessing {
         return this.elevation;
     }
 
+    public void setCurrentFloor(int updatedFloor) { this.currentFloor = updatedFloor; }
+
+
     /**
      * Get the current floor number as estimated by the PDR class.
      *

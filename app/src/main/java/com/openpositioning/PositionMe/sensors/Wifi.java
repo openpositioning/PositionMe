@@ -52,15 +52,5 @@ public class Wifi {
         return  "bssid: " + bssid +", level: " + level;
     }
 
-    /**
-     * 新增方法：将 Wifi 对象转换为 JSONObject，用于生成指纹数据
-     */
-    public JSONObject toJSONObject() throws JSONException {
-        JSONObject obj = new JSONObject();
-        obj.put("bssid", bssid);
-        obj.put("level", level);
-        obj.put("ssid", ssid);
-        obj.put("frequency", frequency);
-        return obj;
-    }
 }
+

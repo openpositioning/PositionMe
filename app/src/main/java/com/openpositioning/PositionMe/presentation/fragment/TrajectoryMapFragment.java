@@ -81,6 +81,11 @@ public class TrajectoryMapFragment extends Fragment {
     private Button switchColorButton;
     private Polygon buildingPolygon;
 
+    private Polyline ekfPolyline;
+    private Polyline pfPolyline;
+    private LatLng lastEKFLocation = null;
+    private LatLng lastPFLocation = null;
+
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -203,29 +208,26 @@ public class TrajectoryMapFragment extends Fragment {
      */
 
     private void initMapSettings(GoogleMap map) {
-        // Basic map settings
         map.getUiSettings().setCompassEnabled(true);
         map.getUiSettings().setTiltGesturesEnabled(true);
         map.getUiSettings().setRotateGesturesEnabled(true);
         map.getUiSettings().setScrollGesturesEnabled(true);
         map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
-        // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
 
-        // Initialize an empty polyline
         polyline = map.addPolyline(new PolylineOptions()
-                .color(Color.RED)
-                .width(5f)
-                .add() // start empty
-        );
+                .color(Color.RED).width(5f).add());
 
-        // GNSS path in blue
         gnssPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.BLUE)
-                .width(5f)
-                .add() // start empty
-        );
+                .color(Color.BLUE).width(5f).add());
+
+        // 添加 EKF / PF 轨迹线
+        ekfPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.GREEN).width(5f).add());
+
+        pfPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.MAGENTA).width(5f).add());
     }
 
 
@@ -288,6 +290,7 @@ public class TrajectoryMapFragment extends Fragment {
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+
         if (gMap == null) return;
 
         // Keep track of current location
@@ -326,7 +329,15 @@ public class TrajectoryMapFragment extends Fragment {
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
     }
-
+    public void updateUserLocationSafe(@NonNull LatLng newLocation, float orientation) {
+        if (gMap == null || newLocation == null) return;
+        if (Double.isNaN(newLocation.latitude) || Double.isNaN(newLocation.longitude) || Float.isNaN(orientation)) {
+            Log.w("TrajectoryMap", "⚠️ Skip location update due to NaN values: "
+                    + newLocation + ", orientation=" + orientation);
+            return;
+        }
+        updateUserLocation(newLocation, orientation);
+    }
 
 
     /**
@@ -443,6 +454,24 @@ public class TrajectoryMapFragment extends Fragment {
                     .width(5f)
                     .add());
         }
+        if (polyline != null) polyline.remove();
+        if (gnssPolyline != null) gnssPolyline.remove();
+        if (ekfPolyline != null) ekfPolyline.remove();
+        if (pfPolyline != null) pfPolyline.remove();
+        if (orientationMarker != null) orientationMarker.remove();
+        if (gnssMarker != null) gnssMarker.remove();
+
+        lastGnssLocation = null;
+        lastEKFLocation = null;
+        lastPFLocation = null;
+        currentLocation  = null;
+
+        if (gMap != null) {
+            polyline = gMap.addPolyline(new PolylineOptions().color(Color.RED).width(5f).add());
+            gnssPolyline = gMap.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).add());
+            ekfPolyline = gMap.addPolyline(new PolylineOptions().color(Color.GREEN).width(5f).add());
+            pfPolyline = gMap.addPolyline(new PolylineOptions().color(Color.MAGENTA).width(5f).add());
+        }
     }
 
     /**
@@ -536,6 +565,27 @@ public class TrajectoryMapFragment extends Fragment {
         gMap.addPolygon(buildingPolygonOptions4);
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
+    public void updateEKF(@NonNull LatLng ekfLocation) {
+        if (gMap == null || ekfLocation == null) return;
+        if (lastEKFLocation == null || !lastEKFLocation.equals(ekfLocation)) {
+            List<LatLng> ekfPoints = new ArrayList<>(ekfPolyline.getPoints());
+            ekfPoints.add(ekfLocation);
+            ekfPolyline.setPoints(ekfPoints);
+            lastEKFLocation = ekfLocation;
+        }
+    }
+
+    public void updatePF(@NonNull LatLng pfLocation) {
+        if (gMap == null || pfLocation == null) return;
+        if (lastPFLocation == null || !lastPFLocation.equals(pfLocation)) {
+            List<LatLng> pfPoints = new ArrayList<>(pfPolyline.getPoints());
+            pfPoints.add(pfLocation);
+            pfPolyline.setPoints(pfPoints);
+            lastPFLocation = pfLocation;
+        }
+    }
+
+
 
 
 }

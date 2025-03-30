@@ -11,6 +11,7 @@ import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.provider.Settings;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -43,6 +44,23 @@ public class WifiDataProcessor implements Observable {
     // 定时扫描对象
     private Timer scanWifiDataTimer;
 
+
+
+    /**
+     * Public default constructor of the WifiDataProcessor class.
+     * The constructor saves the context, checks for permissions to use the location services,
+     * creates an instance of the shared preferences to access settings using the context,
+     * initialises the wifi manager, and creates a timer object and list of observers. It checks if
+     * wifi is enabled and enables wifi scans every 5seconds. It also informs the user to disable
+     * wifi throttling if the device implements it.
+     *
+     * @param context           Application Context to be used for permissions and device accesses.
+     *
+     * @see SensorFusion the intended parent class.
+     *
+     * @author Virginia Cangelosi
+     * @author Mate Stodulka
+     */
     public WifiDataProcessor(Context context) {
         this.context = context;
         boolean permissionsGranted = checkWifiPermissions();
@@ -59,6 +77,7 @@ public class WifiDataProcessor implements Observable {
     /**
      * 广播接收器：接收扫描完成后的广播
      */
+
     BroadcastReceiver wifiScanReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -66,52 +85,28 @@ public class WifiDataProcessor implements Observable {
                 stopListening();
                 return;
             }
-            // 获取扫描结果
-            List<ScanResult> wifiScanList = wifiManager.getScanResults();
-            context.unregisterReceiver(this);
 
-            wifiData = new Wifi[wifiScanList.size()];
-            for (int i = 0; i < wifiScanList.size(); i++) {
-                wifiData[i] = new Wifi();
-                String wifiMacAddress = wifiScanList.get(i).BSSID;
-                long intMacAddress = convertBssidToLong(wifiMacAddress);
-                wifiData[i].setBssid(intMacAddress);
-                wifiData[i].setLevel(wifiScanList.get(i).level);
-                wifiData[i].setSsid(wifiScanList.get(i).SSID);
-                wifiData[i].setFrequency(wifiScanList.get(i).frequency);
+            if (WifiManager.SCAN_RESULTS_AVAILABLE_ACTION.equals(intent.getAction())) {
+
+                // Collect the list of nearby wifis
+                List<ScanResult> wifiScanList = wifiManager.getScanResults();
+
+                // Loop through each item in wifi list
+                wifiData = new Wifi[wifiScanList.size()];
+                for (int i = 0; i < wifiScanList.size(); i++) {
+                    wifiData[i] = new Wifi();
+                    String wifiMacAddress = wifiScanList.get(i).BSSID;
+                    long intMacAddress = convertBssidToLong(wifiMacAddress);
+                    wifiData[i].setBssid(intMacAddress);
+                    wifiData[i].setLevel(wifiScanList.get(i).level);
+                }
+
+                // Notify observers of change in wifiData variable
+                notifyObservers(0);
+
+                // Unregister receiver after handling scan result
+                stopListening();
             }
-
-            // 构造指纹 JSON 对象
-            JSONObject fingerprint = new JSONObject();
-            JSONArray wifiArray = new JSONArray();
-            try {
-                for (int i = 0; i < wifiData.length; i++) {
-                    // 过滤掉信号太弱的 WiFi（例如 -85 dBm 以下），可根据需要调整
-                    if (wifiData[i].getLevel() < -85) continue;
-                    wifiArray.put(wifiData[i].toJSONObject());
-                }
-                fingerprint.put("wifiFingerprint", wifiArray);
-                fingerprint.put("timestamp", System.currentTimeMillis());
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-
-            // 调用 RESTful 定位请求
-            WiFiPositioning wifiPositioning = new WiFiPositioning(context);
-            wifiPositioning.request(fingerprint, new WiFiPositioning.VolleyCallback() {
-                @Override
-                public void onSuccess(com.google.android.gms.maps.model.LatLng location, int floor) {
-                    // 显示定位结果（例如使用 Toast）
-                    Toast.makeText(context, "定位结果：(" + location.latitude + ", " + location.longitude + "), 楼层: " + floor, Toast.LENGTH_LONG).show();
-                }
-                @Override
-                public void onError(String message) {
-                    Toast.makeText(context, "定位错误: " + message, Toast.LENGTH_LONG).show();
-                }
-            });
-
-            // 通知观察者更新数据
-            notifyObservers(0);
         }
     };
 
