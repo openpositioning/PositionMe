@@ -92,19 +92,19 @@ public class SensorFusion implements SensorEventListener, Observer {
   private static final String WIFI_FINGERPRINT = "wf";
 
   private static final float OUTLIER_DISTANCE_THRESHOLD = 10;
-  private static final SimpleMatrix INIT_POS_COVARIANCE = new SimpleMatrix(new double[][]{
+  public static final SimpleMatrix INIT_POS_COVARIANCE = new SimpleMatrix(new double[][]{
       {2.0, 0.0},
       {0.0, 2.0}
   });
-  private static final SimpleMatrix PDR_COVARIANCE = new SimpleMatrix(new double[][]{
+  public static final SimpleMatrix PDR_COVARIANCE = new SimpleMatrix(new double[][]{
       {1.0, 0.0},
       {0.0, 5.0}
   });
-  private static final SimpleMatrix WIFI_COVARIANCE = new SimpleMatrix(new double[][]{
+  public static final SimpleMatrix WIFI_COVARIANCE = new SimpleMatrix(new double[][]{
       {2.0, 0.0},
       {0.0, 2.0}
   });
-  private static final SimpleMatrix GNSS_COVARIANCE = new SimpleMatrix(new double[][]{
+  public static final SimpleMatrix GNSS_COVARIANCE = new SimpleMatrix(new double[][]{
       {5.0, 0.0},
       {0.0, 5.0}
   });
@@ -156,7 +156,7 @@ public class SensorFusion implements SensorEventListener, Observer {
   // Coordinate transformer instance to convert WGS84 (Latitude, Longitude) coordinates into
   // a Northing-Easting space.
   // Initialized when given the start location.
-  private CoordinateTransformer coordinateTransformer;
+  public CoordinateTransformer coordinateTransformer;
 
   // Sensor values
   private float[] acceleration;
@@ -175,8 +175,8 @@ public class SensorFusion implements SensorEventListener, Observer {
   private float elevation;
   private boolean elevator;
   // Location values
-  private float latitude;
-  private float longitude;
+  private float gnssLatitude;
+  private float gnssLongitude;
   private float altitude;
   private LatLng startLocation;
   // Wifi values
@@ -200,14 +200,6 @@ public class SensorFusion implements SensorEventListener, Observer {
   private WiFiPositioning wiFiPositioning;
   // Actual sensor Fusion
   private FilterAdapter filter;
-
-  // Object Composition, Sensor Hub.
-  private SensorHub sensorHub;
-
-  private WifiDataProcessor wifiDataProcessor;
-
-  private GNSSDataProcessor gnssDataProcessor;
-
 
   //region Initialisation
 
@@ -240,10 +232,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     this.R = new float[9];
   }
 
-  private boolean isOutlier(LatLng currentPoint, LatLng update) {
-    ProjCoordinate currentPointXY = this.coordinateTransformer
+  public static boolean isOutlier(CoordinateTransformer transformer,
+      LatLng currentPoint, LatLng update) {
+    ProjCoordinate currentPointXY = transformer
         .convertWGS84ToTarget(currentPoint.latitude, currentPoint.longitude);
-    ProjCoordinate updatePointXY = this.coordinateTransformer
+    ProjCoordinate updatePointXY = transformer
         .convertWGS84ToTarget(update.latitude, update.longitude);
     double distance = CoordinateTransformer.calculateDistance(currentPointXY,
         updatePointXY);
@@ -274,13 +267,6 @@ public class SensorFusion implements SensorEventListener, Observer {
    * @see WifiDataProcessor for network data processing.
    */
   public void setContext(Context context) {
-    SensorManager sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
-    this.sensorHub = new SensorHub(sensorManager);
-    this.wifiDataProcessor = new WifiDataProcessor(context, sensorHub);
-    this.gnssDataProcessor = new GNSSDataProcessor(context, sensorHub);
-
-    this.sensorHub.addListener(Sensor.TYPE_ACCELEROMETER, )
-
     this.appContext = context.getApplicationContext(); // store app context for later use
 
     // Initialise data collection devices (unchanged)...
@@ -297,7 +283,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Listener based devices
     this.wifiProcessor = new WifiDataProcessor(context);
     wifiProcessor.registerObserver(this);
-    this.gnssProcessor = new GNSSDataProcessor(context, locationListener );
+    this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
     // Create object handling HTTPS communication
     this.serverCommunications = new ServerCommunications(context);
     // Save absolute and relative start time
@@ -370,13 +356,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         break;
 
       case Sensor.TYPE_PRESSURE:
-        pressure = (1 - ALPHA) * pressure + ALPHA * sensorEvent.values[0];
-        if (saveRecording) {
-          this.elevation = pdrProcessing.updateElevation(
-              SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
-          );
-        }
-        break;
+          pressure = (1 -  ALPHA) * pressure + ALPHA * sensorEvent.values[0];
+          if (saveRecording) {
+              this.elevation = pdrProcessing.updateElevation(
+                      SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
+              );
+          }
+          break;
 
       case Sensor.TYPE_GYROSCOPE:
         angularVelocity[0] = sensorEvent.values[0];
@@ -504,22 +490,34 @@ public class SensorFusion implements SensorEventListener, Observer {
     @Override
     public void onLocationChanged(@NonNull Location location) {
       //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
-      latitude = (float) location.getLatitude();
-      longitude = (float) location.getLongitude();
+      gnssLatitude = (float) location.getLatitude();
+      gnssLongitude = (float) location.getLongitude();
+      if (fusedLocation == null) {
+        // Initial fused location is GNSS latlng.
+        fusedLocation = new float[]{gnssLatitude, gnssLongitude};
+      }
+      LatLng loc = new LatLng(gnssLatitude, gnssLongitude);
       float altitude = (float) location.getAltitude();
-      float accuracy = (float) location.getAccuracy();
+      float xAccuracy = (float) location.getAccuracy();
+      float xVariance = (float) Math.pow(xAccuracy, 2);
+      float yVariance = (float) Math.pow(location.getVerticalAccuracyMeters(), 2);
+      SimpleMatrix currentGnssCovariance = GNSS_COVARIANCE.copy();
+      currentGnssCovariance.set(0, 0, xAccuracy);
+      currentGnssCovariance.set(1, 1, yVariance);
       float speed = (float) location.getSpeed();
       String provider = location.getProvider();
       float[] pdrData = getSensorValueMap().get(SensorTypes.PDR);
       if (startLocation != null && pdrData != null) {
-        updateFusionData(new LatLng(latitude, longitude), GNSS_COVARIANCE, pdrData);
+        if (!isOutlier(coordinateTransformer, new LatLng(fusedLocation[0], fusedLocation[1]), loc)) {
+          updateFusionData(loc, currentGnssCovariance, pdrData);
+        }
       }
       if (saveRecording) {
         trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
-            .setAccuracy(accuracy)
+            .setAccuracy(xAccuracy)
             .setAltitude(altitude)
-            .setLatitude(latitude)
-            .setLongitude(longitude)
+            .setLatitude(gnssLatitude)
+            .setLongitude(gnssLongitude)
             .setSpeed(speed)
             .setProvider(provider)
             .setRelativeTimestamp(System.currentTimeMillis() - absoluteStartTime));
@@ -588,7 +586,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     return mse;
   }
 
-
   private void updateFusionData(LatLng observation, SimpleMatrix observationCov, float[] pdrData) {
     double[] pdrData64 = {pdrData[0], pdrData[1]};
 
@@ -645,7 +642,9 @@ public class SensorFusion implements SensorEventListener, Observer {
             float[] pdrData = getSensorValueMap().get(SensorTypes.PDR);
             currentWifiLocation = wifiLocation;
             if (coordinateTransformer != null) {
-              isWifiLocationOutlier = isOutlier(new LatLng(latitude, longitude), wifiLocation);
+              isWifiLocationOutlier = isOutlier(coordinateTransformer,
+                  new LatLng(fusedLocation[0], fusedLocation[1]),
+                  wifiLocation);
             }
             if (startLocation != null && pdrData != null && !isWifiLocationOutlier) {
               updateFusionData(wifiLocation, WIFI_COVARIANCE, pdrData);
@@ -788,8 +787,8 @@ public class SensorFusion implements SensorEventListener, Observer {
   public float[] getGNSSLatitude(boolean start) {
     float[] latLong = new float[2];
     if (!start) {
-      latLong[0] = latitude;
-      latLong[1] = longitude;
+      latLong[0] = gnssLatitude;
+      latLong[1] = gnssLongitude;
     } else {
       latLong[0] = (float) startLocation.latitude;
       latLong[1] = (float) startLocation.longitude;
@@ -878,7 +877,7 @@ public class SensorFusion implements SensorEventListener, Observer {
       sensorValueMap.put(SensorTypes.WIFI, new float[]{
           (float) currentWifiLocation.latitude,
           (float) currentWifiLocation.longitude});
-      sensorValueMap.put(SensorTypes.WIFI_FLOOR, new float[this.getWifiFloor()]);
+      sensorValueMap.put(SensorTypes.WIFI_FLOOR, new float[]{this.getWifiFloor()});
       sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[isWifiLocationOutlier ? 1 : 0]);
     }
     sensorValueMap.put(SensorTypes.FUSED, fusedLocation);
@@ -989,8 +988,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor,
         SensorManager.SENSOR_DELAY_NORMAL);
     rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, (int) 1e6);
-    wifiProcessor.start();
-    gnssProcessor.start();
+    wifiProcessor.startListening();
+    gnssProcessor.startLocationUpdates();
   }
 
   /**
@@ -1018,12 +1017,12 @@ public class SensorFusion implements SensorEventListener, Observer {
       //The app often crashes here because the scan receiver stops after it has found the list.
       // It will only unregister one if there is to unregister
       try {
-        this.wifiProcessor.stop(); //error here?
+        this.wifiProcessor.stopListening(); //error here?
       } catch (Exception e) {
         System.err.println("Wifi resumed before existing");
       }
       // Stop receiving location updates
-      this.gnssProcessor.stop();
+      this.gnssProcessor.stopUpdating();
     }
   }
 
@@ -1043,7 +1042,6 @@ public class SensorFusion implements SensorEventListener, Observer {
       wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
     }
     wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
-
     this.saveRecording = true;
     this.stepCounter = 0;
     this.absoluteStartTime = System.currentTimeMillis();
@@ -1057,7 +1055,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
         .setBarometerInfo(createInfoBuilder(barometerSensor))
         .setLightSensorInfo(createInfoBuilder(lightSensor));
-
     this.storeTrajectoryTimer = new Timer();
     this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
     this.pdrProcessing.resetPDR();
@@ -1220,8 +1217,8 @@ public class SensorFusion implements SensorEventListener, Observer {
       currentLongitude = fusedLocation[1];
       currentAltitude = altitude; // Fused data doesn't include altitude, so we reuse the GNSS altitude.
     } else {
-      currentLatitude = latitude;
-      currentLongitude = longitude;
+      currentLatitude = gnssLatitude;
+      currentLongitude = gnssLongitude;
       currentAltitude = altitude;
     }
 

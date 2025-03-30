@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -34,6 +35,10 @@ import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 
+import org.locationtech.proj4j.ProjCoordinate;
+
+import java.util.Objects;
+
 
 /**
  * Fragment responsible for managing the recording process of trajectory data.
@@ -57,6 +62,7 @@ import com.google.android.gms.maps.model.LatLng;
  *
  * @author Shu Gu
  * @author Alexandros Zoupos (Adjusted for AddTag functionality)
+ * @author Kleitos Kountouris (Wifi points, fused trajectory plotting)
  */
 
 public class RecordingFragment extends Fragment {
@@ -231,9 +237,16 @@ public class RecordingFragment extends Fragment {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
+        // PDR movement difference
+        float[] pdrDelta = new float[] {pdrValues[0] - previousPosX, pdrValues[1] - previousPosY};
+        // Update previous
+        previousPosX = pdrValues[0];
+        previousPosY = pdrValues[1];
+
         // Distance
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
-                + Math.pow(pdrValues[1] - previousPosY, 2));
+        distance += (float) Math.sqrt(Math.pow(pdrDelta[0], 2)
+                + Math.pow(pdrDelta[1], 2));
+
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
         // Elevation
@@ -246,17 +259,20 @@ public class RecordingFragment extends Fragment {
         // For example:
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
+            LatLng oldLocation = trajectoryMapFragment.getPdrCurrentLocation(); // or store locally
+//            LatLng newLocation = sensorFusion.
+
             LatLng newLocation = UtilFunctions.calculateNewPos(
                     oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
+                    new float[]{ pdrDelta[0], pdrDelta[1] }
             );
+
 
             // Pass the location + orientation to the map
             LatLng dummy = new LatLng(0,0);
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation, dummy,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+                trajectoryMapFragment.updatePdrLocation(newLocation);
+
             }
         }
 
@@ -296,15 +312,38 @@ public class RecordingFragment extends Fragment {
         float[] fused = sensorFusion.getSensorValueMap().get(SensorTypes.FUSED);
         if (fused != null && trajectoryMapFragment != null) {
             LatLng fusedLocation = new LatLng(fused[0], fused[1]);
-            trajectoryMapFragment.updateFused(fusedLocation);
+            LatLng currentFusedLocation = trajectoryMapFragment.getCurrentLocation();
+            if(currentFusedLocation != null
+                && (Double.compare(fused[0], currentFusedLocation.latitude) == 0
+                && Double.compare(fused[1], currentFusedLocation.longitude) == 0)) {
+                    LatLng currEstimate = trajectoryMapFragment.getEstimatedLocation();
+                    if (currEstimate == null) {
+                        currEstimate = currentFusedLocation;
+                    }
+                    ProjCoordinate estimatedLocation = sensorFusion.coordinateTransformer.
+                            applyDisplacementAndConvert(currEstimate.latitude, currEstimate.longitude,
+                                    pdrDelta[0], pdrDelta[1]);
+//                Log.i("RecordingFragment", "Calling interpolate fused location with" +
+//                        "")
+                    LatLng estimatedLatLng = new LatLng(estimatedLocation.y, estimatedLocation.x);
+                    trajectoryMapFragment.interpolateFusedLocation(estimatedLatLng);
+                }
+            trajectoryMapFragment.updateUserLocation(fusedLocation,
+                    (float) Math.toDegrees(sensorFusion.passOrientation()));
+
             fusionError.setVisibility(View.VISIBLE);
             fusionError.setText(String.format(getString(R.string.fusion_error) + "%.2fm",
                     this.sensorFusion.getFusionError()));
         }
 
-        // Update previous
-        previousPosX = pdrValues[0];
-        previousPosY = pdrValues[1];
+        // Get and use floor provided by WIFI
+        float floor = Objects.requireNonNull(
+                sensorFusion.getSensorValueMap().
+                        getOrDefault(SensorTypes.WIFI_FLOOR,new float[]{(float) -10.0}))[0];
+        if (floor != -10) {
+            trajectoryMapFragment.updateFloor(Math.round(floor));
+        }
+
     }
 
     /**
