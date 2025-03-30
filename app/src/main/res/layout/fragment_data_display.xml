@@ -15,8 +15,8 @@
         <androidx.fragment.app.FragmentContainerView
             android:id="@+id/mapFragmentContainer"
             android:name="com.google.android.gms.maps.SupportMapFragment"
-            android:layout_width="395dp"
-            android:layout_height="424dp"
+            android:layout_width="397dp"
+            android:layout_height="612dp"
             android:layout_marginTop="16dp"
             app:layout_constraintDimensionRatio="16:9"
             app:layout_constraintEnd_toEndOf="parent"
@@ -35,16 +35,16 @@
 
         <Spinner
             android:id="@+id/spinner2"
-            android:layout_width="67dp"
-            android:layout_height="38dp"
-            android:background="@color/white"
+            android:layout_width="wrap_content"
+            android:layout_height="41dp"
+            android:background="@color/design_default_color_background"
 
             android:text="@string/choose_map"
-            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintBottom_toBottomOf="@+id/mapFragmentContainer"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.093"
+            app:layout_constraintHorizontal_bias="0.081"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="0.095" />
+            app:layout_constraintTop_toTopOf="@+id/mapFragmentContainer"
+            app:layout_constraintVertical_bias="0.022" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>

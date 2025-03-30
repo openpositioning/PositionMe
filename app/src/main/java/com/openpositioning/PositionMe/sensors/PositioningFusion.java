@@ -55,6 +55,10 @@ public class PositioningFusion {
         return instance;
     }
 
+    public boolean isInitialized() {
+        return coordSystem.isInitialized();
+    }
+
     // origin initialization
     public void initCoordSystem(double latitude, double longitude) {
         wifiPosition = null;
@@ -75,13 +79,11 @@ public class PositioningFusion {
     }
 
     public boolean isWifiPositionSet() {
-        boolean initialized = coordSystem.isInitialized();
-        return wifiPosition != null && initialized;
+        return wifiPosition != null;
     }
 
     public boolean isGNSSPositionSet() {
-        boolean initialized = coordSystem.isInitialized();
-        return gnssPosition != null && initialized;
+        return gnssPosition != null;
     }
 
     public boolean isPDRPositionSet() {
@@ -181,7 +183,7 @@ public class PositioningFusion {
         } else {
             pdrMotion = pdrPosition;
         }
-        if (wifiPositionLocal != null && gnssPositionLocal != null) {
+        if (gnssPositionLocal != null) {
             // 1. |EN: Construct Observation Data (WiFi/GNSS first)
             //    |CHS: 构造观测数据（WiFi/GNSS 优先使用）
             PointF observation = null;
@@ -221,7 +223,7 @@ public class PositioningFusion {
     public LatLng getFusedPosition() {
         updateAllSourse();
         coordinateConversionToLocal();
-        outlierRemoval();
+//        outlierRemoval();
         fusePosition();
         coordinateConversionToGlobal();
         return this.fusedPosition;

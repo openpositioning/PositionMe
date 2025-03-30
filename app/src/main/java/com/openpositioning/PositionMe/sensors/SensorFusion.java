@@ -487,6 +487,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         return this.wiFiPositioning.getFloor();
     }
 
+    public Location getLocationData(){return locationData;}
+
     /**
      * Method used for converting an array of orientation angles into a rotation matrix.
      *

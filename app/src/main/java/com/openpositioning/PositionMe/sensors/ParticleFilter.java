@@ -100,7 +100,7 @@ public class ParticleFilter {
         if (wifiPos != null) {
             // 使用 WiFi 数据进行观测校正
             measurement = wifiPos;
-            measurementStd = 3.0;    // 假设 WiFi 定位误差的标准差为约3个单位（可调参数）
+            measurementStd = 1.0;    // 假设 WiFi 定位误差的标准差为约3个单位（可调参数）
         } else if (gnssPos != null) {
             // WiFi 数据不可用，使用 GNSS 数据进行校正
             measurement = gnssPos;

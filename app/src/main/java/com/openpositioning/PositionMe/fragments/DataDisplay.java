@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
+import android.location.Location;
 import android.os.Bundle;
 
 import androidx.annotation.DrawableRes;
@@ -148,9 +149,10 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
         statusText = view.findViewById(R.id.textView3);
 
-        SensorFusion.getInstance().pdrReset();
         mapTypeSpinner = view.findViewById(R.id.spinner2);
         setupMapTypeSpinner();
+
+        Log.d("Data Display", "View Created");
     }
 
     @Override
@@ -161,9 +163,6 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         indoorMapManager = new IndoorMapManager(mMap);
         indoorMapManager.setIndicationOfIndoorMap();
         trajectoryDrawer = new TrajectoryDrawer(mMap);
-
-        positioningFusion.initCoordSystem(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
-
     }
 
     public void showCurrentLocation(){
@@ -178,9 +177,21 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     }
 
     private void updateWifiLocationText() {
+        if (!positioningFusion.isInitialized()) {
+            if (positioningFusion.isWifiPositionSet()) {
+                LatLng wifiLocation = positioningFusion.getWifiPosition();
+                positioningFusion.initCoordSystem(wifiLocation.latitude, wifiLocation.longitude);
+            }
+            else if (positioningFusion.isGNSSPositionSet()) {
+                LatLng gnssLocation = positioningFusion.getGnssPosition();
+                positioningFusion.initCoordSystem(gnssLocation.latitude, gnssLocation.longitude);
+            }
+        }
+        Log.d("DataDisplay", String.format("Inilization status: %s", positioningFusion.isInitialized()));
         LatLng fusedLocation = PositioningFusion.getInstance().getFusedPosition();
 //        LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
         int floor = SensorFusion.getInstance().getWifiFloor();
+        Location locationData = SensorFusion.getInstance().getLocationData();
 
         Log.d("DataDisplay", "Fused Location: " + fusedLocation);
 
@@ -189,10 +200,11 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
             // 显示 estimated 经纬度 + 楼层
             String display = String.format(
-                    "Location:\nLat: %.6f\nLon: %.6f\nFloor: %d",
+                    "Location:\nLat: %.6f\nLon: %.6f\nFloor: %d\nAccuracy: %.2fm",
                     fusedLocation.latitude,
                     fusedLocation.longitude,
-                    floor
+                    floor,
+                    locationData.getAccuracy()
             );
             statusText.setText(display);
 
