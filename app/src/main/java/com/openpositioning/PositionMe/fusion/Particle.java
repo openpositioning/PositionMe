@@ -6,45 +6,47 @@ import org.ejml.simple.SimpleMatrix;
 
 public class Particle {
     double x, y, theta;  // Position and orientation of the particle
-
-    double weight; // Weight assigned to each particle
+    double weight;       // Weight assigned to each particle
+    double logWeight;    // Log-weight for numerical stability
 
     // Constructor
     public Particle(double x, double y, double theta) {
         this.x = x;
         this.y = y;
         this.theta = theta;
+        this.weight = 1.0;
+        this.logWeight = 0.0;
     }
 
+    // Update particle position statically (random walk)
     public void updateStatic(double[] staticPDRStds) {
         Random rand = new Random();
         this.theta += rand.nextGaussian() * staticPDRStds[1];
-        this.x += rand.nextGaussian()*staticPDRStds[0];
-        this.y += rand.nextGaussian()*staticPDRStds[0];
+        this.x += rand.nextGaussian() * staticPDRStds[0];
+        this.y += rand.nextGaussian() * staticPDRStds[0];
     }
 
     // Update particle position when step is detected
     public void updateDynamic(double stepLength, double headingChange, double[] dynamicPDRStds) {
         Random rand = new Random();
 
-        // Derive update and add noise
-        this.theta += headingChange + rand.nextGaussian() * dynamicPDRStds[1];
-        this.x += (stepLength + dynamicPDRStds[0]) * Math.cos(this.theta);
-        this.y += (stepLength + dynamicPDRStds[0]) * Math.sin(this.theta);
+        // Add noise to heading change
+        double noiseHeading = rand.nextGaussian() * dynamicPDRStds[1];
+        this.theta += headingChange + noiseHeading;
 
+        // Add noise to step length
+        double noiseStep = rand.nextGaussian() * dynamicPDRStds[0];
+        double noisyStepLength = Math.max(0, stepLength + noiseStep); // Ensure non-negative step
+
+        // Update position using angle
+        this.x += noisyStepLength * Math.sin(this.theta);
+        this.y += noisyStepLength * Math.cos(this.theta);
     }
 
-    // Reweight particles
+    // Reweight particle based on measurement - handled in main class now
     public void reweight(SimpleMatrix measurementCovariance,
                          SimpleMatrix forwardModel,
                          SimpleMatrix measurementVector) {
-
-        SimpleMatrix positionVector = new SimpleMatrix(new double[] {this.x, this.y, this.theta});
-        SimpleMatrix error = measurementVector.minus(forwardModel.mult(positionVector));
-
-        double logProb = -0.5*error.transpose().mult(measurementCovariance.invert()).mult(error).get(0);
-        double prob = Math.exp(logProb);
-
-        this.weight *= prob;
+        // This is now handled in the main reweightParticles method for numerical stability
     }
 }
