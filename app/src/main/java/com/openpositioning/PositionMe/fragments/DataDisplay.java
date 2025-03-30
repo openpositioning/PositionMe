@@ -39,6 +39,8 @@ import com.openpositioning.PositionMe.TrajectoryDrawer;
 import com.openpositioning.PositionMe.sensors.PositioningFusion;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
+import java.util.Arrays;
+
 
 /**
  * A simple {@link Fragment} subclass.
@@ -153,6 +155,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         setupMapTypeSpinner();
 
         Log.d("Data Display", "View Created");
+        positioningFusion.initCoordSystem();
+        positioningFusion.startPeriodicFusion();
     }
 
     @Override
@@ -163,7 +167,6 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         indoorMapManager = new IndoorMapManager(mMap);
         indoorMapManager.setIndicationOfIndoorMap();
         trajectoryDrawer = new TrajectoryDrawer(mMap);
-        positioningFusion.initCoordSystem();
     }
 
     public void showCurrentLocation(){
@@ -239,7 +242,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                 if (wifiMarker == null) {
                     wifiMarker = mMap.addMarker(new MarkerOptions()
                             .position(wifiLocation)
-                            .title("WiFi Position")
+                            .title(String.format("WiFi Position %s", wifiLocation))
                             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
                 } else {
                     wifiMarker.setPosition(wifiLocation);
@@ -252,7 +255,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                 if (gnssMarker == null) {
                     gnssMarker = mMap.addMarker(new MarkerOptions()
                             .position(gnssLocation)
-                            .title("GNSS Position")
+                            .title(String.format("GNSS Position %s", gnssLocation))
                             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
                 } else {
                     gnssMarker.setPosition(gnssLocation);
@@ -265,7 +268,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                 if (pdrMarker == null) {
                     pdrMarker = mMap.addMarker(new MarkerOptions()
                             .position(pdrLocation)
-                            .title("PDR Position")
+                            .title(String.format("PDR Position: %s", Arrays.toString(positioningFusion.getPdrPositionLocal())))
                             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
                 } else {
                     pdrMarker.setPosition(pdrLocation);
@@ -352,6 +355,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        positioningFusion.stopPeriodicFusion();
         handler.removeCallbacks(updateWifiLocationRunnable);
     }
 }
