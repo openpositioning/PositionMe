@@ -640,7 +640,8 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
             // 创建POST请求所需的JSON对象
             JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put("wf", wf);
+            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+//            wifiFingerPrint.put("wf", wf);
 
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
