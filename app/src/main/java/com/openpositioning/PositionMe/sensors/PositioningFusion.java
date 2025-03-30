@@ -84,7 +84,6 @@ public class PositioningFusion implements PositionObserver {
         if (SensorFusion.getInstance().getLatLngWifiPositioning() != null) {
             LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
             coordSystem.initReference(wifiLocation.latitude, wifiLocation.longitude);
-            startPeriodicFusion();
         }
 //        else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != null) {
 //            LatLng gnssLocation = positioningFusion.getGnssPosition();
@@ -92,7 +91,6 @@ public class PositioningFusion implements PositionObserver {
 //        }
         else {
             coordSystem.initReference(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
-            startPeriodicFusion();
         }
     }
 
@@ -156,6 +154,10 @@ public class PositioningFusion implements PositionObserver {
         return coordSystem.toGlobal(this.pdrPosition[0], this.pdrPosition[1]);
     }
 
+    public float[] getPdrPositionLocal() {
+        return pdrPosition;
+    }
+
     public void updateFromGNSS(LatLng gnssLocation) {
         this.gnssPosition = gnssLocation;
 //        Log.d("Fusion", "GNSS updated: " + gnssLocation);
@@ -165,7 +167,6 @@ public class PositioningFusion implements PositionObserver {
     public void updateFromPDR(float[] pdrXY) {
         this.pdrPosition = pdrXY;
 //        Log.d("Fusion", "PDR updated: " + Arrays.toString(pdrXY));
-//        fusePosition();
     }
 
     public void updateAllSourse() {

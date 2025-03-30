@@ -19,11 +19,11 @@ public class LocalCoordinateSystem {
      * 初始化参考坐标（只设置一次）
      */
     public void initReference(double latitude, double longitude) {
-        if (!initialized) {
-            this.refLat = latitude;
-            this.refLon = longitude;
-            this.initialized = true;
-        }
+//        if (!initialized) {
+        this.refLat = latitude;
+        this.refLon = longitude;
+        this.initialized = true;
+//        }
     }
 
     /**
