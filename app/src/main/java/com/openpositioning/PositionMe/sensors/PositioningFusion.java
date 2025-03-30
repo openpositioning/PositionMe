@@ -9,6 +9,7 @@ import com.openpositioning.PositionMe.PdrProcessing;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.TimerTask;
 
 
 public class PositioningFusion implements PositionObserver {
@@ -33,6 +34,9 @@ public class PositioningFusion implements PositionObserver {
     private float[] lastPdrPosition;
     private float[] pdrPosition; // [x, y] in meters
 
+    // 定时器
+    private java.util.Timer fusionTimer = new java.util.Timer();
+    private static final long FUSION_INTERVAL_MS = 1000; // 1秒
 
     // Fused position
     private float[] fusedPositionLocal;
@@ -80,6 +84,7 @@ public class PositioningFusion implements PositionObserver {
         if (SensorFusion.getInstance().getLatLngWifiPositioning() != null) {
             LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
             coordSystem.initReference(wifiLocation.latitude, wifiLocation.longitude);
+            startPeriodicFusion();
         }
 //        else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != null) {
 //            LatLng gnssLocation = positioningFusion.getGnssPosition();
@@ -87,7 +92,25 @@ public class PositioningFusion implements PositionObserver {
 //        }
         else {
             coordSystem.initReference(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
+            startPeriodicFusion();
         }
+    }
+
+    public void startPeriodicFusion() {
+        fusionTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                if (isReadyToFuse()) {
+                    fusePosition();
+                    coordinateConversionToGlobal();
+                }
+            }
+        }, 0, FUSION_INTERVAL_MS);
+    }
+
+    public void stopPeriodicFusion() {
+        fusionTimer.cancel();
+        fusionTimer = new java.util.Timer(); // 允许后续重新 start
     }
 
     // --- Update Methods ---
@@ -262,8 +285,9 @@ public class PositioningFusion implements PositionObserver {
 
         if (isReadyToFuse()) {
             coordinateConversionToLocal();
-            fusePosition();
-            coordinateConversionToGlobal();
         }
     }
+
+//    fusePosition();
+//    coordinateConversionToGlobal();
 }
