@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -28,6 +29,7 @@ import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.google.android.material.button.MaterialButton;
 
 
 /**
@@ -54,8 +56,10 @@ import java.util.List;
 public class TrajectoryMapFragment extends Fragment {
 
     private GoogleMap gMap; // Google Maps instance
-    private LatLng currentLocation; // Stores the user's current location
-    private Marker orientationMarker; // Marker representing user's heading
+    private LatLng rawCurrentLocation;    // For raw (PDR) trajectory
+    private LatLng fusionCurrentLocation; // For fused (EKF) trajectory
+    private Marker rawMarker;    // Marker for raw (PDR) trajectory (red arrow)
+    private Marker fusionMarker; // Marker for fused (EKF) trajectory (green arrow)
     private Marker gnssMarker; // GNSS position marker
     private Circle gnssAccuracyCircle;
     private Polyline polyline; // Polyline representing user's movement path
@@ -82,6 +86,11 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+    private boolean showRawTrajectory = true;
+    private boolean showFusionTrajectory = true;
+
+    private MaterialButton showRawButton;
+    private MaterialButton showFusionButton;
 
 
     public TrajectoryMapFragment() {
@@ -109,6 +118,25 @@ public class TrajectoryMapFragment extends Fragment {
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         switchColorButton = view.findViewById(R.id.lineColorButton);
+        switchColorButton = view.findViewById(R.id.lineColorButton);
+        showRawButton = view.findViewById(R.id.showRawButton);
+        showFusionButton = view.findViewById(R.id.showFusionButton);
+
+        showRawButton.setOnClickListener(v -> {
+            setShowRawTrajectory(!showRawTrajectory);
+        });
+
+        showFusionButton.setOnClickListener(v -> {
+            setShowFusionTrajectory(!showFusionTrajectory);
+        });
+
+        showRawButton.setOnClickListener(v -> {
+            setShowRawTrajectory(!showRawTrajectory);
+        });
+
+        showFusionButton.setOnClickListener(v -> {
+            setShowFusionTrajectory(!showFusionTrajectory);
+        });
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -202,6 +230,7 @@ public class TrajectoryMapFragment extends Fragment {
                 indoorMapManager.setCurrentFloor(newFloor, true);
             }
         });
+        sensorFusion.setTrajectoryMapFragment(this);
     }
 
 
@@ -324,25 +353,23 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap == null) return;
 
         // Keep track of current location
-        LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
+        LatLng oldLocation = rawCurrentLocation;
+        rawCurrentLocation = newLocation;
 
         // If no marker, create it
-        if (orientationMarker == null) {
-            orientationMarker = gMap.addMarker(new MarkerOptions()
+        if (rawMarker == null) {
+            rawMarker = gMap.addMarker(new MarkerOptions()
                     .position(newLocation)
                     .flat(true)
-                    .title("Current Position")
+                    .title("Raw Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
             );
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
         } else {
-            // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
-            orientationMarker.setRotation(orientation);
-            // Move camera a bit
+            rawMarker.setPosition(newLocation);
+            rawMarker.setRotation(orientation);
             gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
 
@@ -372,26 +399,25 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap == null) return;
 
         // Keep track of current location
-        LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
+        LatLng oldLocation = fusionCurrentLocation;
+        fusionCurrentLocation = newLocation;
 
         // If no marker, create it
-        if (orientationMarker == null) {
-            orientationMarker = gMap.addMarker(new MarkerOptions()
+        if (fusionMarker == null) {
+            fusionMarker = gMap.addMarker(new MarkerOptions()
                     .position(newLocation)
                     .flat(true)
-                    .title("Current Position")
+                    .title("Fusion Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24_green)))
             );
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
         } else {
-            // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
-            orientationMarker.setRotation(orientation);
-            // Move camera a bit
-//            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+            fusionMarker.setPosition(newLocation);
+            fusionMarker.setRotation(orientation);
+            // Optionally move camera if needed
+            // gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
 
         // Extend polyline if movement occurred
@@ -416,11 +442,10 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap == null) return;
 
         // Keep track of current location
-        this.currentLocation = newLocation;
 
 
         if (pinConfirmed) {
-            orientationMarker = gMap.addMarker(new MarkerOptions()
+            Marker orientationMarker = gMap.addMarker(new MarkerOptions()
                     .position(newLocation)
                     .flat(true)
                     .title("Tagged Position")
@@ -468,7 +493,7 @@ public class TrajectoryMapFragment extends Fragment {
      * @return The current user location as a LatLng object.
      */
     public LatLng getCurrentLocation() {
-        return currentLocation;
+        return rawCurrentLocation;
     }
 
     /**
@@ -549,16 +574,21 @@ public class TrajectoryMapFragment extends Fragment {
             gnssPolyline.remove();
             gnssPolyline = null;
         }
-        if (orientationMarker != null) {
-            orientationMarker.remove();
-            orientationMarker = null;
+        if (rawMarker != null) {
+            rawMarker.remove();
+            rawMarker = null;
+        }
+        if (fusionMarker != null) {
+            fusionMarker.remove();
+            fusionMarker = null;
         }
         if (gnssMarker != null) {
             gnssMarker.remove();
             gnssMarker = null;
         }
         lastGnssLocation = null;
-        currentLocation  = null;
+        rawCurrentLocation = null;
+        fusionCurrentLocation = null;
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
@@ -666,4 +696,31 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
+
+    public void setShowRawTrajectory(boolean show) {
+        this.showRawTrajectory = show;
+        if (polyline != null) {
+            polyline.setVisible(show);
+        }
+        if (rawMarker != null) {
+            rawMarker.setVisible(show);
+        }
+        if (showRawButton != null) {
+            showRawButton.setBackgroundTintList(ColorStateList.valueOf(show ? Color.RED : Color.GRAY));
+        }
+    }
+
+
+    public void setShowFusionTrajectory(boolean show) {
+        this.showFusionTrajectory = show;
+        if (fusionPolyline != null) {
+            fusionPolyline.setVisible(show);
+        }
+        if (fusionMarker != null) {
+            fusionMarker.setVisible(show);
+        }
+        if (showFusionButton != null) {
+            showFusionButton.setBackgroundTintList(ColorStateList.valueOf(show ? Color.GREEN : Color.GRAY));
+        }
+    }
 }
