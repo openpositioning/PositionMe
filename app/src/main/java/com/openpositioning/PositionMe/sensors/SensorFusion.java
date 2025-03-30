@@ -356,13 +356,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         break;
 
       case Sensor.TYPE_PRESSURE:
-        pressure = (1 - ALPHA) * pressure + ALPHA * sensorEvent.values[0];
-        if (saveRecording) {
-          this.elevation = pdrProcessing.updateElevation(
-              SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
-          );
-        }
-        break;
+          pressure = (1 -  ALPHA) * pressure + ALPHA * sensorEvent.values[0];
+          if (saveRecording) {
+              this.elevation = pdrProcessing.updateElevation(
+                      SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
+              );
+          }
+          break;
 
       case Sensor.TYPE_GYROSCOPE:
         angularVelocity[0] = sensorEvent.values[0];
