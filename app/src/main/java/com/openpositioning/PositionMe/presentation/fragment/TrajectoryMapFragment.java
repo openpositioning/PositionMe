@@ -27,6 +27,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
+import com.openpositioning.PositionMe.fusion.SmoothingFilter;
 
 import com.google.maps.android.SphericalUtil;
 
@@ -102,12 +103,14 @@ public class TrajectoryMapFragment extends Fragment {
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
     private SwitchMaterial wifiSwitch;
-    private static final double MAX_DISTANCE_THRESHOLD = 100; //wifi max distance between readings to detect outliers
+    private static final double MAX_DISTANCE_THRESHOLD = 100; //wifi max distance between readings to detect/remove outliers
 
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+
+    SmoothingFilter fusionSmoothingFilter = new SmoothingFilter(0.3);
 
 
     public TrajectoryMapFragment() {
@@ -287,21 +290,23 @@ public class TrajectoryMapFragment extends Fragment {
         Log.d("TrajectoryMapFragment", "updateFusionPosition called with: " +
                 fusionLocation.latitude + ", " + fusionLocation.longitude);
 
+        LatLng smoothedFusionLocation = fusionSmoothingFilter.update(fusionLocation);
+
         // If fusion marker doesn't exist, create it
         if (fusionMarker == null) {
             fusionMarker = gMap.addMarker(new MarkerOptions()
-                    .position(fusionLocation)
+                    .position(smoothedFusionLocation)
                     .title("Fusion Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24))));
-         gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusionLocation, 19f));
+         gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(smoothedFusionLocation, 19f));
         } else {
             // Update marker position + orientation
-            fusionMarker.setPosition(fusionLocation);
+            fusionMarker.setPosition(smoothedFusionLocation);
             fusionMarker.setRotation(orientation);
             // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(fusionLocation));
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(smoothedFusionLocation));
         }
 
         // Check if fusionPolyline is null and create it if needed
@@ -310,12 +315,12 @@ public class TrajectoryMapFragment extends Fragment {
                     .color(Color.GREEN)
                     .width(8f)
                     .zIndex(100)
-                    .add(fusionLocation));
+                    .add(smoothedFusionLocation));
             Log.d("TrajectoryMapFragment", "Created new fusion polyline");
         } else {
             // Add new point to fusion path
             List<LatLng> fusionPoints = new ArrayList<>(fusionPolyline.getPoints());
-            fusionPoints.add(fusionLocation);
+            fusionPoints.add(smoothedFusionLocation);
             fusionPolyline.setPoints(fusionPoints);
             Log.d("TrajectoryMapFragment", "Added point to fusion polyline, total points: " + fusionPoints.size());
         }
@@ -470,7 +475,6 @@ public class TrajectoryMapFragment extends Fragment {
      * and append to polyline if the user actually moved.
      *
      * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
      */
     public void pdrLocation(@NonNull LatLng newLocation) {
         if (gMap == null) return;
@@ -559,6 +563,7 @@ public class TrajectoryMapFragment extends Fragment {
                     .zIndex(8f)  // High z-index, but below fusion marker
             );
             lastGnssLocation = gnssLocation;
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(gnssLocation, 19f));
         } else {
             // Move existing GNSS marker
             gnssMarker.setPosition(gnssLocation);
