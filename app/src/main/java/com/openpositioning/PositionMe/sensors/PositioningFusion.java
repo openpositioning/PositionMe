@@ -4,6 +4,7 @@ import android.graphics.PointF;
 import android.location.Location;
 import android.util.Log;
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.PdrProcessing;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -79,6 +80,7 @@ public class PositioningFusion {
         else {
             coordSystem.initReference(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
         }
+        SensorFusion.getInstance().pdrReset();
     }
 
     // --- Update Methods ---

@@ -211,7 +211,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 //            }
 
             // --- Fused ---
-            float bearing = SensorFusion.getInstance().getHeading(); // 获取朝向角度（度）
+            //float bearing = SensorFusion.getInstance().getHeading(); // 获取朝向角度（度）
 
             // 初始化图标
             BitmapDescriptor blueDotIcon = vectorToBitmap(requireContext(), R.drawable.ic_blue_dot);
@@ -273,7 +273,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
             }
 
 
-            if (directionMarker == null) {
+            /*if (directionMarker == null) {
                 directionMarker = mMap.addMarker(new MarkerOptions()
                         .position(fusedLocation)
                         .icon(coneIcon)
@@ -283,7 +283,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
             } else {
                 directionMarker.setPosition(fusedLocation);
                 directionMarker.setRotation(bearing);
-            }
+            }*/
 
             if (indoorMapManager != null) {
                 indoorMapManager.setCurrentLocation(fusedLocation);
