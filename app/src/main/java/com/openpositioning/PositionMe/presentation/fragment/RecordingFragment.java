@@ -271,7 +271,7 @@ public class RecordingFragment extends Fragment {
             // Pass the location + orientation to the map
             LatLng dummy = new LatLng(0,0);
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updatePdrLocation(newLocation, dummy);
+                trajectoryMapFragment.updatePdrLocation(newLocation);
 
             }
         }

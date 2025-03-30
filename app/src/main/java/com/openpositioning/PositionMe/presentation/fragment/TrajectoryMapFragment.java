@@ -462,23 +462,6 @@ public class TrajectoryMapFragment extends Fragment {
       pdrPolyline.setPoints(points);
     }
   }
-  public void updatePdrLocation(@NonNull LatLng newLocation, LatLng initialPosition) {
-    if (gMap == null) {
-      return;
-    }
-    // Keep track of current location
-    LatLng oldLocation = this.pdrCurrentLocation;
-    this.pdrCurrentLocation = new LatLng(newLocation.latitude + initialPosition.latitude,
-        newLocation.longitude + initialPosition.longitude);
-    // Extend polyline if movement occurred
-    if (oldLocation != null && !oldLocation.equals(this.pdrCurrentLocation)
-        && pdrPolyline != null) {
-      List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
-      points.add(this.pdrCurrentLocation);
-      pdrPolyline.setPoints(points);
-    }
-  }
-
   /**
    * Set the initial camera position for the map.
    * <p>
@@ -662,6 +645,10 @@ public class TrajectoryMapFragment extends Fragment {
       gnssPolyline.remove();
       gnssPolyline = null;
     }
+    if (pdrPolyline != null) {
+      pdrPolyline.remove();
+      pdrPolyline = null;
+    }
     if (orientationMarker != null) {
       orientationMarker.remove();
       orientationMarker = null;
@@ -685,6 +672,11 @@ public class TrajectoryMapFragment extends Fragment {
           .zIndex(10f)
           .width(5f)
           .add());
+      pdrPolyline = gMap.addPolyline(new PolylineOptions()
+              .color(Color.BLACK)
+              .zIndex(10f)
+              .width(5f)
+              .add());
     }
   }
 
