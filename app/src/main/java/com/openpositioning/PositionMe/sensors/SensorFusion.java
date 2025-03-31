@@ -22,6 +22,7 @@ import com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragmen
 import com.openpositioning.PositionMe.sensors.filters.FilterAdapter;
 import com.openpositioning.PositionMe.sensors.filters.KalmanFilterAdapter;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
+import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
@@ -157,6 +158,7 @@ public class SensorFusion implements SensorEventListener, Observer {
   // a Northing-Easting space.
   // Initialized when given the start location.
   public CoordinateTransformer coordinateTransformer;
+  private NucleusBuildingManager nucleusBuildingManager;
 
   // Sensor values
   private float[] acceleration;
@@ -187,6 +189,7 @@ public class SensorFusion implements SensorEventListener, Observer {
   private boolean isWifiLocationOutlier = false;
   private float[] fusedLocation;
   private float fusedError;
+  private boolean inElevator;
 
 
   // Over time accelerometer magnitude values since last step
@@ -348,6 +351,13 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Update timestamp and frequency counter for this sensor
     lastEventTimestamps.put(sensorType, currentTime);
     eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
+
+    if (!inElevator && getElevator()) {
+      inElevator = true;
+      // TODO: set it to the closest lift latlng
+      fusedLocation[0] = 0;
+      fusedLocation[1] = 0;
+    }
 
     switch (sensorType) {
       case Sensor.TYPE_ACCELEROMETER:
@@ -513,8 +523,14 @@ public class SensorFusion implements SensorEventListener, Observer {
       String provider = location.getProvider();
       float[] pdrData = getSensorValueMap().get(SensorTypes.PDR);
       if (startLocation != null && pdrData != null) {
-        if (!isOutlier(coordinateTransformer, new LatLng(fusedLocation[0], fusedLocation[1]), loc)) {
+        if (!isOutlier(coordinateTransformer, new LatLng(fusedLocation[0], fusedLocation[1]), loc) &&
+            !inElevator) {
           updateFusionData(loc, currentGnssCovariance, pdrData);
+        }
+
+        if (inElevator && getElevator()) {  // Has just left an elevator
+          resetFilter(loc, pdrData);
+          inElevator = false;
         }
       }
       if (saveRecording) {
@@ -591,25 +607,28 @@ public class SensorFusion implements SensorEventListener, Observer {
     return mse;
   }
 
-  private void updateFusionData(LatLng observation, SimpleMatrix observationCov, float[] pdrData) {
-    double[] pdrData64 = {pdrData[0], pdrData[1]};
-
-    // Convert the WiFi location to XY
+  private double[] latLngToXY(LatLng reference, LatLng pt) {
     ProjCoordinate startLocationNorthEast = coordinateTransformer.convertWGS84ToTarget(
-        startLocation.latitude,
-        startLocation.longitude);
+            reference.latitude,
+            reference.longitude);
     ProjCoordinate observationNorthEast = coordinateTransformer.convertWGS84ToTarget(
-        observation.latitude,
-        observation.longitude);
-    double[] wifiXYZ = CoordinateTransformer.getRelativePosition(
-        startLocationNorthEast,
-        observationNorthEast
+            pt.latitude,
+            pt.longitude);
+    double[] ptXYZ = CoordinateTransformer.getRelativePosition(
+            startLocationNorthEast,
+            observationNorthEast
     );
-    double[] wifiXY = {wifiXYZ[0], wifiXYZ[1]};
+    return new double[]{ptXYZ[0], ptXYZ[1]};
+  }
+
+  private void updateFusionData(LatLng observation, SimpleMatrix observationCov, float[] pdrData) {
+    double[] obsXY = latLngToXY(startLocation, observation);
+
+    double[] pdrData64 = {pdrData[0], pdrData[1]};
 
     // Get the current timestamp and update the filter
     double timestamp = (System.currentTimeMillis() - absoluteStartTime) / 1e3;
-    if (!filter.update(pdrData64, wifiXY, timestamp, observationCov)) {
+    if (!filter.update(pdrData64, obsXY, timestamp, observationCov)) {
       Log.w("SensorFusion", "Filter update failed");
     }
     double[] fusedPos = filter.getPos();
@@ -617,6 +636,27 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Convert back to Lat-Long
     ProjCoordinate fusedCoord = coordinateTransformer.applyDisplacementAndConvert(
         startLocation.latitude, startLocation.longitude, fusedPos[0], fusedPos[1]);
+    fusedLocation = new float[]{(float) fusedCoord.y, (float) fusedCoord.x};
+
+    SimpleMatrix fusedCov = filter.getCovariance();
+    this.fusedError = (float) Math.sqrt(computeMSE(fusedCov));
+  }
+
+  private void resetFilter(LatLng newPos, float[] pdrData) {
+    double[] newXY = latLngToXY(startLocation, newPos);
+
+    double[] pdrData64 = {pdrData[0], pdrData[1]};
+
+    // Get the current timestamp and update the filter
+    double timestamp = (System.currentTimeMillis() - absoluteStartTime) / 1e3;
+    if (!filter.reset(newXY, INIT_POS_COVARIANCE, pdrData64, timestamp)) {
+      Log.w("SensorFusion", "Filter reset failed");
+    }
+    double[] fusedPos = filter.getPos();
+
+    // Convert back to Lat-Long
+    ProjCoordinate fusedCoord = coordinateTransformer.applyDisplacementAndConvert(
+            startLocation.latitude, startLocation.longitude, fusedPos[0], fusedPos[1]);
     fusedLocation = new float[]{(float) fusedCoord.y, (float) fusedCoord.x};
 
     SimpleMatrix fusedCov = filter.getCovariance();
@@ -651,8 +691,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                   new LatLng(fusedLocation[0], fusedLocation[1]),
                   wifiLocation);
             }
-            if (startLocation != null && pdrData != null && !isWifiLocationOutlier) {
+            if (startLocation != null && pdrData != null && !isWifiLocationOutlier &&
+                    !inElevator) {
               updateFusionData(wifiLocation, WIFI_COVARIANCE, pdrData);
+            }
+            if (inElevator && getElevator() && pdrData != null) {  // Has just left an elevator
+              resetFilter(wifiLocation, pdrData);
+              inElevator = false;
             }
           }
         }
