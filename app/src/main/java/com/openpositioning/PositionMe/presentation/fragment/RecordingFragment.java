@@ -75,7 +75,7 @@ public class RecordingFragment extends Fragment {
     private MaterialButton completeButton, cancelButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
-    private TextView elevation, distanceTravelled, gnssError;
+    private TextView elevation, distanceTravelled, gnssError, wifiError;
 
     // App settings
     private SharedPreferences settings;
@@ -95,6 +95,11 @@ public class RecordingFragment extends Fragment {
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
+    private boolean gnssEnabled = true;
+    private boolean wifiEnabled = true;
+    private LatLng lastWifiLocation = null;
+    private LatLng lastGnssLocation = null;
+    private LatLng lastPFLocation = null;
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
@@ -150,6 +155,7 @@ public class RecordingFragment extends Fragment {
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
+        wifiError = view.findViewById(R.id.wifiError);
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
@@ -158,6 +164,7 @@ public class RecordingFragment extends Fragment {
 
         // Hide or initialize default values
         gnssError.setVisibility(View.GONE);
+        wifiError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
@@ -255,6 +262,7 @@ public class RecordingFragment extends Fragment {
             }
         }
 
+        // 更新GNSS位置
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
             if (trajectoryMapFragment.isGnssEnabled()) {
@@ -272,6 +280,23 @@ public class RecordingFragment extends Fragment {
             }
         }
 
+        // 更新WiFi位置
+        LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+        if (wifiLocation != null && trajectoryMapFragment != null) {
+            if (trajectoryMapFragment.isWifiEnabled()) {
+                LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+                if (currentLoc != null) {
+                    double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, wifiLocation);
+                    wifiError.setVisibility(View.VISIBLE);
+                    wifiError.setText(String.format(getString(R.string.wifi_error) + "%.2fm", errorDist));
+                }
+                trajectoryMapFragment.updateWifi(wifiLocation);
+            } else {
+                wifiError.setVisibility(View.GONE);
+                trajectoryMapFragment.clearWifi();
+            }
+        }
+
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
 
@@ -286,7 +311,7 @@ public class RecordingFragment extends Fragment {
     }
 
 
-/**
+    /**
      * Start the blinking effect for the recording icon.
      */
     private void blinkingRecordingIcon() {
@@ -309,6 +334,18 @@ public class RecordingFragment extends Fragment {
         super.onResume();
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
+        }
+    }
+
+    private void clearWifi() {
+        if (trajectoryMapFragment != null) {
+            trajectoryMapFragment.clearWifi();
+        }
+    }
+
+    private void updateWifi(LatLng location) {
+        if (trajectoryMapFragment != null) {
+            trajectoryMapFragment.updateWifi(location);
         }
     }
 }

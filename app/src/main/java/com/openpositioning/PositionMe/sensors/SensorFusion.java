@@ -1135,7 +1135,6 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Stores the resulting position and timestamps it.
      */
     public void updateFusionPDR(){
-
         // calculate new PDR, save as global variable
         float[] pdrValues = getCurrentPDRCalc();
         float elevationVal = getElevation();
@@ -1232,7 +1231,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public void initialiseFusionAlgorithm() {
         // Picks the Fusion Algorithm to run
-        fusionAlgorithmSelection = this.settings.getBoolean("fusion_enable", true);  // 默认使用PF
+        fusionAlgorithmSelection = !(this.settings.getBoolean("fusion_enable", false));
         this.noCoverage = true;
         if (fusionAlgorithmSelection) {
             this.extendedKalmanFilter = new ExtendedKalmanFilter();

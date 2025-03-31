@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -57,11 +58,10 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
-    private Polyline polyline; // Polyline representing user's movement path
+    private Polyline pdrPolyline; // Polyline for PDR path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
 
-    private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
@@ -70,11 +70,11 @@ public class TrajectoryMapFragment extends Fragment {
     private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
 
-
     // UI
     private Spinner switchMapSpinner;
 
     private SwitchMaterial gnssSwitch;
+    private SwitchMaterial wifiSwitch;
     private SwitchMaterial autoFloorSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
@@ -85,6 +85,12 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline pfPolyline;
     private LatLng lastEKFLocation = null;
     private LatLng lastPFLocation = null;
+
+    private Marker wifiMarker;
+    private boolean wifiEnabled = false;
+    private LatLng lastWifiLocation = null;
+
+    private Polyline trajectoryPolyline;
 
 
     public TrajectoryMapFragment() {
@@ -108,6 +114,7 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
+        wifiSwitch      = view.findViewById(R.id.wifiSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
@@ -138,8 +145,6 @@ public class TrajectoryMapFragment extends Fragment {
                     drawBuildingPolygon();
 
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
-
-
                 }
             });
         }
@@ -150,22 +155,35 @@ public class TrajectoryMapFragment extends Fragment {
         // GNSS Switch
         gnssSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             isGnssOn = isChecked;
-            if (!isChecked && gnssMarker != null) {
-                gnssMarker.remove();
-                gnssMarker = null;
+            if (!isChecked) {
+                if (gnssMarker != null) {
+                    gnssMarker.remove();
+                    gnssMarker = null;
+                }
+            }
+        });
+
+        // WiFi Switch
+        wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            wifiEnabled = isChecked;
+            if (!isChecked) {
+                if (wifiMarker != null) {
+                    wifiMarker.remove();
+                    wifiMarker = null;
+                }
             }
         });
 
         // Color switch
         switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
+            if (pdrPolyline != null) {
                 if (isRed) {
                     switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
+                    pdrPolyline.setColor(Color.BLACK);
                     isRed = false;
                 } else {
                     switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
+                    pdrPolyline.setColor(Color.RED);
                     isRed = true;
                 }
             }
@@ -216,18 +234,25 @@ public class TrajectoryMapFragment extends Fragment {
 
         indoorMapManager = new IndoorMapManager(map);
 
-        polyline = map.addPolyline(new PolylineOptions()
-                .color(Color.RED).width(5f).add());
-
-        gnssPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.BLUE).width(5f).add());
+        // 初始化PDR轨迹线
+        pdrPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.RED)
+                .width(5f)
+                .zIndex(2)
+                .add());
 
         // 添加 EKF / PF 轨迹线
         ekfPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.GREEN).width(5f).add());
+                .color(Color.GREEN)
+                .width(5f)
+                .zIndex(2)
+                .add());
 
         pfPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.MAGENTA).width(5f).add());
+                .color(Color.MAGENTA)
+                .width(5f)
+                .zIndex(2)
+                .add());
     }
 
 
@@ -287,10 +312,9 @@ public class TrajectoryMapFragment extends Fragment {
      * and append to polyline if the user actually moved.
      *
      * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
+     * @param orientation The user's heading (e.g. from sensor fusion).
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
-
         if (gMap == null) return;
 
         // Keep track of current location
@@ -316,11 +340,11 @@ public class TrajectoryMapFragment extends Fragment {
             gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
 
-        // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
+        // Extend PDR polyline if movement occurred
+        if (oldLocation != null && !oldLocation.equals(newLocation) && pdrPolyline != null) {
+            List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
             points.add(newLocation);
-            polyline.setPoints(points);
+            pdrPolyline.setPoints(points);
         }
 
         // Update indoor map overlay
@@ -388,13 +412,6 @@ public class TrajectoryMapFragment extends Fragment {
         } else {
             // Move existing GNSS marker
             gnssMarker.setPosition(gnssLocation);
-
-            // Add a segment to the blue GNSS line, if this is a new location
-            if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
-                List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
-                gnssPoints.add(gnssLocation);
-                gnssPolyline.setPoints(gnssPoints);
-            }
             lastGnssLocation = gnssLocation;
         }
     }
@@ -424,13 +441,9 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     public void clearMapAndReset() {
-        if (polyline != null) {
-            polyline.remove();
-            polyline = null;
-        }
-        if (gnssPolyline != null) {
-            gnssPolyline.remove();
-            gnssPolyline = null;
+        if (pdrPolyline != null) {
+            pdrPolyline.remove();
+            pdrPolyline = null;
         }
         if (orientationMarker != null) {
             orientationMarker.remove();
@@ -440,37 +453,31 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker.remove();
             gnssMarker = null;
         }
+        if (wifiMarker != null) {
+            wifiMarker.remove();
+            wifiMarker = null;
+        }
         lastGnssLocation = null;
-        currentLocation  = null;
+        lastWifiLocation = null;
+        currentLocation = null;
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions()
+            pdrPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
                     .width(5f)
+                    .zIndex(2)
                     .add());
-            gnssPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.BLUE)
+            ekfPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.GREEN)
                     .width(5f)
+                    .zIndex(2)
                     .add());
-        }
-        if (polyline != null) polyline.remove();
-        if (gnssPolyline != null) gnssPolyline.remove();
-        if (ekfPolyline != null) ekfPolyline.remove();
-        if (pfPolyline != null) pfPolyline.remove();
-        if (orientationMarker != null) orientationMarker.remove();
-        if (gnssMarker != null) gnssMarker.remove();
-
-        lastGnssLocation = null;
-        lastEKFLocation = null;
-        lastPFLocation = null;
-        currentLocation  = null;
-
-        if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions().color(Color.RED).width(5f).add());
-            gnssPolyline = gMap.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).add());
-            ekfPolyline = gMap.addPolyline(new PolylineOptions().color(Color.GREEN).width(5f).add());
-            pfPolyline = gMap.addPolyline(new PolylineOptions().color(Color.MAGENTA).width(5f).add());
+            pfPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.MAGENTA)
+                    .width(5f)
+                    .zIndex(2)
+                    .add());
         }
     }
 
@@ -585,7 +592,81 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    public boolean isWifiEnabled() {
+        return wifiEnabled;
+    }
+
+    public void setWifiEnabled(boolean wifiEnabled) {
+        this.wifiEnabled = wifiEnabled;
+        if (!wifiEnabled) {
+            clearWifi();
+        }
+    }
+
+    public void updateWifi(LatLng location) {
+        if (gMap == null || !wifiEnabled) return;
+
+        BitmapDescriptor wifiIcon = BitmapDescriptorFactory.fromResource(R.drawable.wifi);
+
+        if (wifiMarker == null) {
+            wifiMarker = gMap.addMarker(new MarkerOptions()
+                    .position(location)
+                    .icon(wifiIcon)
+                    .title("WiFi location"));
+        } else {
+            wifiMarker.setPosition(location);
+        }
+        lastWifiLocation = location;
+    }
 
 
+    public void clearWifi() {
+        if (wifiMarker != null) {
+            wifiMarker.remove();
+            wifiMarker = null;
+        }
+    }
+
+    private void drawTrajectoryLine(List<LatLng> points) {
+        if (gMap == null || points.size() < 2) return;
+
+        // 清除现有的轨迹线
+        if (trajectoryPolyline != null) {
+            trajectoryPolyline.remove();
+        }
+
+        // 创建新的轨迹线，设置z-index为1使其显示在室内地图上层
+        PolylineOptions polylineOptions = new PolylineOptions()
+                .addAll(points)
+                .color(Color.RED)
+                .width(5f)
+                .zIndex(1);  // 设置z-index为1
+
+        trajectoryPolyline = gMap.addPolyline(polylineOptions);
+    }
+
+    private void updateTrajectoryLine(LatLng newPoint) {
+        if (gMap == null || newPoint == null) return;
+
+        List<LatLng> points = new ArrayList<>();
+        if (trajectoryPolyline != null) {
+            points.addAll(trajectoryPolyline.getPoints());
+        }
+        points.add(newPoint);
+
+        // 清除现有的轨迹线
+        if (trajectoryPolyline != null) {
+            trajectoryPolyline.remove();
+        }
+
+        // 创建新的轨迹线，设置z-index为1使其显示在室内地图上层
+        PolylineOptions polylineOptions = new PolylineOptions()
+                .addAll(points)
+                .color(Color.RED)
+                .width(5f)
+                .zIndex(1);  // 设置z-index为1
+
+        trajectoryPolyline = gMap.addPolyline(polylineOptions);
+    }
 
 }

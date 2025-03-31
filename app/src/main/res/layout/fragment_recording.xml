@@ -23,51 +23,77 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="12dp"
-            android:gravity="center_vertical">
+            android:orientation="vertical"
+            android:padding="12dp">
 
-            <!-- Red Dot -->
-            <ImageView
-                android:id="@+id/redDot"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:contentDescription="@string/red_dot_description_text"
-                android:src="@drawable/ic_baseline_red_dot_24"
-                android:layout_marginEnd="8dp" />
-
-            <!-- Distance Traveled -->
-            <TextView
-                android:id="@+id/currentDistanceTraveled"
-                android:layout_width="wrap_content"
+            <!-- First Row: Status Info -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/meter"
-                android:textColor="@color/md_theme_secondary"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textStyle="bold" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
 
-            <!-- Elevation -->
-            <TextView
-                android:id="@+id/currentElevation"
-                android:layout_width="wrap_content"
+                <!-- Red Dot -->
+                <ImageView
+                    android:id="@+id/redDot"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:contentDescription="@string/red_dot_description_text"
+                    android:src="@drawable/ic_baseline_red_dot_24"
+                    android:layout_marginEnd="8dp" />
+
+                <!-- Distance Traveled -->
+                <TextView
+                    android:id="@+id/currentDistanceTraveled"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/meter"
+                    android:textColor="@color/md_theme_secondary"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                    android:textStyle="bold" />
+
+                <!-- Elevation -->
+                <TextView
+                    android:id="@+id/currentElevation"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/elevation"
+                    android:textColor="@color/md_theme_secondary"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                    android:textStyle="bold"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp" />
+            </LinearLayout>
+
+            <!-- Second Row: Error Messages -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/elevation"
-                android:textColor="@color/md_theme_secondary"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textStyle="bold"
-                android:layout_marginStart="16dp"
-                android:layout_marginEnd="16dp" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
+                <!-- GNSS Error -->
+                <TextView
+                    android:id="@+id/gnssError"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/gnss_error"
+                    android:textColor="@color/md_theme_error"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                    android:visibility="gone"
+                    android:layout_marginEnd="16dp" />
 
-            <!-- GNSS Error -->
-            <TextView
-                android:id="@+id/gnssError"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/gnss_error"
-                android:textColor="@color/md_theme_error"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                android:layout_marginStart="16dp" />
+                <!-- WiFi Error -->
+                <TextView
+                    android:id="@+id/wifiError"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/wifi_error"
+                    android:textColor="@color/md_theme_error"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                    android:visibility="gone" />
+            </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -141,5 +167,29 @@
                 app:backgroundTint="@color/md_theme_primary"
                 app:cornerRadius="16dp" />
         </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/gnss_error"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/gnss_error"
+            android:textColor="@color/white"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/wifi_error"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/wifi_error"
+            android:textColor="@color/white"
+            android:visibility="gone" />
+
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
