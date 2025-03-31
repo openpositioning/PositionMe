@@ -275,6 +275,7 @@ public class ReplayFragment extends Fragment {
                 break;
 
             case "WiFi":
+                // code by Jamie Arnott
                 if (p.cachedWiFiLocation != null) {
                     trajectoryMapFragment.updateUserLocation(p.cachedWiFiLocation, p.orientation);
                 } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
@@ -332,6 +333,61 @@ public class ReplayFragment extends Fragment {
         }
     }
 
+    private LatLng EKF_point(int index){
+        TrajParser.ReplayPoint p = replayData.get(index);
+        // handle WiFi data
+        if (p.cachedWiFiLocation != null) {
+            // do EKF using cached WiFi Location
+        } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
+            JSONObject wifiFingerprint = new JSONObject();
+            JSONObject wifiAccessPoints = new JSONObject();
+            for (Traj.WiFi_Sample sample : p.wifiSamples) {
+                for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
+                    try {
+                        wifiAccessPoints.put(String.valueOf(macScan.getMac()), macScan.getRssi());
+                    } catch (JSONException e) {
+                        Log.e(TAG, "WiFi JSON error: " + e.getMessage());
+                    }
+                }
+            }
+            try {
+                wifiFingerprint.put("wf", wifiAccessPoints);
+            } catch (JSONException e) {
+                Log.e(TAG, "WiFi fingerprint JSON failed: " + e.getMessage());
+            }
+
+            new WiFiPositioning(getContext()).request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng location, int floor) {
+                    Log.d(TAG, "WiFi Positioning Successful");
+                    p.cachedWiFiLocation = location; // keep this
+
+                    prevWiFiLocation = location; // keep this to update prev location
+                    // do the EKF using location
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.w(TAG, "WiFi Positioning failed: " + message);
+                    if (prevWiFiLocation != null) {
+                        // do EKF using prevWiFiLocation
+                    } else {
+                        // do nothing
+                    }
+                }
+            });
+        } else {
+            if (prevWiFiLocation != null) {
+                // do EKF using prevWiFiLocation
+            } else {
+                // do nothing
+            }
+        }
+
+        return null;
+    }
+
+    // code by Guilherme
     private int getColorForMode(String mode) {
         switch (mode) {
             case "GNSS": return android.graphics.Color.BLUE;
