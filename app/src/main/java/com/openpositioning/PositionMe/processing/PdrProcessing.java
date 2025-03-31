@@ -514,6 +514,7 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
                 }
                 // Clear accel magntiude after using it.
                 this.accelMagnitude.clear();
+                notifyObservers(0);
             }
         }
     }

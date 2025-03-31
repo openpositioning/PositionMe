@@ -103,7 +103,7 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
     // Update the trajectory with the PDR data
     if (objList != null && objList.length > 0) {
       // Update provides the X,Y float array of the PDR data
-      float[] pdrData = (float[]) objList[0];
+      Float[] pdrData = (Float[]) objList;
       trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
           .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
           .setX(pdrData[0])
