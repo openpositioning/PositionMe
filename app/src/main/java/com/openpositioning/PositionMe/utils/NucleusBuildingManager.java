@@ -6,13 +6,43 @@ import com.google.android.gms.maps.model.LatLngBounds;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.IndoorMapFragment;
 
+import org.locationtech.proj4j.ProjCoordinate;
+
 import java.util.ArrayList;
 
+/**
+ * The {@code NucleusBuildingManager} class is responsible for managing spatial
+ * information related to the Nucleus building, including indoor map overlays,
+ * floor management, and key infrastructure points like elevators.
+ *
+ * <p>Specifically, this class:
+ * <ul>
+ *   <li>Initializes indoor map fragments for each floor using pre-defined bounds and assets.</li>
+ *   <li>Defines the building footprint using a rectangular polygon for containment checks.</li>
+ *   <li>Provides functionality to determine whether a user is inside the building polygon.</li>
+ *   <li>Stores fixed locations of elevator shafts and can return the nearest one to a given user position
+ *       by computing distances in local projected (XY) coordinates using a {@link CoordinateTransformer}.</li>
+ * </ul>
+ *
+ * <p>This class is primarily used for location-aware applications such as indoor navigation,
+ * elevator matching, and floor-based positioning.
+ *
+ * @author Alexandros Zoupos (lift matching)
+ */
 public class NucleusBuildingManager {
     private IndoorMapFragment indoorMapFragment;
     private ArrayList<LatLng> buildingPolygon;
 
-    public NucleusBuildingManager(GoogleMap map) {
+  // Elevator center positions (in WGS84 LatLng)
+  private final LatLng leftLift = new LatLng(55.92301742, -3.17440627);
+  private final LatLng centerLift = new LatLng(55.92302437, -3.17436403);
+  private final LatLng rightLift = new LatLng(55.92302418, -3.17432731);
+
+  // Array to loop through lifts if needed
+  private final LatLng[] elevatorLifts = new LatLng[] { leftLift, centerLift, rightLift };
+
+
+  public NucleusBuildingManager(GoogleMap map) {
         // The nuclear building has 5 floors
         indoorMapFragment = new IndoorMapFragment(map, 5);
 
@@ -95,4 +125,34 @@ public class NucleusBuildingManager {
         // Return true if the intersection point is to the right of the point
         return x > pX;
     }
+
+  /**
+   * Determines the closest elevator to a given user location.
+   * 1: Left elevator, 2: Center elevator, 3: Right elevator.
+   * @param userLocation the current location of the user
+   * @param transformer the coordinate transformer
+   * @return the closest elevator
+   */
+  public int getClosestElevator(LatLng userLocation, CoordinateTransformer transformer) {
+    ProjCoordinate userXY = transformer.convertWGS84ToTarget(userLocation.latitude, userLocation.longitude);
+
+    double minDistance = Double.MAX_VALUE;
+    int closestIndex = -1;
+
+    for (int i = 0; i < elevatorLifts.length; i++) {
+      ProjCoordinate liftXY = transformer.convertWGS84ToTarget(
+              elevatorLifts[i].latitude,
+              elevatorLifts[i].longitude
+      );
+
+      double distance = CoordinateTransformer.calculateDistance(userXY, liftXY);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i + 1; // 1-based index
+      }
+    }
+
+    return closestIndex;
+  }
 }
