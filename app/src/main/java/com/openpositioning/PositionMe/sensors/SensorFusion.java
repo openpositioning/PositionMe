@@ -710,6 +710,19 @@ public class SensorFusion implements SensorEventListener, Observer {
         if (wifiMeters != null) {
             double[][] R_wifi = {{5.0, 0}, {0, 5.0}}; // WiFi = more accurate indoors
             performMeasurementUpdate(wifiMeters, R_wifi);
+            // Perform outlier detection
+            double predictedX = state[0];
+            double predictedY = state[1];
+            double distanceToPrediction = Math.sqrt(Math.pow(wifiMeters[0] - predictedX, 2) + Math.pow(wifiMeters[1] - predictedY, 2));
+            // Define an outlier threshold based on WiFi resolution (e.g., 15 meters)
+            double outlierThreshold = 15.0;
+
+            if (distanceToPrediction > outlierThreshold) {
+                Log.w("EKF", "WiFi measurement detected as outlier: distance=" + distanceToPrediction);
+
+                // Increase measurement noise to reduce influence of outlier
+                R_wifi = new double[][]{{20.0, 0}, {0, 20.0}};
+            }
         }
 
         // === Update step (GNSS) ===
