@@ -2,6 +2,8 @@ package com.openpositioning.PositionMe.FusionAlgorithms;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.utils.CoordinateTransform;
+import com.openpositioning.PositionMe.utils.MapConstraint;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -65,6 +67,7 @@ public class ParticleFilter {
     private double refLat;
     private double refLon;
     private double refAlt;
+    private MapConstraint mapConstraint;
 
     /**
      * Constructor: initialize with a certain number of particles,
@@ -113,6 +116,10 @@ public class ParticleFilter {
             // Move particle
             p.x += noisyStep * Math.sin(p.theta);
             p.y += noisyStep * Math.cos(p.theta);
+            // Optional: constrain to map area
+            if (mapConstraint != null && !mapConstraint.isInside(p.x, p.y)) {
+                p.weight = 0.0;
+            }
         }
     }
 
@@ -286,6 +293,9 @@ public class ParticleFilter {
         return angle;
     }
 
+    public void setMapConstraint(MapConstraint mapConstraint) {
+        this.mapConstraint = mapConstraint;
+    }
     // region Setters & getters for parameters
     public void setStepLenNoiseSigma(double stepLenNoiseSigma) {
         this.stepLenNoiseSigma = stepLenNoiseSigma;
