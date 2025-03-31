@@ -118,10 +118,10 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
 
         // Initialize measurement noise matrices for GNSS and WIFI
         measurementNoiseMatrixGnss = SimpleMatrix.identity(MEAS_SIZE);
-        measurementNoiseMatrixGnss = measurementNoiseMatrixGnss.scale(49); //7m st dev
+        measurementNoiseMatrixGnss = measurementNoiseMatrixGnss.scale(100); //10m st dev
 
         measurementNoiseMatrixWifi = SimpleMatrix.identity(MEAS_SIZE);
-        measurementNoiseMatrixWifi = measurementNoiseMatrixWifi.scale(9); //3m st dev
+        measurementNoiseMatrixWifi = measurementNoiseMatrixWifi.scale(64); //8m st dev
 
         // Initialize process matrix (will be updated with each time step)
         processMatrix = SimpleMatrix.identity(STATE_SIZE);
@@ -283,7 +283,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
 
 
         // Apply additional uncertainty scaling factor for GNSS
-        double gnssUncertaintyScaleFactor = 1.2; // Makes GNSS 1.2x less trusted
+        double gnssUncertaintyScaleFactor = 1.5; // Makes GNSS 1.5x less trusted
         double gnssVar = Math.pow(measurementModel.getGnssStd() * gnssUncertaintyScaleFactor, 2);
         measurementNoiseMatrixGnss.set(MEAS_IDX_EAST, MEAS_IDX_EAST, gnssVar);
         measurementNoiseMatrixGnss.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, gnssVar);
@@ -353,7 +353,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         measurementVector.set(MEAS_IDX_NORTH, 0, enu[1]);
 
         // Prepare measurement noise matrix
-        double wifiConfidenceScaleFactor = 0.8; // Makes WiFi more trusted (80% of original uncertainty)
+        double wifiConfidenceScaleFactor = 1.5; // Makes WiFi less trusted
         double wifiVar = Math.pow(measurementModel.getWifiStd() * wifiConfidenceScaleFactor, 2);
         measurementNoiseMatrixWifi.set(MEAS_IDX_EAST, MEAS_IDX_EAST, wifiVar);
         measurementNoiseMatrixWifi.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, wifiVar);
