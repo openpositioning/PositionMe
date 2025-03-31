@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.processing;
 
 import android.hardware.Sensor;
+import android.hardware.SensorManager;
 import android.os.Build.VERSION;
 import android.os.SystemClock;
 import android.util.Log;
@@ -18,7 +19,7 @@ import com.openpositioning.PositionMe.sensors.SensorData.PressureData;
 import com.openpositioning.PositionMe.sensors.SensorData.RotationVectorData;
 import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
 import com.openpositioning.PositionMe.sensors.SensorData.StepDetectorData;
-import com.openpositioning.PositionMe.sensors.SensorData.WiFiScanResult;
+import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
 import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorListeners.SensorDataListener;
 import com.openpositioning.PositionMe.sensors.StreamSensor;
@@ -66,25 +67,22 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
   private MagneticFieldData magneticFieldData;
   private LightData lightData;
   private GyroscopeData gyroscopeData;
-  private WiFiScanResult wifiData;
+  private WiFiData wifiData;
   private GNSSLocationData gnssData;
 
 
   public TrajectoryRecorder(SensorHub sensorHub, PdrProcessing pdrProcessor,
-      WifiDataProcessor wifiProcessor, ServerCommunications serverCommunications, long startTime) {
+      ServerCommunications serverCommunications, long startTime) {
     // Register sensors
     this.sensorHub = sensorHub;
-    for (int sensor_idx : INTERESTED_SENSORS) {
-      sensorHub.addListener(sensor_idx, this);
-    }
+
+    this.startTime = startTime;
+
+    start();
 
     this.pdrProcessor = pdrProcessor;
 
-    this.wifiProcessor = wifiProcessor;
-
     this.serverCommunications = serverCommunications;
-
-    this.startTime = startTime;
 
     this.trajectory = Traj.Trajectory.newBuilder()
         .setAndroidVersion(VERSION.RELEASE)
@@ -94,10 +92,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
         .setMagnetometerInfo(createInfoBuilder(Sensor.TYPE_MAGNETIC_FIELD))
         .setBarometerInfo(createInfoBuilder(Sensor.TYPE_PRESSURE))
         .setLightSensorInfo(createInfoBuilder(Sensor.TYPE_LIGHT));
-
-    this.storeTrajectoryTimer = new Timer();
-
-    this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
   }
 
   /**
@@ -213,8 +207,8 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
       lightData = (LightData) data;
     } else if (data instanceof GyroscopeData) {
       gyroscopeData = (GyroscopeData) data;
-    } else if (data instanceof WiFiScanResult) {
-      wifiData = (WiFiScanResult) data;
+    } else if (data instanceof WiFiData) {
+      wifiData = (WiFiData) data;
       saveWifiData(wifiData);
     } else if (data instanceof GNSSLocationData) {
       gnssData = (GNSSLocationData) data;
@@ -222,7 +216,39 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
     }
   }
 
-  private void saveWifiData(WiFiScanResult data) {
+  @Override
+  public void stop() {
+    // Stop all sensors
+    for (int sensor_idx : INTERESTED_SENSORS) {
+      sensorHub.removeListener(sensor_idx, this);
+    }
+
+    for (StreamSensor sensor_idx : INTERESTED_STREAM_SENSORS) {
+      sensorHub.removeListener(sensor_idx, this);
+    }
+
+    // Cancel the timer
+    storeTrajectoryTimer.cancel();
+  }
+
+  @Override
+  public void start() {
+    // Start all sensors
+    for (int sensor_idx : INTERESTED_SENSORS) {
+      sensorHub.addListener(sensor_idx, this);
+    }
+
+    for (StreamSensor sensor_idx : INTERESTED_STREAM_SENSORS) {
+      sensorHub.addListener(sensor_idx, this);
+    }
+
+    // Restart the timer
+    storeTrajectoryTimer = new Timer();
+    this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(),
+        SensorManager.SENSOR_DELAY_NORMAL, TIME_CONST);
+  }
+
+  private void saveWifiData(WiFiData data) {
     Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
         .setRelativeTimestamp(SystemClock.uptimeMillis() - startTime);
     for (Wifi wifiSample : data.wifiList) {

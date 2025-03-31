@@ -328,7 +328,7 @@ public class RecordingFragment extends Fragment {
                     trajectoryMapFragment.interpolateFusedLocation(estimatedLatLng);
                 }
             trajectoryMapFragment.updateUserLocation(fusedLocation,
-                    (float) Math.toDegrees(sensorFusion.passOrientation()));
+                    (float) Math.toDegrees(sensorFusion. passOrientation()));
 
             fusionError.setVisibility(View.VISIBLE);
             fusionError.setText(String.format(getString(R.string.fusion_error) + "%.2fm",

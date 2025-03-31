@@ -63,7 +63,7 @@ public class CorrectionFragment extends Fragment {
         View rootView = inflater.inflate(R.layout.fragment_correction, container, false);
 
         // Send trajectory data to the cloud
-        sensorFusion.sendTrajectoryToCloud();
+        sensorFusion.stop();
 
         //Obtain start position
         float[] startPosition = sensorFusion.getGNSSLatitude(true);

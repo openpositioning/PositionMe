@@ -49,8 +49,12 @@ public class WiFiPositioning {
     return wifiLocation;
   }
 
+
+
   // Store user's location obtained using WiFi positioning
   private LatLng wifiLocation;
+
+  private int wifiFloor;
 
   /**
    * Getter for the  WiFi positioning floor obtained using openpositioning API

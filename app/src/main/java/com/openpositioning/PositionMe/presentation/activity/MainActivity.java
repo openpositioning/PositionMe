@@ -199,7 +199,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }, 300); // Delay ensures activity is fully visible before requesting permissions
 
         if (sensorFusion != null) {
-            sensorFusion.resumeListening();
+            sensorFusion.start();
         }
     }
 

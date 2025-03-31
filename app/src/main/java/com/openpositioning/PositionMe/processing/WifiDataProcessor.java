@@ -18,7 +18,7 @@ import androidx.core.app.ActivityCompat;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
-import com.openpositioning.PositionMe.sensors.SensorData.WiFiScanResult;
+import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
 import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorModule;
 import com.openpositioning.PositionMe.sensors.StreamSensor;
@@ -51,7 +51,7 @@ import org.json.JSONObject;
  * @author Mate Stodulka
  * @author Virginia Cangelosi
  */
-public class WifiDataProcessor extends SensorModule<WiFiScanResult> implements Observable {
+public class WifiDataProcessor extends SensorModule<WiFiData> {
   private static final long SCAN_RATE_WITH_THROTTLING = 5000; // ms
   //
   private static final long SCAN_RATE_WITHOUT_THROTTLING = 500; // ms
@@ -67,8 +67,12 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> implements O
   private final WifiManager wifiManager;
 
   private WiFiPositioning wifiPositioning;
+
   private LatLng currentWifiLocation;
+
   private int currentWifiLevel;
+
+
 
   //List of nearby networks
   private Wifi[] wifiData;
@@ -118,6 +122,59 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> implements O
   }
 
   /**
+   * Get the most recent wifi location from WifiPositioning API
+   *
+   * @return LatLng of current latitude and longitude (WGS84) null if there have been no successful
+   * readings.
+   */
+  public LatLng getCurrentWifiLocation() {
+    return currentWifiLocation;
+  }
+
+  public int getCurrentWifiLevel() {
+    return currentWifiLevel;
+  }
+
+  /**
+   * Obtains required information about wifi in which the device is currently connected.
+   * <p>
+   * A connectivity manager is used to obtain information about the current network. If the device
+   * is connected to a network its ssid, mac address and frequency is stored to a Wifi object so
+   * that it can be accessed by the caller of the method
+   *
+   * @return wifi object containing the currently connected wifi's ssid, mac address and frequency
+   */
+  public Wifi getCurrentWifiData() {
+    //Set up a connectivity manager to get information about the wifi
+    ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService
+        (Context.CONNECTIVITY_SERVICE);
+    //Set up a network info object to store information about the current network
+    NetworkInfo networkInfo = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+
+    //Only obtain wifi data if the device is connected
+    //Wifi in which the device is currently connected to
+    Wifi currentWifi = new Wifi();
+    if (networkInfo.isConnected()) {
+      //Store the ssid, mac address and frequency of the current wifi
+      currentWifi.setSsid(wifiManager.getConnectionInfo().getSSID());
+      String wifiMacAddress = wifiManager.getConnectionInfo().getBSSID();
+      long intMacAddress = convertBssidToLong(wifiMacAddress);
+      currentWifi.setBssid(intMacAddress);
+      currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
+    } else {
+      //Store standard information if not connected
+      currentWifi.setSsid("Not connected");
+      currentWifi.setBssid(0);
+      currentWifi.setFrequency(0);
+    }
+    return currentWifi;
+  }
+
+  public Wifi[] getWifiData() {
+    return wifiData;
+  }
+
+  /**
    * Initiate scans for nearby networks every SCAN_INTERVAL seconds. The method declares a new timer
    * instance to schedule a scan for nearby wifis every SCAN_INTERVAL seconds.
    */
@@ -160,7 +217,6 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> implements O
         stop();
         return;
       }
-
       //Collect the list of nearby wifis
       List<ScanResult> wifiScanList = wifiManager.getScanResults();
       //Stop receiver as scan is complete
@@ -179,8 +235,8 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> implements O
       }
 
       //Notify observers of change in wifiData variable
-      List<Wifi> newData = Stream.of(wifiScanList).map(o -> (Wifi) o).collect(Collectors.toList());
-      WifiDataProcessor.super.notifyListeners(new WiFiScanResult(newData));
+      List<Wifi> newData = Stream.of(wifiData).map(o -> (Wifi) o).collect(Collectors.toList());
+      createWifiPositionRequestCallback(newData);
     }
   };
 
@@ -188,11 +244,11 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> implements O
    * Function to create a request to obtain a wifi location for the obtained wifi fingerprint Handle
    * response with a volley callback
    */
-  private void createWifiPositionRequestCallback(WiFiScanResult wifiScanResult) {
+  private void createWifiPositionRequestCallback(List<Wifi> wifiScanResult) {
     try {
       // Creating a JSON object to store the WiFi access points
       JSONObject wifiAccessPoints = new JSONObject();
-      for (Wifi data : wifiScanResult.wifiList) {
+      for (Wifi data : wifiScanResult) {
         wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
       }
       // Creating POST Request
@@ -206,15 +262,19 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> implements O
             currentWifiLocation = wifiLocation;
             currentWifiLevel = floor;
             // Notify listeners of a new wifi location, level received.
-            notifyObservers(0);
+            WifiDataProcessor.super.notifyListeners(new WiFiData(wifiScanResult, currentWifiLocation,
+                currentWifiLevel));
           }
         }
-
         @Override
         public void onError(String message) {
           // Handle the error response
           Log.e("SensorFusion.WifiPositioning", "Wifi Positioning request" +
               "returned an error! " + message);
+          // TODO: Notify the first time that we are not able to get a location, otherwise stop.
+
+          WifiDataProcessor.super.notifyListeners(new WiFiData(wifiScanResult, null,
+              -1));
         }
       });
     } catch (JSONException e) {
@@ -315,29 +375,6 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> implements O
     }
   }
 
-  @Override
-  public void registerObserver(Observer o) {
-    if (observers == null) {
-      observers = new ArrayList<>();
-    }
-    //Add observer to list
-    observers.add(o);
-  }
-
-  // TODO: can think of making this a record type rather than 3 floats. (would need to be public)
-  @Override
-  public void notifyObservers(int idx) {
-    //Notify observers of changes to wifi data
-    for (Observer observer : observers) {
-      observer.update(new Float[] {
-          (float) currentWifiLocation.latitude,
-          (float) currentWifiLocation.longitude,
-          (float) currentWifiLevel
-      });
-    }
-  }
-
-
   /**
    * Class to schedule wifi scans.
    * <p>
@@ -352,38 +389,5 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> implements O
     }
   }
 
-  /**
-   * Obtains required information about wifi in which the device is currently connected.
-   * <p>
-   * A connectivity manager is used to obtain information about the current network. If the device
-   * is connected to a network its ssid, mac address and frequency is stored to a Wifi object so
-   * that it can be accessed by the caller of the method
-   *
-   * @return wifi object containing the currently connected wifi's ssid, mac address and frequency
-   */
-  public Wifi getCurrentWifiData() {
-    //Set up a connectivity manager to get information about the wifi
-    ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService
-        (Context.CONNECTIVITY_SERVICE);
-    //Set up a network info object to store information about the current network
-    NetworkInfo networkInfo = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
 
-    //Only obtain wifi data if the device is connected
-    //Wifi in which the device is currently connected to
-    Wifi currentWifi = new Wifi();
-    if (networkInfo.isConnected()) {
-      //Store the ssid, mac address and frequency of the current wifi
-      currentWifi.setSsid(wifiManager.getConnectionInfo().getSSID());
-      String wifiMacAddress = wifiManager.getConnectionInfo().getBSSID();
-      long intMacAddress = convertBssidToLong(wifiMacAddress);
-      currentWifi.setBssid(intMacAddress);
-      currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
-    } else {
-      //Store standard information if not connected
-      currentWifi.setSsid("Not connected");
-      currentWifi.setBssid(0);
-      currentWifi.setFrequency(0);
-    }
-    return currentWifi;
-  }
 }

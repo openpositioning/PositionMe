@@ -107,12 +107,15 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
     private final int[] INTERESTED_SENSORS = new int[] {
         Sensor.TYPE_GRAVITY, Sensor.TYPE_PRESSURE,
         Sensor.TYPE_LINEAR_ACCELERATION, Sensor.TYPE_ROTATION_VECTOR
-    } ;
+    };
     private List<Double> accelMagnitude = new ArrayList<>();
     private boolean elevator;
     private GravityData gravityData;
     private PressureData pressureData;
     private LinearAccelerationData linearAccelerationData;
+
+
+
     private RotationVectorData rotationVectorData;
 
 
@@ -125,58 +128,11 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
     public PdrProcessing(Context context, SensorHub sensorHub, long startTime) {
         // Initialise settings
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
-        // Check if estimate or manual values should be used
-        this.useManualStep = this.settings.getBoolean("manual_step_values", false);
-        if(useManualStep) {
-            try {
-                // Retrieve manual step  length
-                this.stepLength = this.settings.getInt("user_step_length", 75) / 100f;
-            } catch (Exception e) {
-                // Invalid values - reset to defaults
-                this.stepLength = 0.75f;
-                this.settings.edit().putInt("user_step_length", 75).apply();
-            }
-        }
-        else {
-            // Using estimated step length - set to zero
-            this.stepLength = 0;
-        }
-
-        // Initial position and elevation - starts from zero
-        this.positionX = 0f;
-        this.positionY = 0f;
-        this.elevation = 0f;
-
-
-        if(this.settings.getBoolean("overwrite_constants", false)) {
-            // Capacity - pressure is read with 1Hz - store values of past 10 seconds
-            this.elevationList = new CircularFloatBuffer(Integer.parseInt(settings.getString("elevation_seconds", "4")));
-
-            // Buffer for most recent acceleration values
-            this.verticalAccel = new CircularFloatBuffer(Integer.parseInt(settings.getString("accel_samples", "4")));
-            this.horizontalAccel = new CircularFloatBuffer(Integer.parseInt(settings.getString("accel_samples", "4")));
-        }
-        else {
-            // Capacity - pressure is read with 1Hz - store values of past 10 seconds
-            this.elevationList = new CircularFloatBuffer(elevationSeconds);
-
-            // Buffer for most recent acceleration values
-            this.verticalAccel = new CircularFloatBuffer(accelSamples);
-            this.horizontalAccel = new CircularFloatBuffer(accelSamples);
-        }
-
-        // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", 4);
-        // Array for holding initial values
-        this.startElevationBuffer = new Float[3];
-        // Start floor - assumed to be zero
-        this.currentFloor = 0;
-
-        // Register sensors
         this.sensorHub = sensorHub;
-        for (int sensor_idx : INTERESTED_SENSORS) {
-            sensorHub.addListener(sensor_idx, this);
-        }
+        // Register sensors
+        start();
+        // Check if estimate or manual values should be used
+        resetPDR();
     }
 
     /**
@@ -468,6 +424,10 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         return averageStepLength;
     }
 
+    public RotationVectorData getRotationVectorData() {
+        return rotationVectorData;
+    }
+
     @Override
     public void onSensorDataReceived(SensorData data) {
         // Check which sensor has updated
@@ -484,6 +444,22 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         } else {
             Log.e("PDR Processing", "PDR Processing receiving data it is not listening to! "
                 + "Check the subscriptions.");
+        }
+    }
+
+    @Override
+    public void stop() {
+        // Unregister all listeners
+        for (int sensor_idx : INTERESTED_SENSORS) {
+            sensorHub.removeListener(sensor_idx, this);
+        }
+    }
+
+    @Override
+    public void start() {
+        // Register all listeners
+        for (int sensor_idx : INTERESTED_SENSORS) {
+            sensorHub.addListener(sensor_idx, this);
         }
     }
 
@@ -557,4 +533,9 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
             o.update(new Float[] {this.positionX, this.positionY});
         }
     }
+
+  public boolean isElevator() {
+    return elevator;
+  }
+
 }

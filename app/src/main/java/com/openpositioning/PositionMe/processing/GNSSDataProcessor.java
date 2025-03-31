@@ -104,7 +104,6 @@ public class GNSSDataProcessor extends SensorModule<GNSSLocationData> implements
     locationManager.removeUpdates(this);
   }
 
-
   /**
    * Checks if the user authorised all permissions necessary for accessing location data.
    * <p>

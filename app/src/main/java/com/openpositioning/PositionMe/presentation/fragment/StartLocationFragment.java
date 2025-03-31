@@ -171,8 +171,7 @@ public class StartLocationFragment extends Fragment {
         // If the Activity is RecordingActivity
         if (requireActivity() instanceof RecordingActivity) {
           // Start sensor recording + set the start location
-          sensorFusion.startRecording();
-          sensorFusion.setStartGNSSLatitude(startPosition);
+          sensorFusion.startRecording(startPosition);
           // Now switch to the recording screen
           ((RecordingActivity) requireActivity()).showRecordingScreen();
 

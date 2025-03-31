@@ -17,6 +17,10 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.processing.SensorFusion;
+import com.openpositioning.PositionMe.processing.SensorViewListener;
+import com.openpositioning.PositionMe.sensors.SensorData.GNSSLocationData;
+import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
+import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.presentation.viewitems.WifiListAdapter;
@@ -40,7 +44,9 @@ public class MeasurementsFragment extends Fragment {
     private static final long REFRESH_TIME = 5000;
 
     // Singleton Sensor Fusion class handling all sensor data
-    private SensorFusion sensorFusion;
+    private SensorHub sensorHub;
+    // Associated sensor view listener to retrieve sensor updates;
+    private SensorViewListener sensorViewListener;
 
     // UI Handler
     private Handler refreshDataHandler;
@@ -69,8 +75,15 @@ public class MeasurementsFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Get sensor fusion instance
-        sensorFusion = SensorFusion.getInstance();
+        // Get sensor hub instance
+        sensorHub = SensorFusion.getInstance().getSensorHub();
+        // Get the sensor view listener
+        sensorViewListener = new SensorViewListener(sensorHub,
+            (sensorValues, wifiData, gnssLocationData) -> {
+                // Update the UI with the new data
+                updateSensorUI(sensorValues, wifiData);
+            });
+
         // Initialise string prefaces for display
         prefaces =  new int[]{R.string.x, R.string.y, R.string.z};
         gnssPrefaces =  new int[]{R.string.lati, R.string.longi};
@@ -82,7 +95,6 @@ public class MeasurementsFragment extends Fragment {
     /**
      * {@inheritDoc}
      * Sets title in the action bar to Sensor Measurements.
-     * Posts the {@link MeasurementsFragment#refreshTableTask} using the Handler.
      */
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -90,7 +102,7 @@ public class MeasurementsFragment extends Fragment {
         // Inflate the layout for this fragment
         View rootView = inflater.inflate(R.layout.fragment_measurements, container, false);
         getActivity().setTitle("Sensor Measurements");
-        this.refreshDataHandler.post(refreshTableTask);
+        sensorViewListener.start();
         return rootView;
     }
 
@@ -101,7 +113,7 @@ public class MeasurementsFragment extends Fragment {
     @Override
     public void onPause() {
         super.onPause();
-        this.refreshDataHandler.removeCallbacks(refreshTableTask);
+        sensorViewListener.stop();
     }
 
     /**
@@ -111,7 +123,7 @@ public class MeasurementsFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        this.refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
+        sensorViewListener.start();
     }
 
     /**
@@ -136,42 +148,45 @@ public class MeasurementsFragment extends Fragment {
      * @see SensorFusion class handling all sensors and data processing.
      * @see Wifi class holding network data.
      */
-    private final Runnable refreshTableTask = new Runnable() {
-        @Override
-        public void run() {
-            // Get all the values from SensorFusion
-            Map<SensorTypes, float[]> sensorValueMap = sensorFusion.getSensorValueMap();
-            // Loop through UI elements and update the values
-            for(SensorTypes st : SensorTypes.values()) {
-                if (st.ordinal() <= 8) {
-                  CardView cardView = (CardView) sensorMeasurementList.getChildAt(st.ordinal());
-                  ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
-                  float[] values = sensorValueMap.get(st);
-                  for (int i = 0; i < values.length; i++) {
-                    String valueString;
-                    // Set string wrapper based on data type.
-                    if (values.length == 1) {
-                      valueString = getString(R.string.level, String.format("%.2f", values[0]));
-                    } else if (values.length == 2) {
-                      if (st == SensorTypes.GNSSLATLONG)
-                        valueString = getString(gnssPrefaces[i], String.format("%.2f", values[i]));
-                      else
-                        valueString = getString(prefaces[i], String.format("%.2f", values[i]));
+    private void updateSensorUI(Map<SensorTypes, float[]> sensorValueMap, WiFiData wifiData) {
+      requireActivity().runOnUiThread(() -> {
+        for (SensorTypes st : SensorTypes.values()) {
+          if (st.ordinal() <= 8) {
+            CardView cardView = (CardView) sensorMeasurementList.getChildAt(st.ordinal());
+            ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
+            float[] values = sensorValueMap.get(st);
+
+            if (values != null) {
+              for (int i = 0; i < values.length; i++) {
+                String valueString;
+                if (values.length == 1) {
+                  valueString = getString(R.string.level, String.format("%.2f", values[0]));
+                } else if (values.length == 2) {
+                  if (st == SensorTypes.GNSSLATLONG)
+                    valueString = getString(gnssPrefaces[i], String.format("%.2f", values[i]));
+                  else if (st == SensorTypes.WIFI) {
+                    if(wifiData.location == null) {
+                      valueString = getString(gnssPrefaces[i], String.format("%.2f", -1));
                     } else {
-                      valueString = getString(prefaces[i], String.format("%.2f", values[i]));
+                      float[] location = new float[] {(float) wifiData.location.latitude,
+                          (float) wifiData.location.longitude};
+                      valueString = getString(gnssPrefaces[i], String.format("%.2f", location[i]));
                     }
-                    ((TextView) currentRow.getChildAt(i + 1)).setText(valueString);
+                  } else {
+                    valueString = getString(prefaces[i], String.format("%.2f", values[i]));
                   }
+                } else {
+                  valueString = getString(prefaces[i], String.format("%.2f", values[i]));
                 }
+                ((TextView) currentRow.getChildAt(i + 1)).setText(valueString);
+              }
             }
-            // Get all WiFi values - convert to list of strings
-            List<Wifi> wifiObjects = sensorFusion.getWifiList();
-            // If there are WiFi networks visible, update the recycler view with the data.
-            if(wifiObjects != null) {
-                wifiListView.setAdapter(new WifiListAdapter(getActivity(), wifiObjects));
-            }
-            // Restart the data updater task in REFRESH_TIME milliseconds.
-            refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
+          }
         }
-    };
+        // Update WiFi list if available
+        if (wifiData != null) {
+          wifiListView.setAdapter(new WifiListAdapter(getActivity(), wifiData.wifiList));
+        }
+      });
+    }
 }
