@@ -657,6 +657,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove){
+        if (WIFIpos == null || PDRmove == null) {
+            Log.e("EKF", "Received null input: wifi=" + WIFIpos + ", pdr=" + PDRmove);
+            return null;
+        }
+        createWifiPositioningRequest();
 
         //Initialise local variables
         float wifiLat = (float)WIFIpos.latitude;
@@ -727,8 +732,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         double R = 6371e3;
         double cosLat = Math.cos(Math.toRadians(initialLocation.getLatitude()));
         return new double[][] {
-                {0, 180/(Math.PI * R)},                  // d(lat)/dy
-                {180/(Math.PI * R * cosLat), 0}          // d(lng)/dx
+                {0, 180/(Math.PI * R)},
+                {180/(Math.PI * R * cosLat), 0}
         };
     }
 
@@ -753,6 +758,11 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private static double[][] inverse(double[][] m) {
         double det = m[0][0]*m[1][1] - m[0][1]*m[1][0];
+        if (Math.abs(det) < 1e-10) {
+            Log.e("EKF", "Matrix is singular, cannot invert.");
+            return new double[][]{{1, 0}, {0, 1}}; // fallback identity
+        }
+
         return new double[][]{
                 {m[1][1]/det, -m[0][1]/det},
                 {-m[1][0]/det, m[0][0]/det}
