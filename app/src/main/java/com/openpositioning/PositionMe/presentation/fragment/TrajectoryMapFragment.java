@@ -36,7 +36,6 @@ import com.google.maps.android.SphericalUtil;
 
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 
@@ -107,7 +106,7 @@ public class TrajectoryMapFragment extends Fragment {
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
     private SwitchMaterial wifiSwitch;
-    private static final double MAX_DISTANCE_THRESHOLD = 100; //wifi max distance between readings to detect outliers
+    private static final double MAX_DISTANCE_THRESHOLD = 100; //wifi max distance between readings to detect/remove outliers
 
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
@@ -115,6 +114,7 @@ public class TrajectoryMapFragment extends Fragment {
     private Polygon buildingPolygon;
 
     private BroadcastReceiver wifiErrorReceiver;
+
 
 
 
@@ -311,6 +311,7 @@ public class TrajectoryMapFragment extends Fragment {
 
         Log.d("TrajectoryMapFragment", "updateFusionPosition called with: " +
                 fusionLocation.latitude + ", " + fusionLocation.longitude);
+
 
         // If fusion marker doesn't exist, create it
         if (fusionMarker == null) {
@@ -515,7 +516,6 @@ public class TrajectoryMapFragment extends Fragment {
      * and append to polyline if the user actually moved.
      *
      * @param newLocation The new location to plot.
-     *
      */
     public void pdrLocation(@NonNull LatLng newLocation) {
         if (gMap == null) return;
@@ -604,6 +604,7 @@ public class TrajectoryMapFragment extends Fragment {
                     .zIndex(8f)  // High z-index, but below fusion marker
             );
             lastGnssLocation = gnssLocation;
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(gnssLocation, 19f));
         } else {
             // Move existing GNSS marker
             gnssMarker.setPosition(gnssLocation);

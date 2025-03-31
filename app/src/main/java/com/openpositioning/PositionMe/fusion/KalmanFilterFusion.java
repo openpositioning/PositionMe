@@ -255,6 +255,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
+
         // Debug the conversion
         Log.d(TAG, "GNSS geodetic->ENU: " +
                 position.latitude + "," + position.longitude + " -> " +
@@ -914,7 +915,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         /** The normalization constant used in the modified Z-score calculation (1 / Φ⁻¹(3/4) ≈ 0.6745). */
         private static final double MAD_NORMALIZATION_FACTOR = 0.6745;
         /** An absolute maximum distance allowed; measurements exceeding this are immediately flagged as outliers. */
-        private static final double ABSOLUTE_DISTANCE_THRESHOLD = 15.0; // meters
+        private static final double ABSOLUTE_DISTANCE_THRESHOLD = 7.0; // meters
         /** A small value to prevent division by zero or near-zero MAD values. */
         private static final double MINIMUM_MAD_VALUE = 1e-4;
         /** The minimum number of samples required in the buffer before statistical analysis can be performed. */

@@ -156,12 +156,14 @@ public class StartLocationFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        this.button = view.findViewById(R.id.startLocationDone);
-        this.button.setOnClickListener(new View.OnClickListener() {
+        Button kalmanButton = view.findViewById(R.id.useKalmanFilter);
+        Button particleButton = view.findViewById(R.id.useParticleFilter);
+
+        // Set click listener for Kalman filter button
+        kalmanButton.setOnClickListener(new View.OnClickListener() {
             /**
              * {@inheritDoc}
-             * When button clicked the PDR recording can start and the start position is stored for
-             * the {@link CorrectionFragment} to display. The {@link RecordingFragment} is loaded.
+             * When Kalman button clicked, store start position, set filter type to Kalman, and start recording
              */
             @Override
             public void onClick(View view) {
@@ -169,8 +171,8 @@ public class StartLocationFragment extends Fragment {
                 float chosenLat = startPosition[0];
                 float chosenLon = startPosition[1];
 
-                // Log the start location
-                Log.d("StartLocation", "Setting start location: " + chosenLat + ", " + chosenLon);
+                // Log the start location and filter choice
+                Log.d("StartLocation", "Setting start location: " + chosenLat + ", " + chosenLon + " with Kalman filter");
 
                 // Set both reference positions consistently
                 // 1. Set as float array (used by pdrProcessing)
@@ -180,18 +182,65 @@ public class StartLocationFragment extends Fragment {
                 double[] referencePosition = new double[]{chosenLat, chosenLon, 0.0};
                 sensorFusion.setStartGNSSLatLngAlt(referencePosition);
 
+                // Set filter type to Kalman
+                sensorFusion.setFilterType("kalman");
+
                 // Initialize the fusion algorithm with the correct reference position
                 sensorFusion.initializeFusionAlgorithm();
 
                 // Start recording sensors
                 sensorFusion.startRecording();
 
-                // If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
-                    // Now switch to the recording screen
                     ((RecordingActivity) requireActivity()).showRecordingScreen();
                 }
-                // For other activity types (handling based on your app flow)
+                // For other activity types
+                else if (requireActivity() instanceof ReplayActivity) {
+                    ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);
+                }
+                else {
+                    // Optional: log or handle error
+                    Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
+                }
+            }
+        });
+
+        // Set click listener for Particle filter button
+        particleButton.setOnClickListener(new View.OnClickListener() {
+            /**
+             * {@inheritDoc}
+             * When Particle button clicked, store start position, set filter type to Particle, and start recording
+             */
+            @Override
+            public void onClick(View view) {
+                // Get the chosen location from the map
+                float chosenLat = startPosition[0];
+                float chosenLon = startPosition[1];
+
+                // Log the start location and filter choice
+                Log.d("StartLocation", "Setting start location: " + chosenLat + ", " + chosenLon + " with Particle filter");
+
+                // Set both reference positions consistently
+                // 1. Set as float array (used by pdrProcessing)
+                sensorFusion.setStartGNSSLatitude(startPosition);
+
+                // 2. Set as double array (used by fusion algorithm)
+                double[] referencePosition = new double[]{chosenLat, chosenLon, 0.0};
+                sensorFusion.setStartGNSSLatLngAlt(referencePosition);
+
+                // Set filter type to Particle
+                sensorFusion.setFilterType("particle");
+
+                // Initialize the fusion algorithm with the correct reference position
+                sensorFusion.initializeFusionAlgorithm();
+
+                // Start recording sensors
+                sensorFusion.startRecording();
+
+                if (requireActivity() instanceof RecordingActivity) {
+                    ((RecordingActivity) requireActivity()).showRecordingScreen();
+                }
+                // For other activity types
                 else if (requireActivity() instanceof ReplayActivity) {
                     ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);
                 }

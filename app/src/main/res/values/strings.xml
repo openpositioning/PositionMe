@@ -138,5 +138,6 @@
     <string name="replay_frag_play">Play</string>
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
+    <string name="filterInstructions">Please select which filter you would like to use for your sensor fusion</string>
 
 </resources>
