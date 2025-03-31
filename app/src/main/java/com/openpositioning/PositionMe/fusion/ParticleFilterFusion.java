@@ -5,6 +5,7 @@ import android.util.Log;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
 
+import org.apache.commons.math3.distribution.TDistribution;
 import org.ejml.simple.SimpleMatrix;
 
 import java.util.ArrayList;
@@ -18,7 +19,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     private static final int MEAS_SIZE = 2;         // Total measurement vector size
 
     // Process noise scale (PDR) update {X, Y}
-    private static final double[] dynamicPdrStds = {0.25, Math.PI/6};
+    private static final double[] dynamicPdrStds = {0.5, 0.2, Math.PI/18};
     private SimpleMatrix measGnssMat;
     private SimpleMatrix measWifiMat;
     private SimpleMatrix forwardModel;
@@ -101,10 +102,14 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
         measWifiMat = SimpleMatrix.identity(MEAS_SIZE);
         measWifiMat = measWifiMat.scale(Math.pow(BASE_WIFI_NOISE, 2.0));
+
+        lastUpdateTime = 0;
     }
 
     @Override
     public void processPdrUpdate(float eastMeters, float northMeters, float altitude) {
+        long currentTime = System.currentTimeMillis();
+
         // Handle reference position and particles if not initialized
         if (!referenceInitialized && hasInitialGnssPosition) {
             initializeReferencePosition();
@@ -279,6 +284,11 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         Log.d(TAG, "Particle filter reset");
     }
 
+    public double scaleHeadingUncert(long currentTime) {
+        double scaling = 3*(currentTime - lastUpdateTime)/1000.0;
+        return Math.sqrt(scaling);
+    }
+
     // Simulate motion update of particles
     public void moveParticlesDynamic(double stepLength, double headingChange, double[] pdrStds) {
         for (Particle particle : particles) {
@@ -368,7 +378,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
             // Create a copy of the selected particle
             Particle original = particles.get(index);
-            Particle newParticle = new Particle(original.x, original.y, original.theta);
+            Particle newParticle = new Particle(original.x, original.y, original.theta, original.stepLength);
             newParticle.weight = 1.0 / numParticles;  // Reset weights to uniform
             newParticles.add(newParticle);
         }
@@ -490,15 +500,18 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         previousPdrPos[1] = initGnssCoordEnu[1];
 
         // Initial dispersion - spread particles in a reasonable area
-        double initialDispersion = 5.0; // 5 meters initial uncertainty
+        double initialDispersion = 2.5; // 2.5 meters initial uncertainty
 
         for (int i = 0; i < numParticles; i++) {
-            // Add some random noise to initial positions
-            double x = previousPdrPos[0] + rand.nextGaussian() * initialDispersion;
-            double y = previousPdrPos[1] + rand.nextGaussian() * initialDispersion;
-            double theta = rand.nextDouble() * 2 * Math.PI - Math.PI;  // Random orientation
+            TDistribution tdist = new TDistribution(2);
 
-            Particle particle = new Particle(x, y, theta);
+            // Add some random noise to initial positions
+            double x = previousPdrPos[0] + tdist.sample() * initialDispersion;
+            double y = previousPdrPos[1] + tdist.sample() * initialDispersion;
+            double theta = tdist.sample() * 2 * Math.PI;  // Random orientation
+            double stepLength = 0.75 + tdist.sample() * dynamicPdrStds[1];
+
+            Particle particle = new Particle(x, y, theta, stepLength);
             particle.weight = 1.0 / numParticles;
             particles.add(particle);
         }
