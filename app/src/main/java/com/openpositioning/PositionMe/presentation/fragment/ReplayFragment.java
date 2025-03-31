@@ -349,10 +349,11 @@ public class ReplayFragment extends Fragment {
                             p.cachedWiFiLocation = location;
                             float bearing = p.orientation;
                             if (previousReplayPoint != null) {
-                                bearing = (float) UtilFunctions.calculateAngleSimple(previousReplayPoint, location);
+                                bearing = (float) UtilFunctions.calculateBearing(previousReplayPoint, location); // Accurate bearing
+
                             }
                             trajectoryMapFragment.updateUserLocation(location, bearing);
-                            trajectoryMapFragment.addPolylinePoint(location); // ✅ Add trace point
+                            trajectoryMapFragment.addPolylinePoint(location); // Add trace point
                             previousReplayPoint = location;
                             prevWiFiLocation = location;
                         }
@@ -376,7 +377,7 @@ public class ReplayFragment extends Fragment {
         if (currentPoint != null) {
             float bearing = p.orientation;
             if (previousReplayPoint != null) {
-                bearing = (float) UtilFunctions.calculateAngleSimple(previousReplayPoint, currentPoint);
+                bearing = (float) UtilFunctions.calculateBearing(previousReplayPoint, currentPoint); // code by Guilherme
             }
 
             trajectoryMapFragment.updateUserLocation(currentPoint, bearing);
