@@ -598,7 +598,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Written by Marco Bancalari-Ruiz
      */
 
-    public LatLng EKF(){
+    public LatLng EKF_recording(){
 
         createWifiPositioningRequest();
 
@@ -633,6 +633,63 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Update step (WiFi)
         double[] measurement = {wifiLat, wifiLng};
         double[] predictedLL = metersToLatLng(state[0], state[1]);
+        double[][] H = computeJacobian();
+        double[][] R = {{1e-6, 0}, {0, 1e-6}}; // Measurement noise
+
+        // Kalman gain
+        double[][] S = matrixAdd(matrixMultiply(H, matrixMultiply(covariance, transpose(H))), R);
+        double[][] K = matrixMultiply(matrixMultiply(covariance, transpose(H)), inverse(S));
+
+        // State update
+        double[] innovation = {
+                measurement[0] - predictedLL[0],
+                measurement[1] - predictedLL[1]
+        };
+        double[] update = matrixVectorMultiply(K, innovation);
+        state[0] += update[0];
+        state[1] += update[1];
+
+        // Covariance update
+        double[][] I = {{1, 0}, {0, 1}};
+        covariance = matrixMultiply(matrixSubtract(I, matrixMultiply(K, H)), covariance);
+
+        return new LatLng(predictedLL[0], predictedLL[1]);
+    }
+
+    public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove){
+
+        createWifiPositioningRequest();
+
+        //Initialise local variables
+        float wifiLat = (float)WIFIpos.latitude;
+        float wifiLng = (float)WIFIpos.longitude;
+        float pdrDeltaX = (float)PDRmove.latitude;
+        float pdrDeltaY = (float)PDRmove.longitude;
+
+        // Initialize on first valid WiFi reading
+        if (!isInitialized && wifiLat != 0 && wifiLng != 0) {
+            initialLocation = new Location("");
+            initialLocation.setLatitude(wifiLat);
+            initialLocation.setLongitude(wifiLng);
+            state[0] = 0;
+            state[1] = 0;
+            isInitialized = true;
+            return new LatLng(wifiLat, wifiLng);
+        }
+
+        if (!isInitialized) return null;
+
+        // Prediction step (PDR)
+        double[][] F = {{1, 0}, {0, 1}}; // State transition matrix
+        double[][] Q = {{1e-6, 0}, {0, 1e-6}}; // Process noise
+
+        state[0] += pdrDeltaX;
+        state[1] += pdrDeltaY;
+        covariance = matrixAdd(matrixMultiply(F, matrixMultiply(covariance, transpose(F))), Q);
+
+        // Update step (WiFi)
+        double[] measurement = {wifiLat, wifiLng};
+        double[] predictedLL = {state[0], state[1]};
         double[][] H = computeJacobian();
         double[][] R = {{1e-6, 0}, {0, 1e-6}}; // Measurement noise
 
