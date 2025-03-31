@@ -348,6 +348,7 @@ public class ReplayFragment extends Fragment {
     };
 
     // code by Guilherme: Updated method to draw replay point, orientation, and trace.
+    // code by Guilherme: Updated method to draw replay point, orientation, trace, and tag markers.
     private void drawReplayPointWithMode(int index) {
         if (index < 0 || index >= replayData.size()) return;
 
@@ -356,12 +357,20 @@ public class ReplayFragment extends Fragment {
 
         switch (selectedMode) {
             case "GNSS":
+                Log.d(TAG, "GNSS Mode - gnssLocation: " + p.gnssLocation);
                 if (p.gnssLocation != null) {
                     trajectoryMapFragment.updateUserLocation(p.gnssLocation, p.orientation);
-                } else {
+                    trajectoryMapFragment.addPolylinePoint(p.gnssLocation); // Optional
+                    if (selectedMode.equals("GNSS")) {
+                        trajectoryMapFragment.updateGNSS(p.gnssLocation);
+                    }
+                    currentPoint = p.gnssLocation;
+                } else if (p.pdrLocation != null) {
                     trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+                    currentPoint = p.pdrLocation;
                 }
                 break;
+
 
             case "WiFi":
                 // code by Jamie Arnott
@@ -393,7 +402,6 @@ public class ReplayFragment extends Fragment {
                             float bearing = p.orientation;
                             if (previousReplayPoint != null) {
                                 bearing = (float) UtilFunctions.calculateBearing(previousReplayPoint, location); // Accurate bearing
-
                             }
                             trajectoryMapFragment.updateUserLocation(location, bearing);
                             trajectoryMapFragment.addPolylinePoint(location); // Add trace point
@@ -404,7 +412,6 @@ public class ReplayFragment extends Fragment {
                         @Override
                         public void onError(String message) {
                             Log.w(TAG, "WiFi Positioning failed: " + message);
-                            // Do not update map if WiFi fails
                         }
                     });
 
@@ -432,6 +439,7 @@ public class ReplayFragment extends Fragment {
             }
         }
     }
+
 
 
 
@@ -512,16 +520,15 @@ public class ReplayFragment extends Fragment {
         return null;
     }
 
-    // code by Guilherme: Load and show tags on the map
-    // code by Guilherme: draw all tags saved to SensorFusion
+    // code by Guilherme
     private void showReplayTags() {
-        List<Tag> tags = SensorFusion.getInstance().getTags();
-        for (Tag tag : tags) {
-            if (tag.getLocation() != null && tag.getLabel() != null) {
-                trajectoryMapFragment.addTagMarker(tag.getLocation(), tag.getLabel());
+        for (TrajParser.TagPoint tag : TrajParser.tagPoints) {
+            if (tag.location != null && tag.label != null) {
+                trajectoryMapFragment.addTagMarker(tag.location, tag.label);
             }
         }
     }
+
 
 
 }
