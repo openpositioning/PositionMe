@@ -12,6 +12,10 @@ import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.Toast;
+// Code by Guilherme: added necessary imports
+import com.openpositioning.PositionMe.utils.UtilFunctions;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -19,22 +23,20 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.WiFiPositioning;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class ReplayFragment extends Fragment {
 
@@ -59,6 +61,9 @@ public class ReplayFragment extends Fragment {
 
     private LatLng prevWiFiLocation;
 
+    // code by Guilherme: New field to store previous replay point for computing bearing.
+    private LatLng previousReplayPoint = null;
+
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -76,7 +81,9 @@ public class ReplayFragment extends Fragment {
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater,
+                             @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_replay, container, false);
     }
 
@@ -94,12 +101,77 @@ public class ReplayFragment extends Fragment {
                     .commit();
         }
 
+        // Use WiFi positioning from the first replay point if available.
+        if (!replayData.isEmpty()) {
+            TrajParser.ReplayPoint firstReplayPoint = replayData.get(0);
+            if (firstReplayPoint.wifiSamples != null && !firstReplayPoint.wifiSamples.isEmpty()) {
+                JSONObject wifiAccessPoints = new JSONObject();
+                for (Traj.WiFi_Sample sample : firstReplayPoint.wifiSamples) {
+                    for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
+                        try {
+                            wifiAccessPoints.put(String.valueOf(macScan.getMac()), macScan.getRssi());
+                        } catch (JSONException e) {
+                            Log.e(TAG, "Error creating WiFi fingerprint JSON: " + e.getMessage());
+                        }
+                    }
+                }
+                JSONObject wifiFingerPrint = new JSONObject();
+                try {
+                    wifiFingerPrint.put("wf", wifiAccessPoints);
+                } catch (JSONException e) {
+                    throw new RuntimeException(e);
+                }
+                new WiFiPositioning(getContext()).request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                    @Override
+                    public void onSuccess(LatLng wifiLocation, int floor) {
+                        Log.i(TAG, "WiFi positioning successful. Location: " + wifiLocation);
+                        new AlertDialog.Builder(requireContext())
+                                .setTitle("Choose Positioning Method")
+                                .setMessage("WiFi-based positioning is available for this trajectory. Do you want to use WiFi positioning?")
+                                .setPositiveButton("Use WiFi", (dialog, which) -> {
+                                    setupInitialMapPosition((float) wifiLocation.latitude, (float) wifiLocation.longitude);
+                                    dialog.dismiss();
+                                })
+                                .setNegativeButton("Use GNSS", (dialog, which) -> {
+                                    showGnssChoiceDialog();
+                                    dialog.dismiss();
+                                })
+                                .setCancelable(false)
+                                .show();
+                    }
+                    @Override
+                    public void onError(String message) {
+                        Log.e(TAG, "WiFi positioning failed: " + message);
+                        if (hasAnyGnssData(replayData)) {
+                            showGnssChoiceDialog();
+                        } else {
+                            if (initialLat != 0f || initialLon != 0f) {
+                                LatLng startPoint = new LatLng(initialLat, initialLon);
+                                trajectoryMapFragment.setInitialCameraPosition(startPoint);
+                            }
+                        }
+                    }
+                });
+            } else {
+                if (hasAnyGnssData(replayData)) {
+                    showGnssChoiceDialog();
+                } else {
+                    if (initialLat != 0f || initialLon != 0f) {
+                        LatLng startPoint = new LatLng(initialLat, initialLon);
+                        trajectoryMapFragment.setInitialCameraPosition(startPoint);
+                    }
+                }
+            }
+        } else {
+            Log.e(TAG, "Replay data is empty, cannot determine initial location.");
+        }
+
         playButton = view.findViewById(R.id.playButton);
         pauseButton = view.findViewById(R.id.pauseButton);
-        replayButton = view.findViewById(R.id.replayButton);
-        goToEndButton = view.findViewById(R.id.goToEndButton);
         speedHalfButton = view.findViewById(R.id.speedHalfButton);
         speedDoubleButton = view.findViewById(R.id.speedDoubleButton);
+        replayButton = view.findViewById(R.id.replayButton);
+        goToEndButton = view.findViewById(R.id.goToEndButton);
         playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
         dataSourceSpinner = view.findViewById(R.id.dataSourceSpinner);
 
@@ -107,19 +179,20 @@ public class ReplayFragment extends Fragment {
                 android.R.layout.simple_spinner_dropdown_item,
                 new String[]{"PDR", "GNSS", "WiFi"});
         dataSourceSpinner.setAdapter(adapter);
-
         dataSourceSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
                 selectedMode = parent.getItemAtPosition(position).toString();
+                // code by Guilherme: Set polyline color based on selection.
                 trajectoryMapFragment.setPolylineColor(getColorForMode(selectedMode));
-                trajectoryMapFragment.clearMapAndReset();
+                trajectoryMapFragment.clearMapAndReset(); // code by Guilherme: Clear previous trace when mode changes.
                 currentIndex = 0;
                 playbackSeekBar.setProgress(0);
                 updateSeekBarMax();
+                // Reset the previous replay point for bearing calculation.
+                previousReplayPoint = null; // code by Guilherme
                 drawReplayPointWithMode(currentIndex);
             }
-
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) {}
         });
@@ -132,6 +205,7 @@ public class ReplayFragment extends Fragment {
                 isPlaying = true;
                 playButton.setEnabled(false);
                 pauseButton.setEnabled(true);
+                // code by Guilherme: Do not clear the map here so the polyline trace accumulates.
                 playbackHandler.postDelayed(playbackRunnable, playbackInterval);
             }
         });
@@ -151,15 +225,20 @@ public class ReplayFragment extends Fragment {
         replayButton.setOnClickListener(v -> {
             currentIndex = 0;
             playbackSeekBar.setProgress(0);
-            trajectoryMapFragment.clearMapAndReset();
+            trajectoryMapFragment.clearMapAndReset(); // code by Guilherme: Clear trace when restarting.
+            // code by Guilherme: Reset previousReplayPoint for bearing calculation.
+            previousReplayPoint = null;
             drawReplayPointWithMode(currentIndex);
         });
 
         goToEndButton.setOnClickListener(v -> {
             currentIndex = replayData.size() - 1;
             playbackSeekBar.setProgress(currentIndex);
-            trajectoryMapFragment.clearMapAndReset();
-            drawReplayPointWithMode(currentIndex);
+            trajectoryMapFragment.clearMapAndReset(); // code by Guilherme: Clear trace before drawing final point.
+            // Redraw all points up to the last one.
+            for (int i = 0; i <= currentIndex && i < replayData.size(); i++) {
+                drawReplayPointWithMode(i);
+            }
             stopPlaying();
         });
 
@@ -167,17 +246,23 @@ public class ReplayFragment extends Fragment {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
                     currentIndex = progress;
-                    trajectoryMapFragment.clearMapAndReset();
-                    drawReplayPointWithMode(currentIndex);
+                    trajectoryMapFragment.clearMapAndReset(); // code by Guilherme: Clear trace for manual scrubbing.
+                    // Reset previousReplayPoint.
+                    previousReplayPoint = null; // code by Guilherme
+                    for (int i = 0; i <= currentIndex && i < replayData.size(); i++) {
+                        drawReplayPointWithMode(i);
+                    }
+                    Log.i(TAG, "SeekBar moved by user. New index: " + currentIndex);
                 }
             }
-
             @Override public void onStartTrackingTouch(SeekBar seekBar) { stopPlaying(); }
-
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
         if (!replayData.isEmpty()) {
+            trajectoryMapFragment.clearMapAndReset();
+            // code by Guilherme: Reset previousReplayPoint.
+            previousReplayPoint = null;
             drawReplayPointWithMode(0);
         }
     }
@@ -214,7 +299,8 @@ public class ReplayFragment extends Fragment {
                 stopPlaying();
                 return;
             }
-            trajectoryMapFragment.clearMapAndReset();
+            // code by Guilherme: Do not clear the map here so that the trajectory line persists.
+            // Instead, simply add the current point to the polyline by calling drawReplayPointWithMode.
             drawReplayPointWithMode(currentIndex);
             currentIndex++;
             playbackSeekBar.setProgress(currentIndex);
@@ -222,22 +308,23 @@ public class ReplayFragment extends Fragment {
         }
     };
 
+    // code by Guilherme: Updated method to draw replay point, orientation, and trace.
     private void drawReplayPointWithMode(int index) {
         if (index < 0 || index >= replayData.size()) return;
 
         TrajParser.ReplayPoint p = replayData.get(index);
+        LatLng currentPoint = null;
+
         switch (selectedMode) {
             case "GNSS":
                 if (p.gnssLocation != null) {
-                    trajectoryMapFragment.updateUserLocation(p.gnssLocation, p.orientation);
-                } else {
-                    trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+                    currentPoint = p.gnssLocation;
                 }
                 break;
 
             case "WiFi":
                 if (p.cachedWiFiLocation != null) {
-                    trajectoryMapFragment.updateUserLocation(p.cachedWiFiLocation, p.orientation);
+                    currentPoint = p.cachedWiFiLocation;
                 } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
                     JSONObject wifiFingerprint = new JSONObject();
                     JSONObject wifiAccessPoints = new JSONObject();
@@ -259,39 +346,51 @@ public class ReplayFragment extends Fragment {
                     new WiFiPositioning(getContext()).request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
                         @Override
                         public void onSuccess(LatLng location, int floor) {
-                            Log.d(TAG, "WiFi Positioning Successful");
                             p.cachedWiFiLocation = location;
-                            trajectoryMapFragment.updateUserLocation(location, p.orientation);
+                            float bearing = p.orientation;
+                            if (previousReplayPoint != null) {
+                                bearing = (float) UtilFunctions.calculateAngleSimple(previousReplayPoint, location);
+                            }
+                            trajectoryMapFragment.updateUserLocation(location, bearing);
+                            trajectoryMapFragment.addPolylinePoint(location); // ✅ Add trace point
+                            previousReplayPoint = location;
                             prevWiFiLocation = location;
                         }
 
                         @Override
                         public void onError(String message) {
                             Log.w(TAG, "WiFi Positioning failed: " + message);
-                            if (prevWiFiLocation != null) {
-                                trajectoryMapFragment.updateUserLocation(prevWiFiLocation, p.orientation);
-                            } else {
-                                trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-                            }
+                            // Do not update map if WiFi fails
                         }
                     });
-                } else {
-                    if (prevWiFiLocation != null) {
-                        trajectoryMapFragment.updateUserLocation(prevWiFiLocation, p.orientation);
-                    } else {
-                        trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-                    }
+
+                    return; // Async, return early to avoid using fallback
                 }
                 break;
 
-            default:
-                trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+            default: // PDR
+                currentPoint = p.pdrLocation;
+                break;
         }
 
-        if (selectedMode.equals("GNSS") && p.gnssLocation != null) {
-            trajectoryMapFragment.updateGNSS(p.gnssLocation);
+        if (currentPoint != null) {
+            float bearing = p.orientation;
+            if (previousReplayPoint != null) {
+                bearing = (float) UtilFunctions.calculateAngleSimple(previousReplayPoint, currentPoint);
+            }
+
+            trajectoryMapFragment.updateUserLocation(currentPoint, bearing);
+            trajectoryMapFragment.addPolylinePoint(currentPoint); // ✅ Draw trace point
+            previousReplayPoint = currentPoint;
+
+            if (selectedMode.equals("GNSS") && p.gnssLocation != null) {
+                trajectoryMapFragment.updateGNSS(p.gnssLocation);
+            }
         }
     }
+
+
+
 
     private int getColorForMode(String mode) {
         switch (mode) {
@@ -318,5 +417,51 @@ public class ReplayFragment extends Fragment {
     public void onDestroyView() {
         super.onDestroyView();
         stopPlaying();
+    }
+
+    // Helper methods for GNSS choice dialog and initial map position.
+    private boolean hasAnyGnssData(List<TrajParser.ReplayPoint> data) {
+        for (TrajParser.ReplayPoint point : data) {
+            if (point.gnssLocation != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void showGnssChoiceDialog() {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Choose Starting Location")
+                .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or your manually picked coordinates?")
+                .setPositiveButton("File's GNSS", (dialog, which) -> {
+                    LatLng firstGnss = getFirstGnssLocation(replayData);
+                    if (firstGnss != null) {
+                        setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
+                    } else {
+                        setupInitialMapPosition(initialLat, initialLon);
+                    }
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Manual Set", (dialog, which) -> {
+                    setupInitialMapPosition(initialLat, initialLon);
+                    dialog.dismiss();
+                })
+                .setCancelable(false)
+                .show();
+    }
+
+    private void setupInitialMapPosition(float latitude, float longitude) {
+        LatLng startPoint = new LatLng(latitude, longitude);
+        Log.i(TAG, "Setting initial map position: " + startPoint);
+        trajectoryMapFragment.setInitialCameraPosition(startPoint);
+    }
+
+    private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
+        for (TrajParser.ReplayPoint point : data) {
+            if (point.gnssLocation != null) {
+                return new LatLng(point.gnssLocation.latitude, point.gnssLocation.longitude);
+            }
+        }
+        return null;
     }
 }

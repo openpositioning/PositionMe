@@ -82,6 +82,10 @@ public class TrajectoryMapFragment extends Fragment {
     private Button switchColorButton;
     private Polygon buildingPolygon;
 
+    // Code by Guilherme
+    private int currentColor = Color.RED;
+    private PolylineOptions polylineOptions;
+
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -216,13 +220,31 @@ public class TrajectoryMapFragment extends Fragment {
 
 
 
+    // Code by Guilherme
     public void setPolylineColor(int color) {
+        currentColor = color; // store the new color
         if (polyline != null) {
             polyline.setColor(color);
         } else {
             Log.e("TrajectoryMapFragment", "Polyline is null. Cannot set color.");
         }
     }
+
+    // Code by Guilherme
+    public void addPolylinePoint(@NonNull LatLng point) {
+        if (gMap == null) return;
+
+        if (polyline == null) {
+            polylineOptions = new PolylineOptions().color(currentColor).width(8f).add(point);
+            polyline = gMap.addPolyline(polylineOptions);
+        } else {
+            List<LatLng> points = new ArrayList<>(polyline.getPoints());
+            points.add(point);
+            polyline.setPoints(points);
+        }
+    }
+
+
 
     /**
      * Initialize the map settings with the provided GoogleMap instance.
@@ -247,11 +269,14 @@ public class TrajectoryMapFragment extends Fragment {
         indoorMapManager = new IndoorMapManager(map);
 
         // Initialize an empty polyline
-        polyline = map.addPolyline(new PolylineOptions()
-                .color(Color.RED)
-                .width(5f)
-                .add() // start empty
-        );
+        // Code by Guilherme
+        polylineOptions = new PolylineOptions()
+                .color(currentColor)
+                .width(8f)
+                .add(); // empty
+
+        polyline = map.addPolyline(polylineOptions);
+
 
         // GNSS path in blue
         gnssPolyline = map.addPolyline(new PolylineOptions()
@@ -467,14 +492,19 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.RED)
-                    .width(5f)
-                    .add());
+            // Code by Guilherme
+            // Code by Guilherme
+            polylineOptions = new PolylineOptions()
+                    .color(currentColor)
+                    .width(8f)
+                    .add();
+
+            polyline = gMap.addPolyline(polylineOptions);
             gnssPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.BLUE)
                     .width(5f)
                     .add());
+
         }
     }
 
@@ -569,6 +599,8 @@ public class TrajectoryMapFragment extends Fragment {
         gMap.addPolygon(buildingPolygonOptions4);
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
+
+
 
 
 }
