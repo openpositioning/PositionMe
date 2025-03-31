@@ -83,6 +83,9 @@ public class RecordingFragment extends Fragment {
     private float previousPosX;
     private float previousPosY;
 
+    private float fusedDistance;
+    private float fusedPreviousPosX;
+    private float fusedPreviousPosY;
     // Starting point coordinates
     private static LatLng start;
     // Storing the google map object
@@ -97,6 +100,7 @@ public class RecordingFragment extends Fragment {
     private Marker wifiPositionMarker;
     // Current Location coordinates
     private LatLng currentLocation;
+    private LatLng fusedCurrentLocation;
     // Next Location coordinates
     private LatLng nextLocation;
     // Stores the polyline object for plotting path
@@ -214,6 +218,9 @@ public class RecordingFragment extends Fragment {
 
         currentLocation = start; // 🔥 确保 currentLocation 也初始化 Make sure currentLocation is also initialized
 
+        fusedCurrentLocation = start;
+
+
         // ✅ 初始化地图
         // ✅ Initialize the map
         SupportMapFragment supportMapFragment = (SupportMapFragment)
@@ -258,13 +265,13 @@ public class RecordingFragment extends Fragment {
                 // initialize the fused position
                 fusedPolyline = gMap.addPolyline(new PolylineOptions()
                         .color(Color.YELLOW)
-                        .add(currentLocation)
+                        .add(fusedCurrentLocation)
                         .zIndex(6));
 
 
                 // ✅ 设置室内地图（如适用）
                 // ✅ Set up indoor maps (if applicable)
-                indoorMapManager.setCurrentLocation(currentLocation);
+                indoorMapManager.setCurrentLocation(currentLocation);// fusedCurrentLocation or not?
                 indoorMapManager.setIndicationOfIndoorMap();
             });
         } else {
@@ -317,6 +324,10 @@ public class RecordingFragment extends Fragment {
         this.distance = 0f;
         this.previousPosX = 0f;
         this.previousPosY = 0f;
+
+        this.fusedDistance = 0f;
+        this.fusedPreviousPosX = 0f;
+        this.fusedPreviousPosY = 0f;
 
         this.recIcon = getView().findViewById(R.id.redDot);
         if (recIcon != null) {
@@ -643,10 +654,10 @@ public class RecordingFragment extends Fragment {
     }
 
     private void addCurrentLocationMarker() {
-        if(currentLocation != null){
+        if(fusedCurrentLocation != null){
             if(isRecording){
                 Marker tagMarker = gMap.addMarker(new MarkerOptions()
-                        .position(currentLocation)
+                        .position(fusedCurrentLocation)
                         .title("Added Tag")
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
             }
@@ -664,15 +675,16 @@ public class RecordingFragment extends Fragment {
         // 重置当前位置信息为初始位置（假设 start 是你的初始位置）
         // Reset the current location information to the initial location (assuming start is your initial location)
         currentLocation = new LatLng(start.latitude, start.longitude);
+        fusedCurrentLocation = new LatLng(start.latitude, start.longitude);
 
         // 重置摄像机视角（例如 zoom 为 19f）
         // Reset the camera perspective (e.g. zoom to 19f)
-        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 19f));
+        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusedCurrentLocation, 19f));
 
         // 重新添加 orientationMarker 到初始位置
         // Re-add orientationMarker to the initial position
         orientationMarker = gMap.addMarker(new MarkerOptions()
-                .position(currentLocation)
+                .position(fusedCurrentLocation)
                 .title("Current Position")
                 .flat(true)
                 .icon(BitmapDescriptorFactory.fromBitmap(
@@ -692,7 +704,7 @@ public class RecordingFragment extends Fragment {
         }
         fusedPolyline = gMap.addPolyline(new PolylineOptions()
                 .color(Color.YELLOW)
-                .add(currentLocation)
+                .add(fusedCurrentLocation)
                 .zIndex(6));
     }
 
@@ -864,16 +876,27 @@ public class RecordingFragment extends Fragment {
         // ✅ **获取 PDR 数据**（检查是否为 null）
         //✅ **Get PDR data** (check if it is null)
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
+        float[] fusedValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
+//        float[] fusedValues = sensorFusion.getFusionLocation();;/////////// Fusion location
+
         if (pdrValues == null || pdrValues.length < 2) {
 //            Log.e("updateUI", "❌ PDR Data is NULL or Incomplete!");
             return;
         }
+
+        if (fusedValues == null || fusedValues.length < 2) {return;}
+
 
         // ✅ **计算移动距离**
         //✅ **Calculate moving distance**
         float deltaX = pdrValues[0] - previousPosX;
         float deltaY = pdrValues[1] - previousPosY;
         float stepDistance = (float) Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+        float fusedDeltaX = fusedValues[0] - fusedPreviousPosX;
+        float fusedDeltaY = fusedValues[1] - fusedPreviousPosY;
+        float fusedStepDistance = (float) Math.sqrt(fusedDeltaX * fusedDeltaX + fusedDeltaY * fusedDeltaY);
+
 //        Log.d("deltaX", "🚶‍♂️ Delta X: " + deltaX);
 //        Log.d("deltaY", "🚶‍♂️ Delta Y: " + deltaY);
 //        Log.d("updateUI", "🚶‍♂️ Step Distance: " + stepDistance);
@@ -887,6 +910,13 @@ public class RecordingFragment extends Fragment {
             // ✅ **绘制轨迹（只在用户真正移动时）**
             // ✅ **Draw the track (only when the user actually moves)**
             plotLines(new float[]{deltaX, deltaY});
+        }
+
+        if (fusedStepDistance > 0.001f) {
+            fusedDistance += fusedStepDistance;
+            // ✅ **绘制轨迹（只在用户真正移动时）**
+            // ✅ **Draw the track (only when the user actually moves)**
+            plotLines(new float[]{fusedDeltaX, fusedDeltaY});
         }
 
         // ✅ **检查室内地图管理器**
@@ -1061,6 +1091,9 @@ public class RecordingFragment extends Fragment {
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
 
+        fusedPreviousPosX = fusedValues[0];
+        fusedPreviousPosY = fusedValues[1];
+
         // ✅ **更新 UI Elevation**
         //✅ **Update UI Elevation**
         elevation.setText("Elevation: " + String.format("%.2f", elevationVal) + " m");
@@ -1090,47 +1123,96 @@ public class RecordingFragment extends Fragment {
             Log.e("PlottingPDR", "❌ Invalid pdrMoved data!");
             return;
         }
+        updatePDRandFusionPosition(pdrMoved, true);  // update fused polyline
+        updatePDRandFusionPosition(pdrMoved, false); // update PDR polyline
 
-        if (currentLocation != null) {
-            // ✅ **计算新位置**
-            //✅ **Calculate new position**
-            LatLng nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
+        // 平滑摄像机
+        gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedCurrentLocation, 19f));
+
+//        if (currentLocation != null) {
+//            // ✅ **计算新位置**
+//            //✅ **Calculate new position**
+//            LatLng nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
+//            if (nextLocation == null) {
+//                Log.e("PlottingPDR", "❌ nextLocation is NULL!");
+//                return;
+//            }
+//            try {
+//                // ✅ **更新 PDR 轨迹**
+//                //✅ **Update PDR tracks**
+//                List<LatLng> points = new ArrayList<>(polyline.getPoints()); // 🔥 避免 GC 频繁回收 Avoid frequent GC collection
+//                points.add(nextLocation);
+//                polyline.setPoints(points);
+//
+//                // ✅ **移动方向指示 Marker**
+//                //✅ **Moving direction indicator Marker**
+//                if (orientationMarker != null) {
+//                    orientationMarker.setPosition(nextLocation);
+//                }
+//
+//                // ✅ **平滑移动摄像机**
+//                //✅ **Smooth camera movement**
+//                gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, 19f));
+//
+//            } catch (Exception ex) {
+//                Log.e("PlottingPDR", "❌ Exception: " + ex.getMessage());
+//            }
+//
+//            // ✅ **更新当前位置**
+//            //✅ **Update current location**
+//            currentLocation = nextLocation;
+//        } else {
+//            // **初始化起始位置**
+//            // **Initialize the starting position**
+//            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+//            if (location != null && location.length >= 2) {
+//                currentLocation = new LatLng(location[0], location[1]);
+//                nextLocation = currentLocation;
+//            } else {
+//                Log.e("PlottingPDR", "❌ GNSS location unavailable!");
+//            }
+//        }
+    }
+
+    private void updatePDRandFusionPosition(float[] pdrMoved, boolean isFused) {
+        LatLng location = isFused ? fusedCurrentLocation : currentLocation;
+        Polyline targetPolyline = isFused ? fusedPolyline : polyline;
+
+        if (location != null) {
+            LatLng nextLocation = UtilFunctions.calculateNewPos(location, pdrMoved);
             if (nextLocation == null) {
                 Log.e("PlottingPDR", "❌ nextLocation is NULL!");
                 return;
             }
 
             try {
-                // ✅ **更新 PDR 轨迹**
-                //✅ **Update PDR tracks**
-                List<LatLng> points = new ArrayList<>(polyline.getPoints()); // 🔥 避免 GC 频繁回收 Avoid frequent GC collection
+                List<LatLng> points = new ArrayList<>(targetPolyline.getPoints());
                 points.add(nextLocation);
-                polyline.setPoints(points);
-
-                // ✅ **移动方向指示 Marker**
-                //✅ **Moving direction indicator Marker**
-                if (orientationMarker != null) {
-                    orientationMarker.setPosition(nextLocation);
-                }
-
-                // ✅ **平滑移动摄像机**
-                //✅ **Smooth camera movement**
-                gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, 19f));
+                targetPolyline.setPoints(points);
 
             } catch (Exception ex) {
                 Log.e("PlottingPDR", "❌ Exception: " + ex.getMessage());
             }
 
-            // ✅ **更新当前位置**
-            //✅ **Update current location**
-            currentLocation = nextLocation;
+            if (isFused) {
+                fusedCurrentLocation = nextLocation;
+            } else {
+                currentLocation = nextLocation;
+            }
+            //✅ **Moving direction indicator Marker**
+            if (orientationMarker != null) {
+                orientationMarker.setPosition(fusedCurrentLocation);
+            }
         } else {
-            // **初始化起始位置**
-            // **Initialize the starting position**
-            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-            if (location != null && location.length >= 2) {
-                currentLocation = new LatLng(location[0], location[1]);
-                nextLocation = currentLocation;
+            // 初始化起始位置
+            float[] locationData = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+            if (locationData != null && locationData.length >= 2) {
+                LatLng startLocation = new LatLng(locationData[0], locationData[1]);
+                if (isFused) {
+                    fusedCurrentLocation = startLocation;
+                } else {
+                    currentLocation = startLocation;
+                }
             } else {
                 Log.e("PlottingPDR", "❌ GNSS location unavailable!");
             }
