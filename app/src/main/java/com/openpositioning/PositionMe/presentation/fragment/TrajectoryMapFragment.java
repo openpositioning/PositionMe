@@ -1,5 +1,9 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -86,6 +90,7 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng lastWifiLocation = null; // Last WiFi position
     private boolean isWifiOn = false; // Toggle for WiFi tracking
 
+    private int lastAutoFloorLevel = Integer.MIN_VALUE;
 
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
@@ -107,6 +112,10 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+
+    private BroadcastReceiver wifiErrorReceiver;
+
+
 
 
 
@@ -233,13 +242,20 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
+        sensorFusion = SensorFusion.getInstance();
+
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-
-            //TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
-//            float elevationVal = sensorFusion.getElevation();
-//            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-//                    ,true);
+            if (indoorMapManager != null) {
+                if (isChecked) {
+                    // Get WiFi floor from SensorFusion and set it
+                    int wifiFloor = sensorFusion.getWifiFloor();
+                    Log.d("AutoFloor", "Auto floor enabled. WiFi floor = " + wifiFloor);
+                    indoorMapManager.setCurrentFloor(wifiFloor, true);
+                } else {
+                    Log.d("AutoFloor", "Auto floor disabled");
+                }
+            }
         });
 
         floorUpButton.setOnClickListener(v -> {
@@ -256,7 +272,16 @@ public class TrajectoryMapFragment extends Fragment {
                 indoorMapManager.decreaseFloor();
             }
         });
+
+
+
+
+
     }
+
+
+
+
 
 
 
@@ -324,7 +349,27 @@ public class TrajectoryMapFragment extends Fragment {
             indoorMapManager.setCurrentLocation(fusionLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
+
+
+        UpdateAutoFloor();
+
     }
+
+    private void UpdateAutoFloor() {
+        if (autoFloorSwitch != null && autoFloorSwitch.isChecked()
+                && sensorFusion != null && indoorMapManager != null) {
+
+            int wifiFloor = sensorFusion.getWifiFloor();
+
+            if (wifiFloor != lastAutoFloorLevel) {
+                lastAutoFloorLevel = wifiFloor;
+                Log.d("AutoFloor", "Auto floor change detected. Setting floor to: " + wifiFloor);
+                indoorMapManager.setCurrentFloor(wifiFloor, true);
+            }
+        }
+    }
+
+
 
     /**
      * Checks if the main polyline is empty (has no points)
@@ -856,6 +901,7 @@ public class TrajectoryMapFragment extends Fragment {
         gMap.addPolygon(buildingPolygonOptions4);
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
+
 
 
 }

@@ -20,6 +20,8 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
@@ -370,6 +372,20 @@ public class RecordingFragment extends Fragment implements PositionListener {
 
     @Override
     public void onPositionUpdate(PositionListener.UpdateType updateType, LatLng position) {
+        if (updateType == PositionListener.UpdateType.WIFI_ERROR) {
+            Log.e("RecordingFragment", "WiFi positioning failed while RecordingFragment is active.");
+            Context context = getContext();
+            if (context != null) {
+                Toast.makeText(context, "WiFi positioning failed. Check your connection.", Toast.LENGTH_SHORT).show();
+            } else {
+                Log.e("RecordingFragment", "Context is null - cannot show Toast");
+            }
+           // return; // early exit after handling
+        }
+
+
+
+
         if (position == null) {
             Log.w("RecordingFragment", "Received null position update for type: " + updateType);
             return;
@@ -403,6 +419,10 @@ public class RecordingFragment extends Fragment implements PositionListener {
                 case ORIENTATION_UPDATE:
                     // Orientation updates are handled elsewhere
                     break;
+
+
+
+
             }
         });
     }

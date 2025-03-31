@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -9,9 +10,11 @@ import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -177,6 +180,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     private double[] referencePosition = new double[3]; // lat, lng, alt
     private boolean useFusion = true;
     private String filterType; // for choosing filter type (kalman/particle)
+
+
+    // WiFi failure tracking
+    private static final long WIFI_FAILURE_TIME_THRESHOLD_MS = 10000; // 10 seconds
+    private long wifiFailureStartTime = 0;
+    private boolean isWifiFailureOngoing = false;
+
+
+
+
 
     //region Initialisation
     /**
@@ -525,7 +538,74 @@ public class SensorFusion implements SensorEventListener, Observer {
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
 
             // Using standard WiFi positioning without fusion integration
-            this.wiFiPositioning.request(wifiFingerPrint);
+           // this.wiFiPositioning.request(wifiFingerPrint);
+
+
+            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    // WiFi succeeded — reset failure streak
+                    if (isWifiFailureOngoing) {
+                        isWifiFailureOngoing = false;
+                        wifiFailureStartTime = 0;
+                        Log.d("SensorFusion", "WiFi recovered. Resetting failure timer.");
+                    }
+
+                    // Existing logic...
+                    Log.d("WiFiPositioning", "Success! Location: " + wifiLocation);
+                }
+
+
+//                @Override
+//                public void onError(String message) {
+//                    Log.e("WiFiPositioning", "Failed to get WiFi position: " + message);
+//                    if (hasPositionListeners()) {
+//                        for (PositionListener listener : positionListeners) {
+//                            listener.onPositionUpdate(PositionListener.UpdateType.WIFI_ERROR, null); // custom type
+//                        }
+//                    }
+//                }
+
+
+                @Override
+                public void onError(String message) {
+                    Log.e("WiFiPositioning", "Failed to get WiFi position: " + message);
+
+                    long now = System.currentTimeMillis();
+
+                    if (!isWifiFailureOngoing) {
+                        wifiFailureStartTime = now;
+                        isWifiFailureOngoing = true;
+                        Log.d("SensorFusion", "WiFi failure streak started.");
+                    } else {
+                        long failureDuration = now - wifiFailureStartTime;
+                        if (failureDuration >= WIFI_FAILURE_TIME_THRESHOLD_MS) {
+                            Log.e("SensorFusion", "WiFi has failed for over 10 seconds. Notifying listeners.");
+
+                            if (hasPositionListeners()) {
+                                for (PositionListener listener : positionListeners) {
+                                    listener.onPositionUpdate(PositionListener.UpdateType.WIFI_ERROR, null);
+                                }
+                            }
+
+                            // Optional: Reset so you only notify once every 10s streak
+                            wifiFailureStartTime = now;
+                        }
+                    }
+                }
+
+
+
+
+
+            });
+
+
+
+
+
+
+
         } catch (JSONException e) {
             // Catching error while making JSON object, to prevent crashes
             Log.e("jsonErrors", "Error creating json object" + e.toString());
@@ -559,6 +639,21 @@ public class SensorFusion implements SensorEventListener, Observer {
                 public void onError(String message) {
                     // Handle the error response
                     Log.e("WiFiFusion", "Failed to get WiFi position: " + message);
+
+//                    // Show Toast directly from SensorFusion (must be on UI thread)
+//                    new android.os.Handler(Looper.getMainLooper()).post(() ->
+//                            Toast.makeText(appContext, "WiFi Error: " + message, Toast.LENGTH_LONG).show()
+//                    );
+
+
+
+                    // Send a broadcast with the error message
+
+                    //                    Intent intent = new Intent("WIFI_POSITIONING_ERROR");
+//                    intent.putExtra("errorMessage", message);
+//                    appContext.sendBroadcast(intent);  // using stored appContext from setContext()
+
+
                 }
             });
         } catch (JSONException e) {
