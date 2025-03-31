@@ -27,13 +27,11 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
-import com.openpositioning.PositionMe.fusion.SmoothingFilter;
 
 import com.google.maps.android.SphericalUtil;
 
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 
@@ -110,7 +108,6 @@ public class TrajectoryMapFragment extends Fragment {
     private Button switchColorButton;
     private Polygon buildingPolygon;
 
-    SmoothingFilter fusionSmoothingFilter = new SmoothingFilter(0.3);
 
 
     public TrajectoryMapFragment() {
@@ -290,23 +287,22 @@ public class TrajectoryMapFragment extends Fragment {
         Log.d("TrajectoryMapFragment", "updateFusionPosition called with: " +
                 fusionLocation.latitude + ", " + fusionLocation.longitude);
 
-        LatLng smoothedFusionLocation = fusionSmoothingFilter.update(fusionLocation);
 
         // If fusion marker doesn't exist, create it
         if (fusionMarker == null) {
             fusionMarker = gMap.addMarker(new MarkerOptions()
-                    .position(smoothedFusionLocation)
+                    .position(fusionLocation)
                     .title("Fusion Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24))));
-         gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(smoothedFusionLocation, 19f));
+         gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusionLocation, 19f));
         } else {
             // Update marker position + orientation
-            fusionMarker.setPosition(smoothedFusionLocation);
+            fusionMarker.setPosition(fusionLocation);
             fusionMarker.setRotation(orientation);
             // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(smoothedFusionLocation));
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(fusionLocation));
         }
 
         // Check if fusionPolyline is null and create it if needed
@@ -315,12 +311,12 @@ public class TrajectoryMapFragment extends Fragment {
                     .color(Color.GREEN)
                     .width(8f)
                     .zIndex(100)
-                    .add(smoothedFusionLocation));
+                    .add(fusionLocation));
             Log.d("TrajectoryMapFragment", "Created new fusion polyline");
         } else {
             // Add new point to fusion path
             List<LatLng> fusionPoints = new ArrayList<>(fusionPolyline.getPoints());
-            fusionPoints.add(smoothedFusionLocation);
+            fusionPoints.add(fusionLocation);
             fusionPolyline.setPoints(fusionPoints);
             Log.d("TrajectoryMapFragment", "Added point to fusion polyline, total points: " + fusionPoints.size());
         }
