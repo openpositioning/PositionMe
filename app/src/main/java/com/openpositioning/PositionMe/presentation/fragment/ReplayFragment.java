@@ -35,31 +35,58 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+/**
+ * Sub fragment of Replay Activity. Fragment that replays trajectory data on a map.
+ *
+ * The ReplayFragment is responsible for visualizing and replaying trajectory data captured during
+ * previous recordings. It loads trajectory data from a JSON file, updates the map with user movement,
+ * and provides UI controls for playback, pause, and seek functionalities.
+ *
+ * Features:
+ * - Loads trajectory data from a file and displays it on a map.
+ * - Provides playback controls including separate play and pause buttons, replay (rewind), and go to end.
+ * - Updates the trajectory dynamically as playback progresses.
+ * - Allows users to manually seek through the recorded trajectory.
+ * - Integrates with {@link TrajectoryMapFragment} for map visualization.
+ *
+ * @see ReplayActivity The activity managing the replay workflow.
+ * @see TrajParser Utility class for parsing trajectory data.
+ */
 public class ReplayFragment extends Fragment {
 
     private static final String TAG = "ReplayFragment";
 
+    // GPS start location (received from ReplayActivity)
     private float initialLat = 0f;
     private float initialLon = 0f;
     private String filePath = "";
+    private int lastIndex = -1;
 
+    // UI Controls
     private TrajectoryMapFragment trajectoryMapFragment;
     private ImageButton playButton, pauseButton, replayButton, goToEndButton;
-    private Button speedHalfButton, speedDoubleButton;
+    private Button speedHalfButton, speedDoubleButton, viewStatsButton;
     private SeekBar playbackSeekBar;
+    // Spinner for selecting data source.
     private Spinner dataSourceSpinner;
-
+    // Holds the selected mode ("PDR", "GNSS", or "WiFi")
     private String selectedMode = "PDR";
+
+    // Playback-related
     private final Handler playbackHandler = new Handler();
-    private long playbackInterval = 500;
+    private long playbackInterval = 500; // Default interval (ms)
     private List<TrajParser.ReplayPoint> replayData = new ArrayList<>();
     private int currentIndex = 0;
     private boolean isPlaying = false;
 
     private LatLng prevWiFiLocation;
+    private List<LatLng> EKF_data = new ArrayList<>();
 
     // code by Guilherme: New field to store previous replay point for computing bearing.
     private LatLng previousReplayPoint = null;
@@ -67,6 +94,8 @@ public class ReplayFragment extends Fragment {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Retrieve transferred data from ReplayActivity
         if (getArguments() != null) {
             filePath = getArguments().getString(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, "");
             initialLat = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LAT, 0f);
@@ -81,9 +110,7 @@ public class ReplayFragment extends Fragment {
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater,
-                             @Nullable ViewGroup container,
-                             @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_replay, container, false);
     }
 
@@ -91,6 +118,7 @@ public class ReplayFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        // Initialize map fragment
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.replayMapFragmentContainer);
         if (trajectoryMapFragment == null) {
@@ -168,10 +196,10 @@ public class ReplayFragment extends Fragment {
 
         playButton = view.findViewById(R.id.playButton);
         pauseButton = view.findViewById(R.id.pauseButton);
-        speedHalfButton = view.findViewById(R.id.speedHalfButton);
-        speedDoubleButton = view.findViewById(R.id.speedDoubleButton);
         replayButton = view.findViewById(R.id.replayButton);
         goToEndButton = view.findViewById(R.id.goToEndButton);
+        speedHalfButton = view.findViewById(R.id.speedHalfButton);
+        speedDoubleButton = view.findViewById(R.id.speedDoubleButton);
         playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
         dataSourceSpinner = view.findViewById(R.id.dataSourceSpinner);
 
@@ -193,6 +221,7 @@ public class ReplayFragment extends Fragment {
                 previousReplayPoint = null; // code by Guilherme
                 drawReplayPointWithMode(currentIndex);
             }
+
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) {}
         });
@@ -255,7 +284,9 @@ public class ReplayFragment extends Fragment {
                     Log.i(TAG, "SeekBar moved by user. New index: " + currentIndex);
                 }
             }
+
             @Override public void onStartTrackingTouch(SeekBar seekBar) { stopPlaying(); }
+
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
@@ -264,6 +295,14 @@ public class ReplayFragment extends Fragment {
             // code by Guilherme: Reset previousReplayPoint.
             previousReplayPoint = null;
             drawReplayPointWithMode(0);
+        }
+
+        //Code By Guilherme: Add tags to map
+        List<com.openpositioning.PositionMe.utils.Tag> tags = SensorFusion.getInstance().getTagList();
+        if (tags != null && !tags.isEmpty()) {
+            for (com.openpositioning.PositionMe.utils.Tag tag : tags) {
+                trajectoryMapFragment.addTagMarker(tag.getLocation(), tag.getLabel());
+            }
         }
     }
 
@@ -299,8 +338,9 @@ public class ReplayFragment extends Fragment {
                 stopPlaying();
                 return;
             }
-            // code by Guilherme: Do not clear the map here so that the trajectory line persists.
-            // Instead, simply add the current point to the polyline by calling drawReplayPointWithMode.
+            trajectoryMapFragment.clearMapAndReset();
+            EKF_data.add(EKF_point(currentIndex));
+            Log.d(TAG, "Fused point: "+ EKF_data.get(currentIndex));
             drawReplayPointWithMode(currentIndex);
             currentIndex++;
             playbackSeekBar.setProgress(currentIndex);
@@ -318,13 +358,16 @@ public class ReplayFragment extends Fragment {
         switch (selectedMode) {
             case "GNSS":
                 if (p.gnssLocation != null) {
-                    currentPoint = p.gnssLocation;
+                    trajectoryMapFragment.updateUserLocation(p.gnssLocation, p.orientation);
+                } else {
+                    trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
                 }
                 break;
 
             case "WiFi":
+                // code by Jamie Arnott
                 if (p.cachedWiFiLocation != null) {
-                    currentPoint = p.cachedWiFiLocation;
+                    trajectoryMapFragment.updateUserLocation(p.cachedWiFiLocation, p.orientation);
                 } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
                     JSONObject wifiFingerprint = new JSONObject();
                     JSONObject wifiAccessPoints = new JSONObject();
@@ -346,6 +389,7 @@ public class ReplayFragment extends Fragment {
                     new WiFiPositioning(getContext()).request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
                         @Override
                         public void onSuccess(LatLng location, int floor) {
+                            Log.d(TAG, "WiFi Positioning Successful");
                             p.cachedWiFiLocation = location;
                             float bearing = p.orientation;
                             if (previousReplayPoint != null) {
@@ -393,6 +437,65 @@ public class ReplayFragment extends Fragment {
 
 
 
+    private LatLng EKF_point(int index){
+        TrajParser.ReplayPoint p = replayData.get(index);
+        LatLng EKF_fused_point;
+        // get PDR data
+        LatLng pdrLatLng = p.pdrLocation;
+
+        // handle WiFi data
+        if (p.cachedWiFiLocation != null) {
+            // do EKF using cached WiFi Location
+            EKF_fused_point = SensorFusion.getInstance().EKF_replay(p.cachedWiFiLocation, pdrLatLng);
+        } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
+            JSONObject wifiFingerprint = new JSONObject();
+            JSONObject wifiAccessPoints = new JSONObject();
+            for (Traj.WiFi_Sample sample : p.wifiSamples) {
+                for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
+                    try {
+                        wifiAccessPoints.put(String.valueOf(macScan.getMac()), macScan.getRssi());
+                    } catch (JSONException e) {
+                        Log.e(TAG, "WiFi JSON error: " + e.getMessage());
+                    }
+                }
+            }
+            try {
+                wifiFingerprint.put("wf", wifiAccessPoints);
+            } catch (JSONException e) {
+                Log.e(TAG, "WiFi fingerprint JSON failed: " + e.getMessage());
+            }
+
+            new WiFiPositioning(getContext()).request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng location, int floor) {
+                    Log.d(TAG, "WiFi Positioning Successful");
+                    p.cachedWiFiLocation = location; // keep this
+
+                    prevWiFiLocation = location; // keep this to update prev location
+                    // do the EKF using location
+
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.w(TAG, "WiFi Positioning failed: " + message);
+                }
+            });
+            EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng);
+        } else {
+            if (prevWiFiLocation != null) {
+                // do EKF using prevWiFiLocation
+                EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng);
+            } else {
+                // do nothing
+                return null;
+            }
+        }
+
+        return EKF_fused_point;
+    }
+
+    // code by Guilherme
     private int getColorForMode(String mode) {
         switch (mode) {
             case "GNSS": return android.graphics.Color.BLUE;
