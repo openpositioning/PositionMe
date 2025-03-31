@@ -274,29 +274,13 @@ public class TrajectoryMapFragment extends Fragment {
         });
 
 
-     //   registerWifiErrorReceiver();
+
 
 
     }
 
 
-//    private void registerWifiErrorReceiver() {
-//        wifiErrorReceiver = new BroadcastReceiver() {
-//            @Override
-//            public void onReceive(Context context, Intent intent) {
-//                if ("WIFI_POSITIONING_ERROR".equals(intent.getAction())) {
-//                    String errorMessage = intent.getStringExtra("errorMessage");
-//                    Toast.makeText(requireContext(), "WiFi Error: " + errorMessage, Toast.LENGTH_LONG).show();
-//                }
-//            }
-//        };
-//
-//        requireContext().registerReceiver(
-//                wifiErrorReceiver,
-//                new IntentFilter("WIFI_POSITIONING_ERROR"),
-//                Context.RECEIVER_NOT_EXPORTED
-//        );
-//    }
+
 
 
 
@@ -677,14 +661,14 @@ public class TrajectoryMapFragment extends Fragment {
             return; // Skip updating the marker
         }
 
-//        boolean isInsideWifiBounds = indoorMapManager.getIsIndoorMapSet(); // Check bounds
-//        if (!isInsideWifiBounds) {
-//            // WiFi readings are not available; show a message
-//            showNoWiFiCoverageMessage();
-//            clearWiFi(); // Clear the WiFi marker and polyline if any
-//            wifiSwitch.setChecked(false);
-//            return;
-//        }
+        boolean isInsideWifiBounds = indoorMapManager.getIsIndoorMapSet(); // Check bounds
+        if (!isInsideWifiBounds) {
+            // WiFi readings are not available; show a message
+            showNoWiFiCoverageMessage();
+            clearWiFi(); // Clear the WiFi marker and polyline if any
+            wifiSwitch.setChecked(false);
+            return;
+        }
 
         if (wifiMarker == null) {
             // Create the WiFi marker for the first time
@@ -917,12 +901,6 @@ public class TrajectoryMapFragment extends Fragment {
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
 
-//    @Override
-//    public void onDestroyView() {
-//        super.onDestroyView();
-//        if (wifiErrorReceiver != null) {
-//            requireContext().unregisterReceiver(wifiErrorReceiver);
-//        }
-//    }
+
 
 }
