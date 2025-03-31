@@ -12,32 +12,23 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
-
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
-
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.Traj;
+import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment;
 import com.openpositioning.PositionMe.processing.filters.FilterAdapter;
 import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;
 import com.openpositioning.PositionMe.sensors.MovementSensor;
 import com.openpositioning.PositionMe.sensors.Observer;
-import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorInfo;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
 import com.openpositioning.PositionMe.utils.PathView;
-import com.openpositioning.PositionMe.data.remote.ServerCommunications;
-import com.openpositioning.PositionMe.Traj;
-import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
-
-import org.ejml.simple.SimpleMatrix;
-import org.json.JSONException;
-import org.json.JSONObject;
-import org.locationtech.proj4j.ProjCoordinate;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -46,6 +37,10 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.ejml.simple.SimpleMatrix;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.locationtech.proj4j.ProjCoordinate;
 
 
 /**
@@ -57,7 +52,7 @@ import java.util.stream.Stream;
  * <p>
  * The class implements {@link SensorEventListener} and has instances of {@link MovementSensor} for
  * every device type necessary for data collection. As such, it implements the
- * {@link SensorFusion#onSensorChanged(SensorEvent)} function, and process and records the data
+ * {@link SensorFusion_old#onSensorChanged(SensorEvent)} function, and process and records the data
  * provided by the sensor hardware, which are stored in a {@link Traj} object. Data is read
  * continuously but is only saved to the trajectory when recording is enabled.
  * <p>
@@ -73,11 +68,8 @@ import java.util.stream.Stream;
  * @author Philip Heptonstall
  * @author Alexandros Zoupos
  */
-public class SensorFusion {
-  // Sensor Variables
-  private SensorHub sensorHub;
-  private WifiDataProcessor wifiDataProcessor;
-  private GNSSDataProcessor gnssDataProcessor
+public class SensorFusion_old {
+
 
 
 
@@ -93,7 +85,7 @@ public class SensorFusion {
 
   //region Static variables
   // Singleton Class
-  private static final SensorFusion sensorFusion = new SensorFusion();
+  private static final SensorFusion_old sensorFusion = new SensorFusion_old();
   // Static constant for calculations with milliseconds
   private static final long TIME_CONST = 10;
   // Coefficient for fusing gyro-based and magnetometer-based orientation
@@ -219,7 +211,7 @@ public class SensorFusion {
    * Private constructor for implementing singleton design pattern for SensorFusion. Initialises
    * empty arrays and new objects that do not depends on outside information.
    */
-  private SensorFusion() {
+  private SensorFusion_old() {
     // Location listener to be used by the GNSS class
     this.locationListener = new myLocationListener();
     // Timer to store sensor values in the trajectory object
@@ -261,7 +253,7 @@ public class SensorFusion {
    *
    * @return singleton instance of SensorFusion class.
    */
-  public static SensorFusion getInstance() {
+  public static SensorFusion_old getInstance() {
     return sensorFusion;
   }
 
@@ -1133,8 +1125,8 @@ public class SensorFusion {
   /**
    * Timer task to record data with the desired frequency in the trajectory class.
    * <p>
-   * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
-   * destroyed in {@link SensorFusion#stopRecording()}.
+   * Inherently threaded, runnables are created in {@link SensorFusion_old#startRecording()} and
+   * destroyed in {@link SensorFusion_old#stopRecording()}.
    */
   private class storeDataInTrajectory extends TimerTask {
 

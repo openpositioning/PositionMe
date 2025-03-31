@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.sensors;
+package com.openpositioning.PositionMe.processing;
 
 import android.Manifest;
 import android.content.BroadcastReceiver;
@@ -10,18 +10,27 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 
-import com.openpositioning.PositionMe.processing.SensorFusion;
+import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.sensors.Observable;
+import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiScanResult;
+import com.openpositioning.PositionMe.sensors.SensorHub;
+import com.openpositioning.PositionMe.sensors.SensorModule;
+import com.openpositioning.PositionMe.sensors.StreamSensor;
+import com.openpositioning.PositionMe.sensors.Wifi;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * The WifiDataProcessor class is the Wi-Fi data gathering and processing class of the application.
@@ -42,17 +51,24 @@ import java.util.stream.Stream;
  * @author Mate Stodulka
  * @author Virginia Cangelosi
  */
-public class WifiDataProcessor extends SensorModule<WiFiScanResult> {
+public class WifiDataProcessor extends SensorModule<WiFiScanResult> implements Observable {
   private static final long SCAN_RATE_WITH_THROTTLING = 5000; // ms
   //
   private static final long SCAN_RATE_WITHOUT_THROTTLING = 500; // ms
   //Time over which a new scan will be initiated
   private static long scanInterval = SCAN_RATE_WITH_THROTTLING;
 
+  // String for creating WiFi fingerprint JSON object
+  private static final String WIFI_FINGERPRINT = "wf";
+
   // Application context for handling permissions and WifiManager instances
   private final Context context;
   // Locations manager to enable access to Wifi data via the android system
   private final WifiManager wifiManager;
+
+  private WiFiPositioning wifiPositioning;
+  private LatLng currentWifiLocation;
+  private int currentWifiLevel;
 
   //List of nearby networks
   private Wifi[] wifiData;
@@ -77,9 +93,9 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> {
    */
   public WifiDataProcessor(Context context, SensorHub sensorHub) {
     super(sensorHub, StreamSensor.WIFI);
-
     this.context = context;
     // Check for permissions
+    this.wifiPositioning = new WiFiPositioning(context);
     boolean permissionsGranted = checkWifiPermissions();
     this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
     this.scanWifiDataTimer = new Timer();
@@ -169,6 +185,47 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> {
   };
 
   /**
+   * Function to create a request to obtain a wifi location for the obtained wifi fingerprint Handle
+   * response with a volley callback
+   */
+  private void createWifiPositionRequestCallback(WiFiScanResult wifiScanResult) {
+    try {
+      // Creating a JSON object to store the WiFi access points
+      JSONObject wifiAccessPoints = new JSONObject();
+      for (Wifi data : wifiScanResult.wifiList) {
+        wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+      }
+      // Creating POST Request
+      JSONObject wifiFingerPrint = new JSONObject();
+      wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+      this.wifiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+        @Override
+        public void onSuccess(LatLng wifiLocation, int floor) {
+          // Handle the success response
+          if (wifiLocation != currentWifiLocation) {
+            currentWifiLocation = wifiLocation;
+            currentWifiLevel = floor;
+            // Notify listeners of a new wifi location, level received.
+            notifyObservers(0);
+          }
+        }
+
+        @Override
+        public void onError(String message) {
+          // Handle the error response
+          Log.e("SensorFusion.WifiPositioning", "Wifi Positioning request" +
+              "returned an error! " + message);
+        }
+      });
+    } catch (JSONException e) {
+      // Catching error while making JSON object, to prevent crashes
+      // Error log to keep record of errors (for secure programming and maintainability)
+      Log.e("jsonErrors", "Error creating json object" + e.toString());
+    }
+
+  }
+
+  /**
    * Converts mac address from string to integer. Removes semicolons from mac address and converts
    * each hex byte to a hex integer.
    *
@@ -255,6 +312,28 @@ public class WifiDataProcessor extends SensorModule<WiFiScanResult> {
       } else {
         scanInterval = SCAN_RATE_WITHOUT_THROTTLING;
       }
+    }
+  }
+
+  @Override
+  public void registerObserver(Observer o) {
+    if (observers == null) {
+      observers = new ArrayList<>();
+    }
+    //Add observer to list
+    observers.add(o);
+  }
+
+  // TODO: can think of making this a record type rather than 3 floats. (would need to be public)
+  @Override
+  public void notifyObservers(int idx) {
+    //Notify observers of changes to wifi data
+    for (Observer observer : observers) {
+      observer.update(new Float[] {
+          (float) currentWifiLocation.latitude,
+          (float) currentWifiLocation.longitude,
+          (float) currentWifiLevel
+      });
     }
   }
 

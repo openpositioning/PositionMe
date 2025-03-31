@@ -14,8 +14,8 @@ import com.google.gson.JsonParser;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.processing.WiFiPositioning;
-import com.openpositioning.PositionMe.sensors.filters.FilterAdapter;
-import com.openpositioning.PositionMe.sensors.filters.KalmanFilterAdapter;
+import com.openpositioning.PositionMe.processing.filters.FilterAdapter;
+import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
 import com.openpositioning.PositionMe.utils.TimedData;
 

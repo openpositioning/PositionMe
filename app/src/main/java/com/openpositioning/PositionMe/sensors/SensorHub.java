@@ -20,6 +20,8 @@ public class SensorHub implements SensorEventListener {
   // Store listeners for all physical sensors as defined by android.hardware.Sensor
   private final Map<Integer, List<SensorDataListener<? extends SensorData>>> listeners =
       new HashMap<>();
+  private final Map<Integer, Sensor> sensors =
+      new HashMap<>();
 
   // Store all StreamSensor types.
   private final Map<StreamSensor, SensorModule<?>> sensorModules = new HashMap<>();
@@ -31,6 +33,15 @@ public class SensorHub implements SensorEventListener {
 
   public SensorHub(SensorManager sensorManager) {
     this.sensorManager = sensorManager;
+  }
+
+  /**
+   * Get the sensor of the sensorType, defined from Sensor.TYPE_*
+   * @return the sensor of the sensorType
+   *         null if the sensor is not available, or not registered
+   */
+  public Sensor getSensor(int sensorType) {
+    return sensors.get(sensorType);
   }
 
   // Subscribe to a specific sensor type.
@@ -72,6 +83,7 @@ public class SensorHub implements SensorEventListener {
     Sensor sensor = sensorManager.getDefaultSensor(sensorType);
     if (sensor != null) {
       sensorManager.registerListener(this, sensor, samplingPeriodUs);
+      sensors.put(sensorType, sensor);
     } else {
       Log.i("SensorHub", "Cannot initialize sensor of type " + sensorType);
     }
@@ -82,6 +94,7 @@ public class SensorHub implements SensorEventListener {
     Sensor sensor = sensorManager.getDefaultSensor(sensorType);
     if (sensor != null) {
       sensorManager.unregisterListener(this, sensor);
+      sensors.remove(sensorType);
     } else {
       Log.i("SensorHub", "Null sensor of type " + sensorType);
     }

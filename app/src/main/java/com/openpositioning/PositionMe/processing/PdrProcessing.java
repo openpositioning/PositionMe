@@ -10,6 +10,8 @@ import android.util.Log;
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.Traj;
+import com.openpositioning.PositionMe.sensors.Observable;
+import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorData.GravityData;
 import com.openpositioning.PositionMe.sensors.SensorData.LinearAccelerationData;
 import com.openpositioning.PositionMe.sensors.SensorData.PressureData;
@@ -36,11 +38,15 @@ import java.util.stream.Collectors;
  * (eg. stride length from the Weiberg algorithm) or provided constants, calculates the elevation
  * and attempts to estimate the current floor as well as elevators.
  *
+ * Original Authors
  * @author Mate Stodulka
  * @author Michal Dvorak
+ *
+ * Updated by:
+ * @author Philip Heptonstall. Refactored to follow single-responsibility principles,
+ * and interface with sensors directly as a SensorDataListener.
  */
-public class PdrProcessing implements SensorDataListener<SensorData> {
-
+public class PdrProcessing implements SensorDataListener<SensorData>, Observable {
 
     //region Static variables
     // Weiberg algorithm coefficient for stride calculations
@@ -65,7 +71,6 @@ public class PdrProcessing implements SensorDataListener<SensorData> {
     private long bootTime = SystemClock.uptimeMillis();
 
     // Step length
-
     private float stepLength;
     // Using manually input constants instead of estimated values
     private boolean useManualStep;
@@ -95,6 +100,8 @@ public class PdrProcessing implements SensorDataListener<SensorData> {
     private int stepCount = 0;
     //endregion
 
+    private List<Observer> observers;
+
     // Sensor Variables
     private SensorHub sensorHub;
     private final int[] INTERESTED_SENSORS = new int[] {
@@ -115,7 +122,7 @@ public class PdrProcessing implements SensorDataListener<SensorData> {
      *
      * @param context   Application context for variable access.
      */
-    public PdrProcessing(Context context, SensorHub sensorHub) {
+    public PdrProcessing(Context context, SensorHub sensorHub, long startTime) {
         // Initialise settings
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         // Check if estimate or manual values should be used
@@ -313,6 +320,12 @@ public class PdrProcessing implements SensorDataListener<SensorData> {
       return new float[] {positionX,positionY};
 
     }
+
+    public int getStepCount() {
+        return stepCount;
+    }
+
+
 
     /**
      * Get the current elevation as calculated by the PDR class.
@@ -521,6 +534,8 @@ public class PdrProcessing implements SensorDataListener<SensorData> {
                 }
                 // Clear accel magntiude after using it.
                 this.accelMagnitude.clear();
+                // Notify observers of a new position update.
+                notifyObservers(0);
             }
         }
     }
@@ -529,5 +544,17 @@ public class PdrProcessing implements SensorDataListener<SensorData> {
         this.pressureData = data;
         updateElevation(SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE,
             data.pressure));
+    }
+
+    @Override
+    public void registerObserver(Observer o) {
+        this.observers.add(o);
+    }
+
+    @Override
+    public void notifyObservers(int idx) {
+        for (Observer o : observers) {
+            o.update(new Float[] {this.positionX, this.positionY});
+        }
     }
 }
