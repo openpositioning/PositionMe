@@ -14,6 +14,7 @@ import android.widget.Spinner;
 import android.widget.Toast;
 // Code by Guilherme: added necessary imports
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.Tag;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
@@ -298,13 +299,8 @@ public class ReplayFragment extends Fragment {
             drawReplayPointWithMode(0);
         }
 
-        //Code By Guilherme: Add tags to map
-        List<com.openpositioning.PositionMe.utils.Tag> tags = SensorFusion.getInstance().getTagList();
-        if (tags != null && !tags.isEmpty()) {
-            for (com.openpositioning.PositionMe.utils.Tag tag : tags) {
-                trajectoryMapFragment.addTagMarker(tag.getLocation(), tag.getLabel());
-            }
-        }
+        // code by Guilherme: show saved tags on the map
+        showReplayTags();
     }
 
     private void restartPlaybackIfPlaying() {
@@ -339,9 +335,11 @@ public class ReplayFragment extends Fragment {
                 stopPlaying();
                 return;
             }
-            trajectoryMapFragment.clearMapAndReset();
-            EKF_data.add(EKF_point(currentIndex));
-            Log.d(TAG, "Fused point: "+ EKF_data.get(currentIndex));
+            if (currentIndex == 0) {
+                trajectoryMapFragment.clearMapAndReset(); // Only clear once at the start
+            }
+
+
             drawReplayPointWithMode(currentIndex);
             currentIndex++;
             playbackSeekBar.setProgress(currentIndex);
@@ -438,63 +436,7 @@ public class ReplayFragment extends Fragment {
 
 
 
-    private LatLng EKF_point(int index){
-        TrajParser.ReplayPoint p = replayData.get(index);
-        LatLng EKF_fused_point;
-        // get PDR data
-        LatLng pdrLatLng = p.pdrLocation;
 
-        // handle WiFi data
-        if (p.cachedWiFiLocation != null) {
-            // do EKF using cached WiFi Location
-            EKF_fused_point = SensorFusion.getInstance().EKF_replay(p.cachedWiFiLocation, pdrLatLng);
-        } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
-            JSONObject wifiFingerprint = new JSONObject();
-            JSONObject wifiAccessPoints = new JSONObject();
-            for (Traj.WiFi_Sample sample : p.wifiSamples) {
-                for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
-                    try {
-                        wifiAccessPoints.put(String.valueOf(macScan.getMac()), macScan.getRssi());
-                    } catch (JSONException e) {
-                        Log.e(TAG, "WiFi JSON error: " + e.getMessage());
-                    }
-                }
-            }
-            try {
-                wifiFingerprint.put("wf", wifiAccessPoints);
-            } catch (JSONException e) {
-                Log.e(TAG, "WiFi fingerprint JSON failed: " + e.getMessage());
-            }
-
-            new WiFiPositioning(getContext()).request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
-                @Override
-                public void onSuccess(LatLng location, int floor) {
-                    Log.d(TAG, "WiFi Positioning Successful");
-                    p.cachedWiFiLocation = location; // keep this
-
-                    prevWiFiLocation = location; // keep this to update prev location
-                    // do the EKF using location
-
-                }
-
-                @Override
-                public void onError(String message) {
-                    Log.w(TAG, "WiFi Positioning failed: " + message);
-                }
-            });
-            EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng);
-        } else {
-            if (prevWiFiLocation != null) {
-                // do EKF using prevWiFiLocation
-                EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng);
-            } else {
-                // do nothing
-                return null;
-            }
-        }
-
-        return EKF_fused_point;
-    }
 
     // code by Guilherme
     private int getColorForMode(String mode) {
@@ -569,4 +511,17 @@ public class ReplayFragment extends Fragment {
         }
         return null;
     }
+
+    // code by Guilherme: Load and show tags on the map
+    // code by Guilherme: draw all tags saved to SensorFusion
+    private void showReplayTags() {
+        List<Tag> tags = SensorFusion.getInstance().getTags();
+        for (Tag tag : tags) {
+            if (tag.getLocation() != null && tag.getLabel() != null) {
+                trajectoryMapFragment.addTagMarker(tag.getLocation(), tag.getLabel());
+            }
+        }
+    }
+
+
 }

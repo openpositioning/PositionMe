@@ -216,4 +216,17 @@ public class TrajParser {
         float azimuthDeg = (float) Math.toDegrees(orientationAngles[0]);
         return azimuthDeg < 0 ? azimuthDeg + 360.0f : azimuthDeg;
     }
+
+    public class TagPoint {
+        public String label;
+        public LatLng location;
+
+        public TagPoint(String label, LatLng location) {
+            this.label = label;
+            this.location = location;
+        }
+    }
+    public static List<TagPoint> tagPoints = new ArrayList<>();
+
+
 }

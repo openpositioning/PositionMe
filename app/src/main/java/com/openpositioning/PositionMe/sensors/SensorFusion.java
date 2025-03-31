@@ -23,6 +23,7 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
+import com.openpositioning.PositionMe.utils.Tag;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import org.json.JSONException;
@@ -661,7 +662,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             Log.e("EKF", "Received null input: wifi=" + WIFIpos + ", pdr=" + PDRmove);
             return null;
         }
-        createWifiPositioningRequest();
+
 
         //Initialise local variables
         float wifiLat = (float)WIFIpos.latitude;
@@ -1319,19 +1320,17 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
-    /**
-     * Adds a new tag to the list.
-     */
-    public void addTag(com.openpositioning.PositionMe.utils.Tag tag) {
-        tagList.add(tag);
+    // code by Guilherme: store tags globally for access in replay
+    private final List<Tag> tags = new ArrayList<>();
+
+    public void addTag(Tag tag) {
+        tags.add(tag);
     }
 
-    /**
-     * Returns the list of recorded tags.
-     */
-    public List<com.openpositioning.PositionMe.utils.Tag> getTagList() {
-        return tagList;
+    public List<Tag> getTags() {
+        return tags;
     }
+
 
 
     private class storeDataInTrajectory extends TimerTask {
