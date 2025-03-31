@@ -656,26 +656,26 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new LatLng(predictedLL[0], predictedLL[1]);
     }
 
-    public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove){
+    public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove, LatLng prevPDRmove){
         if (WIFIpos == null || PDRmove == null) {
             Log.e("EKF", "Received null input: wifi=" + WIFIpos + ", pdr=" + PDRmove);
             return null;
         }
-        createWifiPositioningRequest();
+        //createWifiPositioningRequest();
 
         //Initialise local variables
         float wifiLat = (float)WIFIpos.latitude;
         float wifiLng = (float)WIFIpos.longitude;
-        float pdrDeltaX = (float)PDRmove.latitude;
-        float pdrDeltaY = (float)PDRmove.longitude;
+        float pdrDeltaX = (float)PDRmove.latitude - (float)prevPDRmove.latitude;
+        float pdrDeltaY = (float)PDRmove.longitude - (float)prevPDRmove.longitude;
 
         // Initialize on first valid WiFi reading
         if (!isInitialized && wifiLat != 0 && wifiLng != 0) {
             initialLocation = new Location("");
             initialLocation.setLatitude(wifiLat);
             initialLocation.setLongitude(wifiLng);
-            state[0] = 0;
-            state[1] = 0;
+            state[0] = wifiLat;
+            state[1] = wifiLng;
             isInitialized = true;
             return new LatLng(wifiLat, wifiLng);
         }
@@ -713,7 +713,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         double[][] I = {{1, 0}, {0, 1}};
         covariance = matrixMultiply(matrixSubtract(I, matrixMultiply(K, H)), covariance);
 
-        return new LatLng(predictedLL[0], predictedLL[1]);
+        return new LatLng(state[0], state[1]);
     }
 
     /**
