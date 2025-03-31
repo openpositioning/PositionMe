@@ -46,8 +46,11 @@ public class UtilFunctions {
 
         // 计算新的经度（纬度越高，经度变化对实际距离影响越大，需要调整）
         // Calculate the new longitude (the higher the latitude, the greater the impact of longitude changes on the actual distance, and needs to be adjusted)
-        double newLongitude = initialLocation.longitude + (pdrMoved[0] / DEGREE_IN_M)
-                * Math.cos(Math.toRadians(initialLocation.latitude));
+//        double newLongitude = initialLocation.longitude + (pdrMoved[0] / DEGREE_IN_M)
+//                * Math.cos(Math.toRadians(initialLocation.latitude));
+        double newLongitude = initialLocation.longitude + (pdrMoved[0] /
+                (DEGREE_IN_M * Math.cos(Math.toRadians(initialLocation.latitude)))
+        );
 
         // 记录日志（可选）
 //        Log.d("UtilFunctions", "Moved from (" + initialLocation.latitude + ", " + initialLocation.longitude + ")"
@@ -136,7 +139,7 @@ public class UtilFunctions {
 
         // 将经度差转换为东向距离（单位：米），考虑纬度对经度实际距离的影响
         // Convert the longitude difference to easting (meters), taking into account the latitude
-        double easting = deltaLon * DEGREE_IN_M / Math.cos(Math.toRadians(start.latitude));
+        double easting = deltaLon * (DEGREE_IN_M * Math.cos(Math.toRadians(start.latitude)));
 
         return new double[]{easting, northing};
     }

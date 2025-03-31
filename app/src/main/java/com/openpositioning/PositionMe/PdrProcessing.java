@@ -168,6 +168,17 @@ public class PdrProcessing {
         float x = (float) (stepLength * Math.cos(adaptedHeading));
         float y = (float) (stepLength * Math.sin(adaptedHeading));
 
+
+//        // === DEBUG: Fixed direction movement ===
+//        float x = 0f;
+//        float y = 0f;
+//
+//        if (stepCount % 2 == 0) {
+//            x = 1.0f;  // even steps: move along x
+//        } else {
+//            y = 1.0f;  // odd steps: move along y
+//        }
+
         // Update position values
         this.positionX += x;
         this.positionY += y;

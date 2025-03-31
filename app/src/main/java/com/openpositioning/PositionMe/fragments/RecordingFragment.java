@@ -835,9 +835,9 @@ public class RecordingFragment extends Fragment {
                 if (wifiPositionMarker != null) {
                     wifiPositionMarker.setPosition(wifiPosition);
 
-                    double[] result = convertLatLangToNorthingEasting(start, wifiPosition);
-                    Log.d("LocationConversion", "Easting: " + result[0] + " meters");
-                    Log.d("LocationConversion", "Northing: " + result[1] + " meters");
+//                    double[] result = convertLatLangToNorthingEasting(start, wifiPosition);
+//                    Log.d("LocationConversion", "Easting: " + result[0] + " meters");
+//                    Log.d("LocationConversion", "Northing: " + result[1] + " meters");
                 } else {
                     wifiPositionMarker = gMap.addMarker(new MarkerOptions()
                             .position(wifiPosition)

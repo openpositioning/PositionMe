@@ -157,8 +157,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     private FilterUtils.EKFFilter ekf;
 
     private float[] fusionLocation;
-    private int testX;
-    private int testY;
 
     int MAX_WIFI_APS = 60;
     private static final float constantDuration = 1f; // duration of the wifi weight being maximum
@@ -194,8 +192,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.R = new float[9];
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
-        this.testX = 0;
-        this.testY = 0;
     }
 
 
