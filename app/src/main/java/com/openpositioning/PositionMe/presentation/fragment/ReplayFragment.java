@@ -381,7 +381,7 @@ public class ReplayFragment extends Fragment {
             }
 
             trajectoryMapFragment.updateUserLocation(currentPoint, bearing);
-            trajectoryMapFragment.addPolylinePoint(currentPoint); // ✅ Draw trace point
+            trajectoryMapFragment.addPolylinePoint(currentPoint); // Draw trace point
             previousReplayPoint = currentPoint;
 
             if (selectedMode.equals("GNSS") && p.gnssLocation != null) {
