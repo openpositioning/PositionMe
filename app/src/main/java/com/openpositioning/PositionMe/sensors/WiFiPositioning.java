@@ -54,8 +54,6 @@ public class WiFiPositioning {
     // Store current floor of user, default value 0 (ground floor)
     private int floor=0;
 
-    private final Context context;
-
 
     /**
      * Constructor to create the WiFi positioning object
@@ -66,8 +64,7 @@ public class WiFiPositioning {
      */
     public WiFiPositioning(Context context){
         // Initialising the Request queue
-        this.context = context.getApplicationContext(); //  Store context here
-        this.requestQueue = Volley.newRequestQueue(this.context);
+        this.requestQueue = Volley.newRequestQueue(context.getApplicationContext());
     }
 
     /**
@@ -113,16 +110,6 @@ public class WiFiPositioning {
                             Log.e("WiFiPositioning","Error message: " + error.getMessage());
                         }
                     }
-
-
-//                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
-//
-////                        String errorMessage = (error.getMessage() != null) ? error.getMessage() : "Unknown error";
-////                        android.widget.Toast.makeText(context, "WiFi error: " + errorMessage, android.widget.Toast.LENGTH_LONG).show()
-//
-//
-//                      android.widget.Toast.makeText(context, "WiFi positioning failed", android.widget.Toast.LENGTH_SHORT).show()
-//                    );
                 }
         );
         // Adds the request to the request queue
@@ -177,11 +164,6 @@ public class WiFiPositioning {
                             callback.onError("Error message: " + error.getMessage());
                         }
                     }
-//                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
-//                            android.widget.Toast.makeText(context, "WiFi positioning failed", android.widget.Toast.LENGTH_SHORT).show()
-//                    );
-
-
                 }
         );
         // Adds the request to the request queue

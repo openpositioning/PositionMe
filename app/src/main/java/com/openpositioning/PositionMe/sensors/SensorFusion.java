@@ -180,6 +180,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     private double[] referencePosition = new double[3]; // lat, lng, alt
     private boolean useFusion = true;
 
+
+    // WiFi failure tracking
+    private static final long WIFI_FAILURE_TIME_THRESHOLD_MS = 10000; // 10 seconds
+    private long wifiFailureStartTime = 0;
+    private boolean isWifiFailureOngoing = false;
+
+
+
+
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -533,20 +543,60 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Optionally store the position here if needed
-                    SensorFusion.this.wifiPosition = wifiLocation;
+                    // WiFi succeeded — reset failure streak
+                    if (isWifiFailureOngoing) {
+                        isWifiFailureOngoing = false;
+                        wifiFailureStartTime = 0;
+                        Log.d("SensorFusion", "WiFi recovered. Resetting failure timer.");
+                    }
+
+                    // Existing logic...
                     Log.d("WiFiPositioning", "Success! Location: " + wifiLocation);
                 }
+
+
+//                @Override
+//                public void onError(String message) {
+//                    Log.e("WiFiPositioning", "Failed to get WiFi position: " + message);
+//                    if (hasPositionListeners()) {
+//                        for (PositionListener listener : positionListeners) {
+//                            listener.onPositionUpdate(PositionListener.UpdateType.WIFI_ERROR, null); // custom type
+//                        }
+//                    }
+//                }
+
 
                 @Override
                 public void onError(String message) {
                     Log.e("WiFiPositioning", "Failed to get WiFi position: " + message);
-                    if (hasPositionListeners()) {
-                        for (PositionListener listener : positionListeners) {
-                            listener.onPositionUpdate(PositionListener.UpdateType.WIFI_ERROR, null); // custom type
+
+                    long now = System.currentTimeMillis();
+
+                    if (!isWifiFailureOngoing) {
+                        wifiFailureStartTime = now;
+                        isWifiFailureOngoing = true;
+                        Log.d("SensorFusion", "WiFi failure streak started.");
+                    } else {
+                        long failureDuration = now - wifiFailureStartTime;
+                        if (failureDuration >= WIFI_FAILURE_TIME_THRESHOLD_MS) {
+                            Log.e("SensorFusion", "WiFi has failed for over 10 seconds. Notifying listeners.");
+
+                            if (hasPositionListeners()) {
+                                for (PositionListener listener : positionListeners) {
+                                    listener.onPositionUpdate(PositionListener.UpdateType.WIFI_ERROR, null);
+                                }
+                            }
+
+                            // Optional: Reset so you only notify once every 10s streak
+                            wifiFailureStartTime = now;
                         }
                     }
                 }
+
+
+
+
+
             });
 
 
@@ -589,10 +639,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // Handle the error response
                     Log.e("WiFiFusion", "Failed to get WiFi position: " + message);
 
-                    // Show Toast directly from SensorFusion (must be on UI thread)
-                    new android.os.Handler(Looper.getMainLooper()).post(() ->
-                            Toast.makeText(appContext, "WiFi Error: " + message, Toast.LENGTH_LONG).show()
-                    );
+//                    // Show Toast directly from SensorFusion (must be on UI thread)
+//                    new android.os.Handler(Looper.getMainLooper()).post(() ->
+//                            Toast.makeText(appContext, "WiFi Error: " + message, Toast.LENGTH_LONG).show()
+//                    );
 
 
 
