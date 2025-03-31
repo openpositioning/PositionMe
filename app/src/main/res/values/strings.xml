@@ -122,7 +122,6 @@
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
-    <string name="google_maps_key">AIzaSyDhNWpn9mdeWZsutL7Oe_X1m9n-KSgN7JQ</string>
     <string-array name="fusion_options">
         <item>EKF</item>
         <item>Batch Optimisation</item>

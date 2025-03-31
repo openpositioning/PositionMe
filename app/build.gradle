@@ -10,6 +10,9 @@ def localPropertiesFile = rootProject.file('secrets.properties')
 if (localPropertiesFile.exists()) {
     localProperties.load(new FileInputStream(localPropertiesFile))
 }
+def secretsPropertiesFile = rootProject.file("secrets.properties")
+def secretsProperties = new Properties()
+secretsProperties.load(new FileInputStream(secretsPropertiesFile))
 
 android {
     namespace ="com.openpositioning.PositionMe" //fix Namespace not specified problem
@@ -21,7 +24,7 @@ android {
         targetSdk 33
         versionCode 1
         versionName "1.0"
-
+        resValue "string", "google_maps_key", secretsProperties['MAPS_API_KEY']
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "MAPS_API_KEY",
                 "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
