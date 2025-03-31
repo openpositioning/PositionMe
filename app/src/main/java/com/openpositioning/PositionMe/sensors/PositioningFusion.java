@@ -84,13 +84,15 @@ public class PositioningFusion implements PositionObserver {
         if (SensorFusion.getInstance().getLatLngWifiPositioning() != null) {
             LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
             coordSystem.initReference(wifiLocation.latitude, wifiLocation.longitude);
+            ParticleFilter.initializeParticles(new PointF((float)wifiLocation.latitude, (float)wifiLocation.longitude));
         }
 //        else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != null) {
 //            LatLng gnssLocation = positioningFusion.getGnssPosition();
 //            coordSystem.initReference(gnssLocation.latitude, gnssLocation.longitude);
 //        }
-        else {
+        else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != 0 && SensorFusion.getInstance().getGNSSLatitude(false)[1] != 0) {
             coordSystem.initReference(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
+            ParticleFilter.initializeParticles(new PointF(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[0]));
         }
     }
 

@@ -104,10 +104,10 @@ public class ParticleFilter {
             double moveY = pdrDelta.y;
             double motionNoiseStd = 0.5; // 运动噪声标准差，可根据需要调整
             double absMovement = Math.sqrt(moveX * moveX + moveY * moveY);
-            Log.d("ParticleFilter", "Absolute movement: " + absMovement);
+//            Log.d("ParticleFilter", "Absolute movement: " + absMovement);
             if (absMovement < 0.5) {
                 isMoving = false;
-                Log.d("ParticleFilter", "PDR moving detect"+isMoving);
+//                Log.d("ParticleFilter", "PDR moving detect"+isMoving);
             }
 
 
@@ -140,7 +140,7 @@ public class ParticleFilter {
             } else {
                 measurementStd = 99999;
             }
-            Log.d("ParticleFilter", "measurementStd is" + measurementStd); // 基础噪声
+//            Log.d("ParticleFilter", "measurementStd is" + measurementStd); // 基础噪声
             // 如果WiFi位置与当前估计位置差异过大，增大噪声
             double dxEst = estX - wifiPos.x;
             double dyEst = estY - wifiPos.y;
@@ -154,7 +154,7 @@ public class ParticleFilter {
             measurementStd = 5.0;}
             else{measurementStd = 99999;}// GNSS 噪声
         }
-        Log.d("ParticleFilter", "measurementStd is" + measurementStd); // 基础噪声
+//        Log.d("ParticleFilter", "measurementStd is" + measurementStd); // 基础噪声
         if (measurement != null) {
             double sigmaSq = measurementStd * measurementStd;
             double weightSum = 0.0;

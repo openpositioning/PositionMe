@@ -191,6 +191,12 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
         if (fusedLocation != null) {
             trajectoryDrawer.addPoint(fusedLocation);
+            float accuracy;
+            if (locationData != null) {
+                accuracy = locationData.getAccuracy();
+            } else {
+                accuracy = -1;
+            }
 
             // 显示 estimated 经纬度 + 楼层
             String display = String.format(
@@ -198,7 +204,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                     fusedLocation.latitude,
                     fusedLocation.longitude,
                     floor,
-                    locationData.getAccuracy()
+                    accuracy
             );
             statusText.setText(display);
 
