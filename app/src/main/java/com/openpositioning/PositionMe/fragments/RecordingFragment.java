@@ -45,6 +45,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.UtilFunctions;
+import com.openpositioning.PositionMe.sensors.PositioningFusion;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 
@@ -67,6 +68,9 @@ import java.util.List;
  * @author Arun Gopalakrishnan
  */
 public class RecordingFragment extends Fragment {
+
+    private boolean isFirstUpdate = true;
+
 
     //Button to end PDR recording
     private Button stopButton;
@@ -93,8 +97,9 @@ public class RecordingFragment extends Fragment {
 
     //variables to store data of the trajectory
     private float distance;
-    private float previousPosX;
-    private float previousPosY;
+    private double previousPosX;
+    private double previousPosY;
+
 
     // Starting point coordinates
     private static LatLng start;
@@ -229,6 +234,7 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        PositioningFusion.getInstance().startPeriodicFusion();
 
         // Set autoStop to null for repeat recordings
         this.autoStop = null;
@@ -486,56 +492,89 @@ public class RecordingFragment extends Fragment {
      * Updates the UI, traces PDR Position on the map
      * and also updates marker representing the current location and direction on the map
      */
-    private void updateUIandPosition(){
-        // Get new position
-        float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
-        // Calculate distance travelled
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2) + Math.pow(pdrValues[1] - previousPosY, 2));
+    /**
+     * Updates the UI, traces fused Position on the map
+     * and also updates marker representing the current location and direction on the map
+     */
+    /**
+     * Updates the UI, traces fused Position on the map
+     * and also updates marker representing the current location and direction on the map
+     */
+    private void updateUIandPosition() {
+        // Get new fused LatLng position
+
+        LatLng fusedLatLng = PositioningFusion.getInstance().getFusedPosition();
+
+        if (fusedLatLng == null) return; // 防止空指针
+
+        double lat = fusedLatLng.latitude;
+        double lng = fusedLatLng.longitude;
+
+        if (isFirstUpdate) {
+            previousPosX = lat;
+            previousPosY = lng;
+            isFirstUpdate = false;
+            return;
+        }
+
+        // Calculate distance travelled (in meters)
+        distance += UtilFunctions.distanceBetweenPoints(new LatLng(previousPosX, previousPosY), fusedLatLng);
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
-        // Net pdr movement
-        float[] pdrMoved={pdrValues[0]-previousPosX,pdrValues[1]-previousPosY};
-        // if PDR has changed plot new line to indicate user movement
-        if (pdrMoved[0]!=0 ||pdrMoved[1]!=0) {
-            plotLines(pdrMoved);
+
+        // Movement vector (in degrees lat/lng, not meters)
+        double dx = lat - previousPosX;
+        double dy = lng - previousPosY;
+
+        if (dx != 0 || dy != 0) {
+            plotLines(new float[]{(float) dx, (float) dy});
         }
-        // If not initialized, initialize
+
+        // Ensure indoor map manager is initialized
         if (indoorMapManager == null) {
-            indoorMapManager =new IndoorMapManager(gMap);
+            indoorMapManager = new IndoorMapManager(gMap);
         }
-        //Show GNSS marker and error if user enables it
-        if (gnss.isChecked() && gnssMarker!=null){
+
+        // Show GNSS marker and error if user enables it
+        if (gnss.isChecked() && gnssMarker != null) {
             float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-            LatLng gnssLocation = new LatLng(location[0],location[1]);
+            LatLng gnssLocation = new LatLng(location[0], location[1]);
             gnssError.setVisibility(View.VISIBLE);
-            gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
-                    UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
+            gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
+                    UtilFunctions.distanceBetweenPoints(fusedLatLng, gnssLocation)));
             gnssMarker.setPosition(gnssLocation);
         }
-        //  Updates current location of user to show the indoor floor map (if applicable)
-        indoorMapManager.setCurrentLocation(currentLocation);
+
+        // Update indoor map logic
+        indoorMapManager.setCurrentLocation(fusedLatLng);
+
         float elevationVal = sensorFusion.getElevation();
-        // Display buttons to allow user to change floors if indoor map is visible
-        if(indoorMapManager.getIsIndoorMapSet()){
+
+        if (indoorMapManager.getIsIndoorMapSet()) {
             setFloorButtonVisibility(View.VISIBLE);
-            // Auto-floor logic
-            if(autoFloor.isChecked()){
-                indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-                ,true);
+            if (autoFloor.isChecked()) {
+                indoorMapManager.setCurrentFloor((int) (elevationVal / indoorMapManager.getFloorHeight()), true);
             }
-        }else{
-            // Hide the buttons and switch used to change floor if indoor map is not visible
+        } else {
             setFloorButtonVisibility(View.GONE);
         }
-        // Store previous PDR values for next call
-        previousPosX = pdrValues[0];
-        previousPosY = pdrValues[1];
-        // Display elevation
+
+        // Save fused position as previous position
+        previousPosX = lat;
+        previousPosY = lng;
+
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
-        //Rotate compass Marker according to direction of movement
-        if (orientationMarker!=null) {
+
+        if (orientationMarker != null) {
             orientationMarker.setRotation((float) Math.toDegrees(sensorFusion.passOrientation()));
+            orientationMarker.setPosition(fusedLatLng);
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusedLatLng, 19f));
         }
+
+        // Update current location for consistency
+        currentLocation = fusedLatLng;
     }
+
+
     /**
      * Plots the users location based on movement in Real-time
      * @param pdrMoved Contains the change in PDR in X and Y directions
@@ -600,7 +639,9 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onPause() {
         refreshDataHandler.removeCallbacks(refreshDataTask);
+        PositioningFusion.getInstance().stopPeriodicFusion();
         super.onPause();
+
     }
 
     /**

@@ -262,7 +262,7 @@ public class PositioningFusion implements PositionObserver {
             //    |CHS: 更新粒子集合和融合位置
             currentParticles = result.particles;
             fusedPositionLocal = new float[]{(float) result.bestX, (float) result.bestY};
-//            Log.d("Posotioning Fusion",String.format("fused position: %s", fusedPositionLocal.toString()));
+            Log.d("Posotioning Fusion",String.format("fused position: %s", fusedPositionLocal.toString()));
 
             lastPdrPosition = pdrPosition;
         }

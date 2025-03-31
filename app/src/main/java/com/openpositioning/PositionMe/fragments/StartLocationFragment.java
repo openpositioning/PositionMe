@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -21,6 +22,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.PositioningFusion;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 /**
@@ -166,6 +168,8 @@ public class StartLocationFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        PositioningFusion.getInstance().initCoordSystem();
+        PositioningFusion.getInstance().startPeriodicFusion();
         // Add button to begin PDR recording and go to recording fragment.
         this.button = (Button) getView().findViewById(R.id.startLocationDone);
         this.button.setOnClickListener(new View.OnClickListener() {
@@ -179,7 +183,19 @@ public class StartLocationFragment extends Fragment {
                 // Starts recording data from the sensor fusion
                 sensorFusion.startRecording();
                 // Set the start location obtained
-                sensorFusion.setStartGNSSLatitude(startPosition);
+                // Get fused position (LatLng type) and convert to float[]
+                LatLng fusedLatLng = PositioningFusion.getInstance().getFusedPosition();
+                if (fusedLatLng == null) {
+                    Toast.makeText(requireContext(), "定位尚未准备好，请稍后再试", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                float[] fusedPosition = new float[]{(float) fusedLatLng.latitude, (float) fusedLatLng.longitude};
+
+
+
+                // Set as the starting GNSS position
+                sensorFusion.setStartGNSSLatitude(fusedPosition);
+
                 // Navigate to the RecordingFragment
                 NavDirections action = StartLocationFragmentDirections.actionStartLocationFragmentToRecordingFragment();
                 Navigation.findNavController(view).navigate(action);
@@ -201,4 +217,16 @@ public class StartLocationFragment extends Fragment {
         }
     }
 
-}
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        PositioningFusion.getInstance().stopPeriodicFusion();
+
+    }
+
+    @Override
+    public void onPause() {
+        PositioningFusion.getInstance().stopPeriodicFusion();
+        super.onPause();
+
+    }}
