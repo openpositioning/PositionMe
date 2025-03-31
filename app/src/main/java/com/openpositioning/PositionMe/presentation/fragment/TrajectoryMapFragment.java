@@ -196,12 +196,10 @@ public class TrajectoryMapFragment extends Fragment {
         });
     }
 
-    // Code by Guilherme: Adds a tag marker with a custom icon (using the createTagMarkerIcon method).
+    // code by Guilherme: adds tag marker to map
     public void addTagMarker(LatLng location, String label) {
         if (gMap != null) {
             Bitmap tagIcon = UtilFunctions.createTagMarkerIcon(getContext(), label);
-            // Calculate the anchor: we want the marker's location to correspond to the center of the tag symbol.
-            // The anchor x value is (markerDiameter / totalWidth).
             int markerDiameter = UtilFunctions.dpToPx(getContext(), 40);
             float textWidth = UtilFunctions.getTextWidth(getContext(), label);
             int padding = UtilFunctions.dpToPx(getContext(), 8);
@@ -210,12 +208,12 @@ public class TrajectoryMapFragment extends Fragment {
             MarkerOptions options = new MarkerOptions()
                     .position(location)
                     .icon(BitmapDescriptorFactory.fromBitmap(tagIcon))
-                    .anchor(anchorX, 0.5f);  // vertically centered.
+                    .anchor(anchorX, 0.5f);
             gMap.addMarker(options);
-        } else {
-            Log.e("TrajectoryMapFragment", "GoogleMap is not initialized yet.");
         }
     }
+
+
 
 
 
