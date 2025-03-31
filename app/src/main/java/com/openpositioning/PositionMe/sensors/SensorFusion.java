@@ -304,13 +304,14 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   public Map<SensorTypes, float[]> getSensorValueMap() {
     Map<SensorTypes, float[]> sensorValueMap = new HashMap<>();
     sensorValueMap.put(SensorTypes.GNSSLATLONG, this.getGNSSLatitude(false));
+    sensorValueMap.put(SensorTypes.GNSS_OUTLIER, new float[] {isGnssOutlier ? 1 : 0});
     sensorValueMap.put(SensorTypes.PDR, pdrProcessing.getPDRMovement());
     if (currentWifiLocation != null) {
       sensorValueMap.put(SensorTypes.WIFI, new float[]{
           (float) currentWifiLocation.latitude,
           (float) currentWifiLocation.longitude});
       sensorValueMap.put(SensorTypes.WIFI_FLOOR, new float[]{this.getWifiFloor()});
-      sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[isWifiLocationOutlier ? 1 : 0]);
+      sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[] {isWifiLocationOutlier ? 1 : 0});
     }
     sensorValueMap.put(SensorTypes.FUSED, new float[] {
         (float) this.fusedLocation.latitude,

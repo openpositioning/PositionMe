@@ -277,6 +277,7 @@ public class RecordingFragment extends Fragment {
 
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+        float[] gnssIsOutlier = sensorFusion.getSensorValueMap().get(SensorTypes.GNSS_OUTLIER);
         if (gnss != null && trajectoryMapFragment != null) {
             // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
@@ -287,7 +288,7 @@ public class RecordingFragment extends Fragment {
                     gnssError.setVisibility(View.VISIBLE);
                     gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
                 }
-                trajectoryMapFragment.updateGNSS(gnssLocation);
+                trajectoryMapFragment.updateGNSS(gnssLocation, gnssIsOutlier);
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
@@ -297,11 +298,12 @@ public class RecordingFragment extends Fragment {
 
         // Get and plot wifi data
         float[] wifi = sensorFusion.getSensorValueMap().get(SensorTypes.WIFI);
+        float[] wifiIsOutlier = sensorFusion.getSensorValueMap().get(SensorTypes.WIFI_OUTLIER);
         if (wifi != null && trajectoryMapFragment != null) {
             // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isWifiEnabled()) {
                 LatLng wifiLocation = new LatLng(wifi[0], wifi[1]);
-                trajectoryMapFragment.updateWifi(wifiLocation);
+                trajectoryMapFragment.updateWifi(wifiLocation, wifiIsOutlier);
             } else {
                 trajectoryMapFragment.clearWifi();
             }
