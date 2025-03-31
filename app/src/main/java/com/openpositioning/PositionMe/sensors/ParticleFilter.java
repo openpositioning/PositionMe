@@ -13,7 +13,7 @@ import java.util.Random;
 public class ParticleFilter {
 
     /** 粒子状态类，表示位置 (x, y) 以及对应的权重 */
-    static class Particle {
+    public static class Particle {
         double x;
         double y;
         double weight;
@@ -25,7 +25,7 @@ public class ParticleFilter {
     }
 
     /** 结果类，包含估计的最优位置和完整的粒子集合 */
-    static class Result {
+    public static class Result {
         public double bestX;      // 最优估计位置的 x 坐标
         public double bestY;      // 最优估计位置的 y 坐标
         public List<Particle> particles;  // 更新后的粒子集合
@@ -34,6 +34,22 @@ public class ParticleFilter {
             this.bestY = bestY;
             this.particles = particles;
         }
+    }
+
+    public static List<Particle> initializeParticles(PointF initPos) {
+        List<Particle> particles = new ArrayList<>(NUM_PARTICLES);
+        double initX = (initPos != null) ? initPos.x : 0.0;
+        double initY = (initPos != null) ? initPos.y : 0.0;
+        // 设定初始粒子散布范围（例如在初始中心附近随机散布5个单位的范围）
+        double initSpread = 5.0;
+        Random rand = new Random();
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            double rx = initX + (rand.nextDouble() * 2 - 1) * initSpread;
+            double ry = initY + (rand.nextDouble() * 2 - 1) * initSpread;
+            // 初始时每个粒子权重相等
+            particles.add(new Particle(rx, ry, 1.0 / NUM_PARTICLES));
+        }
+        return particles;
     }
 
     // 固定的粒子数量，可以根据需要进行配置
