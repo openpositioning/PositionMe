@@ -502,13 +502,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                 .setX((float) fusedPos.latitude)
                                 .setY((float) fusedPos.longitude));
-                    if (trajectoryMapFragment != null) {
-                        // Example: use EKF heading, assume there's a method extendedKalmanFilter.getHeading()
-                        // that returns a double in radians. Convert it to degrees.
-                        double fusedTheta = extendedKalmanFilter.getHeading();
-                        float fusedHeadingDeg = (float) Math.toDegrees(fusedTheta);
-                        trajectoryMapFragment.updateFusionLocation(fusedPos, fusedHeadingDeg);
-                    }
+                        if (trajectoryMapFragment != null) {
+                        float headingDeg = (float) Math.toDegrees(this.orientation[0]);
+                        trajectoryMapFragment.updateFusionLocation(fusedPos, headingDeg);
+                        }
                     } else {
                         Log.e("SensorFusion", "EKF is null when trying to get estimated position!");
                     }
