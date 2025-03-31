@@ -359,7 +359,7 @@ public class ReplayFragment extends Fragment {
   private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
     for (TrajParser.ReplayPoint point : data) {
       if (point.gnssLocation != null) {
-        return new LatLng(point.gnssLocation.latitude, point.gnssLocation.longitude);
+        return new LatLng(point.gnssLocation.position().latitude, point.gnssLocation.position().longitude);
       }
     }
     return null; // None found
@@ -415,12 +415,14 @@ public class ReplayFragment extends Fragment {
         trajectoryMapFragment.updateUserLocation(p.fusedLocation, p.orientation);
         trajectoryMapFragment.updatePdrLocation(p.pdrLocation);
         if (p.gnssLocation != null) {
-          trajectoryMapFragment.updateGNSS(p.gnssLocation);
+          trajectoryMapFragment.updateGNSS(p.gnssLocation.position(),
+                  new float[] {p.gnssLocation.isOutlier() ? 1 : 0});
         }
         // Plot the latest WiFi datapoint
         if (p.wifiLocation != null) {
-          trajectoryMapFragment.updateWifi(p.wifiLocation.first);
-          trajectoryMapFragment.updateFloor(p.wifiLocation.second);
+          trajectoryMapFragment.updateWifi(p.wifiLocation.position(),
+                  new float[] {p.wifiLocation.isOutlier() ? 1 : 0});
+          trajectoryMapFragment.updateFloor(p.wifiLocation.floor());
         }
       }
     } else {
@@ -429,12 +431,14 @@ public class ReplayFragment extends Fragment {
       trajectoryMapFragment.updateUserLocation(p.fusedLocation, p.orientation);
       trajectoryMapFragment.updatePdrLocation(p.pdrLocation);
       if (p.gnssLocation != null) {
-        trajectoryMapFragment.updateGNSS(p.gnssLocation);
+        trajectoryMapFragment.updateGNSS(p.gnssLocation.position(),
+                new float[] {p.gnssLocation.isOutlier() ? 1 : 0});
       }
       // Plot the latest WiFi datapoint
       if (p.wifiLocation != null) {
-        trajectoryMapFragment.updateWifi(p.wifiLocation.first);
-        trajectoryMapFragment.updateFloor(p.wifiLocation.second);
+        trajectoryMapFragment.updateWifi(p.wifiLocation.position(),
+                new float[] {p.wifiLocation.isOutlier() ? 1 : 0});
+        trajectoryMapFragment.updateFloor(p.wifiLocation.floor());
       }
     }
 

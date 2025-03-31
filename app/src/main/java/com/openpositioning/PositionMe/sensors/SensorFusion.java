@@ -91,7 +91,7 @@ public class SensorFusion implements SensorEventListener, Observer {
   // String for creating WiFi fingerprint JSO N object
   private static final String WIFI_FINGERPRINT = "wf";
 
-  private static final float OUTLIER_DISTANCE_THRESHOLD = 10;
+  private static final float OUTLIER_DISTANCE_THRESHOLD = 15;
   public static final SimpleMatrix INIT_POS_COVARIANCE = new SimpleMatrix(new double[][]{
       {2.0, 0.0},
       {0.0, 2.0}
@@ -177,6 +177,7 @@ public class SensorFusion implements SensorEventListener, Observer {
   // Location values
   private float gnssLatitude;
   private float gnssLongitude;
+  private boolean isGnssOutlier;
   private float altitude;
   private LatLng startLocation;
   // Wifi values
@@ -495,6 +496,10 @@ public class SensorFusion implements SensorEventListener, Observer {
       if (fusedLocation == null) {
         // Initial fused location is GNSS latlng.
         fusedLocation = new float[]{gnssLatitude, gnssLongitude};
+      } else if (coordinateTransformer != null) {
+        isGnssOutlier = isOutlier(coordinateTransformer,
+                new LatLng(fusedLocation[0],fusedLocation[1]),
+                new LatLng(gnssLatitude, gnssLongitude));
       }
       LatLng loc = new LatLng(gnssLatitude, gnssLongitude);
       float altitude = (float) location.getAltitude();
@@ -872,13 +877,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     sensorValueMap.put(SensorTypes.PRESSURE, new float[]{pressure});
     sensorValueMap.put(SensorTypes.PROXIMITY, new float[]{proximity});
     sensorValueMap.put(SensorTypes.GNSSLATLONG, this.getGNSSLatitude(false));
+    sensorValueMap.put(SensorTypes.GNSS_OUTLIER, new float[] {isGnssOutlier ? 1 : 0});
     sensorValueMap.put(SensorTypes.PDR, pdrProcessing.getPDRMovement());
     if (currentWifiLocation != null) {
       sensorValueMap.put(SensorTypes.WIFI, new float[]{
           (float) currentWifiLocation.latitude,
           (float) currentWifiLocation.longitude});
       sensorValueMap.put(SensorTypes.WIFI_FLOOR, new float[]{this.getWifiFloor()});
-      sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[isWifiLocationOutlier ? 1 : 0]);
+      sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[] {isWifiLocationOutlier ? 1 : 0});
     }
     sensorValueMap.put(SensorTypes.FUSED, fusedLocation);
     return sensorValueMap;

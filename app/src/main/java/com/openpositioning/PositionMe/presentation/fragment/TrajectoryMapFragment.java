@@ -81,8 +81,6 @@ public class TrajectoryMapFragment extends Fragment {
   private boolean isPdrOn = false; // Tracks whether the polyline color is red
   private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
   private boolean isWifiOn = false; // Tracks if GNSS tracking is enabled
-
-  private Polyline gnssPolyline; // Polyline for GNSS path
   private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
   private LatLng pendingCameraPosition = null; // Stores pending camera movement
@@ -210,9 +208,6 @@ public class TrajectoryMapFragment extends Fragment {
         gnssMarker.remove();
         gnssMarker = null;
       }
-      if (gnssPolyline != null) {
-        gnssPolyline.setVisible(isChecked);
-      }
     });
     // Wifi Switch
     wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -301,15 +296,6 @@ public class TrajectoryMapFragment extends Fragment {
         );
         // ensures pdr trajectory is initialised in the invisible state
         pdrPolyline.setVisible(isPdrOn);
-
-        // GNSS path in blue
-        gnssPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.BLUE)
-                .zIndex(10f)
-                .width(5f)
-                .add() // start empty
-        );
-        gnssPolyline.setVisible(isGnssOn);
     }
 
 
@@ -526,32 +512,31 @@ public class TrajectoryMapFragment extends Fragment {
   /**
    * Called when we want to set or update the GNSS marker position
    */
-  public void updateGNSS(@NonNull LatLng gnssLocation) {
+  public void updateGNSS(@NonNull LatLng gnssLocation, @NonNull float[] isOutlier) {
     if (gMap == null) {
       return;
     }
     if (!isGnssOn) {
       return;
     }
+    BitmapDescriptor icon;
 
+    if (isOutlier[0] == 1) {
+      icon = UtilFunctions.bitmapDescriptorFromVector(requireContext(), R.drawable.gnss_outlier);
+    } else {
+      icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE);
+    }
     if (gnssMarker == null) {
       // Create the GNSS marker for the first time
       gnssMarker = gMap.addMarker(new MarkerOptions()
           .position(gnssLocation)
           .title("GNSS Position")
-          .icon(BitmapDescriptorFactory
-              .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+          .icon(icon));
       lastGnssLocation = gnssLocation;
     } else {
       // Move existing GNSS marker
       gnssMarker.setPosition(gnssLocation);
-
-      // Add a segment to the blue GNSS line, if this is a new location
-      if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
-        List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
-        gnssPoints.add(gnssLocation);
-        gnssPolyline.setPoints(gnssPoints);
-      }
+      gnssMarker.setIcon(icon);
       lastGnssLocation = gnssLocation;
     }
   }
@@ -561,7 +546,7 @@ public class TrajectoryMapFragment extends Fragment {
    *
    * @param wifiLocation The location where the WiFi marker should be placed.
    */
-  public void updateWifi(@NonNull LatLng wifiLocation) {
+  public void updateWifi(@NonNull LatLng wifiLocation, @NonNull float[] isOutlier) {
     if (gMap == null) {
       return;
     }
@@ -569,39 +554,25 @@ public class TrajectoryMapFragment extends Fragment {
       return;
     }
 
+    BitmapDescriptor icon;
+
+    if (isOutlier[0] == 1) {
+      icon = UtilFunctions.bitmapDescriptorFromVector(requireContext(), R.drawable.wifi_outlier);
+    } else {
+      icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE);
+    }
+
     if (wifiMarker == null) {
       // Create the WiFi marker if it doesn't already exist
       wifiMarker = gMap.addMarker(new MarkerOptions()
           .position(wifiLocation)
           .title("WiFi Access Point")
-          .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+          .icon(icon)
       );
     } else {
       // Update the existing WiFi marker's position
       wifiMarker.setPosition(wifiLocation);
-    }
-  }
-
-  /**
-   * Update the map with a Fused marker at the specified location.
-   *
-   * @param fusedLocation The location where the Fused marker should be placed.
-   */
-  public void updateFused(@NonNull LatLng fusedLocation) {
-    if (gMap == null) {
-      return;
-    }
-
-    if (fusedMarker == null) {
-      // Create the fused marker if it doesn't already exist
-      fusedMarker = gMap.addMarker(new MarkerOptions()
-          .position(fusedLocation)
-          .title("Fused Position")
-          .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
-      );
-    } else {
-      // Update the existing fused marker's position
-      fusedMarker.setPosition(fusedLocation);
+      wifiMarker.setIcon(icon);
     }
   }
 
@@ -609,10 +580,6 @@ public class TrajectoryMapFragment extends Fragment {
     if (indoorMapManager != null && this.autoFloorSwitch.isChecked()) {
       indoorMapManager.setCurrentFloor(floor, true);
     }
-  }
-
-  public void updateElevation(float elevation) {
-
   }
 
   /**
@@ -668,10 +635,6 @@ public class TrajectoryMapFragment extends Fragment {
           pdrPolyline.remove();
           pdrPolyline = null;
         }
-        if (gnssPolyline != null) {
-            gnssPolyline.remove();
-            gnssPolyline = null;
-        }
         if (orientationMarker != null) {
             orientationMarker.remove();
             orientationMarker = null;
@@ -689,16 +652,12 @@ public class TrajectoryMapFragment extends Fragment {
           .zIndex(10f)
           .width(5f)
           .add());
-      gnssPolyline = gMap.addPolyline(new PolylineOptions()
-          .color(Color.BLUE)
-          .zIndex(10f)
-          .width(5f)
-          .add());
       pdrPolyline = gMap.addPolyline(new PolylineOptions()
               .color(Color.BLACK)
               .zIndex(10f)
               .width(5f)
               .add());
+      pdrPolyline.setVisible(isPdrOn);
     }
   }
 
