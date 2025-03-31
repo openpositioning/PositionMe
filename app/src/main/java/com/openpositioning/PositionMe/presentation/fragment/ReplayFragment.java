@@ -80,8 +80,8 @@ public class ReplayFragment extends Fragment {
     private List<TrajParser.ReplayPoint> replayData = new ArrayList<>();
     private int currentIndex = 0;
     private boolean isPlaying = false;
-
     private LatLng prevWiFiLocation;
+    private List<LatLng> EKF_data = new ArrayList<>();
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
