@@ -176,6 +176,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private double altitude;
     private double[] referencePosition = new double[3]; // lat, lng, alt
     private boolean useFusion = true;
+    private String filterType; // for choosing filter type (kalman/particle)
 
     //region Initialisation
     /**
@@ -1294,7 +1295,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         updateSimpleFusion();
     }
 
-
+    /**
+     * Set the type of fusion filter to use (kalman or particle)
+     * @param filterType The filter type to use
+     */
+    public void setFilterType(String filterType) {
+        this.filterType = filterType.toLowerCase();
+    }
 
     /**
      * Initialize the fusion algorithm
@@ -1319,8 +1326,15 @@ public class SensorFusion implements SensorEventListener, Observer {
         Log.d("SensorFusion", "Initializing fusion algorithm with reference position: " +
                 referencePosition[0] + ", " + referencePosition[1] + ", " + referencePosition[2]);
 
-        // Create fusion algorithm with valid reference position
-        fusionAlgorithm = new KalmanFilterFusion(referencePosition);
+        // Create fusion algorithm based on selected filter type
+        if ("particle".equals(filterType)) {
+            Log.d("SensorFusion", "Using Particle Filter fusion algorithm");
+            fusionAlgorithm = new ParticleFilterFusion(NUM_PARTICLES, referencePosition);
+        } else {
+            // Default to Kalman filter
+            Log.d("SensorFusion", "Using Kalman Filter fusion algorithm");
+            fusionAlgorithm = new KalmanFilterFusion(referencePosition);
+        }
     }
 
     /**
