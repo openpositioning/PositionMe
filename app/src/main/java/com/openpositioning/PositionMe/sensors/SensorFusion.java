@@ -23,7 +23,6 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
-import com.openpositioning.PositionMe.utils.Tag;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import org.json.JSONException;
@@ -657,65 +656,95 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new LatLng(predictedLL[0], predictedLL[1]);
     }
 
-    public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove){
-        if (WIFIpos == null || PDRmove == null) {
-            Log.e("EKF", "Received null input: wifi=" + WIFIpos + ", pdr=" + PDRmove);
-            return null;
+    public LatLng EKF_replay(LatLng wifiPos, LatLng pdrPos, LatLng prevPdrPos, LatLng gnssPos) {
+        if (pdrPos == null || prevPdrPos == null) return null;
+
+        initialLocation = new Location("");
+        initialLocation.setLatitude(wifiPos != null ? wifiPos.latitude : gnssPos.latitude);
+        initialLocation.setLongitude(wifiPos != null ? wifiPos.longitude : gnssPos.longitude);
+
+        // Convert delta movement from degrees to meters
+        double deltaX = UtilFunctions.degreesToMetersLng(
+                pdrPos.longitude - prevPdrPos.longitude, initialLocation.getLatitude()
+        );
+        double deltaY = UtilFunctions.degreesToMetersLat(
+                pdrPos.latitude - prevPdrPos.latitude
+        );
+
+        // Convert WiFi and GNSS positions to meters from origin (if they exist)
+        double[] wifiMeters = null;
+        if (wifiPos != null) {
+            wifiMeters = UtilFunctions.latLngToMeters(wifiPos, initialLocation);
         }
 
+        double[] gnssMeters = null;
+        if (gnssPos != null) {
+            gnssMeters = UtilFunctions.latLngToMeters(gnssPos, initialLocation);
+        }
 
-        //Initialise local variables
-        float wifiLat = (float)WIFIpos.latitude;
-        float wifiLng = (float)WIFIpos.longitude;
-        float pdrDeltaX = (float)PDRmove.latitude;
-        float pdrDeltaY = (float)PDRmove.longitude;
-
-        // Initialize on first valid WiFi reading
-        if (!isInitialized && wifiLat != 0 && wifiLng != 0) {
-            initialLocation = new Location("");
-            initialLocation.setLatitude(wifiLat);
-            initialLocation.setLongitude(wifiLng);
-            state[0] = 0;
-            state[1] = 0;
+        // Initialize filter on first valid reading
+        if (!isInitialized && wifiMeters != null) {
+            state[0] = wifiMeters[0];
+            state[1] = wifiMeters[1];
             isInitialized = true;
-            return new LatLng(wifiLat, wifiLng);
+            return wifiPos;
+        } else if (!isInitialized && gnssMeters != null) {
+            state[0] = gnssMeters[0];
+            state[1] = gnssMeters[1];
+            isInitialized = true;
+            return gnssPos;
         }
+
+
 
         if (!isInitialized) return null;
 
-        // Prediction step (PDR)
-        double[][] F = {{1, 0}, {0, 1}}; // State transition matrix
-        double[][] Q = {{1e-6, 0}, {0, 1e-6}}; // Process noise
-
-        state[0] += pdrDeltaX;
-        state[1] += pdrDeltaY;
+        // === Prediction step (PDR) ===
+        double[][] F = {{1, 0}, {0, 1}};
+        double[][] Q = {{1, 0}, {0, 1}}; // PDR noise in meters
+        state[0] += deltaX;
+        state[1] += deltaY;
         covariance = matrixAdd(matrixMultiply(F, matrixMultiply(covariance, transpose(F))), Q);
 
-        // Update step (WiFi)
-        double[] measurement = {wifiLat, wifiLng};
-        double[] predictedLL = {state[0], state[1]};
-        double[][] H = computeJacobian();
-        double[][] R = {{1e-6, 0}, {0, 1e-6}}; // Measurement noise
+        // === Update step (WiFi) ===
+        if (wifiMeters != null) {
+            double[][] R_wifi = {{5.0, 0}, {0, 5.0}}; // WiFi = more accurate indoors
+            performMeasurementUpdate(wifiMeters, R_wifi);
+        }
 
-        // Kalman gain
+        // === Update step (GNSS) ===
+        if (gnssMeters != null) {
+            double[][] R_gnss = {{10.0, 0}, {0, 10.0}}; // GNSS = less accurate indoors
+            performMeasurementUpdate(gnssMeters, R_gnss);
+        }
+
+        // Convert back to lat/lng
+        double[] latLng = UtilFunctions.metersToLatLng(state[0], state[1], initialLocation);
+        return new LatLng(latLng[0], latLng[1]);
+    }
+
+
+    private void performMeasurementUpdate(double[] measurement, double[][] R) {
+        double[][] H = {{1, 0}, {0, 1}};
+
+        double[] predicted = {state[0], state[1]};
+        double[] innovation = {
+                measurement[0] - predicted[0],
+                measurement[1] - predicted[1]
+        };
+
         double[][] S = matrixAdd(matrixMultiply(H, matrixMultiply(covariance, transpose(H))), R);
         double[][] K = matrixMultiply(matrixMultiply(covariance, transpose(H)), inverse(S));
-
-        // State update
-        double[] innovation = {
-                measurement[0] - predictedLL[0],
-                measurement[1] - predictedLL[1]
-        };
         double[] update = matrixVectorMultiply(K, innovation);
+
         state[0] += update[0];
         state[1] += update[1];
 
-        // Covariance update
         double[][] I = {{1, 0}, {0, 1}};
         covariance = matrixMultiply(matrixSubtract(I, matrixMultiply(K, H)), covariance);
-
-        return new LatLng(predictedLL[0], predictedLL[1]);
     }
+
+
 
     /**
      *
@@ -1320,17 +1349,19 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
-    // code by Guilherme: store tags globally for access in replay
-    private final List<Tag> tags = new ArrayList<>();
-
-    public void addTag(Tag tag) {
-        tags.add(tag);
+    /**
+     * Adds a new tag to the list.
+     */
+    public void addTag(com.openpositioning.PositionMe.utils.Tag tag) {
+        tagList.add(tag);
     }
 
-    public List<Tag> getTags() {
-        return tags;
+    /**
+     * Returns the list of recorded tags.
+     */
+    public List<com.openpositioning.PositionMe.utils.Tag> getTagList() {
+        return tagList;
     }
-
 
 
     private class storeDataInTrajectory extends TimerTask {

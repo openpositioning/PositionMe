@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.location.Location;
 import android.util.TypedValue;
 
 import androidx.core.content.ContextCompat;
@@ -25,8 +26,9 @@ import java.util.Random;
  * @see RecordingFragment Currently used by RecordingFragment
  */
 public class UtilFunctions {
+
     // Constant 1degree of latitiude/longitude (in m)
-    private static final int  DEGREE_IN_M=111111;
+    public static final int  DEGREE_IN_M =111111;
 
     private static final int PARTICLE_COUNT = 1000; // Number of particles
     private static final double PDR_NOISE_STD = 0.5; // Noise in PDR movement (meters)
@@ -367,6 +369,17 @@ public class UtilFunctions {
         return bitmap;
     }
 
+    public static double[] latLngToMeters(LatLng latLng, Location origin) {
+        double dx = degreesToMetersLng(latLng.longitude - origin.getLongitude(), origin.getLatitude());
+        double dy = degreesToMetersLat(latLng.latitude - origin.getLatitude());
+        return new double[]{dx, dy};
+    }
+
+    public static double[] metersToLatLng(double xMeters, double yMeters, Location origin) {
+        double lat = origin.getLatitude() + yMeters / DEGREE_IN_M;
+        double lng = origin.getLongitude() + xMeters / (DEGREE_IN_M * Math.cos(Math.toRadians(origin.getLatitude())));
+        return new double[]{lat, lng};
+    }
 
     // Code by Guilherme: Converts dp to pixels.
     public static int dpToPx(Context context, int dp) {
