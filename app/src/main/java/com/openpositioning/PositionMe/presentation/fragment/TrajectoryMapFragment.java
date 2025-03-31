@@ -1,5 +1,9 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -109,6 +113,10 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+
+    private BroadcastReceiver wifiErrorReceiver;
+
+
 
 
     public TrajectoryMapFragment() {
@@ -264,7 +272,32 @@ public class TrajectoryMapFragment extends Fragment {
                 indoorMapManager.decreaseFloor();
             }
         });
+
+
+     //   registerWifiErrorReceiver();
+
+
     }
+
+
+//    private void registerWifiErrorReceiver() {
+//        wifiErrorReceiver = new BroadcastReceiver() {
+//            @Override
+//            public void onReceive(Context context, Intent intent) {
+//                if ("WIFI_POSITIONING_ERROR".equals(intent.getAction())) {
+//                    String errorMessage = intent.getStringExtra("errorMessage");
+//                    Toast.makeText(requireContext(), "WiFi Error: " + errorMessage, Toast.LENGTH_LONG).show();
+//                }
+//            }
+//        };
+//
+//        requireContext().registerReceiver(
+//                wifiErrorReceiver,
+//                new IntentFilter("WIFI_POSITIONING_ERROR"),
+//                Context.RECEIVER_NOT_EXPORTED
+//        );
+//    }
+
 
 
 
@@ -498,7 +531,7 @@ public class TrajectoryMapFragment extends Fragment {
      * and append to polyline if the user actually moved.
      *
      * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
+     *
      */
     public void pdrLocation(@NonNull LatLng newLocation) {
         if (gMap == null) return;
@@ -644,14 +677,14 @@ public class TrajectoryMapFragment extends Fragment {
             return; // Skip updating the marker
         }
 
-        boolean isInsideWifiBounds = indoorMapManager.getIsIndoorMapSet(); // Check bounds
-        if (!isInsideWifiBounds) {
-            // WiFi readings are not available; show a message
-            showNoWiFiCoverageMessage();
-            clearWiFi(); // Clear the WiFi marker and polyline if any
-            wifiSwitch.setChecked(false);
-            return;
-        }
+//        boolean isInsideWifiBounds = indoorMapManager.getIsIndoorMapSet(); // Check bounds
+//        if (!isInsideWifiBounds) {
+//            // WiFi readings are not available; show a message
+//            showNoWiFiCoverageMessage();
+//            clearWiFi(); // Clear the WiFi marker and polyline if any
+//            wifiSwitch.setChecked(false);
+//            return;
+//        }
 
         if (wifiMarker == null) {
             // Create the WiFi marker for the first time
@@ -884,5 +917,12 @@ public class TrajectoryMapFragment extends Fragment {
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
 
+//    @Override
+//    public void onDestroyView() {
+//        super.onDestroyView();
+//        if (wifiErrorReceiver != null) {
+//            requireContext().unregisterReceiver(wifiErrorReceiver);
+//        }
+//    }
 
 }

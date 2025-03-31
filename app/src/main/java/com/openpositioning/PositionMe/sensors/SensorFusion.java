@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -9,9 +10,11 @@ import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -524,7 +527,34 @@ public class SensorFusion implements SensorEventListener, Observer {
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
 
             // Using standard WiFi positioning without fusion integration
-            this.wiFiPositioning.request(wifiFingerPrint);
+           // this.wiFiPositioning.request(wifiFingerPrint);
+
+
+            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    // Optionally store the position here if needed
+                    SensorFusion.this.wifiPosition = wifiLocation;
+                    Log.d("WiFiPositioning", "Success! Location: " + wifiLocation);
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.e("WiFiPositioning", "Failed to get WiFi position: " + message);
+                    if (hasPositionListeners()) {
+                        for (PositionListener listener : positionListeners) {
+                            listener.onPositionUpdate(PositionListener.UpdateType.WIFI_ERROR, null); // custom type
+                        }
+                    }
+                }
+            });
+
+
+
+
+
+
+
         } catch (JSONException e) {
             // Catching error while making JSON object, to prevent crashes
             Log.e("jsonErrors", "Error creating json object" + e.toString());
@@ -558,6 +588,21 @@ public class SensorFusion implements SensorEventListener, Observer {
                 public void onError(String message) {
                     // Handle the error response
                     Log.e("WiFiFusion", "Failed to get WiFi position: " + message);
+
+                    // Show Toast directly from SensorFusion (must be on UI thread)
+                    new android.os.Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(appContext, "WiFi Error: " + message, Toast.LENGTH_LONG).show()
+                    );
+
+
+
+                    // Send a broadcast with the error message
+
+                    //                    Intent intent = new Intent("WIFI_POSITIONING_ERROR");
+//                    intent.putExtra("errorMessage", message);
+//                    appContext.sendBroadcast(intent);  // using stored appContext from setContext()
+
+
                 }
             });
         } catch (JSONException e) {

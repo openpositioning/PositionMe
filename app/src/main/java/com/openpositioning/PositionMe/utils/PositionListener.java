@@ -22,7 +22,9 @@ public interface PositionListener {
         FUSED_POSITION,
 
         /** Update for heading/orientation */
-        ORIENTATION_UPDATE
+        ORIENTATION_UPDATE,
+
+        WIFI_ERROR
     }
 
     /**
