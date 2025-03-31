@@ -91,7 +91,7 @@ public class SensorFusion implements SensorEventListener, Observer {
   // String for creating WiFi fingerprint JSO N object
   private static final String WIFI_FINGERPRINT = "wf";
 
-  private static final float OUTLIER_DISTANCE_THRESHOLD = 1;
+  private static final float OUTLIER_DISTANCE_THRESHOLD = 15;
   public static final SimpleMatrix INIT_POS_COVARIANCE = new SimpleMatrix(new double[][]{
       {2.0, 0.0},
       {0.0, 2.0}
