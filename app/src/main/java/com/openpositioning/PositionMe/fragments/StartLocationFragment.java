@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.fragments;
 
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -181,26 +182,37 @@ public class StartLocationFragment extends Fragment {
              */
             @Override
             public void onClick(View view) {
-                // Starts recording data from the sensor fusion
-                sensorFusion.startRecording();
-                // Set the start location obtained
-                // Get fused position (LatLng type) and convert to float[]
+                // 获取融合定位
                 LatLng fusedLatLng = PositioningFusion.getInstance().getFusedPosition();
+
                 if (fusedLatLng == null) {
                     Toast.makeText(requireContext(), "定位尚未准备好，请稍后再试", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                float[] fusedPosition = new float[]{(float) fusedLatLng.latitude, (float) fusedLatLng.longitude};
 
+                // 弹出提示，等待 5 秒
+                Toast.makeText(requireContext(), "定位成功，5秒后开始录制...", Toast.LENGTH_SHORT).show();
 
+                // 禁用按钮避免重复点击（可选）
+                view.setEnabled(false);
 
-                // Set as the starting GNSS position
-                sensorFusion.setStartGNSSLatitude(fusedPosition);
+                new Handler().postDelayed(() -> {
+                    // 启动录制
+                    sensorFusion.startRecording();
 
-                // Navigate to the RecordingFragment
-                NavDirections action = StartLocationFragmentDirections.actionStartLocationFragmentToRecordingFragment();
-                Navigation.findNavController(view).navigate(action);
+                    // 设置起始位置
+                    float[] fusedPosition = new float[]{
+                            (float) fusedLatLng.latitude,
+                            (float) fusedLatLng.longitude
+                    };
+                    sensorFusion.setStartGNSSLatitude(fusedPosition);
+
+                    // 页面跳转
+                    NavDirections action = StartLocationFragmentDirections.actionStartLocationFragmentToRecordingFragment();
+                    Navigation.findNavController(view).navigate(action);
+                }, 5000); // 5000 毫秒 = 5 秒
             }
+
         });
 
     }

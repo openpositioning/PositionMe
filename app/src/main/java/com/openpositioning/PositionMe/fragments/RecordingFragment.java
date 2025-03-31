@@ -68,6 +68,10 @@ import java.util.List;
  * @author Arun Gopalakrishnan
  */
 public class RecordingFragment extends Fragment {
+    private Marker wifiMarker;
+    private Marker pdrMarker;
+    private Marker fusedMarker;
+
 
     private boolean isFirstUpdate = true;
 
@@ -216,6 +220,8 @@ public class RecordingFragment extends Fragment {
                 //Showing an indication of available indoor maps using PolyLines
                 indoorMapManager.setIndicationOfIndoorMap();
                 polyline.setZIndex(500);
+                refreshDataHandler.post(refreshDataTask); // ✅ 地图准备好再更新 UI
+
             }
         });
 
@@ -419,10 +425,10 @@ public class RecordingFragment extends Fragment {
                 }
             }.start();
         }
-        else {
-            // No time limit - use a repeating task to refresh UI.
-            this.refreshDataHandler.post(refreshDataTask);
-        }
+//        else {
+//            // No time limit - use a repeating task to refresh UI.
+//            this.refreshDataHandler.post(refreshDataTask);
+//        }
     }
 
     /**
@@ -504,6 +510,45 @@ public class RecordingFragment extends Fragment {
         // Get new fused LatLng position
 
         LatLng fusedLatLng = PositioningFusion.getInstance().getFusedPosition();
+
+        // --- WiFi ---
+        LatLng wifiLocation = PositioningFusion.getInstance().getWifiPosition();
+        if (PositioningFusion.getInstance().isWifiPositionSet()) {
+            if (wifiMarker == null) {
+                wifiMarker = gMap.addMarker(new MarkerOptions()
+                        .position(wifiLocation)
+                        .title(String.format("WiFi Position %s", wifiLocation))
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+            } else {
+                wifiMarker.setPosition(wifiLocation);
+            }
+        }
+
+// --- PDR ---
+        LatLng pdrLocation = PositioningFusion.getInstance().getPdrPosition();
+        if (PositioningFusion.getInstance().isPDRPositionSet()) {
+            if (pdrMarker == null) {
+                pdrMarker = gMap.addMarker(new MarkerOptions()
+                        .position(pdrLocation)
+                        .title(String.format("PDR Position %s", pdrLocation))
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+            } else {
+                pdrMarker.setPosition(pdrLocation);
+            }
+        }
+
+// --- GNSS ---
+        LatLng gnssmarkerLocation = PositioningFusion.getInstance().getGnssPosition();
+        if (PositioningFusion.getInstance().isGNSSPositionSet()) {
+            if (gnssMarker == null) {
+                gnssMarker = gMap.addMarker(new MarkerOptions()
+                        .position(gnssmarkerLocation)
+                        .title(String.format("GNSS Position %s", gnssmarkerLocation))
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+            } else {
+                gnssMarker.setPosition(gnssmarkerLocation);
+            }
+        }
 
         if (fusedLatLng == null) return; // 防止空指针
 
