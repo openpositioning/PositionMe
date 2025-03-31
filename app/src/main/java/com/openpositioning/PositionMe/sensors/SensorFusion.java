@@ -165,6 +165,8 @@ public class SensorFusion implements SensorEventListener, Observer {
             new LatLng(55.92298698483965, -3.1741890966446484)
     );
 
+    List<float[]> windowList = new ArrayList<>();
+
     int MAX_WIFI_APS = 60;
     //region Initialisation
     /**
@@ -271,6 +273,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         pf = new FilterUtils.ParticleFilter(200, 0, 0, 1);
         ekf = new FilterUtils.EKFFilter(0, 0, 1.0, 1, 2);
+
     }
     //endregion
 
@@ -435,6 +438,25 @@ public class SensorFusion implements SensorEventListener, Observer {
                 newCords = new float[]{(float) currentState.x, (float) currentState.y};
                 Log.e("Particle Filter", "x: " + currentState.x + ", y: " + currentState.y);
 
+                // 6. Batch Optimization
+
+                int historyPoints = 4; // 自定义历史点数量
+
+                if (windowList.size() >= historyPoints + 1) {
+                    windowList.remove(0); // 保持窗口长度
+                }
+                windowList.add(newCords); // 添加当前点
+
+                // 调用优化函数（参考历史 4 点）
+                newCords = TrajectoryOptimizer.weightedSmoothOptimizedPoint(
+                        windowList,
+                        1.0f,     // 平滑项权重
+                        1.0f,     // 拟合项权重
+                        historyPoints  // 自定义历史点数量
+                );
+
+                Log.e("Optimized", "x: " + newCords[0] + ", y: " + newCords[1]);
+
                 // test
                 List<float[]> wallPoints = new ArrayList<>();
                 for (LatLng point : wallPointsLatLng) {
@@ -497,6 +519,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     }
                 }
                 // test end
+
 
                 if (saveRecording) {
                     // Store the PDR coordinates for plotting the trajectory
