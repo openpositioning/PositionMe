@@ -45,11 +45,6 @@ public class PathView extends View {
     private static boolean draw = true;
     //Variable to only draw when the variable is true
     private static boolean reDraw = false;
-    private final int ekfColor = Color.RED;
-    private Path ekfPath = new Path();
-    private static ArrayList<Float> ekfXCoords = new ArrayList<>();
-    private static ArrayList<Float> ekfYCoords = new ArrayList<>();
-
 
     /**
      * Public default constructor for PathView. The constructor initialises the view with a context
@@ -112,14 +107,12 @@ public class PathView extends View {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
 
-            // 设置绘制顺序，确保轨迹显示在最上层
-            canvas.save();
-            canvas.translate(0, 0); // 确保在最上层
+            //Draw path
             canvas.drawPath(path, drawPaint);
-            canvas.restore();
 
             //Ensure path not redrawn
             draw = false;
+
         }
         //If redrawing due to scaling of the average step length
         else if(reDraw){
@@ -146,16 +139,13 @@ public class PathView extends View {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
 
-            // 设置绘制顺序，确保轨迹显示在最上层
-            canvas.save();
-            canvas.translate(0, 0); // 确保在最上层
             canvas.drawPath(path, drawPaint);
-            canvas.restore();
 
             //Ensure path not redrawn when screen is resized
             reDraw = false;
         }
         else{
+
             // If there are no coordinates, don't draw anything
             if (xCoords.size() == 0)
                 return;
@@ -168,11 +158,7 @@ public class PathView extends View {
                 path.lineTo(xCoords.get(i), yCoords.get(i));
             }
 
-            // 设置绘制顺序，确保轨迹显示在最上层
-            canvas.save();
-            canvas.translate(0, 0); // 确保在最上层
             canvas.drawPath(path, drawPaint);
-            canvas.restore();
         }
     }
 

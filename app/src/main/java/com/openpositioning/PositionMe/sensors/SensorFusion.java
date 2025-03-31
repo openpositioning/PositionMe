@@ -456,7 +456,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     break;
                 }
-
         }
     }
 
@@ -958,6 +957,14 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+    /**
+     * 获取当前使用的融合算法选择
+     * @return true表示使用EKF，false表示使用PF
+     */
+    public boolean isFusionAlgorithmSelection() {
+        return fusionAlgorithmSelection;
+    }
+
     //endregion
 
     //region Start/Stop
@@ -1051,8 +1058,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
                 .setLightSensorInfo(createInfoBuilder(lightSensor));
 
-
-
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
         this.pdrProcessing.resetPDR();
@@ -1144,11 +1149,24 @@ public class SensorFusion implements SensorEventListener, Observer {
         double latitude = positionPDR.latitude;
         double longitude = positionPDR.longitude;
 
+        // 通知UI更新PDR轨迹
+        notifySensorUpdate(SensorFusionUpdates.update_type.PDR_UPDATE);
+
         // call fusion algorithm arg(double, double)
         if (fusionAlgorithmSelection) {
             this.extendedKalmanFilter.onStepDetected(pdrValues[0], pdrValues[1], elevationVal, (android.os.SystemClock.uptimeMillis()));
+            // 获取EKF位置并更新轨迹
+            double[] ekfState = this.extendedKalmanFilter.getCurrentState();
+            LatLng ekfPosition = CoordinateTransform.enuToGeodetic(
+                (float)ekfState[0], (float)ekfState[1], elevationVal,
+                startRef[0], startRef[1], ecefRefCoords
+            );
+            notifyFusedUpdate(ekfPosition);
         } else {
             this.particleFilter.update(latitude, longitude);
+            // 获取PF位置并更新轨迹
+            LatLng pfPosition = new LatLng(latitude, longitude); // 使用PDR位置作为PF位置
+            notifyFusedUpdate(pfPosition);
         }
     }
 
