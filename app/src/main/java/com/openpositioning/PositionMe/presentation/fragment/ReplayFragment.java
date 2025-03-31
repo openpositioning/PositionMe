@@ -475,11 +475,12 @@ public class ReplayFragment extends Fragment {
         // get PDR data
         LatLng pdrLatLng = p.pdrLocation;
         LatLng prevPDR = prev.pdrLocation;
+        LatLng gnssLocation = p.gnssLocation;
         // handle WiFi data
         if (p.cachedWiFiLocation != null) {
             // do EKF using cached WiFi Location
 
-            EKF_fused_point = SensorFusion.getInstance().EKF_replay(p.cachedWiFiLocation, pdrLatLng, prevPDR);
+            EKF_fused_point = SensorFusion.getInstance().EKF_replay(p.cachedWiFiLocation, pdrLatLng, prevPDR,gnssLocation);
         } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
             JSONObject wifiFingerprint = new JSONObject();
             JSONObject wifiAccessPoints = new JSONObject();
@@ -514,11 +515,11 @@ public class ReplayFragment extends Fragment {
                     Log.w(TAG, "WiFi Positioning failed: " + message);
                 }
             });
-            EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng, prevPDR);
+            EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng, prevPDR, gnssLocation);
         } else {
             if (prevWiFiLocation != null) {
                 // do EKF using prevWiFiLocation
-                EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng, prevPDR);
+                EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng, prevPDR, gnssLocation);
             } else {
                 // do nothing
                 return null;

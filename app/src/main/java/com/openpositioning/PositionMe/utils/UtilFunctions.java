@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.location.Location;
 import android.util.TypedValue;
 
 import androidx.core.content.ContextCompat;
@@ -368,6 +369,17 @@ public class UtilFunctions {
         return bitmap;
     }
 
+    public static double[] latLngToMeters(LatLng latLng, Location origin) {
+        double dx = degreesToMetersLng(latLng.longitude - origin.getLongitude(), origin.getLatitude());
+        double dy = degreesToMetersLat(latLng.latitude - origin.getLatitude());
+        return new double[]{dx, dy};
+    }
+
+    public static double[] metersToLatLng(double xMeters, double yMeters, Location origin) {
+        double lat = origin.getLatitude() + yMeters / DEGREE_IN_M;
+        double lng = origin.getLongitude() + xMeters / (DEGREE_IN_M * Math.cos(Math.toRadians(origin.getLatitude())));
+        return new double[]{lat, lng};
+    }
 
     // Code by Guilherme: Converts dp to pixels.
     public static int dpToPx(Context context, int dp) {

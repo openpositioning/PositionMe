@@ -656,70 +656,94 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new LatLng(predictedLL[0], predictedLL[1]);
     }
 
-    public LatLng EKF_replay(LatLng wifiPos, LatLng pdrCurrent, LatLng pdrPrev) {
-        if (wifiPos == null || pdrCurrent == null || pdrPrev == null) {
-            Log.e("EKF", "Invalid input: wifi=" + wifiPos + ", pdr=" + pdrCurrent + ", prev=" + pdrPrev);
-            return null;
+    public LatLng EKF_replay(LatLng wifiPos, LatLng pdrPos, LatLng prevPdrPos, LatLng gnssPos) {
+        if (pdrPos == null || prevPdrPos == null) return null;
+
+        initialLocation = new Location("");
+        initialLocation.setLatitude(wifiPos != null ? wifiPos.latitude : gnssPos.latitude);
+        initialLocation.setLongitude(wifiPos != null ? wifiPos.longitude : gnssPos.longitude);
+
+        // Convert delta movement from degrees to meters
+        double deltaX = UtilFunctions.degreesToMetersLng(
+                pdrPos.longitude - prevPdrPos.longitude, initialLocation.getLatitude()
+        );
+        double deltaY = UtilFunctions.degreesToMetersLat(
+                pdrPos.latitude - prevPdrPos.latitude
+        );
+
+        // Convert WiFi and GNSS positions to meters from origin (if they exist)
+        double[] wifiMeters = null;
+        if (wifiPos != null) {
+            wifiMeters = UtilFunctions.latLngToMeters(wifiPos, initialLocation);
         }
 
-        // Convert WiFi position to meters from the initial origin
-        double wifiLat = wifiPos.latitude;
-        double wifiLng = wifiPos.longitude;
+        double[] gnssMeters = null;
+        if (gnssPos != null) {
+            gnssMeters = UtilFunctions.latLngToMeters(gnssPos, initialLocation);
+        }
 
-        if (!isInitialized && wifiLat != 0 && wifiLng != 0) {
-            initialLocation = new Location("");
-            initialLocation.setLatitude(wifiLat);
-            initialLocation.setLongitude(wifiLng);
-            state[0] = 0; // x = 0 meters
-            state[1] = 0; // y = 0 meters
+        // Initialize filter on first valid reading
+        if (!isInitialized && wifiMeters != null) {
+            state[0] = wifiMeters[0];
+            state[1] = wifiMeters[1];
             isInitialized = true;
             return wifiPos;
+        } else if (!isInitialized && gnssMeters != null) {
+            state[0] = gnssMeters[0];
+            state[1] = gnssMeters[1];
+            isInitialized = true;
+            return gnssPos;
         }
+
+
 
         if (!isInitialized) return null;
 
-        // Convert PDR delta from lat/lng degrees to meters
-        double deltaLat = pdrCurrent.latitude - pdrPrev.latitude;
-        double deltaLng = pdrCurrent.longitude - pdrPrev.longitude;
-
-        double deltaY = UtilFunctions.degreesToMetersLat(deltaLat);
-        double deltaX = UtilFunctions.degreesToMetersLng(deltaLng, initialLocation.getLatitude());
-
-        // Prediction step
+        // === Prediction step (PDR) ===
+        double[][] F = {{1, 0}, {0, 1}};
+        double[][] Q = {{1, 0}, {0, 1}}; // PDR noise in meters
         state[0] += deltaX;
         state[1] += deltaY;
-
-        double[][] F = {{1, 0}, {0, 1}};
-        double[][] Q = {{0.5, 0}, {0, 0.5}};
         covariance = matrixAdd(matrixMultiply(F, matrixMultiply(covariance, transpose(F))), Q);
 
-        // Measurement step (convert WiFi lat/lng to meters from initialLocation)
-        double wifiY = UtilFunctions.degreesToMetersLat(wifiLat - initialLocation.getLatitude());
-        double wifiX = UtilFunctions.degreesToMetersLng(wifiLng - initialLocation.getLongitude(), initialLocation.getLatitude());
-        double[] measurement = {wifiX, wifiY};
+        // === Update step (WiFi) ===
+        if (wifiMeters != null) {
+            double[][] R_wifi = {{5.0, 0}, {0, 5.0}}; // WiFi = more accurate indoors
+            performMeasurementUpdate(wifiMeters, R_wifi);
+        }
 
-        double[][] H = {{1, 0}, {0, 1}}; // Identity matrix (direct observation)
-        double[][] R = {{5.0, 0}, {0, 5.0}}; // Measurement noise
+        // === Update step (GNSS) ===
+        if (gnssMeters != null) {
+            double[][] R_gnss = {{10.0, 0}, {0, 10.0}}; // GNSS = less accurate indoors
+            performMeasurementUpdate(gnssMeters, R_gnss);
+        }
 
-        // Kalman gain
+        // Convert back to lat/lng
+        double[] latLng = UtilFunctions.metersToLatLng(state[0], state[1], initialLocation);
+        return new LatLng(latLng[0], latLng[1]);
+    }
+
+
+    private void performMeasurementUpdate(double[] measurement, double[][] R) {
+        double[][] H = {{1, 0}, {0, 1}};
+
+        double[] predicted = {state[0], state[1]};
+        double[] innovation = {
+                measurement[0] - predicted[0],
+                measurement[1] - predicted[1]
+        };
+
         double[][] S = matrixAdd(matrixMultiply(H, matrixMultiply(covariance, transpose(H))), R);
         double[][] K = matrixMultiply(matrixMultiply(covariance, transpose(H)), inverse(S));
-
-        // Update step
-        double[] innovation = {measurement[0] - state[0], measurement[1] - state[1]};
         double[] update = matrixVectorMultiply(K, innovation);
+
         state[0] += update[0];
         state[1] += update[1];
 
         double[][] I = {{1, 0}, {0, 1}};
         covariance = matrixMultiply(matrixSubtract(I, matrixMultiply(K, H)), covariance);
-
-        // Convert back to LatLng
-        double fusedLat = initialLocation.getLatitude() + (state[1] / UtilFunctions.DEGREE_IN_M);
-        double fusedLng = initialLocation.getLongitude() + (state[0] / (UtilFunctions.DEGREE_IN_M / Math.cos(Math.toRadians(initialLocation.getLatitude()))));
-
-        return new LatLng(fusedLat, fusedLng);
     }
+
 
 
     /**
