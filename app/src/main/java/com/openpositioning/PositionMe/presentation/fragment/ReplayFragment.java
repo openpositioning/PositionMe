@@ -377,6 +377,7 @@ public class ReplayFragment extends Fragment {
                 // code by Jamie Arnott
                 if (p.cachedWiFiLocation != null) {
                     trajectoryMapFragment.updateUserLocation(p.cachedWiFiLocation, p.orientation);
+                    currentPoint = p.cachedWiFiLocation;
                 } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
                     ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
                     NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
@@ -413,6 +414,7 @@ public class ReplayFragment extends Fragment {
                                 trajectoryMapFragment.addPolylinePoint(location); // Add trace point
                                 previousReplayPoint = location;
                                 prevWiFiLocation = location;
+
                             }
 
                             @Override
@@ -431,10 +433,11 @@ public class ReplayFragment extends Fragment {
 
             case "EKF":
                 // call EKF_point() with the current index
-                LatLng EKF_location = EKF_point(index);
-                if (EKF_location != null){
-                    trajectoryMapFragment.updateUserLocation(EKF_location,p.orientation);
+                currentPoint = EKF_point(index);
+                if (currentPoint != null){
+                    trajectoryMapFragment.updateUserLocation(currentPoint,p.orientation);
                 }
+                break;
 
 
             default: // PDR
