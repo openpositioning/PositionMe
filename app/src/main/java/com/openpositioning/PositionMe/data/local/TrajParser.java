@@ -11,8 +11,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.openpositioning.PositionMe.Traj;
-import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -63,11 +61,26 @@ public class TrajParser {
     private static class GnssRecord {
         public long relativeTimestamp;
         public double latitude, longitude;
+        public double altitude;
+        public String provider;
     }
+
+    public static class TagPoint {
+        public String label;
+        public LatLng location;
+
+        public TagPoint(String label, LatLng location) {
+            this.label = label;
+            this.location = location;
+        }
+    }
+
+    public static List<TagPoint> tagPoints = new ArrayList<>();
 
     public static List<ReplayPoint> parseTrajectoryData(String filePath, Context context,
                                                         double originLat, double originLng) {
         List<ReplayPoint> result = new ArrayList<>();
+        tagPoints.clear(); // Clear any previous tags
 
         try {
             File file = new File(filePath);
@@ -78,7 +91,6 @@ public class TrajParser {
 
             BufferedReader br = new BufferedReader(new FileReader(file));
             JsonObject root = new JsonParser().parse(br).getAsJsonObject();
-
             br.close();
 
             long startTimestamp = root.has("startTimestamp") ? root.get("startTimestamp").getAsLong() : 0;
@@ -88,6 +100,24 @@ public class TrajParser {
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
 
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " PDR: " + pdrList.size() + " GNSS: " + gnssList.size());
+
+            // Extract tags from GNSS with provider "fusion"
+            if (root.has("gnssData")) {
+                JsonArray gnssArray = root.getAsJsonArray("gnssData");
+                for (JsonElement elem : gnssArray) {
+                    JsonObject obj = elem.getAsJsonObject();
+
+                    if (obj.has("provider") && "fusion".equalsIgnoreCase(obj.get("provider").getAsString())) {
+                        long timestamp = obj.get("relativeTimestamp").getAsLong();
+                        double lat = obj.get("latitude").getAsDouble();
+                        double lon = obj.get("longitude").getAsDouble();
+                        double alt = obj.has("altitude") ? obj.get("altitude").getAsDouble() : 0.0;
+
+                        String label = String.format("Tag @ %.5f, %.5f\nAlt: %.1f", lat, lon, alt);
+                        tagPoints.add(new TagPoint(label, new LatLng(lat, lon)));
+                    }
+                }
+            }
 
             for (int i = 0; i < pdrList.size(); i++) {
                 PdrRecord pdr = pdrList.get(i);
@@ -186,9 +216,15 @@ public class TrajParser {
     private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
         List<GnssRecord> gnssList = new ArrayList<>();
         if (gnssArray == null) return gnssList;
-        Gson gson = new Gson();
         for (JsonElement elem : gnssArray) {
-            gnssList.add(gson.fromJson(elem, GnssRecord.class));
+            JsonObject obj = elem.getAsJsonObject();
+            GnssRecord record = new GnssRecord();
+            record.relativeTimestamp = obj.get("relativeTimestamp").getAsLong();
+            record.latitude = obj.get("latitude").getAsDouble();
+            record.longitude = obj.get("longitude").getAsDouble();
+            record.altitude = obj.has("altitude") ? obj.get("altitude").getAsDouble() : 0.0;
+            record.provider = obj.has("provider") ? obj.get("provider").getAsString() : "";
+            gnssList.add(record);
         }
         return gnssList;
     }
