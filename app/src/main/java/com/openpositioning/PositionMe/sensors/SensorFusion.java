@@ -657,7 +657,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove){
-
+        if (WIFIpos == null || PDRmove == null) {
+            Log.e("EKF", "Received null input: wifi=" + WIFIpos + ", pdr=" + PDRmove);
+            return null;
+        }
         createWifiPositioningRequest();
 
         //Initialise local variables
