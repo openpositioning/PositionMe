@@ -15,7 +15,7 @@ import org.ejml.simple.SimpleMatrix;
  * Predict step: uses "step length" + "bearing" to update next position
  * Update step: fuses GNSS or Wi-Fi measurements of (X, Y)
  */
-public class EKF {
+public class EKF implements FusionAlgorithm {
 
     // ----------------------------
     // 1) 常量或可调参数
@@ -59,6 +59,9 @@ public class EKF {
     private double prevStepLength = DEFAULT_STEP_LENGTH; // 上一次步长
 
     public EKF() {
+
+        // Initialize the smoothing filter with a chosen smoothing factor (e.g., 0.8)
+        this.smoothingFilter = new ExponentialSmoothingFilter(0.8,2);
         // 初始化状态: 假设 bearing=0, x=0, y=0
         this.Xk = new SimpleMatrix(new double[][] {
                 { 0.0 },  // bearing
@@ -302,16 +305,52 @@ public class EKF {
     public void onStepDetected(double pdrEast, double pdrNorth, double altitude, long refTime) {
         if (stopEKF) return;
 
-        // 使用 handler 在后台线程中执行，保证 UI 不被阻塞
-        ekfHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                // 简化版：直接调用一次观测更新函数
-                // 这里假设 onObservationUpdate() 方法能直接根据当前 PDR 测量更新 EKF 状态
-                onObservationUpdate(pdrEast, pdrNorth, pdrEast, pdrNorth, altitude, 1);
+        ekfHandler.post(() -> {
+            double[] lastGNSS = SensorFusion.getInstance().getGNSSLatLngAlt(false);
+            double[] startRef = SensorFusion.getInstance().getGNSSLatLngAlt(true);
+
+            // Check if GNSS is valid
+            if (lastGNSS != null && startRef != null) {
+                double[] enu = CoordinateTransform.geodeticToEnu(
+                        lastGNSS[0], lastGNSS[1], lastGNSS[2],
+                        startRef[0], startRef[1], startRef[2]
+                );
+
+                double observationEast = enu[0];
+                double observationNorth = enu[1];
+
+                // Compute innovation and update
+                double[] observation = new double[] {
+                        pdrEast - observationEast,
+                        pdrNorth - observationNorth
+                };
+
+                update(observation[0],observation[1], true);
+            } else {
+                // Fallback: use recursive correction
+                double predictedEast = Xk.get(1, 0);
+                double predictedNorth = Xk.get(2, 0);
+
+                double[] observation = new double[] {
+                        pdrEast - predictedEast,
+                        pdrNorth - predictedNorth
+                };
+
+                update(observation[0], observation[1], false); // slight penalty factor
             }
+
+            // Update UI with smoothed result
+            double[] smoothed = smoothingFilter.applySmoothing(new double[] {
+                    Xk.get(1, 0), Xk.get(2, 0)
+            });
+
+            double[] ecefRef = SensorFusion.getInstance().getEcefRefCoords();
+            SensorFusion.getInstance().notifyFusedUpdate(
+                    CoordinateTransform.enuToGeodetic(smoothed[0], smoothed[1], altitude, startRef[0], startRef[1], ecefRef)
+            );
         });
     }
+
     // A simple example function to determine if the new measurement is relevant.
     // This can be specialized to consider how old the measurement is, how frequently updates occur, etc.
     private boolean checkRelevance(long refTime) {
@@ -354,6 +393,53 @@ public class EKF {
             }
         });
     }
+
+    @Override
+    public void init(float[] initialPos) {
+        // Xk[1] = easting, Xk[2] = northing
+        Xk.set(1, 0, initialPos[0]);
+        Xk.set(2, 0, initialPos[1]);
+    }
+
+
+    @Override
+    public void predict(float[] delta) {
+        double deltaEast = delta[0];
+        double deltaNorth = delta[1];
+
+        double oldX = Xk.get(1, 0);
+        double oldY = Xk.get(2, 0);
+
+        double newX = oldX + deltaEast;
+        double newY = oldY + deltaNorth;
+
+        Xk.set(1, 0, newX);
+        Xk.set(2, 0, newY);
+
+        // Optional: update Pk covariance if needed
+    }
+
+
+    @Override
+    public void updateFromGnss(float[] gnssPos) {
+        update(gnssPos[0], gnssPos[1], true);  // isGNSS = true
+    }
+
+
+    @Override
+    public void updateFromWifi(float[] wifiPos) {
+        update(wifiPos[0], wifiPos[1], false);
+    }
+
+
+    @Override
+    public float[] getFusedPosition() {
+        return new float[] {
+                (float) Xk.get(1, 0),
+                (float) Xk.get(2, 0)
+        };
+    }
+
 }
 
 

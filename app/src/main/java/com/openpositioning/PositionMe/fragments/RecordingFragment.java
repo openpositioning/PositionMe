@@ -1,8 +1,5 @@
 package com.openpositioning.PositionMe.fragments;
 
-import static androidx.core.view.ViewCompat.getElevation;
-
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -21,6 +18,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.Switch;
@@ -30,7 +28,6 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.SwitchCompat;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
@@ -47,10 +44,8 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
@@ -143,6 +138,11 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
     // Switch used to set auto floor
     private Switch autoFloor;
 
+    private Marker fusedOrientationMarker;  // new arrow marker for fusion
+
+
+    private LatLng currentFusedLocation = null;
+
     /**
      * Public Constructor for the class.
      * Left empty as not required
@@ -164,12 +164,13 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
         Context context = getActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.refreshDataHandler = new Handler();
+
     }
     //Wifi update from sensor fusion
 
     @Override
     public void onWifiUpdate(LatLng latlngFromWifiServer){
-        requireActivity().runOnUiThread(() -> {
+        getActivity().runOnUiThread(() -> {
             if (latlngFromWifiServer == null) {
                 // Hide WiFi Marker
                 if (wifiMarker != null) {
@@ -181,11 +182,14 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
             // WiFi Marker
             if (gMap != null) {
 //                if (wifiMarker != null) wifiMarker.remove();
-                wifiMarker = gMap.addMarker(new MarkerOptions()
-                        .position(latlngFromWifiServer)
-                        .title("WiFi Location")
-                        .icon(BitmapDescriptorFactory.fromBitmap(
-                                UtilFunctions.getBitmapFromVector(getContext(), R.drawable.blue_hollow_circle))));
+                if (wifi.isChecked()) {
+                    wifiMarker = gMap.addMarker(new MarkerOptions()
+                            .position(latlngFromWifiServer)
+                            .title("WiFi Location")
+                            .icon(BitmapDescriptorFactory.fromBitmap(
+                                    UtilFunctions.getBitmapFromVector(getContext(), R.drawable.blue_hollow_circle))));
+                }
+
             }
         });
     }
@@ -193,8 +197,11 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
 
     @Override
     public void onFusedUpdate(LatLng fusedCoordinate) {
+        if (!isAdded() || getActivity() == null) return;
         requireActivity().runOnUiThread(() -> {
             if (fusedCoordinate == null || gMap == null) return;
+
+            currentFusedLocation = fusedCoordinate;
 
             if (fusionPolyline == null) {
                 PolylineOptions fusionOptions = new PolylineOptions()
@@ -208,8 +215,29 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
                 fusionPolyline.setPoints(points);
             }
 
-            fusionPolyline.setVisible(fusionSwitch.isChecked());
+            // Update fused orientation marker
+            if (fusedOrientationMarker == null) {
+                fusedOrientationMarker = gMap.addMarker(new MarkerOptions()
+                        .position(fusedCoordinate)
+                        .title("Fused Position")
+                        .flat(true)
+                        .icon(BitmapDescriptorFactory.fromBitmap(
+                                UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_blue_24)))); // You can use a different icon if desired
+            } else {
+                fusedOrientationMarker.setPosition(fusedCoordinate);
+                fusedOrientationMarker.setRotation((float) Math.toDegrees(sensorFusion.passOrientation()));
+
+            }
+
+            // Set visibility based on the fusion switch
+            if (fusionSwitch != null) {
+                boolean visible = fusionSwitch.isChecked();
+                fusionPolyline.setVisible(visible);
+                fusedOrientationMarker.setVisible(visible);
+            }
         });
+        Log.d("FUSION_PATH", "Fused location: " + fusedCoordinate);
+
     }
 
 
@@ -271,7 +299,7 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
                 PolylineOptions polylineOptions=new PolylineOptions()
                         .color(Color.RED)
                         .add(currentLocation);
-                polyline = gMap.addPolyline(polylineOptions);
+                pdrPolyline  = gMap.addPolyline(polylineOptions);
                 // Setting current location to set Ground Overlay for indoor map (if in building)
                 indoorMapManager.setCurrentLocation(currentLocation);
                 //Showing an indication of available indoor maps using PolyLines
@@ -296,6 +324,8 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
         super.onViewCreated(view, savedInstanceState);
 
         // Set autoStop to null for repeat recordings
+        sensorFusion.registerForSensorUpdates(this);
+        sensorFusion.initialiseFusionAlgorithm();
 
         this.autoStop = null;
         this.timeRemaining = getView().findViewById(R.id.timeRemainingBar);
@@ -314,13 +344,18 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
         this.distance = 0f;
         this.previousPosX = 0f;
         this.previousPosY = 0f;
-        // 初始化 "Add Tag" 按钮（id 为 position_tag_button）
+        // Add Tag
         addtag = getView().findViewById(R.id.position_tag_button);
         addtag.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (currentLocation != null) {
-                    SensorFusion.getInstance().addTagFusionTrajectory(currentLocation);
+                if (currentFusedLocation  != null) {
+                    SensorFusion.getInstance().addTagFusionTrajectory(currentFusedLocation );
+                    // Add visual tag to the map
+                    gMap.addMarker(new MarkerOptions()
+                            .position(currentFusedLocation )
+                            .title("Tag")
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
                     Toast.makeText(getContext(), "Tag Successfully added.", Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(getContext(), "Tag Unsuccessfully added.", Toast.LENGTH_SHORT).show();
@@ -400,13 +435,17 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
 
         this.fusionSwitch = getView().findViewById(R.id.fusionSwitch);
         this.pdrSwitch = getView().findViewById(R.id.pdrSwitch);
+        //fusionSwitch.setChecked(true); //enable fusion by default
+        pdrSwitch.setChecked(true);  //enable PDR by default
 
         fusionSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (fusionPolyline != null) fusionPolyline.setVisible(isChecked);
+            if (fusedOrientationMarker != null) fusedOrientationMarker.setVisible(isChecked);
         });
 
         pdrSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (pdrPolyline != null) pdrPolyline.setVisible(isChecked);
+            if (orientationMarker != null) orientationMarker.setVisible(isChecked);
         });
 
         //Obtain the GNSS toggle switch
@@ -418,9 +457,8 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (!isChecked) {
-                    if (wifiMarker != null) {
-                        wifiMarker.remove();
-                        wifiMarker = null;
+                    for (Marker marker : wifiMarkers) {
+                        marker.setVisible(false);
                     }
 
                 }
@@ -474,6 +512,32 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
             // No time limit - use a repeating task to refresh UI.
             this.refreshDataHandler.post(refreshDataTask);
         }
+        Button infobutton = view.findViewById(R.id.infobutton);
+        LinearLayout switchContainer = view.findViewById(R.id.switchContainer);
+
+        infobutton.setOnClickListener(v -> {
+            if (switchContainer.getVisibility() == View.GONE) {
+                // Show with slide-up animation
+                switchContainer.setVisibility(View.VISIBLE);
+                switchContainer.setTranslationY(switchContainer.getHeight());
+                switchContainer.animate()
+                        .translationY(0)
+                        .setDuration(300)
+                        .start();
+                infobutton.setText("Hide Options");
+            } else {
+                // Slide down and hide
+                switchContainer.animate()
+                        .translationY(switchContainer.getHeight())
+                        .setDuration(300)
+                        .withEndAction(() -> {
+                            switchContainer.setVisibility(View.GONE);
+                            infobutton.setText("Show Options");
+                        })
+                        .start();
+            }
+        });
+
     }
 
     /**
@@ -622,9 +686,9 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
                 //Try catch to prevent exceptions from crashing the app
                 try{
                     // Adds new location to polyline to plot the PDR path of user
-                    List<LatLng> pointsMoved = polyline.getPoints();
+                    List<LatLng> pointsMoved = pdrPolyline .getPoints();
                     pointsMoved.add(nextLocation);
-                    polyline.setPoints(pointsMoved);
+                    pdrPolyline .setPoints(pointsMoved);
                     // Change current location to new location and zoom there
                     orientationMarker.setPosition(nextLocation);
                     gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));

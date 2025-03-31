@@ -9,7 +9,7 @@ import java.util.Random;
 /**
  *  Particle Filter.
  */
-public class ParticleFilter {
+public class ParticleFilter implements FusionAlgorithm {
 
     // 1) Number of particles
     private static final int NUM_PARTICLES = 50;
@@ -121,6 +121,83 @@ public class ParticleFilter {
         );
     }
 
+    @Override
+    public void init(float[] initialPos) {
+        // You could re-initialize particles around a new ENU origin here if needed
+        // For now, we leave it empty since the constructor already does it
+    }
+
+    @Override
+    public void predict(float[] delta) {
+        // Move each particle by delta[0] (east), delta[1] (north)
+        for (Particle p : particles) {
+            p.easting += delta[0];
+            p.northing += delta[1];
+        }
+    }
+
+    @Override
+    public void updateFromGnss(float[] gnssPos) {
+        // Assume input is ENU coordinates: gnssPos[0] = easting, gnssPos[1] = northing
+        for (Particle p : particles) {
+            p.easting += 0.1 * (gnssPos[0] - p.easting);
+            p.northing += 0.1 * (gnssPos[1] - p.northing);
+        }
+
+        LatLng fusedLatLng = predict();
+        SensorFusion.getInstance().notifyFusedUpdate(fusedLatLng);
+    }
+
+    @Override
+    public void updateFromWifi(float[] wifiPos) {
+        // Same as GNSS update — minimal approach
+        updateFromGnss(wifiPos);
+    }
+
+    @Override
+    public float[] getFusedPosition() {
+        double sumEast = 0.0;
+        double sumNorth = 0.0;
+        for (Particle p : particles) {
+            sumEast += p.easting;
+            sumNorth += p.northing;
+        }
+        float avgEast = (float) (sumEast / NUM_PARTICLES);
+        float avgNorth = (float) (sumNorth / NUM_PARTICLES);
+        return new float[]{avgEast, avgNorth};
+    }
+
+    @Override
+    public void onOpportunisticUpdate(double east, double north, boolean isGNSS, long refTime) {
+        // Minimal handling for now – treat this like a basic update
+        updateFromGnss(new float[]{(float) east, (float) north});
+    }
+
+    @Override
+    public void onStepDetected(double pdrEast, double pdrNorth, double altitude, long refTime) {
+        // Optionally: nudge particles toward new PDR step
+        // This is a placeholder example – real PF would resample/move particles more smartly
+        for (Particle p : particles) {
+            p.easting += 0.5 * (pdrEast - p.easting);
+            p.northing += 0.5 * (pdrNorth - p.northing);
+        }
+        SensorFusion.getInstance().notifyFusedUpdate(predict());
+    }
+
+    @Override
+    public double[] getState() {
+        // Return [bearing=0, x, y] for compatibility
+        LatLng pos = predict();
+        return new double[]{0, pos.latitude, pos.longitude};
+    }
+
+    @Override
+    public void stopFusion() {
+        // Nothing to stop for PF; no thread running
+    }
+
+
+
     /**
      * An extremely simple Particle class storing (easting, northing, weight).
      * For this minimal version, we won't do advanced weighting/resampling, etc.
@@ -138,3 +215,4 @@ public class ParticleFilter {
     }
 
 }
+

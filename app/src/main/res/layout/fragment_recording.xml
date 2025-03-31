@@ -19,107 +19,24 @@
         android:layout_height="match_parent"
         tools:ignore="ExtraText">
 
-        <Switch
-            android:id="@+id/Wifiswitch"
-            android:layout_width="94dp"
-            android:layout_height="27dp"
-            android:background="@color/ic_launcher_simple_background"
-            android:buttonTint="@android:color/holo_green_dark"
-            android:text="WIFI"
-            android:textColor="@color/white"
-            app:layout_constraintStart_toEndOf="@+id/yellowdot"
-            app:layout_constraintTop_toBottomOf="@+id/gnssSwitch" />
 
-        <Switch
-            android:id="@+id/pdrSwitch"
-            android:layout_width="94dp"
-            android:layout_height="27dp"
-            android:layout_marginStart="27dp"
-            android:layout_marginTop="88dp"
-            android:background="@color/ic_launcher_simple_background"
-            android:buttonTint="@android:color/holo_green_dark"
-            android:text="PDR"
-            android:textColor="@color/white"
-            app:layout_constraintStart_toStartOf="@+id/purpledot"
-            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
+
 
         <Button
-            android:id="@+id/position_tag_button"
-            android:layout_width="82dp"
-            android:layout_height="60dp"
-            android:layout_marginBottom="16dp"
-            android:text="Add tag"
-            android:textSize="14sp"
-            app:iconSize="24dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@+id/stopButton"
-            app:layout_constraintHorizontal_chainStyle="packed"
-            app:layout_constraintStart_toEndOf="@+id/cancelButton"
-            app:layout_constraintTop_toBottomOf="@+id/timeRemainingBar"
-            app:layout_constraintVertical_bias="1.0" />
+            android:id="@+id/infobutton"
+            android:layout_width="75dp"
+            android:layout_height="59dp"
+            android:layout_marginTop="30dp"
+            android:background="@android:color/transparent"
+            android:backgroundTint="@android:color/transparent"
+            app:icon="@drawable/ic_baseline_info_24"
+            app:iconGravity="start"
+            app:iconSize="40dp"
+            app:iconTint="@color/ic_launcher_simple_background"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
 
-        <ImageView
-            android:id="@+id/greendot"
-            android:layout_width="27dp"
-            android:layout_height="27dp"
-            android:background="@color/ic_launcher_simple_background"
-            android:src="@drawable/ic_baseline_red_dot_24"
-            app:layout_constraintTop_toBottomOf="@+id/purpledot"
-            app:tint="@color/green"
-            tools:layout_editor_absoluteX="16dp" />
 
-        <Switch
-            android:id="@+id/gnssSwitch"
-            android:layout_width="94dp"
-            android:layout_height="27dp"
-            android:background="@color/ic_launcher_simple_background"
-            android:buttonTint="@android:color/holo_green_dark"
-            android:text="GNSS"
-            android:textColor="@color/white"
-            app:layout_constraintStart_toEndOf="@+id/greendot"
-            app:layout_constraintTop_toBottomOf="@+id/pdrSwitch" />
-
-        <ImageView
-            android:id="@+id/yellowdot"
-            android:layout_width="27dp"
-            android:layout_height="27dp"
-            android:background="@color/ic_launcher_simple_background"
-            android:src="@drawable/ic_baseline_red_dot_24"
-            app:layout_constraintTop_toBottomOf="@+id/greendot"
-            app:tint="@color/goldYellow"
-            tools:layout_editor_absoluteX="16dp" />
-
-        <ImageView
-            android:id="@+id/bluedot"
-            android:layout_width="27dp"
-            android:layout_height="27dp"
-            android:background="@color/ic_launcher_simple_background"
-            android:src="@drawable/ic_baseline_red_dot_24"
-            app:layout_constraintTop_toBottomOf="@+id/yellowdot"
-            app:tint="@color/lightLogoBlue"
-            tools:layout_editor_absoluteX="16dp" />
-
-        <Switch
-            android:id="@+id/fusionSwitch"
-            android:layout_width="94dp"
-            android:layout_height="27dp"
-            android:background="@color/ic_launcher_simple_background"
-            android:buttonTint="@android:color/holo_green_dark"
-            android:text="Fusion"
-            android:textColor="@color/white"
-            app:layout_constraintStart_toEndOf="@+id/bluedot"
-            app:layout_constraintTop_toBottomOf="@+id/Wifiswitch" />
-
-        <ImageView
-            android:id="@+id/purpledot"
-            android:layout_width="27dp"
-            android:layout_height="27dp"
-            android:layout_marginTop="24dp"
-            android:background="@color/ic_launcher_simple_background"
-            android:src="@drawable/ic_baseline_red_dot_24"
-            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner"
-            app:tint="@color/purple_500"
-            tools:layout_editor_absoluteX="16dp" />
 
         <Switch
             android:id="@+id/autoFloor"
@@ -239,11 +156,12 @@
             android:id="@+id/mapSwitchSpinner"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
-            android:layout_marginTop="16dp"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="30dp"
             android:background="@color/ic_launcher_simple_background"
             android:spinnerMode="dropdown"
-            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard"
-            tools:layout_editor_absoluteX="16dp" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
@@ -293,7 +211,7 @@
         <Button
             android:id="@+id/cancelButton"
             android:layout_width="124dp"
-            android:layout_height="58dp"
+            android:layout_height="56dp"
             android:layout_marginBottom="16dp"
             android:backgroundTint="@color/ic_launcher_simple_background"
             android:text="@string/cancel"
@@ -304,9 +222,9 @@
             app:iconSize="24dp"
             app:iconTint="@color/white"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/position_tag_button"
-            app:layout_constraintHorizontal_bias="0" />
+            app:layout_constraintHorizontal_bias="0"
+            app:layout_constraintStart_toStartOf="parent" />
 
         <Button
             android:id="@+id/stopButton"
@@ -323,26 +241,135 @@
             app:iconTint="@color/white"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toEndOf="@+id/position_tag_button"
-            app:layout_constraintHorizontal_bias="1" /><![CDATA[
+            app:layout_constraintHorizontal_bias="1"
+            app:layout_constraintStart_toEndOf="@+id/position_tag_button" />
+
+        <Button
+            android:id="@+id/position_tag_button"
+            android:layout_width="82dp"
+            android:layout_height="56dp"
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="@color/ic_launcher_simple_background"
+            android:text="Add Tag"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/stopButton"
+            app:layout_constraintHorizontal_chainStyle="packed"
+            app:layout_constraintStart_toEndOf="@+id/cancelButton"
+            app:layout_constraintTop_toBottomOf="@+id/timeRemainingBar"
+            app:layout_constraintVertical_bias="1" />
 
 
 
-
-
-        />
-
-
-
-
-
-
-
-
-
-        />
-
-    ]]>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
+    <LinearLayout
+        android:id="@+id/switchContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_gravity="bottom"
+        android:background="@color/ic_launcher_simple_background"
+        android:visibility="gone"
+        android:padding="16dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- One layout block per switch -->
+
+        <!-- Green dot + GNSS -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_baseline_red_dot_24"
+                app:tint="@color/green" />
+
+            <Switch
+                android:id="@+id/gnssSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="GNSS"
+                android:textColor="@color/white"
+                android:layout_marginStart="12dp"/>
+        </LinearLayout>
+
+        <!-- Red dot + PDR -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_baseline_red_dot_24"
+                app:tint="@color/red" />
+
+            <Switch
+                android:id="@+id/pdrSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PDR"
+                android:textColor="@color/white"
+                android:layout_marginStart="12dp"/>
+        </LinearLayout>
+
+        <!-- Yellow dot + WiFi -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_baseline_red_dot_24"
+                app:tint="@color/goldYellow" />
+
+            <Switch
+                android:id="@+id/Wifiswitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="WiFi"
+                android:textColor="@color/white"
+                android:layout_marginStart="12dp"/>
+        </LinearLayout>
+
+        <!-- Blue dot + Fusion -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_baseline_red_dot_24"
+                app:tint="@color/lightLogoBlue" />
+
+            <Switch
+                android:id="@+id/fusionSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Fusion"
+                android:textColor="@color/white"
+                android:layout_marginStart="12dp"/>
+        </LinearLayout>
+
+    </LinearLayout>
 </FrameLayout>

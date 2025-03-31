@@ -127,6 +127,14 @@
             app:dependency="overwrite_constants"
             app:defaultValue="5"
             android:summary="@string/wifi_scan_interval" />
+        <ListPreference
+            android:key="fusion_method"
+            android:title="Fusion Algorithm"
+            android:summary="Select which sensor fusion algorithm to use"
+            android:defaultValue="EKF"
+            android:entries="@array/fusion_options"
+            android:entryValues="@array/fusion_values" />
+
 
     </PreferenceCategory>
 
