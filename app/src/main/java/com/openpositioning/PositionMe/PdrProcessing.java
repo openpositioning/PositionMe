@@ -54,6 +54,8 @@ public class PdrProcessing {
     // Current 2D position coordinates
     private float positionX;
     private float positionY;
+    private float rawPosX;
+    private float rawPosY;
 
     // Vertical movement calculation
     private Float[] startElevationBuffer;
@@ -104,6 +106,8 @@ public class PdrProcessing {
         // Initial position and elevation - starts from zero
         this.positionX = 0f;
         this.positionY = 0f;
+        this.rawPosX = 0f;
+        this.rawPosY = 0f;
         this.elevation = 0f;
 
 
@@ -179,9 +183,15 @@ public class PdrProcessing {
 //            y = 1.0f;  // odd steps: move along y
 //        }
 
+        // record raw position
+        this.rawPosX += x;
+        this.rawPosY += y;
+
         // Update position values
         this.positionX += x;
         this.positionY += y;
+
+        Log.e("fused test", positionX + " " + positionY);
         // return current position
         return new float[]{this.positionX, this.positionY};
     }
@@ -314,9 +324,14 @@ public class PdrProcessing {
      * @return  float array of size 2, with the X and Y coordinates respectively.
      */
     public float[] getPDRMovement() {
-        float [] pdrPosition= new float[] {positionX,positionY};
+        float [] pdrPosition = new float[] {positionX,positionY};
         return pdrPosition;
+    }
 
+    public float[] getRawPDRMovement() {
+        float [] pdrPosition = new float[] {rawPosX,rawPosY};
+        Log.e("Raw pdr test", pdrPosition[0] + " " + pdrPosition[1]);
+        return pdrPosition;
     }
 
     /**
@@ -416,6 +431,10 @@ public class PdrProcessing {
         // Initial position and elevation - starts from zero
         this.positionX = 0f;
         this.positionY = 0f;
+
+        this.rawPosX = 0f;
+        this.rawPosY = 0f;
+
         this.elevation = 0f;
 
         this.setupIndex = 0; // to reset the elevation to 0, otherwise buffer would be full

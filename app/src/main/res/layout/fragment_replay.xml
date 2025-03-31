@@ -121,6 +121,41 @@
             app:layout_constraintTop_toBottomOf="@+id/ReplayMapSwitchSpinner"
             app:layout_constraintVertical_bias="0.031" />
 
+
+        <Switch
+            android:id="@+id/switchWifi"
+            android:layout_width="146dp"
+            android:layout_height="24dp"
+            android:background="@drawable/rounded_corner_lightblue"
+            android:backgroundTint="#F0A6E8"
+            android:checked="true"
+            android:text="WiFi position"
+            android:textAlignment="center"
+            android:textColor="#6F4D81"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.939"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/ReplayMapSwitchSpinner"
+            app:layout_constraintVertical_bias="0.083" />
+
+        <Switch
+            android:id="@+id/switchPDR"
+            android:layout_width="146dp"
+            android:layout_height="24dp"
+            android:background="@drawable/rounded_corner_lightblue"
+            android:backgroundTint="#F0A6E8"
+            android:checked="true"
+            android:text="PDR path"
+            android:textAlignment="center"
+            android:textColor="#6F4D81"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.939"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/ReplayMapSwitchSpinner"
+            app:layout_constraintVertical_bias="0.135" />
+
         <TextView
             android:id="@+id/ElevationView"
             android:layout_width="178dp"
