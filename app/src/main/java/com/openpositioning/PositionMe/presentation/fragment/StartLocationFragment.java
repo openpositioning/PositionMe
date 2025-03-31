@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -164,28 +165,39 @@ public class StartLocationFragment extends Fragment {
              */
             @Override
             public void onClick(View view) {
+                // Get the chosen location from the map
                 float chosenLat = startPosition[0];
                 float chosenLon = startPosition[1];
 
+                // Log the start location
+                Log.d("StartLocation", "Setting start location: " + chosenLat + ", " + chosenLon);
+
+                // Set both reference positions consistently
+                // 1. Set as float array (used by pdrProcessing)
+                sensorFusion.setStartGNSSLatitude(startPosition);
+
+                // 2. Set as double array (used by fusion algorithm)
+                double[] referencePosition = new double[]{chosenLat, chosenLon, 0.0};
+                sensorFusion.setStartGNSSLatLngAlt(referencePosition);
+
+                // Initialize the fusion algorithm with the correct reference position
+                sensorFusion.initializeFusionAlgorithm();
+
+                // Start recording sensors
+                sensorFusion.startRecording();
+
                 // If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
-                    // Start sensor recording + set the start location
-                    sensorFusion.startRecording();
-                    sensorFusion.setStartGNSSLatitude(startPosition);
-
                     // Now switch to the recording screen
                     ((RecordingActivity) requireActivity()).showRecordingScreen();
-
-                    // If the Activity is ReplayActivity
-                } else if (requireActivity() instanceof ReplayActivity) {
-                    // *Do not* cast to RecordingActivity here
-                    // Just call the Replay method
+                }
+                // For other activity types (handling based on your app flow)
+                else if (requireActivity() instanceof ReplayActivity) {
                     ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);
-
-                    // Otherwise (unexpected host)
-                } else {
+                }
+                else {
                     // Optional: log or handle error
-                    // Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
+                    Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
                 }
             }
         });

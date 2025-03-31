@@ -97,6 +97,12 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 
+    // Added EJML for matrix operations used in sensor fusion algorithms
+    implementation 'org.ejml:ejml-all:0.43.1'
+
+    // Added these for enhanced math operations
+    implementation 'org.apache.commons:commons-math3:3.6.1'
+
     implementation 'com.google.maps.android:android-maps-utils:3.4.0'
 
 }
