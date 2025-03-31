@@ -79,6 +79,15 @@ public class SensorHub implements SensorEventListener {
     return sensors.get(sensorType);
   }
 
+  /**
+   * Get the sensor of the sensorType, defined from StreamSensor
+   * @return the sensor of the sensorType
+   *         null if the sensor is not available, or not registered
+   */
+  public SensorModule<?> getSensor(StreamSensor sensorType) {
+    return sensorModules.get(sensorType);
+  }
+
   // Subscribe to a specific sensor type.
   public <T extends SensorData> void addListener(int sensorType,
       SensorDataListener<T> listener) {

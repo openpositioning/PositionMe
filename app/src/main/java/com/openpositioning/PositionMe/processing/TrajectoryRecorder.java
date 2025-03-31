@@ -27,7 +27,7 @@ import com.openpositioning.PositionMe.sensors.Wifi;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class TrajectoryRecorder implements SensorDataListener<SensorData> {
+public class TrajectoryRecorder implements SensorDataListener<SensorData>, Observer {
 
   // Data saving timer
   private static final long TIME_CONST = 10;
@@ -49,9 +49,10 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
 
   // Sensor Variables
   private long startTime;
+  private long bootTime;
   private SensorHub sensorHub;
   private final int[] INTERESTED_SENSORS = new int[]{
-      Sensor.TYPE_PRESSURE, Sensor.TYPE_LINEAR_ACCELERATION,
+      Sensor.TYPE_PRESSURE, Sensor.TYPE_ACCELEROMETER,
       Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_STEP_DETECTOR,
       Sensor.TYPE_MAGNETIC_FIELD,  Sensor.TYPE_LIGHT, Sensor.TYPE_GYROSCOPE
   };
@@ -72,15 +73,18 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
 
 
   public TrajectoryRecorder(SensorHub sensorHub, PdrProcessing pdrProcessor,
-      ServerCommunications serverCommunications, long startTime) {
+      ServerCommunications serverCommunications, long startTime, long bootTime) {
     // Register sensors
     this.sensorHub = sensorHub;
 
     this.startTime = startTime;
 
+    this.bootTime = bootTime;
+
     start();
 
     this.pdrProcessor = pdrProcessor;
+    this.pdrProcessor.registerObserver(this);
 
     this.serverCommunications = serverCommunications;
 
@@ -94,6 +98,21 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
         .setLightSensorInfo(createInfoBuilder(Sensor.TYPE_LIGHT));
   }
 
+  @Override
+  public void update(Object[] objList) {
+    // Update the trajectory with the PDR data
+    if (objList != null && objList.length > 0) {
+      // Update provides the X,Y float array of the PDR data
+      float[] pdrData = (float[]) objList[0];
+      trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+          .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+          .setX(pdrData[0])
+          .setY(pdrData[1]));
+    } else {
+      Log.e("SensorFusion", "PDR data is null or empty.");
+    }
+  }
+
   /**
    * Timer task to record data with the desired frequency in the trajectory class.
    * <p>
@@ -103,9 +122,14 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
   private class storeDataInTrajectory extends TimerTask {
 
     public void run() {
+      if (accelerometerData == null || rotationVectorData == null
+          || magneticFieldData == null || gyroscopeData == null) {
+        Log.e("SensorFusion", "Sensor data is null, skipping data storage.");
+        return;
+      }
       // Store IMU and magnetometer data in Trajectory cl1ass
       trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-              .setRelativeTimestamp(SystemClock.uptimeMillis() - startTime)
+              .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
               .setAccX(accelerometerData.acceleration[0])
               .setAccY(accelerometerData.acceleration[1])
               .setAccZ(accelerometerData.acceleration[2])
@@ -122,12 +146,12 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
               .setMagX(magneticFieldData.magneticField[0])
               .setMagY(magneticFieldData.magneticField[1])
               .setMagZ(magneticFieldData.magneticField[2])
-              .setRelativeTimestamp(SystemClock.uptimeMillis() - startTime))
+              .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime));
 //                    .addGnssData(Traj.GNSS_Sample.newBuilder()
 //                            .setLatitude(latitude)
 //                            .setLongitude(longitude)
 //                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-      ;
+
 
       // Divide timer with a counter for storing data every 1 second
       if (counter == 99) {
@@ -136,10 +160,10 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
         if (pressureData != null) {
           trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
                   .setPressure(pressureData.pressure)
-                  .setRelativeTimestamp(SystemClock.uptimeMillis() - startTime))
+                  .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
                   .addLightData(Traj.Light_Sample.newBuilder()
                       .setLight(lightData.light)
-                      .setRelativeTimestamp(SystemClock.uptimeMillis() - startTime)
+                      .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                       .build());
         }
 
@@ -147,7 +171,8 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
         if (secondCounter == 4) {
           secondCounter = 0;
           //Current Wifi Object
-          Wifi currentWifi = wifiProcessor.getCurrentWifiData();
+          Wifi currentWifi = ((WifiDataProcessor) sensorHub.getSensor(StreamSensor.WIFI)).
+              getCurrentWifiData();
           trajectory.addApsData(Traj.AP_Data.newBuilder()
               .setMac(currentWifi.getBssid())
               .setSsid(currentWifi.getSsid())
@@ -245,15 +270,15 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
     // Restart the timer
     storeTrajectoryTimer = new Timer();
     this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(),
-        SensorManager.SENSOR_DELAY_NORMAL, TIME_CONST);
+        100, TIME_CONST);
   }
 
   private void saveWifiData(WiFiData data) {
     Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
-        .setRelativeTimestamp(SystemClock.uptimeMillis() - startTime);
+        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
     for (Wifi wifiSample : data.wifiList) {
       wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
-          .setRelativeTimestamp(SystemClock.uptimeMillis() - startTime)
+          .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
           .setMac(wifiSample.getBssid()).setRssi(wifiSample.getLevel()));
     }
     // Adding WiFi data to Trajectory
@@ -345,6 +370,7 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData> {
     Traj.Trajectory sentTrajectory = trajectory.build();
     // Pass object to communications object
     this.serverCommunications.sendTrajectory(sentTrajectory);
+    this.stop();
   }
 
   /**

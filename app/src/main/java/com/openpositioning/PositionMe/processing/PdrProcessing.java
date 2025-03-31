@@ -68,7 +68,7 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
     // Settings for accessing shared variables
     private SharedPreferences settings;
 
-    private long bootTime = SystemClock.uptimeMillis();
+    private long bootTime;
 
     // Step length
     private float stepLength;
@@ -106,7 +106,8 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
     private SensorHub sensorHub;
     private final int[] INTERESTED_SENSORS = new int[] {
         Sensor.TYPE_GRAVITY, Sensor.TYPE_PRESSURE,
-        Sensor.TYPE_LINEAR_ACCELERATION, Sensor.TYPE_ROTATION_VECTOR
+        Sensor.TYPE_LINEAR_ACCELERATION, Sensor.TYPE_ROTATION_VECTOR,
+        Sensor.TYPE_STEP_DETECTOR
     };
     private List<Double> accelMagnitude = new ArrayList<>();
     private boolean elevator;
@@ -125,10 +126,11 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
      *
      * @param context   Application context for variable access.
      */
-    public PdrProcessing(Context context, SensorHub sensorHub, long startTime) {
+    public PdrProcessing(Context context, SensorHub sensorHub, long startTime, long bootTime) {
         // Initialise settings
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.sensorHub = sensorHub;
+        this.bootTime = bootTime;
         // Register sensors
         start();
         // Check if estimate or manual values should be used
@@ -488,13 +490,15 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
 
     private void processStepDetection(StepDetectorData data) {
         long stepTime = SystemClock.uptimeMillis() - this.bootTime;
-        if (data.timestamp - lastStepTime < MIN_TIME_BETWEEN_STEPS) {
+        long currentTime = System.currentTimeMillis(); // Get the current time in milliseconds
+
+        if (currentTime - lastStepTime < MIN_TIME_BETWEEN_STEPS) {
             Log.e("SensorFusion",
                 "Ignoring step event, too soon after last step event:" +
                     (data.timestamp - lastStepTime) + " ms");
             // Ignore rapid successive step events
         } else {
-            lastStepTime = data.timestamp;
+            lastStepTime = currentTime;
             // Log if accelMagnitude is empty
             if (this.accelMagnitude.isEmpty()) {
                 Log.e("SensorFusion",
@@ -510,8 +514,6 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
                 }
                 // Clear accel magntiude after using it.
                 this.accelMagnitude.clear();
-                // Notify observers of a new position update.
-                notifyObservers(0);
             }
         }
     }
@@ -522,20 +524,24 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
             data.pressure));
     }
 
-    @Override
-    public void registerObserver(Observer o) {
-        this.observers.add(o);
-    }
-
-    @Override
-    public void notifyObservers(int idx) {
-        for (Observer o : observers) {
-            o.update(new Float[] {this.positionX, this.positionY});
-        }
-    }
-
   public boolean isElevator() {
     return elevator;
   }
 
+    @Override
+    public void registerObserver(Observer o) {
+        if (observers == null) {
+            observers = new ArrayList<>();
+        }
+        observers.add(o);
+    }
+
+    @Override
+    public void notifyObservers(int idx) {
+        if (observers != null) {
+            for (Observer o : observers) {
+                o.update(new Float[] {this.positionX, this.positionY});
+            }
+        }
+    }
 }

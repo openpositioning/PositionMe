@@ -65,7 +65,7 @@ import java.util.Map;
  * @author Philip Heptonstall
  * @author Alexandros Zoupos
  */
-public class SensorFusion implements SensorDataListener<SensorData> {
+public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   // Sensor Variables
   private SensorHub sensorHub;
   private PdrProcessing pdrProcessing;
@@ -200,7 +200,8 @@ public class SensorFusion implements SensorDataListener<SensorData> {
 
     this.sensorHub.addListener(StreamSensor.GNSS,this);
     this.sensorHub.addListener(StreamSensor.WIFI,this);
-    this.pdrProcessing = new PdrProcessing(context, this.sensorHub, bootTime);
+    this.pdrProcessing = new PdrProcessing(context, this.sensorHub, absoluteStartTime, bootTime);
+    this.pdrProcessing.registerObserver(this);
     // Sensor Fusion variables
     this.filter = new KalmanFilterAdapter(new double[]{0.0, 0.0}, INIT_POS_COVARIANCE,
         0.0, PDR_COVARIANCE);
@@ -271,6 +272,7 @@ public class SensorFusion implements SensorDataListener<SensorData> {
    * @param startPosition contains the initial location set by the user
    */
   public void setStartGNSSLatitude(float[] startPosition) {
+    this.fusedLocation = new LatLng(startPosition[0], startPosition[1]);
     this.startLocation = new LatLng(startPosition[0], startPosition[1]);
     this.coordinateTransformer = new CoordinateTransformer(startPosition[0], startPosition[1]);
   }
@@ -472,7 +474,7 @@ public class SensorFusion implements SensorDataListener<SensorData> {
 
     // Protobuf trajectory class for sending sensor data to restful API
     this.trajRecorder = new TrajectoryRecorder(sensorHub, pdrProcessing
-        , serverCommunications, bootTime);
+        , serverCommunications, absoluteStartTime, bootTime);
 
     if (settings.getBoolean("overwrite_constants", false)) {
       this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
@@ -594,4 +596,15 @@ public class SensorFusion implements SensorDataListener<SensorData> {
     }
   }
 
+  @Override
+  public void update(Object[] objList) {
+    // Convert to Float[] array, called by PDRProcessing
+    // to update the path view
+    float[] pdrData = new float[objList.length];
+    for (int i = 0; i < objList.length; i++) {
+      pdrData[i] = ((Number) objList[i]).floatValue();
+    }
+    // Update the path view with the new PDR data
+    pathView.drawTrajectory(pdrData);
+  }
 }
