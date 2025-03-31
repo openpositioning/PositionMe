@@ -107,8 +107,9 @@ public class ReplayFragment extends Fragment {
         File trajectoryFile = new File(filePath);
         if (!trajectoryFile.exists() || !trajectoryFile.canRead()) return;
 
-        replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
-    }
+        List<TrajParser.ReplayPoint> parsedData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
+        replayData = parsedData;
+        TrajParser.replayData = parsedData;    }
 
     @Nullable
     @Override
@@ -204,6 +205,17 @@ public class ReplayFragment extends Fragment {
         speedDoubleButton = view.findViewById(R.id.speedDoubleButton);
         playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
         dataSourceSpinner = view.findViewById(R.id.dataSourceSpinner);
+
+        //Code by Guilherme: View Stats button
+        viewStatsButton = view.findViewById(R.id.viewStatsButton);
+        viewStatsButton.setOnClickListener(v -> {
+            // Navigate to StatsFragment
+            getParentFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.replayRoot, new StatsFragment())
+                    .addToBackStack(null)
+                    .commit();
+        });
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
                 android.R.layout.simple_spinner_dropdown_item,
@@ -333,6 +345,9 @@ public class ReplayFragment extends Fragment {
         public void run() {
             if (!isPlaying || currentIndex >= replayData.size()) {
                 stopPlaying();
+                if (currentIndex >= replayData.size()) {
+                    viewStatsButton.setVisibility(View.VISIBLE); //  Show button once complete
+                }
                 return;
             }
             if (currentIndex == 0) {
@@ -521,6 +536,7 @@ public class ReplayFragment extends Fragment {
     }
 
     // code by Guilherme
+    // NEW version to load tags parsed from file (TrajParser)
     private void showReplayTags() {
         for (TrajParser.TagPoint tag : TrajParser.tagPoints) {
             if (tag.location != null && tag.label != null) {
@@ -528,6 +544,7 @@ public class ReplayFragment extends Fragment {
             }
         }
     }
+
 
 
 

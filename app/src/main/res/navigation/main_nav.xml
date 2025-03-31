@@ -75,7 +75,11 @@
         android:id="@+id/uploadFragment"
         android:name="com.openpositioning.PositionMe.presentation.fragment.UploadFragment"
         android:label="UploadFragment"
-        tools:layout="@layout/fragment_upload" />
+        tools:layout="@layout/fragment_upload" >
+        <action
+            android:id="@+id/action_uploadFragment_to_replayFragment"
+            app:destination="@id/replayFragment" />
+    </fragment>
 
     <action
         android:id="@+id/action_global_settingsFragment"
@@ -84,4 +88,16 @@
         app:exitAnim="@anim/slide_out_bottom"
         app:popEnterAnim="@anim/slide_in_bottom"
         app:popExitAnim="@anim/slide_in_top" />
+    <fragment
+        android:id="@+id/replayFragment"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.ReplayFragment"
+        android:label="ReplayFragment" >
+        <action
+            android:id="@+id/action_replayFragment_to_statsFragment"
+            app:destination="@id/statsFragment" />
+    </fragment>
+    <fragment
+        android:id="@+id/statsFragment"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.StatsFragment"
+        android:label="StatsFragment" />
 </navigation>
