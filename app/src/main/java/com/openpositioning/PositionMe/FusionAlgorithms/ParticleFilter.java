@@ -317,4 +317,22 @@ public class ParticleFilter {
         return particles;
     }
     // endregion
+
+    public double computeEntropy() {
+        double meanX = 0, meanY = 0;
+        for (Particle p : particles) {
+            meanX += p.x;
+            meanY += p.y;
+        }
+        meanX /= particles.size();
+        meanY /= particles.size();
+
+        double varSum = 0;
+        for (Particle p : particles) {
+            double dx = p.x - meanX;
+            double dy = p.y - meanY;
+            varSum += dx * dx + dy * dy;
+        }
+        return varSum / particles.size(); // variance as a proxy for entropy
+    }
 }

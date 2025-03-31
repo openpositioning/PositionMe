@@ -21,6 +21,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.FusionAlgorithms.ParticleFilter;
 import com.openpositioning.PositionMe.data.remote.WiFiPositioning;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.utils.CoordinateTransform;
@@ -181,6 +182,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private long wifiReceivedTime = 0;
     private int wifiFloor = 0;
     private float gnssAccuracy = 100f;
+
+    private ParticleFilter particleFilter;
+    private static final double PF_EKF_THRESHOLD = 10.0;
 
     private com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment trajectoryMapFragment;
 
@@ -447,10 +451,44 @@ public class SensorFusion implements SensorEventListener, Observer {
                     }
                     if (extendedKalmanFilter != null) {
                         extendedKalmanFilter.predict(stepLen, theta);
+                        // --- PF 辅助 EKF 逻辑（仅在室内场景启用）---
+                        if (particleFilter != null) {
+                            particleFilter.predict(stepLen, theta);
+                            if (pendingWifiPosition != null &&
+                                    SystemClock.uptimeMillis() - wifiPositionTimestamp < 2000) {
+                                double[] wifiENU = CoordinateTransform.geodeticToEnu(
+                                        pendingWifiPosition.latitude,
+                                        pendingWifiPosition.longitude,
+                                        0.0,
+                                        refLat, refLon, refAlt
+                                );
+                                particleFilter.updateWiFi(wifiENU[0], wifiENU[1]);
+                            }
+                            if (stepCounter % 5 == 0) {
+                                particleFilter.resample();
+                            }
+
+                            LatLng pfEstimate = particleFilter.getEstimateLatLng();
+                            LatLng ekfEstimate = extendedKalmanFilter.getEstimatedPosition(refLat, refLon, refAlt);
+
+                            double diff = computeDistance(ekfEstimate, pfEstimate);
+                            double pfEntropy = particleFilter.computeEntropy();
+                            if (diff > PF_EKF_THRESHOLD && pfEntropy < 5.0) {
+                                double[] enuReset = CoordinateTransform.geodeticToEnu(
+                                        pfEstimate.latitude, pfEstimate.longitude, 0.0,
+                                        refLat, refLon, refAlt
+                                );
+                                extendedKalmanFilter.resetPosition(enuReset[0], enuReset[1]);
+                                Log.d("SensorFusion", "EKF reset with PF due to drift > " + diff + " m");
+                            }
+                        }else {
+                            Log.e("SensorFusion", "ParticleFilter is not initialized!");
+                        }
 
                     } else {
                         Log.e("SensorFusion", "EKF is not initialized!");
                     }
+
                     // 获取最新 GNSS 位置
                     Location gnssLocation = gnssProcessor.getLastKnownLocation();
                     if (gnssLocation != null) {
@@ -1109,6 +1147,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         extendedKalmanFilter = new EKF(enuCoords[0], enuCoords[1], 0.0, initialTheta);
         Log.d("SensorFusion", "EKF initialized successfully: " +
                 "East=" + enuCoords[0] + ", North=" + enuCoords[1] + ", Theta=" + initialTheta);
+        // 初始化 PF
+        particleFilter = new ParticleFilter(100, refLat, refLon, refAlt);
+        particleFilter.initializeParticles(enuCoords[0], enuCoords[1], initialTheta, 1.0, 1.0, 0.1);
     }
 
     /**
@@ -1175,6 +1216,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         return SensorFusionUtils.getAllSensorData(this, wiFiPositioning);  // "this" = current SensorFusion
     }
 
+    private double computeDistance(LatLng a, LatLng b) {
+        double latDiff = (a.latitude - b.latitude) * 111000;
+        double lonDiff = (a.longitude - b.longitude) * 111000 * Math.cos(Math.toRadians((a.latitude + b.latitude) / 2));
+        return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff);
+    }
 
     public void setOnWifiFloorChangedListener(Consumer<Integer> listener) {
         this.wifiFloorChangedListener = listener;
