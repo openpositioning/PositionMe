@@ -267,7 +267,7 @@ public class PdrProcessing {
      *
      * @return  float array of size 2, with the X and Y coordinates respectively.
      */
-    public float[] getPDRMovement() {
+    public static float[] getPDRMovement() {
         float [] pdrPosition= new float[] {positionX,positionY};
         return pdrPosition;
 

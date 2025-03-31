@@ -656,7 +656,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new LatLng(predictedLL[0], predictedLL[1]);
     }
 
-    // method to compute EKF fused position using pre-computed points from ReplayFragment
     public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove){
 
         createWifiPositioningRequest();
@@ -1187,9 +1186,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new LatLng(0, 0); // fallback if not available
     }
 
-    /**
-     * Code By Guilherme
-     */
+/**
+ * Code By Guilherme
+ */
 
     // New inner class to store a fused sample with its timestamp.
     public static class FusedSample {
@@ -1331,19 +1330,19 @@ public class SensorFusion implements SensorEventListener, Observer {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
             trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
-                            .setAccX(acceleration[0])
-                            .setAccY(acceleration[1])
-                            .setAccZ(acceleration[2])
-                            .setGyrX(angularVelocity[0])
-                            .setGyrY(angularVelocity[1])
-                            .setGyrZ(angularVelocity[2])
-                            .setGyrZ(angularVelocity[2])
-                            .setRotationVectorX(rotation[0])
-                            .setRotationVectorY(rotation[1])
-                            .setRotationVectorZ(rotation[2])
-                            .setRotationVectorW(rotation[3])
-                            .setStepCount(stepCounter))
+                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
+                    .setAccX(acceleration[0])
+                    .setAccY(acceleration[1])
+                    .setAccZ(acceleration[2])
+                    .setGyrX(angularVelocity[0])
+                    .setGyrY(angularVelocity[1])
+                    .setGyrZ(angularVelocity[2])
+                    .setGyrZ(angularVelocity[2])
+                    .setRotationVectorX(rotation[0])
+                    .setRotationVectorY(rotation[1])
+                    .setRotationVectorZ(rotation[2])
+                    .setRotationVectorW(rotation[3])
+                    .setStepCount(stepCounter))
                     .addPositionData(Traj.Position_Sample.newBuilder()
                             .setMagX(magneticField[0])
                             .setMagY(magneticField[1])
@@ -1395,4 +1394,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 }
 
 
-//endregion
+    //endregion
+
+

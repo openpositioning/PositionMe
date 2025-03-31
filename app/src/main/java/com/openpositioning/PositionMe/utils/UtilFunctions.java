@@ -378,6 +378,23 @@ public class UtilFunctions {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14, context.getResources().getDisplayMetrics()));
         return paint.measureText(text);
+
+    }
+
+    // Code by Guilherme
+    public static double calculateBearing(LatLng from, LatLng to) {
+        double lat1 = Math.toRadians(from.latitude);
+        double lon1 = Math.toRadians(from.longitude);
+        double lat2 = Math.toRadians(to.latitude);
+        double lon2 = Math.toRadians(to.longitude);
+
+        double dLon = lon2 - lon1;
+
+        double y = Math.sin(dLon) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2)
+                - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+        return (Math.toDegrees(Math.atan2(y, x)) + 360.0) % 360.0;
     }
 
 
