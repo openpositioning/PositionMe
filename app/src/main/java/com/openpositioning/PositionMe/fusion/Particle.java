@@ -14,25 +14,17 @@ public class Particle {
         this.x = x;
         this.y = y;
         this.theta = theta;
+
         this.weight = 1.0;
         this.logWeight = 0.0;
     }
 
-    // Update particle position statically (random walk)
-    public void updateStatic(double[] staticPDRStds) {
-        Random rand = new Random();
-        this.theta += rand.nextGaussian() * staticPDRStds[1];
-        this.x += rand.nextGaussian() * staticPDRStds[0];
-        this.y += rand.nextGaussian() * staticPDRStds[0];
-    }
-
     // Update particle position when step is detected
-    public void updateDynamic(double stepLength, double headingChange, double[] dynamicPDRStds) {
+    public void updateDynamic(double stepLength, double currentHeading, double[] dynamicPDRStds) {
         Random rand = new Random();
 
         // Add noise to heading change
-        double noiseHeading = rand.nextGaussian() * dynamicPDRStds[1];
-        this.theta += headingChange + noiseHeading;
+        this.theta += currentHeading + rand.nextGaussian() * dynamicPDRStds[1];
 
         // Add noise to step length
         double noiseStep = rand.nextGaussian() * dynamicPDRStds[0];
@@ -43,10 +35,4 @@ public class Particle {
         this.y += noisyStepLength * Math.cos(this.theta);
     }
 
-    // Reweight particle based on measurement - handled in main class now
-    public void reweight(SimpleMatrix measurementCovariance,
-                         SimpleMatrix forwardModel,
-                         SimpleMatrix measurementVector) {
-        // This is now handled in the main reweightParticles method for numerical stability
-    }
 }

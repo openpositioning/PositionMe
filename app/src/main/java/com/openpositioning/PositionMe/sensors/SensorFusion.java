@@ -174,7 +174,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private LatLng fusedPosition;
     private LatLng wifiPosition;
     private double altitude;
-    private double[] referencePosition = new double[3]; // lat, lng, alt
+    private double[] referencePosition; // lat, lng, alt
     private boolean useFusion = true;
 
     //region Initialisation
@@ -211,6 +211,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.startLocation = new float[2];
         // Initialize list for position listeners
         this.positionListeners = new ArrayList<>();
+        this.referencePosition = new double[3];
     }
 
 
@@ -836,6 +837,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     public boolean getElevator() {
         return this.elevator;
     }
+
+    public double[] getReferencePosition() {return this.referencePosition; }
 
     /**
      * Estimates position of the phone based on proximity and light sensors.

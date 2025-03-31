@@ -100,7 +100,6 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         this.measurementModel = new MeasurementModel();
         this.smoothingFilter = new FusionFilter(SMOOTHING_FACTOR, 2);
         this.fusionOutlierDetector = new FusionOutlierDetector();
-
         // Initialize state vector [heading, x, y, vx, vy]ᵀ
         stateVector = new SimpleMatrix(STATE_SIZE, 1);
 
@@ -320,7 +319,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         // Convert WiFi position to ENU (using the reference position)
         // TODO: Fix altitude estimate for wifi
         double[] enu = CoordinateConverter.convertGeodeticToEnu(
-                position.latitude, position.longitude, referencePosition[2],
+                position.latitude, position.longitude, 0,
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
@@ -387,8 +386,10 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         double east = stateVector.get(STATE_IDX_EAST, 0);
         double north = stateVector.get(STATE_IDX_NORTH, 0);
 
-        // Apply smoothing if needed
-        double[] smoothed = smoothingFilter.update(new double[]{east, north});
+        // Apply smoothing
+
+        double [] smoothed = smoothingFilter.update(new double[]{east, north});
+
 
         // Debug the state before conversion
         Log.d(TAG, "Fused position (before conversion): E=" + smoothed[0] + ", N=" + smoothed[1]);
