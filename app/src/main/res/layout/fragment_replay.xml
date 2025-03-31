@@ -13,6 +13,61 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- 轨迹类型选择器 -->
+    <RadioGroup
+        android:id="@+id/trajectory_type_group"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="16dp"
+        android:background="#CCFFFFFF"
+        android:elevation="10dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <RadioButton
+            android:id="@+id/pdr_radio_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="PDR轨迹"
+            android:clickable="true"
+            android:focusable="true"
+            android:minHeight="48dp"
+            android:textSize="16sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:textColor="@color/colorRed" />
+
+        <RadioButton
+            android:id="@+id/gnss_radio_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="GNSS轨迹"
+            android:clickable="true"
+            android:focusable="true"
+            android:minHeight="48dp"
+            android:textSize="16sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:textColor="@color/colorBlue" />
+
+        <RadioButton
+            android:id="@+id/ekf_radio_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="融合轨迹"
+            android:clickable="true"
+            android:focusable="true"
+            android:minHeight="48dp"
+            android:textSize="16sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:textColor="@color/colorGreen" />
+    </RadioGroup>
+
     <!-- Playback Controls -->
     <LinearLayout
         android:id="@+id/controls_layout"

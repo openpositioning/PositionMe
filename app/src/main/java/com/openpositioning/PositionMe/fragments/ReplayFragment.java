@@ -9,6 +9,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.SeekBar;
 import android.widget.Toast;
 
@@ -42,10 +44,16 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     private GoogleMap mMap;
     private Button playPauseButton, restartButton;
     private SeekBar progressBar;
+    private RadioGroup trajectoryTypeGroup;
+    private RadioButton pdrRadioButton, gnssRadioButton, ekfRadioButton;
     private boolean isPlaying = false;
     
     // 添加轨迹相关变量
     private List<TrajectoryPoint> trajectoryPoints = new ArrayList<>();
+    private List<TrajectoryPoint> pdrTrajectoryPoints = new ArrayList<>();
+    private List<TrajectoryPoint> gnssTrajectoryPoints = new ArrayList<>();
+    private List<TrajectoryPoint> ekfTrajectoryPoints = new ArrayList<>();
+    
     private int currentPointIndex = 0;
     private Handler playbackHandler = new Handler();
     private static final int PLAYBACK_INTERVAL = 1000; // 1秒更新一次
@@ -53,6 +61,15 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     private Marker currentPositionMarker;
     
     private List<Location> pendingLocations = null;  // 添加这个变量
+    
+    // 当前显示的轨迹类型
+    private enum TrajectoryType {
+        PDR,
+        GNSS,
+        EKF
+    }
+    
+    private TrajectoryType currentTrajectoryType = TrajectoryType.EKF; // 默认显示EKF轨迹
     
     // 轨迹点类
     private static class TrajectoryPoint {
@@ -81,6 +98,69 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         playPauseButton = view.findViewById(R.id.play_pause_button);
         restartButton = view.findViewById(R.id.restart_button);
         progressBar = (SeekBar) view.findViewById(R.id.progress_bar);
+        
+        // 初始化轨迹类型选择按钮
+        trajectoryTypeGroup = view.findViewById(R.id.trajectory_type_group);
+        pdrRadioButton = view.findViewById(R.id.pdr_radio_button);
+        gnssRadioButton = view.findViewById(R.id.gnss_radio_button);
+        ekfRadioButton = view.findViewById(R.id.ekf_radio_button);
+        
+        Log.d(TAG, "轨迹选择控件初始化: " + 
+              "RadioGroup=" + (trajectoryTypeGroup != null) + ", " +
+              "PDR=" + (pdrRadioButton != null) + ", " +
+              "GNSS=" + (gnssRadioButton != null) + ", " + 
+              "EKF=" + (ekfRadioButton != null));
+        
+        if (trajectoryTypeGroup != null) {
+            // 设置点击事件监听器
+            trajectoryTypeGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(RadioGroup group, int checkedId) {
+                    Log.d(TAG, "轨迹类型切换: checkedId=" + checkedId);
+                    
+                    if (checkedId == R.id.pdr_radio_button) {
+                        Log.d(TAG, "切换到PDR轨迹");
+                        switchTrajectoryType(TrajectoryType.PDR);
+                    } else if (checkedId == R.id.gnss_radio_button) {
+                        Log.d(TAG, "切换到GNSS轨迹");
+                        switchTrajectoryType(TrajectoryType.GNSS);
+                    } else if (checkedId == R.id.ekf_radio_button) {
+                        Log.d(TAG, "切换到EKF轨迹");
+                        switchTrajectoryType(TrajectoryType.EKF);
+                    }
+                }
+            });
+            
+            // 单独为每个RadioButton设置点击监听器，以防RadioGroup监听器失效
+            pdrRadioButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Log.d(TAG, "PDR RadioButton 点击");
+                    pdrRadioButton.setChecked(true);
+                    switchTrajectoryType(TrajectoryType.PDR);
+                }
+            });
+            
+            gnssRadioButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Log.d(TAG, "GNSS RadioButton 点击");
+                    gnssRadioButton.setChecked(true);
+                    switchTrajectoryType(TrajectoryType.GNSS);
+                }
+            });
+            
+            ekfRadioButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Log.d(TAG, "EKF RadioButton 点击");
+                    ekfRadioButton.setChecked(true);
+                    switchTrajectoryType(TrajectoryType.EKF);
+                }
+            });
+        } else {
+            Log.e(TAG, "轨迹类型RadioGroup未找到!");
+        }
 
         // Set button click listeners
         playPauseButton.setOnClickListener(v -> togglePlayback());
@@ -176,32 +256,91 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             
             // 解析 JSON
             JSONObject jsonObject = new JSONObject(content.toString());
-            JSONArray locationData = jsonObject.getJSONArray("locationData");
             
-            if (locationData.length() == 0) {
-                Toast.makeText(getContext(), "No location data found", Toast.LENGTH_SHORT).show();
+            // 优先读取EKF轨迹数据
+            boolean hasValidTrajectory = false;
+            
+            // 读取EKF轨迹数据
+            if (jsonObject.has("ekfLocationData")) {
+                JSONArray ekfLocationData = jsonObject.getJSONArray("ekfLocationData");
+                if (ekfLocationData.length() > 0) {
+                    hasValidTrajectory = true;
+                    parseTrajectoryData(ekfLocationData, ekfTrajectoryPoints);
+                    Log.d(TAG, "Successfully loaded EKF trajectory: " + ekfTrajectoryPoints.size() + " points");
+                    ekfRadioButton.setEnabled(true);
+                } else {
+                    ekfRadioButton.setEnabled(false);
+                }
+            } else {
+                ekfRadioButton.setEnabled(false);
+            }
+            
+            // 读取GNSS轨迹数据
+            if (jsonObject.has("gnssLocationData")) {
+                JSONArray gnssLocationData = jsonObject.getJSONArray("gnssLocationData");
+                if (gnssLocationData.length() > 0) {
+                    hasValidTrajectory = true;
+                    parseTrajectoryData(gnssLocationData, gnssTrajectoryPoints);
+                    Log.d(TAG, "Successfully loaded GNSS trajectory: " + gnssTrajectoryPoints.size() + " points");
+                    gnssRadioButton.setEnabled(true);
+                } else {
+                    gnssRadioButton.setEnabled(false);
+                }
+            } else {
+                gnssRadioButton.setEnabled(false);
+            }
+            
+            // 读取PDR轨迹数据
+            if (jsonObject.has("locationData")) {
+                JSONArray locationData = jsonObject.getJSONArray("locationData");
+                if (locationData.length() > 0) {
+                    hasValidTrajectory = true;
+                    parseTrajectoryData(locationData, pdrTrajectoryPoints);
+                    Log.d(TAG, "Successfully loaded PDR trajectory: " + pdrTrajectoryPoints.size() + " points");
+                    pdrRadioButton.setEnabled(true);
+                } else {
+                    pdrRadioButton.setEnabled(false);
+                }
+            } else {
+                pdrRadioButton.setEnabled(false);
+            }
+            
+            if (!hasValidTrajectory) {
+                Toast.makeText(getContext(), "No valid trajectory data found", Toast.LENGTH_SHORT).show();
                 return;
             }
             
-            // 解析位置数据
-            List<Location> locations = new ArrayList<>();
-            for (int i = 0; i < locationData.length(); i++) {
-                JSONObject point = locationData.getJSONObject(i);
-                Location location = new Location("");
-                location.setLatitude(point.getDouble("latitude"));
-                location.setLongitude(point.getDouble("longitude"));
-                location.setTime(point.getLong("timestamp"));
-                locations.add(location);
-            }
+            // 设置默认轨迹类型
+            Log.d(TAG, "设置默认轨迹类型 - EKF轨迹可用: " + ekfRadioButton.isEnabled() + 
+                  ", GNSS轨迹可用: " + gnssRadioButton.isEnabled() + 
+                  ", PDR轨迹可用: " + pdrRadioButton.isEnabled());
             
-            Log.d(TAG, "Successfully loaded trajectory points: " + locations.size());
+            if (ekfRadioButton.isEnabled()) {
+                currentTrajectoryType = TrajectoryType.EKF;
+                ekfRadioButton.setChecked(true);
+                gnssRadioButton.setChecked(false);
+                pdrRadioButton.setChecked(false);
+                trajectoryPoints = ekfTrajectoryPoints;
+                Log.d(TAG, "默认显示EKF轨迹，轨迹点数量: " + trajectoryPoints.size());
+            } else if (gnssRadioButton.isEnabled()) {
+                currentTrajectoryType = TrajectoryType.GNSS;
+                gnssRadioButton.setChecked(true);
+                ekfRadioButton.setChecked(false);
+                pdrRadioButton.setChecked(false);
+                trajectoryPoints = gnssTrajectoryPoints;
+                Log.d(TAG, "默认显示GNSS轨迹，轨迹点数量: " + trajectoryPoints.size());
+            } else if (pdrRadioButton.isEnabled()) {
+                currentTrajectoryType = TrajectoryType.PDR;
+                pdrRadioButton.setChecked(true);
+                ekfRadioButton.setChecked(false);
+                gnssRadioButton.setChecked(false);
+                trajectoryPoints = pdrTrajectoryPoints;
+                Log.d(TAG, "默认显示PDR轨迹，轨迹点数量: " + trajectoryPoints.size());
+            }
             
             // 如果地图已经准备好，直接更新
             if (mMap != null) {
-                updateMap(locations);
-            } else {
-                // 否则保存轨迹点，等待地图准备好
-                pendingLocations = locations;
+                updateMap();
             }
             
         } catch (Exception e) {
@@ -209,15 +348,89 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             Toast.makeText(getContext(), "Failed to load trajectory file: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
+    
+    /**
+     * 解析轨迹数据并添加到指定列表
+     */
+    private void parseTrajectoryData(JSONArray jsonArray, List<TrajectoryPoint> targetList) throws Exception {
+        targetList.clear();
+        for (int i = 0; i < jsonArray.length(); i++) {
+            JSONObject point = jsonArray.getJSONObject(i);
+            targetList.add(new TrajectoryPoint(
+                point.getLong("timestamp"),
+                point.getDouble("latitude"),
+                point.getDouble("longitude")
+            ));
+        }
+    }
+    
+    /**
+     * 切换轨迹类型
+     */
+    private void switchTrajectoryType(TrajectoryType type) {
+        if (mMap == null) {
+            Log.e(TAG, "地图尚未准备好，无法切换轨迹类型");
+            return;
+        }
+        
+        Log.d(TAG, "切换轨迹类型: " + type.name());
+        
+        // 停止播放并重置位置
+        stopPlayback();
+        currentPointIndex = 0;
+        
+        currentTrajectoryType = type;
+        
+        // 更新轨迹点和RadioButton状态
+        switch (type) {
+            case PDR:
+                trajectoryPoints = pdrTrajectoryPoints;
+                Log.d(TAG, "切换到PDR轨迹，轨迹点数量: " + trajectoryPoints.size());
+                if (!pdrRadioButton.isChecked()) {
+                    pdrRadioButton.setChecked(true);
+                    gnssRadioButton.setChecked(false);
+                    ekfRadioButton.setChecked(false);
+                }
+                break;
+            case GNSS:
+                trajectoryPoints = gnssTrajectoryPoints;
+                Log.d(TAG, "切换到GNSS轨迹，轨迹点数量: " + trajectoryPoints.size());
+                if (!gnssRadioButton.isChecked()) {
+                    gnssRadioButton.setChecked(true);
+                    pdrRadioButton.setChecked(false);
+                    ekfRadioButton.setChecked(false);
+                }
+                break;
+            case EKF:
+                trajectoryPoints = ekfTrajectoryPoints;
+                Log.d(TAG, "切换到EKF轨迹，轨迹点数量: " + trajectoryPoints.size());
+                if (!ekfRadioButton.isChecked()) {
+                    ekfRadioButton.setChecked(true);
+                    pdrRadioButton.setChecked(false);
+                    gnssRadioButton.setChecked(false);
+                }
+                break;
+        }
+        
+        // 更新地图和进度条
+        updateMap();
+        
+        // 确保进度条正确反映轨迹长度
+        if (progressBar != null) {
+            progressBar.setMax(trajectoryPoints.size() > 0 ? trajectoryPoints.size() - 1 : 0);
+            progressBar.setProgress(0);
+        }
+        
+        Log.d(TAG, "轨迹类型切换完成: " + type.name());
+    }
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
         
-        // 如果有待处理的轨迹点，现在更新它们
-        if (pendingLocations != null) {
-            updateMap(pendingLocations);
-            pendingLocations = null;
+        // 更新地图
+        if (!trajectoryPoints.isEmpty()) {
+            updateMap();
         }
     }
 
@@ -278,64 +491,86 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         playPauseButton.setText(R.string.play);
         isPlaying = false;
         
-        // 移除当前位置标记
-        if (currentPositionMarker != null) {
-            currentPositionMarker.remove();
-            currentPositionMarker = null;
-        }
-        
+        // 移动相机回到起点
         if (!trajectoryPoints.isEmpty()) {
-            // 移动相机回到起点
             TrajectoryPoint startPoint = trajectoryPoints.get(0);
-            mMap.animateCamera(CameraUpdateFactory.newLatLng(
-                new LatLng(startPoint.latitude, startPoint.longitude)));
+            LatLng startPosition = new LatLng(startPoint.latitude, startPoint.longitude);
+            
+            // 更新位置标记
+            if (currentPositionMarker != null) {
+                currentPositionMarker.setPosition(startPosition);
+            } else {
+                currentPositionMarker = mMap.addMarker(new MarkerOptions()
+                    .position(startPosition)
+                    .title("Current Position")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
+            }
+            
+            // 移动相机
+            mMap.animateCamera(CameraUpdateFactory.newLatLng(startPosition));
         }
     }
 
-    private void updateMap(List<Location> locations) {
-        if (mMap == null) {
-            Log.e(TAG, "Map is not ready");
+    private void updateMap() {
+        if (mMap == null || trajectoryPoints.isEmpty()) {
             return;
         }
         
-        trajectoryPoints.clear();
-        for (Location location : locations) {
-            trajectoryPoints.add(new TrajectoryPoint(
-                location.getTime(),
-                location.getLatitude(),
-                location.getLongitude()
-            ));
-        }
-        
-        Log.d(TAG, "Successfully loaded trajectory points: " + trajectoryPoints.size());
-        
-        // 设置进度条最大值
-        if (progressBar != null) {
-            progressBar.setMax(trajectoryPoints.size());
-        }
-        
-        // 更新地图
+        // 清除地图
         mMap.clear();
-        if (!trajectoryPoints.isEmpty()) {
-            // 绘制完整轨迹
-            PolylineOptions polylineOptions = new PolylineOptions()
-                .color(getResources().getColor(R.color.primaryBlue))
-                .width(5);
-                
-            for (TrajectoryPoint point : trajectoryPoints) {
-                polylineOptions.add(new LatLng(point.latitude, point.longitude));
-            }
-            mMap.addPolyline(polylineOptions);
-            
-            // 添加起点标记
-            TrajectoryPoint startPoint = trajectoryPoints.get(0);
-            mMap.addMarker(new MarkerOptions()
-                .position(new LatLng(startPoint.latitude, startPoint.longitude))
-                .title("Start point"));
-            
-            // 移动相机到起点
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-                new LatLng(startPoint.latitude, startPoint.longitude), 15));
+        currentPositionMarker = null;
+        
+        // 确定轨迹颜色
+        int trajectoryColor;
+        switch (currentTrajectoryType) {
+            case PDR:
+                trajectoryColor = getResources().getColor(R.color.colorRed);
+                break;
+            case GNSS:
+                trajectoryColor = getResources().getColor(R.color.colorBlue);
+                break;
+            case EKF:
+                trajectoryColor = getResources().getColor(R.color.colorGreen);
+                break;
+            default:
+                trajectoryColor = getResources().getColor(R.color.primaryBlue);
         }
+        
+        // 绘制完整轨迹
+        PolylineOptions polylineOptions = new PolylineOptions()
+            .color(trajectoryColor)
+            .width(5);
+            
+        for (TrajectoryPoint point : trajectoryPoints) {
+            polylineOptions.add(new LatLng(point.latitude, point.longitude));
+        }
+        mMap.addPolyline(polylineOptions);
+        
+        // 添加起点标记
+        TrajectoryPoint startPoint = trajectoryPoints.get(0);
+        mMap.addMarker(new MarkerOptions()
+            .position(new LatLng(startPoint.latitude, startPoint.longitude))
+            .title("Start point"));
+            
+        // 添加终点标记
+        TrajectoryPoint endPoint = trajectoryPoints.get(trajectoryPoints.size() - 1);
+        mMap.addMarker(new MarkerOptions()
+            .position(new LatLng(endPoint.latitude, endPoint.longitude))
+            .title("End point")
+            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
+        
+        // 添加当前位置标记（初始位置设为起点）
+        currentPositionMarker = mMap.addMarker(new MarkerOptions()
+            .position(new LatLng(startPoint.latitude, startPoint.longitude))
+            .title("Current Position")
+            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
+        
+        // 移动相机到起点
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
+            new LatLng(startPoint.latitude, startPoint.longitude), 17));
+            
+        // 设置进度条
+        progressBar.setMax(trajectoryPoints.size());
+        progressBar.setProgress(0);
     }
 }
