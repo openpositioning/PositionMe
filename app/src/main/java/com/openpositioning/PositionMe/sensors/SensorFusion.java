@@ -658,8 +658,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove){
 
-        createWifiPositioningRequest();
-
         //Initialise local variables
         float wifiLat = (float)WIFIpos.latitude;
         float wifiLng = (float)WIFIpos.longitude;
@@ -729,8 +727,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         double R = 6371e3;
         double cosLat = Math.cos(Math.toRadians(initialLocation.getLatitude()));
         return new double[][] {
-                {0, 180/(Math.PI * R)},
-                {180/(Math.PI * R * cosLat), 0}
+                {0, 180/(Math.PI * R)},                  // d(lat)/dy
+                {180/(Math.PI * R * cosLat), 0}          // d(lng)/dx
         };
     }
 
