@@ -12,7 +12,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
-import com.openpositioning.PositionMe.processing.SensorFusion;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.processing.WiFiPositioning;
 import com.openpositioning.PositionMe.processing.filters.FilterAdapter;
 import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;

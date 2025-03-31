@@ -9,7 +9,7 @@ import android.util.AttributeSet;
 import android.view.View;
 
 import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
-import com.openpositioning.PositionMe.processing.SensorFusion;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.util.ArrayList;
 import java.util.Collections;

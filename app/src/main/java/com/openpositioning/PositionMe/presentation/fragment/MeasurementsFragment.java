@@ -16,16 +16,14 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.processing.SensorFusion;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.processing.SensorViewListener;
-import com.openpositioning.PositionMe.sensors.SensorData.GNSSLocationData;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
 import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.presentation.viewitems.WifiListAdapter;
 
-import java.util.List;
 import java.util.Map;
 
 /**

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.processing;
+package com.openpositioning.PositionMe.sensors;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -12,26 +12,23 @@ import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.processing.GNSSDataProcessor;
+import com.openpositioning.PositionMe.processing.PdrProcessing;
+import com.openpositioning.PositionMe.processing.TrajectoryRecorder;
+import com.openpositioning.PositionMe.processing.WiFiPositioning;
+import com.openpositioning.PositionMe.processing.WifiDataProcessor;
 import com.openpositioning.PositionMe.processing.filters.FilterAdapter;
 import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;
-import com.openpositioning.PositionMe.sensors.MovementSensor;
-import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorData.GNSSLocationData;
 import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
-import com.openpositioning.PositionMe.sensors.SensorHub;
-import com.openpositioning.PositionMe.sensors.SensorInfo;
 import com.openpositioning.PositionMe.sensors.SensorListeners.SensorDataListener;
-import com.openpositioning.PositionMe.sensors.SensorTypes;
-import com.openpositioning.PositionMe.sensors.StreamSensor;
-import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 
-import java.util.Arrays;
 import org.ejml.simple.SimpleMatrix;
 import org.locationtech.proj4j.ProjCoordinate;
 

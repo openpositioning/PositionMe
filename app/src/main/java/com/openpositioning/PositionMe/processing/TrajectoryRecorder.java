@@ -1,7 +1,6 @@
 package com.openpositioning.PositionMe.processing;
 
 import android.hardware.Sensor;
-import android.hardware.SensorManager;
 import android.os.Build.VERSION;
 import android.os.SystemClock;
 import android.util.Log;
@@ -20,6 +19,7 @@ import com.openpositioning.PositionMe.sensors.SensorData.RotationVectorData;
 import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
 import com.openpositioning.PositionMe.sensors.SensorData.StepDetectorData;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorListeners.SensorDataListener;
 import com.openpositioning.PositionMe.sensors.StreamSensor;

@@ -12,6 +12,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import com.openpositioning.PositionMe.sensors.SensorData.GNSSLocationData;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorModule;
 import com.openpositioning.PositionMe.sensors.StreamSensor;
