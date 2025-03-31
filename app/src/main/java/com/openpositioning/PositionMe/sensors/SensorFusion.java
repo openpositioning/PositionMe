@@ -404,6 +404,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // *** Particle start ***
                 //Store time of step
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
+
+                float [] currentStateCords = this.pdrProcessing.getPDRMovement();
+
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
                 Log.e("PDR", "x: " + newCords[0] + ", y: " + newCords[1]);
                 // *** new
@@ -432,15 +435,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                 newCords = new float[]{(float) currentState.x, (float) currentState.y};
                 Log.e("Particle Filter", "x: " + currentState.x + ", y: " + currentState.y);
 
-                // ** test
-//                newCords = new float[]{(float) currentState.x, (float) currentState.y};
-                float [] startCords = new float[]{this.startLocation[0], this.startLocation[1]};
-
-                double refLat = this.startLocation[0]; // 当前纬度作为局部平面参考
-
+                // test
                 List<float[]> wallPoints = new ArrayList<>();
                 for (LatLng point : wallPointsLatLng) {
-//                    wallPoints.add(GeoUtils.latLonToXY(point.latitude, point.longitude, refLat));
                     double[] addPoint = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, point);
                     float[] addPointfloat = new float[]{(float) addPoint[0], (float) addPoint[1]};
                     wallPoints.add(addPointfloat);
@@ -449,15 +446,57 @@ public class SensorFusion implements SensorEventListener, Observer {
                 for (int i = 0; i < wallPoints.size() - 1; i++) {
                     float[] wallA = wallPoints.get(i);
                     float[] wallB = wallPoints.get(i + 1);
-                    if (GeoUtils.segmentsIntersect(startCords, newCords, wallA, wallB)) {
-                        newCords = GeoUtils.projectPointOntoSegment(newCords, wallA, wallB);
-                        Log.d("WallCheck", "⚠️ 穿墙，正在更正坐标");
+
+                    float[] intersection = GeoUtils.getLineSegmentIntersection(currentStateCords, newCords, wallA, wallB);
+
+                    if (intersection != null) {
+                        // 主方向：从交点指向起点
+                        float dx = currentStateCords[0] - intersection[0];
+                        float dy = currentStateCords[1] - intersection[1];
+                        float len = (float) Math.sqrt(dx * dx + dy * dy);
+                        if (len == 0) {
+                            Log.e("WallCheck", "⚠️ 起点与交点重合，无法偏移");
+                            break;
+                        }
+                        float dirX = dx / len;
+                        float dirY = dy / len;
+
+                        // 墙体方向
+                        float wx = wallB[0] - wallA[0];
+                        float wy = wallB[1] - wallA[1];
+                        float wlen = (float) Math.sqrt(wx * wx + wy * wy);
+                        if (wlen == 0) {
+                            Log.e("WallCheck", "⚠️ 墙体端点重合，跳过该段");
+                            continue;
+                        }
+                        float wallDirX = wx / wlen;
+                        float wallDirY = wy / wlen;
+
+                        // 墙体右手法线方向
+                        float normalX = -wallDirY;
+                        float normalY = wallDirX;
+
+                        // 根据法线方向判断是否朝墙外，必要时反转法线
+                        float dot = dx * normalX + dy * normalY;
+                        if (dot < 0) {
+                            normalX = -normalX;
+                            normalY = -normalY;
+                        }
+
+                        // 组合偏移
+                        float offset = 0.25f;
+                        float slideOffset = 0.1f;
+                        float[] corrected = new float[]{
+                                intersection[0] + dirX * offset + normalX * slideOffset,
+                                intersection[1] + dirY * offset + normalY * slideOffset
+                        };
+
+                        Log.d("WallCheck", "✅ 修正点: " + corrected[0] + ", " + corrected[1]);
+                        newCords = corrected;
                         break;
                     }
                 }
-
-                Log.e("Particle Filter", "x: " + newCords[0] + ", y: " + newCords[1]);
-                // ** test end
+                // test end
 
                 if (saveRecording) {
                     // Store the PDR coordinates for plotting the trajectory
