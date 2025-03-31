@@ -232,20 +232,6 @@ public class RecordingFragment extends Fragment {
             // No set time limit, just keep refreshing
             refreshDataHandler.post(refreshDataTask);
         }
-
-        // 初始化WiFi错误显示
-        wifiError = view.findViewById(R.id.wifi_error);
-        wifiError.setVisibility(View.GONE);
-        
-        // 设置WiFi显示按钮点击事件
-        Button showWifiButton = view.findViewById(R.id.show_wifi_button);
-        showWifiButton.setOnClickListener(v -> {
-            wifiEnabled = !wifiEnabled;
-            showWifiButton.setText(wifiEnabled ? "Hide WiFi" : "Show WiFi");
-            if (!wifiEnabled) {
-                clearWifi();
-            }
-        });
     }
 
     /**
