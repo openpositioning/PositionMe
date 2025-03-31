@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.fragments;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -219,13 +220,15 @@ public class StartLocationFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        Log.d("StartLocation", "onDestroyView");
         super.onDestroyView();
-        PositioningFusion.getInstance().stopPeriodicFusion();
+//        PositioningFusion.getInstance().stopPeriodicFusion();
 
     }
 
     @Override
     public void onPause() {
+        Log.d("StartLocation", "onPause");
         PositioningFusion.getInstance().stopPeriodicFusion();
         super.onPause();
 

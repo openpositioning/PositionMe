@@ -552,7 +552,12 @@ public class RecordingFragment extends Fragment {
         if (indoorMapManager.getIsIndoorMapSet()) {
             setFloorButtonVisibility(View.VISIBLE);
             if (autoFloor.isChecked()) {
-                indoorMapManager.setCurrentFloor((int) (elevationVal / indoorMapManager.getFloorHeight()), true);
+                if (PositioningFusion.getInstance().isWifiPositionSet()) {
+                    indoorMapManager.setCurrentFloor(SensorFusion.getInstance().getWifiFloor(), true);
+                } else {
+                    indoorMapManager.setCurrentFloor((int) (elevationVal / indoorMapManager.getFloorHeight()), true);
+                }
+
             }
         } else {
             setFloorButtonVisibility(View.GONE);
@@ -638,6 +643,7 @@ public class RecordingFragment extends Fragment {
      */
     @Override
     public void onPause() {
+        Log.d("Recording", "onPause");
         refreshDataHandler.removeCallbacks(refreshDataTask);
         PositioningFusion.getInstance().stopPeriodicFusion();
         super.onPause();
@@ -650,6 +656,8 @@ public class RecordingFragment extends Fragment {
      */
     @Override
     public void onResume() {
+        Log.d("Recording", "onResume");
+        PositioningFusion.getInstance().startPeriodicFusion();
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }

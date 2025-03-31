@@ -97,6 +97,7 @@ public class PositioningFusion implements PositionObserver {
     }
 
     public void startPeriodicFusion() {
+        Log.d("Fusion", "startPeriodicFusion");
         fusionTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
@@ -109,6 +110,7 @@ public class PositioningFusion implements PositionObserver {
     }
 
     public void stopPeriodicFusion() {
+        Log.d("Fusion", "stopPeriodicFusion");
         fusionTimer.cancel();
         fusionTimer = new java.util.Timer(); // 允许后续重新 start
     }
@@ -262,7 +264,7 @@ public class PositioningFusion implements PositionObserver {
             //    |CHS: 更新粒子集合和融合位置
             currentParticles = result.particles;
             fusedPositionLocal = new float[]{(float) result.bestX, (float) result.bestY};
-            Log.d("Posotioning Fusion",String.format("fused position: %s", fusedPositionLocal.toString()));
+            Log.d("Posotioning Fusion",String.format("fused position: %s", Arrays.toString(fusedPositionLocal)));
 
             lastPdrPosition = pdrPosition;
         }
