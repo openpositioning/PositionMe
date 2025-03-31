@@ -80,8 +80,8 @@ public class ReplayFragment extends Fragment {
     private List<TrajParser.ReplayPoint> replayData = new ArrayList<>();
     private int currentIndex = 0;
     private boolean isPlaying = false;
-
     private LatLng prevWiFiLocation;
+    private List<LatLng> EKF_data = new ArrayList<>();
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -254,6 +254,8 @@ public class ReplayFragment extends Fragment {
                 return;
             }
             trajectoryMapFragment.clearMapAndReset();
+            EKF_data.add(EKF_point(currentIndex));
+            Log.d(TAG, "Fused point: "+ EKF_data.get(currentIndex));
             drawReplayPointWithMode(currentIndex);
             currentIndex++;
             playbackSeekBar.setProgress(currentIndex);
@@ -333,11 +335,17 @@ public class ReplayFragment extends Fragment {
         }
     }
 
+    // code by Marco Bancalari
     private LatLng EKF_point(int index){
         TrajParser.ReplayPoint p = replayData.get(index);
+        LatLng EKF_fused_point;
+        // get PDR data
+        LatLng pdrLatLng = p.pdrLocation;
+
         // handle WiFi data
         if (p.cachedWiFiLocation != null) {
             // do EKF using cached WiFi Location
+            EKF_fused_point = SensorFusion.getInstance().EKF_replay(p.cachedWiFiLocation, pdrLatLng);
         } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
             JSONObject wifiFingerprint = new JSONObject();
             JSONObject wifiAccessPoints = new JSONObject();
@@ -364,27 +372,26 @@ public class ReplayFragment extends Fragment {
 
                     prevWiFiLocation = location; // keep this to update prev location
                     // do the EKF using location
+
                 }
 
                 @Override
                 public void onError(String message) {
                     Log.w(TAG, "WiFi Positioning failed: " + message);
-                    if (prevWiFiLocation != null) {
-                        // do EKF using prevWiFiLocation
-                    } else {
-                        // do nothing
-                    }
                 }
             });
+            EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng);
         } else {
             if (prevWiFiLocation != null) {
                 // do EKF using prevWiFiLocation
+                EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng);
             } else {
                 // do nothing
+                return null;
             }
         }
 
-        return null;
+        return EKF_fused_point;
     }
 
     // code by Guilherme
