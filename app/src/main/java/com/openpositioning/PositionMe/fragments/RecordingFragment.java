@@ -617,7 +617,7 @@ public class RecordingFragment extends Fragment {
         if (orientationMarker != null) {
             orientationMarker.setRotation((float) Math.toDegrees(sensorFusion.passOrientation()));
             orientationMarker.setPosition(fusedLatLng);
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusedLatLng, 19f));
+            //gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusedLatLng, 19f));
         }
 
         // Update current location for consistency
