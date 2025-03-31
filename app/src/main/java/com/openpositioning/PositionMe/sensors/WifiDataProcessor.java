@@ -13,17 +13,13 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.provider.Settings;
 import android.widget.Toast;
-import android.util.Log;
 
 import androidx.core.app.ActivityCompat;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.stream.Collectors;
 
 /**
  * The WifiDataProcessor class is the Wi-Fi data gathering and processing class of the application.
@@ -62,10 +58,6 @@ public class WifiDataProcessor implements Observable {
 
     // Timer object
     private Timer scanWifiDataTimer;
-
-    int MIN_RSSI = -85;
-    int MAX_WIFI_APS = 30;
-    List<String> ssidBlacklist = Arrays.asList("Xiaomi", "AndroidAP", "MiShare");
 
     /**
      * Public default constructor of the WifiDataProcessor class.
@@ -130,35 +122,19 @@ public class WifiDataProcessor implements Observable {
 
             //Collect the list of nearby wifis
             List<ScanResult> wifiScanList = wifiManager.getScanResults();
-
-            // 1. 过滤 + 排序 Wi-Fi 列表（按信号强度，从强到弱）
-            List<ScanResult> filteredList = wifiScanList.stream()
-                    // RSSI 筛选
-                    .filter(w -> w.level > MIN_RSSI)
-                    // SSID 黑名单过滤
-                    .filter(w -> ssidBlacklist.stream().noneMatch(bad -> w.SSID.contains(bad)))
-                    // BSSID 合法性检查（非空、非 02:00:00）
-                    .filter(w -> w.BSSID != null && !w.BSSID.equals("02:00:00:00:00:00"))
-                    // 按信号强度排序
-                    .sorted(Comparator.comparingInt(w -> -w.level))
-                    // 最多选 MAX_WIFI_APS 个
-                    .limit(MAX_WIFI_APS)
-                    .collect(Collectors.toList());
-
             //Stop receiver as scan is complete
-            try {
-                context.unregisterReceiver(this);
-            } catch (IllegalArgumentException e) {
-                Log.w("WiFiReceiver", "Receiver already unregistered: " + e.getMessage());
-            }
+            context.unregisterReceiver(this);
 
-            // 2. 将过滤后的结果转换为 wifiData[]
-            wifiData = new Wifi[filteredList.size()];
-            for (int i = 0; i < filteredList.size(); i++) {
-                ScanResult result = filteredList.get(i);
+            //Loop though each item in wifi list
+            wifiData = new Wifi[wifiScanList.size()];
+            for(int i = 0; i < wifiScanList.size(); i++) {
                 wifiData[i] = new Wifi();
-                wifiData[i].setBssid(convertBssidToLong(result.BSSID));
-                wifiData[i].setLevel(result.level);
+                //Convert String mac address to an integer
+                String wifiMacAddress = wifiScanList.get(i).BSSID;
+                long intMacAddress = convertBssidToLong(wifiMacAddress);
+                //store mac address and rssi of wifi
+                wifiData[i].setBssid(intMacAddress);
+                wifiData[i].setLevel(wifiScanList.get(i).level);
             }
 
             //Notify observers of change in wifiData variable
