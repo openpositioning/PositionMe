@@ -24,6 +24,7 @@ import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
+import com.openpositioning.PositionMe.utils.PdrProcessing;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -168,6 +169,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
+
+
 
     //region Initialisation
     /**
@@ -605,7 +608,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         //Initialise local variables
         float wifiLat = this.latitude;
         float wifiLng = this.longitude;
-        float[] PDRMovement = PdrProcessing.getPDRMovement();
+        float[] PDRMovement = pdrProcessing.getPDRMovement();
         float pdrDeltaX = PDRMovement[0];
         float pdrDeltaY = PDRMovement[1];
 
@@ -658,7 +661,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove){
 
-        createWifiPositioningRequest();
+        //createWifiPositioningRequest();
 
         //Initialise local variables
         float wifiLat = (float)WIFIpos.latitude;
