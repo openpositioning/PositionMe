@@ -25,8 +25,9 @@ import java.util.Random;
  * @see RecordingFragment Currently used by RecordingFragment
  */
 public class UtilFunctions {
+
     // Constant 1degree of latitiude/longitude (in m)
-    private static final int  DEGREE_IN_M=111111;
+    public static final int  DEGREE_IN_M =111111;
 
     private static final int PARTICLE_COUNT = 1000; // Number of particles
     private static final double PDR_NOISE_STD = 0.5; // Noise in PDR movement (meters)

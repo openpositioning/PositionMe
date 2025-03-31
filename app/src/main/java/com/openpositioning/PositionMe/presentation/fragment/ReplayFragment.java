@@ -1,5 +1,9 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.content.Context;
+import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -206,7 +210,7 @@ public class ReplayFragment extends Fragment {
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
                 android.R.layout.simple_spinner_dropdown_item,
-                new String[]{"PDR", "GNSS", "WiFi"});
+                new String[]{"PDR", "GNSS", "WiFi", "EKF"});
         dataSourceSpinner.setAdapter(adapter);
         dataSourceSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
@@ -325,7 +329,7 @@ public class ReplayFragment extends Fragment {
         switch (mode) {
             case "GNSS":
                 return (int) replayData.stream().filter(p -> p.gnssLocation != null).count();
-            case "WiFi":
+            case "WiFi", "EKF":
                 return (int) replayData.stream().filter(p -> p.cachedWiFiLocation != null || (p.wifiSamples != null && !p.wifiSamples.isEmpty())).count();
             default:
                 return replayData.size();
@@ -339,9 +343,13 @@ public class ReplayFragment extends Fragment {
                 stopPlaying();
                 return;
             }
-            trajectoryMapFragment.clearMapAndReset();
-            EKF_data.add(EKF_point(currentIndex));
-            Log.d(TAG, "Fused point: "+ EKF_data.get(currentIndex));
+            if (currentIndex == 0) {
+                trajectoryMapFragment.clearMapAndReset(); // only clear once at the start
+            }
+            LatLng ekfPoint = EKF_point(currentIndex);
+            EKF_data.add(ekfPoint);
+            Log.d(TAG, "Fused point: " + ekfPoint);
+
             drawReplayPointWithMode(currentIndex);
             currentIndex++;
             playbackSeekBar.setProgress(currentIndex);
@@ -369,50 +377,68 @@ public class ReplayFragment extends Fragment {
                 // code by Jamie Arnott
                 if (p.cachedWiFiLocation != null) {
                     trajectoryMapFragment.updateUserLocation(p.cachedWiFiLocation, p.orientation);
+                    currentPoint = p.cachedWiFiLocation;
                 } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
-                    JSONObject wifiFingerprint = new JSONObject();
-                    JSONObject wifiAccessPoints = new JSONObject();
-                    for (Traj.WiFi_Sample sample : p.wifiSamples) {
-                        for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
-                            try {
-                                wifiAccessPoints.put(String.valueOf(macScan.getMac()), macScan.getRssi());
-                            } catch (JSONException e) {
-                                Log.e(TAG, "WiFi JSON error: " + e.getMessage());
+                    ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+                    NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+                    boolean isConnected = activeNetwork != null && activeNetwork.isConnectedOrConnecting();
+                    if (isConnected) {
+                        JSONObject wifiFingerprint = new JSONObject();
+                        JSONObject wifiAccessPoints = new JSONObject();
+                        for (Traj.WiFi_Sample sample : p.wifiSamples) {
+                            for (Traj.Mac_Scan macScan : sample.getMacScansList()) {
+                                try {
+                                    wifiAccessPoints.put(String.valueOf(macScan.getMac()), macScan.getRssi());
+                                } catch (JSONException e) {
+                                    Log.e(TAG, "WiFi JSON error: " + e.getMessage());
+                                }
                             }
                         }
-                    }
-                    try {
-                        wifiFingerprint.put("wf", wifiAccessPoints);
-                    } catch (JSONException e) {
-                        Log.e(TAG, "WiFi fingerprint JSON failed: " + e.getMessage());
-                    }
+                        try {
+                            wifiFingerprint.put("wf", wifiAccessPoints);
+                        } catch (JSONException e) {
+                            Log.e(TAG, "WiFi fingerprint JSON failed: " + e.getMessage());
+                        }
 
-                    new WiFiPositioning(getContext()).request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
-                        @Override
-                        public void onSuccess(LatLng location, int floor) {
-                            Log.d(TAG, "WiFi Positioning Successful");
-                            p.cachedWiFiLocation = location;
-                            float bearing = p.orientation;
-                            if (previousReplayPoint != null) {
-                                bearing = (float) UtilFunctions.calculateBearing(previousReplayPoint, location); // Accurate bearing
+                        new WiFiPositioning(getContext()).request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
+                            @Override
+                            public void onSuccess(LatLng location, int floor) {
+                                Log.d(TAG, "WiFi Positioning Successful");
+                                p.cachedWiFiLocation = location;
+                                float bearing = p.orientation;
+                                if (previousReplayPoint != null) {
+                                    bearing = (float) UtilFunctions.calculateBearing(previousReplayPoint, location); // Accurate bearing
+
+                                }
+                                trajectoryMapFragment.updateUserLocation(location, bearing);
+                                trajectoryMapFragment.addPolylinePoint(location); // Add trace point
+                                previousReplayPoint = location;
+                                prevWiFiLocation = location;
 
                             }
-                            trajectoryMapFragment.updateUserLocation(location, bearing);
-                            trajectoryMapFragment.addPolylinePoint(location); // Add trace point
-                            previousReplayPoint = location;
-                            prevWiFiLocation = location;
-                        }
 
-                        @Override
-                        public void onError(String message) {
-                            Log.w(TAG, "WiFi Positioning failed: " + message);
-                            // Do not update map if WiFi fails
-                        }
-                    });
+                            @Override
+                            public void onError(String message) {
+                                Log.w(TAG, "WiFi Positioning failed: " + message);
+                                // Do not update map if WiFi fails
+                            }
+                        });
 
-                    return; // Async, return early to avoid using fallback
+                        return; // Async, return early to avoid using fallback
+                    }else{
+                        Log.d(TAG, "WiFi Network Not Connected");
+                    }
                 }
                 break;
+
+            case "EKF":
+                // call EKF_point() with the current index
+                currentPoint = EKF_point(index);
+                if (currentPoint != null){
+                    trajectoryMapFragment.updateUserLocation(currentPoint,p.orientation);
+                }
+                break;
+
 
             default: // PDR
                 currentPoint = p.pdrLocation;
@@ -440,14 +466,20 @@ public class ReplayFragment extends Fragment {
 
     private LatLng EKF_point(int index){
         TrajParser.ReplayPoint p = replayData.get(index);
+        TrajParser.ReplayPoint prev = replayData.get(index);
+        if (index > 0){
+            prev = replayData.get(index-1);
+        }
+
         LatLng EKF_fused_point;
         // get PDR data
         LatLng pdrLatLng = p.pdrLocation;
-
+        LatLng prevPDR = prev.pdrLocation;
         // handle WiFi data
         if (p.cachedWiFiLocation != null) {
             // do EKF using cached WiFi Location
-            EKF_fused_point = SensorFusion.getInstance().EKF_replay(p.cachedWiFiLocation, pdrLatLng);
+
+            EKF_fused_point = SensorFusion.getInstance().EKF_replay(p.cachedWiFiLocation, pdrLatLng, prevPDR);
         } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
             JSONObject wifiFingerprint = new JSONObject();
             JSONObject wifiAccessPoints = new JSONObject();
@@ -482,11 +514,11 @@ public class ReplayFragment extends Fragment {
                     Log.w(TAG, "WiFi Positioning failed: " + message);
                 }
             });
-            EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng);
+            EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng, prevPDR);
         } else {
             if (prevWiFiLocation != null) {
                 // do EKF using prevWiFiLocation
-                EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng);
+                EKF_fused_point = SensorFusion.getInstance().EKF_replay(prevWiFiLocation, pdrLatLng, prevPDR);
             } else {
                 // do nothing
                 return null;
@@ -501,6 +533,7 @@ public class ReplayFragment extends Fragment {
         switch (mode) {
             case "GNSS": return android.graphics.Color.BLUE;
             case "WiFi": return android.graphics.Color.GREEN;
+            case "EKF":  return android.graphics.Color.CYAN;
             default: return android.graphics.Color.RED;
         }
     }

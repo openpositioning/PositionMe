@@ -656,65 +656,71 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new LatLng(predictedLL[0], predictedLL[1]);
     }
 
-    public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove){
-        if (WIFIpos == null || PDRmove == null) {
-            Log.e("EKF", "Received null input: wifi=" + WIFIpos + ", pdr=" + PDRmove);
+    public LatLng EKF_replay(LatLng wifiPos, LatLng pdrCurrent, LatLng pdrPrev) {
+        if (wifiPos == null || pdrCurrent == null || pdrPrev == null) {
+            Log.e("EKF", "Invalid input: wifi=" + wifiPos + ", pdr=" + pdrCurrent + ", prev=" + pdrPrev);
             return null;
         }
-        createWifiPositioningRequest();
 
-        //Initialise local variables
-        float wifiLat = (float)WIFIpos.latitude;
-        float wifiLng = (float)WIFIpos.longitude;
-        float pdrDeltaX = (float)PDRmove.latitude;
-        float pdrDeltaY = (float)PDRmove.longitude;
+        // Convert WiFi position to meters from the initial origin
+        double wifiLat = wifiPos.latitude;
+        double wifiLng = wifiPos.longitude;
 
-        // Initialize on first valid WiFi reading
         if (!isInitialized && wifiLat != 0 && wifiLng != 0) {
             initialLocation = new Location("");
             initialLocation.setLatitude(wifiLat);
             initialLocation.setLongitude(wifiLng);
-            state[0] = 0;
-            state[1] = 0;
+            state[0] = 0; // x = 0 meters
+            state[1] = 0; // y = 0 meters
             isInitialized = true;
-            return new LatLng(wifiLat, wifiLng);
+            return wifiPos;
         }
 
         if (!isInitialized) return null;
 
-        // Prediction step (PDR)
-        double[][] F = {{1, 0}, {0, 1}}; // State transition matrix
-        double[][] Q = {{1e-6, 0}, {0, 1e-6}}; // Process noise
+        // Convert PDR delta from lat/lng degrees to meters
+        double deltaLat = pdrCurrent.latitude - pdrPrev.latitude;
+        double deltaLng = pdrCurrent.longitude - pdrPrev.longitude;
 
-        state[0] += pdrDeltaX;
-        state[1] += pdrDeltaY;
+        double deltaY = UtilFunctions.degreesToMetersLat(deltaLat);
+        double deltaX = UtilFunctions.degreesToMetersLng(deltaLng, initialLocation.getLatitude());
+
+        // Prediction step
+        state[0] += deltaX;
+        state[1] += deltaY;
+
+        double[][] F = {{1, 0}, {0, 1}};
+        double[][] Q = {{0.5, 0}, {0, 0.5}};
         covariance = matrixAdd(matrixMultiply(F, matrixMultiply(covariance, transpose(F))), Q);
 
-        // Update step (WiFi)
-        double[] measurement = {wifiLat, wifiLng};
-        double[] predictedLL = {state[0], state[1]};
-        double[][] H = computeJacobian();
-        double[][] R = {{1e-6, 0}, {0, 1e-6}}; // Measurement noise
+        // Measurement step (convert WiFi lat/lng to meters from initialLocation)
+        double wifiY = UtilFunctions.degreesToMetersLat(wifiLat - initialLocation.getLatitude());
+        double wifiX = UtilFunctions.degreesToMetersLng(wifiLng - initialLocation.getLongitude(), initialLocation.getLatitude());
+        double[] measurement = {wifiX, wifiY};
+
+        double[][] H = {{1, 0}, {0, 1}}; // Identity matrix (direct observation)
+        double[][] R = {{5.0, 0}, {0, 5.0}}; // Measurement noise
 
         // Kalman gain
         double[][] S = matrixAdd(matrixMultiply(H, matrixMultiply(covariance, transpose(H))), R);
         double[][] K = matrixMultiply(matrixMultiply(covariance, transpose(H)), inverse(S));
 
-        // State update
-        double[] innovation = {
-                measurement[0] - predictedLL[0],
-                measurement[1] - predictedLL[1]
-        };
+        // Update step
+        double[] innovation = {measurement[0] - state[0], measurement[1] - state[1]};
         double[] update = matrixVectorMultiply(K, innovation);
         state[0] += update[0];
         state[1] += update[1];
 
-        // Covariance update
         double[][] I = {{1, 0}, {0, 1}};
         covariance = matrixMultiply(matrixSubtract(I, matrixMultiply(K, H)), covariance);
 
-        return new LatLng(predictedLL[0], predictedLL[1]);
+        // Convert back to LatLng
+        double fusedLat = initialLocation.getLatitude() + (state[1] / UtilFunctions.DEGREE_IN_M);
+        double fusedLng = initialLocation.getLongitude() + (state[0] / (UtilFunctions.DEGREE_IN_M / Math.cos(Math.toRadians(initialLocation.getLatitude()))));
+
+        return new LatLng(fusedLat, fusedLng);
     }
+
 
     /**
      *

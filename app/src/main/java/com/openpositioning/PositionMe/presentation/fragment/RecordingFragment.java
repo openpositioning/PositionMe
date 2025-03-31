@@ -199,8 +199,6 @@ public class RecordingFragment extends Fragment {
 // import java.util.UUID;
 
 // ... inside onViewCreated (or after initializing UI controls)
-
-        //Code by Guilherme: Add a new button for adding a tag
         Button tagButton = view.findViewById(R.id.tagButton);
         tagButton.setOnClickListener(v -> {
             LatLng currentLocation = trajectoryMapFragment.getCurrentLocation();
@@ -225,9 +223,8 @@ public class RecordingFragment extends Fragment {
                 Toast.makeText(getContext(), "Fusion tag added", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(getContext(), "Current location not available", Toast.LENGTH_SHORT).show();
-            }
-        });
-
+         }
+    });
 
 
 
