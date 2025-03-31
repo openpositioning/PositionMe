@@ -157,8 +157,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     private FilterUtils.EKFFilter ekf;
 
     private float[] fusionLocation;
+    private int testX;
+    private int testY;
 
     int MAX_WIFI_APS = 60;
+    private static final float constantDuration = 1f; // duration of the wifi weight being maximum
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -191,6 +194,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.R = new float[9];
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
+        this.testX = 0;
+        this.testY = 0;
     }
 
 
@@ -365,6 +370,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             case Sensor.TYPE_ROTATION_VECTOR:
                 // Save values
                 this.rotation = sensorEvent.values.clone();
+                // Convert the filtered rotation vector into a 3x3 Direction Cosine Matrix (DCM)
                 float[] rotationVectorDCM = new float[9];
                 // Convert rotation vector to a 3*3 DCM
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM,this.rotation);
@@ -437,7 +443,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                     LatLng startLocation = new LatLng(this.startLocation[0], this.startLocation[1]);
                     double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocation, latLng);
                     Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
-                    pf.setWifiRatio(ratio);
+                    if (isWifiNotBehind(new double[]{newCords[0], newCords[1]}, wifiPos, this.orientation[0])) {
+                        pf.setWifiRatio(ratio * 1);
+                        Log.e("Ratio", "wifi in front");
+                    } else {
+                        pf.setWifiRatio(ratio * 0.2);
+                        Log.e("Ratio", "wifi NOT in front");
+                    }
                     Log.e("Ratio", String.valueOf(ratio));
                     pf.update(wifiPos[0], wifiPos[1]);
                 }
@@ -474,6 +486,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 currFusionCoordinates = newCords;
                 currFusionLocation = UtilFunctions.calculateNewPos(new LatLng(startLocation[0], startLocation[1]), newCords);
                 fusionLocation = new float[]{newCords[0], newCords[1]};
+
                 this.pdrProcessing.setCurrentLocation(newCords[0], newCords[1]);
                 break;
             // *** Particle END ***
@@ -1270,23 +1283,24 @@ public class SensorFusion implements SensorEventListener, Observer {
         public void run() {
             long currentTime = System.currentTimeMillis();
             // 计算上一次wifi成功召回后的已用时间（秒）
+            // calculate the last time wifi successfully retrieved
             float elapsedSeconds = (currentTime - lastWifiSuccessTime) / 1000f;
 
-            if (elapsedSeconds <= 1.5f) {
-                // 1.5秒以内保持为1
+            if (elapsedSeconds <= constantDuration) {
+                // constantDuration 秒以内保持为1
+                // within
                 ratio = 1f;
             } else if (elapsedSeconds >= 10f) {
                 // 超过10秒后，ratio直接为0
                 ratio = 0f;
             } else {
-                // 介于1.5秒到10秒之间，采用指数衰减
-                // 此处选取的k值使得在10秒时ratio接近0（也可以调整k值实现你想要的衰减曲线）
-                float k = (float)(Math.log(1.0/0.01) / (10 - 1.5));
-                ratio = (float)Math.exp(-k * (elapsedSeconds - 1.5));
+                // 介于 constantDuration 到 10 秒之间，采用指数衰减
+                float k = (float)(Math.log(1.0 / 0.01) / (10 - constantDuration));
+                ratio = (float)Math.exp(-k * (elapsedSeconds - constantDuration));
             }
 
             // 这里可以做一些UI更新或其他操作，例如打印当前ratio值
-            Log.d("RatioUpdater", "当前ratio值：" + ratio);
+//            Log.d("RatioUpdater", "当前ratio值：" + ratio);
 
             // 若计时器未超过10秒，继续更新
             if (elapsedSeconds < 10f) {
@@ -1294,5 +1308,37 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
         }
     };
+    public static boolean isWifiNotBehind(double[] newCords, double[] wifiPos, double azimuthRadians) {
+        double dx = wifiPos[0] - newCords[0]; // easting 差值
+        double dy = wifiPos[1] - newCords[1]; // northing 差值
+
+        // 两点重合时，视为不在前方
+        if (dx == 0 && dy == 0) {
+            return false;
+        }
+
+        // 计算从 newCords 指向 wifiPos 的方向角（相对于正北，单位：弧度）
+        // 使用 Math.atan2(dx, dy) 得到的角度正符合：正北 0，顺时针增加
+        double wifiAngle = Math.atan2(dx, dy);
+        if (wifiAngle < 0) {
+            wifiAngle += 2 * Math.PI;
+        }
+
+        // 归一化用户的 azimuth 到 [0, 2π)
+        double normalizedAzimuth = ((azimuthRadians % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+
+        // 用户的背向角：即面朝方向加 π，再归一化到 [0,2π)
+        double backDirection = (normalizedAzimuth + Math.PI) % (2 * Math.PI);
+
+        // 计算 wifiAngle 与背向角之间的最小角差
+        double diff = Math.abs(wifiAngle - backDirection);
+        if (diff > Math.PI) {
+            diff = 2 * Math.PI - diff;
+        }
+
+        // 如果差值小于等于 π/4（45°），则 WiFi 落在背后 90° 扇形内，返回 false；否则返回 true
+        return diff > (Math.PI / 4);
+    }
+
 
 }

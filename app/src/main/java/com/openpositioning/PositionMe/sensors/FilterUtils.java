@@ -31,7 +31,7 @@ public class FilterUtils {
 
         // Noise parameters
         double processNoisePos = 0.6;
-        double measurementNoise = 1.1; // Adjust based on your sensor characteristics
+        double measurementNoise = 1.5; // Adjust based on your sensor characteristics
 
         // WiFi weight parameters: a constant base weight and an external ratio
         double wifiRatio;  // External factor that determines how important the WiFi measurement is
@@ -116,7 +116,8 @@ public class FilterUtils {
 
             // Inject new particles at the WiFi measurement to further emphasize its influence.
             // For example, replace 20% of the particles with new ones centered around the WiFi measurement.
-            int numInjection = (int)(0.05 * numParticles);
+//            int numInjection = (int)(0.05 * numParticles);
+            int numInjection = 0;
             for (int i = 0; i < numInjection; i++) {
                 int idx = random.nextInt(numParticles);
                 // Adding a bit of noise so the injected particles are not all identical.

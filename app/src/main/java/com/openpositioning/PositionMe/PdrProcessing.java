@@ -171,7 +171,6 @@ public class PdrProcessing {
         // Update position values
         this.positionX += x;
         this.positionY += y;
-
         // return current position
         return new float[]{this.positionX, this.positionY};
     }
