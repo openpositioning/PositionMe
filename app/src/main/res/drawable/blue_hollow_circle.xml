@@ -8,7 +8,7 @@
     <!-- Define a circular path -->
     <path
         android:fillColor="@android:color/transparent"
-        android:strokeColor="#0000FF"
+        android:strokeColor="@color/goldYellow"
         android:strokeWidth="2"
         android:pathData="M12,2
             A10,10 0 1,1 11.99,2z"/>

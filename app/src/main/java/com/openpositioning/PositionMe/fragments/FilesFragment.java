@@ -153,6 +153,26 @@ public class FilesFragment extends Fragment implements Observer, ReplayClickList
     public void updateWifi(Object[] singletonStringList) {
         return;
     }
+
+    @Override
+    public void updateServer(Object[] singletonStringList) {
+        // Cast input as a string
+        String infoString = (String) singletonStringList[0];
+        // Check if the string is non-null and non-empty before processing
+        if(infoString != null && !infoString.isEmpty()) {
+            // Process string
+            List<Map<String, String>> entryList = processInfoResponse(infoString);
+            // Start a handler to be able to modify UI elements
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    // Update the RecyclerView with data from the server
+                    updateView(entryList);
+                }
+            });
+        }
+    }
+
     @Override
     public void onReplayClick(int position) {
 

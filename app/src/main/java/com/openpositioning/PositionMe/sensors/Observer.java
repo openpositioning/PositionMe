@@ -19,4 +19,6 @@ public interface Observer {
      */
     public void update(Object[] objList);
     void updateWifi(Object[] wifiList);
+
+    void updateServer(Object[] responseList);
 }

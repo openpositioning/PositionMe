@@ -3,7 +3,7 @@
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
-    <color name="teal_700">#FF018786</color>
+    <color name="teal_700">#475569</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="pastelBlue">#3F51B5</color>
@@ -14,5 +14,6 @@
     <color name="primaryBlue">#FF001080</color>
     <color name="red">#FE0000</color>
     <color name="green">#00CC00</color>
+    <color name="light_blue">#94a3b8</color>
 
 </resources>

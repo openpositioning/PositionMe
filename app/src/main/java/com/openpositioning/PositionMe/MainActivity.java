@@ -71,6 +71,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private SharedPreferences settings;
     private SensorFusion sensorFusion;
     private Handler httpResponseHandler;
+    private ServerCommunications serverCommunications;
 
     //endregion
 
@@ -96,7 +97,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
         Toolbar toolbar = findViewById(R.id.main_toolbar);
         setSupportActionBar(toolbar);
         toolbar.showOverflowMenu();
-        toolbar.setBackgroundColor(ContextCompat.getColor(getApplicationContext(), R.color.primaryBlue));
+        //toolbar.setBackgroundColor(ContextCompat.getColor(getApplicationContext(), R.color.primaryBlue));
         toolbar.setTitleTextColor(ContextCompat.getColor(getApplicationContext(), R.color.white));
 
         // Set up back action
@@ -141,7 +142,16 @@ public class MainActivity extends AppCompatActivity implements Observer {
             sensorFusion.stopListening();
         }
     }
-
+    @Override
+    public void updateServer(Object[] objList) {
+        assert objList[0] instanceof Boolean;
+        if((Boolean) objList[0]) {
+            this.httpResponseHandler.post(displayToastTaskSuccess);
+        }
+        else {
+            this.httpResponseHandler.post(displayToastTaskFailure);
+        }
+    }
     /**
      * {@inheritDoc}
      * Checks for activities in case the app was closed without granting them, or if they were
@@ -490,6 +500,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
      */
     private void allPermissionsObtained() {
         settings.edit().putBoolean("permanentDeny", false).apply();
+        this.serverCommunications = ServerCommunications.getMainInstance(getApplicationContext());
+        this.serverCommunications.registerObserver(this);
         this.sensorFusion = SensorFusion.getInstance();
         this.sensorFusion.setContext(getApplicationContext());
         sensorFusion.registerForServerUpdate(this);

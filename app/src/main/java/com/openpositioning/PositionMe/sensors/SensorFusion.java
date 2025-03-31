@@ -59,6 +59,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // 每隔10ms存一次数据
     private static final long TIME_CONST = 10;
     // 低通滤波相关常量
+    private LatLng positionWifi;
     public static final float FILTER_COEFFICIENT = 0.96f;
     private static final float ALPHA = 0.8f;
     private LatLng fusedPosition;
@@ -201,7 +202,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
 
         // Server
-        this.serverCommunications = new ServerCommunications(context);
+        this.serverCommunications = ServerCommunications.getMainInstance();
+        this.serverCommunications.registerObserver(this);
 
         // 时间
         this.absoluteStartTime = System.currentTimeMillis();
@@ -304,20 +306,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // 在地图上画线
                     this.pathView.drawTrajectory(pdrCords);
 
-                    // (★EKF集成处) 如果启用了EKF, 调用 EKF 的 predict/onStepDetected
-//                    if (enableEKF && fusionAlgorithm != null) {
-//                        float stepLength = pdrProcessing.StepLength();
-//                        fusionAlgorithm.predict(
-//                                orientation[0],  // 当前方位(弧度)
-//                                stepLength,       // 这一步长度
-//                                passAverageStepLength(),
-//                                SystemClock.uptimeMillis(),
-//                                pdrProcessing.detectMovementType(orientation[0]) // 若有转弯检测等
-//                        );
-//
-//                        // 也可在这里或内部再调用 fusionAlgorithm.onStepDetected(...)
-//                        // 如果实现中需要
-//                    }
 
                     // 触发一次Fusion逻辑
                     updateFusionPDR();
@@ -359,6 +347,18 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
 
     }
+    private void debugLocalWifiScan(List<Wifi> wifiList) {
+        if (wifiList == null || wifiList.isEmpty()) {
+            Log.d("SensorFusion", "WiFi Debug: 未获取到任何 WiFi 扫描结果，wifiList 为空。");
+            return;
+        }
+        // 遍历所有扫描结果并打印 BSSID 和 RSSI
+        for (Wifi wifi : wifiList) {
+            Log.d("SensorFusion",
+                    "WiFi Debug: 本地扫描到的 AP -> BSSID: " + wifi.getBssid()
+                            + ", RSSI: " + wifi.getLevel());
+        }
+    }
     public double[] getEcefRefCoords(){
         return ecefRefCoords;
     }
@@ -387,6 +387,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     //-----------------------------
     @Override
     public void update(Object[] responseList) {
+        // WifiDataProcessor那边给的回调
         if (!saveRecording) return;
         if (responseList == null || responseList.length == 0 || responseList[0] == null) {
             updateFusionWifi(null);
@@ -394,6 +395,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         Object first = responseList[0];
         if (first instanceof JSONObject) {
+            // 如果 WifiDataProcessor 直接给你 JSON
             updateFusionWifi((JSONObject) first);
         } else if (first instanceof Wifi) {
             Log.e("SensorFusion", "Received single Wifi object, route to updateWifi()");
@@ -404,10 +406,12 @@ public class SensorFusion implements SensorEventListener, Observer {
     @Override
     public void updateWifi(Object[] wifiArr) {
         this.wifiList = Stream.of(wifiArr).map(o -> (Wifi)o).collect(Collectors.toList());
+        debugLocalWifiScan(this.wifiList);
         if (saveRecording) {
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
             for (Wifi w : this.wifiList) {
+                Log.d("SensorFusion", "BSSID: " + w.getBssid() + ", RSSI: " + w.getLevel());
                 wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
                         .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
                         .setMac(w.getBssid())
@@ -419,6 +423,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             // 发送到服务器
             try {
                 JSONObject wifiJSON = JsonConverter.toJson(this.wifiList);
+                Log.d("SensorFusion", "Sending WiFi JSON: " + wifiJSON.toString());
                 sendWifiJsonToCloud(wifiJSON);
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -466,11 +471,61 @@ public class SensorFusion implements SensorEventListener, Observer {
     /**
      * 当 WiFi 定位结果到来时调用
      */
-    public void updateFusionWifi(JSONObject wifiResponse) {
-        // 省略出错等处理
-        if (wifiResponse == null) return;
+    @Override
+    public void updateServer(Object[] responseList) {
+        //update fusion processing with new wifi fingerprint
+        if (saveRecording) {
+            if (responseList == null || responseList[0] == null){
+                updateFusionWifi(null);
+            }
+            JSONObject wifiResponse = (JSONObject) responseList[0];
+            updateFusionWifi(wifiResponse);
+        }
+    }
+    public void notifyWifiUpdate(LatLng wifiPosition) {
+        this.positionWifi = wifiPosition; // 可选：更新内部状态
+
+        for (SensorFusionUpdates observer : recordingUpdates) {
+            observer.onWifiUpdate(wifiPosition);
+        }
+    }
+    /**
+     * 调试服务器返回的 WiFi JSON 数据，主要检查 lat、lon 等字段
+     */
+    private void debugWifiResponse(JSONObject wifiResponse) {
+        if (wifiResponse == null) {
+            Log.d("SensorFusion", "WiFi Debug: 服务器返回数据 wifiResponse 为 null，无法进行 WiFi 定位。");
+            return;
+        }
+        Log.d("SensorFusion", "WiFi Debug: 收到服务器 WiFi JSON = " + wifiResponse.toString());
+        // 检查 lat / lon / floor 等关键字段是否存在
         if (!wifiResponse.has("lat") || !wifiResponse.has("lon")) {
-            Log.e("SensorFusion", "Invalid WiFi response received, skipping fusion update.");
+            Log.d("SensorFusion",
+                    "WiFi Debug: wifiResponse 缺少 lat 或 lon 字段，" +
+                            "完整数据: " + wifiResponse.toString());
+        } else {
+            try {
+                double lat = wifiResponse.getDouble("lat");
+                double lon = wifiResponse.getDouble("lon");
+                Log.d("SensorFusion",
+                        "WiFi Debug: 服务器返回的 WiFi 坐标 -> lat: " + lat + ", lon: " + lon);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    public void updateFusionWifi(JSONObject wifiResponse) {
+        // 调试输出
+        debugWifiResponse(wifiResponse);
+
+        if (wifiResponse == null) {
+            notifyWifiUpdate(null);
+            return;
+        }
+
+        if (!wifiResponse.has("lat") || !wifiResponse.has("lon")) {
+            Log.e("SensorFusion", "Invalid WiFi response (missing lat/lon), skipping fusion update.");
+            notifyWifiUpdate(null);
             return;
         }
 
@@ -478,14 +533,17 @@ public class SensorFusion implements SensorEventListener, Observer {
             double lat = wifiResponse.getDouble("lat");
             double lon = wifiResponse.getDouble("lon");
             double floor = wifiResponse.getDouble("floor");
-            // ...
-            // (★EKF集成处) 若EKF启用, 就onOpportunisticUpdate
+
+            LatLng wifiLatLng = new LatLng(lat, lon);
+            // 通知UI
+            notifyWifiUpdate(wifiLatLng);
+
+            // 然后调用融合算法
             if (fusionAlgorithm != null) {
-                // 将 lat/lon 转成 ENU / XY, 并把它交给 onOpportunisticUpdate
+                // 做一些座标转换...
                 double[] enu = CoordinateTransform.geodeticToEnu(
-                        lat, lon, 0, // altitude简化
-                        // 需要有 setStartGNSSLatLngAlt(...) 里保存的参照点:
-                        startLocation[0], // or a double[] startRef
+                        lat, lon, 0,
+                        startLocation[0], // 你的起点
                         startLocation[1],
                         0
                 );
@@ -493,7 +551,10 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
         } catch (JSONException e) {
             e.printStackTrace();
-        }// Wi-Fi注入后，获取fusedState:
+            notifyWifiUpdate(null);
+        }
+
+        // 融合后, 继续读取融合状态, 通知UI
         double[] fusedState = fusionAlgorithm.getState();
         LatLng fusedCoordinate = CoordinateTransform.enuToGeodetic(
                 fusedState[1], fusedState[2], 0,

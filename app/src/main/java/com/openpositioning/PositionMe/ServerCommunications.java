@@ -54,7 +54,7 @@ import okhttp3.ResponseBody;
  * @author Mate Stodulka
  */
 public class ServerCommunications implements Observable {
-
+    private static ServerCommunications mainInstance;
     // Application context for handling permissions and devices
     private final Context context;
     private JSONObject wifiResponse;
@@ -216,6 +216,19 @@ public class ServerCommunications implements Observable {
 
     }
 //Wifi
+    public static ServerCommunications getMainInstance(Context context) {
+        if (mainInstance == null) {
+            mainInstance = new ServerCommunications(context);
+        }
+        return mainInstance;
+    }
+    public static ServerCommunications getMainInstance() {
+        if (mainInstance == null) {
+            throw new IllegalStateException("ServerCommunications has not been initialized.");
+        }
+        return mainInstance;
+    }
+
 
     public void sendWifi(JSONObject fingerprint) {
 
