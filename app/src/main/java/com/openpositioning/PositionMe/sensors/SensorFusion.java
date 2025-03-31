@@ -656,7 +656,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new LatLng(predictedLL[0], predictedLL[1]);
     }
 
-    public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove){
+    public LatLng EKF_replay(LatLng WIFIpos, LatLng PDRmove, LatLng prevPDRmove){
         if (WIFIpos == null || PDRmove == null) {
             Log.e("EKF", "Received null input: wifi=" + WIFIpos + ", pdr=" + PDRmove);
             return null;
@@ -666,8 +666,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         //Initialise local variables
         float wifiLat = (float)WIFIpos.latitude;
         float wifiLng = (float)WIFIpos.longitude;
-        float pdrDeltaX = (float)PDRmove.latitude;
-        float pdrDeltaY = (float)PDRmove.longitude;
+        float pdrDeltaX = (float)PDRmove.latitude-(float)prevPDRmove.latitude;
+        float pdrDeltaY = (float)PDRmove.longitude-(float)prevPDRmove.longitude;
 
         // Initialize on first valid WiFi reading
         if (!isInitialized && wifiLat != 0 && wifiLng != 0) {
