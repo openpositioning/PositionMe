@@ -712,14 +712,14 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // === Prediction step (PDR) ===
         double[][] F = {{1, 0}, {0, 1}};
-        double[][] Q = {{0.5, 0}, {0, 0.5}}; // PDR noise in meters
+        double[][] Q = {{0.8, 0}, {0, 0.8}}; // PDR noise in meters
         state[0] += deltaX;
         state[1] += deltaY;
         covariance = matrixAdd(matrixMultiply(F, matrixMultiply(covariance, transpose(F))), Q);
 
         // === Update step (WiFi) ===
         if (wifiMeters != null) {
-            double[][] R_wifi = {{10.0, 0}, {0, 10.0}}; // WiFi = only accurate indoors
+            double[][] R_wifi = {{15.0, 0}, {0, 15.0}}; // WiFi = only accurate indoors
             if (isOutlier(wifiMeters, new double[]{state[0], state[1]}, R_wifi)) {
                 Log.d("EKF", "WiFi fingerprint outlier detected");
                 //Increase noise covariance to reduce influence of outlier
@@ -742,7 +742,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 R_gnss = new double[][]{{100.0, 0}, {0, 100.0}};
 
                 // Option 2: Skip update entirely
-                // continue; // Uncomment this line to skip the update
+                //continue;  // Uncomment this line to skip the update
             } else {
                 R_gnss = new double[][]{{50.0, 0}, {0, 50.0}};
             }
@@ -792,6 +792,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // Limit innovation if it exceeds maxDisplacement
         if (innovationMagnitude > maxDisplacement) {
+            Log.d("EKF", "Max displacement surpassed, scaling innovation");
             double scalingFactor = maxDisplacement / innovationMagnitude;
             innovation[0] *= scalingFactor;
             innovation[1] *= scalingFactor;
@@ -810,22 +811,13 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     private boolean isOutlier(double[] measurement, double[] predicted, double[][] R) {
-        // Compute innovation (difference between measurement and prediction)
-        double[] innovation = {
-                measurement[0] - predicted[0],
-                measurement[1] - predicted[1]
-        };
-
-        // Compute Mahalanobis distance for outlier detection
-        double mahalanobisDistance = Math.sqrt(
-                (innovation[0] * innovation[0]) / R[0][0] +
-                        (innovation[1] * innovation[1]) / R[1][1]
-        );
-
-        // Threshold for outlier detection (e.g., 3σ)
-        double threshold = 3.0; // Adjust based on WiFi resolution and environment
-
-        return mahalanobisDistance > threshold; // Return true if the measurement is an outlier
+        double[][] H = {{1, 0}, {0, 1}};
+        double[][] S = matrixAdd(matrixMultiply(H, matrixMultiply(covariance, transpose(H))), R);
+        double[] innovation = {measurement[0] - predicted[0], measurement[1] - predicted[1]};
+        double[][] S_inv = inverse(S);
+        double mahalanobis = innovation[0] * (S_inv[0][0] * innovation[0] + S_inv[0][1] * innovation[1]) +
+                innovation[1] * (S_inv[1][0] * innovation[0] + S_inv[1][1] * innovation[1]);
+        return Math.sqrt(mahalanobis) > 3.0;
     }
 
 
