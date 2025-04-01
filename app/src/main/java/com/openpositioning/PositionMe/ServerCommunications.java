@@ -179,8 +179,13 @@ public class ServerCommunications implements Observable {
 //                            System.err.println("POST error response: " + responseBody.string());
 
                             String errorBody = responseBody.string();
-                            infoResponse = "Upload failed: " + errorBody;
-                            new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());//show error message to users
+                            infoResponse = "上传失败: " + errorBody;
+                            Log.e("ServerCommunications", "上传错误: " + errorBody);
+                            
+                            new Handler(Looper.getMainLooper()).post(() -> {
+                                Toast.makeText(context, infoResponse, Toast.LENGTH_LONG).show();
+                                Log.e("ServerCommunications", "上传错误: " + errorBody);
+                            });
 
                             System.err.println("POST error response: " + errorBody);
                             success = false;

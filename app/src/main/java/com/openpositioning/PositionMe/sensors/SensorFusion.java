@@ -476,11 +476,38 @@ public class SensorFusion implements SensorEventListener, Observer {
                 if (saveRecording && locationLogger != null) {
                     // 使用PDR位置更新LocationLogger
                     float[] pdrLongLat = getPdrLongLat(newCords[0], newCords[1]);
+                    
+                    // 保存最后的PDR位置用于EKF融合
+                    lastPdrLatitude = pdrLongLat[0];
+                    lastPdrLongitude = pdrLongLat[1];
+                    
                     locationLogger.logLocation(
                         currentTime,
                         pdrLongLat[0],
                         pdrLongLat[1]
                     );
+                    
+                    // 添加轨迹点
+                    addTrajectoryPoint(pdrLongLat[0], pdrLongLat[1]);
+                    
+                    // 记录EKF位置 (PDR与GNSS的融合)
+                    if (latitude != 0 && longitude != 0) {
+                        float ekfLat = 0.4f * latitude + 0.6f * pdrLongLat[0];
+                        float ekfLon = 0.4f * longitude + 0.6f * pdrLongLat[1];
+                        locationLogger.logEkfLocation(
+                            currentTime,
+                            ekfLat,
+                            ekfLon
+                        );
+                    } else {
+                        // 如果没有GNSS位置，直接使用PDR
+                        locationLogger.logEkfLocation(
+                            currentTime,
+                            pdrLongLat[0],
+                            pdrLongLat[1]
+                        );
+                    }
+                    
                     Log.d("SensorFusion", "步伐检测 - 已记录PDR位置: lat=" + 
                            pdrLongLat[0] + ", lng=" + pdrLongLat[1]);
                 }
@@ -513,6 +540,35 @@ public class SensorFusion implements SensorEventListener, Observer {
                         latitude,
                         longitude
                     );
+                    
+                    // 记录GNSS位置
+                    locationLogger.logGnssLocation(
+                        System.currentTimeMillis(),
+                        latitude,
+                        longitude
+                    );
+                    
+                    // 添加轨迹点
+                    addTrajectoryPoint(latitude, longitude);
+                    
+                    // 记录EKF轨迹 (使用GNSS和PDR的融合结果)
+                    // 这里使用简单的加权平均作为演示
+                    if (lastPdrLatitude != 0 && lastPdrLongitude != 0) {
+                        float ekfLat = 0.6f * latitude + 0.4f * lastPdrLatitude;
+                        float ekfLon = 0.6f * longitude + 0.4f * lastPdrLongitude;
+                        locationLogger.logEkfLocation(
+                            System.currentTimeMillis(),
+                            ekfLat,
+                            ekfLon
+                        );
+                    } else {
+                        // 如果没有PDR位置，直接使用GNSS
+                        locationLogger.logEkfLocation(
+                            System.currentTimeMillis(),
+                            latitude,
+                            longitude
+                        );
+                    }
                 }
                 
                 // 添加详细的日志
@@ -1078,58 +1134,60 @@ public class SensorFusion implements SensorEventListener, Observer {
     private class storeDataInTrajectory extends TimerTask {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
-            trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
-                    .setAccX(acceleration[0])
-                    .setAccY(acceleration[1])
-                    .setAccZ(acceleration[2])
-                    .setGyrX(angularVelocity[0])
-                    .setGyrY(angularVelocity[1])
-                    .setGyrZ(angularVelocity[2])
-                    .setGyrZ(angularVelocity[2])
-                    .setRotationVectorX(rotation[0])
-                    .setRotationVectorY(rotation[1])
-                    .setRotationVectorZ(rotation[2])
-                    .setRotationVectorW(rotation[3])
-                    .setStepCount(stepCounter))
-                    .addPositionData(Traj.Position_Sample.newBuilder()
-                            .setMagX(magneticField[0])
-                            .setMagY(magneticField[1])
-                            .setMagZ(magneticField[2])
-                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime));
+            try {
+                trajectory.addImuData(Traj.Motion_Sample.newBuilder()
+                        .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
+                        .setAccX(acceleration[0])
+                        .setAccY(acceleration[1])
+                        .setAccZ(acceleration[2])
+                        .setGyrX(angularVelocity[0])
+                        .setGyrY(angularVelocity[1])
+                        .setGyrZ(angularVelocity[2])
+                        .setRotationVectorX(rotation[0])
+                        .setRotationVectorY(rotation[1])
+                        .setRotationVectorZ(rotation[2])
+                        .setRotationVectorW(rotation[3])
+                        .setStepCount(stepCounter))
+                        .addPositionData(Traj.Position_Sample.newBuilder()
+                                .setMagX(magneticField[0])
+                                .setMagY(magneticField[1])
+                                .setMagZ(magneticField[2])
+                                .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime));
 
-            // Divide timer with a counter for storing data every 1 second
-            if (counter == 99) {
-                counter = 0;
-                // Store pressure and light data
-                if (barometerSensor.sensor != null) {
-                    trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
-                                    .setPressure(pressure)
-                                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime))
-                            .addLightData(Traj.Light_Sample.newBuilder()
-                                    .setLight(light)
-                                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
-                                    .build());
-                }
+                // Divide timer with a counter for storing data every 1 second
+                if (counter == 99) {
+                    counter = 0;
+                    // Store pressure and light data
+                    if (barometerSensor.sensor != null) {
+                        trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
+                                        .setPressure(pressure)
+                                        .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime))
+                                .addLightData(Traj.Light_Sample.newBuilder()
+                                        .setLight(light)
+                                        .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
+                                        .build());
+                    }
 
-                // Divide the timer for storing AP data every 5 seconds
-                if (secondCounter == 4) {
-                    secondCounter = 0;
-                    //Current Wifi Object
-                    Wifi currentWifi = wifiProcessor.getCurrentWifiData();
-                    trajectory.addApsData(Traj.AP_Data.newBuilder()
-                            .setMac(currentWifi.getBssid())
-                            .setSsid(currentWifi.getSsid())
-                            .setFrequency(currentWifi.getFrequency()));
+                    // Divide the timer for storing AP data every 5 seconds
+                    if (secondCounter == 4) {
+                        secondCounter = 0;
+                        //Current Wifi Object
+                        Wifi currentWifi = wifiProcessor.getCurrentWifiData();
+                        trajectory.addApsData(Traj.AP_Data.newBuilder()
+                                .setMac(currentWifi.getBssid())
+                                .setSsid(currentWifi.getSsid())
+                                .setFrequency((int)currentWifi.getFrequency()));
+                    }
+                    else {
+                        secondCounter++;
+                    }
                 }
                 else {
-                    secondCounter++;
+                    counter++;
                 }
+            } catch (Exception e) {
+                Log.e("SensorFusion", "轨迹数据添加错误: " + e.getMessage());
             }
-            else {
-                counter++;
-            }
-
         }
     }
 
@@ -1325,12 +1383,16 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param accMagnitude 当前加速度大小
      */
     private static final double STEP_THRESHOLD = 1.8; // 步伐检测阈值，从1.2增加到1.8，减少误检测
-    private static final long MIN_STEP_INTERVAL = 400; // 最小步伐间隔(毫秒)，从300增加到400
+    private static final long MIN_STEP_INTERVAL = 500; // 最小步伐间隔(毫秒)，从300增加到500
     private double lastPeakValue = 0;
     private long lastStepTime = 0;
     private boolean isAscending = false;
     private double[] recentPeaks = new double[3]; // 记录最近3个峰值用于判断
     private int peakIndex = 0;
+    
+    // 添加变量保存最后的PDR位置
+    private float lastPdrLatitude = 0;
+    private float lastPdrLongitude = 0;
     
     private void manualStepDetection(double accMagnitude) {
         long currentTime = System.currentTimeMillis();
@@ -1378,11 +1440,40 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // 检测到步伐后记录到位置日志器
                 if (saveRecording && locationLogger != null) {
                     float[] pdrLongLat = getPdrLongLat(newCords[0], newCords[1]);
+                    
+                    // 保存最后的PDR位置用于EKF融合
+                    lastPdrLatitude = pdrLongLat[0];
+                    lastPdrLongitude = pdrLongLat[1];
+                    
                     locationLogger.logLocation(
                         currentTime,
                         pdrLongLat[0],
                         pdrLongLat[1]
                     );
+                    
+                    // 添加轨迹点
+                    addTrajectoryPoint(pdrLongLat[0], pdrLongLat[1]);
+                    
+                    // 记录EKF位置 (PDR与GNSS的融合)
+                    if (latitude != 0 && longitude != 0) {
+                        float ekfLat = 0.4f * latitude + 0.6f * pdrLongLat[0];
+                        float ekfLon = 0.4f * longitude + 0.6f * pdrLongLat[1];
+                        locationLogger.logEkfLocation(
+                            currentTime,
+                            ekfLat,
+                            ekfLon
+                        );
+                    } else {
+                        // 如果没有GNSS位置，直接使用PDR
+                        locationLogger.logEkfLocation(
+                            currentTime,
+                            pdrLongLat[0],
+                            pdrLongLat[1]
+                        );
+                    }
+                    
+                    Log.d("SensorFusion", "步伐检测 - 已记录PDR位置: lat=" + 
+                           pdrLongLat[0] + ", lng=" + pdrLongLat[1]);
                 }
                 
                 this.accelMagnitude.clear();
