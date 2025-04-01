@@ -198,6 +198,11 @@ public class ReplayFragment extends Fragment {
                     }
                 }
             }
+            // add tag marker if firstReplayPoint contains one
+            if (firstReplayPoint.tagPoint != null){
+                trajectoryMapFragment.addTagMarker(firstReplayPoint.tagPoint.location, firstReplayPoint.tagPoint.label);
+            }
+            Log.d("TagPoint", "Start Tag Point: " + firstReplayPoint.tagPoint);
         } else {
             Log.e(TAG, "Replay data is empty, cannot determine initial location.");
         }
@@ -315,7 +320,7 @@ public class ReplayFragment extends Fragment {
             previousReplayPoint = null;
             drawReplayPointWithMode(0);
         }
-
+/*
         //Code By Guilherme: Add tags to map
         List<com.openpositioning.PositionMe.utils.Tag> tags = SensorFusion.getInstance().getTagList();
         if (tags != null && !tags.isEmpty()) {
@@ -323,6 +328,8 @@ public class ReplayFragment extends Fragment {
                 trajectoryMapFragment.addTagMarker(tag.getLocation(), tag.getLabel());
             }
         }
+
+ */
     }
 
     private void restartPlaybackIfPlaying() {
@@ -378,6 +385,12 @@ public class ReplayFragment extends Fragment {
 
 
             drawReplayPointWithMode(currentIndex);
+            TrajParser.ReplayPoint point = replayData.get(currentIndex);
+
+            if (point.tagPoint != null){
+                trajectoryMapFragment.addTagMarker(point.tagPoint.location, point.tagPoint.label);
+            }
+            Log.d("TagPoint", "Tag Point at index " + currentIndex + ": " + point.tagPoint);
             currentIndex++;
             playbackSeekBar.setProgress(currentIndex);
             playbackHandler.postDelayed(this, playbackInterval);

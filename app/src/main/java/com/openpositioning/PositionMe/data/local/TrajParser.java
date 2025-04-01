@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 public class TrajParser {
 
@@ -34,9 +35,11 @@ public class TrajParser {
 
         public List<Traj.WiFi_Sample> wifiSamples = new ArrayList<>();
         public LatLng cachedWiFiLocation = null;
+        public TrajParser.TagPoint tagPoint;
 
         public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, float orientation,
-                           float speed, long timestamp, List<Traj.WiFi_Sample> wifiSamples) {
+                           float speed, long timestamp, List<Traj.WiFi_Sample> wifiSamples,
+                           TrajParser.TagPoint tagPoint) {
             this.pdrLocation = pdrLocation;
             this.gnssLocation = gnssLocation;
             this.orientation = orientation;
@@ -44,6 +47,7 @@ public class TrajParser {
             this.timestamp = timestamp;
             this.wifiSamples = wifiSamples != null ? wifiSamples : new ArrayList<>();
             this.cachedWiFiLocation = null; // Start with no cached result
+            this.tagPoint = tagPoint;
         }
     }
 
@@ -76,13 +80,15 @@ public class TrajParser {
         }
     }
 
-    public static List<TagPoint> tagPoints = new ArrayList<>();
+    public static List<TrajParser.TagPoint> tagPoints = new ArrayList<>();
     public static List<ReplayPoint> replayData = new ArrayList<>();
 
     public static List<ReplayPoint> parseTrajectoryData(String filePath, Context context,
                                                         double originLat, double originLng) {
         List<ReplayPoint> result = new ArrayList<>();
+        List<GnssRecord> gnssList = new ArrayList<>();
         tagPoints.clear(); // Clear any previous tags
+
 
 
         try {
@@ -100,7 +106,7 @@ public class TrajParser {
 
             List<ImuRecord> imuList = parseImuData(root.getAsJsonArray("imuData"));
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
-            List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
+            gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
 
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " PDR: " + pdrList.size() + " GNSS: " + gnssList.size());
 
@@ -109,18 +115,26 @@ public class TrajParser {
                 JsonArray gnssArray = root.getAsJsonArray("gnssData");
                 for (JsonElement elem : gnssArray) {
                     JsonObject obj = elem.getAsJsonObject();
-
+                    //Log.d("ParseGnss", "GNSS Element: " + elem);
+                    //Log.d("Condition", "Is fusion here?: " + (obj.has("provider") && "fusion".equalsIgnoreCase(obj.get("provider").getAsString())));
                     if (obj.has("provider") && "fusion".equalsIgnoreCase(obj.get("provider").getAsString())) {
                         long timestamp = obj.get("relativeTimestamp").getAsLong();
                         double lat = obj.get("latitude").getAsDouble();
                         double lon = obj.get("longitude").getAsDouble();
                         double alt = obj.has("altitude") ? obj.get("altitude").getAsDouble() : 0.0;
-
+                        Log.d("NewTag", "Fusion Data: " + lat + " " + lon);
                         String label = String.format("Tag @ %.5f, %.5f\nAlt: %.1f", lat, lon, alt);
                         tagPoints.add(new TagPoint(label, new LatLng(lat, lon)));
                     }
+
                 }
+
             }
+            for (int i = 0; i < tagPoints.size(); i++) {
+                if (tagPoints.get(i) != null) Log.d("Tags", "Tags: " + tagPoints.get(i));
+            }
+            //Log.d("SizeComp", "Tags List Size: " + tagPoints.size() + "PDR List Size: " + pdrList.size());
+
 
             for (int i = 0; i < pdrList.size(); i++) {
                 PdrRecord pdr = pdrList.get(i);
@@ -181,9 +195,13 @@ public class TrajParser {
                         }
                     }
                 }
-
-                result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
-                        speed, pdr.relativeTimestamp, wifiSamples));
+                if (i < tagPoints.size()) {
+                    result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
+                            speed, pdr.relativeTimestamp, wifiSamples, tagPoints.get(i)));
+                }else{
+                    result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
+                            speed, pdr.relativeTimestamp, wifiSamples, null));
+                }
             }
 
             Collections.sort(result, Comparator.comparingLong(r -> r.timestamp));
@@ -242,6 +260,23 @@ public class TrajParser {
         return gnssList.stream()
                 .min(Comparator.comparingLong(g -> Math.abs(g.relativeTimestamp - targetTimestamp)))
                 .orElse(null);
+    }
+
+    // code by Jamie Arnott
+    /**
+     * Method to extract the Gnss records (if any) that contains tagged records
+     * with "fusion" providers
+     *
+     * @param gnsslist
+     * @return List of (@link GnssRecord) which contains the records with tags
+     */
+    private static List<GnssRecord> findTaggedRecords(List<GnssRecord> gnsslist){
+        List<GnssRecord> tagRecords = new ArrayList<>();
+        for (int i = 0; i < gnsslist.size(); i++){
+            Log.d("NewTag", "gnss provider " + gnsslist.get(i).provider);
+            if (Objects.equals(gnsslist.get(i).provider, "fusion")) tagRecords.add(gnsslist.get(i));
+        }
+        return tagRecords;
     }
 
     private static float computeOrientationFromRotationVector(float rx, float ry, float rz, float rw, Context context) {

@@ -90,7 +90,7 @@ public class RecordingFragment extends Fragment {
     private TrajectoryMapFragment trajectoryMapFragment;
 
     // Code by Guilherme: New button for adding a tag
-    private Button tagButton;
+    //private Button tagButton;
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
@@ -152,7 +152,7 @@ public class RecordingFragment extends Fragment {
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
         // Code by Guilherme: Find the new Tag button (added in XML)
-        tagButton = view.findViewById(R.id.tagButton);
+        //Button tagButton = view.findViewById(R.id.tagButton);
 
         // Hide or initialize default values
         gnssError.setVisibility(View.GONE);
@@ -213,6 +213,7 @@ public class RecordingFragment extends Fragment {
                         .setAltitude(sensorFusion.getElevation()) // use elevation if available
                         .setProvider("fusion")
                         .build();
+                // check the format of the GNSS tag and check the entire trajectory to see if the points have been added
 
                 sensorFusion.trajectory.addGnssData(fusionTag);
 
