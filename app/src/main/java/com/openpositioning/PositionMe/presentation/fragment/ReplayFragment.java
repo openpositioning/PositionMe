@@ -92,7 +92,14 @@ public class ReplayFragment extends Fragment {
     private boolean isPlaying = false;
 
     private LatLng prevWiFiLocation;
-    private List<LatLng> EKF_data = new ArrayList<>();
+    public static List<LatLng> EKF_data = new ArrayList<>();
+
+    public static List<LatLng> GNSS_data = new ArrayList<>();
+
+    public static List<LatLng> WIFI_data = new ArrayList<>();
+
+    public static List<LatLng> PDR_data = new ArrayList<>();
+
 
     // code by Guilherme: New field to store previous replay point for computing bearing.
     private LatLng previousReplayPoint = null;
@@ -113,7 +120,35 @@ public class ReplayFragment extends Fragment {
 
         List<TrajParser.ReplayPoint> parsedData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
         replayData = parsedData;
-        TrajParser.replayData = parsedData;    }
+        TrajParser.replayData = parsedData;
+
+        // Code By Guilherme: Populate all trajectory lists immediately after data is parsed
+        for (int i = 0; i < replayData.size(); i++) {
+            TrajParser.ReplayPoint point = replayData.get(i);
+
+            if (point.pdrLocation != null) {
+                PDR_data.add(point.pdrLocation);
+            }
+            if (point.gnssLocation != null) {
+                GNSS_data.add(point.gnssLocation);
+            }
+            if (point.cachedWiFiLocation != null) {
+                WIFI_data.add(point.cachedWiFiLocation);
+            }
+            // Pre-compute EKF data
+            LatLng prevPDR = (i > 0) ? replayData.get(i - 1).pdrLocation : point.pdrLocation;
+            LatLng ekfPoint = SensorFusion.getInstance().EKF_replay(
+                    point.cachedWiFiLocation != null ? point.cachedWiFiLocation : prevWiFiLocation,
+                    point.pdrLocation,
+                    prevPDR,
+                    point.gnssLocation
+            );
+            if (ekfPoint != null) {
+                EKF_data.add(ekfPoint);
+            }
+        }
+
+    }
 
     @Nullable
     @Override
@@ -479,7 +514,6 @@ public class ReplayFragment extends Fragment {
             case "EKF":
                 // call EKF_point() with the current index
                 currentPoint = EKF_point(index);
-                EKF_data.add(currentPoint); // add data to list
                 if (currentPoint != null){
                     trajectoryMapFragment.updateUserLocation(currentPoint,p.orientation);
                 }
