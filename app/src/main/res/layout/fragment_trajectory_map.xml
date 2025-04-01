@@ -43,14 +43,6 @@
                 android:layout_height="wrap_content"
                 android:text="@string/auto_floor" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/lineColorButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@color/md_theme_onPrimary"
-                android:text="@string/color"
-                app:elevation="5dp"/>
 
             <Spinner
                 android:id="@+id/mapSwitchSpinner"
@@ -69,31 +61,33 @@
     <!-- Floating action buttons for floor control, properly spaced -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        app:layout_anchor="@+id/trajectoryMap"
+        app:layout_anchorGravity="center">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_margin="16dp"
+            android:contentDescription="@string/floor_down"
             android:src="@android:drawable/arrow_down_float"
             app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            android:contentDescription="@string/floor_down" />
+            app:tint="@color/md_theme_onPrimary" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_margin="16dp"
+            android:contentDescription="@string/floor_up"
             android:src="@android:drawable/arrow_up_float"
             app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
             app:layout_constraintBottom_toTopOf="@id/floorDownButton"
             app:layout_constraintEnd_toEndOf="parent"
-            android:contentDescription="@string/floor_up" />
+            app:tint="@color/md_theme_onPrimary" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

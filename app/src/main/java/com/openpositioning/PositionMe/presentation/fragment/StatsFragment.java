@@ -2,7 +2,6 @@ package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.graphics.Color;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -16,8 +15,10 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
 
-import com.google.android.gms.maps.*;
-import com.google.android.gms.maps.model.*;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.local.TrajParser;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
@@ -25,11 +26,11 @@ import com.openpositioning.PositionMe.utils.UtilFunctions;
 import java.text.DecimalFormat;
 import java.util.List;
 
-public class StatsFragment extends Fragment implements OnMapReadyCallback {
+public class StatsFragment extends Fragment {
 
-    private TextView distanceTextView, timeTextView, avgSpeedTextView, paceTextView, altitudeTextView;
+    private TextView distanceTextView, timeTextView, avgSpeedTextView, paceTextView;
     private Spinner trajectoryTypeSpinner;
-    private GoogleMap map;
+    private TrajectoryMapFragment trajectoryMapFragment;
 
     @Nullable
     @Override
@@ -46,84 +47,38 @@ public class StatsFragment extends Fragment implements OnMapReadyCallback {
         timeTextView = rootView.findViewById(R.id.timeTextView);
         avgSpeedTextView = rootView.findViewById(R.id.avgSpeedTextView);
         paceTextView = rootView.findViewById(R.id.paceTextView);
-        altitudeTextView = rootView.findViewById(R.id.altitudeTextView);
         trajectoryTypeSpinner = rootView.findViewById(R.id.trajectoryTypeSpinner);
 
+        // Setup Spinner
         ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
                 android.R.layout.simple_spinner_item,
                 new String[]{"PDR", "GNSS", "WiFi", "EKF"});
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         trajectoryTypeSpinner.setAdapter(adapter);
+        trajectoryTypeSpinner.setSelection(0); // default PDR
 
         trajectoryTypeSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                if (map != null) updateTrajectoryMap(map);
+                updateTrajectoryMap();
             }
 
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) {}
         });
 
-        SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.statsMapFragment);
-        if (mapFragment != null) {
-            mapFragment.getMapAsync(this);
-        }
+        // Setup TrajectoryMapFragment (same as ReplayFragment)
+        trajectoryMapFragment = new TrajectoryMapFragment();
+        getChildFragmentManager()
+                .beginTransaction()
+                .replace(R.id.statsMapFragment, trajectoryMapFragment)
+                .commit();
 
         return rootView;
     }
 
-    private void calculateAndDisplayStats(List<LatLng> trajectory) {
-        if (trajectory == null || trajectory.size() < 2) return;
-
-        float totalDistance = 0f;
-        for (int i = 1; i < trajectory.size(); i++) {
-            LatLng prev = trajectory.get(i - 1);
-            LatLng curr = trajectory.get(i);
-            if (prev != null && curr != null) {
-                totalDistance += UtilFunctions.distanceBetweenPoints(prev, curr);
-            }
-        }
-
-        // Using replayData timestamps as fallback
-        List<TrajParser.ReplayPoint> data = TrajParser.replayData;
-        long startTime = data.get(0).timestamp;
-        long endTime = data.get(data.size() - 1).timestamp;
-        float durationSec = (endTime - startTime) / 1000f;
-
-        float durationHours = durationSec / 3600f;
-        float distanceKm = totalDistance / 1000f;
-        float avgSpeed = distanceKm / durationHours;
-        float paceSecPerKm = durationSec / distanceKm;
-        int paceMin = (int) (paceSecPerKm / 60);
-        int paceSec = (int) (paceSecPerKm % 60);
-
-        DecimalFormat df = new DecimalFormat("#.##");
-
-        distanceTextView.setText(df.format(distanceKm) + " km");
-        timeTextView.setText(String.format("%02d:%02d", (int) (durationSec / 60), (int) (durationSec % 60)));
-        avgSpeedTextView.setText(df.format(avgSpeed) + " km/h");
-        paceTextView.setText(String.format("%d:%02d", paceMin, paceSec));
-        altitudeTextView.setText("N/A");
-    }
-
-    @Override
-    public void onMapReady(@NonNull GoogleMap googleMap) {
-        this.map = googleMap;
-
-        map.getUiSettings().setZoomControlsEnabled(true);
-        map.getUiSettings().setMapToolbarEnabled(false);
-        map.getUiSettings().setScrollGesturesEnabled(true);
-        map.getUiSettings().setZoomGesturesEnabled(true);
-        map.setBuildingsEnabled(true);
-        map.setIndoorEnabled(true);
-        map.setMapType(GoogleMap.MAP_TYPE_NORMAL);
-
-        updateTrajectoryMap(map);
-    }
-
-    private void updateTrajectoryMap(GoogleMap googleMap) {
-        googleMap.clear();
+    private void updateTrajectoryMap() {
+        if (trajectoryMapFragment == null) return;
 
         String mode = trajectoryTypeSpinner.getSelectedItem().toString();
 
@@ -153,20 +108,54 @@ public class StatsFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
-        PolylineOptions polyline = new PolylineOptions().color(color).width(6f);
-        LatLngBounds.Builder boundsBuilder = new LatLngBounds.Builder();
+        // Set polyline color
+        trajectoryMapFragment.setPolylineColor(color);
+        trajectoryMapFragment.clearMapAndReset();
 
+        LatLngBounds.Builder boundsBuilder = new LatLngBounds.Builder();
         for (LatLng point : trajectory) {
             if (point != null) {
-                polyline.add(point);
+                trajectoryMapFragment.addPolylinePoint(point);
                 boundsBuilder.include(point);
             }
         }
 
-        googleMap.addPolyline(polyline);
-        googleMap.moveCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 150));
+        if (!trajectory.isEmpty()) {
+            trajectoryMapFragment.setInitialCameraPosition(trajectory.get(0));
+        }
 
-        // Update stats when trajectory changes
         calculateAndDisplayStats(trajectory);
+    }
+
+    private void calculateAndDisplayStats(List<LatLng> trajectory) {
+        if (trajectory == null || trajectory.size() < 2) return;
+
+        float totalDistance = 0f;
+        for (int i = 1; i < trajectory.size(); i++) {
+            LatLng prev = trajectory.get(i - 1);
+            LatLng curr = trajectory.get(i);
+            if (prev != null && curr != null) {
+                totalDistance += UtilFunctions.distanceBetweenPoints(prev, curr);
+            }
+        }
+
+        List<TrajParser.ReplayPoint> data = TrajParser.replayData;
+        long startTime = data.get(0).timestamp;
+        long endTime = data.get(data.size() - 1).timestamp;
+        float durationSec = (endTime - startTime) / 1000f;
+
+        float durationHours = durationSec / 3600f;
+        float distanceKm = totalDistance / 1000f;
+        float avgSpeed = distanceKm / durationHours;
+        float paceSecPerKm = durationSec / distanceKm;
+        int paceMin = (int) (paceSecPerKm / 60);
+        int paceSec = (int) (paceSecPerKm % 60);
+
+        DecimalFormat df = new DecimalFormat("#.##");
+
+        distanceTextView.setText(df.format(distanceKm) + " km");
+        timeTextView.setText(String.format("%02d:%02d", (int) (durationSec / 60), (int) (durationSec % 60)));
+        avgSpeedTextView.setText(df.format(avgSpeed) + " km/h");
+        paceTextView.setText(String.format("%d:%02d", paceMin, paceSec));
     }
 }
