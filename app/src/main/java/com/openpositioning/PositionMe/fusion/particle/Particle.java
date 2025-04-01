@@ -24,11 +24,12 @@ public class Particle {
         Random rand = new Random();
 
         // Add noise to heading change
-        this.theta = currentHeading + rand.nextGaussian() * dynamicPDRStds[2];
+        this.theta = currentHeading + rand.nextGaussian() * dynamicPDRStds[1];
+        stepLength += rand.nextGaussian() * dynamicPDRStds[0];
 
         // Update position using angle
-        this.x += stepLength * Math.cos(this.theta) + rand.nextGaussian() * dynamicPDRStds[0];
-        this.y += stepLength * Math.sin(this.theta) + rand.nextGaussian() * dynamicPDRStds[1];
+        this.x += stepLength * Math.cos(this.theta);
+        this.y += stepLength * Math.sin(this.theta);
     }
 
 }

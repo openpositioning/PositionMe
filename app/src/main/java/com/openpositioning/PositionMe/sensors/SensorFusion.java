@@ -1022,8 +1022,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Initialize fusion algorithm
         initializeFusionAlgorithm();
 
-        // Timer for positional updates
-        startUpdateTimer();
     }
 
 
