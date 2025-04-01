@@ -42,6 +42,7 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.openpositioning.PositionMe.DataRecords.LocationHistory;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.UtilFunctions;
@@ -135,6 +136,12 @@ public class RecordingFragment extends Fragment {
     private boolean isRed=true;
     // Switch used to set auto floor
     private Switch autoFloor;
+
+    private LocationHistory wifiLocationHistory;
+
+    private LocationHistory pdrLocationHistory;
+
+    private LocationHistory gnssLocationHistory;
 
     /**
      * Public Constructor for the class.
@@ -650,8 +657,10 @@ public class RecordingFragment extends Fragment {
         }
         else{
             //Initialise the starting location
-            float[] location = sensorFusion.getGNSSLatitude(true);
-            currentLocation=new LatLng(location[0],location[1]);
+//            float[] location = sensorFusion.getGNSSLatitude(true);
+            LatLng location = PositioningFusion.getInstance().getStartPosition();
+//            currentLocation=new LatLng(location[0],location[1]);
+            currentLocation = location;
             nextLocation=currentLocation;
         }
     }
@@ -703,6 +712,7 @@ public class RecordingFragment extends Fragment {
     public void onResume() {
         Log.d("Recording", "onResume");
         PositioningFusion.getInstance().startPeriodicFusion();
+        PositioningFusion.getInstance().initCoordSystem();
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }

@@ -3,19 +3,27 @@ package com.openpositioning.PositionMe.sensors;
 import android.graphics.PointF;
 import android.location.Location;
 import android.util.Log;
+import android.widget.Toast;
+
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.PdrProcessing;
+import com.openpositioning.PositionMe.fragments.StartLocationFragment;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.TimerTask;
 
+import android.content.Context;
+
+
 
 public class PositioningFusion implements PositionObserver {
 
     // Singleton instance
     private static final PositioningFusion instance = new PositioningFusion();
+
+    private static Context appContext;
 
     private ParticleFilter particleFilter = new ParticleFilter();
     private List<ParticleFilter.Particle> currentParticles;     // Current set of particles
@@ -42,6 +50,8 @@ public class PositioningFusion implements PositionObserver {
     private float[] fusedPositionLocal;
     private LatLng fusedPosition;
 
+    private LatLng startPosition;
+
 
     // Private constructor for singleton
     private PositioningFusion() {
@@ -52,6 +62,7 @@ public class PositioningFusion implements PositionObserver {
         pdrPosition = null;
         fusedPositionLocal = null;
         fusedPosition = null;
+        startPosition = null;
     }
 
 
@@ -59,6 +70,15 @@ public class PositioningFusion implements PositionObserver {
     public static PositioningFusion getInstance() {
         return instance;
     }
+
+    public static void setContext(Context context) {
+        appContext = context.getApplicationContext();
+    }
+
+    public static Context getContext() {
+        return appContext;
+    }
+
 
     public boolean isInitialized() {
         return coordSystem.isInitialized();
@@ -82,17 +102,24 @@ public class PositioningFusion implements PositionObserver {
         fusedPosition = null;
         SensorFusion.getInstance().pdrReset();
         if (SensorFusion.getInstance().getLatLngWifiPositioning() != null) {
+            Log.d("Fusion", "initialized position with wifi location");
             LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
             coordSystem.initReference(wifiLocation.latitude, wifiLocation.longitude);
             ParticleFilter.initializeParticles(new PointF((float)wifiLocation.latitude, (float)wifiLocation.longitude));
+            startPosition = wifiLocation;
+            Toast.makeText(getContext(), "Initialized with Wifi position", Toast.LENGTH_SHORT).show();
+
         }
 //        else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != null) {
 //            LatLng gnssLocation = positioningFusion.getGnssPosition();
 //            coordSystem.initReference(gnssLocation.latitude, gnssLocation.longitude);
 //        }
         else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != 0 && SensorFusion.getInstance().getGNSSLatitude(false)[1] != 0) {
+            Log.d("Fusion", "initialized position with gnss location");
             coordSystem.initReference(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
             ParticleFilter.initializeParticles(new PointF(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[0]));
+            Toast.makeText(getContext(), "Initialized with GNSS position", Toast.LENGTH_SHORT).show();
+            startPosition = new LatLng(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
         }
     }
 
@@ -139,6 +166,10 @@ public class PositioningFusion implements PositionObserver {
         return fusedPosition != null && coordSystem.isInitialized();
     }
 
+    public boolean isStartPositionSet() {
+        return fusedPosition != null && coordSystem.isInitialized();
+    }
+
     // Get WiFi Position (Global)
     public LatLng getWifiPosition() {
         return this.wifiPosition;
@@ -160,6 +191,10 @@ public class PositioningFusion implements PositionObserver {
 
     public float[] getPdrPositionLocal() {
         return pdrPosition;
+    }
+
+    public LatLng getStartPosition() {
+        return startPosition;
     }
 
     public void updateFromGNSS(LatLng gnssLocation) {

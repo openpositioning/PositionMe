@@ -4,29 +4,29 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class WifiLocationHistory {
-    private final List<WifiLocation> history;
+public class LocationHistory {
+    private final List<LocationData> history;
 
-    public WifiLocationHistory() {
+    public LocationHistory() {
         this.history = new ArrayList<>();
     }
 
-    public void addRecord(WifiLocation record) {
+    public void addRecord(LocationData record) {
         history.add(record);
     }
 
-    public void removeRecord(WifiLocation record) {
-        history.remove(record);
+    public void removeRecord(int index) {
+        history.remove(-1);
     }
 
-    public WifiLocation getRecord(int index) {
+    public LocationData getRecord(int index) {
         if (index >= 0 && index < history.size()) {
             return history.get(index);
         }
         return null;
     }
 
-    public List<WifiLocation> getAllRecords() {
+    public List<LocationData> getAllRecords() {
         return Collections.unmodifiableList(history);
     }
 

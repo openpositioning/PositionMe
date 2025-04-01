@@ -29,6 +29,7 @@ import androidx.navigation.ui.NavigationUI;
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.sensors.PositioningFusion;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 /**
@@ -491,6 +492,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
         settings.edit().putBoolean("permanentDeny", false).apply();
         this.sensorFusion = SensorFusion.getInstance();
         this.sensorFusion.setContext(getApplicationContext());
+        PositioningFusion.setContext(getApplicationContext());
         sensorFusion.registerForServerUpdate(this);
     }
 
