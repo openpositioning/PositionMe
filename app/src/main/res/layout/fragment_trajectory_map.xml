@@ -74,7 +74,7 @@
                 android:id="@+id/lineColorButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
+                android:backgroundTint="@color/green"
                 android:textColor="@color/md_theme_onPrimary"
                 android:text="@string/color"
                 app:elevation="5dp" />

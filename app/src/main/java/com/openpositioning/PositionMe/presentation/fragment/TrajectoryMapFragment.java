@@ -69,7 +69,7 @@ public class TrajectoryMapFragment extends Fragment {
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
     private Polyline polyline; // Polyline representing user's movement path
-    private boolean isRed = true; // Tracks whether the polyline color is red
+    private boolean isGreen = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = true; // Tracks if GNSS tracking is enabled
 
     private Polyline gnssPolyline; // Polyline for GNSS path
@@ -228,19 +228,20 @@ public class TrajectoryMapFragment extends Fragment {
 
 
         // Color switch
+        // New logic for switching fusionPolyline color
         switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
-                if (isRed) {
+            if (fusionPolyline != null) {
+                if (isGreen) {
+                    fusionPolyline.setColor(Color.BLACK);
                     switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
-                    isRed = false;
                 } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
-                    isRed = true;
+                    fusionPolyline.setColor(Color.GREEN);
+                    switchColorButton.setBackgroundColor(Color.GREEN);
                 }
+                isGreen = !isGreen;
             }
         });
+
 
         sensorFusion = SensorFusion.getInstance();
 
