@@ -20,7 +20,9 @@ import androidx.fragment.app.Fragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.CoordinateTransform;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
+import com.openpositioning.PositionMe.utils.SensorFusionUpdates;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -52,7 +54,7 @@ import java.util.List;
  * @author Mate Stodulka
  */
 
-public class TrajectoryMapFragment extends Fragment {
+public class TrajectoryMapFragment extends Fragment implements SensorFusionUpdates {
 
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
@@ -340,11 +342,21 @@ public class TrajectoryMapFragment extends Fragment {
             gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
 
-        // Extend PDR polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && pdrPolyline != null) {
-            List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
-            points.add(newLocation);
-            pdrPolyline.setPoints(points);
+        // 更新所有轨迹线
+        if (oldLocation != null && !oldLocation.equals(newLocation)) {
+            // 更新EKF轨迹
+            if (ekfPolyline != null) {
+                List<LatLng> points = new ArrayList<>(ekfPolyline.getPoints());
+                points.add(newLocation);
+                ekfPolyline.setPoints(points);
+            }
+            
+            // 更新PF轨迹
+            if (pfPolyline != null) {
+                List<LatLng> points = new ArrayList<>(pfPolyline.getPoints());
+                points.add(newLocation);
+                pfPolyline.setPoints(points);
+            }
         }
 
         // Update indoor map overlay
@@ -353,6 +365,21 @@ public class TrajectoryMapFragment extends Fragment {
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
     }
+
+    /**
+     * 更新PDR轨迹线
+     */
+    public void updatePDRTrajectory(@NonNull LatLng pdrLocation) {
+        if (gMap == null || pdrLocation == null) return;
+        
+        // 更新PDR轨迹线
+        if (pdrPolyline != null) {
+            List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
+            points.add(pdrLocation);
+            pdrPolyline.setPoints(points);
+        }
+    }
+
     public void updateUserLocationSafe(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null || newLocation == null) return;
         if (Double.isNaN(newLocation.latitude) || Double.isNaN(newLocation.longitude) || Float.isNaN(orientation)) {
@@ -627,46 +654,63 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-    private void drawTrajectoryLine(List<LatLng> points) {
-        if (gMap == null || points.size() < 2) return;
-
-        // 清除现有的轨迹线
-        if (trajectoryPolyline != null) {
-            trajectoryPolyline.remove();
+    @Override
+    public void onPDRUpdate() {
+        // 获取最新的PDR位置
+        float[] pdrValues = SensorFusion.getInstance().getCurrentPDRCalc();
+        if (pdrValues != null) {
+            // 转换为地理坐标
+            LatLng pdrLocation = CoordinateTransform.enuToGeodetic(
+                pdrValues[0], pdrValues[1], 
+                SensorFusion.getInstance().getElevation(),
+                SensorFusion.getInstance().getGNSSLatLngAlt(true)[0],
+                SensorFusion.getInstance().getGNSSLatLngAlt(true)[1],
+                SensorFusion.getInstance().getEcefRefCoords()
+            );
+            // 更新PDR轨迹
+            updatePDRTrajectory(pdrLocation);
         }
-
-        // 创建新的轨迹线，设置z-index为1使其显示在室内地图上层
-        PolylineOptions polylineOptions = new PolylineOptions()
-                .addAll(points)
-                .color(Color.RED)
-                .width(5f)
-                .zIndex(1);  // 设置z-index为1
-
-        trajectoryPolyline = gMap.addPolyline(polylineOptions);
     }
 
-    private void updateTrajectoryLine(LatLng newPoint) {
-        if (gMap == null || newPoint == null) return;
-
-        List<LatLng> points = new ArrayList<>();
-        if (trajectoryPolyline != null) {
-            points.addAll(trajectoryPolyline.getPoints());
-        }
-        points.add(newPoint);
-
-        // 清除现有的轨迹线
-        if (trajectoryPolyline != null) {
-            trajectoryPolyline.remove();
-        }
-
-        // 创建新的轨迹线，设置z-index为1使其显示在室内地图上层
-        PolylineOptions polylineOptions = new PolylineOptions()
-                .addAll(points)
-                .color(Color.RED)
-                .width(5f)
-                .zIndex(1);  // 设置z-index为1
-
-        trajectoryPolyline = gMap.addPolyline(polylineOptions);
+    @Override
+    public void onOrientationUpdate() {
+        // 不需要实现
     }
 
+    @Override
+    public void onGNSSUpdate() {
+        // 不需要实现
+    }
+
+    @Override
+    public void onFusedUpdate(LatLng coordinate) {
+        // 更新融合轨迹
+        if (coordinate != null) {
+            // 根据融合算法选择更新对应的轨迹线
+            if (SensorFusion.getInstance().isFusionAlgorithmSelection()) {
+                // 更新EKF轨迹
+                if (ekfPolyline != null) {
+                    List<LatLng> points = new ArrayList<>(ekfPolyline.getPoints());
+                    points.add(coordinate);
+                    ekfPolyline.setPoints(points);
+                }
+            } else {
+                // 更新PF轨迹
+                if (pfPolyline != null) {
+                    List<LatLng> points = new ArrayList<>(pfPolyline.getPoints());
+                    points.add(coordinate);
+                    pfPolyline.setPoints(points);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onWifiUpdate(LatLng wifi) {
+        // 更新WiFi位置标记
+        if (wifi != null && wifiEnabled) {
+            updateWifi(wifi);
+        }
+    }
 }
+

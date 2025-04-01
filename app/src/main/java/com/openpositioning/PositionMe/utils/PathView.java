@@ -45,11 +45,6 @@ public class PathView extends View {
     private static boolean draw = true;
     //Variable to only draw when the variable is true
     private static boolean reDraw = false;
-    private final int ekfColor = Color.RED;
-    private Path ekfPath = new Path();
-    private static ArrayList<Float> ekfXCoords = new ArrayList<>();
-    private static ArrayList<Float> ekfYCoords = new ArrayList<>();
-
 
     /**
      * Public default constructor for PathView. The constructor initialises the view with a context
@@ -95,42 +90,43 @@ public class PathView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        //If drawing for first time scale trajectory to fit screen
         if(this.draw){
-            // If there are no coordinates, don't draw anything
             if (xCoords.size() == 0)
                 return;
 
-            //Scale trajectory to fit screen
             scaleTrajectory();
 
-            // Start a new path at the center of the view
+            // 使用贝塞尔曲线绘制平滑路径
+            path.reset();
             path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
+            
+            if (xCoords.size() > 1) {
+                for (int i = 1; i < xCoords.size(); i++) {
+                    float prevX = xCoords.get(i-1);
+                    float prevY = yCoords.get(i-1);
+                    float currX = xCoords.get(i);
+                    float currY = yCoords.get(i);
+                    
+                    // 计算控制点
+                    float controlX1 = prevX + (currX - prevX) / 3;
+                    float controlY1 = prevY;
+                    float controlX2 = prevX + (currX - prevX) * 2 / 3;
+                    float controlY2 = currY;
+                    
+                    // 使用三次贝塞尔曲线
+                    path.cubicTo(controlX1, controlY1, controlX2, controlY2, currX, currY);
+                }
             }
 
-            // 设置绘制顺序，确保轨迹显示在最上层
-            canvas.save();
-            canvas.translate(0, 0); // 确保在最上层
             canvas.drawPath(path, drawPaint);
-            canvas.restore();
-
-            //Ensure path not redrawn
             draw = false;
         }
-        //If redrawing due to scaling of the average step length
         else if(reDraw){
-            // If there are no coordinates, don't draw anything
             if (xCoords.size() == 0)
                 return;
 
-            //Clear old path
             path.reset();
 
-            // Iterate over all coordinates, shifting to the center and scaling then returning to original location
             for (int i = 0; i < xCoords.size(); i++) {
                 float newXCoord = (xCoords.get(i) - getWidth()/2) * scalingRatio + getWidth()/2;
                 xCoords.set(i, newXCoord);
@@ -138,41 +134,57 @@ public class PathView extends View {
                 yCoords.set(i, newYCoord);
             }
 
-            // Start a new path at the center of the view
+            // 使用贝塞尔曲线重新绘制平滑路径
             path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
+            
+            if (xCoords.size() > 1) {
+                for (int i = 1; i < xCoords.size(); i++) {
+                    float prevX = xCoords.get(i-1);
+                    float prevY = yCoords.get(i-1);
+                    float currX = xCoords.get(i);
+                    float currY = yCoords.get(i);
+                    
+                    // 计算控制点
+                    float controlX1 = prevX + (currX - prevX) / 3;
+                    float controlY1 = prevY;
+                    float controlX2 = prevX + (currX - prevX) * 2 / 3;
+                    float controlY2 = currY;
+                    
+                    // 使用三次贝塞尔曲线
+                    path.cubicTo(controlX1, controlY1, controlX2, controlY2, currX, currY);
+                }
             }
 
-            // 设置绘制顺序，确保轨迹显示在最上层
-            canvas.save();
-            canvas.translate(0, 0); // 确保在最上层
             canvas.drawPath(path, drawPaint);
-            canvas.restore();
-
-            //Ensure path not redrawn when screen is resized
             reDraw = false;
         }
         else{
-            // If there are no coordinates, don't draw anything
             if (xCoords.size() == 0)
                 return;
 
-            // Start a new path at the center of the view
+            // 使用贝塞尔曲线绘制平滑路径
+            path.reset();
             path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
+            
+            if (xCoords.size() > 1) {
+                for (int i = 1; i < xCoords.size(); i++) {
+                    float prevX = xCoords.get(i-1);
+                    float prevY = yCoords.get(i-1);
+                    float currX = xCoords.get(i);
+                    float currY = yCoords.get(i);
+                    
+                    // 计算控制点
+                    float controlX1 = prevX + (currX - prevX) / 3;
+                    float controlY1 = prevY;
+                    float controlX2 = prevX + (currX - prevX) * 2 / 3;
+                    float controlY2 = currY;
+                    
+                    // 使用三次贝塞尔曲线
+                    path.cubicTo(controlX1, controlY1, controlX2, controlY2, currX, currY);
+                }
             }
 
-            // 设置绘制顺序，确保轨迹显示在最上层
-            canvas.save();
-            canvas.translate(0, 0); // 确保在最上层
             canvas.drawPath(path, drawPaint);
-            canvas.restore();
         }
     }
 
