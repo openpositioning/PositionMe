@@ -329,10 +329,10 @@ public class TrajectoryMapFragment extends Fragment {
             Log.d("TrajectoryMapFragment", "Created new fusion polyline");
         } else {
             // Add new point to fusion path
-            //List<LatLng> fusionPoints = new ArrayList<>(fusionPolyline.getPoints());
+            List<LatLng> fusionPoints = new ArrayList<>(fusionPolyline.getPoints());
             fusionPoints.add(fusionLocation);
             // TODO: Add filter for points
-            List<LatLng> fusionPoints = trajectoryFilter.processData(fusionLocation, sensorFusion.getReferencePosition());
+            //List<LatLng> fusionPoints = trajectoryFilter.processData(fusionLocation, sensorFusion.getReferencePosition());
             fusionPolyline.setPoints(fusionPoints);
             Log.d("TrajectoryMapFragment", "Added point to fusion polyline, total points: " + fusionPoints.size());
         }

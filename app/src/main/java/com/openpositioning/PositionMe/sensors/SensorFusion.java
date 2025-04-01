@@ -89,7 +89,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final String WIFI_FINGERPRINT= "wf";
     //endregion
 
-    private static final int NUM_PARTICLES=2000;
+    private static final int NUM_PARTICLES=10000;
 
     //region Instance variables
     // Keep device awake while recording
@@ -176,6 +176,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private double altitude;
     private double[] referencePosition; // lat, lng, alt
     private boolean useFusion = true;
+
+    private Timer updateTimer; // Timer for regular updates
+    private static final long UPDATE_INTERVAL_MS = 1000; // Update every 1 second
 
     //region Initialisation
     /**
@@ -280,6 +283,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Keep app awake during the recording (using stored appContext)
         PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
+
     }
 
     //endregion
@@ -1017,6 +1021,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // Initialize fusion algorithm
         initializeFusionAlgorithm();
+
+        // Timer for positional updates
+        startUpdateTimer();
     }
 
 
@@ -1154,6 +1161,41 @@ public class SensorFusion implements SensorEventListener, Observer {
     //endregion
 
     //region Position Fusion
+
+    /**
+     * Starts a timer that triggers updates at regular intervals
+     */
+    private void startUpdateTimer() {
+        // Cancel any existing timer
+        if (updateTimer != null) {
+            updateTimer.cancel();
+            updateTimer = null;
+        }
+
+        // Create a new timer
+        updateTimer = new Timer("ParticleFilterUpdateTimer");
+        updateTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                performIntervalUpdate();
+            }
+        }, (int) UPDATE_INTERVAL_MS, UPDATE_INTERVAL_MS);
+    }
+
+    private void performIntervalUpdate() {
+        if (fusionAlgorithm != null) {
+            fusedPosition = fusionAlgorithm.getFusedPosition();
+            // Enhanced logging
+            if (fusedPosition != null) {
+                Log.d("SensorFusion", "Fusion after PDR: " + fusedPosition.latitude + ", " + fusedPosition.longitude);
+
+                // Notify listeners
+                notifyPositionListeners(PositionListener.UpdateType.FUSED_POSITION, fusedPosition);
+            } else {
+                Log.e("SensorFusion", "Fusion algorithm returned null position after PDR update");
+            }
+        }
+    }
 
     /**
      * Updates the fusion algorithm with new PDR data.
