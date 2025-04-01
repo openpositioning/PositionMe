@@ -103,7 +103,7 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
     // Sensor Variables
     private SensorHub sensorHub;
     private final int[] INTERESTED_SENSORS = new int[] {
-        Sensor.TYPE_GRAVITY, Sensor.TYPE_PRESSURE,
+        Sensor.TYPE_GRAVITY, Sensor.TYPE_PRESSURE, Sensor.TYPE_ACCELEROMETER,
         Sensor.TYPE_LINEAR_ACCELERATION, Sensor.TYPE_ROTATION_VECTOR,
         Sensor.TYPE_STEP_DETECTOR
     };
@@ -319,29 +319,31 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         // get horizontal and vertical acceleration magnitude
         float verticalAcc = (float) Math.sqrt(
                 Math.pow((acc[0] * gravity[0]/g),2) +
-                Math.pow((acc[1] * gravity[1]/g), 2) +
-                Math.pow((acc[2] * gravity[2]/g), 2));
+                        Math.pow((acc[1] * gravity[1]/g), 2) +
+                        Math.pow((acc[2] * gravity[2]/g), 2));
         float horizontalAcc = (float) Math.sqrt(
                 Math.pow((acc[0] * (1 - gravity[0]/g)), 2) +
-                Math.pow((acc[1] * (1 - gravity[1]/g)), 2) +
-                Math.pow((acc[2] * (1 - gravity[2]/g)), 2));
+                        Math.pow((acc[1] * (1 - gravity[1]/g)), 2) +
+                        Math.pow((acc[2] * (1 - gravity[2]/g)), 2));
         // Save into buffer to compare with past values
         this.verticalAccel.putNewest(verticalAcc);
         this.horizontalAccel.putNewest(horizontalAcc);
         // Once buffer is full, evaluate data
         if(this.verticalAccel.isFull() && this.horizontalAccel.isFull()) {
+
             // calculate average vertical accel
             List<Float> verticalMemory = this.verticalAccel.getListCopy();
             OptionalDouble optVerticalAvg = verticalMemory.stream().mapToDouble(Math::abs).average();
             float verticalAvg = optVerticalAvg.isPresent() ? (float) optVerticalAvg.getAsDouble() : 0;
+
 
             // calculate average horizontal accel
             List<Float> horizontalMemory = this.horizontalAccel.getListCopy();
             OptionalDouble optHorizontalAvg = horizontalMemory.stream().mapToDouble(Math::abs).average();
             float horizontalAvg = optHorizontalAvg.isPresent() ? (float) optHorizontalAvg.getAsDouble() : 0;
 
-//            System.err.println("elevator: Vertical: " + verticalAvg);
-//            System.err.println("elevator: Horizontal: " + horizontalAvg);
+            //System.err.println("LIFT: Vertical: " + verticalAvg);
+            //System.err.println("LIFT: Horizontal: " + horizontalAvg);
 
             if(this.settings.getBoolean("overwrite_constants", false)) {
                 float eps = Float.parseFloat(settings.getString("epsilon", "0.18"));
@@ -351,7 +353,6 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
             return horizontalAvg < epsilon && verticalAvg > movementThreshold;
         }
         return false;
-
     }
 
     /**
