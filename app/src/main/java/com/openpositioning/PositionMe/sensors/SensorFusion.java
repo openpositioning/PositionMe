@@ -651,19 +651,22 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     if (objList != null && objList.length > 0) {
       // Update provides the X,Y float array of the PDR data
       PdrProcessing.PdrData pdrData = (PdrProcessing.PdrData) objList[0];
-      // Update the path view with the new PDR data
-      pathView.drawTrajectory(pdrData.position());
-      this.elevator = pdrData.inElevator();
-      this.elevatorTrueCount = (this.elevator) ? this.elevatorTrueCount + 1 : 0;
-
-      if(!inElevator && pdrData.inElevator() && fusedLocation != null && elevatorTrueCount == 4) {
-        this.inElevator = true;
-        this.elevatorTrueCount = 0;
-        // Get the closest elevator's LatLng using the NucleusBuildingManager helper
-        LatLng closestElevator = NucleusBuildingManager.getClosestElevatorLatLng
-                (fusedLocation, coordinateTransformer);
-        if (closestElevator != null) {
-          fusedLocation = closestElevator;
+      if(pdrData.newPosition()) {
+        // Update the path view with the new PDR data
+        pathView.drawTrajectory(pdrData.position());
+      }
+      if(pdrData.newElevator()) {
+        this.elevator = pdrData.inElevator();
+        this.elevatorTrueCount = (this.elevator) ? this.elevatorTrueCount + 1 : 0;
+        if(!inElevator && pdrData.inElevator() && fusedLocation != null && elevatorTrueCount == 4) {
+          this.inElevator = true;
+          this.elevatorTrueCount = 0;
+          // Get the closest elevator's LatLng using the NucleusBuildingManager helper
+          LatLng closestElevator = NucleusBuildingManager.getClosestElevatorLatLng
+                  (fusedLocation, coordinateTransformer);
+          if (closestElevator != null) {
+            fusedLocation = closestElevator;
+          }
         }
       }
   }

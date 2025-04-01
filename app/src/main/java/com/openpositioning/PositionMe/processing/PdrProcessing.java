@@ -73,6 +73,7 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
     private boolean useManualStep;
 
     // Current 2D position coordinates
+    private boolean newPosition = false;
     private float positionX;
     private float positionY;
 
@@ -108,6 +109,7 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
     };
     private List<Double> accelMagnitude = new ArrayList<>();
     private boolean elevator = false;
+    private boolean newElevator = false;
     private GravityData gravityData;
     private PressureData pressureData;
     private LinearAccelerationData linearAccelerationData;
@@ -473,6 +475,13 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
 //            this.notifyObservers(0);
         } else {
             elevator = estimateElevator(data.gravity, this.linearAccelerationData.filteredAcc);
+            if (elevator) {
+                Log.d("SensorFusion", "Elevator detected, values" +
+                        " gravity: " + Arrays.toString(this.gravityData.gravity) +
+                        " acc: " + Arrays.toString(this.linearAccelerationData.filteredAcc));
+            }
+            this.newPosition = false;
+            this.newElevator = true;
             this.notifyObservers(0);
         }
     }
@@ -487,8 +496,12 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
             elevator = estimateElevator(this.gravityData.gravity, data.filteredAcc);
             // Log if elevator detected
             if (elevator) {
-                Log.d("SensorFusion", "Elevator detected");
+                Log.d("SensorFusion", "Elevator detected, values" +
+                    " gravity: " + Arrays.toString(this.gravityData.gravity) +
+                    " acc: " + Arrays.toString(data.filteredAcc));
             }
+            this.newPosition = false;
+            this.newElevator = true;
             this.notifyObservers(0);
         }
     }
@@ -519,6 +532,8 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
                 }
                 // Clear accel magntiude after using it.
                 this.accelMagnitude.clear();
+                this.newPosition = true;
+                this.newElevator = false;
                 notifyObservers(0);
             }
         }
@@ -542,14 +557,16 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         observers.add(o);
     }
 
-    public record PdrData(float[] position, boolean inElevator) {}
+    public record PdrData(float[] position, boolean newPosition,
+                          boolean inElevator, boolean newElevator) {}
 
     @Override
     public void notifyObservers(int idx) {
         if (observers != null) {
             for (Observer o : observers) {
                 o.update(new PdrData[] {new PdrData(new float[] {this.positionX, this.positionY},
-                        elevator)});
+                        this.newPosition,
+                        elevator, this.newElevator)});
             }
         }
     }
