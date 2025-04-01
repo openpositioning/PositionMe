@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -222,13 +223,7 @@ public class TrajectoryMapFragment extends Fragment {
                 Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
                 Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
                 //update indoor maker
-                this.updateEmergencyExitMarkers();
-                this.updateLiftMarkers();
-                this.updateToiletMarkers();
-                this.updateAccessibleRouteMarkers();
-                this.updateAccessibleToiletMarkers();
-                this.updateDrinkingWaterMarkers();
-                this.updateMedicalRoomMarkers();
+                updateAllIndoorMarkers();
             }
         });
 
@@ -239,13 +234,7 @@ public class TrajectoryMapFragment extends Fragment {
                 Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
                 Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
                 //update indoor maker
-                this.updateEmergencyExitMarkers();
-                this.updateLiftMarkers();
-                this.updateToiletMarkers();
-                this.updateAccessibleRouteMarkers();
-                this.updateAccessibleToiletMarkers();
-                this.updateDrinkingWaterMarkers();
-                this.updateMedicalRoomMarkers();
+                updateAllIndoorMarkers();
             }
         });
 
@@ -260,13 +249,7 @@ public class TrajectoryMapFragment extends Fragment {
                 Log.d("currentfloor", "Register callback for Wi-Fi floor changes: " + this.getCurrentBuilding());
                 Log.d("currentfloor", "Register callback for Wi-Fi floor changes: " + this.getCurrentFloor());
                 //update indoor maker
-                this.updateEmergencyExitMarkers();
-                this.updateLiftMarkers();
-                this.updateToiletMarkers();
-                this.updateAccessibleRouteMarkers();
-                this.updateAccessibleToiletMarkers();
-                this.updateDrinkingWaterMarkers();
-                this.updateMedicalRoomMarkers();
+                updateAllIndoorMarkers();
             }
         });
         sensorFusion.setTrajectoryMapFragment(this);
@@ -431,13 +414,7 @@ public class TrajectoryMapFragment extends Fragment {
                 Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
                 Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
                 //update indoor maker
-                this.updateEmergencyExitMarkers();
-                this.updateLiftMarkers();
-                this.updateToiletMarkers();
-                this.updateAccessibleRouteMarkers();
-                this.updateAccessibleToiletMarkers();
-                this.updateDrinkingWaterMarkers();
-                this.updateMedicalRoomMarkers();
+                updateAllIndoorMarkers();
             }
         }
     }
@@ -520,431 +497,33 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         //update indoor maker
-        this.updateEmergencyExitMarkers();
-        this.updateLiftMarkers();
-        this.updateToiletMarkers();
-        this.updateAccessibleRouteMarkers();
-        this.updateAccessibleToiletMarkers();
-        this.updateDrinkingWaterMarkers();
-        this.updateMedicalRoomMarkers();
+        updateAllIndoorMarkers();
 
     }
-
-    public void updateEmergencyExitMarkers() {
-        if (gMap == null) return;
-
-        int currentFloor = this.getCurrentFloor();
-        String currentBuilding = this.getCurrentBuilding();
-
-        List<LatLng> exitLocations = null; // 提前定义
-
-        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
-            exitLocations = Arrays.asList(
-                    new LatLng(55.92327684586336, -3.174331672489643),
-                    new LatLng(55.92305836864246, -3.174259588122368),
-                    new LatLng(55.923040334354255, -3.174433596432209)
-            );
-        }
-        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
-            exitLocations = Arrays.asList(
-                    new LatLng(55.922839326615474, -3.17451573908329),
-                    new LatLng(55.92283913875728, -3.1742961332201958),
-                    new LatLng(55.92330295784777, -3.174157999455929),
-                    new LatLng(55.92287501965453, -3.174012154340744),
-                    new LatLng(55.92301422219288, -3.173900842666626),
-                    new LatLng(55.92308936505573, -3.1738971546292305),
-                    new LatLng(55.923300515720484, -3.1740912795066833)
-            );
-        }
-        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
-            exitLocations = Arrays.asList(
-                    new LatLng(55.92303563792365, -3.174491263926029),
-                    new LatLng(55.92327647015123, -3.174472488462925)
-            );
-        }
-        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
-            exitLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
-            exitLocations = Arrays.asList(
-            );
-        }
-
-        // 清除旧的 marker
-        for (Marker marker : emergencyExitMarkers) {
-            marker.remove();
-        }
-        emergencyExitMarkers.clear();
-
-        // 避免 nullPointerException
-        if (exitLocations != null) {
-            for (LatLng location : exitLocations) {
-                Marker marker = gMap.addMarker(new MarkerOptions()
-                        .position(location)
-                        .flat(true)
-                        .title("Emergency Exit")
-                        .icon(BitmapDescriptorFactory.fromBitmap(
-                                UtilFunctions.getBitmapFromVector(requireContext(),
-                                        R.drawable.iso_emergency_exit)))
-                );
-                if (marker != null) {
-                    emergencyExitMarkers.add(marker);
-                }
-            }
-        }
-    }
-
-    public void updateMedicalRoomMarkers() {
-        if (gMap == null) return;
-
-        int currentFloor = this.getCurrentFloor();
-        String currentBuilding = this.getCurrentBuilding();
-
-        List<LatLng> medicalRoomLocations = null;
-        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
-            medicalRoomLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
-            medicalRoomLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
-            medicalRoomLocations = Arrays.asList(
-                    new LatLng(55.923291498633766, -3.1743306666612625)
-            );
-        }
-        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
-            medicalRoomLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
-            medicalRoomLocations = Arrays.asList(
-            );
-        }
-
-        // 清除旧的 marker
-        for (Marker marker : medicalRoomMarkers) {
-            marker.remove();
-        }
-        medicalRoomMarkers.clear();
-
-        // 添加新的 marker
-        if (medicalRoomLocations != null) {
-            for (LatLng location : medicalRoomLocations) {
-                Marker marker = gMap.addMarker(new MarkerOptions()
-                        .position(location)
-                        .flat(true)
-                        .title("Medical Room")
-                        .icon(BitmapDescriptorFactory.fromBitmap(
-                                UtilFunctions.getBitmapFromVector(requireContext(),
-                                        R.drawable.iso_first_aid_icon)))
-                );
-                if (marker != null) {
-                    medicalRoomMarkers.add(marker);
-                }
-            }
-        }
-    }
-
-    public void updateLiftMarkers() {
-        if (gMap == null) return;
-
-        int currentFloor = this.getCurrentFloor();
-        String currentBuilding = this.getCurrentBuilding();
-
-        List<LatLng> liftLocations = null;
-        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
-            liftLocations = Arrays.asList(
-                    new LatLng(55.92303883149652, -3.1743890047073364),
-                    new LatLng(55.923040334354255, -3.1743494421243668),
-                    new LatLng(55.92304277649792, -3.1743118911981583)
-            );
-        }
-        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
-            liftLocations = Arrays.asList(
-                    new LatLng(55.923027560061676, -3.1743665412068367),
-                    new LatLng(55.92303075363521, -3.17432664334774),
-                    new LatLng(55.923030565777935, -3.174288421869278)
-            );
-        }
-        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
-            liftLocations = Arrays.asList(
-                    new LatLng(55.92304484292707, -3.17434910684824),
-                    new LatLng(55.923045970070206, -3.1743139028549194),
-                    new LatLng(55.92304390364111, -3.1743836402893066)
-            );
-        }
-        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
-            liftLocations = Arrays.asList(
-                    new LatLng(55.92304484292707, -3.17434910684824),
-                    new LatLng(55.923045970070206, -3.1743139028549194),
-                    new LatLng(55.92304390364111, -3.1743836402893066)
-            );
-        }
-        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
-            liftLocations = Arrays.asList(
-                    new LatLng(55.92304484292707, -3.17434910684824),
-                    new LatLng(55.923045970070206, -3.1743139028549194),
-                    new LatLng(55.92304390364111, -3.1743836402893066)
-            );
-        }
-
-        // 清除旧的 marker
-        for (Marker marker : liftMarkers) {
-            marker.remove();
-        }
-        liftMarkers.clear();
-
-        // 添加新的 marker
-        if (liftLocations != null) {
-            for (LatLng location : liftLocations) {
-                Marker marker = gMap.addMarker(new MarkerOptions()
-                        .position(location)
-                        .flat(true)
-                        .title("Lift")
-                        .icon(BitmapDescriptorFactory.fromBitmap(
-                                UtilFunctions.getBitmapFromVector(requireContext(),
-                                        R.drawable.iso_lift)))
-                );
-                if (marker != null) {
-                    liftMarkers.add(marker);
-                }
-            }
-        }
-    }
-
-    public void updateAccessibleToiletMarkers() {
-        if (gMap == null) return;
-
-        int currentFloor = this.getCurrentFloor();
-        String currentBuilding = this.getCurrentBuilding();
-
-        List<LatLng> toiletLocations = null;
-        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
-            toiletLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
-            toiletLocations = Arrays.asList(
-                    new LatLng(55.923273276597925, -3.1740865856409073),
-                    new LatLng(55.922906391930155, -3.174562007188797)
-            );
-        }
-        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
-            toiletLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
-            toiletLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
-            toiletLocations = Arrays.asList(
-            );
-        }
-
-        // 清除旧的 marker
-        for (Marker marker : accessibleToiletMarkers) {
-            marker.remove();
-        }
-        accessibleToiletMarkers.clear();
-
-        // 添加新的 marker
-        if (toiletLocations != null) {
-            for (LatLng location : toiletLocations) {
-                Marker marker = gMap.addMarker(new MarkerOptions()
-                        .position(location)
-                        .flat(true)
-                        .title("Accessible Toilet")
-                        .icon(BitmapDescriptorFactory.fromBitmap(
-                                UtilFunctions.getBitmapFromVector(requireContext(),
-                                        R.drawable.iso_accessible__toilet)))
-                );
-                if (marker != null) {
-                    accessibleToiletMarkers.add(marker);
-                }
-            }
-        }
-    }
-
-    public void updateDrinkingWaterMarkers() {
-        if (gMap == null) return;
-
-        int currentFloor = this.getCurrentFloor();
-        String currentBuilding = this.getCurrentBuilding();
-
-        List<LatLng> waterLocations = null;
-        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
-            waterLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
-            waterLocations = Arrays.asList(
-                    new LatLng(55.922907331219456, -3.1744718179106712)
-            );
-        }
-        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
-            waterLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
-            waterLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
-            waterLocations = Arrays.asList(
-            );
-        }
-
-        // 清除旧的 marker
-        for (Marker marker : drinkingWaterMarkers) {
-            marker.remove();
-        }
-        drinkingWaterMarkers.clear();
-
-        // 添加新的 marker
-        if (waterLocations != null) {
-            for (LatLng location : waterLocations) {
-                Marker marker = gMap.addMarker(new MarkerOptions()
-                        .position(location)
-                        .flat(true)
-                        .title("Drinking Water")
-                        .icon(BitmapDescriptorFactory.fromBitmap(
-                                UtilFunctions.getBitmapFromVector(requireContext(),
-                                        R.drawable.iso_drinking_water)))
-                );
-                if (marker != null) {
-                    drinkingWaterMarkers.add(marker);
-                }
-            }
-        }
-    }
-
-    public void updateToiletMarkers() {
-        if (gMap == null) return;
-
-        int currentFloor = this.getCurrentFloor();
-        String currentBuilding = this.getCurrentBuilding();
-
-        List<LatLng> toiletLocations = null;
-
-        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
-            toiletLocations = Arrays.asList(
-                    new LatLng(55.92308617148703, -3.174508698284626)
-            );
-        }
-        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
-            toiletLocations = Arrays.asList(
-                    new LatLng(55.9229417091921, -3.174556642770767)
-            );
-        }
-        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
-            toiletLocations = Arrays.asList(
-                    new LatLng(55.92308617148703, -3.174508698284626)
-            );
-        }
-        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
-            toiletLocations = Arrays.asList(
-                    new LatLng(55.92308617148703, -3.174508698284626)
-            );
-        }
-        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
-            toiletLocations = Arrays.asList(
-            );
-        }
-
-        // 清除旧的 marker
-        for (Marker marker : toiletMarkers) {
-            marker.remove();
-        }
-        toiletMarkers.clear();
-
-        // 添加新的 marker
-        if (toiletLocations != null) {
-            for (LatLng location : toiletLocations) {
-                Marker marker = gMap.addMarker(new MarkerOptions()
-                        .position(location)
-                        .flat(true)
-                        .title("Toilet")
-                        .icon(BitmapDescriptorFactory.fromBitmap(
-                                UtilFunctions.getBitmapFromVector(requireContext(),
-                                        R.drawable.iso_toilet_icon))) // 记得准备 iso_toilet 图标
-                );
-                if (marker != null) {
-                    toiletMarkers.add(marker);
-                }
-            }
-        }
-    }
-
-    public void updateAccessibleRouteMarkers() {
-        if (gMap == null) return;
-
-        int currentFloor = this.getCurrentFloor();
-        String currentBuilding = this.getCurrentBuilding();
-
-        List<LatLng> accessibleLocations = null;
-
-        if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
-            accessibleLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
-            accessibleLocations = Arrays.asList(
-                    new LatLng(55.92284627736777, -3.174579441547394),
-                    new LatLng(55.92327102232486, -3.1744134798645973)
-            );
-        }
-        else if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
-            accessibleLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 3 && Objects.equals(currentBuilding, "nucleus")) {
-            accessibleLocations = Arrays.asList(
-            );
-        }
-        else if (currentFloor == 4 && Objects.equals(currentBuilding, "nucleus")) {
-            accessibleLocations = Arrays.asList(
-            );
-        }
-
-        // 清除旧的 marker
-        for (Marker marker : accessibleRouteMarkers) {
-            marker.remove();
-        }
-        accessibleRouteMarkers.clear();
-
-        // 添加新的 marker
-        if (accessibleLocations != null) {
-            for (LatLng location : accessibleLocations) {
-                Marker marker = gMap.addMarker(new MarkerOptions()
-                        .position(location)
-                        .flat(true)
-                        .title("Accessible Route")
-                        .icon(BitmapDescriptorFactory.fromBitmap(
-                                UtilFunctions.getBitmapFromVector(requireContext(),
-                                        R.drawable.iso_symbol_of_access))  // 换成你的无障碍图标
-                        ));
-                if (marker != null) {
-                    accessibleRouteMarkers.add(marker);
-                }
-            }
-        }
-    }
-
 
     // get current floor - return current floor
     public int getCurrentFloor() {
-        return indoorMapManager.getCurrentFloor();
+        return indoorMapManager != null ? indoorMapManager.getCurrentFloor() : 0;
     }
 
     // get current fuilding - return name of current building / int represent
     public String getCurrentBuilding() {
-        return indoorMapManager.getCurrentBuilding();
+        return indoorMapManager != null ? indoorMapManager.getCurrentBuilding() : "";
     }
 
+    private void updateAllIndoorMarkers() {
+        Context context = requireContext();
+        int floor = getCurrentFloor();
+        String building = getCurrentBuilding();
+
+        TrajectoryMapMaker.updateEmergencyExitMarkers(gMap, floor, building, emergencyExitMarkers, context);
+        TrajectoryMapMaker.updateLiftMarkers(gMap, floor, building, liftMarkers, context);
+        TrajectoryMapMaker.updateToiletMarkers(gMap, floor, building, toiletMarkers, context);
+        TrajectoryMapMaker.updateAccessibleToiletMarkers(gMap, floor, building, accessibleToiletMarkers, context);
+        TrajectoryMapMaker.updateDrinkingWaterMarkers(gMap, floor, building, drinkingWaterMarkers, context);
+        TrajectoryMapMaker.updateAccessibleRouteMarkers(gMap, floor, building, accessibleRouteMarkers, context);
+        TrajectoryMapMaker.updateMedicalRoomMarkers(gMap, floor, building, medicalRoomMarkers, context);
+    }
 
 
     /**
