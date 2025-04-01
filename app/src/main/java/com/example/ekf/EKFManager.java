@@ -174,68 +174,42 @@ public class EKFManager {
      * @param heading 当前航向角(弧度)
      */
     public void updatePdrPosition(LatLng pdrPosition, float heading) {
-        if (!isInitialized || !isEkfEnabled || pdrPosition == null) {
-            this.lastPdrPosition = pdrPosition;  // 即使未初始化也保存最新的PDR位置
-            this.previousHeading = heading;      // 保存最新的航向角
+        if (!isEkfEnabled || !isInitialized || pdrPosition == null) {
             return;
         }
+
+        // 计算时间间隔
+        long currentTime = System.currentTimeMillis();
+        long timeDiff = currentTime - lastDisplacementTime;
         
-        // 计算与上一个PDR位置之间的步长
+        // 如果PDR位置没有变化，更新静止状态计数
+        if (lastPdrPosition != null && 
+            Math.abs(pdrPosition.latitude - lastPdrPosition.latitude) < 1e-8 && 
+            Math.abs(pdrPosition.longitude - lastPdrPosition.longitude) < 1e-8) {
+            
+            if (currentTime - lastMovementTime > STATIC_TIME_THRESHOLD) {
+                isStaticState = true;
+                return;  // 静止状态下不进行预测更新
+            }
+        } else {
+            lastMovementTime = currentTime;
+            isStaticState = false;
+        }
+
+        // 计算步长
         double stepLength = 0;
         if (lastPdrPosition != null) {
             stepLength = calculateDistance(lastPdrPosition, pdrPosition);
         }
-        
-        // 检测静止状态
-        long currentTime = System.currentTimeMillis();
-        if (stepLength < STATIC_THRESHOLD) {
-            // 如果移动距离小于阈值，可能处于静止状态
-            if (!isStaticState && (currentTime - lastMovementTime) > STATIC_TIME_THRESHOLD) {
-                // 超过静止时间阈值，进入静止状态
-                isStaticState = true;
-                currentSpeed = 0.0; // 静止状态下速度为0
-                Log.d(TAG, "检测到静止状态");
-            }
-        } else {
-            // 有明显移动，更新最后移动时间并标记为非静止状态
-            lastMovementTime = currentTime;
-            isStaticState = false;
-            
-            // 计算移动速度 (米/秒)
-            double timeElapsed = (currentTime - lastDisplacementTime) / 1000.0; // 转换为秒
-            if (timeElapsed > 0) {
-                double instantSpeed = stepLength / timeElapsed;
-                
-                // 更新速度历史记录
-                speedHistory[speedHistoryIndex] = instantSpeed;
-                speedHistoryIndex = (speedHistoryIndex + 1) % speedHistory.length;
-                
-                // 更新历史记录计数
-                if (speedHistoryCount < speedHistory.length) {
-                    speedHistoryCount++;
-                }
-                
-                // 计算平均速度
-                double totalSpeed = 0;
-                for (int i = 0; i < speedHistoryCount; i++) {
-                    int idx = (speedHistoryIndex - 1 - i + speedHistory.length) % speedHistory.length;
-                    totalSpeed += speedHistory[idx];
-                }
-                currentSpeed = totalSpeed / speedHistoryCount;
-                
-                // 重置时间和累积位移
-                lastDisplacementTime = currentTime;
-            }
-        }
-        
-        // 计算航向变化
-        double headingChange = heading - previousHeading;
-        // 确保航向变化在-π到π之间
-        while (headingChange > Math.PI) headingChange -= 2*Math.PI;
-        while (headingChange < -Math.PI) headingChange += 2*Math.PI;
-        
-        // 更新EKF
-        if (stepLength > 0 && !isStaticState) {
+
+        // 计算航向角变化
+        float headingChange = heading - previousHeading;
+        // 标准化航向角变化到[-π, π]
+        while (headingChange > Math.PI) headingChange -= 2 * Math.PI;
+        while (headingChange < -Math.PI) headingChange += 2 * Math.PI;
+
+        // 只有在非静止状态且有实际位移时才进行预测更新
+        if (stepLength > 0 && !isStaticState && timeDiff >= DISPLACEMENT_TIME_WINDOW) {
             // 限制步长，防止突变
             double limitedStepLength = Math.min(stepLength, MAX_DISPLACEMENT_PER_UPDATE);
             if (stepLength > MAX_DISPLACEMENT_PER_UPDATE) {
@@ -244,6 +218,9 @@ public class EKFManager {
             
             ekf.predict(limitedStepLength, headingChange);
             Log.d(TAG, "EKF预测更新: 步长=" + limitedStepLength + "m, 航向变化=" + Math.toDegrees(headingChange) + "°");
+            
+            // 更新时间戳
+            lastDisplacementTime = currentTime;
         }
         
         // 保存当前值为下一次使用

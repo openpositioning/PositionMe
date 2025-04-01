@@ -70,6 +70,24 @@ public class PdrProcessing {
     private float sumStepLength = 0;
     private int stepCount = 0;
 
+    // 修改陀螺仪相关变量
+    private float[] gyroBuffer = new float[5];  // 减少到5个样本
+    private int gyroBufferIndex = 0;
+    private float gyroBias = 0;
+    private float lastHeading = 0;
+    
+    // 调整卡尔曼滤波器参数以更快响应变化
+    private float headingState = 0;
+    private float headingCovariance = 1.0f;
+    private static final float Q = 0.2f;  // 增大过程噪声，使滤波器更快响应变化
+    private static final float R = 0.1f;  // 保持测量噪声不变
+
+    // WGS84椭球体参数
+    private static final double WGS84_A = 6378137.0;  // 长半轴
+    private static final double WGS84_F = 1/298.257223563;  // 扁率
+    private static final double WGS84_B = WGS84_A * (1 - WGS84_F);  // 短半轴
+    private static final double WGS84_E = Math.sqrt(1 - Math.pow(WGS84_B/WGS84_A, 2));  // 第一偏心率
+
     //endregion
 
     /**
@@ -130,40 +148,124 @@ public class PdrProcessing {
     }
 
     /**
-     * Function to calculate PDR coordinates from sensor values.
-     * Should be called from the step detector sensor's event with the sensor values since the last
-     * step.
-     *
-     * @param currentStepEnd            relative time in milliseconds since the start of the recording.
-     * @param accelMagnitudeOvertime    recorded acceleration magnitudes since the last step.
-     * @param headingRad                heading relative to magnetic north in radians.
+     * 将大地坐标转换为ECEF坐标
+     * @param lat 纬度（弧度）
+     * @param lon 经度（弧度）
+     * @param h 大地高（米）
+     * @return ECEF坐标 [X, Y, Z]
+     */
+    private double[] geodetic2ECEF(double lat, double lon, double h) {
+        double N = WGS84_A / Math.sqrt(1 - Math.pow(WGS84_E * Math.sin(lat), 2));
+        double X = (N + h) * Math.cos(lat) * Math.cos(lon);
+        double Y = (N + h) * Math.cos(lat) * Math.sin(lon);
+        double Z = (N * (1 - Math.pow(WGS84_E, 2)) + h) * Math.sin(lat);
+        return new double[]{X, Y, Z};
+    }
+
+    /**
+     * 将ECEF坐标转换为ENU局部坐标系
+     * @param X ECEF X坐标
+     * @param Y ECEF Y坐标
+     * @param Z ECEF Z坐标
+     * @param refLat 参考点纬度（弧度）
+     * @param refLon 参考点经度（弧度）
+     * @param refH 参考点大地高（米）
+     * @return ENU坐标 [E, N, U]
+     */
+    private double[] ECEF2ENU(double X, double Y, double Z, double refLat, double refLon, double refH) {
+        // 计算参考点的ECEF坐标
+        double[] refECEF = geodetic2ECEF(refLat, refLon, refH);
+        
+        // 计算相对位置
+        double dX = X - refECEF[0];
+        double dY = Y - refECEF[1];
+        double dZ = Z - refECEF[2];
+        
+        // 转换矩阵
+        double sinLat = Math.sin(refLat);
+        double cosLat = Math.cos(refLat);
+        double sinLon = Math.sin(refLon);
+        double cosLon = Math.cos(refLon);
+        
+        // 计算ENU坐标
+        double E = -sinLon * dX + cosLon * dY;
+        double N = -sinLat * cosLon * dX - sinLat * sinLon * dY + cosLat * dZ;
+        double U = cosLat * cosLon * dX + cosLat * sinLon * dY + sinLat * dZ;
+        
+        return new double[]{E, N, U};
+    }
+
+    /**
+     * 更新陀螺仪数据
+     * @param gyroZ 陀螺仪Z轴角速度
+     */
+    public void updateGyro(float gyroZ) {
+        // 更新陀螺仪缓冲区
+        gyroBuffer[gyroBufferIndex] = gyroZ;
+        gyroBufferIndex = (gyroBufferIndex + 1) % gyroBuffer.length;
+        
+        // 计算陀螺仪零偏
+        float sum = 0;
+        for (float value : gyroBuffer) {
+            sum += value;
+        }
+        gyroBias = sum / gyroBuffer.length;
+    }
+    
+    /**
+     * 卡尔曼滤波处理航向角
+     * @param measurement 测量值（来自磁力计）
+     * @return 滤波后的航向角
+     */
+    private float kalmanFilter(float measurement) {
+        // 预测步骤
+        float predictedState = headingState;  // 假设航向角变化不大
+        float predictedCovariance = headingCovariance + Q;
+        
+        // 更新步骤
+        float kalmanGain = predictedCovariance / (predictedCovariance + R);
+        headingState = predictedState + kalmanGain * (measurement - predictedState);
+        headingCovariance = (1 - kalmanGain) * predictedCovariance;
+        
+        // 标准化航向角到[-π, π]范围
+        while (headingState > Math.PI) headingState -= 2 * Math.PI;
+        while (headingState < -Math.PI) headingState += 2 * Math.PI;
+        
+        return headingState;
+    }
+
+    /**
+     * 更新PDR坐标，包含WGS84转换
      */
     public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
-
-        // Change angle so zero rad is east
-        float adaptedHeading = (float) (Math.PI/2 - headingRad);
-
-        // Calculate step length
-        if(!useManualStep) {
-            //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
-            // Estimate stride
-            this.stepLength = weibergMinMax(accelMagnitudeOvertime);
-            // System.err.println("Step Length" + stepLength);
+        // 使用卡尔曼滤波处理航向角
+        float filteredHeading = kalmanFilter(headingRad);
+        
+        // 计算航向角变化
+        float headingChange = filteredHeading - lastHeading;
+        lastHeading = filteredHeading;
+        
+        // 限制航向角变化幅度
+        if (Math.abs(headingChange) > Math.PI/2) {
+            headingChange = (float) (Math.signum(headingChange) * Math.PI/2);
         }
-
-        // Increment aggregate variables
-        sumStepLength += stepLength;
-        stepCount++;
-
-        // Translate to cartesian coordinate system
-        float x = (float) (stepLength * Math.cos(adaptedHeading));
-        float y = (float) (stepLength * Math.sin(adaptedHeading));
-
-        // Update position values
-        this.positionX += x;
-        this.positionY += y;
-
-        // return current position
+        
+        // 使用滤波后的航向角计算位置
+        float adaptedHeading = (float) (Math.PI/2 - filteredHeading);
+        
+        // 计算步长
+        if(!useManualStep) {
+            this.stepLength = weibergMinMax(accelMagnitudeOvertime);
+        }
+        
+        // 计算局部ENU坐标系中的位移
+        float deltaE = (float) (stepLength * Math.cos(adaptedHeading));
+        float deltaN = (float) (stepLength * Math.sin(adaptedHeading));
+        
+        // 更新位置
+        this.positionX += deltaE;
+        this.positionY += deltaN;
+        
         return new float[]{this.positionX, this.positionY};
     }
 
@@ -221,16 +323,6 @@ public class PdrProcessing {
      * @param accelMagnitude    magnitude of acceleration values between the last and current step.
      * @return                  float stride length in meters.
      */
-//    private float weibergMinMax(List<Double> accelMagnitude) {
-//        double maxAccel = Collections.max(accelMagnitude);
-//        double minAccel = Collections.min(accelMagnitude);
-//        float bounce = (float) Math.pow((maxAccel-minAccel), 0.25);
-//        if(this.settings.getBoolean("overwrite_constants", false)) {
-//            return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
-//        }
-//        return bounce*K*2;
-//    }
-
     private float weibergMinMax(List<Double> accelMagnitude) {
         // 检查列表是否为空，避免应用崩溃
         if (accelMagnitude == null || accelMagnitude.isEmpty()) {
@@ -247,6 +339,7 @@ public class PdrProcessing {
         }
         return bounce * K * 2;
     }
+
     /**
      * Get the current X and Y coordinates from the PDR processing class.
      * The coordinates are in meters, the start of the recording is the (0,0)
