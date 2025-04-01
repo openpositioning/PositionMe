@@ -125,6 +125,7 @@ public class StatsFragment extends Fragment {
         }
 
         calculateAndDisplayStats(trajectory);
+
     }
 
     private void calculateAndDisplayStats(List<LatLng> trajectory) {
@@ -158,4 +159,15 @@ public class StatsFragment extends Fragment {
         avgSpeedTextView.setText(df.format(avgSpeed) + " km/h");
         paceTextView.setText(String.format("%d:%02d", paceMin, paceSec));
     }
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+
+        // Clear static trajectory data when leaving the stats screen
+        ReplayFragment.PDR_data.clear();
+        ReplayFragment.GNSS_data.clear();
+        ReplayFragment.WIFI_data.clear();
+        ReplayFragment.EKF_data.clear();
+    }
+
 }
