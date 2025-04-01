@@ -19,7 +19,7 @@ public final class Traj {
     /**
      * <code>optional string android_version = 1;</code>
      */
-    String getAndroidVersion();
+    java.lang.String getAndroidVersion();
     /**
      * <code>optional string android_version = 1;</code>
      */
@@ -29,12 +29,12 @@ public final class Traj {
     /**
      * <code>repeated .Motion_Sample imu_data = 2;</code>
      */
-    java.util.List<Motion_Sample>
+    java.util.List<Traj.Motion_Sample> 
         getImuDataList();
     /**
      * <code>repeated .Motion_Sample imu_data = 2;</code>
      */
-    Motion_Sample getImuData(int index);
+    Traj.Motion_Sample getImuData(int index);
     /**
      * <code>repeated .Motion_Sample imu_data = 2;</code>
      */
@@ -42,23 +42,23 @@ public final class Traj {
     /**
      * <code>repeated .Motion_Sample imu_data = 2;</code>
      */
-    java.util.List<? extends Motion_SampleOrBuilder>
+    java.util.List<? extends Traj.Motion_SampleOrBuilder> 
         getImuDataOrBuilderList();
     /**
      * <code>repeated .Motion_Sample imu_data = 2;</code>
      */
-    Motion_SampleOrBuilder getImuDataOrBuilder(
+    Traj.Motion_SampleOrBuilder getImuDataOrBuilder(
         int index);
 
     /**
      * <code>repeated .Pdr_Sample pdr_data = 3;</code>
      */
-    java.util.List<Pdr_Sample>
+    java.util.List<Traj.Pdr_Sample> 
         getPdrDataList();
     /**
      * <code>repeated .Pdr_Sample pdr_data = 3;</code>
      */
-    Pdr_Sample getPdrData(int index);
+    Traj.Pdr_Sample getPdrData(int index);
     /**
      * <code>repeated .Pdr_Sample pdr_data = 3;</code>
      */
@@ -66,23 +66,23 @@ public final class Traj {
     /**
      * <code>repeated .Pdr_Sample pdr_data = 3;</code>
      */
-    java.util.List<? extends Pdr_SampleOrBuilder>
+    java.util.List<? extends Traj.Pdr_SampleOrBuilder> 
         getPdrDataOrBuilderList();
     /**
      * <code>repeated .Pdr_Sample pdr_data = 3;</code>
      */
-    Pdr_SampleOrBuilder getPdrDataOrBuilder(
+    Traj.Pdr_SampleOrBuilder getPdrDataOrBuilder(
         int index);
 
     /**
      * <code>repeated .Position_Sample position_data = 4;</code>
      */
-    java.util.List<Position_Sample>
+    java.util.List<Traj.Position_Sample> 
         getPositionDataList();
     /**
      * <code>repeated .Position_Sample position_data = 4;</code>
      */
-    Position_Sample getPositionData(int index);
+    Traj.Position_Sample getPositionData(int index);
     /**
      * <code>repeated .Position_Sample position_data = 4;</code>
      */
@@ -90,23 +90,23 @@ public final class Traj {
     /**
      * <code>repeated .Position_Sample position_data = 4;</code>
      */
-    java.util.List<? extends Position_SampleOrBuilder>
+    java.util.List<? extends Traj.Position_SampleOrBuilder> 
         getPositionDataOrBuilderList();
     /**
      * <code>repeated .Position_Sample position_data = 4;</code>
      */
-    Position_SampleOrBuilder getPositionDataOrBuilder(
+    Traj.Position_SampleOrBuilder getPositionDataOrBuilder(
         int index);
 
     /**
      * <code>repeated .Pressure_Sample pressure_data = 5;</code>
      */
-    java.util.List<Pressure_Sample>
+    java.util.List<Traj.Pressure_Sample> 
         getPressureDataList();
     /**
      * <code>repeated .Pressure_Sample pressure_data = 5;</code>
      */
-    Pressure_Sample getPressureData(int index);
+    Traj.Pressure_Sample getPressureData(int index);
     /**
      * <code>repeated .Pressure_Sample pressure_data = 5;</code>
      */
@@ -114,23 +114,23 @@ public final class Traj {
     /**
      * <code>repeated .Pressure_Sample pressure_data = 5;</code>
      */
-    java.util.List<? extends Pressure_SampleOrBuilder>
+    java.util.List<? extends Traj.Pressure_SampleOrBuilder> 
         getPressureDataOrBuilderList();
     /**
      * <code>repeated .Pressure_Sample pressure_data = 5;</code>
      */
-    Pressure_SampleOrBuilder getPressureDataOrBuilder(
+    Traj.Pressure_SampleOrBuilder getPressureDataOrBuilder(
         int index);
 
     /**
      * <code>repeated .Light_Sample light_data = 6;</code>
      */
-    java.util.List<Light_Sample>
+    java.util.List<Traj.Light_Sample> 
         getLightDataList();
     /**
      * <code>repeated .Light_Sample light_data = 6;</code>
      */
-    Light_Sample getLightData(int index);
+    Traj.Light_Sample getLightData(int index);
     /**
      * <code>repeated .Light_Sample light_data = 6;</code>
      */
@@ -138,23 +138,23 @@ public final class Traj {
     /**
      * <code>repeated .Light_Sample light_data = 6;</code>
      */
-    java.util.List<? extends Light_SampleOrBuilder>
+    java.util.List<? extends Traj.Light_SampleOrBuilder> 
         getLightDataOrBuilderList();
     /**
      * <code>repeated .Light_Sample light_data = 6;</code>
      */
-    Light_SampleOrBuilder getLightDataOrBuilder(
+    Traj.Light_SampleOrBuilder getLightDataOrBuilder(
         int index);
 
     /**
      * <code>repeated .GNSS_Sample gnss_data = 7;</code>
      */
-    java.util.List<GNSS_Sample>
+    java.util.List<Traj.GNSS_Sample> 
         getGnssDataList();
     /**
      * <code>repeated .GNSS_Sample gnss_data = 7;</code>
      */
-    GNSS_Sample getGnssData(int index);
+    Traj.GNSS_Sample getGnssData(int index);
     /**
      * <code>repeated .GNSS_Sample gnss_data = 7;</code>
      */
@@ -162,23 +162,23 @@ public final class Traj {
     /**
      * <code>repeated .GNSS_Sample gnss_data = 7;</code>
      */
-    java.util.List<? extends GNSS_SampleOrBuilder>
+    java.util.List<? extends Traj.GNSS_SampleOrBuilder> 
         getGnssDataOrBuilderList();
     /**
      * <code>repeated .GNSS_Sample gnss_data = 7;</code>
      */
-    GNSS_SampleOrBuilder getGnssDataOrBuilder(
+    Traj.GNSS_SampleOrBuilder getGnssDataOrBuilder(
         int index);
 
     /**
      * <code>repeated .WiFi_Sample wifi_data = 8;</code>
      */
-    java.util.List<WiFi_Sample>
+    java.util.List<Traj.WiFi_Sample> 
         getWifiDataList();
     /**
      * <code>repeated .WiFi_Sample wifi_data = 8;</code>
      */
-    WiFi_Sample getWifiData(int index);
+    Traj.WiFi_Sample getWifiData(int index);
     /**
      * <code>repeated .WiFi_Sample wifi_data = 8;</code>
      */
@@ -186,23 +186,23 @@ public final class Traj {
     /**
      * <code>repeated .WiFi_Sample wifi_data = 8;</code>
      */
-    java.util.List<? extends WiFi_SampleOrBuilder>
+    java.util.List<? extends Traj.WiFi_SampleOrBuilder> 
         getWifiDataOrBuilderList();
     /**
      * <code>repeated .WiFi_Sample wifi_data = 8;</code>
      */
-    WiFi_SampleOrBuilder getWifiDataOrBuilder(
+    Traj.WiFi_SampleOrBuilder getWifiDataOrBuilder(
         int index);
 
     /**
      * <code>repeated .AP_Data aps_data = 9;</code>
      */
-    java.util.List<AP_Data>
+    java.util.List<Traj.AP_Data> 
         getApsDataList();
     /**
      * <code>repeated .AP_Data aps_data = 9;</code>
      */
-    AP_Data getApsData(int index);
+    Traj.AP_Data getApsData(int index);
     /**
      * <code>repeated .AP_Data aps_data = 9;</code>
      */
@@ -210,12 +210,12 @@ public final class Traj {
     /**
      * <code>repeated .AP_Data aps_data = 9;</code>
      */
-    java.util.List<? extends AP_DataOrBuilder>
+    java.util.List<? extends Traj.AP_DataOrBuilder> 
         getApsDataOrBuilderList();
     /**
      * <code>repeated .AP_Data aps_data = 9;</code>
      */
-    AP_DataOrBuilder getApsDataOrBuilder(
+    Traj.AP_DataOrBuilder getApsDataOrBuilder(
         int index);
 
     /**
@@ -236,7 +236,7 @@ public final class Traj {
     /**
      * <code>optional string data_identifier = 11;</code>
      */
-    String getDataIdentifier();
+    java.lang.String getDataIdentifier();
     /**
      * <code>optional string data_identifier = 11;</code>
      */
@@ -250,11 +250,11 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info accelerometer_info = 12;</code>
      */
-    Sensor_Info getAccelerometerInfo();
+    Traj.Sensor_Info getAccelerometerInfo();
     /**
      * <code>optional .Sensor_Info accelerometer_info = 12;</code>
      */
-    Sensor_InfoOrBuilder getAccelerometerInfoOrBuilder();
+    Traj.Sensor_InfoOrBuilder getAccelerometerInfoOrBuilder();
 
     /**
      * <code>optional .Sensor_Info gyroscope_info = 13;</code>
@@ -263,11 +263,11 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info gyroscope_info = 13;</code>
      */
-    Sensor_Info getGyroscopeInfo();
+    Traj.Sensor_Info getGyroscopeInfo();
     /**
      * <code>optional .Sensor_Info gyroscope_info = 13;</code>
      */
-    Sensor_InfoOrBuilder getGyroscopeInfoOrBuilder();
+    Traj.Sensor_InfoOrBuilder getGyroscopeInfoOrBuilder();
 
     /**
      * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
@@ -276,11 +276,11 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
      */
-    Sensor_Info getRotationVectorInfo();
+    Traj.Sensor_Info getRotationVectorInfo();
     /**
      * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
      */
-    Sensor_InfoOrBuilder getRotationVectorInfoOrBuilder();
+    Traj.Sensor_InfoOrBuilder getRotationVectorInfoOrBuilder();
 
     /**
      * <code>optional .Sensor_Info magnetometer_info = 15;</code>
@@ -289,11 +289,11 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info magnetometer_info = 15;</code>
      */
-    Sensor_Info getMagnetometerInfo();
+    Traj.Sensor_Info getMagnetometerInfo();
     /**
      * <code>optional .Sensor_Info magnetometer_info = 15;</code>
      */
-    Sensor_InfoOrBuilder getMagnetometerInfoOrBuilder();
+    Traj.Sensor_InfoOrBuilder getMagnetometerInfoOrBuilder();
 
     /**
      * <code>optional .Sensor_Info barometer_info = 16;</code>
@@ -302,11 +302,11 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info barometer_info = 16;</code>
      */
-    Sensor_Info getBarometerInfo();
+    Traj.Sensor_Info getBarometerInfo();
     /**
      * <code>optional .Sensor_Info barometer_info = 16;</code>
      */
-    Sensor_InfoOrBuilder getBarometerInfoOrBuilder();
+    Traj.Sensor_InfoOrBuilder getBarometerInfoOrBuilder();
 
     /**
      * <code>optional .Sensor_Info light_sensor_info = 17;</code>
@@ -315,11 +315,11 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info light_sensor_info = 17;</code>
      */
-    Sensor_Info getLightSensorInfo();
+    Traj.Sensor_Info getLightSensorInfo();
     /**
      * <code>optional .Sensor_Info light_sensor_info = 17;</code>
      */
-    Sensor_InfoOrBuilder getLightSensorInfoOrBuilder();
+    Traj.Sensor_InfoOrBuilder getLightSensorInfoOrBuilder();
 
     /**
      * <pre>
@@ -336,7 +336,7 @@ public final class Traj {
      *
      * <code>optional .Lat_Long_Position start_position = 18;</code>
      */
-    Lat_Long_Position getStartPosition();
+    Traj.Lat_Long_Position getStartPosition();
     /**
      * <pre>
      * new attribute to store starting position
@@ -344,7 +344,31 @@ public final class Traj {
      *
      * <code>optional .Lat_Long_Position start_position = 18;</code>
      */
-    Lat_Long_PositionOrBuilder getStartPositionOrBuilder();
+    Traj.Lat_Long_PositionOrBuilder getStartPositionOrBuilder();
+
+    /**
+     * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+     */
+    java.util.List<Traj.Pdr_Sample> 
+        getFusionDataList();
+    /**
+     * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+     */
+    Traj.Pdr_Sample getFusionData(int index);
+    /**
+     * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+     */
+    int getFusionDataCount();
+    /**
+     * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+     */
+    java.util.List<? extends Traj.Pdr_SampleOrBuilder> 
+        getFusionDataOrBuilderList();
+    /**
+     * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+     */
+    Traj.Pdr_SampleOrBuilder getFusionDataOrBuilder(
+        int index);
   }
   /**
    * Protobuf type {@code Trajectory}
@@ -369,9 +393,10 @@ public final class Traj {
       apsData_ = java.util.Collections.emptyList();
       startTimestamp_ = 0L;
       dataIdentifier_ = "";
+      fusionData_ = java.util.Collections.emptyList();
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -397,81 +422,81 @@ public final class Traj {
               break;
             }
             case 10: {
-              String s = input.readStringRequireUtf8();
+              java.lang.String s = input.readStringRequireUtf8();
 
               androidVersion_ = s;
               break;
             }
             case 18: {
               if (!((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
-                imuData_ = new java.util.ArrayList<Motion_Sample>();
+                imuData_ = new java.util.ArrayList<Traj.Motion_Sample>();
                 mutable_bitField0_ |= 0x00000002;
               }
               imuData_.add(
-                  input.readMessage(Motion_Sample.parser(), extensionRegistry));
+                  input.readMessage(Traj.Motion_Sample.parser(), extensionRegistry));
               break;
             }
             case 26: {
               if (!((mutable_bitField0_ & 0x00000004) == 0x00000004)) {
-                pdrData_ = new java.util.ArrayList<Pdr_Sample>();
+                pdrData_ = new java.util.ArrayList<Traj.Pdr_Sample>();
                 mutable_bitField0_ |= 0x00000004;
               }
               pdrData_.add(
-                  input.readMessage(Pdr_Sample.parser(), extensionRegistry));
+                  input.readMessage(Traj.Pdr_Sample.parser(), extensionRegistry));
               break;
             }
             case 34: {
               if (!((mutable_bitField0_ & 0x00000008) == 0x00000008)) {
-                positionData_ = new java.util.ArrayList<Position_Sample>();
+                positionData_ = new java.util.ArrayList<Traj.Position_Sample>();
                 mutable_bitField0_ |= 0x00000008;
               }
               positionData_.add(
-                  input.readMessage(Position_Sample.parser(), extensionRegistry));
+                  input.readMessage(Traj.Position_Sample.parser(), extensionRegistry));
               break;
             }
             case 42: {
               if (!((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
-                pressureData_ = new java.util.ArrayList<Pressure_Sample>();
+                pressureData_ = new java.util.ArrayList<Traj.Pressure_Sample>();
                 mutable_bitField0_ |= 0x00000010;
               }
               pressureData_.add(
-                  input.readMessage(Pressure_Sample.parser(), extensionRegistry));
+                  input.readMessage(Traj.Pressure_Sample.parser(), extensionRegistry));
               break;
             }
             case 50: {
               if (!((mutable_bitField0_ & 0x00000020) == 0x00000020)) {
-                lightData_ = new java.util.ArrayList<Light_Sample>();
+                lightData_ = new java.util.ArrayList<Traj.Light_Sample>();
                 mutable_bitField0_ |= 0x00000020;
               }
               lightData_.add(
-                  input.readMessage(Light_Sample.parser(), extensionRegistry));
+                  input.readMessage(Traj.Light_Sample.parser(), extensionRegistry));
               break;
             }
             case 58: {
               if (!((mutable_bitField0_ & 0x00000040) == 0x00000040)) {
-                gnssData_ = new java.util.ArrayList<GNSS_Sample>();
+                gnssData_ = new java.util.ArrayList<Traj.GNSS_Sample>();
                 mutable_bitField0_ |= 0x00000040;
               }
               gnssData_.add(
-                  input.readMessage(GNSS_Sample.parser(), extensionRegistry));
+                  input.readMessage(Traj.GNSS_Sample.parser(), extensionRegistry));
               break;
             }
             case 66: {
               if (!((mutable_bitField0_ & 0x00000080) == 0x00000080)) {
-                wifiData_ = new java.util.ArrayList<WiFi_Sample>();
+                wifiData_ = new java.util.ArrayList<Traj.WiFi_Sample>();
                 mutable_bitField0_ |= 0x00000080;
               }
               wifiData_.add(
-                  input.readMessage(WiFi_Sample.parser(), extensionRegistry));
+                  input.readMessage(Traj.WiFi_Sample.parser(), extensionRegistry));
               break;
             }
             case 74: {
               if (!((mutable_bitField0_ & 0x00000100) == 0x00000100)) {
-                apsData_ = new java.util.ArrayList<AP_Data>();
+                apsData_ = new java.util.ArrayList<Traj.AP_Data>();
                 mutable_bitField0_ |= 0x00000100;
               }
               apsData_.add(
-                  input.readMessage(AP_Data.parser(), extensionRegistry));
+                  input.readMessage(Traj.AP_Data.parser(), extensionRegistry));
               break;
             }
             case 80: {
@@ -480,17 +505,17 @@ public final class Traj {
               break;
             }
             case 90: {
-              String s = input.readStringRequireUtf8();
+              java.lang.String s = input.readStringRequireUtf8();
 
               dataIdentifier_ = s;
               break;
             }
             case 98: {
-              Sensor_Info.Builder subBuilder = null;
+              Traj.Sensor_Info.Builder subBuilder = null;
               if (accelerometerInfo_ != null) {
                 subBuilder = accelerometerInfo_.toBuilder();
               }
-              accelerometerInfo_ = input.readMessage(Sensor_Info.parser(), extensionRegistry);
+              accelerometerInfo_ = input.readMessage(Traj.Sensor_Info.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(accelerometerInfo_);
                 accelerometerInfo_ = subBuilder.buildPartial();
@@ -499,11 +524,11 @@ public final class Traj {
               break;
             }
             case 106: {
-              Sensor_Info.Builder subBuilder = null;
+              Traj.Sensor_Info.Builder subBuilder = null;
               if (gyroscopeInfo_ != null) {
                 subBuilder = gyroscopeInfo_.toBuilder();
               }
-              gyroscopeInfo_ = input.readMessage(Sensor_Info.parser(), extensionRegistry);
+              gyroscopeInfo_ = input.readMessage(Traj.Sensor_Info.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(gyroscopeInfo_);
                 gyroscopeInfo_ = subBuilder.buildPartial();
@@ -512,11 +537,11 @@ public final class Traj {
               break;
             }
             case 114: {
-              Sensor_Info.Builder subBuilder = null;
+              Traj.Sensor_Info.Builder subBuilder = null;
               if (rotationVectorInfo_ != null) {
                 subBuilder = rotationVectorInfo_.toBuilder();
               }
-              rotationVectorInfo_ = input.readMessage(Sensor_Info.parser(), extensionRegistry);
+              rotationVectorInfo_ = input.readMessage(Traj.Sensor_Info.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(rotationVectorInfo_);
                 rotationVectorInfo_ = subBuilder.buildPartial();
@@ -525,11 +550,11 @@ public final class Traj {
               break;
             }
             case 122: {
-              Sensor_Info.Builder subBuilder = null;
+              Traj.Sensor_Info.Builder subBuilder = null;
               if (magnetometerInfo_ != null) {
                 subBuilder = magnetometerInfo_.toBuilder();
               }
-              magnetometerInfo_ = input.readMessage(Sensor_Info.parser(), extensionRegistry);
+              magnetometerInfo_ = input.readMessage(Traj.Sensor_Info.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(magnetometerInfo_);
                 magnetometerInfo_ = subBuilder.buildPartial();
@@ -538,11 +563,11 @@ public final class Traj {
               break;
             }
             case 130: {
-              Sensor_Info.Builder subBuilder = null;
+              Traj.Sensor_Info.Builder subBuilder = null;
               if (barometerInfo_ != null) {
                 subBuilder = barometerInfo_.toBuilder();
               }
-              barometerInfo_ = input.readMessage(Sensor_Info.parser(), extensionRegistry);
+              barometerInfo_ = input.readMessage(Traj.Sensor_Info.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(barometerInfo_);
                 barometerInfo_ = subBuilder.buildPartial();
@@ -551,11 +576,11 @@ public final class Traj {
               break;
             }
             case 138: {
-              Sensor_Info.Builder subBuilder = null;
+              Traj.Sensor_Info.Builder subBuilder = null;
               if (lightSensorInfo_ != null) {
                 subBuilder = lightSensorInfo_.toBuilder();
               }
-              lightSensorInfo_ = input.readMessage(Sensor_Info.parser(), extensionRegistry);
+              lightSensorInfo_ = input.readMessage(Traj.Sensor_Info.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(lightSensorInfo_);
                 lightSensorInfo_ = subBuilder.buildPartial();
@@ -564,16 +589,25 @@ public final class Traj {
               break;
             }
             case 146: {
-              Lat_Long_Position.Builder subBuilder = null;
+              Traj.Lat_Long_Position.Builder subBuilder = null;
               if (startPosition_ != null) {
                 subBuilder = startPosition_.toBuilder();
               }
-              startPosition_ = input.readMessage(Lat_Long_Position.parser(), extensionRegistry);
+              startPosition_ = input.readMessage(Traj.Lat_Long_Position.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(startPosition_);
                 startPosition_ = subBuilder.buildPartial();
               }
 
+              break;
+            }
+            case 154: {
+              if (!((mutable_bitField0_ & 0x00040000) == 0x00040000)) {
+                fusionData_ = new java.util.ArrayList<Traj.Pdr_Sample>();
+                mutable_bitField0_ |= 0x00040000;
+              }
+              fusionData_.add(
+                  input.readMessage(Traj.Pdr_Sample.parser(), extensionRegistry));
               break;
             }
           }
@@ -608,6 +642,9 @@ public final class Traj {
         if (((mutable_bitField0_ & 0x00000100) == 0x00000100)) {
           apsData_ = java.util.Collections.unmodifiableList(apsData_);
         }
+        if (((mutable_bitField0_ & 0x00040000) == 0x00040000)) {
+          fusionData_ = java.util.Collections.unmodifiableList(fusionData_);
+        }
         makeExtensionsImmutable();
       }
     }
@@ -616,27 +653,27 @@ public final class Traj {
       return Traj.internal_static_Trajectory_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Trajectory_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              Trajectory.class, Builder.class);
+              Traj.Trajectory.class, Traj.Trajectory.Builder.class);
     }
 
     private int bitField0_;
     public static final int ANDROID_VERSION_FIELD_NUMBER = 1;
-    private volatile Object androidVersion_;
+    private volatile java.lang.Object androidVersion_;
     /**
      * <code>optional string android_version = 1;</code>
      */
-    public String getAndroidVersion() {
-      Object ref = androidVersion_;
-      if (ref instanceof String) {
-        return (String) ref;
+    public java.lang.String getAndroidVersion() {
+      java.lang.Object ref = androidVersion_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
       } else {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
-        String s = bs.toStringUtf8();
+        java.lang.String s = bs.toStringUtf8();
         androidVersion_ = s;
         return s;
       }
@@ -646,11 +683,11 @@ public final class Traj {
      */
     public com.google.protobuf.ByteString
         getAndroidVersionBytes() {
-      Object ref = androidVersion_;
-      if (ref instanceof String) {
+      java.lang.Object ref = androidVersion_;
+      if (ref instanceof java.lang.String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
-                (String) ref);
+                (java.lang.String) ref);
         androidVersion_ = b;
         return b;
       } else {
@@ -659,17 +696,17 @@ public final class Traj {
     }
 
     public static final int IMU_DATA_FIELD_NUMBER = 2;
-    private java.util.List<Motion_Sample> imuData_;
+    private java.util.List<Traj.Motion_Sample> imuData_;
     /**
      * <code>repeated .Motion_Sample imu_data = 2;</code>
      */
-    public java.util.List<Motion_Sample> getImuDataList() {
+    public java.util.List<Traj.Motion_Sample> getImuDataList() {
       return imuData_;
     }
     /**
      * <code>repeated .Motion_Sample imu_data = 2;</code>
      */
-    public java.util.List<? extends Motion_SampleOrBuilder>
+    public java.util.List<? extends Traj.Motion_SampleOrBuilder> 
         getImuDataOrBuilderList() {
       return imuData_;
     }
@@ -682,29 +719,29 @@ public final class Traj {
     /**
      * <code>repeated .Motion_Sample imu_data = 2;</code>
      */
-    public Motion_Sample getImuData(int index) {
+    public Traj.Motion_Sample getImuData(int index) {
       return imuData_.get(index);
     }
     /**
      * <code>repeated .Motion_Sample imu_data = 2;</code>
      */
-    public Motion_SampleOrBuilder getImuDataOrBuilder(
+    public Traj.Motion_SampleOrBuilder getImuDataOrBuilder(
         int index) {
       return imuData_.get(index);
     }
 
     public static final int PDR_DATA_FIELD_NUMBER = 3;
-    private java.util.List<Pdr_Sample> pdrData_;
+    private java.util.List<Traj.Pdr_Sample> pdrData_;
     /**
      * <code>repeated .Pdr_Sample pdr_data = 3;</code>
      */
-    public java.util.List<Pdr_Sample> getPdrDataList() {
+    public java.util.List<Traj.Pdr_Sample> getPdrDataList() {
       return pdrData_;
     }
     /**
      * <code>repeated .Pdr_Sample pdr_data = 3;</code>
      */
-    public java.util.List<? extends Pdr_SampleOrBuilder>
+    public java.util.List<? extends Traj.Pdr_SampleOrBuilder> 
         getPdrDataOrBuilderList() {
       return pdrData_;
     }
@@ -717,29 +754,29 @@ public final class Traj {
     /**
      * <code>repeated .Pdr_Sample pdr_data = 3;</code>
      */
-    public Pdr_Sample getPdrData(int index) {
+    public Traj.Pdr_Sample getPdrData(int index) {
       return pdrData_.get(index);
     }
     /**
      * <code>repeated .Pdr_Sample pdr_data = 3;</code>
      */
-    public Pdr_SampleOrBuilder getPdrDataOrBuilder(
+    public Traj.Pdr_SampleOrBuilder getPdrDataOrBuilder(
         int index) {
       return pdrData_.get(index);
     }
 
     public static final int POSITION_DATA_FIELD_NUMBER = 4;
-    private java.util.List<Position_Sample> positionData_;
+    private java.util.List<Traj.Position_Sample> positionData_;
     /**
      * <code>repeated .Position_Sample position_data = 4;</code>
      */
-    public java.util.List<Position_Sample> getPositionDataList() {
+    public java.util.List<Traj.Position_Sample> getPositionDataList() {
       return positionData_;
     }
     /**
      * <code>repeated .Position_Sample position_data = 4;</code>
      */
-    public java.util.List<? extends Position_SampleOrBuilder>
+    public java.util.List<? extends Traj.Position_SampleOrBuilder> 
         getPositionDataOrBuilderList() {
       return positionData_;
     }
@@ -752,29 +789,29 @@ public final class Traj {
     /**
      * <code>repeated .Position_Sample position_data = 4;</code>
      */
-    public Position_Sample getPositionData(int index) {
+    public Traj.Position_Sample getPositionData(int index) {
       return positionData_.get(index);
     }
     /**
      * <code>repeated .Position_Sample position_data = 4;</code>
      */
-    public Position_SampleOrBuilder getPositionDataOrBuilder(
+    public Traj.Position_SampleOrBuilder getPositionDataOrBuilder(
         int index) {
       return positionData_.get(index);
     }
 
     public static final int PRESSURE_DATA_FIELD_NUMBER = 5;
-    private java.util.List<Pressure_Sample> pressureData_;
+    private java.util.List<Traj.Pressure_Sample> pressureData_;
     /**
      * <code>repeated .Pressure_Sample pressure_data = 5;</code>
      */
-    public java.util.List<Pressure_Sample> getPressureDataList() {
+    public java.util.List<Traj.Pressure_Sample> getPressureDataList() {
       return pressureData_;
     }
     /**
      * <code>repeated .Pressure_Sample pressure_data = 5;</code>
      */
-    public java.util.List<? extends Pressure_SampleOrBuilder>
+    public java.util.List<? extends Traj.Pressure_SampleOrBuilder> 
         getPressureDataOrBuilderList() {
       return pressureData_;
     }
@@ -787,29 +824,29 @@ public final class Traj {
     /**
      * <code>repeated .Pressure_Sample pressure_data = 5;</code>
      */
-    public Pressure_Sample getPressureData(int index) {
+    public Traj.Pressure_Sample getPressureData(int index) {
       return pressureData_.get(index);
     }
     /**
      * <code>repeated .Pressure_Sample pressure_data = 5;</code>
      */
-    public Pressure_SampleOrBuilder getPressureDataOrBuilder(
+    public Traj.Pressure_SampleOrBuilder getPressureDataOrBuilder(
         int index) {
       return pressureData_.get(index);
     }
 
     public static final int LIGHT_DATA_FIELD_NUMBER = 6;
-    private java.util.List<Light_Sample> lightData_;
+    private java.util.List<Traj.Light_Sample> lightData_;
     /**
      * <code>repeated .Light_Sample light_data = 6;</code>
      */
-    public java.util.List<Light_Sample> getLightDataList() {
+    public java.util.List<Traj.Light_Sample> getLightDataList() {
       return lightData_;
     }
     /**
      * <code>repeated .Light_Sample light_data = 6;</code>
      */
-    public java.util.List<? extends Light_SampleOrBuilder>
+    public java.util.List<? extends Traj.Light_SampleOrBuilder> 
         getLightDataOrBuilderList() {
       return lightData_;
     }
@@ -822,29 +859,29 @@ public final class Traj {
     /**
      * <code>repeated .Light_Sample light_data = 6;</code>
      */
-    public Light_Sample getLightData(int index) {
+    public Traj.Light_Sample getLightData(int index) {
       return lightData_.get(index);
     }
     /**
      * <code>repeated .Light_Sample light_data = 6;</code>
      */
-    public Light_SampleOrBuilder getLightDataOrBuilder(
+    public Traj.Light_SampleOrBuilder getLightDataOrBuilder(
         int index) {
       return lightData_.get(index);
     }
 
     public static final int GNSS_DATA_FIELD_NUMBER = 7;
-    private java.util.List<GNSS_Sample> gnssData_;
+    private java.util.List<Traj.GNSS_Sample> gnssData_;
     /**
      * <code>repeated .GNSS_Sample gnss_data = 7;</code>
      */
-    public java.util.List<GNSS_Sample> getGnssDataList() {
+    public java.util.List<Traj.GNSS_Sample> getGnssDataList() {
       return gnssData_;
     }
     /**
      * <code>repeated .GNSS_Sample gnss_data = 7;</code>
      */
-    public java.util.List<? extends GNSS_SampleOrBuilder>
+    public java.util.List<? extends Traj.GNSS_SampleOrBuilder> 
         getGnssDataOrBuilderList() {
       return gnssData_;
     }
@@ -857,29 +894,29 @@ public final class Traj {
     /**
      * <code>repeated .GNSS_Sample gnss_data = 7;</code>
      */
-    public GNSS_Sample getGnssData(int index) {
+    public Traj.GNSS_Sample getGnssData(int index) {
       return gnssData_.get(index);
     }
     /**
      * <code>repeated .GNSS_Sample gnss_data = 7;</code>
      */
-    public GNSS_SampleOrBuilder getGnssDataOrBuilder(
+    public Traj.GNSS_SampleOrBuilder getGnssDataOrBuilder(
         int index) {
       return gnssData_.get(index);
     }
 
     public static final int WIFI_DATA_FIELD_NUMBER = 8;
-    private java.util.List<WiFi_Sample> wifiData_;
+    private java.util.List<Traj.WiFi_Sample> wifiData_;
     /**
      * <code>repeated .WiFi_Sample wifi_data = 8;</code>
      */
-    public java.util.List<WiFi_Sample> getWifiDataList() {
+    public java.util.List<Traj.WiFi_Sample> getWifiDataList() {
       return wifiData_;
     }
     /**
      * <code>repeated .WiFi_Sample wifi_data = 8;</code>
      */
-    public java.util.List<? extends WiFi_SampleOrBuilder>
+    public java.util.List<? extends Traj.WiFi_SampleOrBuilder> 
         getWifiDataOrBuilderList() {
       return wifiData_;
     }
@@ -892,29 +929,29 @@ public final class Traj {
     /**
      * <code>repeated .WiFi_Sample wifi_data = 8;</code>
      */
-    public WiFi_Sample getWifiData(int index) {
+    public Traj.WiFi_Sample getWifiData(int index) {
       return wifiData_.get(index);
     }
     /**
      * <code>repeated .WiFi_Sample wifi_data = 8;</code>
      */
-    public WiFi_SampleOrBuilder getWifiDataOrBuilder(
+    public Traj.WiFi_SampleOrBuilder getWifiDataOrBuilder(
         int index) {
       return wifiData_.get(index);
     }
 
     public static final int APS_DATA_FIELD_NUMBER = 9;
-    private java.util.List<AP_Data> apsData_;
+    private java.util.List<Traj.AP_Data> apsData_;
     /**
      * <code>repeated .AP_Data aps_data = 9;</code>
      */
-    public java.util.List<AP_Data> getApsDataList() {
+    public java.util.List<Traj.AP_Data> getApsDataList() {
       return apsData_;
     }
     /**
      * <code>repeated .AP_Data aps_data = 9;</code>
      */
-    public java.util.List<? extends AP_DataOrBuilder>
+    public java.util.List<? extends Traj.AP_DataOrBuilder> 
         getApsDataOrBuilderList() {
       return apsData_;
     }
@@ -927,13 +964,13 @@ public final class Traj {
     /**
      * <code>repeated .AP_Data aps_data = 9;</code>
      */
-    public AP_Data getApsData(int index) {
+    public Traj.AP_Data getApsData(int index) {
       return apsData_.get(index);
     }
     /**
      * <code>repeated .AP_Data aps_data = 9;</code>
      */
-    public AP_DataOrBuilder getApsDataOrBuilder(
+    public Traj.AP_DataOrBuilder getApsDataOrBuilder(
         int index) {
       return apsData_.get(index);
     }
@@ -958,18 +995,18 @@ public final class Traj {
     }
 
     public static final int DATA_IDENTIFIER_FIELD_NUMBER = 11;
-    private volatile Object dataIdentifier_;
+    private volatile java.lang.Object dataIdentifier_;
     /**
      * <code>optional string data_identifier = 11;</code>
      */
-    public String getDataIdentifier() {
-      Object ref = dataIdentifier_;
-      if (ref instanceof String) {
-        return (String) ref;
+    public java.lang.String getDataIdentifier() {
+      java.lang.Object ref = dataIdentifier_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
       } else {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
-        String s = bs.toStringUtf8();
+        java.lang.String s = bs.toStringUtf8();
         dataIdentifier_ = s;
         return s;
       }
@@ -979,11 +1016,11 @@ public final class Traj {
      */
     public com.google.protobuf.ByteString
         getDataIdentifierBytes() {
-      Object ref = dataIdentifier_;
-      if (ref instanceof String) {
+      java.lang.Object ref = dataIdentifier_;
+      if (ref instanceof java.lang.String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
-                (String) ref);
+                (java.lang.String) ref);
         dataIdentifier_ = b;
         return b;
       } else {
@@ -992,7 +1029,7 @@ public final class Traj {
     }
 
     public static final int ACCELEROMETER_INFO_FIELD_NUMBER = 12;
-    private Sensor_Info accelerometerInfo_;
+    private Traj.Sensor_Info accelerometerInfo_;
     /**
      * <code>optional .Sensor_Info accelerometer_info = 12;</code>
      */
@@ -1002,18 +1039,18 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info accelerometer_info = 12;</code>
      */
-    public Sensor_Info getAccelerometerInfo() {
-      return accelerometerInfo_ == null ? Sensor_Info.getDefaultInstance() : accelerometerInfo_;
+    public Traj.Sensor_Info getAccelerometerInfo() {
+      return accelerometerInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : accelerometerInfo_;
     }
     /**
      * <code>optional .Sensor_Info accelerometer_info = 12;</code>
      */
-    public Sensor_InfoOrBuilder getAccelerometerInfoOrBuilder() {
+    public Traj.Sensor_InfoOrBuilder getAccelerometerInfoOrBuilder() {
       return getAccelerometerInfo();
     }
 
     public static final int GYROSCOPE_INFO_FIELD_NUMBER = 13;
-    private Sensor_Info gyroscopeInfo_;
+    private Traj.Sensor_Info gyroscopeInfo_;
     /**
      * <code>optional .Sensor_Info gyroscope_info = 13;</code>
      */
@@ -1023,18 +1060,18 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info gyroscope_info = 13;</code>
      */
-    public Sensor_Info getGyroscopeInfo() {
-      return gyroscopeInfo_ == null ? Sensor_Info.getDefaultInstance() : gyroscopeInfo_;
+    public Traj.Sensor_Info getGyroscopeInfo() {
+      return gyroscopeInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : gyroscopeInfo_;
     }
     /**
      * <code>optional .Sensor_Info gyroscope_info = 13;</code>
      */
-    public Sensor_InfoOrBuilder getGyroscopeInfoOrBuilder() {
+    public Traj.Sensor_InfoOrBuilder getGyroscopeInfoOrBuilder() {
       return getGyroscopeInfo();
     }
 
     public static final int ROTATION_VECTOR_INFO_FIELD_NUMBER = 14;
-    private Sensor_Info rotationVectorInfo_;
+    private Traj.Sensor_Info rotationVectorInfo_;
     /**
      * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
      */
@@ -1044,18 +1081,18 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
      */
-    public Sensor_Info getRotationVectorInfo() {
-      return rotationVectorInfo_ == null ? Sensor_Info.getDefaultInstance() : rotationVectorInfo_;
+    public Traj.Sensor_Info getRotationVectorInfo() {
+      return rotationVectorInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : rotationVectorInfo_;
     }
     /**
      * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
      */
-    public Sensor_InfoOrBuilder getRotationVectorInfoOrBuilder() {
+    public Traj.Sensor_InfoOrBuilder getRotationVectorInfoOrBuilder() {
       return getRotationVectorInfo();
     }
 
     public static final int MAGNETOMETER_INFO_FIELD_NUMBER = 15;
-    private Sensor_Info magnetometerInfo_;
+    private Traj.Sensor_Info magnetometerInfo_;
     /**
      * <code>optional .Sensor_Info magnetometer_info = 15;</code>
      */
@@ -1065,18 +1102,18 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info magnetometer_info = 15;</code>
      */
-    public Sensor_Info getMagnetometerInfo() {
-      return magnetometerInfo_ == null ? Sensor_Info.getDefaultInstance() : magnetometerInfo_;
+    public Traj.Sensor_Info getMagnetometerInfo() {
+      return magnetometerInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : magnetometerInfo_;
     }
     /**
      * <code>optional .Sensor_Info magnetometer_info = 15;</code>
      */
-    public Sensor_InfoOrBuilder getMagnetometerInfoOrBuilder() {
+    public Traj.Sensor_InfoOrBuilder getMagnetometerInfoOrBuilder() {
       return getMagnetometerInfo();
     }
 
     public static final int BAROMETER_INFO_FIELD_NUMBER = 16;
-    private Sensor_Info barometerInfo_;
+    private Traj.Sensor_Info barometerInfo_;
     /**
      * <code>optional .Sensor_Info barometer_info = 16;</code>
      */
@@ -1086,18 +1123,18 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info barometer_info = 16;</code>
      */
-    public Sensor_Info getBarometerInfo() {
-      return barometerInfo_ == null ? Sensor_Info.getDefaultInstance() : barometerInfo_;
+    public Traj.Sensor_Info getBarometerInfo() {
+      return barometerInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : barometerInfo_;
     }
     /**
      * <code>optional .Sensor_Info barometer_info = 16;</code>
      */
-    public Sensor_InfoOrBuilder getBarometerInfoOrBuilder() {
+    public Traj.Sensor_InfoOrBuilder getBarometerInfoOrBuilder() {
       return getBarometerInfo();
     }
 
     public static final int LIGHT_SENSOR_INFO_FIELD_NUMBER = 17;
-    private Sensor_Info lightSensorInfo_;
+    private Traj.Sensor_Info lightSensorInfo_;
     /**
      * <code>optional .Sensor_Info light_sensor_info = 17;</code>
      */
@@ -1107,18 +1144,18 @@ public final class Traj {
     /**
      * <code>optional .Sensor_Info light_sensor_info = 17;</code>
      */
-    public Sensor_Info getLightSensorInfo() {
-      return lightSensorInfo_ == null ? Sensor_Info.getDefaultInstance() : lightSensorInfo_;
+    public Traj.Sensor_Info getLightSensorInfo() {
+      return lightSensorInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : lightSensorInfo_;
     }
     /**
      * <code>optional .Sensor_Info light_sensor_info = 17;</code>
      */
-    public Sensor_InfoOrBuilder getLightSensorInfoOrBuilder() {
+    public Traj.Sensor_InfoOrBuilder getLightSensorInfoOrBuilder() {
       return getLightSensorInfo();
     }
 
     public static final int START_POSITION_FIELD_NUMBER = 18;
-    private Lat_Long_Position startPosition_;
+    private Traj.Lat_Long_Position startPosition_;
     /**
      * <pre>
      * new attribute to store starting position
@@ -1136,8 +1173,8 @@ public final class Traj {
      *
      * <code>optional .Lat_Long_Position start_position = 18;</code>
      */
-    public Lat_Long_Position getStartPosition() {
-      return startPosition_ == null ? Lat_Long_Position.getDefaultInstance() : startPosition_;
+    public Traj.Lat_Long_Position getStartPosition() {
+      return startPosition_ == null ? Traj.Lat_Long_Position.getDefaultInstance() : startPosition_;
     }
     /**
      * <pre>
@@ -1146,8 +1183,43 @@ public final class Traj {
      *
      * <code>optional .Lat_Long_Position start_position = 18;</code>
      */
-    public Lat_Long_PositionOrBuilder getStartPositionOrBuilder() {
+    public Traj.Lat_Long_PositionOrBuilder getStartPositionOrBuilder() {
       return getStartPosition();
+    }
+
+    public static final int FUSION_DATA_FIELD_NUMBER = 19;
+    private java.util.List<Traj.Pdr_Sample> fusionData_;
+    /**
+     * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+     */
+    public java.util.List<Traj.Pdr_Sample> getFusionDataList() {
+      return fusionData_;
+    }
+    /**
+     * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+     */
+    public java.util.List<? extends Traj.Pdr_SampleOrBuilder> 
+        getFusionDataOrBuilderList() {
+      return fusionData_;
+    }
+    /**
+     * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+     */
+    public int getFusionDataCount() {
+      return fusionData_.size();
+    }
+    /**
+     * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+     */
+    public Traj.Pdr_Sample getFusionData(int index) {
+      return fusionData_.get(index);
+    }
+    /**
+     * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+     */
+    public Traj.Pdr_SampleOrBuilder getFusionDataOrBuilder(
+        int index) {
+      return fusionData_.get(index);
     }
 
     private byte memoizedIsInitialized = -1;
@@ -1215,6 +1287,9 @@ public final class Traj {
       }
       if (startPosition_ != null) {
         output.writeMessage(18, getStartPosition());
+      }
+      for (int i = 0; i < fusionData_.size(); i++) {
+        output.writeMessage(19, fusionData_.get(i));
       }
     }
 
@@ -1293,20 +1368,24 @@ public final class Traj {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(18, getStartPosition());
       }
+      for (int i = 0; i < fusionData_.size(); i++) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(19, fusionData_.get(i));
+      }
       memoizedSize = size;
       return size;
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof Trajectory)) {
+      if (!(obj instanceof Traj.Trajectory)) {
         return super.equals(obj);
       }
-      Trajectory other = (Trajectory) obj;
+      Traj.Trajectory other = (Traj.Trajectory) obj;
 
       boolean result = true;
       result = result && getAndroidVersion()
@@ -1366,10 +1445,12 @@ public final class Traj {
         result = result && getStartPosition()
             .equals(other.getStartPosition());
       }
+      result = result && getFusionDataList()
+          .equals(other.getFusionDataList());
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -1443,63 +1524,67 @@ public final class Traj {
         hash = (37 * hash) + START_POSITION_FIELD_NUMBER;
         hash = (53 * hash) + getStartPosition().hashCode();
       }
+      if (getFusionDataCount() > 0) {
+        hash = (37 * hash) + FUSION_DATA_FIELD_NUMBER;
+        hash = (53 * hash) + getFusionDataList().hashCode();
+      }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
     }
 
-    public static Trajectory parseFrom(
+    public static Traj.Trajectory parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Trajectory parseFrom(
+    public static Traj.Trajectory parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Trajectory parseFrom(byte[] data)
+    public static Traj.Trajectory parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Trajectory parseFrom(
+    public static Traj.Trajectory parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Trajectory parseFrom(java.io.InputStream input)
+    public static Traj.Trajectory parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Trajectory parseFrom(
+    public static Traj.Trajectory parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Trajectory parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.Trajectory parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static Trajectory parseDelimitedFrom(
+    public static Traj.Trajectory parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Trajectory parseFrom(
+    public static Traj.Trajectory parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Trajectory parseFrom(
+    public static Traj.Trajectory parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -1511,7 +1596,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(Trajectory prototype) {
+    public static Builder newBuilder(Traj.Trajectory prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -1519,9 +1604,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -1531,17 +1616,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:Trajectory)
-        TrajectoryOrBuilder {
+        Traj.TrajectoryOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_Trajectory_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Trajectory_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                Trajectory.class, Builder.class);
+                Traj.Trajectory.class, Traj.Trajectory.Builder.class);
       }
 
       // Construct using Traj.Trajectory.newBuilder()
@@ -1550,7 +1635,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -1565,6 +1650,7 @@ public final class Traj {
           getGnssDataFieldBuilder();
           getWifiDataFieldBuilder();
           getApsDataFieldBuilder();
+          getFusionDataFieldBuilder();
         }
       }
       public Builder clear() {
@@ -1665,6 +1751,12 @@ public final class Traj {
           startPosition_ = null;
           startPositionBuilder_ = null;
         }
+        if (fusionDataBuilder_ == null) {
+          fusionData_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00040000);
+        } else {
+          fusionDataBuilder_.clear();
+        }
         return this;
       }
 
@@ -1673,20 +1765,20 @@ public final class Traj {
         return Traj.internal_static_Trajectory_descriptor;
       }
 
-      public Trajectory getDefaultInstanceForType() {
-        return Trajectory.getDefaultInstance();
+      public Traj.Trajectory getDefaultInstanceForType() {
+        return Traj.Trajectory.getDefaultInstance();
       }
 
-      public Trajectory build() {
-        Trajectory result = buildPartial();
+      public Traj.Trajectory build() {
+        Traj.Trajectory result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public Trajectory buildPartial() {
-        Trajectory result = new Trajectory(this);
+      public Traj.Trajectory buildPartial() {
+        Traj.Trajectory result = new Traj.Trajectory(this);
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         result.androidVersion_ = androidVersion_;
@@ -1799,6 +1891,15 @@ public final class Traj {
         } else {
           result.startPosition_ = startPositionBuilder_.build();
         }
+        if (fusionDataBuilder_ == null) {
+          if (((bitField0_ & 0x00040000) == 0x00040000)) {
+            fusionData_ = java.util.Collections.unmodifiableList(fusionData_);
+            bitField0_ = (bitField0_ & ~0x00040000);
+          }
+          result.fusionData_ = fusionData_;
+        } else {
+          result.fusionData_ = fusionDataBuilder_.build();
+        }
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -1831,16 +1932,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof Trajectory) {
-          return mergeFrom((Trajectory)other);
+        if (other instanceof Traj.Trajectory) {
+          return mergeFrom((Traj.Trajectory)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(Trajectory other) {
-        if (other == Trajectory.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.Trajectory other) {
+        if (other == Traj.Trajectory.getDefaultInstance()) return this;
         if (!other.getAndroidVersion().isEmpty()) {
           androidVersion_ = other.androidVersion_;
           onChanged();
@@ -2081,6 +2182,32 @@ public final class Traj {
         if (other.hasStartPosition()) {
           mergeStartPosition(other.getStartPosition());
         }
+        if (fusionDataBuilder_ == null) {
+          if (!other.fusionData_.isEmpty()) {
+            if (fusionData_.isEmpty()) {
+              fusionData_ = other.fusionData_;
+              bitField0_ = (bitField0_ & ~0x00040000);
+            } else {
+              ensureFusionDataIsMutable();
+              fusionData_.addAll(other.fusionData_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.fusionData_.isEmpty()) {
+            if (fusionDataBuilder_.isEmpty()) {
+              fusionDataBuilder_.dispose();
+              fusionDataBuilder_ = null;
+              fusionData_ = other.fusionData_;
+              bitField0_ = (bitField0_ & ~0x00040000);
+              fusionDataBuilder_ = 
+                com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
+                   getFusionDataFieldBuilder() : null;
+            } else {
+              fusionDataBuilder_.addAllMessages(other.fusionData_);
+            }
+          }
+        }
         onChanged();
         return this;
       }
@@ -2093,11 +2220,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        Trajectory parsedMessage = null;
+        Traj.Trajectory parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (Trajectory) e.getUnfinishedMessage();
+          parsedMessage = (Traj.Trajectory) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -2108,20 +2235,20 @@ public final class Traj {
       }
       private int bitField0_;
 
-      private Object androidVersion_ = "";
+      private java.lang.Object androidVersion_ = "";
       /**
        * <code>optional string android_version = 1;</code>
        */
-      public String getAndroidVersion() {
-        Object ref = androidVersion_;
-        if (!(ref instanceof String)) {
+      public java.lang.String getAndroidVersion() {
+        java.lang.Object ref = androidVersion_;
+        if (!(ref instanceof java.lang.String)) {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
-          String s = bs.toStringUtf8();
+          java.lang.String s = bs.toStringUtf8();
           androidVersion_ = s;
           return s;
         } else {
-          return (String) ref;
+          return (java.lang.String) ref;
         }
       }
       /**
@@ -2129,11 +2256,11 @@ public final class Traj {
        */
       public com.google.protobuf.ByteString
           getAndroidVersionBytes() {
-        Object ref = androidVersion_;
+        java.lang.Object ref = androidVersion_;
         if (ref instanceof String) {
           com.google.protobuf.ByteString b = 
               com.google.protobuf.ByteString.copyFromUtf8(
-                  (String) ref);
+                  (java.lang.String) ref);
           androidVersion_ = b;
           return b;
         } else {
@@ -2144,7 +2271,7 @@ public final class Traj {
        * <code>optional string android_version = 1;</code>
        */
       public Builder setAndroidVersion(
-          String value) {
+          java.lang.String value) {
         if (value == null) {
     throw new NullPointerException();
   }
@@ -2177,22 +2304,22 @@ public final class Traj {
         return this;
       }
 
-      private java.util.List<Motion_Sample> imuData_ =
+      private java.util.List<Traj.Motion_Sample> imuData_ =
         java.util.Collections.emptyList();
       private void ensureImuDataIsMutable() {
         if (!((bitField0_ & 0x00000002) == 0x00000002)) {
-          imuData_ = new java.util.ArrayList<Motion_Sample>(imuData_);
+          imuData_ = new java.util.ArrayList<Traj.Motion_Sample>(imuData_);
           bitField0_ |= 0x00000002;
          }
       }
 
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Motion_Sample, Motion_Sample.Builder, Motion_SampleOrBuilder> imuDataBuilder_;
+          Traj.Motion_Sample, Traj.Motion_Sample.Builder, Traj.Motion_SampleOrBuilder> imuDataBuilder_;
 
       /**
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
-      public java.util.List<Motion_Sample> getImuDataList() {
+      public java.util.List<Traj.Motion_Sample> getImuDataList() {
         if (imuDataBuilder_ == null) {
           return java.util.Collections.unmodifiableList(imuData_);
         } else {
@@ -2212,7 +2339,7 @@ public final class Traj {
       /**
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
-      public Motion_Sample getImuData(int index) {
+      public Traj.Motion_Sample getImuData(int index) {
         if (imuDataBuilder_ == null) {
           return imuData_.get(index);
         } else {
@@ -2223,7 +2350,7 @@ public final class Traj {
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
       public Builder setImuData(
-          int index, Motion_Sample value) {
+          int index, Traj.Motion_Sample value) {
         if (imuDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2240,7 +2367,7 @@ public final class Traj {
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
       public Builder setImuData(
-          int index, Motion_Sample.Builder builderForValue) {
+          int index, Traj.Motion_Sample.Builder builderForValue) {
         if (imuDataBuilder_ == null) {
           ensureImuDataIsMutable();
           imuData_.set(index, builderForValue.build());
@@ -2253,7 +2380,7 @@ public final class Traj {
       /**
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
-      public Builder addImuData(Motion_Sample value) {
+      public Builder addImuData(Traj.Motion_Sample value) {
         if (imuDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2270,7 +2397,7 @@ public final class Traj {
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
       public Builder addImuData(
-          int index, Motion_Sample value) {
+          int index, Traj.Motion_Sample value) {
         if (imuDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2287,7 +2414,7 @@ public final class Traj {
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
       public Builder addImuData(
-          Motion_Sample.Builder builderForValue) {
+          Traj.Motion_Sample.Builder builderForValue) {
         if (imuDataBuilder_ == null) {
           ensureImuDataIsMutable();
           imuData_.add(builderForValue.build());
@@ -2301,7 +2428,7 @@ public final class Traj {
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
       public Builder addImuData(
-          int index, Motion_Sample.Builder builderForValue) {
+          int index, Traj.Motion_Sample.Builder builderForValue) {
         if (imuDataBuilder_ == null) {
           ensureImuDataIsMutable();
           imuData_.add(index, builderForValue.build());
@@ -2315,7 +2442,7 @@ public final class Traj {
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
       public Builder addAllImuData(
-          Iterable<? extends Motion_Sample> values) {
+          java.lang.Iterable<? extends Traj.Motion_Sample> values) {
         if (imuDataBuilder_ == null) {
           ensureImuDataIsMutable();
           com.google.protobuf.AbstractMessageLite.Builder.addAll(
@@ -2355,14 +2482,14 @@ public final class Traj {
       /**
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
-      public Motion_Sample.Builder getImuDataBuilder(
+      public Traj.Motion_Sample.Builder getImuDataBuilder(
           int index) {
         return getImuDataFieldBuilder().getBuilder(index);
       }
       /**
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
-      public Motion_SampleOrBuilder getImuDataOrBuilder(
+      public Traj.Motion_SampleOrBuilder getImuDataOrBuilder(
           int index) {
         if (imuDataBuilder_ == null) {
           return imuData_.get(index);  } else {
@@ -2372,7 +2499,7 @@ public final class Traj {
       /**
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
-      public java.util.List<? extends Motion_SampleOrBuilder>
+      public java.util.List<? extends Traj.Motion_SampleOrBuilder> 
            getImuDataOrBuilderList() {
         if (imuDataBuilder_ != null) {
           return imuDataBuilder_.getMessageOrBuilderList();
@@ -2383,31 +2510,31 @@ public final class Traj {
       /**
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
-      public Motion_Sample.Builder addImuDataBuilder() {
+      public Traj.Motion_Sample.Builder addImuDataBuilder() {
         return getImuDataFieldBuilder().addBuilder(
-            Motion_Sample.getDefaultInstance());
+            Traj.Motion_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
-      public Motion_Sample.Builder addImuDataBuilder(
+      public Traj.Motion_Sample.Builder addImuDataBuilder(
           int index) {
         return getImuDataFieldBuilder().addBuilder(
-            index, Motion_Sample.getDefaultInstance());
+            index, Traj.Motion_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .Motion_Sample imu_data = 2;</code>
        */
-      public java.util.List<Motion_Sample.Builder>
+      public java.util.List<Traj.Motion_Sample.Builder> 
            getImuDataBuilderList() {
         return getImuDataFieldBuilder().getBuilderList();
       }
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Motion_Sample, Motion_Sample.Builder, Motion_SampleOrBuilder>
+          Traj.Motion_Sample, Traj.Motion_Sample.Builder, Traj.Motion_SampleOrBuilder> 
           getImuDataFieldBuilder() {
         if (imuDataBuilder_ == null) {
           imuDataBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
-              Motion_Sample, Motion_Sample.Builder, Motion_SampleOrBuilder>(
+              Traj.Motion_Sample, Traj.Motion_Sample.Builder, Traj.Motion_SampleOrBuilder>(
                   imuData_,
                   ((bitField0_ & 0x00000002) == 0x00000002),
                   getParentForChildren(),
@@ -2417,22 +2544,22 @@ public final class Traj {
         return imuDataBuilder_;
       }
 
-      private java.util.List<Pdr_Sample> pdrData_ =
+      private java.util.List<Traj.Pdr_Sample> pdrData_ =
         java.util.Collections.emptyList();
       private void ensurePdrDataIsMutable() {
         if (!((bitField0_ & 0x00000004) == 0x00000004)) {
-          pdrData_ = new java.util.ArrayList<Pdr_Sample>(pdrData_);
+          pdrData_ = new java.util.ArrayList<Traj.Pdr_Sample>(pdrData_);
           bitField0_ |= 0x00000004;
          }
       }
 
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Pdr_Sample, Pdr_Sample.Builder, Pdr_SampleOrBuilder> pdrDataBuilder_;
+          Traj.Pdr_Sample, Traj.Pdr_Sample.Builder, Traj.Pdr_SampleOrBuilder> pdrDataBuilder_;
 
       /**
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
-      public java.util.List<Pdr_Sample> getPdrDataList() {
+      public java.util.List<Traj.Pdr_Sample> getPdrDataList() {
         if (pdrDataBuilder_ == null) {
           return java.util.Collections.unmodifiableList(pdrData_);
         } else {
@@ -2452,7 +2579,7 @@ public final class Traj {
       /**
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
-      public Pdr_Sample getPdrData(int index) {
+      public Traj.Pdr_Sample getPdrData(int index) {
         if (pdrDataBuilder_ == null) {
           return pdrData_.get(index);
         } else {
@@ -2463,7 +2590,7 @@ public final class Traj {
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
       public Builder setPdrData(
-          int index, Pdr_Sample value) {
+          int index, Traj.Pdr_Sample value) {
         if (pdrDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2480,7 +2607,7 @@ public final class Traj {
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
       public Builder setPdrData(
-          int index, Pdr_Sample.Builder builderForValue) {
+          int index, Traj.Pdr_Sample.Builder builderForValue) {
         if (pdrDataBuilder_ == null) {
           ensurePdrDataIsMutable();
           pdrData_.set(index, builderForValue.build());
@@ -2493,7 +2620,7 @@ public final class Traj {
       /**
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
-      public Builder addPdrData(Pdr_Sample value) {
+      public Builder addPdrData(Traj.Pdr_Sample value) {
         if (pdrDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2510,7 +2637,7 @@ public final class Traj {
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
       public Builder addPdrData(
-          int index, Pdr_Sample value) {
+          int index, Traj.Pdr_Sample value) {
         if (pdrDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2527,7 +2654,7 @@ public final class Traj {
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
       public Builder addPdrData(
-          Pdr_Sample.Builder builderForValue) {
+          Traj.Pdr_Sample.Builder builderForValue) {
         if (pdrDataBuilder_ == null) {
           ensurePdrDataIsMutable();
           pdrData_.add(builderForValue.build());
@@ -2541,7 +2668,7 @@ public final class Traj {
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
       public Builder addPdrData(
-          int index, Pdr_Sample.Builder builderForValue) {
+          int index, Traj.Pdr_Sample.Builder builderForValue) {
         if (pdrDataBuilder_ == null) {
           ensurePdrDataIsMutable();
           pdrData_.add(index, builderForValue.build());
@@ -2555,7 +2682,7 @@ public final class Traj {
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
       public Builder addAllPdrData(
-          Iterable<? extends Pdr_Sample> values) {
+          java.lang.Iterable<? extends Traj.Pdr_Sample> values) {
         if (pdrDataBuilder_ == null) {
           ensurePdrDataIsMutable();
           com.google.protobuf.AbstractMessageLite.Builder.addAll(
@@ -2595,14 +2722,14 @@ public final class Traj {
       /**
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
-      public Pdr_Sample.Builder getPdrDataBuilder(
+      public Traj.Pdr_Sample.Builder getPdrDataBuilder(
           int index) {
         return getPdrDataFieldBuilder().getBuilder(index);
       }
       /**
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
-      public Pdr_SampleOrBuilder getPdrDataOrBuilder(
+      public Traj.Pdr_SampleOrBuilder getPdrDataOrBuilder(
           int index) {
         if (pdrDataBuilder_ == null) {
           return pdrData_.get(index);  } else {
@@ -2612,7 +2739,7 @@ public final class Traj {
       /**
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
-      public java.util.List<? extends Pdr_SampleOrBuilder>
+      public java.util.List<? extends Traj.Pdr_SampleOrBuilder> 
            getPdrDataOrBuilderList() {
         if (pdrDataBuilder_ != null) {
           return pdrDataBuilder_.getMessageOrBuilderList();
@@ -2623,31 +2750,31 @@ public final class Traj {
       /**
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
-      public Pdr_Sample.Builder addPdrDataBuilder() {
+      public Traj.Pdr_Sample.Builder addPdrDataBuilder() {
         return getPdrDataFieldBuilder().addBuilder(
-            Pdr_Sample.getDefaultInstance());
+            Traj.Pdr_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
-      public Pdr_Sample.Builder addPdrDataBuilder(
+      public Traj.Pdr_Sample.Builder addPdrDataBuilder(
           int index) {
         return getPdrDataFieldBuilder().addBuilder(
-            index, Pdr_Sample.getDefaultInstance());
+            index, Traj.Pdr_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .Pdr_Sample pdr_data = 3;</code>
        */
-      public java.util.List<Pdr_Sample.Builder>
+      public java.util.List<Traj.Pdr_Sample.Builder> 
            getPdrDataBuilderList() {
         return getPdrDataFieldBuilder().getBuilderList();
       }
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Pdr_Sample, Pdr_Sample.Builder, Pdr_SampleOrBuilder>
+          Traj.Pdr_Sample, Traj.Pdr_Sample.Builder, Traj.Pdr_SampleOrBuilder> 
           getPdrDataFieldBuilder() {
         if (pdrDataBuilder_ == null) {
           pdrDataBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
-              Pdr_Sample, Pdr_Sample.Builder, Pdr_SampleOrBuilder>(
+              Traj.Pdr_Sample, Traj.Pdr_Sample.Builder, Traj.Pdr_SampleOrBuilder>(
                   pdrData_,
                   ((bitField0_ & 0x00000004) == 0x00000004),
                   getParentForChildren(),
@@ -2657,22 +2784,22 @@ public final class Traj {
         return pdrDataBuilder_;
       }
 
-      private java.util.List<Position_Sample> positionData_ =
+      private java.util.List<Traj.Position_Sample> positionData_ =
         java.util.Collections.emptyList();
       private void ensurePositionDataIsMutable() {
         if (!((bitField0_ & 0x00000008) == 0x00000008)) {
-          positionData_ = new java.util.ArrayList<Position_Sample>(positionData_);
+          positionData_ = new java.util.ArrayList<Traj.Position_Sample>(positionData_);
           bitField0_ |= 0x00000008;
          }
       }
 
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Position_Sample, Position_Sample.Builder, Position_SampleOrBuilder> positionDataBuilder_;
+          Traj.Position_Sample, Traj.Position_Sample.Builder, Traj.Position_SampleOrBuilder> positionDataBuilder_;
 
       /**
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
-      public java.util.List<Position_Sample> getPositionDataList() {
+      public java.util.List<Traj.Position_Sample> getPositionDataList() {
         if (positionDataBuilder_ == null) {
           return java.util.Collections.unmodifiableList(positionData_);
         } else {
@@ -2692,7 +2819,7 @@ public final class Traj {
       /**
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
-      public Position_Sample getPositionData(int index) {
+      public Traj.Position_Sample getPositionData(int index) {
         if (positionDataBuilder_ == null) {
           return positionData_.get(index);
         } else {
@@ -2703,7 +2830,7 @@ public final class Traj {
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
       public Builder setPositionData(
-          int index, Position_Sample value) {
+          int index, Traj.Position_Sample value) {
         if (positionDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2720,7 +2847,7 @@ public final class Traj {
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
       public Builder setPositionData(
-          int index, Position_Sample.Builder builderForValue) {
+          int index, Traj.Position_Sample.Builder builderForValue) {
         if (positionDataBuilder_ == null) {
           ensurePositionDataIsMutable();
           positionData_.set(index, builderForValue.build());
@@ -2733,7 +2860,7 @@ public final class Traj {
       /**
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
-      public Builder addPositionData(Position_Sample value) {
+      public Builder addPositionData(Traj.Position_Sample value) {
         if (positionDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2750,7 +2877,7 @@ public final class Traj {
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
       public Builder addPositionData(
-          int index, Position_Sample value) {
+          int index, Traj.Position_Sample value) {
         if (positionDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2767,7 +2894,7 @@ public final class Traj {
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
       public Builder addPositionData(
-          Position_Sample.Builder builderForValue) {
+          Traj.Position_Sample.Builder builderForValue) {
         if (positionDataBuilder_ == null) {
           ensurePositionDataIsMutable();
           positionData_.add(builderForValue.build());
@@ -2781,7 +2908,7 @@ public final class Traj {
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
       public Builder addPositionData(
-          int index, Position_Sample.Builder builderForValue) {
+          int index, Traj.Position_Sample.Builder builderForValue) {
         if (positionDataBuilder_ == null) {
           ensurePositionDataIsMutable();
           positionData_.add(index, builderForValue.build());
@@ -2795,7 +2922,7 @@ public final class Traj {
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
       public Builder addAllPositionData(
-          Iterable<? extends Position_Sample> values) {
+          java.lang.Iterable<? extends Traj.Position_Sample> values) {
         if (positionDataBuilder_ == null) {
           ensurePositionDataIsMutable();
           com.google.protobuf.AbstractMessageLite.Builder.addAll(
@@ -2835,14 +2962,14 @@ public final class Traj {
       /**
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
-      public Position_Sample.Builder getPositionDataBuilder(
+      public Traj.Position_Sample.Builder getPositionDataBuilder(
           int index) {
         return getPositionDataFieldBuilder().getBuilder(index);
       }
       /**
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
-      public Position_SampleOrBuilder getPositionDataOrBuilder(
+      public Traj.Position_SampleOrBuilder getPositionDataOrBuilder(
           int index) {
         if (positionDataBuilder_ == null) {
           return positionData_.get(index);  } else {
@@ -2852,7 +2979,7 @@ public final class Traj {
       /**
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
-      public java.util.List<? extends Position_SampleOrBuilder>
+      public java.util.List<? extends Traj.Position_SampleOrBuilder> 
            getPositionDataOrBuilderList() {
         if (positionDataBuilder_ != null) {
           return positionDataBuilder_.getMessageOrBuilderList();
@@ -2863,31 +2990,31 @@ public final class Traj {
       /**
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
-      public Position_Sample.Builder addPositionDataBuilder() {
+      public Traj.Position_Sample.Builder addPositionDataBuilder() {
         return getPositionDataFieldBuilder().addBuilder(
-            Position_Sample.getDefaultInstance());
+            Traj.Position_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
-      public Position_Sample.Builder addPositionDataBuilder(
+      public Traj.Position_Sample.Builder addPositionDataBuilder(
           int index) {
         return getPositionDataFieldBuilder().addBuilder(
-            index, Position_Sample.getDefaultInstance());
+            index, Traj.Position_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .Position_Sample position_data = 4;</code>
        */
-      public java.util.List<Position_Sample.Builder>
+      public java.util.List<Traj.Position_Sample.Builder> 
            getPositionDataBuilderList() {
         return getPositionDataFieldBuilder().getBuilderList();
       }
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Position_Sample, Position_Sample.Builder, Position_SampleOrBuilder>
+          Traj.Position_Sample, Traj.Position_Sample.Builder, Traj.Position_SampleOrBuilder> 
           getPositionDataFieldBuilder() {
         if (positionDataBuilder_ == null) {
           positionDataBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
-              Position_Sample, Position_Sample.Builder, Position_SampleOrBuilder>(
+              Traj.Position_Sample, Traj.Position_Sample.Builder, Traj.Position_SampleOrBuilder>(
                   positionData_,
                   ((bitField0_ & 0x00000008) == 0x00000008),
                   getParentForChildren(),
@@ -2897,22 +3024,22 @@ public final class Traj {
         return positionDataBuilder_;
       }
 
-      private java.util.List<Pressure_Sample> pressureData_ =
+      private java.util.List<Traj.Pressure_Sample> pressureData_ =
         java.util.Collections.emptyList();
       private void ensurePressureDataIsMutable() {
         if (!((bitField0_ & 0x00000010) == 0x00000010)) {
-          pressureData_ = new java.util.ArrayList<Pressure_Sample>(pressureData_);
+          pressureData_ = new java.util.ArrayList<Traj.Pressure_Sample>(pressureData_);
           bitField0_ |= 0x00000010;
          }
       }
 
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Pressure_Sample, Pressure_Sample.Builder, Pressure_SampleOrBuilder> pressureDataBuilder_;
+          Traj.Pressure_Sample, Traj.Pressure_Sample.Builder, Traj.Pressure_SampleOrBuilder> pressureDataBuilder_;
 
       /**
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
-      public java.util.List<Pressure_Sample> getPressureDataList() {
+      public java.util.List<Traj.Pressure_Sample> getPressureDataList() {
         if (pressureDataBuilder_ == null) {
           return java.util.Collections.unmodifiableList(pressureData_);
         } else {
@@ -2932,7 +3059,7 @@ public final class Traj {
       /**
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
-      public Pressure_Sample getPressureData(int index) {
+      public Traj.Pressure_Sample getPressureData(int index) {
         if (pressureDataBuilder_ == null) {
           return pressureData_.get(index);
         } else {
@@ -2943,7 +3070,7 @@ public final class Traj {
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
       public Builder setPressureData(
-          int index, Pressure_Sample value) {
+          int index, Traj.Pressure_Sample value) {
         if (pressureDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2960,7 +3087,7 @@ public final class Traj {
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
       public Builder setPressureData(
-          int index, Pressure_Sample.Builder builderForValue) {
+          int index, Traj.Pressure_Sample.Builder builderForValue) {
         if (pressureDataBuilder_ == null) {
           ensurePressureDataIsMutable();
           pressureData_.set(index, builderForValue.build());
@@ -2973,7 +3100,7 @@ public final class Traj {
       /**
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
-      public Builder addPressureData(Pressure_Sample value) {
+      public Builder addPressureData(Traj.Pressure_Sample value) {
         if (pressureDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -2990,7 +3117,7 @@ public final class Traj {
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
       public Builder addPressureData(
-          int index, Pressure_Sample value) {
+          int index, Traj.Pressure_Sample value) {
         if (pressureDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3007,7 +3134,7 @@ public final class Traj {
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
       public Builder addPressureData(
-          Pressure_Sample.Builder builderForValue) {
+          Traj.Pressure_Sample.Builder builderForValue) {
         if (pressureDataBuilder_ == null) {
           ensurePressureDataIsMutable();
           pressureData_.add(builderForValue.build());
@@ -3021,7 +3148,7 @@ public final class Traj {
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
       public Builder addPressureData(
-          int index, Pressure_Sample.Builder builderForValue) {
+          int index, Traj.Pressure_Sample.Builder builderForValue) {
         if (pressureDataBuilder_ == null) {
           ensurePressureDataIsMutable();
           pressureData_.add(index, builderForValue.build());
@@ -3035,7 +3162,7 @@ public final class Traj {
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
       public Builder addAllPressureData(
-          Iterable<? extends Pressure_Sample> values) {
+          java.lang.Iterable<? extends Traj.Pressure_Sample> values) {
         if (pressureDataBuilder_ == null) {
           ensurePressureDataIsMutable();
           com.google.protobuf.AbstractMessageLite.Builder.addAll(
@@ -3075,14 +3202,14 @@ public final class Traj {
       /**
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
-      public Pressure_Sample.Builder getPressureDataBuilder(
+      public Traj.Pressure_Sample.Builder getPressureDataBuilder(
           int index) {
         return getPressureDataFieldBuilder().getBuilder(index);
       }
       /**
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
-      public Pressure_SampleOrBuilder getPressureDataOrBuilder(
+      public Traj.Pressure_SampleOrBuilder getPressureDataOrBuilder(
           int index) {
         if (pressureDataBuilder_ == null) {
           return pressureData_.get(index);  } else {
@@ -3092,7 +3219,7 @@ public final class Traj {
       /**
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
-      public java.util.List<? extends Pressure_SampleOrBuilder>
+      public java.util.List<? extends Traj.Pressure_SampleOrBuilder> 
            getPressureDataOrBuilderList() {
         if (pressureDataBuilder_ != null) {
           return pressureDataBuilder_.getMessageOrBuilderList();
@@ -3103,31 +3230,31 @@ public final class Traj {
       /**
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
-      public Pressure_Sample.Builder addPressureDataBuilder() {
+      public Traj.Pressure_Sample.Builder addPressureDataBuilder() {
         return getPressureDataFieldBuilder().addBuilder(
-            Pressure_Sample.getDefaultInstance());
+            Traj.Pressure_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
-      public Pressure_Sample.Builder addPressureDataBuilder(
+      public Traj.Pressure_Sample.Builder addPressureDataBuilder(
           int index) {
         return getPressureDataFieldBuilder().addBuilder(
-            index, Pressure_Sample.getDefaultInstance());
+            index, Traj.Pressure_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .Pressure_Sample pressure_data = 5;</code>
        */
-      public java.util.List<Pressure_Sample.Builder>
+      public java.util.List<Traj.Pressure_Sample.Builder> 
            getPressureDataBuilderList() {
         return getPressureDataFieldBuilder().getBuilderList();
       }
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Pressure_Sample, Pressure_Sample.Builder, Pressure_SampleOrBuilder>
+          Traj.Pressure_Sample, Traj.Pressure_Sample.Builder, Traj.Pressure_SampleOrBuilder> 
           getPressureDataFieldBuilder() {
         if (pressureDataBuilder_ == null) {
           pressureDataBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
-              Pressure_Sample, Pressure_Sample.Builder, Pressure_SampleOrBuilder>(
+              Traj.Pressure_Sample, Traj.Pressure_Sample.Builder, Traj.Pressure_SampleOrBuilder>(
                   pressureData_,
                   ((bitField0_ & 0x00000010) == 0x00000010),
                   getParentForChildren(),
@@ -3137,22 +3264,22 @@ public final class Traj {
         return pressureDataBuilder_;
       }
 
-      private java.util.List<Light_Sample> lightData_ =
+      private java.util.List<Traj.Light_Sample> lightData_ =
         java.util.Collections.emptyList();
       private void ensureLightDataIsMutable() {
         if (!((bitField0_ & 0x00000020) == 0x00000020)) {
-          lightData_ = new java.util.ArrayList<Light_Sample>(lightData_);
+          lightData_ = new java.util.ArrayList<Traj.Light_Sample>(lightData_);
           bitField0_ |= 0x00000020;
          }
       }
 
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Light_Sample, Light_Sample.Builder, Light_SampleOrBuilder> lightDataBuilder_;
+          Traj.Light_Sample, Traj.Light_Sample.Builder, Traj.Light_SampleOrBuilder> lightDataBuilder_;
 
       /**
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
-      public java.util.List<Light_Sample> getLightDataList() {
+      public java.util.List<Traj.Light_Sample> getLightDataList() {
         if (lightDataBuilder_ == null) {
           return java.util.Collections.unmodifiableList(lightData_);
         } else {
@@ -3172,7 +3299,7 @@ public final class Traj {
       /**
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
-      public Light_Sample getLightData(int index) {
+      public Traj.Light_Sample getLightData(int index) {
         if (lightDataBuilder_ == null) {
           return lightData_.get(index);
         } else {
@@ -3183,7 +3310,7 @@ public final class Traj {
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
       public Builder setLightData(
-          int index, Light_Sample value) {
+          int index, Traj.Light_Sample value) {
         if (lightDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3200,7 +3327,7 @@ public final class Traj {
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
       public Builder setLightData(
-          int index, Light_Sample.Builder builderForValue) {
+          int index, Traj.Light_Sample.Builder builderForValue) {
         if (lightDataBuilder_ == null) {
           ensureLightDataIsMutable();
           lightData_.set(index, builderForValue.build());
@@ -3213,7 +3340,7 @@ public final class Traj {
       /**
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
-      public Builder addLightData(Light_Sample value) {
+      public Builder addLightData(Traj.Light_Sample value) {
         if (lightDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3230,7 +3357,7 @@ public final class Traj {
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
       public Builder addLightData(
-          int index, Light_Sample value) {
+          int index, Traj.Light_Sample value) {
         if (lightDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3247,7 +3374,7 @@ public final class Traj {
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
       public Builder addLightData(
-          Light_Sample.Builder builderForValue) {
+          Traj.Light_Sample.Builder builderForValue) {
         if (lightDataBuilder_ == null) {
           ensureLightDataIsMutable();
           lightData_.add(builderForValue.build());
@@ -3261,7 +3388,7 @@ public final class Traj {
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
       public Builder addLightData(
-          int index, Light_Sample.Builder builderForValue) {
+          int index, Traj.Light_Sample.Builder builderForValue) {
         if (lightDataBuilder_ == null) {
           ensureLightDataIsMutable();
           lightData_.add(index, builderForValue.build());
@@ -3275,7 +3402,7 @@ public final class Traj {
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
       public Builder addAllLightData(
-          Iterable<? extends Light_Sample> values) {
+          java.lang.Iterable<? extends Traj.Light_Sample> values) {
         if (lightDataBuilder_ == null) {
           ensureLightDataIsMutable();
           com.google.protobuf.AbstractMessageLite.Builder.addAll(
@@ -3315,14 +3442,14 @@ public final class Traj {
       /**
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
-      public Light_Sample.Builder getLightDataBuilder(
+      public Traj.Light_Sample.Builder getLightDataBuilder(
           int index) {
         return getLightDataFieldBuilder().getBuilder(index);
       }
       /**
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
-      public Light_SampleOrBuilder getLightDataOrBuilder(
+      public Traj.Light_SampleOrBuilder getLightDataOrBuilder(
           int index) {
         if (lightDataBuilder_ == null) {
           return lightData_.get(index);  } else {
@@ -3332,7 +3459,7 @@ public final class Traj {
       /**
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
-      public java.util.List<? extends Light_SampleOrBuilder>
+      public java.util.List<? extends Traj.Light_SampleOrBuilder> 
            getLightDataOrBuilderList() {
         if (lightDataBuilder_ != null) {
           return lightDataBuilder_.getMessageOrBuilderList();
@@ -3343,31 +3470,31 @@ public final class Traj {
       /**
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
-      public Light_Sample.Builder addLightDataBuilder() {
+      public Traj.Light_Sample.Builder addLightDataBuilder() {
         return getLightDataFieldBuilder().addBuilder(
-            Light_Sample.getDefaultInstance());
+            Traj.Light_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
-      public Light_Sample.Builder addLightDataBuilder(
+      public Traj.Light_Sample.Builder addLightDataBuilder(
           int index) {
         return getLightDataFieldBuilder().addBuilder(
-            index, Light_Sample.getDefaultInstance());
+            index, Traj.Light_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .Light_Sample light_data = 6;</code>
        */
-      public java.util.List<Light_Sample.Builder>
+      public java.util.List<Traj.Light_Sample.Builder> 
            getLightDataBuilderList() {
         return getLightDataFieldBuilder().getBuilderList();
       }
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Light_Sample, Light_Sample.Builder, Light_SampleOrBuilder>
+          Traj.Light_Sample, Traj.Light_Sample.Builder, Traj.Light_SampleOrBuilder> 
           getLightDataFieldBuilder() {
         if (lightDataBuilder_ == null) {
           lightDataBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
-              Light_Sample, Light_Sample.Builder, Light_SampleOrBuilder>(
+              Traj.Light_Sample, Traj.Light_Sample.Builder, Traj.Light_SampleOrBuilder>(
                   lightData_,
                   ((bitField0_ & 0x00000020) == 0x00000020),
                   getParentForChildren(),
@@ -3377,22 +3504,22 @@ public final class Traj {
         return lightDataBuilder_;
       }
 
-      private java.util.List<GNSS_Sample> gnssData_ =
+      private java.util.List<Traj.GNSS_Sample> gnssData_ =
         java.util.Collections.emptyList();
       private void ensureGnssDataIsMutable() {
         if (!((bitField0_ & 0x00000040) == 0x00000040)) {
-          gnssData_ = new java.util.ArrayList<GNSS_Sample>(gnssData_);
+          gnssData_ = new java.util.ArrayList<Traj.GNSS_Sample>(gnssData_);
           bitField0_ |= 0x00000040;
          }
       }
 
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          GNSS_Sample, GNSS_Sample.Builder, GNSS_SampleOrBuilder> gnssDataBuilder_;
+          Traj.GNSS_Sample, Traj.GNSS_Sample.Builder, Traj.GNSS_SampleOrBuilder> gnssDataBuilder_;
 
       /**
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
-      public java.util.List<GNSS_Sample> getGnssDataList() {
+      public java.util.List<Traj.GNSS_Sample> getGnssDataList() {
         if (gnssDataBuilder_ == null) {
           return java.util.Collections.unmodifiableList(gnssData_);
         } else {
@@ -3412,7 +3539,7 @@ public final class Traj {
       /**
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
-      public GNSS_Sample getGnssData(int index) {
+      public Traj.GNSS_Sample getGnssData(int index) {
         if (gnssDataBuilder_ == null) {
           return gnssData_.get(index);
         } else {
@@ -3423,7 +3550,7 @@ public final class Traj {
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
       public Builder setGnssData(
-          int index, GNSS_Sample value) {
+          int index, Traj.GNSS_Sample value) {
         if (gnssDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3440,7 +3567,7 @@ public final class Traj {
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
       public Builder setGnssData(
-          int index, GNSS_Sample.Builder builderForValue) {
+          int index, Traj.GNSS_Sample.Builder builderForValue) {
         if (gnssDataBuilder_ == null) {
           ensureGnssDataIsMutable();
           gnssData_.set(index, builderForValue.build());
@@ -3453,7 +3580,7 @@ public final class Traj {
       /**
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
-      public Builder addGnssData(GNSS_Sample value) {
+      public Builder addGnssData(Traj.GNSS_Sample value) {
         if (gnssDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3470,7 +3597,7 @@ public final class Traj {
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
       public Builder addGnssData(
-          int index, GNSS_Sample value) {
+          int index, Traj.GNSS_Sample value) {
         if (gnssDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3487,7 +3614,7 @@ public final class Traj {
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
       public Builder addGnssData(
-          GNSS_Sample.Builder builderForValue) {
+          Traj.GNSS_Sample.Builder builderForValue) {
         if (gnssDataBuilder_ == null) {
           ensureGnssDataIsMutable();
           gnssData_.add(builderForValue.build());
@@ -3501,7 +3628,7 @@ public final class Traj {
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
       public Builder addGnssData(
-          int index, GNSS_Sample.Builder builderForValue) {
+          int index, Traj.GNSS_Sample.Builder builderForValue) {
         if (gnssDataBuilder_ == null) {
           ensureGnssDataIsMutable();
           gnssData_.add(index, builderForValue.build());
@@ -3515,7 +3642,7 @@ public final class Traj {
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
       public Builder addAllGnssData(
-          Iterable<? extends GNSS_Sample> values) {
+          java.lang.Iterable<? extends Traj.GNSS_Sample> values) {
         if (gnssDataBuilder_ == null) {
           ensureGnssDataIsMutable();
           com.google.protobuf.AbstractMessageLite.Builder.addAll(
@@ -3555,14 +3682,14 @@ public final class Traj {
       /**
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
-      public GNSS_Sample.Builder getGnssDataBuilder(
+      public Traj.GNSS_Sample.Builder getGnssDataBuilder(
           int index) {
         return getGnssDataFieldBuilder().getBuilder(index);
       }
       /**
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
-      public GNSS_SampleOrBuilder getGnssDataOrBuilder(
+      public Traj.GNSS_SampleOrBuilder getGnssDataOrBuilder(
           int index) {
         if (gnssDataBuilder_ == null) {
           return gnssData_.get(index);  } else {
@@ -3572,7 +3699,7 @@ public final class Traj {
       /**
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
-      public java.util.List<? extends GNSS_SampleOrBuilder>
+      public java.util.List<? extends Traj.GNSS_SampleOrBuilder> 
            getGnssDataOrBuilderList() {
         if (gnssDataBuilder_ != null) {
           return gnssDataBuilder_.getMessageOrBuilderList();
@@ -3583,31 +3710,31 @@ public final class Traj {
       /**
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
-      public GNSS_Sample.Builder addGnssDataBuilder() {
+      public Traj.GNSS_Sample.Builder addGnssDataBuilder() {
         return getGnssDataFieldBuilder().addBuilder(
-            GNSS_Sample.getDefaultInstance());
+            Traj.GNSS_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
-      public GNSS_Sample.Builder addGnssDataBuilder(
+      public Traj.GNSS_Sample.Builder addGnssDataBuilder(
           int index) {
         return getGnssDataFieldBuilder().addBuilder(
-            index, GNSS_Sample.getDefaultInstance());
+            index, Traj.GNSS_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .GNSS_Sample gnss_data = 7;</code>
        */
-      public java.util.List<GNSS_Sample.Builder>
+      public java.util.List<Traj.GNSS_Sample.Builder> 
            getGnssDataBuilderList() {
         return getGnssDataFieldBuilder().getBuilderList();
       }
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          GNSS_Sample, GNSS_Sample.Builder, GNSS_SampleOrBuilder>
+          Traj.GNSS_Sample, Traj.GNSS_Sample.Builder, Traj.GNSS_SampleOrBuilder> 
           getGnssDataFieldBuilder() {
         if (gnssDataBuilder_ == null) {
           gnssDataBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
-              GNSS_Sample, GNSS_Sample.Builder, GNSS_SampleOrBuilder>(
+              Traj.GNSS_Sample, Traj.GNSS_Sample.Builder, Traj.GNSS_SampleOrBuilder>(
                   gnssData_,
                   ((bitField0_ & 0x00000040) == 0x00000040),
                   getParentForChildren(),
@@ -3617,22 +3744,22 @@ public final class Traj {
         return gnssDataBuilder_;
       }
 
-      private java.util.List<WiFi_Sample> wifiData_ =
+      private java.util.List<Traj.WiFi_Sample> wifiData_ =
         java.util.Collections.emptyList();
       private void ensureWifiDataIsMutable() {
         if (!((bitField0_ & 0x00000080) == 0x00000080)) {
-          wifiData_ = new java.util.ArrayList<WiFi_Sample>(wifiData_);
+          wifiData_ = new java.util.ArrayList<Traj.WiFi_Sample>(wifiData_);
           bitField0_ |= 0x00000080;
          }
       }
 
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          WiFi_Sample, WiFi_Sample.Builder, WiFi_SampleOrBuilder> wifiDataBuilder_;
+          Traj.WiFi_Sample, Traj.WiFi_Sample.Builder, Traj.WiFi_SampleOrBuilder> wifiDataBuilder_;
 
       /**
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
-      public java.util.List<WiFi_Sample> getWifiDataList() {
+      public java.util.List<Traj.WiFi_Sample> getWifiDataList() {
         if (wifiDataBuilder_ == null) {
           return java.util.Collections.unmodifiableList(wifiData_);
         } else {
@@ -3652,7 +3779,7 @@ public final class Traj {
       /**
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
-      public WiFi_Sample getWifiData(int index) {
+      public Traj.WiFi_Sample getWifiData(int index) {
         if (wifiDataBuilder_ == null) {
           return wifiData_.get(index);
         } else {
@@ -3663,7 +3790,7 @@ public final class Traj {
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
       public Builder setWifiData(
-          int index, WiFi_Sample value) {
+          int index, Traj.WiFi_Sample value) {
         if (wifiDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3680,7 +3807,7 @@ public final class Traj {
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
       public Builder setWifiData(
-          int index, WiFi_Sample.Builder builderForValue) {
+          int index, Traj.WiFi_Sample.Builder builderForValue) {
         if (wifiDataBuilder_ == null) {
           ensureWifiDataIsMutable();
           wifiData_.set(index, builderForValue.build());
@@ -3693,7 +3820,7 @@ public final class Traj {
       /**
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
-      public Builder addWifiData(WiFi_Sample value) {
+      public Builder addWifiData(Traj.WiFi_Sample value) {
         if (wifiDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3710,7 +3837,7 @@ public final class Traj {
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
       public Builder addWifiData(
-          int index, WiFi_Sample value) {
+          int index, Traj.WiFi_Sample value) {
         if (wifiDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3727,7 +3854,7 @@ public final class Traj {
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
       public Builder addWifiData(
-          WiFi_Sample.Builder builderForValue) {
+          Traj.WiFi_Sample.Builder builderForValue) {
         if (wifiDataBuilder_ == null) {
           ensureWifiDataIsMutable();
           wifiData_.add(builderForValue.build());
@@ -3741,7 +3868,7 @@ public final class Traj {
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
       public Builder addWifiData(
-          int index, WiFi_Sample.Builder builderForValue) {
+          int index, Traj.WiFi_Sample.Builder builderForValue) {
         if (wifiDataBuilder_ == null) {
           ensureWifiDataIsMutable();
           wifiData_.add(index, builderForValue.build());
@@ -3755,7 +3882,7 @@ public final class Traj {
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
       public Builder addAllWifiData(
-          Iterable<? extends WiFi_Sample> values) {
+          java.lang.Iterable<? extends Traj.WiFi_Sample> values) {
         if (wifiDataBuilder_ == null) {
           ensureWifiDataIsMutable();
           com.google.protobuf.AbstractMessageLite.Builder.addAll(
@@ -3795,14 +3922,14 @@ public final class Traj {
       /**
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
-      public WiFi_Sample.Builder getWifiDataBuilder(
+      public Traj.WiFi_Sample.Builder getWifiDataBuilder(
           int index) {
         return getWifiDataFieldBuilder().getBuilder(index);
       }
       /**
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
-      public WiFi_SampleOrBuilder getWifiDataOrBuilder(
+      public Traj.WiFi_SampleOrBuilder getWifiDataOrBuilder(
           int index) {
         if (wifiDataBuilder_ == null) {
           return wifiData_.get(index);  } else {
@@ -3812,7 +3939,7 @@ public final class Traj {
       /**
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
-      public java.util.List<? extends WiFi_SampleOrBuilder>
+      public java.util.List<? extends Traj.WiFi_SampleOrBuilder> 
            getWifiDataOrBuilderList() {
         if (wifiDataBuilder_ != null) {
           return wifiDataBuilder_.getMessageOrBuilderList();
@@ -3823,31 +3950,31 @@ public final class Traj {
       /**
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
-      public WiFi_Sample.Builder addWifiDataBuilder() {
+      public Traj.WiFi_Sample.Builder addWifiDataBuilder() {
         return getWifiDataFieldBuilder().addBuilder(
-            WiFi_Sample.getDefaultInstance());
+            Traj.WiFi_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
-      public WiFi_Sample.Builder addWifiDataBuilder(
+      public Traj.WiFi_Sample.Builder addWifiDataBuilder(
           int index) {
         return getWifiDataFieldBuilder().addBuilder(
-            index, WiFi_Sample.getDefaultInstance());
+            index, Traj.WiFi_Sample.getDefaultInstance());
       }
       /**
        * <code>repeated .WiFi_Sample wifi_data = 8;</code>
        */
-      public java.util.List<WiFi_Sample.Builder>
+      public java.util.List<Traj.WiFi_Sample.Builder> 
            getWifiDataBuilderList() {
         return getWifiDataFieldBuilder().getBuilderList();
       }
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          WiFi_Sample, WiFi_Sample.Builder, WiFi_SampleOrBuilder>
+          Traj.WiFi_Sample, Traj.WiFi_Sample.Builder, Traj.WiFi_SampleOrBuilder> 
           getWifiDataFieldBuilder() {
         if (wifiDataBuilder_ == null) {
           wifiDataBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
-              WiFi_Sample, WiFi_Sample.Builder, WiFi_SampleOrBuilder>(
+              Traj.WiFi_Sample, Traj.WiFi_Sample.Builder, Traj.WiFi_SampleOrBuilder>(
                   wifiData_,
                   ((bitField0_ & 0x00000080) == 0x00000080),
                   getParentForChildren(),
@@ -3857,22 +3984,22 @@ public final class Traj {
         return wifiDataBuilder_;
       }
 
-      private java.util.List<AP_Data> apsData_ =
+      private java.util.List<Traj.AP_Data> apsData_ =
         java.util.Collections.emptyList();
       private void ensureApsDataIsMutable() {
         if (!((bitField0_ & 0x00000100) == 0x00000100)) {
-          apsData_ = new java.util.ArrayList<AP_Data>(apsData_);
+          apsData_ = new java.util.ArrayList<Traj.AP_Data>(apsData_);
           bitField0_ |= 0x00000100;
          }
       }
 
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          AP_Data, AP_Data.Builder, AP_DataOrBuilder> apsDataBuilder_;
+          Traj.AP_Data, Traj.AP_Data.Builder, Traj.AP_DataOrBuilder> apsDataBuilder_;
 
       /**
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
-      public java.util.List<AP_Data> getApsDataList() {
+      public java.util.List<Traj.AP_Data> getApsDataList() {
         if (apsDataBuilder_ == null) {
           return java.util.Collections.unmodifiableList(apsData_);
         } else {
@@ -3892,7 +4019,7 @@ public final class Traj {
       /**
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
-      public AP_Data getApsData(int index) {
+      public Traj.AP_Data getApsData(int index) {
         if (apsDataBuilder_ == null) {
           return apsData_.get(index);
         } else {
@@ -3903,7 +4030,7 @@ public final class Traj {
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
       public Builder setApsData(
-          int index, AP_Data value) {
+          int index, Traj.AP_Data value) {
         if (apsDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3920,7 +4047,7 @@ public final class Traj {
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
       public Builder setApsData(
-          int index, AP_Data.Builder builderForValue) {
+          int index, Traj.AP_Data.Builder builderForValue) {
         if (apsDataBuilder_ == null) {
           ensureApsDataIsMutable();
           apsData_.set(index, builderForValue.build());
@@ -3933,7 +4060,7 @@ public final class Traj {
       /**
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
-      public Builder addApsData(AP_Data value) {
+      public Builder addApsData(Traj.AP_Data value) {
         if (apsDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3950,7 +4077,7 @@ public final class Traj {
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
       public Builder addApsData(
-          int index, AP_Data value) {
+          int index, Traj.AP_Data value) {
         if (apsDataBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -3967,7 +4094,7 @@ public final class Traj {
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
       public Builder addApsData(
-          AP_Data.Builder builderForValue) {
+          Traj.AP_Data.Builder builderForValue) {
         if (apsDataBuilder_ == null) {
           ensureApsDataIsMutable();
           apsData_.add(builderForValue.build());
@@ -3981,7 +4108,7 @@ public final class Traj {
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
       public Builder addApsData(
-          int index, AP_Data.Builder builderForValue) {
+          int index, Traj.AP_Data.Builder builderForValue) {
         if (apsDataBuilder_ == null) {
           ensureApsDataIsMutable();
           apsData_.add(index, builderForValue.build());
@@ -3995,7 +4122,7 @@ public final class Traj {
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
       public Builder addAllApsData(
-          Iterable<? extends AP_Data> values) {
+          java.lang.Iterable<? extends Traj.AP_Data> values) {
         if (apsDataBuilder_ == null) {
           ensureApsDataIsMutable();
           com.google.protobuf.AbstractMessageLite.Builder.addAll(
@@ -4035,14 +4162,14 @@ public final class Traj {
       /**
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
-      public AP_Data.Builder getApsDataBuilder(
+      public Traj.AP_Data.Builder getApsDataBuilder(
           int index) {
         return getApsDataFieldBuilder().getBuilder(index);
       }
       /**
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
-      public AP_DataOrBuilder getApsDataOrBuilder(
+      public Traj.AP_DataOrBuilder getApsDataOrBuilder(
           int index) {
         if (apsDataBuilder_ == null) {
           return apsData_.get(index);  } else {
@@ -4052,7 +4179,7 @@ public final class Traj {
       /**
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
-      public java.util.List<? extends AP_DataOrBuilder>
+      public java.util.List<? extends Traj.AP_DataOrBuilder> 
            getApsDataOrBuilderList() {
         if (apsDataBuilder_ != null) {
           return apsDataBuilder_.getMessageOrBuilderList();
@@ -4063,31 +4190,31 @@ public final class Traj {
       /**
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
-      public AP_Data.Builder addApsDataBuilder() {
+      public Traj.AP_Data.Builder addApsDataBuilder() {
         return getApsDataFieldBuilder().addBuilder(
-            AP_Data.getDefaultInstance());
+            Traj.AP_Data.getDefaultInstance());
       }
       /**
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
-      public AP_Data.Builder addApsDataBuilder(
+      public Traj.AP_Data.Builder addApsDataBuilder(
           int index) {
         return getApsDataFieldBuilder().addBuilder(
-            index, AP_Data.getDefaultInstance());
+            index, Traj.AP_Data.getDefaultInstance());
       }
       /**
        * <code>repeated .AP_Data aps_data = 9;</code>
        */
-      public java.util.List<AP_Data.Builder>
+      public java.util.List<Traj.AP_Data.Builder> 
            getApsDataBuilderList() {
         return getApsDataFieldBuilder().getBuilderList();
       }
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          AP_Data, AP_Data.Builder, AP_DataOrBuilder>
+          Traj.AP_Data, Traj.AP_Data.Builder, Traj.AP_DataOrBuilder> 
           getApsDataFieldBuilder() {
         if (apsDataBuilder_ == null) {
           apsDataBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
-              AP_Data, AP_Data.Builder, AP_DataOrBuilder>(
+              Traj.AP_Data, Traj.AP_Data.Builder, Traj.AP_DataOrBuilder>(
                   apsData_,
                   ((bitField0_ & 0x00000100) == 0x00000100),
                   getParentForChildren(),
@@ -4153,20 +4280,20 @@ public final class Traj {
         return this;
       }
 
-      private Object dataIdentifier_ = "";
+      private java.lang.Object dataIdentifier_ = "";
       /**
        * <code>optional string data_identifier = 11;</code>
        */
-      public String getDataIdentifier() {
-        Object ref = dataIdentifier_;
-        if (!(ref instanceof String)) {
+      public java.lang.String getDataIdentifier() {
+        java.lang.Object ref = dataIdentifier_;
+        if (!(ref instanceof java.lang.String)) {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
-          String s = bs.toStringUtf8();
+          java.lang.String s = bs.toStringUtf8();
           dataIdentifier_ = s;
           return s;
         } else {
-          return (String) ref;
+          return (java.lang.String) ref;
         }
       }
       /**
@@ -4174,11 +4301,11 @@ public final class Traj {
        */
       public com.google.protobuf.ByteString
           getDataIdentifierBytes() {
-        Object ref = dataIdentifier_;
+        java.lang.Object ref = dataIdentifier_;
         if (ref instanceof String) {
           com.google.protobuf.ByteString b = 
               com.google.protobuf.ByteString.copyFromUtf8(
-                  (String) ref);
+                  (java.lang.String) ref);
           dataIdentifier_ = b;
           return b;
         } else {
@@ -4189,7 +4316,7 @@ public final class Traj {
        * <code>optional string data_identifier = 11;</code>
        */
       public Builder setDataIdentifier(
-          String value) {
+          java.lang.String value) {
         if (value == null) {
     throw new NullPointerException();
   }
@@ -4222,9 +4349,9 @@ public final class Traj {
         return this;
       }
 
-      private Sensor_Info accelerometerInfo_ = null;
+      private Traj.Sensor_Info accelerometerInfo_ = null;
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder> accelerometerInfoBuilder_;
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> accelerometerInfoBuilder_;
       /**
        * <code>optional .Sensor_Info accelerometer_info = 12;</code>
        */
@@ -4234,9 +4361,9 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info accelerometer_info = 12;</code>
        */
-      public Sensor_Info getAccelerometerInfo() {
+      public Traj.Sensor_Info getAccelerometerInfo() {
         if (accelerometerInfoBuilder_ == null) {
-          return accelerometerInfo_ == null ? Sensor_Info.getDefaultInstance() : accelerometerInfo_;
+          return accelerometerInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : accelerometerInfo_;
         } else {
           return accelerometerInfoBuilder_.getMessage();
         }
@@ -4244,7 +4371,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info accelerometer_info = 12;</code>
        */
-      public Builder setAccelerometerInfo(Sensor_Info value) {
+      public Builder setAccelerometerInfo(Traj.Sensor_Info value) {
         if (accelerometerInfoBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -4261,7 +4388,7 @@ public final class Traj {
        * <code>optional .Sensor_Info accelerometer_info = 12;</code>
        */
       public Builder setAccelerometerInfo(
-          Sensor_Info.Builder builderForValue) {
+          Traj.Sensor_Info.Builder builderForValue) {
         if (accelerometerInfoBuilder_ == null) {
           accelerometerInfo_ = builderForValue.build();
           onChanged();
@@ -4274,11 +4401,11 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info accelerometer_info = 12;</code>
        */
-      public Builder mergeAccelerometerInfo(Sensor_Info value) {
+      public Builder mergeAccelerometerInfo(Traj.Sensor_Info value) {
         if (accelerometerInfoBuilder_ == null) {
           if (accelerometerInfo_ != null) {
             accelerometerInfo_ =
-              Sensor_Info.newBuilder(accelerometerInfo_).mergeFrom(value).buildPartial();
+              Traj.Sensor_Info.newBuilder(accelerometerInfo_).mergeFrom(value).buildPartial();
           } else {
             accelerometerInfo_ = value;
           }
@@ -4306,7 +4433,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info accelerometer_info = 12;</code>
        */
-      public Sensor_Info.Builder getAccelerometerInfoBuilder() {
+      public Traj.Sensor_Info.Builder getAccelerometerInfoBuilder() {
         
         onChanged();
         return getAccelerometerInfoFieldBuilder().getBuilder();
@@ -4314,23 +4441,23 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info accelerometer_info = 12;</code>
        */
-      public Sensor_InfoOrBuilder getAccelerometerInfoOrBuilder() {
+      public Traj.Sensor_InfoOrBuilder getAccelerometerInfoOrBuilder() {
         if (accelerometerInfoBuilder_ != null) {
           return accelerometerInfoBuilder_.getMessageOrBuilder();
         } else {
           return accelerometerInfo_ == null ?
-              Sensor_Info.getDefaultInstance() : accelerometerInfo_;
+              Traj.Sensor_Info.getDefaultInstance() : accelerometerInfo_;
         }
       }
       /**
        * <code>optional .Sensor_Info accelerometer_info = 12;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> 
           getAccelerometerInfoFieldBuilder() {
         if (accelerometerInfoBuilder_ == null) {
           accelerometerInfoBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>(
+              Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder>(
                   getAccelerometerInfo(),
                   getParentForChildren(),
                   isClean());
@@ -4339,9 +4466,9 @@ public final class Traj {
         return accelerometerInfoBuilder_;
       }
 
-      private Sensor_Info gyroscopeInfo_ = null;
+      private Traj.Sensor_Info gyroscopeInfo_ = null;
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder> gyroscopeInfoBuilder_;
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> gyroscopeInfoBuilder_;
       /**
        * <code>optional .Sensor_Info gyroscope_info = 13;</code>
        */
@@ -4351,9 +4478,9 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info gyroscope_info = 13;</code>
        */
-      public Sensor_Info getGyroscopeInfo() {
+      public Traj.Sensor_Info getGyroscopeInfo() {
         if (gyroscopeInfoBuilder_ == null) {
-          return gyroscopeInfo_ == null ? Sensor_Info.getDefaultInstance() : gyroscopeInfo_;
+          return gyroscopeInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : gyroscopeInfo_;
         } else {
           return gyroscopeInfoBuilder_.getMessage();
         }
@@ -4361,7 +4488,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info gyroscope_info = 13;</code>
        */
-      public Builder setGyroscopeInfo(Sensor_Info value) {
+      public Builder setGyroscopeInfo(Traj.Sensor_Info value) {
         if (gyroscopeInfoBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -4378,7 +4505,7 @@ public final class Traj {
        * <code>optional .Sensor_Info gyroscope_info = 13;</code>
        */
       public Builder setGyroscopeInfo(
-          Sensor_Info.Builder builderForValue) {
+          Traj.Sensor_Info.Builder builderForValue) {
         if (gyroscopeInfoBuilder_ == null) {
           gyroscopeInfo_ = builderForValue.build();
           onChanged();
@@ -4391,11 +4518,11 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info gyroscope_info = 13;</code>
        */
-      public Builder mergeGyroscopeInfo(Sensor_Info value) {
+      public Builder mergeGyroscopeInfo(Traj.Sensor_Info value) {
         if (gyroscopeInfoBuilder_ == null) {
           if (gyroscopeInfo_ != null) {
             gyroscopeInfo_ =
-              Sensor_Info.newBuilder(gyroscopeInfo_).mergeFrom(value).buildPartial();
+              Traj.Sensor_Info.newBuilder(gyroscopeInfo_).mergeFrom(value).buildPartial();
           } else {
             gyroscopeInfo_ = value;
           }
@@ -4423,7 +4550,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info gyroscope_info = 13;</code>
        */
-      public Sensor_Info.Builder getGyroscopeInfoBuilder() {
+      public Traj.Sensor_Info.Builder getGyroscopeInfoBuilder() {
         
         onChanged();
         return getGyroscopeInfoFieldBuilder().getBuilder();
@@ -4431,23 +4558,23 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info gyroscope_info = 13;</code>
        */
-      public Sensor_InfoOrBuilder getGyroscopeInfoOrBuilder() {
+      public Traj.Sensor_InfoOrBuilder getGyroscopeInfoOrBuilder() {
         if (gyroscopeInfoBuilder_ != null) {
           return gyroscopeInfoBuilder_.getMessageOrBuilder();
         } else {
           return gyroscopeInfo_ == null ?
-              Sensor_Info.getDefaultInstance() : gyroscopeInfo_;
+              Traj.Sensor_Info.getDefaultInstance() : gyroscopeInfo_;
         }
       }
       /**
        * <code>optional .Sensor_Info gyroscope_info = 13;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> 
           getGyroscopeInfoFieldBuilder() {
         if (gyroscopeInfoBuilder_ == null) {
           gyroscopeInfoBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>(
+              Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder>(
                   getGyroscopeInfo(),
                   getParentForChildren(),
                   isClean());
@@ -4456,9 +4583,9 @@ public final class Traj {
         return gyroscopeInfoBuilder_;
       }
 
-      private Sensor_Info rotationVectorInfo_ = null;
+      private Traj.Sensor_Info rotationVectorInfo_ = null;
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder> rotationVectorInfoBuilder_;
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> rotationVectorInfoBuilder_;
       /**
        * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
        */
@@ -4468,9 +4595,9 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
        */
-      public Sensor_Info getRotationVectorInfo() {
+      public Traj.Sensor_Info getRotationVectorInfo() {
         if (rotationVectorInfoBuilder_ == null) {
-          return rotationVectorInfo_ == null ? Sensor_Info.getDefaultInstance() : rotationVectorInfo_;
+          return rotationVectorInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : rotationVectorInfo_;
         } else {
           return rotationVectorInfoBuilder_.getMessage();
         }
@@ -4478,7 +4605,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
        */
-      public Builder setRotationVectorInfo(Sensor_Info value) {
+      public Builder setRotationVectorInfo(Traj.Sensor_Info value) {
         if (rotationVectorInfoBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -4495,7 +4622,7 @@ public final class Traj {
        * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
        */
       public Builder setRotationVectorInfo(
-          Sensor_Info.Builder builderForValue) {
+          Traj.Sensor_Info.Builder builderForValue) {
         if (rotationVectorInfoBuilder_ == null) {
           rotationVectorInfo_ = builderForValue.build();
           onChanged();
@@ -4508,11 +4635,11 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
        */
-      public Builder mergeRotationVectorInfo(Sensor_Info value) {
+      public Builder mergeRotationVectorInfo(Traj.Sensor_Info value) {
         if (rotationVectorInfoBuilder_ == null) {
           if (rotationVectorInfo_ != null) {
             rotationVectorInfo_ =
-              Sensor_Info.newBuilder(rotationVectorInfo_).mergeFrom(value).buildPartial();
+              Traj.Sensor_Info.newBuilder(rotationVectorInfo_).mergeFrom(value).buildPartial();
           } else {
             rotationVectorInfo_ = value;
           }
@@ -4540,7 +4667,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
        */
-      public Sensor_Info.Builder getRotationVectorInfoBuilder() {
+      public Traj.Sensor_Info.Builder getRotationVectorInfoBuilder() {
         
         onChanged();
         return getRotationVectorInfoFieldBuilder().getBuilder();
@@ -4548,23 +4675,23 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
        */
-      public Sensor_InfoOrBuilder getRotationVectorInfoOrBuilder() {
+      public Traj.Sensor_InfoOrBuilder getRotationVectorInfoOrBuilder() {
         if (rotationVectorInfoBuilder_ != null) {
           return rotationVectorInfoBuilder_.getMessageOrBuilder();
         } else {
           return rotationVectorInfo_ == null ?
-              Sensor_Info.getDefaultInstance() : rotationVectorInfo_;
+              Traj.Sensor_Info.getDefaultInstance() : rotationVectorInfo_;
         }
       }
       /**
        * <code>optional .Sensor_Info rotation_vector_info = 14;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> 
           getRotationVectorInfoFieldBuilder() {
         if (rotationVectorInfoBuilder_ == null) {
           rotationVectorInfoBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>(
+              Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder>(
                   getRotationVectorInfo(),
                   getParentForChildren(),
                   isClean());
@@ -4573,9 +4700,9 @@ public final class Traj {
         return rotationVectorInfoBuilder_;
       }
 
-      private Sensor_Info magnetometerInfo_ = null;
+      private Traj.Sensor_Info magnetometerInfo_ = null;
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder> magnetometerInfoBuilder_;
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> magnetometerInfoBuilder_;
       /**
        * <code>optional .Sensor_Info magnetometer_info = 15;</code>
        */
@@ -4585,9 +4712,9 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info magnetometer_info = 15;</code>
        */
-      public Sensor_Info getMagnetometerInfo() {
+      public Traj.Sensor_Info getMagnetometerInfo() {
         if (magnetometerInfoBuilder_ == null) {
-          return magnetometerInfo_ == null ? Sensor_Info.getDefaultInstance() : magnetometerInfo_;
+          return magnetometerInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : magnetometerInfo_;
         } else {
           return magnetometerInfoBuilder_.getMessage();
         }
@@ -4595,7 +4722,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info magnetometer_info = 15;</code>
        */
-      public Builder setMagnetometerInfo(Sensor_Info value) {
+      public Builder setMagnetometerInfo(Traj.Sensor_Info value) {
         if (magnetometerInfoBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -4612,7 +4739,7 @@ public final class Traj {
        * <code>optional .Sensor_Info magnetometer_info = 15;</code>
        */
       public Builder setMagnetometerInfo(
-          Sensor_Info.Builder builderForValue) {
+          Traj.Sensor_Info.Builder builderForValue) {
         if (magnetometerInfoBuilder_ == null) {
           magnetometerInfo_ = builderForValue.build();
           onChanged();
@@ -4625,11 +4752,11 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info magnetometer_info = 15;</code>
        */
-      public Builder mergeMagnetometerInfo(Sensor_Info value) {
+      public Builder mergeMagnetometerInfo(Traj.Sensor_Info value) {
         if (magnetometerInfoBuilder_ == null) {
           if (magnetometerInfo_ != null) {
             magnetometerInfo_ =
-              Sensor_Info.newBuilder(magnetometerInfo_).mergeFrom(value).buildPartial();
+              Traj.Sensor_Info.newBuilder(magnetometerInfo_).mergeFrom(value).buildPartial();
           } else {
             magnetometerInfo_ = value;
           }
@@ -4657,7 +4784,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info magnetometer_info = 15;</code>
        */
-      public Sensor_Info.Builder getMagnetometerInfoBuilder() {
+      public Traj.Sensor_Info.Builder getMagnetometerInfoBuilder() {
         
         onChanged();
         return getMagnetometerInfoFieldBuilder().getBuilder();
@@ -4665,23 +4792,23 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info magnetometer_info = 15;</code>
        */
-      public Sensor_InfoOrBuilder getMagnetometerInfoOrBuilder() {
+      public Traj.Sensor_InfoOrBuilder getMagnetometerInfoOrBuilder() {
         if (magnetometerInfoBuilder_ != null) {
           return magnetometerInfoBuilder_.getMessageOrBuilder();
         } else {
           return magnetometerInfo_ == null ?
-              Sensor_Info.getDefaultInstance() : magnetometerInfo_;
+              Traj.Sensor_Info.getDefaultInstance() : magnetometerInfo_;
         }
       }
       /**
        * <code>optional .Sensor_Info magnetometer_info = 15;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> 
           getMagnetometerInfoFieldBuilder() {
         if (magnetometerInfoBuilder_ == null) {
           magnetometerInfoBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>(
+              Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder>(
                   getMagnetometerInfo(),
                   getParentForChildren(),
                   isClean());
@@ -4690,9 +4817,9 @@ public final class Traj {
         return magnetometerInfoBuilder_;
       }
 
-      private Sensor_Info barometerInfo_ = null;
+      private Traj.Sensor_Info barometerInfo_ = null;
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder> barometerInfoBuilder_;
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> barometerInfoBuilder_;
       /**
        * <code>optional .Sensor_Info barometer_info = 16;</code>
        */
@@ -4702,9 +4829,9 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info barometer_info = 16;</code>
        */
-      public Sensor_Info getBarometerInfo() {
+      public Traj.Sensor_Info getBarometerInfo() {
         if (barometerInfoBuilder_ == null) {
-          return barometerInfo_ == null ? Sensor_Info.getDefaultInstance() : barometerInfo_;
+          return barometerInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : barometerInfo_;
         } else {
           return barometerInfoBuilder_.getMessage();
         }
@@ -4712,7 +4839,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info barometer_info = 16;</code>
        */
-      public Builder setBarometerInfo(Sensor_Info value) {
+      public Builder setBarometerInfo(Traj.Sensor_Info value) {
         if (barometerInfoBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -4729,7 +4856,7 @@ public final class Traj {
        * <code>optional .Sensor_Info barometer_info = 16;</code>
        */
       public Builder setBarometerInfo(
-          Sensor_Info.Builder builderForValue) {
+          Traj.Sensor_Info.Builder builderForValue) {
         if (barometerInfoBuilder_ == null) {
           barometerInfo_ = builderForValue.build();
           onChanged();
@@ -4742,11 +4869,11 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info barometer_info = 16;</code>
        */
-      public Builder mergeBarometerInfo(Sensor_Info value) {
+      public Builder mergeBarometerInfo(Traj.Sensor_Info value) {
         if (barometerInfoBuilder_ == null) {
           if (barometerInfo_ != null) {
             barometerInfo_ =
-              Sensor_Info.newBuilder(barometerInfo_).mergeFrom(value).buildPartial();
+              Traj.Sensor_Info.newBuilder(barometerInfo_).mergeFrom(value).buildPartial();
           } else {
             barometerInfo_ = value;
           }
@@ -4774,7 +4901,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info barometer_info = 16;</code>
        */
-      public Sensor_Info.Builder getBarometerInfoBuilder() {
+      public Traj.Sensor_Info.Builder getBarometerInfoBuilder() {
         
         onChanged();
         return getBarometerInfoFieldBuilder().getBuilder();
@@ -4782,23 +4909,23 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info barometer_info = 16;</code>
        */
-      public Sensor_InfoOrBuilder getBarometerInfoOrBuilder() {
+      public Traj.Sensor_InfoOrBuilder getBarometerInfoOrBuilder() {
         if (barometerInfoBuilder_ != null) {
           return barometerInfoBuilder_.getMessageOrBuilder();
         } else {
           return barometerInfo_ == null ?
-              Sensor_Info.getDefaultInstance() : barometerInfo_;
+              Traj.Sensor_Info.getDefaultInstance() : barometerInfo_;
         }
       }
       /**
        * <code>optional .Sensor_Info barometer_info = 16;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> 
           getBarometerInfoFieldBuilder() {
         if (barometerInfoBuilder_ == null) {
           barometerInfoBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>(
+              Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder>(
                   getBarometerInfo(),
                   getParentForChildren(),
                   isClean());
@@ -4807,9 +4934,9 @@ public final class Traj {
         return barometerInfoBuilder_;
       }
 
-      private Sensor_Info lightSensorInfo_ = null;
+      private Traj.Sensor_Info lightSensorInfo_ = null;
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder> lightSensorInfoBuilder_;
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> lightSensorInfoBuilder_;
       /**
        * <code>optional .Sensor_Info light_sensor_info = 17;</code>
        */
@@ -4819,9 +4946,9 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info light_sensor_info = 17;</code>
        */
-      public Sensor_Info getLightSensorInfo() {
+      public Traj.Sensor_Info getLightSensorInfo() {
         if (lightSensorInfoBuilder_ == null) {
-          return lightSensorInfo_ == null ? Sensor_Info.getDefaultInstance() : lightSensorInfo_;
+          return lightSensorInfo_ == null ? Traj.Sensor_Info.getDefaultInstance() : lightSensorInfo_;
         } else {
           return lightSensorInfoBuilder_.getMessage();
         }
@@ -4829,7 +4956,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info light_sensor_info = 17;</code>
        */
-      public Builder setLightSensorInfo(Sensor_Info value) {
+      public Builder setLightSensorInfo(Traj.Sensor_Info value) {
         if (lightSensorInfoBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -4846,7 +4973,7 @@ public final class Traj {
        * <code>optional .Sensor_Info light_sensor_info = 17;</code>
        */
       public Builder setLightSensorInfo(
-          Sensor_Info.Builder builderForValue) {
+          Traj.Sensor_Info.Builder builderForValue) {
         if (lightSensorInfoBuilder_ == null) {
           lightSensorInfo_ = builderForValue.build();
           onChanged();
@@ -4859,11 +4986,11 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info light_sensor_info = 17;</code>
        */
-      public Builder mergeLightSensorInfo(Sensor_Info value) {
+      public Builder mergeLightSensorInfo(Traj.Sensor_Info value) {
         if (lightSensorInfoBuilder_ == null) {
           if (lightSensorInfo_ != null) {
             lightSensorInfo_ =
-              Sensor_Info.newBuilder(lightSensorInfo_).mergeFrom(value).buildPartial();
+              Traj.Sensor_Info.newBuilder(lightSensorInfo_).mergeFrom(value).buildPartial();
           } else {
             lightSensorInfo_ = value;
           }
@@ -4891,7 +5018,7 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info light_sensor_info = 17;</code>
        */
-      public Sensor_Info.Builder getLightSensorInfoBuilder() {
+      public Traj.Sensor_Info.Builder getLightSensorInfoBuilder() {
         
         onChanged();
         return getLightSensorInfoFieldBuilder().getBuilder();
@@ -4899,23 +5026,23 @@ public final class Traj {
       /**
        * <code>optional .Sensor_Info light_sensor_info = 17;</code>
        */
-      public Sensor_InfoOrBuilder getLightSensorInfoOrBuilder() {
+      public Traj.Sensor_InfoOrBuilder getLightSensorInfoOrBuilder() {
         if (lightSensorInfoBuilder_ != null) {
           return lightSensorInfoBuilder_.getMessageOrBuilder();
         } else {
           return lightSensorInfo_ == null ?
-              Sensor_Info.getDefaultInstance() : lightSensorInfo_;
+              Traj.Sensor_Info.getDefaultInstance() : lightSensorInfo_;
         }
       }
       /**
        * <code>optional .Sensor_Info light_sensor_info = 17;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
-          Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>
+          Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder> 
           getLightSensorInfoFieldBuilder() {
         if (lightSensorInfoBuilder_ == null) {
           lightSensorInfoBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              Sensor_Info, Sensor_Info.Builder, Sensor_InfoOrBuilder>(
+              Traj.Sensor_Info, Traj.Sensor_Info.Builder, Traj.Sensor_InfoOrBuilder>(
                   getLightSensorInfo(),
                   getParentForChildren(),
                   isClean());
@@ -4924,9 +5051,9 @@ public final class Traj {
         return lightSensorInfoBuilder_;
       }
 
-      private Lat_Long_Position startPosition_ = null;
+      private Traj.Lat_Long_Position startPosition_ = null;
       private com.google.protobuf.SingleFieldBuilderV3<
-          Lat_Long_Position, Lat_Long_Position.Builder, Lat_Long_PositionOrBuilder> startPositionBuilder_;
+          Traj.Lat_Long_Position, Traj.Lat_Long_Position.Builder, Traj.Lat_Long_PositionOrBuilder> startPositionBuilder_;
       /**
        * <pre>
        * new attribute to store starting position
@@ -4944,9 +5071,9 @@ public final class Traj {
        *
        * <code>optional .Lat_Long_Position start_position = 18;</code>
        */
-      public Lat_Long_Position getStartPosition() {
+      public Traj.Lat_Long_Position getStartPosition() {
         if (startPositionBuilder_ == null) {
-          return startPosition_ == null ? Lat_Long_Position.getDefaultInstance() : startPosition_;
+          return startPosition_ == null ? Traj.Lat_Long_Position.getDefaultInstance() : startPosition_;
         } else {
           return startPositionBuilder_.getMessage();
         }
@@ -4958,7 +5085,7 @@ public final class Traj {
        *
        * <code>optional .Lat_Long_Position start_position = 18;</code>
        */
-      public Builder setStartPosition(Lat_Long_Position value) {
+      public Builder setStartPosition(Traj.Lat_Long_Position value) {
         if (startPositionBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -4979,7 +5106,7 @@ public final class Traj {
        * <code>optional .Lat_Long_Position start_position = 18;</code>
        */
       public Builder setStartPosition(
-          Lat_Long_Position.Builder builderForValue) {
+          Traj.Lat_Long_Position.Builder builderForValue) {
         if (startPositionBuilder_ == null) {
           startPosition_ = builderForValue.build();
           onChanged();
@@ -4996,11 +5123,11 @@ public final class Traj {
        *
        * <code>optional .Lat_Long_Position start_position = 18;</code>
        */
-      public Builder mergeStartPosition(Lat_Long_Position value) {
+      public Builder mergeStartPosition(Traj.Lat_Long_Position value) {
         if (startPositionBuilder_ == null) {
           if (startPosition_ != null) {
             startPosition_ =
-              Lat_Long_Position.newBuilder(startPosition_).mergeFrom(value).buildPartial();
+              Traj.Lat_Long_Position.newBuilder(startPosition_).mergeFrom(value).buildPartial();
           } else {
             startPosition_ = value;
           }
@@ -5036,7 +5163,7 @@ public final class Traj {
        *
        * <code>optional .Lat_Long_Position start_position = 18;</code>
        */
-      public Lat_Long_Position.Builder getStartPositionBuilder() {
+      public Traj.Lat_Long_Position.Builder getStartPositionBuilder() {
         
         onChanged();
         return getStartPositionFieldBuilder().getBuilder();
@@ -5048,12 +5175,12 @@ public final class Traj {
        *
        * <code>optional .Lat_Long_Position start_position = 18;</code>
        */
-      public Lat_Long_PositionOrBuilder getStartPositionOrBuilder() {
+      public Traj.Lat_Long_PositionOrBuilder getStartPositionOrBuilder() {
         if (startPositionBuilder_ != null) {
           return startPositionBuilder_.getMessageOrBuilder();
         } else {
           return startPosition_ == null ?
-              Lat_Long_Position.getDefaultInstance() : startPosition_;
+              Traj.Lat_Long_Position.getDefaultInstance() : startPosition_;
         }
       }
       /**
@@ -5064,17 +5191,257 @@ public final class Traj {
        * <code>optional .Lat_Long_Position start_position = 18;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
-          Lat_Long_Position, Lat_Long_Position.Builder, Lat_Long_PositionOrBuilder>
+          Traj.Lat_Long_Position, Traj.Lat_Long_Position.Builder, Traj.Lat_Long_PositionOrBuilder> 
           getStartPositionFieldBuilder() {
         if (startPositionBuilder_ == null) {
           startPositionBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              Lat_Long_Position, Lat_Long_Position.Builder, Lat_Long_PositionOrBuilder>(
+              Traj.Lat_Long_Position, Traj.Lat_Long_Position.Builder, Traj.Lat_Long_PositionOrBuilder>(
                   getStartPosition(),
                   getParentForChildren(),
                   isClean());
           startPosition_ = null;
         }
         return startPositionBuilder_;
+      }
+
+      private java.util.List<Traj.Pdr_Sample> fusionData_ =
+        java.util.Collections.emptyList();
+      private void ensureFusionDataIsMutable() {
+        if (!((bitField0_ & 0x00040000) == 0x00040000)) {
+          fusionData_ = new java.util.ArrayList<Traj.Pdr_Sample>(fusionData_);
+          bitField0_ |= 0x00040000;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          Traj.Pdr_Sample, Traj.Pdr_Sample.Builder, Traj.Pdr_SampleOrBuilder> fusionDataBuilder_;
+
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public java.util.List<Traj.Pdr_Sample> getFusionDataList() {
+        if (fusionDataBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(fusionData_);
+        } else {
+          return fusionDataBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public int getFusionDataCount() {
+        if (fusionDataBuilder_ == null) {
+          return fusionData_.size();
+        } else {
+          return fusionDataBuilder_.getCount();
+        }
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Traj.Pdr_Sample getFusionData(int index) {
+        if (fusionDataBuilder_ == null) {
+          return fusionData_.get(index);
+        } else {
+          return fusionDataBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Builder setFusionData(
+          int index, Traj.Pdr_Sample value) {
+        if (fusionDataBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureFusionDataIsMutable();
+          fusionData_.set(index, value);
+          onChanged();
+        } else {
+          fusionDataBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Builder setFusionData(
+          int index, Traj.Pdr_Sample.Builder builderForValue) {
+        if (fusionDataBuilder_ == null) {
+          ensureFusionDataIsMutable();
+          fusionData_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          fusionDataBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Builder addFusionData(Traj.Pdr_Sample value) {
+        if (fusionDataBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureFusionDataIsMutable();
+          fusionData_.add(value);
+          onChanged();
+        } else {
+          fusionDataBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Builder addFusionData(
+          int index, Traj.Pdr_Sample value) {
+        if (fusionDataBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureFusionDataIsMutable();
+          fusionData_.add(index, value);
+          onChanged();
+        } else {
+          fusionDataBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Builder addFusionData(
+          Traj.Pdr_Sample.Builder builderForValue) {
+        if (fusionDataBuilder_ == null) {
+          ensureFusionDataIsMutable();
+          fusionData_.add(builderForValue.build());
+          onChanged();
+        } else {
+          fusionDataBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Builder addFusionData(
+          int index, Traj.Pdr_Sample.Builder builderForValue) {
+        if (fusionDataBuilder_ == null) {
+          ensureFusionDataIsMutable();
+          fusionData_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          fusionDataBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Builder addAllFusionData(
+          java.lang.Iterable<? extends Traj.Pdr_Sample> values) {
+        if (fusionDataBuilder_ == null) {
+          ensureFusionDataIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, fusionData_);
+          onChanged();
+        } else {
+          fusionDataBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Builder clearFusionData() {
+        if (fusionDataBuilder_ == null) {
+          fusionData_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00040000);
+          onChanged();
+        } else {
+          fusionDataBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Builder removeFusionData(int index) {
+        if (fusionDataBuilder_ == null) {
+          ensureFusionDataIsMutable();
+          fusionData_.remove(index);
+          onChanged();
+        } else {
+          fusionDataBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Traj.Pdr_Sample.Builder getFusionDataBuilder(
+          int index) {
+        return getFusionDataFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Traj.Pdr_SampleOrBuilder getFusionDataOrBuilder(
+          int index) {
+        if (fusionDataBuilder_ == null) {
+          return fusionData_.get(index);  } else {
+          return fusionDataBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public java.util.List<? extends Traj.Pdr_SampleOrBuilder> 
+           getFusionDataOrBuilderList() {
+        if (fusionDataBuilder_ != null) {
+          return fusionDataBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(fusionData_);
+        }
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Traj.Pdr_Sample.Builder addFusionDataBuilder() {
+        return getFusionDataFieldBuilder().addBuilder(
+            Traj.Pdr_Sample.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public Traj.Pdr_Sample.Builder addFusionDataBuilder(
+          int index) {
+        return getFusionDataFieldBuilder().addBuilder(
+            index, Traj.Pdr_Sample.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .Pdr_Sample fusion_data = 19;</code>
+       */
+      public java.util.List<Traj.Pdr_Sample.Builder> 
+           getFusionDataBuilderList() {
+        return getFusionDataFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          Traj.Pdr_Sample, Traj.Pdr_Sample.Builder, Traj.Pdr_SampleOrBuilder> 
+          getFusionDataFieldBuilder() {
+        if (fusionDataBuilder_ == null) {
+          fusionDataBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
+              Traj.Pdr_Sample, Traj.Pdr_Sample.Builder, Traj.Pdr_SampleOrBuilder>(
+                  fusionData_,
+                  ((bitField0_ & 0x00040000) == 0x00040000),
+                  getParentForChildren(),
+                  isClean());
+          fusionData_ = null;
+        }
+        return fusionDataBuilder_;
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -5091,12 +5458,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:Trajectory)
-    private static final Trajectory DEFAULT_INSTANCE;
+    private static final Traj.Trajectory DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new Trajectory();
+      DEFAULT_INSTANCE = new Traj.Trajectory();
     }
 
-    public static Trajectory getDefaultInstance() {
+    public static Traj.Trajectory getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -5114,12 +5481,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<Trajectory> getParserForType() {
       return PARSER;
     }
 
-    public Trajectory getDefaultInstanceForType() {
+    public Traj.Trajectory getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -5171,7 +5538,7 @@ public final class Traj {
       y_ = 0F;
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -5227,11 +5594,11 @@ public final class Traj {
       return Traj.internal_static_Pdr_Sample_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Pdr_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              Pdr_Sample.class, Builder.class);
+              Traj.Pdr_Sample.class, Traj.Pdr_Sample.Builder.class);
     }
 
     public static final int RELATIVE_TIMESTAMP_FIELD_NUMBER = 1;
@@ -5316,31 +5683,31 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof Pdr_Sample)) {
+      if (!(obj instanceof Traj.Pdr_Sample)) {
         return super.equals(obj);
       }
-      Pdr_Sample other = (Pdr_Sample) obj;
+      Traj.Pdr_Sample other = (Traj.Pdr_Sample) obj;
 
       boolean result = true;
       result = result && (getRelativeTimestamp()
           == other.getRelativeTimestamp());
       result = result && (
-          Float.floatToIntBits(getX())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getX())
+          == java.lang.Float.floatToIntBits(
               other.getX()));
       result = result && (
-          Float.floatToIntBits(getY())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getY())
+          == java.lang.Float.floatToIntBits(
               other.getY()));
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -5351,68 +5718,68 @@ public final class Traj {
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           getRelativeTimestamp());
       hash = (37 * hash) + X_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getX());
       hash = (37 * hash) + Y_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getY());
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
     }
 
-    public static Pdr_Sample parseFrom(
+    public static Traj.Pdr_Sample parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Pdr_Sample parseFrom(
+    public static Traj.Pdr_Sample parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Pdr_Sample parseFrom(byte[] data)
+    public static Traj.Pdr_Sample parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Pdr_Sample parseFrom(
+    public static Traj.Pdr_Sample parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Pdr_Sample parseFrom(java.io.InputStream input)
+    public static Traj.Pdr_Sample parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Pdr_Sample parseFrom(
+    public static Traj.Pdr_Sample parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Pdr_Sample parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.Pdr_Sample parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static Pdr_Sample parseDelimitedFrom(
+    public static Traj.Pdr_Sample parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Pdr_Sample parseFrom(
+    public static Traj.Pdr_Sample parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Pdr_Sample parseFrom(
+    public static Traj.Pdr_Sample parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -5424,7 +5791,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(Pdr_Sample prototype) {
+    public static Builder newBuilder(Traj.Pdr_Sample prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -5432,9 +5799,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -5444,17 +5811,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:Pdr_Sample)
-        Pdr_SampleOrBuilder {
+        Traj.Pdr_SampleOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_Pdr_Sample_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Pdr_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                Pdr_Sample.class, Builder.class);
+                Traj.Pdr_Sample.class, Traj.Pdr_Sample.Builder.class);
       }
 
       // Construct using Traj.Pdr_Sample.newBuilder()
@@ -5463,7 +5830,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -5488,20 +5855,20 @@ public final class Traj {
         return Traj.internal_static_Pdr_Sample_descriptor;
       }
 
-      public Pdr_Sample getDefaultInstanceForType() {
-        return Pdr_Sample.getDefaultInstance();
+      public Traj.Pdr_Sample getDefaultInstanceForType() {
+        return Traj.Pdr_Sample.getDefaultInstance();
       }
 
-      public Pdr_Sample build() {
-        Pdr_Sample result = buildPartial();
+      public Traj.Pdr_Sample build() {
+        Traj.Pdr_Sample result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public Pdr_Sample buildPartial() {
-        Pdr_Sample result = new Pdr_Sample(this);
+      public Traj.Pdr_Sample buildPartial() {
+        Traj.Pdr_Sample result = new Traj.Pdr_Sample(this);
         result.relativeTimestamp_ = relativeTimestamp_;
         result.x_ = x_;
         result.y_ = y_;
@@ -5536,16 +5903,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof Pdr_Sample) {
-          return mergeFrom((Pdr_Sample)other);
+        if (other instanceof Traj.Pdr_Sample) {
+          return mergeFrom((Traj.Pdr_Sample)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(Pdr_Sample other) {
-        if (other == Pdr_Sample.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.Pdr_Sample other) {
+        if (other == Traj.Pdr_Sample.getDefaultInstance()) return this;
         if (other.getRelativeTimestamp() != 0L) {
           setRelativeTimestamp(other.getRelativeTimestamp());
         }
@@ -5567,11 +5934,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        Pdr_Sample parsedMessage = null;
+        Traj.Pdr_Sample parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (Pdr_Sample) e.getUnfinishedMessage();
+          parsedMessage = (Traj.Pdr_Sample) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -5703,12 +6070,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:Pdr_Sample)
-    private static final Pdr_Sample DEFAULT_INSTANCE;
+    private static final Traj.Pdr_Sample DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new Pdr_Sample();
+      DEFAULT_INSTANCE = new Traj.Pdr_Sample();
     }
 
-    public static Pdr_Sample getDefaultInstance() {
+    public static Traj.Pdr_Sample getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -5726,12 +6093,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<Pdr_Sample> getParserForType() {
       return PARSER;
     }
 
-    public Pdr_Sample getDefaultInstanceForType() {
+    public Traj.Pdr_Sample getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -5857,7 +6224,7 @@ public final class Traj {
       azimuth_ = 0F;
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -5963,11 +6330,11 @@ public final class Traj {
       return Traj.internal_static_Motion_Sample_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Motion_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              Motion_Sample.class, Builder.class);
+              Traj.Motion_Sample.class, Traj.Motion_Sample.Builder.class);
     }
 
     public static final int RELATIVE_TIMESTAMP_FIELD_NUMBER = 1;
@@ -6226,69 +6593,69 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof Motion_Sample)) {
+      if (!(obj instanceof Traj.Motion_Sample)) {
         return super.equals(obj);
       }
-      Motion_Sample other = (Motion_Sample) obj;
+      Traj.Motion_Sample other = (Traj.Motion_Sample) obj;
 
       boolean result = true;
       result = result && (getRelativeTimestamp()
           == other.getRelativeTimestamp());
       result = result && (
-          Float.floatToIntBits(getAccX())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getAccX())
+          == java.lang.Float.floatToIntBits(
               other.getAccX()));
       result = result && (
-          Float.floatToIntBits(getAccY())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getAccY())
+          == java.lang.Float.floatToIntBits(
               other.getAccY()));
       result = result && (
-          Float.floatToIntBits(getAccZ())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getAccZ())
+          == java.lang.Float.floatToIntBits(
               other.getAccZ()));
       result = result && (
-          Float.floatToIntBits(getGyrX())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getGyrX())
+          == java.lang.Float.floatToIntBits(
               other.getGyrX()));
       result = result && (
-          Float.floatToIntBits(getGyrY())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getGyrY())
+          == java.lang.Float.floatToIntBits(
               other.getGyrY()));
       result = result && (
-          Float.floatToIntBits(getGyrZ())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getGyrZ())
+          == java.lang.Float.floatToIntBits(
               other.getGyrZ()));
       result = result && (
-          Float.floatToIntBits(getRotationVectorX())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getRotationVectorX())
+          == java.lang.Float.floatToIntBits(
               other.getRotationVectorX()));
       result = result && (
-          Float.floatToIntBits(getRotationVectorY())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getRotationVectorY())
+          == java.lang.Float.floatToIntBits(
               other.getRotationVectorY()));
       result = result && (
-          Float.floatToIntBits(getRotationVectorZ())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getRotationVectorZ())
+          == java.lang.Float.floatToIntBits(
               other.getRotationVectorZ()));
       result = result && (
-          Float.floatToIntBits(getRotationVectorW())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getRotationVectorW())
+          == java.lang.Float.floatToIntBits(
               other.getRotationVectorW()));
       result = result && (getStepCount()
           == other.getStepCount());
       result = result && (
-          Float.floatToIntBits(getAzimuth())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getAzimuth())
+          == java.lang.Float.floatToIntBits(
               other.getAzimuth()));
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -6299,97 +6666,97 @@ public final class Traj {
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           getRelativeTimestamp());
       hash = (37 * hash) + ACC_X_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getAccX());
       hash = (37 * hash) + ACC_Y_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getAccY());
       hash = (37 * hash) + ACC_Z_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getAccZ());
       hash = (37 * hash) + GYR_X_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getGyrX());
       hash = (37 * hash) + GYR_Y_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getGyrY());
       hash = (37 * hash) + GYR_Z_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getGyrZ());
       hash = (37 * hash) + ROTATION_VECTOR_X_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getRotationVectorX());
       hash = (37 * hash) + ROTATION_VECTOR_Y_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getRotationVectorY());
       hash = (37 * hash) + ROTATION_VECTOR_Z_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getRotationVectorZ());
       hash = (37 * hash) + ROTATION_VECTOR_W_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getRotationVectorW());
       hash = (37 * hash) + STEP_COUNT_FIELD_NUMBER;
       hash = (53 * hash) + getStepCount();
       hash = (37 * hash) + AZIMUTH_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getAzimuth());
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
     }
 
-    public static Motion_Sample parseFrom(
+    public static Traj.Motion_Sample parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Motion_Sample parseFrom(
+    public static Traj.Motion_Sample parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Motion_Sample parseFrom(byte[] data)
+    public static Traj.Motion_Sample parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Motion_Sample parseFrom(
+    public static Traj.Motion_Sample parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Motion_Sample parseFrom(java.io.InputStream input)
+    public static Traj.Motion_Sample parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Motion_Sample parseFrom(
+    public static Traj.Motion_Sample parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Motion_Sample parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.Motion_Sample parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static Motion_Sample parseDelimitedFrom(
+    public static Traj.Motion_Sample parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Motion_Sample parseFrom(
+    public static Traj.Motion_Sample parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Motion_Sample parseFrom(
+    public static Traj.Motion_Sample parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -6401,7 +6768,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(Motion_Sample prototype) {
+    public static Builder newBuilder(Traj.Motion_Sample prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -6409,9 +6776,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -6421,17 +6788,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:Motion_Sample)
-        Motion_SampleOrBuilder {
+        Traj.Motion_SampleOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_Motion_Sample_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Motion_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                Motion_Sample.class, Builder.class);
+                Traj.Motion_Sample.class, Traj.Motion_Sample.Builder.class);
       }
 
       // Construct using Traj.Motion_Sample.newBuilder()
@@ -6440,7 +6807,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -6485,20 +6852,20 @@ public final class Traj {
         return Traj.internal_static_Motion_Sample_descriptor;
       }
 
-      public Motion_Sample getDefaultInstanceForType() {
-        return Motion_Sample.getDefaultInstance();
+      public Traj.Motion_Sample getDefaultInstanceForType() {
+        return Traj.Motion_Sample.getDefaultInstance();
       }
 
-      public Motion_Sample build() {
-        Motion_Sample result = buildPartial();
+      public Traj.Motion_Sample build() {
+        Traj.Motion_Sample result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public Motion_Sample buildPartial() {
-        Motion_Sample result = new Motion_Sample(this);
+      public Traj.Motion_Sample buildPartial() {
+        Traj.Motion_Sample result = new Traj.Motion_Sample(this);
         result.relativeTimestamp_ = relativeTimestamp_;
         result.accX_ = accX_;
         result.accY_ = accY_;
@@ -6543,16 +6910,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof Motion_Sample) {
-          return mergeFrom((Motion_Sample)other);
+        if (other instanceof Traj.Motion_Sample) {
+          return mergeFrom((Traj.Motion_Sample)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(Motion_Sample other) {
-        if (other == Motion_Sample.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.Motion_Sample other) {
+        if (other == Traj.Motion_Sample.getDefaultInstance()) return this;
         if (other.getRelativeTimestamp() != 0L) {
           setRelativeTimestamp(other.getRelativeTimestamp());
         }
@@ -6604,11 +6971,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        Motion_Sample parsedMessage = null;
+        Traj.Motion_Sample parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (Motion_Sample) e.getUnfinishedMessage();
+          parsedMessage = (Traj.Motion_Sample) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -7042,12 +7409,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:Motion_Sample)
-    private static final Motion_Sample DEFAULT_INSTANCE;
+    private static final Traj.Motion_Sample DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new Motion_Sample();
+      DEFAULT_INSTANCE = new Traj.Motion_Sample();
     }
 
-    public static Motion_Sample getDefaultInstance() {
+    public static Traj.Motion_Sample getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -7065,12 +7432,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<Motion_Sample> getParserForType() {
       return PARSER;
     }
 
-    public Motion_Sample getDefaultInstanceForType() {
+    public Traj.Motion_Sample getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -7122,7 +7489,7 @@ public final class Traj {
       magZ_ = 0F;
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -7183,11 +7550,11 @@ public final class Traj {
       return Traj.internal_static_Position_Sample_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Position_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              Position_Sample.class, Builder.class);
+              Traj.Position_Sample.class, Traj.Position_Sample.Builder.class);
     }
 
     public static final int RELATIVE_TIMESTAMP_FIELD_NUMBER = 1;
@@ -7282,35 +7649,35 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof Position_Sample)) {
+      if (!(obj instanceof Traj.Position_Sample)) {
         return super.equals(obj);
       }
-      Position_Sample other = (Position_Sample) obj;
+      Traj.Position_Sample other = (Traj.Position_Sample) obj;
 
       boolean result = true;
       result = result && (getRelativeTimestamp()
           == other.getRelativeTimestamp());
       result = result && (
-          Float.floatToIntBits(getMagX())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getMagX())
+          == java.lang.Float.floatToIntBits(
               other.getMagX()));
       result = result && (
-          Float.floatToIntBits(getMagY())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getMagY())
+          == java.lang.Float.floatToIntBits(
               other.getMagY()));
       result = result && (
-          Float.floatToIntBits(getMagZ())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getMagZ())
+          == java.lang.Float.floatToIntBits(
               other.getMagZ()));
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -7321,71 +7688,71 @@ public final class Traj {
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           getRelativeTimestamp());
       hash = (37 * hash) + MAG_X_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getMagX());
       hash = (37 * hash) + MAG_Y_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getMagY());
       hash = (37 * hash) + MAG_Z_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getMagZ());
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
     }
 
-    public static Position_Sample parseFrom(
+    public static Traj.Position_Sample parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Position_Sample parseFrom(
+    public static Traj.Position_Sample parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Position_Sample parseFrom(byte[] data)
+    public static Traj.Position_Sample parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Position_Sample parseFrom(
+    public static Traj.Position_Sample parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Position_Sample parseFrom(java.io.InputStream input)
+    public static Traj.Position_Sample parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Position_Sample parseFrom(
+    public static Traj.Position_Sample parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Position_Sample parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.Position_Sample parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static Position_Sample parseDelimitedFrom(
+    public static Traj.Position_Sample parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Position_Sample parseFrom(
+    public static Traj.Position_Sample parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Position_Sample parseFrom(
+    public static Traj.Position_Sample parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -7397,7 +7764,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(Position_Sample prototype) {
+    public static Builder newBuilder(Traj.Position_Sample prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -7405,9 +7772,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -7417,17 +7784,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:Position_Sample)
-        Position_SampleOrBuilder {
+        Traj.Position_SampleOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_Position_Sample_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Position_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                Position_Sample.class, Builder.class);
+                Traj.Position_Sample.class, Traj.Position_Sample.Builder.class);
       }
 
       // Construct using Traj.Position_Sample.newBuilder()
@@ -7436,7 +7803,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -7463,20 +7830,20 @@ public final class Traj {
         return Traj.internal_static_Position_Sample_descriptor;
       }
 
-      public Position_Sample getDefaultInstanceForType() {
-        return Position_Sample.getDefaultInstance();
+      public Traj.Position_Sample getDefaultInstanceForType() {
+        return Traj.Position_Sample.getDefaultInstance();
       }
 
-      public Position_Sample build() {
-        Position_Sample result = buildPartial();
+      public Traj.Position_Sample build() {
+        Traj.Position_Sample result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public Position_Sample buildPartial() {
-        Position_Sample result = new Position_Sample(this);
+      public Traj.Position_Sample buildPartial() {
+        Traj.Position_Sample result = new Traj.Position_Sample(this);
         result.relativeTimestamp_ = relativeTimestamp_;
         result.magX_ = magX_;
         result.magY_ = magY_;
@@ -7512,16 +7879,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof Position_Sample) {
-          return mergeFrom((Position_Sample)other);
+        if (other instanceof Traj.Position_Sample) {
+          return mergeFrom((Traj.Position_Sample)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(Position_Sample other) {
-        if (other == Position_Sample.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.Position_Sample other) {
+        if (other == Traj.Position_Sample.getDefaultInstance()) return this;
         if (other.getRelativeTimestamp() != 0L) {
           setRelativeTimestamp(other.getRelativeTimestamp());
         }
@@ -7546,11 +7913,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        Position_Sample parsedMessage = null;
+        Traj.Position_Sample parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (Position_Sample) e.getUnfinishedMessage();
+          parsedMessage = (Traj.Position_Sample) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -7690,12 +8057,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:Position_Sample)
-    private static final Position_Sample DEFAULT_INSTANCE;
+    private static final Traj.Position_Sample DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new Position_Sample();
+      DEFAULT_INSTANCE = new Traj.Position_Sample();
     }
 
-    public static Position_Sample getDefaultInstance() {
+    public static Traj.Position_Sample getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -7713,12 +8080,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<Position_Sample> getParserForType() {
       return PARSER;
     }
 
-    public Position_Sample getDefaultInstanceForType() {
+    public Traj.Position_Sample getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -7768,7 +8135,7 @@ public final class Traj {
       estimatedElevation_ = 0F;
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -7824,11 +8191,11 @@ public final class Traj {
       return Traj.internal_static_Pressure_Sample_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Pressure_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              Pressure_Sample.class, Builder.class);
+              Traj.Pressure_Sample.class, Traj.Pressure_Sample.Builder.class);
     }
 
     public static final int RELATIVE_TIMESTAMP_FIELD_NUMBER = 1;
@@ -7911,31 +8278,31 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof Pressure_Sample)) {
+      if (!(obj instanceof Traj.Pressure_Sample)) {
         return super.equals(obj);
       }
-      Pressure_Sample other = (Pressure_Sample) obj;
+      Traj.Pressure_Sample other = (Traj.Pressure_Sample) obj;
 
       boolean result = true;
       result = result && (getRelativeTimestamp()
           == other.getRelativeTimestamp());
       result = result && (
-          Float.floatToIntBits(getPressure())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getPressure())
+          == java.lang.Float.floatToIntBits(
               other.getPressure()));
       result = result && (
-          Float.floatToIntBits(getEstimatedElevation())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getEstimatedElevation())
+          == java.lang.Float.floatToIntBits(
               other.getEstimatedElevation()));
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -7946,68 +8313,68 @@ public final class Traj {
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           getRelativeTimestamp());
       hash = (37 * hash) + PRESSURE_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getPressure());
       hash = (37 * hash) + ESTIMATED_ELEVATION_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getEstimatedElevation());
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
     }
 
-    public static Pressure_Sample parseFrom(
+    public static Traj.Pressure_Sample parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Pressure_Sample parseFrom(
+    public static Traj.Pressure_Sample parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Pressure_Sample parseFrom(byte[] data)
+    public static Traj.Pressure_Sample parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Pressure_Sample parseFrom(
+    public static Traj.Pressure_Sample parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Pressure_Sample parseFrom(java.io.InputStream input)
+    public static Traj.Pressure_Sample parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Pressure_Sample parseFrom(
+    public static Traj.Pressure_Sample parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Pressure_Sample parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.Pressure_Sample parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static Pressure_Sample parseDelimitedFrom(
+    public static Traj.Pressure_Sample parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Pressure_Sample parseFrom(
+    public static Traj.Pressure_Sample parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Pressure_Sample parseFrom(
+    public static Traj.Pressure_Sample parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -8019,7 +8386,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(Pressure_Sample prototype) {
+    public static Builder newBuilder(Traj.Pressure_Sample prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -8027,9 +8394,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -8039,17 +8406,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:Pressure_Sample)
-        Pressure_SampleOrBuilder {
+        Traj.Pressure_SampleOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_Pressure_Sample_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Pressure_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                Pressure_Sample.class, Builder.class);
+                Traj.Pressure_Sample.class, Traj.Pressure_Sample.Builder.class);
       }
 
       // Construct using Traj.Pressure_Sample.newBuilder()
@@ -8058,7 +8425,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -8083,20 +8450,20 @@ public final class Traj {
         return Traj.internal_static_Pressure_Sample_descriptor;
       }
 
-      public Pressure_Sample getDefaultInstanceForType() {
-        return Pressure_Sample.getDefaultInstance();
+      public Traj.Pressure_Sample getDefaultInstanceForType() {
+        return Traj.Pressure_Sample.getDefaultInstance();
       }
 
-      public Pressure_Sample build() {
-        Pressure_Sample result = buildPartial();
+      public Traj.Pressure_Sample build() {
+        Traj.Pressure_Sample result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public Pressure_Sample buildPartial() {
-        Pressure_Sample result = new Pressure_Sample(this);
+      public Traj.Pressure_Sample buildPartial() {
+        Traj.Pressure_Sample result = new Traj.Pressure_Sample(this);
         result.relativeTimestamp_ = relativeTimestamp_;
         result.pressure_ = pressure_;
         result.estimatedElevation_ = estimatedElevation_;
@@ -8131,16 +8498,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof Pressure_Sample) {
-          return mergeFrom((Pressure_Sample)other);
+        if (other instanceof Traj.Pressure_Sample) {
+          return mergeFrom((Traj.Pressure_Sample)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(Pressure_Sample other) {
-        if (other == Pressure_Sample.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.Pressure_Sample other) {
+        if (other == Traj.Pressure_Sample.getDefaultInstance()) return this;
         if (other.getRelativeTimestamp() != 0L) {
           setRelativeTimestamp(other.getRelativeTimestamp());
         }
@@ -8162,11 +8529,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        Pressure_Sample parsedMessage = null;
+        Traj.Pressure_Sample parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (Pressure_Sample) e.getUnfinishedMessage();
+          parsedMessage = (Traj.Pressure_Sample) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -8292,12 +8659,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:Pressure_Sample)
-    private static final Pressure_Sample DEFAULT_INSTANCE;
+    private static final Traj.Pressure_Sample DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new Pressure_Sample();
+      DEFAULT_INSTANCE = new Traj.Pressure_Sample();
     }
 
-    public static Pressure_Sample getDefaultInstance() {
+    public static Traj.Pressure_Sample getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -8315,12 +8682,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<Pressure_Sample> getParserForType() {
       return PARSER;
     }
 
-    public Pressure_Sample getDefaultInstanceForType() {
+    public Traj.Pressure_Sample getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -8360,7 +8727,7 @@ public final class Traj {
       light_ = 0F;
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -8411,11 +8778,11 @@ public final class Traj {
       return Traj.internal_static_Light_Sample_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Light_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              Light_Sample.class, Builder.class);
+              Traj.Light_Sample.class, Traj.Light_Sample.Builder.class);
     }
 
     public static final int RELATIVE_TIMESTAMP_FIELD_NUMBER = 1;
@@ -8478,27 +8845,27 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof Light_Sample)) {
+      if (!(obj instanceof Traj.Light_Sample)) {
         return super.equals(obj);
       }
-      Light_Sample other = (Light_Sample) obj;
+      Traj.Light_Sample other = (Traj.Light_Sample) obj;
 
       boolean result = true;
       result = result && (getRelativeTimestamp()
           == other.getRelativeTimestamp());
       result = result && (
-          Float.floatToIntBits(getLight())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getLight())
+          == java.lang.Float.floatToIntBits(
               other.getLight()));
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -8509,65 +8876,65 @@ public final class Traj {
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           getRelativeTimestamp());
       hash = (37 * hash) + LIGHT_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getLight());
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
     }
 
-    public static Light_Sample parseFrom(
+    public static Traj.Light_Sample parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Light_Sample parseFrom(
+    public static Traj.Light_Sample parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Light_Sample parseFrom(byte[] data)
+    public static Traj.Light_Sample parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Light_Sample parseFrom(
+    public static Traj.Light_Sample parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Light_Sample parseFrom(java.io.InputStream input)
+    public static Traj.Light_Sample parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Light_Sample parseFrom(
+    public static Traj.Light_Sample parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Light_Sample parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.Light_Sample parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static Light_Sample parseDelimitedFrom(
+    public static Traj.Light_Sample parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Light_Sample parseFrom(
+    public static Traj.Light_Sample parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Light_Sample parseFrom(
+    public static Traj.Light_Sample parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -8579,7 +8946,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(Light_Sample prototype) {
+    public static Builder newBuilder(Traj.Light_Sample prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -8587,9 +8954,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -8599,17 +8966,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:Light_Sample)
-        Light_SampleOrBuilder {
+        Traj.Light_SampleOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_Light_Sample_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Light_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                Light_Sample.class, Builder.class);
+                Traj.Light_Sample.class, Traj.Light_Sample.Builder.class);
       }
 
       // Construct using Traj.Light_Sample.newBuilder()
@@ -8618,7 +8985,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -8641,20 +9008,20 @@ public final class Traj {
         return Traj.internal_static_Light_Sample_descriptor;
       }
 
-      public Light_Sample getDefaultInstanceForType() {
-        return Light_Sample.getDefaultInstance();
+      public Traj.Light_Sample getDefaultInstanceForType() {
+        return Traj.Light_Sample.getDefaultInstance();
       }
 
-      public Light_Sample build() {
-        Light_Sample result = buildPartial();
+      public Traj.Light_Sample build() {
+        Traj.Light_Sample result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public Light_Sample buildPartial() {
-        Light_Sample result = new Light_Sample(this);
+      public Traj.Light_Sample buildPartial() {
+        Traj.Light_Sample result = new Traj.Light_Sample(this);
         result.relativeTimestamp_ = relativeTimestamp_;
         result.light_ = light_;
         onBuilt();
@@ -8688,16 +9055,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof Light_Sample) {
-          return mergeFrom((Light_Sample)other);
+        if (other instanceof Traj.Light_Sample) {
+          return mergeFrom((Traj.Light_Sample)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(Light_Sample other) {
-        if (other == Light_Sample.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.Light_Sample other) {
+        if (other == Traj.Light_Sample.getDefaultInstance()) return this;
         if (other.getRelativeTimestamp() != 0L) {
           setRelativeTimestamp(other.getRelativeTimestamp());
         }
@@ -8716,11 +9083,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        Light_Sample parsedMessage = null;
+        Traj.Light_Sample parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (Light_Sample) e.getUnfinishedMessage();
+          parsedMessage = (Traj.Light_Sample) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -8808,12 +9175,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:Light_Sample)
-    private static final Light_Sample DEFAULT_INSTANCE;
+    private static final Traj.Light_Sample DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new Light_Sample();
+      DEFAULT_INSTANCE = new Traj.Light_Sample();
     }
 
-    public static Light_Sample getDefaultInstance() {
+    public static Traj.Light_Sample getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -8831,12 +9198,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<Light_Sample> getParserForType() {
       return PARSER;
     }
 
-    public Light_Sample getDefaultInstanceForType() {
+    public Traj.Light_Sample getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -8904,7 +9271,7 @@ public final class Traj {
      *
      * <code>optional string provider = 7;</code>
      */
-    String getProvider();
+    java.lang.String getProvider();
     /**
      * <pre>
      * e.g 'gps' or 'network'
@@ -8936,7 +9303,7 @@ public final class Traj {
       provider_ = "";
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -8992,7 +9359,7 @@ public final class Traj {
               break;
             }
             case 58: {
-              String s = input.readStringRequireUtf8();
+              java.lang.String s = input.readStringRequireUtf8();
 
               provider_ = s;
               break;
@@ -9013,11 +9380,11 @@ public final class Traj {
       return Traj.internal_static_GNSS_Sample_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_GNSS_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              GNSS_Sample.class, Builder.class);
+              Traj.GNSS_Sample.class, Traj.GNSS_Sample.Builder.class);
     }
 
     public static final int RELATIVE_TIMESTAMP_FIELD_NUMBER = 1;
@@ -9096,7 +9463,7 @@ public final class Traj {
     }
 
     public static final int PROVIDER_FIELD_NUMBER = 7;
-    private volatile Object provider_;
+    private volatile java.lang.Object provider_;
     /**
      * <pre>
      * e.g 'gps' or 'network'
@@ -9104,14 +9471,14 @@ public final class Traj {
      *
      * <code>optional string provider = 7;</code>
      */
-    public String getProvider() {
-      Object ref = provider_;
-      if (ref instanceof String) {
-        return (String) ref;
+    public java.lang.String getProvider() {
+      java.lang.Object ref = provider_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
       } else {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
-        String s = bs.toStringUtf8();
+        java.lang.String s = bs.toStringUtf8();
         provider_ = s;
         return s;
       }
@@ -9125,11 +9492,11 @@ public final class Traj {
      */
     public com.google.protobuf.ByteString
         getProviderBytes() {
-      Object ref = provider_;
-      if (ref instanceof String) {
+      java.lang.Object ref = provider_;
+      if (ref instanceof java.lang.String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
-                (String) ref);
+                (java.lang.String) ref);
         provider_ = b;
         return b;
       } else {
@@ -9209,45 +9576,45 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof GNSS_Sample)) {
+      if (!(obj instanceof Traj.GNSS_Sample)) {
         return super.equals(obj);
       }
-      GNSS_Sample other = (GNSS_Sample) obj;
+      Traj.GNSS_Sample other = (Traj.GNSS_Sample) obj;
 
       boolean result = true;
       result = result && (getRelativeTimestamp()
           == other.getRelativeTimestamp());
       result = result && (
-          Float.floatToIntBits(getLatitude())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getLatitude())
+          == java.lang.Float.floatToIntBits(
               other.getLatitude()));
       result = result && (
-          Float.floatToIntBits(getLongitude())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getLongitude())
+          == java.lang.Float.floatToIntBits(
               other.getLongitude()));
       result = result && (
-          Float.floatToIntBits(getAltitude())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getAltitude())
+          == java.lang.Float.floatToIntBits(
               other.getAltitude()));
       result = result && (
-          Float.floatToIntBits(getAccuracy())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getAccuracy())
+          == java.lang.Float.floatToIntBits(
               other.getAccuracy()));
       result = result && (
-          Float.floatToIntBits(getSpeed())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getSpeed())
+          == java.lang.Float.floatToIntBits(
               other.getSpeed()));
       result = result && getProvider()
           .equals(other.getProvider());
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -9258,19 +9625,19 @@ public final class Traj {
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           getRelativeTimestamp());
       hash = (37 * hash) + LATITUDE_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getLatitude());
       hash = (37 * hash) + LONGITUDE_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getLongitude());
       hash = (37 * hash) + ALTITUDE_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getAltitude());
       hash = (37 * hash) + ACCURACY_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getAccuracy());
       hash = (37 * hash) + SPEED_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getSpeed());
       hash = (37 * hash) + PROVIDER_FIELD_NUMBER;
       hash = (53 * hash) + getProvider().hashCode();
@@ -9279,58 +9646,58 @@ public final class Traj {
       return hash;
     }
 
-    public static GNSS_Sample parseFrom(
+    public static Traj.GNSS_Sample parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static GNSS_Sample parseFrom(
+    public static Traj.GNSS_Sample parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static GNSS_Sample parseFrom(byte[] data)
+    public static Traj.GNSS_Sample parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static GNSS_Sample parseFrom(
+    public static Traj.GNSS_Sample parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static GNSS_Sample parseFrom(java.io.InputStream input)
+    public static Traj.GNSS_Sample parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static GNSS_Sample parseFrom(
+    public static Traj.GNSS_Sample parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static GNSS_Sample parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.GNSS_Sample parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static GNSS_Sample parseDelimitedFrom(
+    public static Traj.GNSS_Sample parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static GNSS_Sample parseFrom(
+    public static Traj.GNSS_Sample parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static GNSS_Sample parseFrom(
+    public static Traj.GNSS_Sample parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -9342,7 +9709,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(GNSS_Sample prototype) {
+    public static Builder newBuilder(Traj.GNSS_Sample prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -9350,9 +9717,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -9362,17 +9729,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:GNSS_Sample)
-        GNSS_SampleOrBuilder {
+        Traj.GNSS_SampleOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_GNSS_Sample_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_GNSS_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                GNSS_Sample.class, Builder.class);
+                Traj.GNSS_Sample.class, Traj.GNSS_Sample.Builder.class);
       }
 
       // Construct using Traj.GNSS_Sample.newBuilder()
@@ -9381,7 +9748,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -9414,20 +9781,20 @@ public final class Traj {
         return Traj.internal_static_GNSS_Sample_descriptor;
       }
 
-      public GNSS_Sample getDefaultInstanceForType() {
-        return GNSS_Sample.getDefaultInstance();
+      public Traj.GNSS_Sample getDefaultInstanceForType() {
+        return Traj.GNSS_Sample.getDefaultInstance();
       }
 
-      public GNSS_Sample build() {
-        GNSS_Sample result = buildPartial();
+      public Traj.GNSS_Sample build() {
+        Traj.GNSS_Sample result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public GNSS_Sample buildPartial() {
-        GNSS_Sample result = new GNSS_Sample(this);
+      public Traj.GNSS_Sample buildPartial() {
+        Traj.GNSS_Sample result = new Traj.GNSS_Sample(this);
         result.relativeTimestamp_ = relativeTimestamp_;
         result.latitude_ = latitude_;
         result.longitude_ = longitude_;
@@ -9466,16 +9833,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof GNSS_Sample) {
-          return mergeFrom((GNSS_Sample)other);
+        if (other instanceof Traj.GNSS_Sample) {
+          return mergeFrom((Traj.GNSS_Sample)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(GNSS_Sample other) {
-        if (other == GNSS_Sample.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.GNSS_Sample other) {
+        if (other == Traj.GNSS_Sample.getDefaultInstance()) return this;
         if (other.getRelativeTimestamp() != 0L) {
           setRelativeTimestamp(other.getRelativeTimestamp());
         }
@@ -9510,11 +9877,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        GNSS_Sample parsedMessage = null;
+        Traj.GNSS_Sample parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (GNSS_Sample) e.getUnfinishedMessage();
+          parsedMessage = (Traj.GNSS_Sample) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -9743,7 +10110,7 @@ public final class Traj {
         return this;
       }
 
-      private Object provider_ = "";
+      private java.lang.Object provider_ = "";
       /**
        * <pre>
        * e.g 'gps' or 'network'
@@ -9751,16 +10118,16 @@ public final class Traj {
        *
        * <code>optional string provider = 7;</code>
        */
-      public String getProvider() {
-        Object ref = provider_;
-        if (!(ref instanceof String)) {
+      public java.lang.String getProvider() {
+        java.lang.Object ref = provider_;
+        if (!(ref instanceof java.lang.String)) {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
-          String s = bs.toStringUtf8();
+          java.lang.String s = bs.toStringUtf8();
           provider_ = s;
           return s;
         } else {
-          return (String) ref;
+          return (java.lang.String) ref;
         }
       }
       /**
@@ -9772,11 +10139,11 @@ public final class Traj {
        */
       public com.google.protobuf.ByteString
           getProviderBytes() {
-        Object ref = provider_;
+        java.lang.Object ref = provider_;
         if (ref instanceof String) {
           com.google.protobuf.ByteString b = 
               com.google.protobuf.ByteString.copyFromUtf8(
-                  (String) ref);
+                  (java.lang.String) ref);
           provider_ = b;
           return b;
         } else {
@@ -9791,7 +10158,7 @@ public final class Traj {
        * <code>optional string provider = 7;</code>
        */
       public Builder setProvider(
-          String value) {
+          java.lang.String value) {
         if (value == null) {
     throw new NullPointerException();
   }
@@ -9846,12 +10213,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:GNSS_Sample)
-    private static final GNSS_Sample DEFAULT_INSTANCE;
+    private static final Traj.GNSS_Sample DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new GNSS_Sample();
+      DEFAULT_INSTANCE = new Traj.GNSS_Sample();
     }
 
-    public static GNSS_Sample getDefaultInstance() {
+    public static Traj.GNSS_Sample getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -9869,12 +10236,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<GNSS_Sample> getParserForType() {
       return PARSER;
     }
 
-    public GNSS_Sample getDefaultInstanceForType() {
+    public Traj.GNSS_Sample getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -9892,12 +10259,12 @@ public final class Traj {
     /**
      * <code>repeated .Mac_Scan mac_scans = 2;</code>
      */
-    java.util.List<Mac_Scan>
+    java.util.List<Traj.Mac_Scan> 
         getMacScansList();
     /**
      * <code>repeated .Mac_Scan mac_scans = 2;</code>
      */
-    Mac_Scan getMacScans(int index);
+    Traj.Mac_Scan getMacScans(int index);
     /**
      * <code>repeated .Mac_Scan mac_scans = 2;</code>
      */
@@ -9905,12 +10272,12 @@ public final class Traj {
     /**
      * <code>repeated .Mac_Scan mac_scans = 2;</code>
      */
-    java.util.List<? extends Mac_ScanOrBuilder>
+    java.util.List<? extends Traj.Mac_ScanOrBuilder> 
         getMacScansOrBuilderList();
     /**
      * <code>repeated .Mac_Scan mac_scans = 2;</code>
      */
-    Mac_ScanOrBuilder getMacScansOrBuilder(
+    Traj.Mac_ScanOrBuilder getMacScansOrBuilder(
         int index);
   }
   /**
@@ -9929,7 +10296,7 @@ public final class Traj {
       macScans_ = java.util.Collections.emptyList();
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -9961,11 +10328,11 @@ public final class Traj {
             }
             case 18: {
               if (!((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
-                macScans_ = new java.util.ArrayList<Mac_Scan>();
+                macScans_ = new java.util.ArrayList<Traj.Mac_Scan>();
                 mutable_bitField0_ |= 0x00000002;
               }
               macScans_.add(
-                  input.readMessage(Mac_Scan.parser(), extensionRegistry));
+                  input.readMessage(Traj.Mac_Scan.parser(), extensionRegistry));
               break;
             }
           }
@@ -9987,11 +10354,11 @@ public final class Traj {
       return Traj.internal_static_WiFi_Sample_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_WiFi_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              WiFi_Sample.class, Builder.class);
+              Traj.WiFi_Sample.class, Traj.WiFi_Sample.Builder.class);
     }
 
     private int bitField0_;
@@ -10005,17 +10372,17 @@ public final class Traj {
     }
 
     public static final int MAC_SCANS_FIELD_NUMBER = 2;
-    private java.util.List<Mac_Scan> macScans_;
+    private java.util.List<Traj.Mac_Scan> macScans_;
     /**
      * <code>repeated .Mac_Scan mac_scans = 2;</code>
      */
-    public java.util.List<Mac_Scan> getMacScansList() {
+    public java.util.List<Traj.Mac_Scan> getMacScansList() {
       return macScans_;
     }
     /**
      * <code>repeated .Mac_Scan mac_scans = 2;</code>
      */
-    public java.util.List<? extends Mac_ScanOrBuilder>
+    public java.util.List<? extends Traj.Mac_ScanOrBuilder> 
         getMacScansOrBuilderList() {
       return macScans_;
     }
@@ -10028,13 +10395,13 @@ public final class Traj {
     /**
      * <code>repeated .Mac_Scan mac_scans = 2;</code>
      */
-    public Mac_Scan getMacScans(int index) {
+    public Traj.Mac_Scan getMacScans(int index) {
       return macScans_.get(index);
     }
     /**
      * <code>repeated .Mac_Scan mac_scans = 2;</code>
      */
-    public Mac_ScanOrBuilder getMacScansOrBuilder(
+    public Traj.Mac_ScanOrBuilder getMacScansOrBuilder(
         int index) {
       return macScans_.get(index);
     }
@@ -10077,15 +10444,15 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof WiFi_Sample)) {
+      if (!(obj instanceof Traj.WiFi_Sample)) {
         return super.equals(obj);
       }
-      WiFi_Sample other = (WiFi_Sample) obj;
+      Traj.WiFi_Sample other = (Traj.WiFi_Sample) obj;
 
       boolean result = true;
       result = result && (getRelativeTimestamp()
@@ -10095,7 +10462,7 @@ public final class Traj {
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -10114,58 +10481,58 @@ public final class Traj {
       return hash;
     }
 
-    public static WiFi_Sample parseFrom(
+    public static Traj.WiFi_Sample parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static WiFi_Sample parseFrom(
+    public static Traj.WiFi_Sample parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static WiFi_Sample parseFrom(byte[] data)
+    public static Traj.WiFi_Sample parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static WiFi_Sample parseFrom(
+    public static Traj.WiFi_Sample parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static WiFi_Sample parseFrom(java.io.InputStream input)
+    public static Traj.WiFi_Sample parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static WiFi_Sample parseFrom(
+    public static Traj.WiFi_Sample parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static WiFi_Sample parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.WiFi_Sample parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static WiFi_Sample parseDelimitedFrom(
+    public static Traj.WiFi_Sample parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static WiFi_Sample parseFrom(
+    public static Traj.WiFi_Sample parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static WiFi_Sample parseFrom(
+    public static Traj.WiFi_Sample parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -10177,7 +10544,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(WiFi_Sample prototype) {
+    public static Builder newBuilder(Traj.WiFi_Sample prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -10185,9 +10552,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -10197,17 +10564,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:WiFi_Sample)
-        WiFi_SampleOrBuilder {
+        Traj.WiFi_SampleOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_WiFi_Sample_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_WiFi_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                WiFi_Sample.class, Builder.class);
+                Traj.WiFi_Sample.class, Traj.WiFi_Sample.Builder.class);
       }
 
       // Construct using Traj.WiFi_Sample.newBuilder()
@@ -10216,7 +10583,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -10244,20 +10611,20 @@ public final class Traj {
         return Traj.internal_static_WiFi_Sample_descriptor;
       }
 
-      public WiFi_Sample getDefaultInstanceForType() {
-        return WiFi_Sample.getDefaultInstance();
+      public Traj.WiFi_Sample getDefaultInstanceForType() {
+        return Traj.WiFi_Sample.getDefaultInstance();
       }
 
-      public WiFi_Sample build() {
-        WiFi_Sample result = buildPartial();
+      public Traj.WiFi_Sample build() {
+        Traj.WiFi_Sample result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public WiFi_Sample buildPartial() {
-        WiFi_Sample result = new WiFi_Sample(this);
+      public Traj.WiFi_Sample buildPartial() {
+        Traj.WiFi_Sample result = new Traj.WiFi_Sample(this);
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
         result.relativeTimestamp_ = relativeTimestamp_;
@@ -10302,16 +10669,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof WiFi_Sample) {
-          return mergeFrom((WiFi_Sample)other);
+        if (other instanceof Traj.WiFi_Sample) {
+          return mergeFrom((Traj.WiFi_Sample)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(WiFi_Sample other) {
-        if (other == WiFi_Sample.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.WiFi_Sample other) {
+        if (other == Traj.WiFi_Sample.getDefaultInstance()) return this;
         if (other.getRelativeTimestamp() != 0L) {
           setRelativeTimestamp(other.getRelativeTimestamp());
         }
@@ -10353,11 +10720,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        WiFi_Sample parsedMessage = null;
+        Traj.WiFi_Sample parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (WiFi_Sample) e.getUnfinishedMessage();
+          parsedMessage = (Traj.WiFi_Sample) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -10394,22 +10761,22 @@ public final class Traj {
         return this;
       }
 
-      private java.util.List<Mac_Scan> macScans_ =
+      private java.util.List<Traj.Mac_Scan> macScans_ =
         java.util.Collections.emptyList();
       private void ensureMacScansIsMutable() {
         if (!((bitField0_ & 0x00000002) == 0x00000002)) {
-          macScans_ = new java.util.ArrayList<Mac_Scan>(macScans_);
+          macScans_ = new java.util.ArrayList<Traj.Mac_Scan>(macScans_);
           bitField0_ |= 0x00000002;
          }
       }
 
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Mac_Scan, Mac_Scan.Builder, Mac_ScanOrBuilder> macScansBuilder_;
+          Traj.Mac_Scan, Traj.Mac_Scan.Builder, Traj.Mac_ScanOrBuilder> macScansBuilder_;
 
       /**
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
-      public java.util.List<Mac_Scan> getMacScansList() {
+      public java.util.List<Traj.Mac_Scan> getMacScansList() {
         if (macScansBuilder_ == null) {
           return java.util.Collections.unmodifiableList(macScans_);
         } else {
@@ -10429,7 +10796,7 @@ public final class Traj {
       /**
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
-      public Mac_Scan getMacScans(int index) {
+      public Traj.Mac_Scan getMacScans(int index) {
         if (macScansBuilder_ == null) {
           return macScans_.get(index);
         } else {
@@ -10440,7 +10807,7 @@ public final class Traj {
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
       public Builder setMacScans(
-          int index, Mac_Scan value) {
+          int index, Traj.Mac_Scan value) {
         if (macScansBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -10457,7 +10824,7 @@ public final class Traj {
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
       public Builder setMacScans(
-          int index, Mac_Scan.Builder builderForValue) {
+          int index, Traj.Mac_Scan.Builder builderForValue) {
         if (macScansBuilder_ == null) {
           ensureMacScansIsMutable();
           macScans_.set(index, builderForValue.build());
@@ -10470,7 +10837,7 @@ public final class Traj {
       /**
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
-      public Builder addMacScans(Mac_Scan value) {
+      public Builder addMacScans(Traj.Mac_Scan value) {
         if (macScansBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -10487,7 +10854,7 @@ public final class Traj {
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
       public Builder addMacScans(
-          int index, Mac_Scan value) {
+          int index, Traj.Mac_Scan value) {
         if (macScansBuilder_ == null) {
           if (value == null) {
             throw new NullPointerException();
@@ -10504,7 +10871,7 @@ public final class Traj {
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
       public Builder addMacScans(
-          Mac_Scan.Builder builderForValue) {
+          Traj.Mac_Scan.Builder builderForValue) {
         if (macScansBuilder_ == null) {
           ensureMacScansIsMutable();
           macScans_.add(builderForValue.build());
@@ -10518,7 +10885,7 @@ public final class Traj {
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
       public Builder addMacScans(
-          int index, Mac_Scan.Builder builderForValue) {
+          int index, Traj.Mac_Scan.Builder builderForValue) {
         if (macScansBuilder_ == null) {
           ensureMacScansIsMutable();
           macScans_.add(index, builderForValue.build());
@@ -10532,7 +10899,7 @@ public final class Traj {
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
       public Builder addAllMacScans(
-          Iterable<? extends Mac_Scan> values) {
+          java.lang.Iterable<? extends Traj.Mac_Scan> values) {
         if (macScansBuilder_ == null) {
           ensureMacScansIsMutable();
           com.google.protobuf.AbstractMessageLite.Builder.addAll(
@@ -10572,14 +10939,14 @@ public final class Traj {
       /**
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
-      public Mac_Scan.Builder getMacScansBuilder(
+      public Traj.Mac_Scan.Builder getMacScansBuilder(
           int index) {
         return getMacScansFieldBuilder().getBuilder(index);
       }
       /**
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
-      public Mac_ScanOrBuilder getMacScansOrBuilder(
+      public Traj.Mac_ScanOrBuilder getMacScansOrBuilder(
           int index) {
         if (macScansBuilder_ == null) {
           return macScans_.get(index);  } else {
@@ -10589,7 +10956,7 @@ public final class Traj {
       /**
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
-      public java.util.List<? extends Mac_ScanOrBuilder>
+      public java.util.List<? extends Traj.Mac_ScanOrBuilder> 
            getMacScansOrBuilderList() {
         if (macScansBuilder_ != null) {
           return macScansBuilder_.getMessageOrBuilderList();
@@ -10600,31 +10967,31 @@ public final class Traj {
       /**
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
-      public Mac_Scan.Builder addMacScansBuilder() {
+      public Traj.Mac_Scan.Builder addMacScansBuilder() {
         return getMacScansFieldBuilder().addBuilder(
-            Mac_Scan.getDefaultInstance());
+            Traj.Mac_Scan.getDefaultInstance());
       }
       /**
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
-      public Mac_Scan.Builder addMacScansBuilder(
+      public Traj.Mac_Scan.Builder addMacScansBuilder(
           int index) {
         return getMacScansFieldBuilder().addBuilder(
-            index, Mac_Scan.getDefaultInstance());
+            index, Traj.Mac_Scan.getDefaultInstance());
       }
       /**
        * <code>repeated .Mac_Scan mac_scans = 2;</code>
        */
-      public java.util.List<Mac_Scan.Builder>
+      public java.util.List<Traj.Mac_Scan.Builder> 
            getMacScansBuilderList() {
         return getMacScansFieldBuilder().getBuilderList();
       }
       private com.google.protobuf.RepeatedFieldBuilderV3<
-          Mac_Scan, Mac_Scan.Builder, Mac_ScanOrBuilder>
+          Traj.Mac_Scan, Traj.Mac_Scan.Builder, Traj.Mac_ScanOrBuilder> 
           getMacScansFieldBuilder() {
         if (macScansBuilder_ == null) {
           macScansBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
-              Mac_Scan, Mac_Scan.Builder, Mac_ScanOrBuilder>(
+              Traj.Mac_Scan, Traj.Mac_Scan.Builder, Traj.Mac_ScanOrBuilder>(
                   macScans_,
                   ((bitField0_ & 0x00000002) == 0x00000002),
                   getParentForChildren(),
@@ -10648,12 +11015,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:WiFi_Sample)
-    private static final WiFi_Sample DEFAULT_INSTANCE;
+    private static final Traj.WiFi_Sample DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new WiFi_Sample();
+      DEFAULT_INSTANCE = new Traj.WiFi_Sample();
     }
 
-    public static WiFi_Sample getDefaultInstance() {
+    public static Traj.WiFi_Sample getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -10671,12 +11038,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<WiFi_Sample> getParserForType() {
       return PARSER;
     }
 
-    public WiFi_Sample getDefaultInstanceForType() {
+    public Traj.WiFi_Sample getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -10728,7 +11095,7 @@ public final class Traj {
       rssi_ = 0;
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -10784,11 +11151,11 @@ public final class Traj {
       return Traj.internal_static_Mac_Scan_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Mac_Scan_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              Mac_Scan.class, Builder.class);
+              Traj.Mac_Scan.class, Traj.Mac_Scan.Builder.class);
     }
 
     public static final int RELATIVE_TIMESTAMP_FIELD_NUMBER = 1;
@@ -10873,15 +11240,15 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof Mac_Scan)) {
+      if (!(obj instanceof Traj.Mac_Scan)) {
         return super.equals(obj);
       }
-      Mac_Scan other = (Mac_Scan) obj;
+      Traj.Mac_Scan other = (Traj.Mac_Scan) obj;
 
       boolean result = true;
       result = result && (getRelativeTimestamp()
@@ -10893,7 +11260,7 @@ public final class Traj {
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -10913,58 +11280,58 @@ public final class Traj {
       return hash;
     }
 
-    public static Mac_Scan parseFrom(
+    public static Traj.Mac_Scan parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Mac_Scan parseFrom(
+    public static Traj.Mac_Scan parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Mac_Scan parseFrom(byte[] data)
+    public static Traj.Mac_Scan parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Mac_Scan parseFrom(
+    public static Traj.Mac_Scan parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Mac_Scan parseFrom(java.io.InputStream input)
+    public static Traj.Mac_Scan parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Mac_Scan parseFrom(
+    public static Traj.Mac_Scan parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Mac_Scan parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.Mac_Scan parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static Mac_Scan parseDelimitedFrom(
+    public static Traj.Mac_Scan parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Mac_Scan parseFrom(
+    public static Traj.Mac_Scan parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Mac_Scan parseFrom(
+    public static Traj.Mac_Scan parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -10976,7 +11343,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(Mac_Scan prototype) {
+    public static Builder newBuilder(Traj.Mac_Scan prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -10984,9 +11351,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -10996,17 +11363,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:Mac_Scan)
-        Mac_ScanOrBuilder {
+        Traj.Mac_ScanOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_Mac_Scan_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Mac_Scan_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                Mac_Scan.class, Builder.class);
+                Traj.Mac_Scan.class, Traj.Mac_Scan.Builder.class);
       }
 
       // Construct using Traj.Mac_Scan.newBuilder()
@@ -11015,7 +11382,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -11040,20 +11407,20 @@ public final class Traj {
         return Traj.internal_static_Mac_Scan_descriptor;
       }
 
-      public Mac_Scan getDefaultInstanceForType() {
-        return Mac_Scan.getDefaultInstance();
+      public Traj.Mac_Scan getDefaultInstanceForType() {
+        return Traj.Mac_Scan.getDefaultInstance();
       }
 
-      public Mac_Scan build() {
-        Mac_Scan result = buildPartial();
+      public Traj.Mac_Scan build() {
+        Traj.Mac_Scan result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public Mac_Scan buildPartial() {
-        Mac_Scan result = new Mac_Scan(this);
+      public Traj.Mac_Scan buildPartial() {
+        Traj.Mac_Scan result = new Traj.Mac_Scan(this);
         result.relativeTimestamp_ = relativeTimestamp_;
         result.mac_ = mac_;
         result.rssi_ = rssi_;
@@ -11088,16 +11455,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof Mac_Scan) {
-          return mergeFrom((Mac_Scan)other);
+        if (other instanceof Traj.Mac_Scan) {
+          return mergeFrom((Traj.Mac_Scan)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(Mac_Scan other) {
-        if (other == Mac_Scan.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.Mac_Scan other) {
+        if (other == Traj.Mac_Scan.getDefaultInstance()) return this;
         if (other.getRelativeTimestamp() != 0L) {
           setRelativeTimestamp(other.getRelativeTimestamp());
         }
@@ -11119,11 +11486,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        Mac_Scan parsedMessage = null;
+        Traj.Mac_Scan parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (Mac_Scan) e.getUnfinishedMessage();
+          parsedMessage = (Traj.Mac_Scan) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -11255,12 +11622,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:Mac_Scan)
-    private static final Mac_Scan DEFAULT_INSTANCE;
+    private static final Traj.Mac_Scan DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new Mac_Scan();
+      DEFAULT_INSTANCE = new Traj.Mac_Scan();
     }
 
-    public static Mac_Scan getDefaultInstance() {
+    public static Traj.Mac_Scan getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -11278,12 +11645,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<Mac_Scan> getParserForType() {
       return PARSER;
     }
 
-    public Mac_Scan getDefaultInstanceForType() {
+    public Traj.Mac_Scan getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -11310,7 +11677,7 @@ public final class Traj {
      *
      * <code>optional string ssid = 2;</code>
      */
-    String getSsid();
+    java.lang.String getSsid();
     /**
      * <pre>
      * E.g. 'Eduroam' or 'Starbucks_free_wifi'
@@ -11347,7 +11714,7 @@ public final class Traj {
       frequency_ = 0L;
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -11378,7 +11745,7 @@ public final class Traj {
               break;
             }
             case 18: {
-              String s = input.readStringRequireUtf8();
+              java.lang.String s = input.readStringRequireUtf8();
 
               ssid_ = s;
               break;
@@ -11404,11 +11771,11 @@ public final class Traj {
       return Traj.internal_static_AP_Data_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_AP_Data_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              AP_Data.class, Builder.class);
+              Traj.AP_Data.class, Traj.AP_Data.Builder.class);
     }
 
     public static final int MAC_FIELD_NUMBER = 1;
@@ -11426,7 +11793,7 @@ public final class Traj {
     }
 
     public static final int SSID_FIELD_NUMBER = 2;
-    private volatile Object ssid_;
+    private volatile java.lang.Object ssid_;
     /**
      * <pre>
      * E.g. 'Eduroam' or 'Starbucks_free_wifi'
@@ -11434,14 +11801,14 @@ public final class Traj {
      *
      * <code>optional string ssid = 2;</code>
      */
-    public String getSsid() {
-      Object ref = ssid_;
-      if (ref instanceof String) {
-        return (String) ref;
+    public java.lang.String getSsid() {
+      java.lang.Object ref = ssid_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
       } else {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
-        String s = bs.toStringUtf8();
+        java.lang.String s = bs.toStringUtf8();
         ssid_ = s;
         return s;
       }
@@ -11455,11 +11822,11 @@ public final class Traj {
      */
     public com.google.protobuf.ByteString
         getSsidBytes() {
-      Object ref = ssid_;
-      if (ref instanceof String) {
+      java.lang.Object ref = ssid_;
+      if (ref instanceof java.lang.String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
-                (String) ref);
+                (java.lang.String) ref);
         ssid_ = b;
         return b;
       } else {
@@ -11524,15 +11891,15 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof AP_Data)) {
+      if (!(obj instanceof Traj.AP_Data)) {
         return super.equals(obj);
       }
-      AP_Data other = (AP_Data) obj;
+      Traj.AP_Data other = (Traj.AP_Data) obj;
 
       boolean result = true;
       result = result && (getMac()
@@ -11544,7 +11911,7 @@ public final class Traj {
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -11564,58 +11931,58 @@ public final class Traj {
       return hash;
     }
 
-    public static AP_Data parseFrom(
+    public static Traj.AP_Data parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static AP_Data parseFrom(
+    public static Traj.AP_Data parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static AP_Data parseFrom(byte[] data)
+    public static Traj.AP_Data parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static AP_Data parseFrom(
+    public static Traj.AP_Data parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static AP_Data parseFrom(java.io.InputStream input)
+    public static Traj.AP_Data parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static AP_Data parseFrom(
+    public static Traj.AP_Data parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static AP_Data parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.AP_Data parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static AP_Data parseDelimitedFrom(
+    public static Traj.AP_Data parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static AP_Data parseFrom(
+    public static Traj.AP_Data parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static AP_Data parseFrom(
+    public static Traj.AP_Data parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -11627,7 +11994,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(AP_Data prototype) {
+    public static Builder newBuilder(Traj.AP_Data prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -11635,9 +12002,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -11647,17 +12014,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:AP_Data)
-        AP_DataOrBuilder {
+        Traj.AP_DataOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_AP_Data_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_AP_Data_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                AP_Data.class, Builder.class);
+                Traj.AP_Data.class, Traj.AP_Data.Builder.class);
       }
 
       // Construct using Traj.AP_Data.newBuilder()
@@ -11666,7 +12033,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -11691,20 +12058,20 @@ public final class Traj {
         return Traj.internal_static_AP_Data_descriptor;
       }
 
-      public AP_Data getDefaultInstanceForType() {
-        return AP_Data.getDefaultInstance();
+      public Traj.AP_Data getDefaultInstanceForType() {
+        return Traj.AP_Data.getDefaultInstance();
       }
 
-      public AP_Data build() {
-        AP_Data result = buildPartial();
+      public Traj.AP_Data build() {
+        Traj.AP_Data result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public AP_Data buildPartial() {
-        AP_Data result = new AP_Data(this);
+      public Traj.AP_Data buildPartial() {
+        Traj.AP_Data result = new Traj.AP_Data(this);
         result.mac_ = mac_;
         result.ssid_ = ssid_;
         result.frequency_ = frequency_;
@@ -11739,16 +12106,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof AP_Data) {
-          return mergeFrom((AP_Data)other);
+        if (other instanceof Traj.AP_Data) {
+          return mergeFrom((Traj.AP_Data)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(AP_Data other) {
-        if (other == AP_Data.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.AP_Data other) {
+        if (other == Traj.AP_Data.getDefaultInstance()) return this;
         if (other.getMac() != 0L) {
           setMac(other.getMac());
         }
@@ -11771,11 +12138,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        AP_Data parsedMessage = null;
+        Traj.AP_Data parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (AP_Data) e.getUnfinishedMessage();
+          parsedMessage = (Traj.AP_Data) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -11826,7 +12193,7 @@ public final class Traj {
         return this;
       }
 
-      private Object ssid_ = "";
+      private java.lang.Object ssid_ = "";
       /**
        * <pre>
        * E.g. 'Eduroam' or 'Starbucks_free_wifi'
@@ -11834,16 +12201,16 @@ public final class Traj {
        *
        * <code>optional string ssid = 2;</code>
        */
-      public String getSsid() {
-        Object ref = ssid_;
-        if (!(ref instanceof String)) {
+      public java.lang.String getSsid() {
+        java.lang.Object ref = ssid_;
+        if (!(ref instanceof java.lang.String)) {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
-          String s = bs.toStringUtf8();
+          java.lang.String s = bs.toStringUtf8();
           ssid_ = s;
           return s;
         } else {
-          return (String) ref;
+          return (java.lang.String) ref;
         }
       }
       /**
@@ -11855,11 +12222,11 @@ public final class Traj {
        */
       public com.google.protobuf.ByteString
           getSsidBytes() {
-        Object ref = ssid_;
+        java.lang.Object ref = ssid_;
         if (ref instanceof String) {
           com.google.protobuf.ByteString b = 
               com.google.protobuf.ByteString.copyFromUtf8(
-                  (String) ref);
+                  (java.lang.String) ref);
           ssid_ = b;
           return b;
         } else {
@@ -11874,7 +12241,7 @@ public final class Traj {
        * <code>optional string ssid = 2;</code>
        */
       public Builder setSsid(
-          String value) {
+          java.lang.String value) {
         if (value == null) {
     throw new NullPointerException();
   }
@@ -11967,12 +12334,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:AP_Data)
-    private static final AP_Data DEFAULT_INSTANCE;
+    private static final Traj.AP_Data DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new AP_Data();
+      DEFAULT_INSTANCE = new Traj.AP_Data();
     }
 
-    public static AP_Data getDefaultInstance() {
+    public static Traj.AP_Data getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -11990,12 +12357,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<AP_Data> getParserForType() {
       return PARSER;
     }
 
-    public AP_Data getDefaultInstanceForType() {
+    public Traj.AP_Data getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -12008,7 +12375,7 @@ public final class Traj {
     /**
      * <code>optional string name = 1;</code>
      */
-    String getName();
+    java.lang.String getName();
     /**
      * <code>optional string name = 1;</code>
      */
@@ -12018,7 +12385,7 @@ public final class Traj {
     /**
      * <code>optional string vendor = 2;</code>
      */
-    String getVendor();
+    java.lang.String getVendor();
     /**
      * <code>optional string vendor = 2;</code>
      */
@@ -12065,7 +12432,7 @@ public final class Traj {
       type_ = 0;
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -12091,13 +12458,13 @@ public final class Traj {
               break;
             }
             case 10: {
-              String s = input.readStringRequireUtf8();
+              java.lang.String s = input.readStringRequireUtf8();
 
               name_ = s;
               break;
             }
             case 18: {
-              String s = input.readStringRequireUtf8();
+              java.lang.String s = input.readStringRequireUtf8();
 
               vendor_ = s;
               break;
@@ -12138,26 +12505,26 @@ public final class Traj {
       return Traj.internal_static_Sensor_Info_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Sensor_Info_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              Sensor_Info.class, Builder.class);
+              Traj.Sensor_Info.class, Traj.Sensor_Info.Builder.class);
     }
 
     public static final int NAME_FIELD_NUMBER = 1;
-    private volatile Object name_;
+    private volatile java.lang.Object name_;
     /**
      * <code>optional string name = 1;</code>
      */
-    public String getName() {
-      Object ref = name_;
-      if (ref instanceof String) {
-        return (String) ref;
+    public java.lang.String getName() {
+      java.lang.Object ref = name_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
       } else {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
-        String s = bs.toStringUtf8();
+        java.lang.String s = bs.toStringUtf8();
         name_ = s;
         return s;
       }
@@ -12167,11 +12534,11 @@ public final class Traj {
      */
     public com.google.protobuf.ByteString
         getNameBytes() {
-      Object ref = name_;
-      if (ref instanceof String) {
+      java.lang.Object ref = name_;
+      if (ref instanceof java.lang.String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
-                (String) ref);
+                (java.lang.String) ref);
         name_ = b;
         return b;
       } else {
@@ -12180,18 +12547,18 @@ public final class Traj {
     }
 
     public static final int VENDOR_FIELD_NUMBER = 2;
-    private volatile Object vendor_;
+    private volatile java.lang.Object vendor_;
     /**
      * <code>optional string vendor = 2;</code>
      */
-    public String getVendor() {
-      Object ref = vendor_;
-      if (ref instanceof String) {
-        return (String) ref;
+    public java.lang.String getVendor() {
+      java.lang.Object ref = vendor_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
       } else {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
-        String s = bs.toStringUtf8();
+        java.lang.String s = bs.toStringUtf8();
         vendor_ = s;
         return s;
       }
@@ -12201,11 +12568,11 @@ public final class Traj {
      */
     public com.google.protobuf.ByteString
         getVendorBytes() {
-      Object ref = vendor_;
-      if (ref instanceof String) {
+      java.lang.Object ref = vendor_;
+      if (ref instanceof java.lang.String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
-                (String) ref);
+                (java.lang.String) ref);
         vendor_ = b;
         return b;
       } else {
@@ -12313,15 +12680,15 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof Sensor_Info)) {
+      if (!(obj instanceof Traj.Sensor_Info)) {
         return super.equals(obj);
       }
-      Sensor_Info other = (Sensor_Info) obj;
+      Traj.Sensor_Info other = (Traj.Sensor_Info) obj;
 
       boolean result = true;
       result = result && getName()
@@ -12329,12 +12696,12 @@ public final class Traj {
       result = result && getVendor()
           .equals(other.getVendor());
       result = result && (
-          Float.floatToIntBits(getResolution())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getResolution())
+          == java.lang.Float.floatToIntBits(
               other.getResolution()));
       result = result && (
-          Float.floatToIntBits(getPower())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getPower())
+          == java.lang.Float.floatToIntBits(
               other.getPower()));
       result = result && (getVersion()
           == other.getVersion());
@@ -12343,7 +12710,7 @@ public final class Traj {
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -12355,10 +12722,10 @@ public final class Traj {
       hash = (37 * hash) + VENDOR_FIELD_NUMBER;
       hash = (53 * hash) + getVendor().hashCode();
       hash = (37 * hash) + RESOLUTION_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getResolution());
       hash = (37 * hash) + POWER_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getPower());
       hash = (37 * hash) + VERSION_FIELD_NUMBER;
       hash = (53 * hash) + getVersion();
@@ -12369,58 +12736,58 @@ public final class Traj {
       return hash;
     }
 
-    public static Sensor_Info parseFrom(
+    public static Traj.Sensor_Info parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Sensor_Info parseFrom(
+    public static Traj.Sensor_Info parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Sensor_Info parseFrom(byte[] data)
+    public static Traj.Sensor_Info parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Sensor_Info parseFrom(
+    public static Traj.Sensor_Info parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Sensor_Info parseFrom(java.io.InputStream input)
+    public static Traj.Sensor_Info parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Sensor_Info parseFrom(
+    public static Traj.Sensor_Info parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Sensor_Info parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.Sensor_Info parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static Sensor_Info parseDelimitedFrom(
+    public static Traj.Sensor_Info parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Sensor_Info parseFrom(
+    public static Traj.Sensor_Info parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Sensor_Info parseFrom(
+    public static Traj.Sensor_Info parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -12432,7 +12799,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(Sensor_Info prototype) {
+    public static Builder newBuilder(Traj.Sensor_Info prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -12440,9 +12807,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -12452,17 +12819,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:Sensor_Info)
-        Sensor_InfoOrBuilder {
+        Traj.Sensor_InfoOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_Sensor_Info_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Sensor_Info_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                Sensor_Info.class, Builder.class);
+                Traj.Sensor_Info.class, Traj.Sensor_Info.Builder.class);
       }
 
       // Construct using Traj.Sensor_Info.newBuilder()
@@ -12471,7 +12838,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -12502,20 +12869,20 @@ public final class Traj {
         return Traj.internal_static_Sensor_Info_descriptor;
       }
 
-      public Sensor_Info getDefaultInstanceForType() {
-        return Sensor_Info.getDefaultInstance();
+      public Traj.Sensor_Info getDefaultInstanceForType() {
+        return Traj.Sensor_Info.getDefaultInstance();
       }
 
-      public Sensor_Info build() {
-        Sensor_Info result = buildPartial();
+      public Traj.Sensor_Info build() {
+        Traj.Sensor_Info result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public Sensor_Info buildPartial() {
-        Sensor_Info result = new Sensor_Info(this);
+      public Traj.Sensor_Info buildPartial() {
+        Traj.Sensor_Info result = new Traj.Sensor_Info(this);
         result.name_ = name_;
         result.vendor_ = vendor_;
         result.resolution_ = resolution_;
@@ -12553,16 +12920,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof Sensor_Info) {
-          return mergeFrom((Sensor_Info)other);
+        if (other instanceof Traj.Sensor_Info) {
+          return mergeFrom((Traj.Sensor_Info)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(Sensor_Info other) {
-        if (other == Sensor_Info.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.Sensor_Info other) {
+        if (other == Traj.Sensor_Info.getDefaultInstance()) return this;
         if (!other.getName().isEmpty()) {
           name_ = other.name_;
           onChanged();
@@ -12595,11 +12962,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        Sensor_Info parsedMessage = null;
+        Traj.Sensor_Info parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (Sensor_Info) e.getUnfinishedMessage();
+          parsedMessage = (Traj.Sensor_Info) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -12609,20 +12976,20 @@ public final class Traj {
         return this;
       }
 
-      private Object name_ = "";
+      private java.lang.Object name_ = "";
       /**
        * <code>optional string name = 1;</code>
        */
-      public String getName() {
-        Object ref = name_;
-        if (!(ref instanceof String)) {
+      public java.lang.String getName() {
+        java.lang.Object ref = name_;
+        if (!(ref instanceof java.lang.String)) {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
-          String s = bs.toStringUtf8();
+          java.lang.String s = bs.toStringUtf8();
           name_ = s;
           return s;
         } else {
-          return (String) ref;
+          return (java.lang.String) ref;
         }
       }
       /**
@@ -12630,11 +12997,11 @@ public final class Traj {
        */
       public com.google.protobuf.ByteString
           getNameBytes() {
-        Object ref = name_;
+        java.lang.Object ref = name_;
         if (ref instanceof String) {
           com.google.protobuf.ByteString b = 
               com.google.protobuf.ByteString.copyFromUtf8(
-                  (String) ref);
+                  (java.lang.String) ref);
           name_ = b;
           return b;
         } else {
@@ -12645,7 +13012,7 @@ public final class Traj {
        * <code>optional string name = 1;</code>
        */
       public Builder setName(
-          String value) {
+          java.lang.String value) {
         if (value == null) {
     throw new NullPointerException();
   }
@@ -12678,20 +13045,20 @@ public final class Traj {
         return this;
       }
 
-      private Object vendor_ = "";
+      private java.lang.Object vendor_ = "";
       /**
        * <code>optional string vendor = 2;</code>
        */
-      public String getVendor() {
-        Object ref = vendor_;
-        if (!(ref instanceof String)) {
+      public java.lang.String getVendor() {
+        java.lang.Object ref = vendor_;
+        if (!(ref instanceof java.lang.String)) {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
-          String s = bs.toStringUtf8();
+          java.lang.String s = bs.toStringUtf8();
           vendor_ = s;
           return s;
         } else {
-          return (String) ref;
+          return (java.lang.String) ref;
         }
       }
       /**
@@ -12699,11 +13066,11 @@ public final class Traj {
        */
       public com.google.protobuf.ByteString
           getVendorBytes() {
-        Object ref = vendor_;
+        java.lang.Object ref = vendor_;
         if (ref instanceof String) {
           com.google.protobuf.ByteString b = 
               com.google.protobuf.ByteString.copyFromUtf8(
-                  (String) ref);
+                  (java.lang.String) ref);
           vendor_ = b;
           return b;
         } else {
@@ -12714,7 +13081,7 @@ public final class Traj {
        * <code>optional string vendor = 2;</code>
        */
       public Builder setVendor(
-          String value) {
+          java.lang.String value) {
         if (value == null) {
     throw new NullPointerException();
   }
@@ -12865,12 +13232,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:Sensor_Info)
-    private static final Sensor_Info DEFAULT_INSTANCE;
+    private static final Traj.Sensor_Info DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new Sensor_Info();
+      DEFAULT_INSTANCE = new Traj.Sensor_Info();
     }
 
-    public static Sensor_Info getDefaultInstance() {
+    public static Traj.Sensor_Info getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -12888,12 +13255,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<Sensor_Info> getParserForType() {
       return PARSER;
     }
 
-    public Sensor_Info getDefaultInstanceForType() {
+    public Traj.Sensor_Info getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -12937,7 +13304,7 @@ public final class Traj {
       long_ = 0F;
     }
 
-    @Override
+    @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
@@ -12988,11 +13355,11 @@ public final class Traj {
       return Traj.internal_static_Lat_Long_Position_descriptor;
     }
 
-    protected FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Lat_Long_Position_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              Lat_Long_Position.class, Builder.class);
+              Traj.Lat_Long_Position.class, Traj.Lat_Long_Position.Builder.class);
     }
 
     public static final int LAT_FIELD_NUMBER = 1;
@@ -13059,29 +13426,29 @@ public final class Traj {
     }
 
     private static final long serialVersionUID = 0L;
-    @Override
-    public boolean equals(final Object obj) {
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
        return true;
       }
-      if (!(obj instanceof Lat_Long_Position)) {
+      if (!(obj instanceof Traj.Lat_Long_Position)) {
         return super.equals(obj);
       }
-      Lat_Long_Position other = (Lat_Long_Position) obj;
+      Traj.Lat_Long_Position other = (Traj.Lat_Long_Position) obj;
 
       boolean result = true;
       result = result && (
-          Float.floatToIntBits(getLat())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getLat())
+          == java.lang.Float.floatToIntBits(
               other.getLat()));
       result = result && (
-          Float.floatToIntBits(getLong())
-          == Float.floatToIntBits(
+          java.lang.Float.floatToIntBits(getLong())
+          == java.lang.Float.floatToIntBits(
               other.getLong()));
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public int hashCode() {
       if (memoizedHashCode != 0) {
         return memoizedHashCode;
@@ -13089,68 +13456,68 @@ public final class Traj {
       int hash = 41;
       hash = (19 * hash) + getDescriptorForType().hashCode();
       hash = (37 * hash) + LAT_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getLat());
       hash = (37 * hash) + LONG_FIELD_NUMBER;
-      hash = (53 * hash) + Float.floatToIntBits(
+      hash = (53 * hash) + java.lang.Float.floatToIntBits(
           getLong());
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
     }
 
-    public static Lat_Long_Position parseFrom(
+    public static Traj.Lat_Long_Position parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Lat_Long_Position parseFrom(
+    public static Traj.Lat_Long_Position parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Lat_Long_Position parseFrom(byte[] data)
+    public static Traj.Lat_Long_Position parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
-    public static Lat_Long_Position parseFrom(
+    public static Traj.Lat_Long_Position parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
-    public static Lat_Long_Position parseFrom(java.io.InputStream input)
+    public static Traj.Lat_Long_Position parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Lat_Long_Position parseFrom(
+    public static Traj.Lat_Long_Position parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Lat_Long_Position parseDelimitedFrom(java.io.InputStream input)
+    public static Traj.Lat_Long_Position parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
-    public static Lat_Long_Position parseDelimitedFrom(
+    public static Traj.Lat_Long_Position parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
-    public static Lat_Long_Position parseFrom(
+    public static Traj.Lat_Long_Position parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
-    public static Lat_Long_Position parseFrom(
+    public static Traj.Lat_Long_Position parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -13162,7 +13529,7 @@ public final class Traj {
     public static Builder newBuilder() {
       return DEFAULT_INSTANCE.toBuilder();
     }
-    public static Builder newBuilder(Lat_Long_Position prototype) {
+    public static Builder newBuilder(Traj.Lat_Long_Position prototype) {
       return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() {
@@ -13170,9 +13537,9 @@ public final class Traj {
           ? new Builder() : new Builder().mergeFrom(this);
     }
 
-    @Override
+    @java.lang.Override
     protected Builder newBuilderForType(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -13182,17 +13549,17 @@ public final class Traj {
     public static final class Builder extends
         com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:Lat_Long_Position)
-        Lat_Long_PositionOrBuilder {
+        Traj.Lat_Long_PositionOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return Traj.internal_static_Lat_Long_Position_descriptor;
       }
 
-      protected FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Lat_Long_Position_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-                Lat_Long_Position.class, Builder.class);
+                Traj.Lat_Long_Position.class, Traj.Lat_Long_Position.Builder.class);
       }
 
       // Construct using Traj.Lat_Long_Position.newBuilder()
@@ -13201,7 +13568,7 @@ public final class Traj {
       }
 
       private Builder(
-          BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -13224,20 +13591,20 @@ public final class Traj {
         return Traj.internal_static_Lat_Long_Position_descriptor;
       }
 
-      public Lat_Long_Position getDefaultInstanceForType() {
-        return Lat_Long_Position.getDefaultInstance();
+      public Traj.Lat_Long_Position getDefaultInstanceForType() {
+        return Traj.Lat_Long_Position.getDefaultInstance();
       }
 
-      public Lat_Long_Position build() {
-        Lat_Long_Position result = buildPartial();
+      public Traj.Lat_Long_Position build() {
+        Traj.Lat_Long_Position result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-      public Lat_Long_Position buildPartial() {
-        Lat_Long_Position result = new Lat_Long_Position(this);
+      public Traj.Lat_Long_Position buildPartial() {
+        Traj.Lat_Long_Position result = new Traj.Lat_Long_Position(this);
         result.lat_ = lat_;
         result.long_ = long_;
         onBuilt();
@@ -13271,16 +13638,16 @@ public final class Traj {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof Lat_Long_Position) {
-          return mergeFrom((Lat_Long_Position)other);
+        if (other instanceof Traj.Lat_Long_Position) {
+          return mergeFrom((Traj.Lat_Long_Position)other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-      public Builder mergeFrom(Lat_Long_Position other) {
-        if (other == Lat_Long_Position.getDefaultInstance()) return this;
+      public Builder mergeFrom(Traj.Lat_Long_Position other) {
+        if (other == Traj.Lat_Long_Position.getDefaultInstance()) return this;
         if (other.getLat() != 0F) {
           setLat(other.getLat());
         }
@@ -13299,11 +13666,11 @@ public final class Traj {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        Lat_Long_Position parsedMessage = null;
+        Traj.Lat_Long_Position parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (Lat_Long_Position) e.getUnfinishedMessage();
+          parsedMessage = (Traj.Lat_Long_Position) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
@@ -13403,12 +13770,12 @@ public final class Traj {
     }
 
     // @@protoc_insertion_point(class_scope:Lat_Long_Position)
-    private static final Lat_Long_Position DEFAULT_INSTANCE;
+    private static final Traj.Lat_Long_Position DEFAULT_INSTANCE;
     static {
-      DEFAULT_INSTANCE = new Lat_Long_Position();
+      DEFAULT_INSTANCE = new Traj.Lat_Long_Position();
     }
 
-    public static Lat_Long_Position getDefaultInstance() {
+    public static Traj.Lat_Long_Position getDefaultInstance() {
       return DEFAULT_INSTANCE;
     }
 
@@ -13426,12 +13793,12 @@ public final class Traj {
       return PARSER;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Parser<Lat_Long_Position> getParserForType() {
       return PARSER;
     }
 
-    public Lat_Long_Position getDefaultInstanceForType() {
+    public Traj.Lat_Long_Position getDefaultInstanceForType() {
       return DEFAULT_INSTANCE;
     }
 
@@ -13505,8 +13872,8 @@ public final class Traj {
   private static  com.google.protobuf.Descriptors.FileDescriptor
       descriptor;
   static {
-    String[] descriptorData = {
-      "\n\025main/proto/traj.proto\"\213\005\n\nTrajectory\022\027" +
+    java.lang.String[] descriptorData = {
+      "\n\025main/proto/traj.proto\"\255\005\n\nTrajectory\022\027" +
       "\n\017android_version\030\001 \001(\t\022 \n\010imu_data\030\002 \003(" +
       "\0132\016.Motion_Sample\022\035\n\010pdr_data\030\003 \003(\0132\013.Pd" +
       "r_Sample\022\'\n\rposition_data\030\004 \003(\0132\020.Positi" +
@@ -13522,35 +13889,36 @@ public final class Traj {
       "netometer_info\030\017 \001(\0132\014.Sensor_Info\022$\n\016ba" +
       "rometer_info\030\020 \001(\0132\014.Sensor_Info\022\'\n\021ligh" +
       "t_sensor_info\030\021 \001(\0132\014.Sensor_Info\022*\n\016sta" +
-      "rt_position\030\022 \001(\0132\022.Lat_Long_Position\">\n" +
-      "\nPdr_Sample\022\032\n\022relative_timestamp\030\001 \001(\003\022" +
-      "\t\n\001x\030\002 \001(\002\022\t\n\001y\030\003 \001(\002\"\226\002\n\rMotion_Sample\022" +
-      "\032\n\022relative_timestamp\030\001 \001(\003\022\r\n\005acc_x\030\002 \001",
-      "(\002\022\r\n\005acc_y\030\003 \001(\002\022\r\n\005acc_z\030\004 \001(\002\022\r\n\005gyr_" +
-      "x\030\005 \001(\002\022\r\n\005gyr_y\030\006 \001(\002\022\r\n\005gyr_z\030\007 \001(\002\022\031\n" +
-      "\021rotation_vector_x\030\010 \001(\002\022\031\n\021rotation_vec" +
-      "tor_y\030\t \001(\002\022\031\n\021rotation_vector_z\030\n \001(\002\022\031" +
-      "\n\021rotation_vector_w\030\013 \001(\002\022\022\n\nstep_count\030" +
-      "\014 \001(\005\022\017\n\007azimuth\030\r \001(\002\"Z\n\017Position_Sampl" +
-      "e\022\032\n\022relative_timestamp\030\001 \001(\003\022\r\n\005mag_x\030\002" +
-      " \001(\002\022\r\n\005mag_y\030\003 \001(\002\022\r\n\005mag_z\030\004 \001(\002\"\\\n\017Pr" +
-      "essure_Sample\022\032\n\022relative_timestamp\030\001 \001(" +
-      "\003\022\020\n\010pressure\030\002 \001(\002\022\033\n\023estimated_elevati",
-      "on\030\003 \001(\002\"9\n\014Light_Sample\022\032\n\022relative_tim" +
-      "estamp\030\001 \001(\003\022\r\n\005light\030\002 \001(\002\"\223\001\n\013GNSS_Sam" +
-      "ple\022\032\n\022relative_timestamp\030\001 \001(\003\022\020\n\010latit" +
-      "ude\030\002 \001(\002\022\021\n\tlongitude\030\003 \001(\002\022\020\n\010altitude" +
-      "\030\004 \001(\002\022\020\n\010accuracy\030\005 \001(\002\022\r\n\005speed\030\006 \001(\002\022" +
-      "\020\n\010provider\030\007 \001(\t\"G\n\013WiFi_Sample\022\032\n\022rela" +
-      "tive_timestamp\030\001 \001(\003\022\034\n\tmac_scans\030\002 \003(\0132" +
-      "\t.Mac_Scan\"A\n\010Mac_Scan\022\032\n\022relative_times" +
-      "tamp\030\001 \001(\003\022\013\n\003mac\030\002 \001(\003\022\014\n\004rssi\030\003 \001(\005\"7\n" +
-      "\007AP_Data\022\013\n\003mac\030\001 \001(\003\022\014\n\004ssid\030\002 \001(\t\022\021\n\tf",
-      "requency\030\003 \001(\003\"m\n\013Sensor_Info\022\014\n\004name\030\001 " +
-      "\001(\t\022\016\n\006vendor\030\002 \001(\t\022\022\n\nresolution\030\003 \001(\002\022" +
-      "\r\n\005power\030\004 \001(\002\022\017\n\007version\030\005 \001(\005\022\014\n\004type\030" +
-      "\006 \001(\005\".\n\021Lat_Long_Position\022\013\n\003lat\030\001 \001(\002\022" +
-      "\014\n\004long\030\002 \001(\002b\006proto3"
+      "rt_position\030\022 \001(\0132\022.Lat_Long_Position\022 \n" +
+      "\013fusion_data\030\023 \003(\0132\013.Pdr_Sample\">\n\nPdr_S" +
+      "ample\022\032\n\022relative_timestamp\030\001 \001(\003\022\t\n\001x\030\002" +
+      " \001(\002\022\t\n\001y\030\003 \001(\002\"\226\002\n\rMotion_Sample\022\032\n\022rel",
+      "ative_timestamp\030\001 \001(\003\022\r\n\005acc_x\030\002 \001(\002\022\r\n\005" +
+      "acc_y\030\003 \001(\002\022\r\n\005acc_z\030\004 \001(\002\022\r\n\005gyr_x\030\005 \001(" +
+      "\002\022\r\n\005gyr_y\030\006 \001(\002\022\r\n\005gyr_z\030\007 \001(\002\022\031\n\021rotat" +
+      "ion_vector_x\030\010 \001(\002\022\031\n\021rotation_vector_y\030" +
+      "\t \001(\002\022\031\n\021rotation_vector_z\030\n \001(\002\022\031\n\021rota" +
+      "tion_vector_w\030\013 \001(\002\022\022\n\nstep_count\030\014 \001(\005\022" +
+      "\017\n\007azimuth\030\r \001(\002\"Z\n\017Position_Sample\022\032\n\022r" +
+      "elative_timestamp\030\001 \001(\003\022\r\n\005mag_x\030\002 \001(\002\022\r" +
+      "\n\005mag_y\030\003 \001(\002\022\r\n\005mag_z\030\004 \001(\002\"\\\n\017Pressure" +
+      "_Sample\022\032\n\022relative_timestamp\030\001 \001(\003\022\020\n\010p",
+      "ressure\030\002 \001(\002\022\033\n\023estimated_elevation\030\003 \001" +
+      "(\002\"9\n\014Light_Sample\022\032\n\022relative_timestamp" +
+      "\030\001 \001(\003\022\r\n\005light\030\002 \001(\002\"\223\001\n\013GNSS_Sample\022\032\n" +
+      "\022relative_timestamp\030\001 \001(\003\022\020\n\010latitude\030\002 " +
+      "\001(\002\022\021\n\tlongitude\030\003 \001(\002\022\020\n\010altitude\030\004 \001(\002" +
+      "\022\020\n\010accuracy\030\005 \001(\002\022\r\n\005speed\030\006 \001(\002\022\020\n\010pro" +
+      "vider\030\007 \001(\t\"G\n\013WiFi_Sample\022\032\n\022relative_t" +
+      "imestamp\030\001 \001(\003\022\034\n\tmac_scans\030\002 \003(\0132\t.Mac_" +
+      "Scan\"A\n\010Mac_Scan\022\032\n\022relative_timestamp\030\001" +
+      " \001(\003\022\013\n\003mac\030\002 \001(\003\022\014\n\004rssi\030\003 \001(\005\"7\n\007AP_Da",
+      "ta\022\013\n\003mac\030\001 \001(\003\022\014\n\004ssid\030\002 \001(\t\022\021\n\tfrequen" +
+      "cy\030\003 \001(\003\"m\n\013Sensor_Info\022\014\n\004name\030\001 \001(\t\022\016\n" +
+      "\006vendor\030\002 \001(\t\022\022\n\nresolution\030\003 \001(\002\022\r\n\005pow" +
+      "er\030\004 \001(\002\022\017\n\007version\030\005 \001(\005\022\014\n\004type\030\006 \001(\005\"" +
+      ".\n\021Lat_Long_Position\022\013\n\003lat\030\001 \001(\002\022\014\n\004lon" +
+      "g\030\002 \001(\002b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -13569,73 +13937,73 @@ public final class Traj {
     internal_static_Trajectory_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_Trajectory_descriptor,
-        new String[] { "AndroidVersion", "ImuData", "PdrData", "PositionData", "PressureData", "LightData", "GnssData", "WifiData", "ApsData", "StartTimestamp", "DataIdentifier", "AccelerometerInfo", "GyroscopeInfo", "RotationVectorInfo", "MagnetometerInfo", "BarometerInfo", "LightSensorInfo", "StartPosition", });
+        new java.lang.String[] { "AndroidVersion", "ImuData", "PdrData", "PositionData", "PressureData", "LightData", "GnssData", "WifiData", "ApsData", "StartTimestamp", "DataIdentifier", "AccelerometerInfo", "GyroscopeInfo", "RotationVectorInfo", "MagnetometerInfo", "BarometerInfo", "LightSensorInfo", "StartPosition", "FusionData", });
     internal_static_Pdr_Sample_descriptor =
       getDescriptor().getMessageTypes().get(1);
     internal_static_Pdr_Sample_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_Pdr_Sample_descriptor,
-        new String[] { "RelativeTimestamp", "X", "Y", });
+        new java.lang.String[] { "RelativeTimestamp", "X", "Y", });
     internal_static_Motion_Sample_descriptor =
       getDescriptor().getMessageTypes().get(2);
     internal_static_Motion_Sample_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_Motion_Sample_descriptor,
-        new String[] { "RelativeTimestamp", "AccX", "AccY", "AccZ", "GyrX", "GyrY", "GyrZ", "RotationVectorX", "RotationVectorY", "RotationVectorZ", "RotationVectorW", "StepCount", "Azimuth", });
+        new java.lang.String[] { "RelativeTimestamp", "AccX", "AccY", "AccZ", "GyrX", "GyrY", "GyrZ", "RotationVectorX", "RotationVectorY", "RotationVectorZ", "RotationVectorW", "StepCount", "Azimuth", });
     internal_static_Position_Sample_descriptor =
       getDescriptor().getMessageTypes().get(3);
     internal_static_Position_Sample_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_Position_Sample_descriptor,
-        new String[] { "RelativeTimestamp", "MagX", "MagY", "MagZ", });
+        new java.lang.String[] { "RelativeTimestamp", "MagX", "MagY", "MagZ", });
     internal_static_Pressure_Sample_descriptor =
       getDescriptor().getMessageTypes().get(4);
     internal_static_Pressure_Sample_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_Pressure_Sample_descriptor,
-        new String[] { "RelativeTimestamp", "Pressure", "EstimatedElevation", });
+        new java.lang.String[] { "RelativeTimestamp", "Pressure", "EstimatedElevation", });
     internal_static_Light_Sample_descriptor =
       getDescriptor().getMessageTypes().get(5);
     internal_static_Light_Sample_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_Light_Sample_descriptor,
-        new String[] { "RelativeTimestamp", "Light", });
+        new java.lang.String[] { "RelativeTimestamp", "Light", });
     internal_static_GNSS_Sample_descriptor =
       getDescriptor().getMessageTypes().get(6);
     internal_static_GNSS_Sample_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_GNSS_Sample_descriptor,
-        new String[] { "RelativeTimestamp", "Latitude", "Longitude", "Altitude", "Accuracy", "Speed", "Provider", });
+        new java.lang.String[] { "RelativeTimestamp", "Latitude", "Longitude", "Altitude", "Accuracy", "Speed", "Provider", });
     internal_static_WiFi_Sample_descriptor =
       getDescriptor().getMessageTypes().get(7);
     internal_static_WiFi_Sample_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_WiFi_Sample_descriptor,
-        new String[] { "RelativeTimestamp", "MacScans", });
+        new java.lang.String[] { "RelativeTimestamp", "MacScans", });
     internal_static_Mac_Scan_descriptor =
       getDescriptor().getMessageTypes().get(8);
     internal_static_Mac_Scan_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_Mac_Scan_descriptor,
-        new String[] { "RelativeTimestamp", "Mac", "Rssi", });
+        new java.lang.String[] { "RelativeTimestamp", "Mac", "Rssi", });
     internal_static_AP_Data_descriptor =
       getDescriptor().getMessageTypes().get(9);
     internal_static_AP_Data_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_AP_Data_descriptor,
-        new String[] { "Mac", "Ssid", "Frequency", });
+        new java.lang.String[] { "Mac", "Ssid", "Frequency", });
     internal_static_Sensor_Info_descriptor =
       getDescriptor().getMessageTypes().get(10);
     internal_static_Sensor_Info_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_Sensor_Info_descriptor,
-        new String[] { "Name", "Vendor", "Resolution", "Power", "Version", "Type", });
+        new java.lang.String[] { "Name", "Vendor", "Resolution", "Power", "Version", "Type", });
     internal_static_Lat_Long_Position_descriptor =
       getDescriptor().getMessageTypes().get(11);
     internal_static_Lat_Long_Position_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_Lat_Long_Position_descriptor,
-        new String[] { "Lat", "Long", });
+        new java.lang.String[] { "Lat", "Long", });
   }
 
   // @@protoc_insertion_point(outer_class_scope)

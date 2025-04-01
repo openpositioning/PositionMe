@@ -30,6 +30,7 @@ message Trajectory {
 
     // new attribute to store starting position
     Lat_Long_Position start_position = 18;
+    repeated Pdr_Sample fusion_data = 19;
 
 }
 
