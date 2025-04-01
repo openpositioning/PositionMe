@@ -34,9 +34,9 @@ public class PdrProcessing {
     // Number of samples (0.01 seconds)
     private static final int accelSamples = 100;
     // Threshold used to detect significant movement
-    private static final float movementThreshold = 0.28f;
+    private static final float movementThreshold = 0.3f;
     // Threshold under which movement is considered non-existent
-    private static final float epsilon = 0.17f;
+    private static final float epsilon = 0.2f;
     //endregion
 
     //region Instance variables

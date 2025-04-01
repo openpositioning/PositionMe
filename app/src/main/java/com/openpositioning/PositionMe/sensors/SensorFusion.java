@@ -180,6 +180,34 @@ public class SensorFusion implements SensorEventListener, Observer {
     // 在 SensorFusion 类中添加观察者列表
     private List<Observer> floorObservers = new ArrayList<>();
 
+    // 重写EKF相关变量
+    private Timer ekfTimer;
+    private static final int EKF_UPDATE_INTERVAL = 200; // 更快的更新频率
+    private LatLng wifiLocation = null;
+    private long lastWifiUpdateTime = 0;
+    private static final long WIFI_DATA_EXPIRY = 10000; // WiFi数据10秒内有效
+    
+    // EKF状态权重
+    private static final float GNSS_WEIGHT = 0.40f;
+    private static final float PDR_WEIGHT = 0.45f; 
+    private static final float WIFI_WEIGHT = 0.15f;
+
+    // 步伐检测相关变量
+    private long lastStepTime = 0;
+    private static final long MIN_STEP_INTERVAL = 400; // 最小步伐间隔(毫秒)
+    private static final float STEP_THRESHOLD = 0.28f; // 步伐峰值阈值
+    private boolean isAscending = false;
+    private double lastPeakValue = 0;
+    private final double[] recentPeaks = new double[3];
+    private int peakIndex = 0;
+
+    // 保存最后的PDR位置用于融合
+    private float lastPdrLatitude = 0;
+    private float lastPdrLongitude = 0;
+
+    // 添加保存融合位置的成员变量
+    private LatLng currentEkfPosition = null;
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -487,26 +515,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                         pdrLongLat[1]
                     );
                     
-                    // 添加轨迹点
+                    // 添加PDR轨迹点
                     addTrajectoryPoint(pdrLongLat[0], pdrLongLat[1]);
                     
-                    // 记录EKF位置 (PDR与GNSS的融合)
-                    if (latitude != 0 && longitude != 0) {
-                        float ekfLat = 0.4f * latitude + 0.6f * pdrLongLat[0];
-                        float ekfLon = 0.4f * longitude + 0.6f * pdrLongLat[1];
-                        locationLogger.logEkfLocation(
-                            currentTime,
-                            ekfLat,
-                            ekfLon
-                        );
-                    } else {
-                        // 如果没有GNSS位置，直接使用PDR
-                        locationLogger.logEkfLocation(
-                            currentTime,
-                            pdrLongLat[0],
-                            pdrLongLat[1]
-                        );
-                    }
+                    // 不需要在这里直接生成EKF位置 - 现在由定时器统一处理
                     
                     Log.d("SensorFusion", "步伐检测 - 已记录PDR位置: lat=" + 
                            pdrLongLat[0] + ", lng=" + pdrLongLat[1]);
@@ -533,17 +545,20 @@ public class SensorFusion implements SensorEventListener, Observer {
                 latitude = (float) location.getLatitude();
                 longitude = (float) location.getLongitude();
                 
+                // 保存最后GNSS更新时间
+                lastGnssUpdateTime = System.currentTimeMillis();
+                
                 // 记录位置到日志
                 if(saveRecording && locationLogger != null) {
                     locationLogger.logLocation(
-                        System.currentTimeMillis(),
+                        lastGnssUpdateTime,
                         latitude,
                         longitude
                     );
                     
                     // 记录GNSS位置
                     locationLogger.logGnssLocation(
-                        System.currentTimeMillis(),
+                        lastGnssUpdateTime,
                         latitude,
                         longitude
                     );
@@ -551,24 +566,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // 添加轨迹点
                     addTrajectoryPoint(latitude, longitude);
                     
-                    // 记录EKF轨迹 (使用GNSS和PDR的融合结果)
-                    // 这里使用简单的加权平均作为演示
-                    if (lastPdrLatitude != 0 && lastPdrLongitude != 0) {
-                        float ekfLat = 0.6f * latitude + 0.4f * lastPdrLatitude;
-                        float ekfLon = 0.6f * longitude + 0.4f * lastPdrLongitude;
-                        locationLogger.logEkfLocation(
-                            System.currentTimeMillis(),
-                            ekfLat,
-                            ekfLon
-                        );
-                    } else {
-                        // 如果没有PDR位置，直接使用GNSS
-                        locationLogger.logEkfLocation(
-                            System.currentTimeMillis(),
-                            latitude,
-                            longitude
-                        );
-                    }
+                    // 不需要在这里直接生成EKF位置 - 现在由定时器统一处理
                 }
                 
                 // 添加详细的日志
@@ -622,7 +620,8 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
         }
-        createWifiPositioningRequest();
+        // 使用带回调的WiFi请求方法，而不是原来的
+        createWifiPositionRequestCallback();
     }
 
     /**
@@ -665,12 +664,19 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Handle the success response
+                    // 更新WiFi位置和最后更新时间
+                    SensorFusion.this.wifiLocation = wifiLocation;
+                    lastWifiUpdateTime = System.currentTimeMillis();
+                    
+                    Log.d("WIFI_LOCATION", String.format(
+                        "接收WiFi位置更新: [%.6f, %.6f], 楼层: %d", 
+                        wifiLocation.latitude, wifiLocation.longitude, floor));
                 }
 
                 @Override
                 public void onError(String message) {
-                    // Handle the error response
+                    // 记录错误
+                    Log.e("WIFI_LOCATION", "WiFi定位错误: " + message);
                 }
             });
         } catch (JSONException e) {
@@ -1040,7 +1046,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // 清空轨迹点列表
         trajectoryPoints.clear();
-
+        
+        // 启动定时EKF融合更新
+        startEkfTimer();
 
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
@@ -1079,6 +1087,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         if(this.saveRecording) {
             this.saveRecording = false;
             storeTrajectoryTimer.cancel();
+            
+            // 停止EKF融合定时器
+            stopEkfTimer();
 
             // 保存位置日志
             if (locationLogger != null) {
@@ -1089,6 +1100,164 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wakeLock.release();
         }
     }
+
+    //endregion
+
+    // 定时执行EKF融合的定时器
+    // private Timer ekfTimer;
+    // private static final int EKF_UPDATE_INTERVAL = 200; // 更快的更新频率
+    
+    /**
+     * 重写的EKF融合算法 - 每次更新时融合所有可用数据源
+     */
+    private class updateEkfLocation extends TimerTask {
+        @Override
+        public void run() {
+            try {
+                if (!saveRecording || locationLogger == null) return;
+                
+                long currentTime = System.currentTimeMillis();
+                
+                // 检查是否有足够的数据源
+                boolean hasPdr = lastPdrLatitude != 0 && lastPdrLongitude != 0;
+                boolean hasGnss = latitude != 0 && longitude != 0;
+                boolean hasWifi = wifiLocation != null && 
+                                  (currentTime - lastWifiUpdateTime < WIFI_DATA_EXPIRY);
+                
+                // 至少需要一个数据源
+                if (!hasPdr && !hasGnss && !hasWifi) {
+                    Log.d("EKF_FUSION", "没有可用的数据源进行融合");
+                    return;
+                }
+                
+                // 初始化融合位置
+                float fusedLat = 0;
+                float fusedLon = 0;
+                float totalWeight = 0;
+                
+                // 融合PDR数据
+                if (hasPdr) {
+                    float pdrWeight = PDR_WEIGHT;
+                    // 计算PDR数据的时间衰减
+                    long pdrTimeDiff = currentTime - lastStepTime;
+                    if (pdrTimeDiff > 2000) {
+                        // 步数数据超过2秒，权重线性衰减
+                        pdrWeight *= Math.max(0.3f, 1.0f - (pdrTimeDiff - 2000) / 8000.0f);
+                    }
+                    
+                    fusedLat += pdrWeight * lastPdrLatitude;
+                    fusedLon += pdrWeight * lastPdrLongitude;
+                    totalWeight += pdrWeight;
+                    
+                    Log.d("EKF_FUSION", String.format(
+                        "PDR数据: [%.6f, %.6f], 权重: %.2f", 
+                        lastPdrLatitude, lastPdrLongitude, pdrWeight));
+                }
+                
+                // 融合GNSS数据
+                if (hasGnss) {
+                    float gnssWeight = GNSS_WEIGHT;
+                    // 计算GNSS数据的时间衰减
+                    long gnssTimeDiff = currentTime - lastGnssUpdateTime;
+                    if (gnssTimeDiff > 2000) {
+                        // GNSS数据超过2秒，权重线性衰减
+                        gnssWeight *= Math.max(0.3f, 1.0f - (gnssTimeDiff - 2000) / 8000.0f);
+                    }
+                    
+                    fusedLat += gnssWeight * latitude;
+                    fusedLon += gnssWeight * longitude;
+                    totalWeight += gnssWeight;
+                    
+                    Log.d("EKF_FUSION", String.format(
+                        "GNSS数据: [%.6f, %.6f], 权重: %.2f", 
+                        latitude, longitude, gnssWeight));
+                }
+                
+                // 融合WiFi数据
+                if (hasWifi) {
+                    float wifiWeight = WIFI_WEIGHT;
+                    // 计算WiFi数据的时间衰减
+                    long wifiTimeDiff = currentTime - lastWifiUpdateTime;
+                    if (wifiTimeDiff > 3000) {
+                        // WiFi数据超过3秒，权重线性衰减
+                        wifiWeight *= Math.max(0.3f, 1.0f - (wifiTimeDiff - 3000) / 7000.0f);
+                    }
+                    
+                    fusedLat += wifiWeight * (float)wifiLocation.latitude;
+                    fusedLon += wifiWeight * (float)wifiLocation.longitude;
+                    totalWeight += wifiWeight;
+                    
+                    Log.d("EKF_FUSION", String.format(
+                        "WiFi数据: [%.6f, %.6f], 权重: %.2f", 
+                        wifiLocation.latitude, wifiLocation.longitude, wifiWeight));
+                }
+                
+                // 归一化权重
+                if (totalWeight > 0) {
+                    fusedLat /= totalWeight;
+                    fusedLon /= totalWeight;
+                } else if (hasPdr) {
+                    // 如果权重归一化出问题，但有PDR数据，使用PDR数据
+                    fusedLat = lastPdrLatitude;
+                    fusedLon = lastPdrLongitude;
+                } else if (hasGnss) {
+                    // 否则使用GNSS数据
+                    fusedLat = latitude;
+                    fusedLon = longitude;
+                } else if (hasWifi) {
+                    // 最后选择WiFi数据
+                    fusedLat = (float)wifiLocation.latitude;
+                    fusedLon = (float)wifiLocation.longitude;
+                }
+                
+                // 保存当前EKF融合位置到成员变量
+                currentEkfPosition = new LatLng(fusedLat, fusedLon);
+                
+                // 记录融合位置
+                locationLogger.logEkfLocation(currentTime, fusedLat, fusedLon);
+                
+                // 添加到轨迹点列表
+                addTrajectoryPoint(fusedLat, fusedLon);
+                
+                Log.d("EKF_FUSION", String.format(
+                    "融合位置: [%.6f, %.6f], 总权重: %.2f",
+                    fusedLat, fusedLon, totalWeight));
+                
+                // 不再需要递归调度，已使用scheduleAtFixedRate
+            } catch (Exception e) {
+                Log.e("EKF_FUSION", "融合位置更新出错: " + e.getMessage(), e);
+            }
+        }
+    }
+    
+    /**
+     * 启动EKF融合定时器
+     */
+    private void startEkfTimer() {
+        Log.d("EKF_FUSION", "启动EKF融合定时器");
+        
+        if (ekfTimer != null) {
+            ekfTimer.cancel();
+        }
+        ekfTimer = new Timer("EKF-Fusion-Timer");
+        
+        // 使用scheduleAtFixedRate而不是递归调度
+        ekfTimer.scheduleAtFixedRate(new updateEkfLocation(), 0, EKF_UPDATE_INTERVAL);
+    }
+    
+    /**
+     * 停止EKF融合定时器
+     */
+    private void stopEkfTimer() {
+        if (ekfTimer != null) {
+            Log.d("EKF_FUSION", "停止EKF融合定时器");
+            ekfTimer.cancel();
+            ekfTimer = null;
+        }
+    }
+    
+    // 保存GNSS最后更新时间
+    private long lastGnssUpdateTime = 0;
 
     //endregion
 
@@ -1378,22 +1547,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         return this.longitude;
     }
 
-    /**
-     * 手动步伐检测方法，当系统自带步伐检测器不够灵敏时使用
-     * @param accMagnitude 当前加速度大小
-     */
-    private static final double STEP_THRESHOLD = 1.8; // 步伐检测阈值，从1.2增加到1.8，减少误检测
-    private static final long MIN_STEP_INTERVAL = 500; // 最小步伐间隔(毫秒)，从300增加到500
-    private double lastPeakValue = 0;
-    private long lastStepTime = 0;
-    private boolean isAscending = false;
-    private double[] recentPeaks = new double[3]; // 记录最近3个峰值用于判断
-    private int peakIndex = 0;
-    
-    // 添加变量保存最后的PDR位置
-    private float lastPdrLatitude = 0;
-    private float lastPdrLongitude = 0;
-    
+    // 更新manualStepDetection方法，移除EKF融合代码，由定时器统一处理
     private void manualStepDetection(double accMagnitude) {
         long currentTime = System.currentTimeMillis();
         
@@ -1445,34 +1599,19 @@ public class SensorFusion implements SensorEventListener, Observer {
                     lastPdrLatitude = pdrLongLat[0];
                     lastPdrLongitude = pdrLongLat[1];
                     
+                    // 记录PDR位置
                     locationLogger.logLocation(
                         currentTime,
                         pdrLongLat[0],
                         pdrLongLat[1]
                     );
                     
-                    // 添加轨迹点
+                    // 添加PDR轨迹点
                     addTrajectoryPoint(pdrLongLat[0], pdrLongLat[1]);
                     
-                    // 记录EKF位置 (PDR与GNSS的融合)
-                    if (latitude != 0 && longitude != 0) {
-                        float ekfLat = 0.4f * latitude + 0.6f * pdrLongLat[0];
-                        float ekfLon = 0.4f * longitude + 0.6f * pdrLongLat[1];
-                        locationLogger.logEkfLocation(
-                            currentTime,
-                            ekfLat,
-                            ekfLon
-                        );
-                    } else {
-                        // 如果没有GNSS位置，直接使用PDR
-                        locationLogger.logEkfLocation(
-                            currentTime,
-                            pdrLongLat[0],
-                            pdrLongLat[1]
-                        );
-                    }
+                    // 不需要在这里直接生成EKF位置 - 现在由定时器统一处理
                     
-                    Log.d("SensorFusion", "步伐检测 - 已记录PDR位置: lat=" + 
+                    Log.d("SensorFusion", "手动步伐检测 - 已记录位置: lat=" + 
                            pdrLongLat[0] + ", lng=" + pdrLongLat[1]);
                 }
                 
@@ -1511,6 +1650,14 @@ public class SensorFusion implements SensorEventListener, Observer {
         float resultLng = startLocation[1] + lngOffset;
         
         return new float[]{resultLat, resultLng};
+    }
+
+    /**
+     * 获取当前EKF融合位置
+     * @return 当前EKF融合位置，如果未计算则返回null
+     */
+    public LatLng getEkfPosition() {
+        return currentEkfPosition;
     }
 
 }

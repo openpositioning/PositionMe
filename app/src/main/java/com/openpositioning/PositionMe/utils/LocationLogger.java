@@ -118,6 +118,9 @@ public class LocationLogger {
         }
     }
     
+    /**
+     * 记录EKF融合位置
+     */
     public void logEkfLocation(long timestamp, double latitude, double longitude) {
         // 创建当前位置
         LatLng currentLocation = new LatLng(latitude, longitude);
@@ -131,8 +134,9 @@ public class LocationLogger {
             long timeDiff = timestamp - lastSavedEkfTime;
             double distance = calculateDistance(lastSavedEkfLocation, currentLocation);
             
-            // 如果超过时间间隔或距离阈值，则保存
-            shouldSave = (timeDiff >= MIN_SAVE_INTERVAL) && (distance >= MIN_DISTANCE_CHANGE);
+            // EKF轨迹降低过滤条件，确保记录更多点
+            // 只要时间间隔超过100ms并且距离变化超过0.1米就记录
+            shouldSave = (timeDiff >= 100) && (distance >= 0.1);
         }
         
         if (shouldSave) {
@@ -147,12 +151,12 @@ public class LocationLogger {
                 lastSavedEkfLocation = currentLocation;
                 lastSavedEkfTime = timestamp;
                 
-                Log.d(TAG, String.format("Logged EKF location: time=%d, lat=%.6f, lng=%.6f", 
+                Log.d(TAG, String.format("记录EKF位置: time=%d, lat=%.6f, lng=%.6f", 
                     timestamp, latitude, longitude));
-                Log.d(TAG, "Current EKF array size: " + ekfLocationArray.length());
+                Log.d(TAG, "当前EKF轨迹点数量: " + ekfLocationArray.length());
                 
             } catch (JSONException e) {
-                Log.e(TAG, "Error creating EKF JSON object: " + e.getMessage());
+                Log.e(TAG, "创建EKF数据点出错: " + e.getMessage());
             }
         }
     }

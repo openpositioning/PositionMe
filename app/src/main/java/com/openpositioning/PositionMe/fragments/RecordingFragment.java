@@ -141,12 +141,6 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
 
     private LocationCallback locationCallback;
 
-    // EKF manager
-    private EKFManager ekfManager;
-    
-    // EKF轨迹
-    private Polyline ekfPolyline;
-    
     // GNSS轨迹
     private Polyline gnssPolyline;
     
@@ -158,6 +152,9 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
 
     // 添加一个标志变量，跟踪是否已保存数据
     private boolean locationDataSaved = false;
+
+    // EKF轨迹
+    private Polyline ekfPolyline;
 
     /**
      * Public Constructor for the class.
@@ -177,7 +174,6 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         this.sensorFusion = SensorFusion.getInstance();
-        this.ekfManager = EKFManager.getInstance();
         this.gnssProcessor = GNSSProcessor.getInstance();
         Context context = getActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
@@ -207,17 +203,6 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
         startPosition = sensorFusion.getGNSSLatitude(true);
         Log.d("RecordingFragment", "获取到起始位置: " + 
                 (startPosition != null ? startPosition[0] + ", " + startPosition[1] : "null"));
-        
-        // 确保EKF Manager和GNSSProcessor已正确初始化
-        if (ekfManager == null) {
-            ekfManager = EKFManager.getInstance();
-            Log.d("RecordingFragment", "创建新的EKF Manager实例");
-        }
-        
-        if (gnssProcessor == null) {
-            gnssProcessor = GNSSProcessor.getInstance();
-            Log.d("RecordingFragment", "创建新的GNSSProcessor实例");
-        }
         
         // 测试EKF和GPS
         testPositioningSystem();
@@ -291,62 +276,10 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
             Log.d("PositioningTest", "已记录模拟GNSS测试数据");
         }
         
-        // 3. 测试EKF Manager
-        Log.d("PositioningTest", "初始化EKF...");
-        
-        // 使用模拟位置初始化EKF
-        double testLat = 55.9355;
-        double testLng = -3.1792;
-        LatLng testLocation = new LatLng(testLat, testLng);
-        float testOrientation = 0.0f;
-        
-        ekfManager.initialize(testLocation, testOrientation);
-        
-        // 更新几次位置
-        for (int i = 0; i < 3; i++) {
-            double offsetLat = (Math.random() - 0.5) * 0.0001;
-            double offsetLng = (Math.random() - 0.5) * 0.0001;
-            
-            LatLng newPdrPosition = new LatLng(testLat + offsetLat * i, testLng + offsetLng * i);
-            LatLng newGnssPosition = new LatLng(testLat + offsetLat * i * 1.2, testLng + offsetLng * i * 1.2);
-            
-            ekfManager.updatePdrPosition(newPdrPosition, testOrientation);
-            ekfManager.updateGnssPosition(newGnssPosition);
-            
-            // 获取融合位置
-            LatLng fusedPosition = ekfManager.getFusedPosition();
-            
-            if (fusedPosition != null) {
-                Log.d("PositioningTest", String.format("EKF融合位置 #%d: lat=%.8f, lng=%.8f", 
-                        i+1, fusedPosition.latitude, fusedPosition.longitude));
-                
-                // 记录融合位置
-                locationLogger.logEkfLocation(
-                    System.currentTimeMillis(),
-                    fusedPosition.latitude,
-                    fusedPosition.longitude
-                );
-            } else {
-                Log.e("PositioningTest", "EKF融合位置 #" + (i+1) + " 为null");
-                
-                // 创建简单融合位置
-                double fusedLat = (newPdrPosition.latitude + newGnssPosition.latitude) / 2;
-                double fusedLng = (newPdrPosition.longitude + newGnssPosition.longitude) / 2;
-                
-                Log.d("PositioningTest", String.format("创建手动融合位置 #%d: lat=%.8f, lng=%.8f", 
-                        i+1, fusedLat, fusedLng));
-                
-                // 记录手动融合位置
-                locationLogger.logEkfLocation(
-                    System.currentTimeMillis(),
-                    fusedLat,
-                    fusedLng
-                );
-            }
-        }
-        
         // 4. 测试PDR位置记录
         Log.d("PositioningTest", "测试PDR位置记录...");
+        double testLat = 55.9355;
+        double testLng = -3.1792;
         for (int i = 0; i < 3; i++) {
             double offsetLat = (Math.random() - 0.5) * 0.0001;
             double offsetLng = (Math.random() - 0.5) * 0.0001;
@@ -460,49 +393,15 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
                 Log.d("RecordingFragment", "用户点击停止按钮，保存轨迹文件...");
                 
                 // 首先更新并获取最新的融合位置
-                if (currentLocation != null && ekfManager != null) {
+                if (currentLocation != null) {
                     try {
-                        // 最后更新一次EKF位置
-                        float orientation = sensorFusion.passOrientation();
-                        ekfManager.updatePdrPosition(currentLocation, orientation);
-                        
-                        // 获取GNSS位置并更新
-                        float[] gnssValues = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-                        if (gnssValues != null && gnssValues.length >= 2 && gnssValues[0] != 0 && gnssValues[1] != 0) {
-                            LatLng gnssLocation = new LatLng(gnssValues[0], gnssValues[1]);
-                            LatLng processedGnssLocation = gnssProcessor.processGNSSPosition(gnssLocation);
-                            ekfManager.updateGnssPosition(processedGnssLocation);
-                            
-                            // 记录GNSS位置
-                            locationLogger.logGnssLocation(
-                                System.currentTimeMillis(),
-                                processedGnssLocation.latitude,
-                                processedGnssLocation.longitude
-                            );
-                            Log.d("RecordingFragment", "保存前记录最后一个GNSS位置: " + 
-                                processedGnssLocation.latitude + ", " + processedGnssLocation.longitude);
-                        }
-                        
-                        // 获取融合位置
-                        LatLng fusedPosition = ekfManager.getFusedPosition();
-                        if (fusedPosition != null) {
-                            // 记录融合位置
-                            locationLogger.logEkfLocation(
-                                System.currentTimeMillis(),
-                                fusedPosition.latitude,
-                                fusedPosition.longitude
-                            );
-                            Log.d("RecordingFragment", "保存前记录最后一个EKF位置: " + 
-                                fusedPosition.latitude + ", " + fusedPosition.longitude);
-                        }
-                        
-                        // 记录PDR位置
-                        locationLogger.logLocation(
+                        // 记录GNSS位置
+                        locationLogger.logGnssLocation(
                             System.currentTimeMillis(),
                             currentLocation.latitude,
                             currentLocation.longitude
                         );
-                        Log.d("RecordingFragment", "保存前记录最后一个PDR位置: " + 
+                        Log.d("RecordingFragment", "保存前记录最后一个GNSS位置: " + 
                             currentLocation.latitude + ", " + currentLocation.longitude);
                     } catch (Exception e) {
                         Log.e("RecordingFragment", "保存前更新位置数据时出错: " + e.getMessage(), e);
@@ -645,15 +544,9 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
         this.ekfSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                ekfManager.setEkfEnabled(isChecked);
-                
                 if (isChecked) {
                     // 启用EKF时初始化
                     if (currentLocation != null) {
-                        // 使用当前PDR位置和朝向初始化EKF，向左偏移45度修正初始方向误差
-                        float correctedOrientation = sensorFusion.passOrientation() - (float)(Math.PI / 4.0); // 减去45度（π/4弧度）
-                        ekfManager.initialize(currentLocation, correctedOrientation);
-                        
                         // 创建EKF轨迹线
                         if (ekfPolyline == null) {
                             PolylineOptions ekfPolylineOptions = new PolylineOptions()
@@ -668,10 +561,9 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
                             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, (float) 19f));
                         }
                         
-                        Log.d("RecordingFragment", "EKF initialized at: " + currentLocation.latitude + ", " + currentLocation.longitude + 
-                              ", 航向角: " + Math.toDegrees(correctedOrientation) + "° (修正后)");
+                        Log.d("RecordingFragment", "EKF enabled at: " + currentLocation.latitude + ", " + currentLocation.longitude);
                     } else {
-                        Log.e("RecordingFragment", "Cannot initialize EKF: current location is null");
+                        Log.e("RecordingFragment", "Cannot enable EKF: current location is null");
                     }
                 } else {
                     // 禁用EKF时清除EKF轨迹
@@ -886,18 +778,7 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
             
             plotLines(pdrMoved);
             
-            // 无论EKF开关是否开启，都更新EKF数据以便存储
-            if (currentLocation != null) {
-                float correctedOrientation = sensorFusion.passOrientation() - (float)(Math.PI / 4.0); // 减去45度（π/4弧度）
-                
-                // 更新EKF中的PDR位置和航向
-                ekfManager.updatePdrPosition(currentLocation, correctedOrientation);
-                
-                // 只有当EKF开关打开时，才更新UI
-                if (ekfSwitch.isChecked() && ekfManager.isEkfEnabled()) {
-                    // UI相关操作
-                }
-            }
+            // PDR数据更新，SensorFusion内部会自动进行融合计算
         } else {
             // 调试：PDR位置未变化
             Log.d("LocationTracking", "PDR位置未变化");
@@ -906,21 +787,6 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
         // If not initialized, initialize
         if (indoorMapManager == null) {
             indoorMapManager = new IndoorMapManager(gMap);
-        }
-        
-        // 处理WiFi位置更新 - 无论EKF开关是否开启
-        float[] wifiValues = sensorFusion.getSensorValueMap().get(SensorTypes.WIFILATLONG);
-        if (wifiValues != null && wifiValues.length >= 2 && wifiValues[0] != 0 && wifiValues[1] != 0) {
-            // 调试：输出WiFi位置
-            Log.d("LocationTracking", String.format("WiFi位置: lat=%.6f, lng=%.6f", wifiValues[0], wifiValues[1]));
-            
-            LatLng wifiPosition = new LatLng(wifiValues[0], wifiValues[1]);
-            
-            // 无论EKF开关是否开启，都更新EKF中的WiFi位置
-            ekfManager.updateWifiPosition(wifiPosition);
-        } else {
-            // 调试：WiFi位置无效
-            Log.d("LocationTracking", "WiFi位置无效或未获取");
         }
         
         // 处理GNSS位置更新 - 无论GNSS开关是否开启，都记录GNSS位置
@@ -974,39 +840,15 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
                 processedGnssLocation.latitude,
                 processedGnssLocation.longitude
             );
-            
-            // 无论EKF开关是否开启，都更新EKF中的GNSS位置
-            ekfManager.updateGnssPosition(processedGnssLocation);
         } else {
             // 调试：GNSS位置无效
             Log.e("LocationTracking", "GNSS位置无效或未获取: " + 
                 (location == null ? "null" : "length=" + location.length));
-            
-            // 手动创建一个测试用的GNSS位置，确保EKF可以工作
-            if (currentLocation != null) {
-                // 使用当前PDR位置作为GNSS位置，添加一点随机偏移
-                double randomLat = currentLocation.latitude + (Math.random() - 0.5) * 0.00001;
-                double randomLng = currentLocation.longitude + (Math.random() - 0.5) * 0.00001;
-                processedGnssLocation = new LatLng(randomLat, randomLng);
-                
-                Log.d("LocationTracking", "创建模拟GNSS位置: " + processedGnssLocation.latitude + 
-                      ", " + processedGnssLocation.longitude);
-                
-                // 记录模拟的GNSS位置
-                locationLogger.logGnssLocation(
-                    System.currentTimeMillis(),
-                    processedGnssLocation.latitude,
-                    processedGnssLocation.longitude
-                );
-                
-                // 更新EKF中的GNSS位置
-                ekfManager.updateGnssPosition(processedGnssLocation);
-            }
         }
         
         // 获取EKF融合位置并记录 - 无论EKF开关是否开启
-        LatLng fusedPosition = ekfManager.getFusedPosition();
-        
+        LatLng fusedPosition = sensorFusion.getEkfPosition();
+
         // 调试：输出EKF融合位置
         Log.d("LocationTracking", "EKF融合位置: " + (fusedPosition == null ? "null" : 
               fusedPosition.latitude + ", " + fusedPosition.longitude));
@@ -1020,7 +862,7 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
             );
             
             // 只有当EKF开关打开时才更新EKF轨迹UI
-            if (ekfSwitch.isChecked() && ekfManager.isEkfEnabled() && ekfPolyline != null) {
+            if (ekfSwitch.isChecked() && ekfPolyline != null) {
                 List<LatLng> points = ekfPolyline.getPoints();
                 points.add(fusedPosition);
                 ekfPolyline.setPoints(points);
