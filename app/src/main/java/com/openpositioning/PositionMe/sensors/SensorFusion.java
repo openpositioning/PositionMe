@@ -76,6 +76,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   public CoordinateTransformer coordinateTransformer;
   private LatLng startLocation;
   private LatLng currentWifiLocation;
+  private int currentWifiFloor;
   private boolean isWifiLocationOutlier = false;
   private LatLng gnssLoc;
   private boolean isGnssOutlier = false;
@@ -104,7 +105,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   // String for creating WiFi fingerprint JSON object
   private static final String WIFI_FINGERPRINT = "wf";
 
-  private static final float OUTLIER_DISTANCE_THRESHOLD = 10;
+  private static final float OUTLIER_DISTANCE_THRESHOLD = 15;
 
   // Tuned Sensor Fusion constants
 
@@ -230,16 +231,6 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     return this.wiFiPositioning.getWifiLocation();
   }
 
-  /**
-   * Method to get current floor the user is at, obtained using WiFiPositioning
-   *
-   * @return Current floor user is at using WiFiPositioning
-   * @see WiFiPositioning for WiFi positioning
-   */
-  public int getWifiFloor() {
-    return this.wiFiPositioning.getFloor();
-  }
-
   //region Getters/Setters
 
   /**
@@ -310,7 +301,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
       sensorValueMap.put(SensorTypes.WIFI, new float[]{
           (float) currentWifiLocation.latitude,
           (float) currentWifiLocation.longitude});
-      sensorValueMap.put(SensorTypes.WIFI_FLOOR, new float[]{this.getWifiFloor()});
+      sensorValueMap.put(SensorTypes.WIFI_FLOOR, new float[]{this.currentWifiFloor});
       sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[] {isWifiLocationOutlier ? 1 : 0});
     }
     sensorValueMap.put(SensorTypes.FUSED, new float[] {
@@ -562,6 +553,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     if (startLocation != null && currPdrData != null) {
       if (!isOutlier(coordinateTransformer, fusedLocation, loc)) {
         updateFusionData(loc, currentGnssCovariance, currPdrData);
+        this.isGnssOutlier = false;
       } else {
         this.isGnssOutlier = true;
       }
@@ -572,6 +564,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     if (data.location != this.currentWifiLocation) {
       float[] pdrData = pdrProcessing.getPDRMovement();
       this.currentWifiLocation = data.location;
+      this.currentWifiFloor = data.floor;
       if (coordinateTransformer != null) {
         this.isWifiLocationOutlier = isOutlier(coordinateTransformer,
             fusedLocation,
