@@ -5,6 +5,7 @@ import android.util.Log;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.fusion.IPositionFusionAlgorithm;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
+import com.openpositioning.PositionMe.utils.PdrProcessing;
 
 import org.apache.commons.math3.distribution.TDistribution;
 import org.ejml.simple.SimpleMatrix;
@@ -24,7 +25,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     private static final int MEAS_SIZE = 2;         // Total measurement vector size
 
     // Process noise scale (PDR) update
-    private static final double[] dynamicPdrStds = {0.2, 0};
+    private static final double[] dynamicPdrStds = {0.2, Math.PI/12};
     private static final double[] staticPdrStds = {1.5, 1.5, 0};
     private SimpleMatrix measGnssMat;
     private SimpleMatrix measWifiMat;
@@ -80,6 +81,8 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     private double[] currentWiFipositionEMU;
     private SimpleMatrix wifiMeasurementVector;
 
+    private PdrProcessing.ElevationDirection elevationDirection;
+
     // Constructor
     public ParticleFilterFusion(int numParticles, double[] referencePosition) {
         // Initialize particle array
@@ -92,6 +95,8 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
         this.referencePosition = referencePosition.clone(); // Clone to prevent modification
         this.referenceInitialized = (referencePosition[0] != 0 || referencePosition[1] != 0);
+
+        this.elevationDirection = PdrProcessing.ElevationDirection.NEUTRAL;
 
         // Initialize first position tracking
         hasInitialGnssPosition = false;
@@ -148,11 +153,18 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         // Calculate PDR movement and speed
         double dx = currentPdrPos[0] - previousPdrPos[0];
         double dy = currentPdrPos[1] - previousPdrPos[1];
-        double stepLength = Math.sqrt(dx * dx + dy * dy);
-
+        double stepLength = 0;
+        if (this.elevationDirection != PdrProcessing.ElevationDirection.NEUTRAL){
+            stepLength = 0.25;
+            dynamicPdrStds[0] = 0.05;
+        }else {
+            stepLength = Math.sqrt(dx * dx + dy * dy);
+            dynamicPdrStds[0] = 0.2;
+        }
         currentHeading = Math.atan2(dy, dx);
-
-        initializeHeading();
+        if (!headingInitialized) {
+            initializeHeading();
+        }
 
         // Update particle parameters
         moveParticlesDynamic(stepLength, currentHeading, dynamicPdrStds);
@@ -216,7 +228,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
         // Convert GNSS position to ENU (using the reference position)
         double[] enu = CoordinateConverter.convertGeodeticToEnu(
-                position.latitude, position.longitude, latlngAltitude,
+                position.latitude, position.longitude, 78,
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
@@ -269,7 +281,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
         // Convert GNSS position to ENU (using the reference position)
         double[] enu = CoordinateConverter.convertGeodeticToEnu(
-                position.latitude, position.longitude, latlngAltitude,
+                position.latitude, position.longitude, 78,
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
@@ -443,7 +455,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
         // Calculate jitter standard deviations
         double positionJitterStd = jitterScale * dispersion;
-        double headingJitterStd = jitterScale * Math.PI / 6; // ~30 degrees scaled by jitter
+        double headingJitterStd = jitterScale * Math.PI / 12; // Was 6, ~30 degrees scaled by jitter
 
         Random rand = new Random();
 
@@ -580,6 +592,10 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         return Math.sqrt(sumSquaredDistance / numParticles);
     }
 
+    public void setElevationStatus(PdrProcessing.ElevationDirection elevationDirection) {
+        this.elevationDirection = elevationDirection;
+    }
+
     /**
      * Initializes the particles, centered at the reference position.
      * Particles have uniform weights of 1/numParticles.
@@ -637,13 +653,13 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
             // Use the first GNSS position as reference
             referencePosition[0] = firstGnssPosition.latitude;
             referencePosition[1] = firstGnssPosition.longitude;
-            referencePosition[2] = 0; // Assume zero altitude if not provided
+            referencePosition[2] = 78; // Assume zero altitude if not provided
 
             referenceInitialized = true;
         } else {
             referencePosition[0] = firstWifiPosition.latitude;
             referencePosition[1] = firstWifiPosition.longitude;
-            referencePosition[2] = 0; // Assume zero altitude if not provided
+            referencePosition[2] = 78; // Assume zero altitude if not provided
         }
 
         Log.d(TAG, "Reference position initialized from GNSS: " +
