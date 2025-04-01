@@ -135,6 +135,15 @@ public class MeasurementsFragment extends Fragment implements Observer {
         sensorFusion = SensorFusion.getInstance();
         sensorFusion.registerFloorObserver(this);
         
+        // 检查布局中的卡片视图数量是否与传感器类型匹配
+        int cardViewCount = sensorMeasurementList.getChildCount();
+        int sensorTypeCount = SensorTypes.values().length;
+        
+        if (cardViewCount < sensorTypeCount) {
+            Log.e("MeasurementsFragment", "布局中的CardView数量(" + cardViewCount + 
+                  ")小于SensorTypes枚举数量(" + sensorTypeCount + ")");
+        }
+        
         // 设置初始楼层值
         updateFloorDisplay(sensorFusion.getCurrentFloor());
     }
@@ -146,6 +155,16 @@ public class MeasurementsFragment extends Fragment implements Observer {
         if (sensorFusion != null) {
             sensorFusion.removeFloorObserver(this);
         }
+        
+        // 移除所有回调，防止内存泄漏
+        if (refreshDataHandler != null) {
+            refreshDataHandler.removeCallbacksAndMessages(null);
+        }
+        
+        // 清空UI引用
+        sensorMeasurementList = null;
+        wifiListView = null;
+        floorTextView = null;
     }
 
     /**
@@ -160,39 +179,91 @@ public class MeasurementsFragment extends Fragment implements Observer {
     private final Runnable refreshTableTask = new Runnable() {
         @Override
         public void run() {
-            // Get all the values from SensorFusion
-            Map<SensorTypes, float[]> sensorValueMap = sensorFusion.getSensorValueMap();
-            // Loop through UI elements and update the values
-            for(SensorTypes st : SensorTypes.values()) {
-                CardView cardView = (CardView) sensorMeasurementList.getChildAt(st.ordinal());
-                ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
-                float[] values = sensorValueMap.get(st);
-                for (int i = 0; i < values.length; i++) {
-                    String valueString;
-                    // Set string wrapper based on data type.
-                    if(values.length == 1) {
-                        valueString = getString(R.string.level, String.format("%.2f", values[0]));
+            try {
+                // 确保视图已经初始化
+                if (sensorMeasurementList == null || getActivity() == null) {
+                    Log.e("MeasurementsFragment", "View not initialized or fragment detached");
+                    return;
+                }
+                
+                // Get all the values from SensorFusion
+                Map<SensorTypes, float[]> sensorValueMap = sensorFusion.getSensorValueMap();
+                // Loop through UI elements and update the values
+                for(SensorTypes st : SensorTypes.values()) {
+                    // 检查索引是否有效
+                    if (st.ordinal() >= sensorMeasurementList.getChildCount()) {
+                        Log.e("MeasurementsFragment", "Invalid index: " + st.ordinal() + 
+                              ", ChildCount: " + sensorMeasurementList.getChildCount());
+                        continue;
                     }
-                    else if(values.length == 2){
-                        if(st == SensorTypes.GNSSLATLONG)
-                            valueString = getString(gnssPrefaces[i], String.format("%.2f", values[i]));
-                        else
+                    
+                    CardView cardView = (CardView) sensorMeasurementList.getChildAt(st.ordinal());
+                    // 空值检查
+                    if (cardView == null) {
+                        Log.e("MeasurementsFragment", "CardView is null for sensor: " + st.name());
+                        continue;
+                    }
+                    
+                    ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
+                    // 空值检查
+                    if (currentRow == null) {
+                        Log.e("MeasurementsFragment", "ConstraintLayout is null for sensor: " + st.name());
+                        continue;
+                    }
+                    
+                    float[] values = sensorValueMap.get(st);
+                    // 空值检查
+                    if (values == null) {
+                        Log.e("MeasurementsFragment", "Values array is null for sensor: " + st.name());
+                        continue;
+                    }
+                    
+                    for (int i = 0; i < values.length; i++) {
+                        // 检查索引有效性
+                        if (i + 1 >= currentRow.getChildCount()) {
+                            Log.e("MeasurementsFragment", "Invalid child index: " + (i + 1) + 
+                                  " for sensor: " + st.name());
+                            continue;
+                        }
+                        
+                        String valueString;
+                        // Set string wrapper based on data type.
+                        if(values.length == 1) {
+                            valueString = getString(R.string.level, String.format("%.2f", values[0]));
+                        }
+                        else if(values.length == 2){
+                            if(st == SensorTypes.GNSSLATLONG)
+                                valueString = getString(gnssPrefaces[i], String.format("%.2f", values[i]));
+                            else
+                                valueString = getString(prefaces[i], String.format("%.2f", values[i]));
+                        }
+                        else{
                             valueString = getString(prefaces[i], String.format("%.2f", values[i]));
+                        }
+                        
+                        View childView = currentRow.getChildAt(i + 1);
+                        if (childView instanceof TextView) {
+                            ((TextView) childView).setText(valueString);
+                        }
                     }
-                    else{
-                        valueString = getString(prefaces[i], String.format("%.2f", values[i]));
-                    }
-                    ((TextView) currentRow.getChildAt(i + 1)).setText(valueString);
+                }
+                
+                // Get all WiFi values - convert to list of strings
+                List<Wifi> wifiObjects = sensorFusion.getWifiList();
+                // If there are WiFi networks visible, update the recycler view with the data.
+                if(wifiObjects != null && wifiListView != null) {
+                    wifiListView.setAdapter(new WifiListAdapter(getActivity(), wifiObjects));
+                }
+                
+                // Restart the data updater task in REFRESH_TIME milliseconds.
+                refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
+            } catch (Exception e) {
+                Log.e("MeasurementsFragment", "Error updating sensor data: " + e.getMessage());
+                // 即使发生错误，也确保继续刷新
+                if (refreshDataHandler != null) {
+                    refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
                 }
             }
-            // Get all WiFi values - convert to list of strings
-            List<Wifi> wifiObjects = sensorFusion.getWifiList();
-            // If there are WiFi networks visible, update the recycler view with the data.
-            if(wifiObjects != null) {
-                wifiListView.setAdapter(new WifiListAdapter(getActivity(), wifiObjects));
-            }
-            // Restart the data updater task in REFRESH_TIME milliseconds.
-            refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
         }
     };
 

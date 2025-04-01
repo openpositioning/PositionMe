@@ -83,7 +83,7 @@ public class GNSSProcessor {
         }
         
         long currentTime = System.currentTimeMillis();
-        double timeElapsed = (currentTime - lastUpdateTime) / 1000.0; // 转换为秒
+        double timeElapsed = (lastUpdateTime > 0) ? (currentTime - lastUpdateTime) / 1000.0 : 0; // 转换为秒，避免除0
         
         // 如果这是第一个位置，直接接受
         if (lastValidPosition == null) {
@@ -191,6 +191,11 @@ public class GNSSProcessor {
      * @param position 新位置
      */
     private void updatePositionHistory(LatLng position) {
+        if (position == null) {
+            Log.e(TAG, "尝试使用null位置更新历史记录");
+            return; // 避免存储null值
+        }
+        
         positionHistory[positionHistoryIndex] = position;
         positionHistoryIndex = (positionHistoryIndex + 1) % positionHistory.length;
         if (positionHistoryCount < positionHistory.length) {
@@ -244,6 +249,21 @@ public class GNSSProcessor {
     private LatLng calculateSmoothedPosition() {
         if (positionHistoryCount == 0) {
             return null;
+        }
+        
+        // 检查历史记录中是否有空值
+        boolean hasNullEntries = false;
+        for (int i = 0; i < positionHistoryCount; i++) {
+            int index = (positionHistoryIndex - 1 - i + positionHistory.length) % positionHistory.length;
+            if (positionHistory[index] == null) {
+                hasNullEntries = true;
+                break;
+            }
+        }
+        
+        // 如果有空值，返回最后一个有效位置
+        if (hasNullEntries) {
+            return lastValidPosition;
         }
         
         // 根据信号质量调整平滑强度
@@ -360,26 +380,31 @@ public class GNSSProcessor {
             return 0;
         }
         
-        // 地球半径（米）
-        final double R = 6371000;
-        
-        // 将经纬度转换为弧度
-        double lat1 = Math.toRadians(point1.latitude);
-        double lon1 = Math.toRadians(point1.longitude);
-        double lat2 = Math.toRadians(point2.latitude);
-        double lon2 = Math.toRadians(point2.longitude);
-        
-        // 计算差值
-        double dLat = lat2 - lat1;
-        double dLon = lon2 - lon1;
-        
-        // 应用Haversine公式
-        double a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                   Math.cos(lat1) * Math.cos(lat2) *
-                   Math.sin(dLon/2) * Math.sin(dLon/2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        double distance = R * c;
-        
-        return distance;
+        try {
+            // 地球半径（米）
+            final double R = 6371000;
+            
+            // 将经纬度转换为弧度
+            double lat1 = Math.toRadians(point1.latitude);
+            double lon1 = Math.toRadians(point1.longitude);
+            double lat2 = Math.toRadians(point2.latitude);
+            double lon2 = Math.toRadians(point2.longitude);
+            
+            // 计算差值
+            double dLat = lat2 - lat1;
+            double dLon = lon2 - lon1;
+            
+            // 应用Haversine公式
+            double a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                       Math.cos(lat1) * Math.cos(lat2) *
+                       Math.sin(dLon/2) * Math.sin(dLon/2);
+            double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            double distance = R * c;
+            
+            return distance;
+        } catch (Exception e) {
+            Log.e(TAG, "计算距离时出错: " + e.getMessage());
+            return 0; // 出错时返回0距离
+        }
     }
 } 
