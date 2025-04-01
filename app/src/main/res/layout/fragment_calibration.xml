@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/calibrationFragmentRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="#AAFFFFFF"
+    android:animateLayoutChanges="true">
+
+    <!-- Row 1: Building Name + Passive Collect Toggle Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <EditText
+            android:id="@+id/buildingNameEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="@string/building_name_hint"
+            android:inputType="text"
+            android:padding="8dp"
+            android:background="@android:drawable/editbox_background" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/startRecordingButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:contentDescription="@string/start_passive_recording"
+            app:icon="@drawable/ic_file_arrow_down_alt_svgrepo_com"
+            app:backgroundTint="@color/md_theme_primary"
+            app:cornerRadius="24dp"
+            app:iconGravity="textStart"
+            app:iconSize="24dp"
+            android:padding="0dp"
+            app:strokeColor="@color/md_theme_primary"
+            app:strokeWidth="0dp"
+            android:backgroundTint="@color/md_theme_primary"
+            app:iconPadding="0dp" />
+    </LinearLayout>
+
+    <!-- Row 2: Spinners -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <Spinner
+            android:id="@+id/floorSpinner"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:entries="@array/floor_levels"
+            android:prompt="@string/floor_level" />
+
+        <Spinner
+            android:id="@+id/indoorStateSpinner"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:entries="@array/indoor_states"
+            android:prompt="@string/indoor_state" />
+    </LinearLayout>
+
+    <!-- Row 3: Add Tag + Tag Count -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/toggleCalibrationButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.8"
+            android:text="Add Tag"
+            android:enabled="false"
+            app:icon="@drawable/ic_baseline_add_location_24"
+            app:iconTint="@android:color/white"
+            app:iconPadding="8dp"
+            app:iconGravity="textStart"
+            app:cornerRadius="16dp"
+            android:backgroundTint="@color/md_theme_inverseOnSurface"
+            android:textColor="@android:color/white" />
+
+        <TextView
+            android:id="@+id/pointCountTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/point_count_format"
+            android:layout_marginStart="12dp"
+            android:textStyle="bold"
+            android:layout_weight="0.2"
+            android:textColor="@android:color/black" />
+    </LinearLayout>
+</LinearLayout>

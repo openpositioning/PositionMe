@@ -238,6 +238,11 @@ public class EKF {
         };
     }
 
+    public double getHeading() {
+        // Return the theta component from the state vector
+        return state.get(3, 0);
+    }
+
     // 若需要设置噪声
     public void setBaroNoise(double bn) { this.baroNoise = bn; }
     // ...
@@ -325,4 +330,18 @@ public class EKF {
     public double[] getEstimatedPositionENU() {
         return new double[]{state.get(0,0), state.get(1,0)};
     }
+
+    public void resetPosition(double newX, double newY) {
+        state.set(0, 0, newX);  // 设置 x
+        state.set(1, 0, newY);  // 设置 y
+
+        // 重置对应协方差（表示信任该位置）
+        covariance.set(0, 0, 1.0);  // x方向方差
+        covariance.set(1, 1, 1.0);  // y方向方差
+        covariance.set(0, 1, 0.0);
+        covariance.set(1, 0, 0.0);
+
+        // 不修改 theta/z
+    }
+
 }

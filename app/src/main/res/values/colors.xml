@@ -13,6 +13,8 @@
     <color name="darkLogoBlue">#FF001080</color>
     <color name="primaryBlue">#FF001080</color>
     <color name="red">#FE0000</color>
+    <color name="pink">#FFC0CB</color>
+    <color name="green">#00FF00</color>
 
     <!-- Light Theme Colors -->
     <color name="md_theme_light_primary">#6750A4</color>
