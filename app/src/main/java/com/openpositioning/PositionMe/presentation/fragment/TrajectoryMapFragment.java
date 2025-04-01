@@ -97,6 +97,8 @@ public class TrajectoryMapFragment extends Fragment {
     private final List<Marker> accessibleToiletMarkers = new ArrayList<>();
     private final List<Marker> drinkingWaterMarkers = new ArrayList<>();
     private final List<Marker> medicalRoomMarkers = new ArrayList<>();
+    private boolean lastIndoorMapState = false;
+
 
 
     public TrajectoryMapFragment() {
@@ -324,12 +326,6 @@ public class TrajectoryMapFragment extends Fragment {
             rawTrajectoryPlotter.updateLocation(newLocation, orientation);
         }
 
-        // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            points.add(newLocation);
-            polyline.setPoints(points);
-        }
 
         if (indoorMapManager != null) {
             // 只在 indoorMap 存在时才考虑更新
