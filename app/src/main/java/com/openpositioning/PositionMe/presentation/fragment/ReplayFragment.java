@@ -500,7 +500,7 @@ public class ReplayFragment extends Fragment {
             // code by Jamie Arnott: EKF Positioning Integration
             case "EKF":
                 // call EKF_point() with the current index
-                currentPoint = EKF_point(index);
+                currentPoint = EKF_data.get(index);
                 if (currentPoint != null){
                     trajectoryMapFragment.updateUserLocation(currentPoint,p.orientation);
                 }

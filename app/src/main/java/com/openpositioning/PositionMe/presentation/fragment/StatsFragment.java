@@ -21,10 +21,34 @@ import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.local.TrajParser;
+import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import java.text.DecimalFormat;
 import java.util.List;
+
+/**
+ * Sub fragment of Replay Activity. Fragment that displays statistical insights and a visual map summary
+ * of a previously recorded trajectory.
+ *
+ * The StatsFragment is responsible for computing and presenting summary statistics of a selected
+ * trajectory dataset. It also provides a visual replay using the {@link TrajectoryMapFragment}, allowing
+ * users to compare different positioning modes including PDR, GNSS, WiFi, and EKF.
+ *
+ * Features:
+ * - Loads trajectory data and computes key stats such as distance, time, average speed, and pace.
+ * - Displays a dropdown menu for selecting different trajectory sources.
+ * - Renders the selected trajectory on a map for visual inspection.
+ * - Integrates with {@link TrajectoryMapFragment} to display the chosen path.
+ * - Automatically clears trajectory data when the fragment is closed.
+ *
+ * @see ReplayActivity The activity managing the replay and stats workflow.
+ * @see TrajParser Utility class for parsing and accessing trajectory data.
+ * @see TrajectoryMapFragment Fragment responsible for displaying the map view.
+ *
+ * Author @Guilherme Barreiros
+ */
+
 
 public class StatsFragment extends Fragment {
 
