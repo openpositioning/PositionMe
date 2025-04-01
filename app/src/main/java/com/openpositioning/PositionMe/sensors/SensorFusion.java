@@ -354,9 +354,14 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     if (!inElevator && getElevator()) {
       inElevator = true;
-      // TODO: set it to the closest lift latlng
-      fusedLocation[0] = 0;
-      fusedLocation[1] = 0;
+      // Create a LatLng from the current fused location
+      LatLng userPosition = new LatLng(fusedLocation[0], fusedLocation[1]);
+      // Get the closest elevator's LatLng using the NucleusBuildingManager helper
+      LatLng closestElevator = nucleusBuildingManager.getClosestElevatorLatLng(userPosition, coordinateTransformer);
+      if (closestElevator != null) {
+        fusedLocation[0] = (float) closestElevator.latitude;
+        fusedLocation[1] = (float) closestElevator.longitude;
+      }
     }
 
     switch (sensorType) {

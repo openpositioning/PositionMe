@@ -127,32 +127,30 @@ public class NucleusBuildingManager {
     }
 
   /**
-   * Determines the closest elevator to a given user location.
-   * 1: Left elevator, 2: Center elevator, 3: Right elevator.
-   * @param userLocation the current location of the user
-   * @param transformer the coordinate transformer
-   * @return the closest elevator
+   * Determines and returns the LatLng of the closest elevator to the given user location.
+   * The method converts both the user position and each elevator's position into a local
+   * projected coordinate system and then computes their distances.
+   *
+   * @param userLocation the current user LatLng position (in WGS84)
+   * @param transformer  the CoordinateTransformer to convert WGS84 coordinates into local XY space
+   * @return the LatLng of the closest elevator
    */
-  public int getClosestElevator(LatLng userLocation, CoordinateTransformer transformer) {
+  public LatLng getClosestElevatorLatLng(LatLng userLocation, CoordinateTransformer transformer) {
+    // Convert the user's location into projected coordinates.
     ProjCoordinate userXY = transformer.convertWGS84ToTarget(userLocation.latitude, userLocation.longitude);
-
     double minDistance = Double.MAX_VALUE;
-    int closestIndex = -1;
+    LatLng closestElevator = null;
 
-    for (int i = 0; i < elevatorLifts.length; i++) {
-      ProjCoordinate liftXY = transformer.convertWGS84ToTarget(
-              elevatorLifts[i].latitude,
-              elevatorLifts[i].longitude
-      );
-
+    // Iterate through the array of predefined elevator positions.
+    for (LatLng lift : elevatorLifts) {
+      ProjCoordinate liftXY = transformer.convertWGS84ToTarget(lift.latitude, lift.longitude);
       double distance = CoordinateTransformer.calculateDistance(userXY, liftXY);
-
       if (distance < minDistance) {
         minDistance = distance;
-        closestIndex = i + 1; // 1-based index
+        closestElevator = lift;
       }
     }
-
-    return closestIndex;
+    return closestElevator;
   }
+
 }
