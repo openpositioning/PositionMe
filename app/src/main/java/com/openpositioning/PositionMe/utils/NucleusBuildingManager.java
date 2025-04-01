@@ -34,12 +34,12 @@ public class NucleusBuildingManager {
     private ArrayList<LatLng> buildingPolygon;
 
   // Elevator center positions (in WGS84 LatLng)
-  private final LatLng leftLift = new LatLng(55.92301742, -3.17440627);
-  private final LatLng centerLift = new LatLng(55.92302437, -3.17436403);
-  private final LatLng rightLift = new LatLng(55.92302418, -3.17432731);
+  private static final LatLng leftLift = new LatLng(55.92301742, -3.17440627);
+  private static final LatLng centerLift = new LatLng(55.92302437, -3.17436403);
+  private static final LatLng rightLift = new LatLng(55.92302418, -3.17432731);
 
   // Array to loop through lifts if needed
-  private final LatLng[] elevatorLifts = new LatLng[] { leftLift, centerLift, rightLift };
+  private static final LatLng[] elevatorLifts = new LatLng[] { leftLift, centerLift, rightLift };
 
 
   public NucleusBuildingManager(GoogleMap map) {
@@ -135,7 +135,7 @@ public class NucleusBuildingManager {
    * @param transformer  the CoordinateTransformer to convert WGS84 coordinates into local XY space
    * @return the LatLng of the closest elevator
    */
-  public LatLng getClosestElevatorLatLng(LatLng userLocation, CoordinateTransformer transformer) {
+  public static LatLng getClosestElevatorLatLng(LatLng userLocation, CoordinateTransformer transformer) {
     // Convert the user's location into projected coordinates.
     ProjCoordinate userXY = transformer.convertWGS84ToTarget(userLocation.latitude, userLocation.longitude);
     double minDistance = Double.MAX_VALUE;

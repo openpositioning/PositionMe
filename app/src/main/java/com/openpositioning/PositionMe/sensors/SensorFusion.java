@@ -158,7 +158,6 @@ public class SensorFusion implements SensorEventListener, Observer {
   // a Northing-Easting space.
   // Initialized when given the start location.
   public CoordinateTransformer coordinateTransformer;
-  private NucleusBuildingManager nucleusBuildingManager;
 
   // Sensor values
   private float[] acceleration;
@@ -351,13 +350,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Update timestamp and frequency counter for this sensor
     lastEventTimestamps.put(sensorType, currentTime);
     eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
-
-    if (!inElevator && getElevator()) {
+    boolean elevatorEst = true;
+//    boolean elevatorEst = getElevator();
+    if (fusedLocation != null && !inElevator && elevatorEst) {
       inElevator = true;
       // Create a LatLng from the current fused location
       LatLng userPosition = new LatLng(fusedLocation[0], fusedLocation[1]);
       // Get the closest elevator's LatLng using the NucleusBuildingManager helper
-      LatLng closestElevator = nucleusBuildingManager.getClosestElevatorLatLng(userPosition, coordinateTransformer);
+      LatLng closestElevator = NucleusBuildingManager.getClosestElevatorLatLng(userPosition, coordinateTransformer);
       if (closestElevator != null) {
         fusedLocation[0] = (float) closestElevator.latitude;
         fusedLocation[1] = (float) closestElevator.longitude;
@@ -508,10 +508,7 @@ public class SensorFusion implements SensorEventListener, Observer {
       //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
       gnssLatitude = (float) location.getLatitude();
       gnssLongitude = (float) location.getLongitude();
-      if (fusedLocation == null) {
-        // Initial fused location is GNSS latlng.
-        fusedLocation = new float[]{gnssLatitude, gnssLongitude};
-      } else if (coordinateTransformer != null) {
+      if (fusedLocation != null && coordinateTransformer != null) {
         isGnssOutlier = isOutlier(coordinateTransformer,
                 new LatLng(fusedLocation[0],fusedLocation[1]),
                 new LatLng(gnssLatitude, gnssLongitude));
@@ -877,6 +874,7 @@ public class SensorFusion implements SensorEventListener, Observer {
   public void setStartGNSSLatitude(float[] startPosition) {
     this.startLocation = new LatLng(startPosition[0], startPosition[1]);
     this.coordinateTransformer = new CoordinateTransformer(startPosition[0], startPosition[1]);
+    this.fusedLocation = new float[] {startPosition[0], startPosition[1]};
   }
 
 
