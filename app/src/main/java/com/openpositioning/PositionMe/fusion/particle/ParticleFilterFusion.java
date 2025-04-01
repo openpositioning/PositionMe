@@ -24,14 +24,14 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     private static final int MEAS_SIZE = 2;         // Total measurement vector size
 
     // Process noise scale (PDR) update
-    private static final double[] dynamicPdrStds = {0.2, 0};
-    private static final double[] staticPdrStds = {1.5, 1.5, 0};
+    private static final double[] dynamicPdrStds = {0.2, Math.PI/18};
+    private static final double[] staticPdrStds = {1.0, 1.0};
     private SimpleMatrix measGnssMat;
     private SimpleMatrix measWifiMat;
     private SimpleMatrix forwardModel;
 
     // Adjustable GNSS noise based on accuracy
-    private static final double BASE_GNSS_NOISE = 10.0;  // Base measurement noise for GNSS (in meters)
+    private static final double BASE_GNSS_NOISE = 20.0;  // Base measurement noise for GNSS (in meters)
     private static final double BASE_WIFI_NOISE = 5.0;  // Measurement noise for WiFi (in meters)
 
     // Outlier detection parameters
@@ -53,9 +53,9 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
     // Movement state tracking
     private long lastUpdateTime;
-    private static final long STATIC_TIMEOUT_MS = 1000; // 1 seconds without updates = static update
+    private static final long STATIC_TIMEOUT_MS = 1000; // 0.25 seconds without updates = static update
     private Timer updateTimer; // Timer for regular updates
-    private static final long UPDATE_INTERVAL_MS = 1000; // Update every 1 second
+    private static final long UPDATE_INTERVAL_MS = 100; // Update every 0.1 second
 
     // First position values to handle initialization correctly
     private LatLng firstGnssPosition;
@@ -120,6 +120,67 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         measWifiMat = SimpleMatrix.identity(MEAS_SIZE);
         measWifiMat = measWifiMat.scale(Math.pow(BASE_WIFI_NOISE, 2.0));
 
+        //startStaticUpdateTimer();
+
+    }
+
+    // Add this method to your ParticleFilterFusion class
+    private void startStaticUpdateTimer() {
+        if (updateTimer != null) {
+            updateTimer.cancel();
+        }
+
+        updateTimer = new Timer();
+        timerInitialized = true;
+
+        updateTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                // Check if particles are initialized
+                if (!particlesInitialized) {
+                    return;
+                }
+
+                long currentTime = System.currentTimeMillis();
+                // Check if we should do a static update
+                if (currentTime - lastUpdateTime > STATIC_TIMEOUT_MS) {
+                    dynamicUpdate = false;
+                    Log.d(TAG, "Performing static update with timer");
+
+                    // Apply static update to particles
+                    moveParticlesStatic(staticPdrStds);
+
+                    // Reweight particles with available measurements
+                    if (currentGNSSpositionEMU != null) {
+                        gnssMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
+                        for (int i = 0; i < gnssPositionHistory.size(); i++) {
+                            double[] position = gnssPositionHistory.get(i);
+                            gnssMeasurementVector.set(0, 0, position[0]);
+                            gnssMeasurementVector.set(1, 0, position[1]);
+                            reweightParticles(measGnssMat, forwardModel, gnssMeasurementVector);
+                        }
+                    }
+
+                    if (currentWiFipositionEMU != null) {
+                        wifiMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
+                        for (int i = 0; i < wifiPositionHistory.size(); i++) {
+                            double[] position = wifiPositionHistory.get(i);
+                            wifiMeasurementVector.set(0, 0, position[0]);
+                            wifiMeasurementVector.set(1, 0, position[1]);
+                            reweightParticles(measWifiMat, forwardModel, wifiMeasurementVector);
+                        }
+                    }
+
+                    // Resample the particles
+                    resampleParticles();
+
+                    // Update last update time
+                    lastUpdateTime = currentTime;
+                }
+            }
+        }, 0, UPDATE_INTERVAL_MS);
+
+        Log.d(TAG, "Static update timer started");
     }
 
     @Override
@@ -151,11 +212,12 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         double stepLength = Math.sqrt(dx * dx + dy * dy);
 
         currentHeading = Math.atan2(dy, dx);
+        double headingChange = currentHeading - previousHeading;
 
         initializeHeading();
 
         // Update particle parameters
-        moveParticlesDynamic(stepLength, currentHeading, dynamicPdrStds);
+        moveParticlesDynamic(stepLength, headingChange, dynamicPdrStds);
 
         if (currentGNSSpositionEMU != null) {
             gnssMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
@@ -245,7 +307,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         updateMovingAvgGnss(currentGNSSpositionEMU);
 
         // Update last update time
-        lastUpdateTime = System.currentTimeMillis();
+        //lastUpdateTime = System.currentTimeMillis();
     }
 
     @Override
@@ -295,7 +357,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         updateMovingAvgWifi(currentWiFipositionEMU);
 
         // Update last update time
-        lastUpdateTime = System.currentTimeMillis();
+        //lastUpdateTime = System.currentTimeMillis();
     }
 
     public LatLng getFusedPosition() {
@@ -352,6 +414,23 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         for (Particle particle : particles) {
             particle.updateDynamic(stepLength, headingChange, pdrStds);
         }
+    }
+
+    // Add this method to your ParticleFilterFusion class
+    public void moveParticlesStatic(double[] staticStds) {
+        Random rand = new Random();
+
+        for (Particle particle : particles) {
+            // Add random noise to represent random motion in static state
+            particle.x += rand.nextGaussian() * staticStds[0];
+            particle.y += rand.nextGaussian() * staticStds[1];
+            //particle.theta += rand.nextGaussian() * staticStds[2];
+
+            // Normalize angle
+            //particle.theta = CoordinateConverter.normalizeAngleToPi(particle.theta);
+        }
+
+        Log.d(TAG, "Applied static motion model to particles");
     }
 
     public void reweightParticles(SimpleMatrix measurementCovariance,

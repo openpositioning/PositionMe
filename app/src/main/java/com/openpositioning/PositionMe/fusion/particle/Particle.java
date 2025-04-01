@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.fusion.particle;
 
+import com.openpositioning.PositionMe.utils.CoordinateConverter;
+
 import org.apache.commons.math3.distribution.TDistribution;
 
 import java.util.Random;
@@ -20,11 +22,13 @@ public class Particle {
     }
 
     // Update particle position when step is detected
-    public void updateDynamic(double stepLength, double currentHeading, double[] dynamicPDRStds) {
+    public void updateDynamic(double stepLength, double headingChange, double[] dynamicPDRStds) {
         Random rand = new Random();
 
         // Add noise to heading change
-        this.theta = currentHeading + rand.nextGaussian() * dynamicPDRStds[1];
+        this.theta += headingChange + rand.nextGaussian() * dynamicPDRStds[1];
+        //this.theta += Math.PI/4;
+        this.theta = CoordinateConverter.normalizeAngleToPi(this.theta);
         stepLength += rand.nextGaussian() * dynamicPDRStds[0];
 
         // Update position using angle
