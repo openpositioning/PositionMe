@@ -159,6 +159,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private LatLng lastWifiPos;
     private int lastWifiFloor;
 
+    private Location lastGnssLocation;
+    private long lastGnssTime;
+
 //    List<LatLng> wallPointsLatLng = Arrays.asList(
 //            new LatLng(55.92301090863321, -3.174221045188629),
 //            new LatLng(55.92301094092557, -3.1742987516650873),
@@ -423,6 +426,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     LatLng latLng = getLatLngWifiPositioning();
                     double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
                     Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
+                    // if wifi is in front of the user orientation, assuming it's providing a similar
                     if (isWifiNotBehind(new double[]{newCords[0], newCords[1]}, wifiPos, this.orientation[0])) {
                         pf.setWifiRatio(ratio * 1);
                         Log.e("Ratio", "wifi in front");
@@ -433,9 +437,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                     Log.e("Ratio", String.valueOf(ratio));
                     pf.update(wifiPos[0], wifiPos[1]);
                 }
-
-//                // 3. 如果有 GPS 测量，则进行更新
-
+//                else if (lastGnssLocation != null) { // only step in when there is no wifi
+//                    double[] gnssPos = new double[]{lastGnssLocation.getLatitude(), lastGnssLocation.getLongitude()};
+//                    pf.update(gnssPos[0], gnssPos[1]);
+//                }
+//
 //                if (gpsDataAvailable()) {
 //                    double[] gpsPos = getGPSPosition();
 //                    pf.update(gpsPos[0], gpsPos[1]);
@@ -537,8 +543,15 @@ public class SensorFusion implements SensorEventListener, Observer {
                 this.accelMagnitude.clear();
                 if (saveRecording) {
                     stepCounter++;
+                    long relative_time = System.currentTimeMillis() - absoluteStartTime;
+                    float[] raw_pdr = this.pdrProcessing.getRawPDRMovement();
+
                     trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
-                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
+//                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
+                            .setRelativeTimestamp(relative_time)
+                            .setX(raw_pdr[0]).setY(raw_pdr[1]));
+                    trajectory.addFusionData(Traj.Pdr_Sample.newBuilder()
+                            .setRelativeTimestamp(relative_time)
                             .setX(newCords[0]).setY(newCords[1]));
                 }
 
@@ -564,6 +577,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         @Override
         public void onLocationChanged(Location location) {
             if(location != null){
+                lastGnssLocation = location;
+                lastGnssTime = System.currentTimeMillis();
+
                 //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
                 latitude = (float) location.getLatitude();
                 longitude = (float) location.getLongitude();
@@ -718,13 +734,38 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    lastWifiFloor = getWifiFloor();
-                    lastWifiPos = getLatLngWifiPositioning();
+                    // 如果位置和楼层都和上一次相同，就不更新
+                    if (lastWifiPos != null &&
+                            wifiLocation != null &&
+                            lastWifiPos.latitude == wifiLocation.latitude &&
+                            lastWifiPos.longitude == wifiLocation.longitude &&
+                            lastWifiFloor == floor) {
+                        Log.d("WiFiPosition", "位置未变化，不更新");
+                        return;
+                    }
+//                    lastWifiFloor = getWifiFloor();
+//                    lastWifiPos = getLatLngWifiPositioning();
+                    lastWifiFloor = floor;
+                    lastWifiPos = wifiLocation;
                     // 成功回调时，重置计时器（更新成功时间，并启动ratioUpdater）
                     lastWifiSuccessTime = System.currentTimeMillis();
                     // 移除之前可能存在的更新任务，确保计时器重置
                     ratioHandler.removeCallbacks(ratioUpdater);
                     ratioHandler.post(ratioUpdater);
+
+                    if (saveRecording) {
+                        float lat = (float) lastWifiPos.latitude;
+                        float lon = (float) lastWifiPos.longitude;
+                        String provider = "wifi_fine";
+                        trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
+                                .setAccuracy(0)
+                                .setAltitude(0)
+                                .setLatitude(lat)
+                                .setLongitude(lon)
+                                .setSpeed(0)
+                                .setProvider(provider)
+                                .setRelativeTimestamp(System.currentTimeMillis() - absoluteStartTime));
+                    }
 
                     // 其他成功逻辑处理
                     Log.d("WiFiSuccess", "WiFi定位成功：" + wifiLocation.toString());

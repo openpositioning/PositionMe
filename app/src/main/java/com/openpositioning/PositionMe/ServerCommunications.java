@@ -185,7 +185,7 @@ public class ServerCommunications implements Observable {
     private static void initializeURLs() {
         if (userKey != null) {
             uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
-            downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=80&key=" + masterKey;
+            downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=150&key=" + masterKey;
             infoRequestURL = "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
             System.out.println("URL 初始化完成");
         } else {
