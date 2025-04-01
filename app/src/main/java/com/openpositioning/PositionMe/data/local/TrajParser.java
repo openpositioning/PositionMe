@@ -27,6 +27,7 @@ public class TrajParser {
     public static class ReplayPoint {
         public LatLng pdrLocation;
         public LatLng gnssLocation;
+
         public float orientation;
         public float speed;
         public long timestamp;
@@ -76,11 +77,13 @@ public class TrajParser {
     }
 
     public static List<TagPoint> tagPoints = new ArrayList<>();
+    public static List<ReplayPoint> replayData = new ArrayList<>();
 
     public static List<ReplayPoint> parseTrajectoryData(String filePath, Context context,
                                                         double originLat, double originLng) {
         List<ReplayPoint> result = new ArrayList<>();
         tagPoints.clear(); // Clear any previous tags
+
 
         try {
             File file = new File(filePath);

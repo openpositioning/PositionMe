@@ -24,6 +24,20 @@
 
         </FrameLayout>
 
+        <!-- Code by Guilherme: button to view stats-->
+        <Button
+            android:id="@+id/viewStatsButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="View Stats"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:backgroundTint="#D32F2F"
+            android:layout_margin="12dp"
+            android:visibility="gone"/>
+
+
         <!-- SeekBar for playback position -->
         <SeekBar
             android:id="@+id/playbackSeekBar"
@@ -106,6 +120,10 @@
             </LinearLayout>
         </FrameLayout>
     </LinearLayout>
+
+
+
+
     <Spinner
         android:id="@+id/dataSourceSpinner"
         android:layout_width="wrap_content"
