@@ -7,6 +7,7 @@ import android.hardware.SensorEventListener;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
 
@@ -78,6 +79,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   private LatLng currentWifiLocation;
   private int currentWifiFloor;
   private boolean isWifiLocationOutlier = false;
+  private boolean noWifiCoverage = false;
   private LatLng gnssLoc;
   private boolean isGnssOutlier = false;
   private LatLng fusedLocation;
@@ -560,12 +562,18 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     }
   }
   public void onSensorDataReceived(WiFiData data) {
+    // Detect and notify the user if there is no coverage
+    if (!this.noWifiCoverage && data.location == null) {
+      Toast.makeText(this.appContext, "No Wifi Coverage!",Toast.LENGTH_SHORT).show();
+      this.noWifiCoverage = true;
+    }
     // Handle WiFi scan result
     if (data.location != this.currentWifiLocation) {
       float[] pdrData = pdrProcessing.getPDRMovement();
       this.currentWifiLocation = data.location;
       this.currentWifiFloor = data.floor;
-      if (coordinateTransformer != null) {
+      if (coordinateTransformer != null && this.currentWifiLocation != null) {
+        this.noWifiCoverage = false;
         this.isWifiLocationOutlier = isOutlier(coordinateTransformer,
             fusedLocation,
             this.currentWifiLocation);
