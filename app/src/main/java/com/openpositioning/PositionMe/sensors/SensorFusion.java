@@ -216,6 +216,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         // 初始化位置变量为0
         this.latitude = 0.0f;
         this.longitude = 0.0f;
+        
+        // 初始化加速度大小列表
+        this.accelMagnitude = new ArrayList<>();
 
         // 初始化气压值为设定的基准气压
         this.pressure = STANDARD_PRESSURE;
@@ -310,10 +313,32 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void onSensorChanged(SensorEvent sensorEvent) {
         switch (sensorEvent.sensor.getType()) {
             case Sensor.TYPE_ACCELEROMETER:
-                // Accelerometer processing
+                // 保存原始加速度数据
                 acceleration[0] = sensorEvent.values[0];
                 acceleration[1] = sensorEvent.values[1];
                 acceleration[2] = sensorEvent.values[2];
+                
+                // 使用低通滤波器获取重力分量
+                gravity[0] = filter_coefficient * gravity[0] + (1 - filter_coefficient) * acceleration[0];
+                gravity[1] = filter_coefficient * gravity[1] + (1 - filter_coefficient) * acceleration[1];
+                gravity[2] = filter_coefficient * gravity[2] + (1 - filter_coefficient) * acceleration[2];
+                
+                // 通过减去重力获得线性加速度
+                filteredAcc[0] = acceleration[0] - gravity[0];
+                filteredAcc[1] = acceleration[1] - gravity[1];
+                filteredAcc[2] = acceleration[2] - gravity[2];
+                
+                // 计算合加速度大小
+                double accMagnitude = Math.sqrt(Math.pow(filteredAcc[0], 2) + 
+                                             Math.pow(filteredAcc[1], 2) + 
+                                             Math.pow(filteredAcc[2], 2));
+                
+                // 保存加速度大小到列表中，用于步长估计
+                this.accelMagnitude.add(accMagnitude);
+                
+                // 手动步伐检测逻辑 - 基于加速度峰值
+                manualStepDetection(accMagnitude);
+                
                 break;
 
             case Sensor.TYPE_PRESSURE:
@@ -407,9 +432,34 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
-                //Store time of step
+                // 当前时间
+                long currentTime = System.currentTimeMillis();
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
+                
+                // 检查距离上一次步伐检测的时间间隔，过滤掉过快的步伐
+                if (currentTime - lastStepTime < MIN_STEP_INTERVAL) {
+                    Log.d("SensorFusion", "忽略过快的步伐检测，间隔" + (currentTime - lastStepTime) + "ms < " + MIN_STEP_INTERVAL + "ms");
+                    break; // 忽略此次步伐检测
+                }
+                
+                // 检查加速度幅值是否足够，过滤小幅度振动
+                double maxAccel = 0;
+                for (double acc : accelMagnitude) {
+                    maxAccel = Math.max(maxAccel, acc);
+                }
+                
+                if (maxAccel < STEP_THRESHOLD * 0.7) {
+                    Log.d("SensorFusion", "忽略微小振动引起的步伐检测，最大加速度" + maxAccel + " < " + (STEP_THRESHOLD * 0.7));
+                    break; // 忽略此次步伐检测
+                }
+                
+                // 更新PDR位置
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
+                
+                // 添加详细日志，帮助调试步数检测
+                Log.d("SensorFusion", "步伐检测触发 - 时间: " + stepTime + 
+                        "ms, 位置变化: [" + newCords[0] + ", " + newCords[1] + "], 间隔: " + (currentTime - lastStepTime) + "ms");
+                
                 if (saveRecording) {
                     // Store the PDR coordinates for plotting the trajectory
                     this.pathView.drawTrajectory(newCords);
@@ -421,6 +471,22 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
                             .setX(newCords[0]).setY(newCords[1]));
                 }
+                
+                // 检测到步伐后马上记录到位置日志器
+                if (saveRecording && locationLogger != null) {
+                    // 使用PDR位置更新LocationLogger
+                    float[] pdrLongLat = getPdrLongLat(newCords[0], newCords[1]);
+                    locationLogger.logLocation(
+                        currentTime,
+                        pdrLongLat[0],
+                        pdrLongLat[1]
+                    );
+                    Log.d("SensorFusion", "步伐检测 - 已记录PDR位置: lat=" + 
+                           pdrLongLat[0] + ", lng=" + pdrLongLat[1]);
+                }
+                
+                // 更新最后一次步伐时间
+                lastStepTime = currentTime;
                 break;
         }
     }
@@ -850,7 +916,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         lightSensor.sensorManager.registerListener(this, lightSensor.sensor, (int) 1e6);
         proximitySensor.sensorManager.registerListener(this, proximitySensor.sensor, (int) 1e6);
         magnetometerSensor.sensorManager.registerListener(this, magnetometerSensor.sensor, 10000);
-        stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_FASTEST);
+        
+        // 降低步伐检测器的采样率，从SENSOR_DELAY_FASTEST改为SensorManager.SENSOR_DELAY_GAME
+        // 这样可以减少过度灵敏的问题
+        stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_GAME);
+        
         rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, (int) 1e6);
         wifiProcessor.startListening();
         
@@ -1248,6 +1318,108 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public float getLongitude() {
         return this.longitude;
+    }
+
+    /**
+     * 手动步伐检测方法，当系统自带步伐检测器不够灵敏时使用
+     * @param accMagnitude 当前加速度大小
+     */
+    private static final double STEP_THRESHOLD = 1.8; // 步伐检测阈值，从1.2增加到1.8，减少误检测
+    private static final long MIN_STEP_INTERVAL = 400; // 最小步伐间隔(毫秒)，从300增加到400
+    private double lastPeakValue = 0;
+    private long lastStepTime = 0;
+    private boolean isAscending = false;
+    private double[] recentPeaks = new double[3]; // 记录最近3个峰值用于判断
+    private int peakIndex = 0;
+    
+    private void manualStepDetection(double accMagnitude) {
+        long currentTime = System.currentTimeMillis();
+        
+        // 时间间隔检查，防止过于频繁的步伐检测
+        if (currentTime - lastStepTime < MIN_STEP_INTERVAL) {
+            return;
+        }
+        
+        // 检测峰值变化
+        if (!isAscending && accMagnitude > lastPeakValue) {
+            isAscending = true;
+        } else if (isAscending && accMagnitude < lastPeakValue) {
+            // 检测到峰值下降
+            
+            // 保存峰值用于连续性检查
+            recentPeaks[peakIndex] = lastPeakValue;
+            peakIndex = (peakIndex + 1) % recentPeaks.length;
+            
+            // 检查峰值是否符合走路模式 - 连续三个峰值相对稳定且超过阈值
+            boolean isValidStep = lastPeakValue > STEP_THRESHOLD;
+            
+            // 如果有足够的峰值历史，检查连续性
+            if (currentTime - lastStepTime > 2000) { // 如果超过2秒没有步伐，重置判断
+                isValidStep = isValidStep && lastPeakValue > STEP_THRESHOLD * 1.2; // 第一步要求更明显的峰值
+            }
+            
+            if (isValidStep) {
+                // 检测到有效步伐
+                long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
+                Log.d("SensorFusion", String.format("手动步伐检测: 峰值=%.2f, 阈值=%.2f, 间隔=%d毫秒", 
+                        lastPeakValue, STEP_THRESHOLD, currentTime - lastStepTime));
+                
+                // 使用与系统步伐检测器相同的更新逻辑
+                float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
+                
+                if (saveRecording) {
+                    this.pathView.drawTrajectory(newCords);
+                    stepCounter++;
+                    trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+                            .setRelativeTimestamp(stepTime)
+                            .setX(newCords[0]).setY(newCords[1]));
+                }
+                
+                // 检测到步伐后记录到位置日志器
+                if (saveRecording && locationLogger != null) {
+                    float[] pdrLongLat = getPdrLongLat(newCords[0], newCords[1]);
+                    locationLogger.logLocation(
+                        currentTime,
+                        pdrLongLat[0],
+                        pdrLongLat[1]
+                    );
+                }
+                
+                this.accelMagnitude.clear();
+                lastStepTime = currentTime;
+            }
+            isAscending = false;
+        }
+        
+        lastPeakValue = accMagnitude;
+    }
+    
+    /**
+     * 将PDR相对坐标转换为地理坐标
+     * @param x PDR坐标X分量(米)
+     * @param y PDR坐标Y分量(米)
+     * @return 经纬度坐标[纬度,经度]
+     */
+    private float[] getPdrLongLat(float x, float y) {
+        if (startLocation[0] == 0 && startLocation[1] == 0) {
+            // 如果没有起始位置，使用当前GNSS位置
+            return new float[]{latitude, longitude};
+        }
+        
+        // 每度对应的距离(米)
+        double metersPerLatDegree = 111320.0; // 1度纬度大约等于111.32公里
+        // 经度则随纬度变化
+        double metersPerLngDegree = 111320.0 * Math.cos(Math.toRadians(startLocation[0]));
+        
+        // 将米转换为经纬度增量
+        float latOffset = y / (float)metersPerLatDegree;
+        float lngOffset = x / (float)metersPerLngDegree;
+        
+        // 从起始位置增加偏移
+        float resultLat = startLocation[0] + latOffset;
+        float resultLng = startLocation[1] + lngOffset;
+        
+        return new float[]{resultLat, resultLng};
     }
 
 }

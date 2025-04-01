@@ -9,6 +9,7 @@ import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -27,15 +28,15 @@ public class PdrProcessing {
 
     //region Static variables
     // Weiberg algorithm coefficient for stride calculations
-    private static final float K = 0.364f;
+    private static final float K = 0.4f;
     // Number of samples (seconds) to keep as memory for elevation calculation
     private static final int elevationSeconds = 4;
     // Number of samples (0.01 seconds)
     private static final int accelSamples = 100;
     // Threshold used to detect significant movement
-    private static final float movementThreshold = 0.3f; // m/s^2
+    private static final float movementThreshold = 0.28f;
     // Threshold under which movement is considered non-existent
-    private static final float epsilon = 0.18f;
+    private static final float epsilon = 0.17f;
     //endregion
 
     //region Instance variables
@@ -256,6 +257,12 @@ public class PdrProcessing {
         // 计算步长
         if(!useManualStep) {
             this.stepLength = weibergMinMax(accelMagnitudeOvertime);
+            // 限制步长范围
+            if (this.stepLength < 0.25f) {
+                this.stepLength = 0.25f; // 最小步长为0.25米
+            } else if (this.stepLength > 0.75f) {
+                this.stepLength = 0.75f; // 最大步长为0.75米
+            }
         }
         
         // 计算局部ENU坐标系中的位移
@@ -265,6 +272,10 @@ public class PdrProcessing {
         // 更新位置
         this.positionX += deltaE;
         this.positionY += deltaN;
+        
+        // 记录步长信息用于调试
+        Log.d("PdrProcessing", String.format("步长: %.2fm, 方向: %.1f°, 位移: dX=%.2f, dY=%.2f", 
+                stepLength, (float)Math.toDegrees(adaptedHeading), deltaE, deltaN));
         
         return new float[]{this.positionX, this.positionY};
     }
@@ -330,14 +341,70 @@ public class PdrProcessing {
             return 0.0f; // 返回默认步长，避免异常
         }
 
-        double maxAccel = Collections.max(accelMagnitude);
-        double minAccel = Collections.min(accelMagnitude);
+        // 对加速度列表进行过滤，减少噪声影响
+        List<Double> filteredAccelMagnitude = filterAcceleration(accelMagnitude);
+        
+        double maxAccel = Collections.max(filteredAccelMagnitude);
+        double minAccel = Collections.min(filteredAccelMagnitude);
+        
+        // 最小加速度差异阈值，避免静止状态下微小振动导致的错误步长计算
+        double accelThreshold = 0.3;
+        if ((maxAccel - minAccel) < accelThreshold) {
+            Log.d("PdrProcessing", String.format("加速度差异(%.2f)低于阈值(%.2f)，使用默认步长", 
+                    (maxAccel - minAccel), accelThreshold));
+            return 0.5f; // 使用默认步长
+        }
+        
         float bounce = (float) Math.pow((maxAccel - minAccel), 0.25);
+        
+        // 输出计算过程，便于调试
+        Log.d("PdrProcessing", String.format("加速度 - 最大: %.2f, 最小: %.2f, 波动值: %.2f", 
+                maxAccel, minAccel, bounce));
 
         if (this.settings.getBoolean("overwrite_constants", false)) {
-            return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
+            float customK = Float.parseFloat(settings.getString("weiberg_k", "0.934"));
+            float stepLen = bounce * customK * 2;
+            Log.d("PdrProcessing", "使用自定义K值: " + customK + ", 计算步长: " + stepLen);
+            return stepLen;
         }
-        return bounce * K * 2;
+        
+        float stepLen = bounce * K * 2;
+        Log.d("PdrProcessing", "使用默认K值: " + K + ", 计算步长: " + stepLen);
+        return stepLen;
+    }
+
+    /**
+     * 过滤加速度数据，减少噪声影响
+     * @param accelMagnitude 原始加速度数据列表
+     * @return 过滤后的加速度数据列表
+     */
+    private List<Double> filterAcceleration(List<Double> accelMagnitude) {
+        if (accelMagnitude.size() <= 3) {
+            return accelMagnitude; // 数据点太少，不进行过滤
+        }
+        
+        List<Double> filtered = new ArrayList<>();
+        
+        // 使用中值滤波减少异常值影响
+        for (int i = 1; i < accelMagnitude.size() - 1; i++) {
+            // 取当前点和相邻两点
+            List<Double> window = new ArrayList<>();
+            window.add(accelMagnitude.get(i-1));
+            window.add(accelMagnitude.get(i));
+            window.add(accelMagnitude.get(i+1));
+            
+            // 排序并取中值
+            Collections.sort(window);
+            filtered.add(window.get(1));
+        }
+        
+        // 添加首尾两点
+        if (accelMagnitude.size() > 0) {
+            filtered.add(0, accelMagnitude.get(0));
+            filtered.add(accelMagnitude.get(accelMagnitude.size() - 1));
+        }
+        
+        return filtered;
     }
 
     /**
