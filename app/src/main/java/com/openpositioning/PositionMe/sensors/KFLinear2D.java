@@ -1,5 +1,4 @@
-//Authored by Ashley Dong, Sriram Jagathisan, Yuxuan Liu
-
+// Authored by Ashley Dong, Sriram Jagathisan, Yuxuan Liu
 
 package com.openpositioning.PositionMe.sensors;
 
@@ -75,21 +74,12 @@ public class KFLinear2D {
         return new double[]{ x[0], x[1] };
     }
 
-<<<<<<< HEAD
-    // New method: Return a copy of the covariance matrix P
-=======
     // New method: returns a copy of the covariance matrix P
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
     public double[][] getErrorCovariance() {
         return copyMatrix(P);
     }
 
-<<<<<<< HEAD
-    // -------------- Auxiliary matrix operation methods ----------------
-=======
     // -------------- Auxiliary matrix operations methods ----------------
-
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
     private double[][] addMatrices(double[][] A, double[][] B) {
         int rows = A.length;
         int cols = A[0].length;

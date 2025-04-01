@@ -1,4 +1,4 @@
-//Authored by Ashley Dong, Sriram Jagathisan and Yuxuan Liu
+// Authored by Ashley Dong, Sriram Jagathisan and Yuxuan Liu
 
 package com.openpositioning.PositionMe.fragments;
 
@@ -22,8 +22,6 @@ import androidx.navigation.Navigation;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.model.GroundOverlayOptions;
-import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
@@ -43,16 +41,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
-<<<<<<< HEAD
- * FusionFragment with positioning and indoor floor map switching functionality:
- 1.Use the Kalman Filter to fuse WiFi and GNSS data, and update the position with PDR increment.
- 2.Apply exponential smoothing filtering to the fused best position to ensure smooth display.
- 3.Record the most recent MAX_OBSERVATIONS GNSS, WiFi, and PDR absolute positioning data, and display them with different color Markers.
- 4.Display the full trajectory of the fused position (red polyline) and call IndoorMapManager to update floor information, ensuring the floor map remains unchanged (without using mMap.clear() to clear the floor map).
- 5.New "Add tag" button allows users to tag the current location and write it to the Trajectory.
- 6.Calculate and display positioning accuracy (based on the KF covariance matrix).
- 7.Determine indoor/outdoor status based on the current fused position and display it.
-=======
  * FusionFragment that fuses positioning and indoor floor map switching functionality:
  * 1. Uses a Kalman filter to fuse WiFi and GNSS data, and updates the position using incremental PDR.
  * 2. Applies exponential smoothing to the fused optimal position to ensure smooth display.
@@ -63,7 +51,6 @@ import java.util.List;
  * 5. Adds an "Add tag" button to allow users to tag the current position into the Trajectory.
  * 6. Calculates and displays positioning accuracy (based on the KF covariance matrix).
  * 7. Determines and displays indoor/outdoor status based on whether the fused position falls within a building.
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
  */
 public class FusionFragment extends Fragment implements OnMapReadyCallback {
 
@@ -74,49 +61,25 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
     private Polyline fusionPolyline;
     private List<LatLng> fusionPath = new ArrayList<>();
 
-<<<<<<< HEAD
-    // Save the most recent N observations
-=======
     // Stores the most recent N observations
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
     private List<LatLng> gnssObservations = new ArrayList<>();
     private List<LatLng> wifiObservations = new ArrayList<>();
     private List<LatLng> pdrObservations = new ArrayList<>();
     private static final int MAX_OBSERVATIONS = 10;
 
-<<<<<<< HEAD
-    // Used to store references to each sensor Marker for easy clearing
-=======
     // Used to store references to each sensor's Marker for easy removal
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
     private List<Marker> gnssMarkers = new ArrayList<>();
     private List<Marker> wifiMarkers = new ArrayList<>();
     private List<Marker> pdrMarkers = new ArrayList<>();
 
     private Handler updateHandler = new Handler(Looper.getMainLooper());
     private Runnable fusionUpdateRunnable;
-<<<<<<< HEAD
-    private static final long UPDATE_INTERVAL_MS = 1000; // Update once per second
-=======
     private static final long UPDATE_INTERVAL_MS = 1000; // Update every second
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
 
     private SensorFusion sensorFusion;
     private IndoorMapManager indoorMapManager;
     private Spinner mapSpinner;
 
-<<<<<<< HEAD
-    // New TextViews added to display positioning accuracy and indoor/outdoor status
-    private TextView accuracyTextView;
-    private TextView indoorOutdoorTextView;
-
-    // Kalman Filter KF
-    private KFLinear2D kf;
-    private long lastUpdateTime = 0;
-
-    // Local coordinate transformation origin (latitude and longitude),
-    // used to convert latitude and longitude to local (x, y) coordinates (unit: meters)
-=======
     // New TextViews for displaying positioning accuracy and indoor/outdoor status
     private TextView accuracyTextView;
     private TextView indoorOutdoorTextView;
@@ -126,22 +89,14 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
     private long lastUpdateTime = 0;
 
     // Local coordinate conversion origin (lat/lon), used to convert lat/lon to local (x,y) coordinates in meters
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
     private double lat0Deg = 0.0;
     private double lon0Deg = 0.0;
     private boolean originSet = false;
 
-<<<<<<< HEAD
-    // Save the previous PDR data (used for calculating the increment)
-    private float[] lastPdr = null;
-
-    // Noise parameter
-=======
     // Stores the last PDR data (used to calculate increments)
     private float[] lastPdr = null;
 
     // Noise parameters
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
     private final double[][] R_wifi = { {20.0, 0.0}, {0.0, 20.0} };
     private final double[][] R_gnss = { {100.0, 0.0}, {0.0, 100.0} };
     private final double[][] Q = {
@@ -151,19 +106,11 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             {0,   0,   0,   0.1}
     };
 
-<<<<<<< HEAD
-    // Exponential smoothing filter parameter (range [0,1], smaller values result in stronger smoothing)
-    private static final double SMOOTHING_ALPHA = 0.2;
-    private LatLng smoothFusedPosition = null;
-
-    // Used to record the start time of the recording
-=======
     // Exponential smoothing parameter (range [0,1], lower values yield stronger smoothing)
     private static final double SMOOTHING_ALPHA = 0.2;
     private LatLng smoothFusedPosition = null;
 
     // Used to record the start time of recording
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
     private long startTimestamp;
 
     public FusionFragment() {
@@ -173,10 +120,6 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-<<<<<<< HEAD
-        // Initialize the start time of the recording
-=======
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         startTimestamp = System.currentTimeMillis();
         // Initialize sensorFusion so we can get the initial sensor readings.
         sensorFusion = SensorFusion.getInstance();
@@ -211,12 +154,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-<<<<<<< HEAD
-        // Please ensure that fragment_fusion.xml contains the controls with
-        // ids addTagButton_fusion, accuracyTextView_fusion, // and indoorOutdoorTextView_fusion.
-=======
         // Ensure that fragment_fusion.xml contains controls with IDs: addTagButton_fusion, accuracyTextView_fusion, and indoorOutdoorTextView_fusion
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         return inflater.inflate(R.layout.fragment_fusion, container, false);
     }
 
@@ -227,11 +165,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         view.findViewById(R.id.exitButton_fusion).setOnClickListener(v ->
                 Navigation.findNavController(v).popBackStack(R.id.homeFragment, false));
 
-<<<<<<< HEAD
-        // Floor button click event
-=======
         // Floor button click events
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         view.findViewById(R.id.floorUpButton_fusion).setOnClickListener(v -> {
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
@@ -252,11 +186,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         mapSpinner = view.findViewById(R.id.mapSwitchSpinner_fusion);
         setupMapSpinner();
 
-<<<<<<< HEAD
-        // Initialize the newly added controls: Add Tag button and two TextViews
-=======
         // Initialize the new controls: the Add Tag button and two TextViews
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         Button addTagButton = view.findViewById(R.id.addTagButton_fusion);
         accuracyTextView = view.findViewById(R.id.accuracyTextView_fusion);
         indoorOutdoorTextView = view.findViewById(R.id.indoorOutdoorTextView_fusion);
@@ -269,12 +199,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
                     double lat = smoothFusedPosition.latitude;
                     double lon = smoothFusedPosition.longitude;
                     float altitude = sensorFusion.getElevation();
-<<<<<<< HEAD
-                    // Call the newly added addFusionTag() method in
-                    // SensorFusion to write to the Trajectory
-=======
                     // Call the new addFusionTag() method in SensorFusion to write to the Trajectory
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
                     sensorFusion.addFusionTag(relativeTimestamp, lat, lon, altitude, "fusion");
                     Log.d(TAG, "Add tag: timestamp=" + relativeTimestamp + ", lat=" + lat + ", lon=" + lon + ", alt=" + altitude);
                 }
@@ -320,12 +245,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         mMap.getUiSettings().setCompassEnabled(true);
         indoorMapManager = new IndoorMapManager(mMap);
         setupMapSpinner();
-<<<<<<< HEAD
-        // Once the map is ready, IndoorMapManager will automatically
-        // add floor map overlays based on the current location.
-=======
         // Once the map is ready, IndoorMapManager will automatically add floor overlays based on the current position.
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
     }
 
     private void updateFusionUI() {
@@ -346,17 +266,10 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         // 1) Apply PDR increment
         applyPdrIncrement();
 
-<<<<<<< HEAD
-        // 2) KF prediction
-        kf.predict(dt);
-
-        // 3) Fuse WiFi data (high noise)
-=======
         // 2) Kalman Filter prediction
         kf.predict(dt);
 
         // 3) Fuse WiFi data (with larger noise)
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         LatLng wifiLatLon = sensorFusion.getLatLngWifiPositioning();
         if (wifiLatLon != null) {
             double[] localWifi = latLonToLocal(wifiLatLon.latitude, wifiLatLon.longitude);
@@ -366,11 +279,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             addObservation(wifiObservations, wifiLatLon);
         }
 
-<<<<<<< HEAD
-        // 4) Fuse GNSS data (low noise)
-=======
         // 4) Fuse GNSS data (with smaller noise)
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         float[] gnssArr = sensorFusion.getGNSSLatitude(false);
         if (gnssArr != null && gnssArr.length >= 2) {
             float latGNSS = gnssArr[0];
@@ -385,20 +294,12 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             }
         }
 
-<<<<<<< HEAD
-        // 5) Get KF fusion output and convert to latitude and longitude
-=======
         // 5) Get KF fused output and convert it to latitude/longitude
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         double[] xy = kf.getXY();
         double[] latlon = localToLatLon(xy[0], xy[1]);
         LatLng fusedLatLng = new LatLng(latlon[0], latlon[1]);
 
-<<<<<<< HEAD
-        // 6) Apply exponential smoothing to the fused results
-=======
         // 6) Apply exponential smoothing to the fused result
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         if (smoothFusedPosition == null) {
             smoothFusedPosition = fusedLatLng;
         } else {
@@ -415,11 +316,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             addObservation(pdrObservations, pdrLatLng);
         }
 
-<<<<<<< HEAD
-        // 8) Clear existing Markers and Polyline (do not call mMap.clear() to retain floor map overlays)
-=======
         // 8) Clear existing Markers and Polyline (without calling mMap.clear() to preserve floor overlays)
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         if (fusionMarker != null) {
             fusionMarker.remove();
             fusionMarker = null;
@@ -428,12 +325,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             fusionPolyline.remove();
             fusionPolyline = null;
         }
-<<<<<<< HEAD
-
-        // Simultaneously clear other sensor Markers (ensure they do not accumulate)
-=======
         // Also clear markers for other sensors (to avoid accumulation)
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         for (Marker m : gnssMarkers) { m.remove(); }
         gnssMarkers.clear();
         for (Marker m : wifiMarkers) { m.remove(); }
@@ -441,17 +333,12 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         for (Marker m : pdrMarkers) { m.remove(); }
         pdrMarkers.clear();
 
-<<<<<<< HEAD
-        // 9) Draw fused position Marker and full trajectory (Red)
-=======
         // 9) Draw fused position Marker and complete trajectory (red)
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         if (smoothFusedPosition != null) {
             fusionMarker = mMap.addMarker(new MarkerOptions()
                     .position(smoothFusedPosition)
                     .title("Fused Position")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
-                    // Set zIndex to 2000 so that it is above other markers
                     .zIndex(2000));
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(smoothFusedPosition, 19f));
             if (fusionPath.size() > 1) {
@@ -463,11 +350,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             }
         }
 
-<<<<<<< HEAD
-        // 10) Draw GNSS Marker (Blue)
-=======
         // 10) Draw GNSS markers (blue)
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         for (LatLng pos : gnssObservations) {
             Marker marker = mMap.addMarker(new MarkerOptions()
                     .position(pos)
@@ -476,12 +359,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
                     .zIndex(1000));
             gnssMarkers.add(marker);
         }
-<<<<<<< HEAD
-
-        // 11) Draw WiFi Marker (Green)
-=======
         // 11) Draw WiFi markers (green)
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         for (LatLng pos : wifiObservations) {
             Marker marker = mMap.addMarker(new MarkerOptions()
                     .position(pos)
@@ -490,12 +368,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
                     .zIndex(1000));
             wifiMarkers.add(marker);
         }
-<<<<<<< HEAD
-
-        // 12) Draw PDR Marker (Orange)
-=======
         // 12) Draw PDR markers (orange)
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         for (LatLng pos : pdrObservations) {
             Marker marker = mMap.addMarker(new MarkerOptions()
                     .position(pos)
@@ -505,13 +378,8 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             pdrMarkers.add(marker);
         }
 
-<<<<<<< HEAD
-        // 13) Calculate positioning accuracy and update display (using the covariance matrix of the Kalman Filter)
-        double[][] P = kf.getErrorCovariance(); // New method to return the covariance matrix P
-=======
         // 13) Calculate positioning accuracy and update display (using the KF covariance matrix)
-        double[][] P = kf.getErrorCovariance(); // New method that returns the covariance matrix P
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
+        double[][] P = kf.getErrorCovariance();
         double stdX = Math.sqrt(P[0][0]);
         double stdY = Math.sqrt(P[1][1]);
         double accuracy = (stdX + stdY) / 2.0;
@@ -519,11 +387,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             accuracyTextView.setText(String.format("Accuracy: %.1f m", accuracy));
         }
 
-<<<<<<< HEAD
-        // 14) Detect indoor/outdoor status (determine if the fused position is inside a building)
-=======
         // 14) Determine indoor/outdoor status (based on whether the fused position falls within a building)
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         if (indoorOutdoorTextView != null) {
             if (BuildingPolygon.inNucleus(smoothFusedPosition) || BuildingPolygon.inLibrary(smoothFusedPosition)) {
                 indoorOutdoorTextView.setText("Indoor");
@@ -532,12 +396,7 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
             }
         }
 
-<<<<<<< HEAD
-        // 15) Update floor display (update floor information in IndoorMapManager;
-        // the floor map is controlled by IndoorMapManager and does not call mMap.clear())
-=======
-        // 15) Update floor display (update floor information in IndoorMapManager; floor map is controlled by IndoorMapManager without calling mMap.clear())
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
+        // 15) Update floor display (update floor information in IndoorMapManager without calling mMap.clear())
         updateFloor(smoothFusedPosition);
     }
 
@@ -598,19 +457,12 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
     private void applyPdrIncrement() {
         float[] pdrNow = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrNow == null) return;
-        if (!originSet) return;  // or if KF is not set
+        if (!originSet) return;
 
         if (lastPdr == null) {
             lastPdr = pdrNow.clone();
             return;
         }
-<<<<<<< HEAD
-        float rawDx = pdrNow[0] - lastPdr[0];  // Forward/backward
-        float rawDy = pdrNow[1] - lastPdr[1];  // Left/Right
-        lastPdr[0] = pdrNow[0];
-        lastPdr[1] = pdrNow[1];
-=======
-
         float rawDx = pdrNow[0] - lastPdr[0]; // "forward/back" from phone perspective
         float rawDy = pdrNow[1] - lastPdr[1]; // "side-to-side"
         lastPdr[0] = pdrNow[0];
@@ -619,7 +471,6 @@ public class FusionFragment extends Fragment implements OnMapReadyCallback {
         // Try negating rawDy:
         // If "rawDx" is forward => +Y, then "rawDy" is left/right => -X (or +X).
         // We'll do dx = -rawDy, dy = rawDx, so forward translates to upward (north).
->>>>>>> 5616ceee82d26b38c36c9272a2312e9dace43b72
         float dx = -rawDy;
         float dy = rawDx;
 
