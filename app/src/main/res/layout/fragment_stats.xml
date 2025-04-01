@@ -14,106 +14,51 @@
         android:background="#D32F2F"
         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar" />
 
+    <Spinner
+        android:id="@+id/trajectoryTypeSpinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@android:drawable/btn_dropdown"
+        android:spinnerMode="dropdown" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="24dp">
+        android:layout_marginTop="16dp">
 
-        <!-- Left column: Labels -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Distance"
-                android:textSize="18sp"
-                android:layout_marginVertical="8dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Total Time"
-                android:textSize="18sp"
-                android:layout_marginVertical="8dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Average Speed"
-                android:textSize="18sp"
-                android:layout_marginVertical="8dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Pace (min/km)"
-                android:textSize="18sp"
-                android:layout_marginVertical="8dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Altitude Change"
-                android:textSize="18sp"
-                android:layout_marginVertical="8dp" />
+            <TextView android:text="Distance" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:layout_marginVertical="6dp"/>
+            <TextView android:text="Total Time" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:layout_marginVertical="6dp"/>
+            <TextView android:text="Average Speed" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:layout_marginVertical="6dp"/>
+            <TextView android:text="Pace (min/km)" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:layout_marginVertical="6dp"/>
+            <TextView android:text="Altitude Change" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:layout_marginVertical="6dp"/>
         </LinearLayout>
 
-        <!-- Right column: Values -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/distanceTextView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="18sp"
-                android:layout_marginVertical="8dp"
-                android:textAlignment="viewEnd" />
-
-            <TextView
-                android:id="@+id/timeTextView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="18sp"
-                android:layout_marginVertical="8dp"
-                android:textAlignment="viewEnd" />
-
-            <TextView
-                android:id="@+id/avgSpeedTextView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="18sp"
-                android:layout_marginVertical="8dp"
-                android:textAlignment="viewEnd" />
-
-            <TextView
-                android:id="@+id/paceTextView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="18sp"
-                android:layout_marginVertical="8dp"
-                android:textAlignment="viewEnd" />
-
-            <TextView
-                android:id="@+id/altitudeTextView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="18sp"
-                android:layout_marginVertical="8dp"
-                android:textAlignment="viewEnd" />
+            <TextView android:id="@+id/distanceTextView" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:textAlignment="viewEnd" android:layout_marginVertical="6dp"/>
+            <TextView android:id="@+id/timeTextView" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:textAlignment="viewEnd" android:layout_marginVertical="6dp"/>
+            <TextView android:id="@+id/avgSpeedTextView" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:textAlignment="viewEnd" android:layout_marginVertical="6dp"/>
+            <TextView android:id="@+id/paceTextView" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:textAlignment="viewEnd" android:layout_marginVertical="6dp"/>
+            <TextView android:id="@+id/altitudeTextView" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="16sp" android:textAlignment="viewEnd" android:layout_marginVertical="6dp"/>
         </LinearLayout>
     </LinearLayout>
+
+    <fragment
+        android:id="@+id/statsMapFragment"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="380dp"
+        android:layout_height="363dp"
+        android:layout_marginTop="24dp" />
 </LinearLayout>
