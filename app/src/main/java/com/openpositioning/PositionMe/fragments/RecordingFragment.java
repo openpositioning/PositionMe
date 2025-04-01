@@ -219,8 +219,8 @@ public class RecordingFragment extends Fragment {
                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(start, (float) 19f));
                 // Adding polyline to map to plot real-time trajectory
                 PolylineOptions polylineOptions=new PolylineOptions()
-                        .color(Color.RED)
-                        .add(currentLocation);
+                        .color(Color.RED);
+                        //.add(currentLocation);
                 polyline = gMap.addPolyline(polylineOptions);
                 // Setting current location to set Ground Overlay for indoor map (if in building)
                 indoorMapManager.setCurrentLocation(currentLocation);
@@ -566,8 +566,11 @@ public class RecordingFragment extends Fragment {
             previousPosX = lat;
             previousPosY = lng;
             isFirstUpdate = false;
+            currentLocation = fusedLatLng; // 直接从 fused 点开始，不用默认 GNSS 点
+            polyline.setPoints(List.of(currentLocation));
             return;
         }
+
 
         // Calculate distance travelled (in meters)
         distance += UtilFunctions.distanceBetweenPoints(new LatLng(previousPosX, previousPosY), fusedLatLng);
@@ -648,7 +651,7 @@ public class RecordingFragment extends Fragment {
                     polyline.setPoints(pointsMoved);
                     // Change current location to new location and zoom there
                     orientationMarker.setPosition(nextLocation);
-                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
+                    gMap.moveCamera(CameraUpdateFactory.newLatLng(nextLocation));
                 }
                 catch (Exception ex){
                     Log.e("PlottingPDR","Exception: "+ex);
