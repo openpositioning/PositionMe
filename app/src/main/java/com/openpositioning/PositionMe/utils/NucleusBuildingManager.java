@@ -34,12 +34,13 @@ public class NucleusBuildingManager {
     private ArrayList<LatLng> buildingPolygon;
 
   // Elevator center positions (in WGS84 LatLng)
-  private static final LatLng leftLift = new LatLng(55.92301742, -3.17440627);
-  private static final LatLng centerLift = new LatLng(55.92302437, -3.17436403);
-  private static final LatLng rightLift = new LatLng(55.92302418, -3.17432731);
+  private static final LatLng leftLift = new LatLng(55.923022, -3.17437);
+  private static final LatLng centerLift = new LatLng(55.923029, -3.17433);
+  private static final LatLng rightLift = new LatLng(55.923032, -3.17429);
 
   // Array to loop through lifts if needed
   private static final LatLng[] elevatorLifts = new LatLng[] { leftLift, centerLift, rightLift };
+
 
 
   public NucleusBuildingManager(GoogleMap map) {

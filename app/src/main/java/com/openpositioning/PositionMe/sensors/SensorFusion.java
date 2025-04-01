@@ -350,8 +350,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Update timestamp and frequency counter for this sensor
     lastEventTimestamps.put(sensorType, currentTime);
     eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
-    boolean elevatorEst = true;
-//    boolean elevatorEst = getElevator();
+    boolean elevatorEst = getElevator();
     if (fusedLocation != null && !inElevator && elevatorEst) {
       inElevator = true;
       // Create a LatLng from the current fused location
@@ -530,7 +529,7 @@ public class SensorFusion implements SensorEventListener, Observer {
           updateFusionData(loc, currentGnssCovariance, pdrData);
         }
 
-        if (inElevator && getElevator()) {  // Has just left an elevator
+        if (inElevator && !getElevator()) {  // Has just left an elevator
           resetFilter(loc, pdrData);
           inElevator = false;
         }
@@ -697,7 +696,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     !inElevator) {
               updateFusionData(wifiLocation, WIFI_COVARIANCE, pdrData);
             }
-            if (inElevator && getElevator() && pdrData != null) {  // Has just left an elevator
+            if (inElevator && !getElevator() && pdrData != null) {  // Has just left an elevator
               resetFilter(wifiLocation, pdrData);
               inElevator = false;
             }
@@ -1308,6 +1307,7 @@ public class SensorFusion implements SensorEventListener, Observer {
   public float getFusionError() {
     return this.fusedError;
   }
+
 
   //endregion
 
