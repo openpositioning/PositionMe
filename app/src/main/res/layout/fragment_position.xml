@@ -14,38 +14,50 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toTopOf="@id/info_container"/>
 
-    <!-- 显示 Marker 经纬度的消息栏 -->
     <LinearLayout
         android:id="@+id/info_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:padding="8dp"
         android:background="@android:color/white"
         app:layout_constraintBottom_toTopOf="@id/button_container"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <TextView
-            android:id="@+id/tv_latitude"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Lat: --"
-            android:textSize="16sp"
-            android:gravity="center"/>
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_latitude"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Lat: --"
+                android:textSize="16sp"
+                android:gravity="center"/>
+
+            <TextView
+                android:id="@+id/tv_longitude"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Long: --"
+                android:textSize="16sp"
+                android:gravity="center"/>
+        </LinearLayout>
 
         <TextView
-            android:id="@+id/tv_longitude"
-            android:layout_width="0dp"
+            android:id="@+id/wifi_updateTime"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Long: --"
+            android:text="WiFi last updated: -- min ago"
             android:textSize="16sp"
             android:gravity="center"/>
     </LinearLayout>
 
-    <!--  Set 和 Reset 按钮 -->
     <LinearLayout
         android:id="@+id/button_container"
         android:layout_width="match_parent"

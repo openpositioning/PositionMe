@@ -119,7 +119,9 @@
             app:layout_constraintHorizontal_bias="0.939"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/ReplayMapSwitchSpinner"
-            app:layout_constraintVertical_bias="0.031" />
+            app:layout_constraintVertical_bias="0.031"
+            android:thumbTint="@color/switch_color_gnss"
+            android:trackTint="@color/switch_color_gnss"/>
 
 
         <Switch
@@ -137,7 +139,9 @@
             app:layout_constraintHorizontal_bias="0.939"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/ReplayMapSwitchSpinner"
-            app:layout_constraintVertical_bias="0.083" />
+            app:layout_constraintVertical_bias="0.083"
+            android:thumbTint="@color/switch_color_wifi"
+            android:trackTint="@color/switch_color_wifi"/>
 
         <Switch
             android:id="@+id/switchPDR"
@@ -154,7 +158,9 @@
             app:layout_constraintHorizontal_bias="0.939"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/ReplayMapSwitchSpinner"
-            app:layout_constraintVertical_bias="0.135" />
+            app:layout_constraintVertical_bias="0.135"
+            android:thumbTint="@color/switch_color_pdr"
+            android:trackTint="@color/switch_color_pdr"/>
 
         <TextView
             android:id="@+id/ElevationView"
