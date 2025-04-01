@@ -36,6 +36,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class ReplayFragment extends Fragment implements OnMapReadyCallback {
@@ -57,6 +58,11 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     private int currentPointIndex = 0;
     private Handler playbackHandler = new Handler();
     private static final int PLAYBACK_INTERVAL = 1000; // 1秒更新一次
+    
+    // 轨迹平滑处理相关参数
+    private static final int DOWNSAMPLE_FACTOR = 3; // 每3个点取1个点
+    private static final boolean ENABLE_DOWNSAMPLING = true; // 启用降采样
+    private static final boolean ENABLE_SMOOTHING = true; // 启用平滑处理
     
     private Marker currentPositionMarker;
     
@@ -354,14 +360,97 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
      */
     private void parseTrajectoryData(JSONArray jsonArray, List<TrajectoryPoint> targetList) throws Exception {
         targetList.clear();
+        
+        if (jsonArray.length() == 0) {
+            return;
+        }
+        
+        // 原始点集合
+        List<TrajectoryPoint> originalPoints = new ArrayList<>();
+        
+        // 先解析所有原始点
         for (int i = 0; i < jsonArray.length(); i++) {
             JSONObject point = jsonArray.getJSONObject(i);
-            targetList.add(new TrajectoryPoint(
+            originalPoints.add(new TrajectoryPoint(
                 point.getLong("timestamp"),
                 point.getDouble("latitude"),
                 point.getDouble("longitude")
             ));
         }
+        
+        // 按时间戳排序
+        Collections.sort(originalPoints, (p1, p2) -> Long.compare(p1.timestamp, p2.timestamp));
+        
+        // 如果点数太多, 进行降采样
+        if (ENABLE_DOWNSAMPLING && originalPoints.size() > 100) {
+            Log.d(TAG, "原始点数: " + originalPoints.size() + "，进行降采样处理");
+            
+            // 每DOWNSAMPLE_FACTOR个点取一个点
+            for (int i = 0; i < originalPoints.size(); i += DOWNSAMPLE_FACTOR) {
+                targetList.add(originalPoints.get(i));
+            }
+            
+            // 确保包含最后一个点
+            if (targetList.isEmpty() || targetList.get(targetList.size()-1) != originalPoints.get(originalPoints.size()-1)) {
+                targetList.add(originalPoints.get(originalPoints.size()-1));
+            }
+            
+            Log.d(TAG, "降采样后点数: " + targetList.size());
+        } else {
+            // 点数较少，不降采样，直接使用原始点
+            targetList.addAll(originalPoints);
+        }
+        
+        // 对GNSS轨迹进行额外平滑处理
+        if (ENABLE_SMOOTHING && targetList == gnssTrajectoryPoints && targetList.size() > 5) {
+            Log.d(TAG, "对GNSS轨迹执行平滑处理");
+            smoothGnssTrajectory(targetList);
+        }
+    }
+    
+    /**
+     * 对GNSS轨迹进行平滑处理
+     */
+    private void smoothGnssTrajectory(List<TrajectoryPoint> points) {
+        if (points.size() < 5) return;
+        
+        // 复制原始点集合
+        List<TrajectoryPoint> originalPoints = new ArrayList<>(points);
+        points.clear();
+        
+        // 移动平均窗口宽度
+        int windowSize = 5;
+        double[] weights = {0.1, 0.2, 0.4, 0.2, 0.1}; // 加权移动平均权重
+        
+        // 处理开头的点（直接保留）
+        for (int i = 0; i < windowSize/2; i++) {
+            points.add(originalPoints.get(i));
+        }
+        
+        // 对中间的点应用加权移动平均
+        for (int i = windowSize/2; i < originalPoints.size() - windowSize/2; i++) {
+            double sumLat = 0, sumLng = 0;
+            for (int j = 0; j < windowSize; j++) {
+                int idx = i - windowSize/2 + j;
+                TrajectoryPoint pt = originalPoints.get(idx);
+                sumLat += pt.latitude * weights[j];
+                sumLng += pt.longitude * weights[j];
+            }
+            
+            TrajectoryPoint smoothedPoint = new TrajectoryPoint(
+                originalPoints.get(i).timestamp,
+                sumLat,
+                sumLng
+            );
+            points.add(smoothedPoint);
+        }
+        
+        // 处理结尾的点（直接保留）
+        for (int i = originalPoints.size() - windowSize/2; i < originalPoints.size(); i++) {
+            points.add(originalPoints.get(i));
+        }
+        
+        Log.d(TAG, "GNSS轨迹平滑处理完成");
     }
     
     /**

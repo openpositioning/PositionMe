@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.utils;
 
 import android.content.Context;
 import android.util.Log;
+import com.google.android.gms.maps.model.LatLng;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -16,25 +17,39 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
+/**
+ * 位置记录器，负责记录并保存各种定位数据
+ */
 public class LocationLogger {
     private static final String TAG = "LocationLogger";
     private static final String FILE_PREFIX = "location_log_local_";
-    private File logFile;
+    private static final long MIN_SAVE_INTERVAL = 500; // 最小保存间隔(毫秒)
+    private static final double MIN_DISTANCE_CHANGE = 0.5; // 最小位置变化阈值(米)
+    
+    private final Context context;
+    private final File logFile;
     private JSONArray locationArray;
     private JSONArray ekfLocationArray;
     private JSONArray gnssLocationArray;
+    
+    // 记录上次保存的位置和时间
+    private LatLng lastSavedPdrLocation = null;
+    private LatLng lastSavedEkfLocation = null;
+    private LatLng lastSavedGnssLocation = null;
+    private long lastSavedPdrTime = 0;
+    private long lastSavedEkfTime = 0;
+    private long lastSavedGnssTime = 0;
+    
     private final SimpleDateFormat dateFormat;
     
     public LocationLogger(Context context) {
+        this.context = context;
         dateFormat = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault());
         locationArray = new JSONArray();
         ekfLocationArray = new JSONArray();
         gnssLocationArray = new JSONArray();
-        createLogFile(context);
-        Log.d(TAG, "LocationLogger initialized");
-    }
-    
-    private void createLogFile(Context context) {
+        
+        // 创建日志文件
         String timestamp = dateFormat.format(new Date());
         String fileName = String.format("%s%s.json", FILE_PREFIX, timestamp);
         
@@ -47,37 +62,98 @@ public class LocationLogger {
         Log.d(TAG, "Created local log file: " + logFile.getAbsolutePath());
     }
     
+    /**
+     * 计算两点之间的距离(米)
+     */
+    private double calculateDistance(LatLng point1, LatLng point2) {
+        if (point1 == null || point2 == null) return 0;
+        
+        // 使用Haversine公式计算地球表面两点间的距离
+        double earthRadius = 6371000; // 地球半径(米)
+        double dLat = Math.toRadians(point2.latitude - point1.latitude);
+        double dLng = Math.toRadians(point2.longitude - point1.longitude);
+        double a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(Math.toRadians(point1.latitude)) * Math.cos(Math.toRadians(point2.latitude)) *
+                  Math.sin(dLng/2) * Math.sin(dLng/2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return earthRadius * c;
+    }
+
     public void logLocation(long timestamp, double latitude, double longitude) {
-        try {
-            JSONObject locationObject = new JSONObject();
-            locationObject.put("timestamp", timestamp);
-            locationObject.put("latitude", latitude);
-            locationObject.put("longitude", longitude);
-            locationArray.put(locationObject);
+        // 创建当前位置
+        LatLng currentLocation = new LatLng(latitude, longitude);
+        
+        // 检查时间间隔和距离变化
+        boolean shouldSave = false;
+        if (lastSavedPdrLocation == null) {
+            // 第一个点，直接保存
+            shouldSave = true;
+        } else {
+            long timeDiff = timestamp - lastSavedPdrTime;
+            double distance = calculateDistance(lastSavedPdrLocation, currentLocation);
             
-            Log.d(TAG, String.format("Logged location: time=%d, lat=%.6f, lng=%.6f", 
-                timestamp, latitude, longitude));
-            Log.d(TAG, "Current array size: " + locationArray.length());
-            
-        } catch (JSONException e) {
-            Log.e(TAG, "Error creating JSON object: " + e.getMessage());
+            // 如果超过时间间隔或距离阈值，则保存
+            shouldSave = (timeDiff >= MIN_SAVE_INTERVAL) && (distance >= MIN_DISTANCE_CHANGE);
+        }
+        
+        if (shouldSave) {
+            try {
+                JSONObject locationObject = new JSONObject();
+                locationObject.put("timestamp", timestamp);
+                locationObject.put("latitude", latitude);
+                locationObject.put("longitude", longitude);
+                locationArray.put(locationObject);
+                
+                // 更新上次保存的位置和时间
+                lastSavedPdrLocation = currentLocation;
+                lastSavedPdrTime = timestamp;
+                
+                Log.d(TAG, String.format("Logged PDR location: time=%d, lat=%.6f, lng=%.6f", 
+                    timestamp, latitude, longitude));
+                Log.d(TAG, "Current PDR array size: " + locationArray.length());
+                
+            } catch (JSONException e) {
+                Log.e(TAG, "Error creating JSON object: " + e.getMessage());
+            }
         }
     }
     
     public void logEkfLocation(long timestamp, double latitude, double longitude) {
-        try {
-            JSONObject locationObject = new JSONObject();
-            locationObject.put("timestamp", timestamp);
-            locationObject.put("latitude", latitude);
-            locationObject.put("longitude", longitude);
-            ekfLocationArray.put(locationObject);
+        // 创建当前位置
+        LatLng currentLocation = new LatLng(latitude, longitude);
+        
+        // 检查时间间隔和距离变化
+        boolean shouldSave = false;
+        if (lastSavedEkfLocation == null) {
+            // 第一个点，直接保存
+            shouldSave = true;
+        } else {
+            long timeDiff = timestamp - lastSavedEkfTime;
+            double distance = calculateDistance(lastSavedEkfLocation, currentLocation);
             
-            Log.d(TAG, String.format("Logged EKF location: time=%d, lat=%.6f, lng=%.6f", 
-                timestamp, latitude, longitude));
-            Log.d(TAG, "Current EKF array size: " + ekfLocationArray.length());
-            
-        } catch (JSONException e) {
-            Log.e(TAG, "Error creating EKF JSON object: " + e.getMessage());
+            // 如果超过时间间隔或距离阈值，则保存
+            shouldSave = (timeDiff >= MIN_SAVE_INTERVAL) && (distance >= MIN_DISTANCE_CHANGE);
+        }
+        
+        if (shouldSave) {
+            try {
+                JSONObject locationObject = new JSONObject();
+                locationObject.put("timestamp", timestamp);
+                locationObject.put("latitude", latitude);
+                locationObject.put("longitude", longitude);
+                ekfLocationArray.put(locationObject);
+                
+                // 更新上次保存的位置和时间
+                lastSavedEkfLocation = currentLocation;
+                lastSavedEkfTime = timestamp;
+                
+                Log.d(TAG, String.format("Logged EKF location: time=%d, lat=%.6f, lng=%.6f", 
+                    timestamp, latitude, longitude));
+                Log.d(TAG, "Current EKF array size: " + ekfLocationArray.length());
+                
+            } catch (JSONException e) {
+                Log.e(TAG, "Error creating EKF JSON object: " + e.getMessage());
+            }
         }
     }
     
@@ -88,19 +164,41 @@ public class LocationLogger {
      * @param longitude 经度
      */
     public void logGnssLocation(long timestamp, double latitude, double longitude) {
-        try {
-            JSONObject locationObject = new JSONObject();
-            locationObject.put("timestamp", timestamp);
-            locationObject.put("latitude", latitude);
-            locationObject.put("longitude", longitude);
-            gnssLocationArray.put(locationObject);
+        // 创建当前位置
+        LatLng currentLocation = new LatLng(latitude, longitude);
+        
+        // 检查时间间隔和距离变化
+        boolean shouldSave = false;
+        if (lastSavedGnssLocation == null) {
+            // 第一个点，直接保存
+            shouldSave = true;
+        } else {
+            long timeDiff = timestamp - lastSavedGnssTime;
+            double distance = calculateDistance(lastSavedGnssLocation, currentLocation);
             
-            Log.d(TAG, String.format("Logged GNSS location: time=%d, lat=%.6f, lng=%.6f", 
-                timestamp, latitude, longitude));
-            Log.d(TAG, "Current GNSS array size: " + gnssLocationArray.length());
-            
-        } catch (JSONException e) {
-            Log.e(TAG, "Error creating GNSS JSON object: " + e.getMessage());
+            // 如果超过时间间隔或距离阈值，则保存
+            shouldSave = (timeDiff >= MIN_SAVE_INTERVAL) && (distance >= MIN_DISTANCE_CHANGE);
+        }
+        
+        if (shouldSave) {
+            try {
+                JSONObject locationObject = new JSONObject();
+                locationObject.put("timestamp", timestamp);
+                locationObject.put("latitude", latitude);
+                locationObject.put("longitude", longitude);
+                gnssLocationArray.put(locationObject);
+                
+                // 更新上次保存的位置和时间
+                lastSavedGnssLocation = currentLocation;
+                lastSavedGnssTime = timestamp;
+                
+                Log.d(TAG, String.format("Logged GNSS location: time=%d, lat=%.6f, lng=%.6f", 
+                    timestamp, latitude, longitude));
+                Log.d(TAG, "Current GNSS array size: " + gnssLocationArray.length());
+                
+            } catch (JSONException e) {
+                Log.e(TAG, "Error creating GNSS JSON object: " + e.getMessage());
+            }
         }
     }
     

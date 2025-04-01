@@ -111,14 +111,14 @@ public class GNSSDataProcessor {
 
             locationManager.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER,
-                100,  // 最小时间间隔（毫秒）
-                0,    // 最小距离变化（米）
+                500,  // 最小时间间隔（毫秒）- 从100ms增加到500ms
+                1,    // 最小距离变化（米）- 从0米增加到1米
                 locationListener
             );
             locationManager.requestLocationUpdates(
                 LocationManager.NETWORK_PROVIDER,
-                100,  // 最小时间间隔（毫秒）
-                0,    // 最小距离变化（米）
+                500,  // 最小时间间隔（毫秒）- 从100ms增加到500ms
+                1,    // 最小距离变化（米）- 从0米增加到1米
                 locationListener
             );
         }

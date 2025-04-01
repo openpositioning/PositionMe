@@ -35,11 +35,11 @@ public class GNSSProcessor {
     private int directionHistoryCount = 0;
     
     // 平滑因子(0-1)，值越小平滑效果越强
-    private static final double SMOOTHING_FACTOR = 0.2; // 调小平滑因子，增强平滑效果
+    private static final double SMOOTHING_FACTOR = 0.15;
     
     // 跳变检测参数
-    private static final double JUMP_THRESHOLD = 2.0; // 位置跳变阈值(米)
-    private static final double OSCILLATION_THRESHOLD = 1.0; // 摆动检测阈值(米)
+    private static final double JUMP_THRESHOLD = 1.5; // 降低位置跳变阈值(米)
+    private static final double OSCILLATION_THRESHOLD = 0.8; // 降低摆动检测阈值(米)
     private static final long MIN_UPDATE_INTERVAL = 500; // 最小更新间隔(毫秒)
     
     // 方向变化检测参数
@@ -79,18 +79,18 @@ public class GNSSProcessor {
      */
     public LatLng processGNSSPosition(LatLng rawPosition) {
         if (rawPosition == null) {
-            return lastValidPosition; // 如果输入无效，返回上一个有效位置
+            Log.w(TAG, "GNSS位置为null，无法处理");
+            return lastValidPosition;
         }
         
         long currentTime = System.currentTimeMillis();
-        double timeElapsed = (lastUpdateTime > 0) ? (currentTime - lastUpdateTime) / 1000.0 : 0; // 转换为秒，避免除0
         
-        // 如果这是第一个位置，直接接受
+        // 如果是第一个位置，直接设置为有效位置
         if (lastValidPosition == null) {
             lastValidPosition = rawPosition;
             lastUpdateTime = currentTime;
             
-            // 初始化历史记录
+            // 初始化位置历史
             for (int i = 0; i < positionHistory.length; i++) {
                 positionHistory[i] = rawPosition;
             }
@@ -99,25 +99,26 @@ public class GNSSProcessor {
             return rawPosition;
         }
         
-        // 计算与上一位置的距离
+        // 计算与上次有效位置的距离
         double distance = calculateDistance(lastValidPosition, rawPosition);
+        long timeElapsed = (currentTime - lastUpdateTime) / 1000; // 秒
         
-        // 更新速度估计（如果时间间隔有效）
-        if (timeElapsed > 0.1) { // 避免除以非常小的数
-            double instantSpeed = distance / timeElapsed;
-            
-            // 更新当前速度（简单平滑）
-            currentSpeed = 0.7 * currentSpeed + 0.3 * instantSpeed;
-            
-            // 更新方向历史
-            if (distance > 0.5) { // 只有当移动超过0.5米时才计算方向，避免静止状态方向不稳定
-                double direction = calculateBearing(lastValidPosition, rawPosition);
-                updateDirectionHistory(direction);
-            }
-            
+        // 防止除零错误
+        double instantSpeed = timeElapsed > 0 ? distance / timeElapsed : 0;
+        
+        // 更新当前速度估计 (使用加权平均)
+        currentSpeed = 0.8 * currentSpeed + 0.2 * instantSpeed;
+        
+        // 计算当前位置与上次位置的方向角度
+        double direction = calculateBearing(lastValidPosition, rawPosition);
+        updateDirectionHistory(direction);
+        
+        // 更精细的跳变检测和过滤
+        if (timeElapsed > 0) {
             // 静止状态检测
             if (instantSpeed < STATIC_THRESHOLD) {
                 if (!isStaticState) {
+                    // 刚进入静止状态
                     staticStartTime = currentTime;
                     isStaticState = true;
                 } else if (currentTime - staticStartTime > STATIC_TIME_THRESHOLD) {
@@ -138,7 +139,7 @@ public class GNSSProcessor {
             // 2. 时间间隔太短但距离较大（可能是信号不稳定导致的快速变化）
             // 3. 方向频繁变化（摆动检测）
             boolean isJumping = (distance > JUMP_THRESHOLD && instantSpeed > MAX_GNSS_SPEED) || 
-                               (distance > 3.0 && timeElapsed < 0.2);
+                               (distance > 2.0 && timeElapsed < 0.2);
             
             boolean isOscillating = distance > OSCILLATION_THRESHOLD && hasRecentDirectionChange();
             
@@ -148,14 +149,14 @@ public class GNSSProcessor {
                       "m/s, 时间=" + timeElapsed + "s, 原因=" + reason);
                 
                 // 对于严重跳变，直接返回上一个有效位置
-                if (distance > JUMP_THRESHOLD * 2 || (isOscillating && signalQuality < 2)) {
+                if (distance > JUMP_THRESHOLD * 2 || (isOscillating && signalQuality < 3)) {
                     Log.d(TAG, "严重跳变，直接使用上一个有效位置");
                     updatePositionHistory(lastValidPosition); // 继续使用上一个有效位置进行平滑
                     return lastValidPosition;
                 }
                 
                 // 对于中等跳变，限制移动距离
-                double limitFactor = signalQuality < 2 ? 0.3 : 0.5; // 信号质量差时更严格限制
+                double limitFactor = signalQuality < 2 ? 0.2 : 0.4; // 降低限制因子，更严格限制
                 double limitedDistance = MAX_GNSS_SPEED * timeElapsed * limitFactor;
                 double ratio = limitedDistance / distance;
                 
@@ -270,19 +271,19 @@ public class GNSSProcessor {
         double smoothingStrength;
         switch(signalQuality) {
             case 0: // 很差
-                smoothingStrength = 0.1; // 强平滑
+                smoothingStrength = 0.08; // 强平滑
                 break;
             case 1: // 差
-                smoothingStrength = 0.2;
+                smoothingStrength = 0.12;
                 break;
             case 2: // 中等
-                smoothingStrength = 0.3;
+                smoothingStrength = 0.15;
                 break;
             case 3: // 好
-                smoothingStrength = 0.5;
+                smoothingStrength = 0.25;
                 break;
             case 4: // 很好
-                smoothingStrength = 0.7; // 弱平滑
+                smoothingStrength = 0.4; // 弱平滑
                 break;
             default:
                 smoothingStrength = SMOOTHING_FACTOR;
