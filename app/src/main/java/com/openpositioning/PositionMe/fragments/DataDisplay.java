@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.fragments;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.os.Bundle;
@@ -252,6 +253,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
                 } else {
                     wifiMarker.setPosition(wifiLocation);
+                    wifiMarker.setTitle(String.format("WiFi Position %s", wifiLocation));
+                    PositioningFusion.getInstance().wifiLocationHistory.drawOnMap(mMap, Color.YELLOW);
                 }
             }
 
@@ -265,6 +268,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
                 } else {
                     gnssMarker.setPosition(gnssLocation);
+                    gnssMarker.setTitle(String.format("GNSS Position %s", gnssLocation));
+                    PositioningFusion.getInstance().gnssLocationHistory.drawOnMap(mMap, Color.GREEN);
                 }
             }
 
@@ -278,6 +283,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
                 } else {
                     pdrMarker.setPosition(pdrLocation);
+                    pdrMarker.setTitle(String.format("PDR Position: %s", Arrays.toString(positioningFusion.getPdrPositionLocal())));
+                    PositioningFusion.getInstance().pdrLocationHistory.drawOnMap(mMap, Color.MAGENTA);
                 }
             }
 

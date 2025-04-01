@@ -50,6 +50,7 @@ import com.openpositioning.PositionMe.sensors.PositioningFusion;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -142,6 +143,9 @@ public class RecordingFragment extends Fragment {
     private LocationHistory pdrLocationHistory;
 
     private LocationHistory gnssLocationHistory;
+    private Switch wifi;
+
+    private Switch pdr;
 
     /**
      * Public Constructor for the class.
@@ -355,17 +359,25 @@ public class RecordingFragment extends Fragment {
                     gnssError.setVisibility(View.VISIBLE);
                     gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
                             UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
-                    // Set GNSS marker
-                    gnssMarker=gMap.addMarker(
-                            new MarkerOptions().title("GNSS position")
-                                    .position(gnssLocation)
-                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+//                    // Set GNSS marker
+//                    gnssMarker=gMap.addMarker(
+//                            new MarkerOptions().title("GNSS position")
+//                                    .position(gnssLocation)
+//                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
                 }else {
-                    gnssMarker.remove();
+//                    gnssMarker.remove();
+
                     gnssError.setVisibility(View.GONE);
                 }
             }
         });
+
+        // Obtain the Wifi toggle switch
+        this.wifi = getView().findViewById(R.id.wifiSwitch);
+
+        // Obtain the PDR toggle switch
+        this.pdr = getView().findViewById(R.id.pdrSwitch);
+
         // Switch colour button
         this.switchColor=getView().findViewById(R.id.lineColorButton);
         this.switchColor.setOnClickListener(new View.OnClickListener() {
@@ -518,44 +530,76 @@ public class RecordingFragment extends Fragment {
 
         LatLng fusedLatLng = PositioningFusion.getInstance().getFusedPosition();
 
+
         // --- WiFi ---
-        LatLng wifiLocation = PositioningFusion.getInstance().getWifiPosition();
-        if (PositioningFusion.getInstance().isWifiPositionSet()) {
-            if (wifiMarker == null) {
-                wifiMarker = gMap.addMarker(new MarkerOptions()
-                        .position(wifiLocation)
-                        .title(String.format("WiFi Position %s", wifiLocation))
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
-            } else {
-                wifiMarker.setPosition(wifiLocation);
+        if (wifi.isChecked()) {
+            LatLng wifiLocation = PositioningFusion.getInstance().getWifiPosition();
+            if (PositioningFusion.getInstance().isWifiPositionSet()) {
+                if (wifiMarker == null) {
+                    wifiMarker = gMap.addMarker(new MarkerOptions()
+                            .position(wifiLocation)
+                            .title(String.format("WiFi Position %s", wifiLocation))
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+                } else {
+                    wifiMarker.setPosition(wifiLocation);
+                    wifiMarker.setTitle(String.format("WiFi Position %s", wifiLocation));
+                    PositioningFusion.getInstance().wifiLocationHistory.drawOnMap(gMap, Color.YELLOW);
+                }
             }
+        } else {
+            if (wifiMarker != null) {
+                wifiMarker.remove();
+                wifiMarker = null;
+            }
+            PositioningFusion.getInstance().wifiLocationHistory.remove(gMap);
         }
 
 // --- PDR ---
-        LatLng pdrLocation = PositioningFusion.getInstance().getPdrPosition();
-        if (PositioningFusion.getInstance().isPDRPositionSet()) {
-            if (pdrMarker == null) {
-                pdrMarker = gMap.addMarker(new MarkerOptions()
-                        .position(pdrLocation)
-                        .title(String.format("PDR Position %s", pdrLocation))
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
-            } else {
-                pdrMarker.setPosition(pdrLocation);
+        if (pdr.isChecked()) {
+            LatLng pdrLocation = PositioningFusion.getInstance().getPdrPosition();
+            if (PositioningFusion.getInstance().isPDRPositionSet()) {
+                if (pdrMarker == null) {
+                    pdrMarker = gMap.addMarker(new MarkerOptions()
+                            .position(pdrLocation)
+                            .title(String.format("PDR Position %s", pdrLocation))
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+                } else {
+                    pdrMarker.setPosition(pdrLocation);
+                    pdrMarker.setTitle(String.format("PDR Position: %s", Arrays.toString(PositioningFusion.getInstance().getPdrPositionLocal())));
+                    PositioningFusion.getInstance().pdrLocationHistory.drawOnMap(gMap, Color.MAGENTA);
+                }
             }
+        } else {
+            if (pdrMarker != null) {
+                pdrMarker.remove();
+                pdrMarker = null;
+            }
+            PositioningFusion.getInstance().pdrLocationHistory.remove(gMap);
         }
 
 // --- GNSS ---
-        LatLng gnssmarkerLocation = PositioningFusion.getInstance().getGnssPosition();
-        if (PositioningFusion.getInstance().isGNSSPositionSet()) {
-            if (gnssMarker == null) {
-                gnssMarker = gMap.addMarker(new MarkerOptions()
-                        .position(gnssmarkerLocation)
-                        .title(String.format("GNSS Position %s", gnssmarkerLocation))
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
-            } else {
-                gnssMarker.setPosition(gnssmarkerLocation);
+        if (gnss.isChecked()) {
+            LatLng gnssmarkerLocation = PositioningFusion.getInstance().getGnssPosition();
+            if (PositioningFusion.getInstance().isGNSSPositionSet()) {
+                if (gnssMarker == null) {
+                    gnssMarker = gMap.addMarker(new MarkerOptions()
+                            .position(gnssmarkerLocation)
+                            .title(String.format("GNSS Position %s", gnssmarkerLocation))
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                } else {
+                    gnssMarker.setPosition(gnssmarkerLocation);
+                    gnssMarker.setTitle(String.format("GNSS Position %s", gnssmarkerLocation));
+                    PositioningFusion.getInstance().gnssLocationHistory.drawOnMap(gMap, Color.GREEN);
+                }
             }
+        } else {
+            if (gnssMarker != null) {
+                gnssMarker.remove();
+                gnssMarker = null;
+            }
+            PositioningFusion.getInstance().gnssLocationHistory.remove(gMap);
         }
+
 
         if (fusedLatLng == null) return; // 防止空指针
 
@@ -589,15 +633,15 @@ public class RecordingFragment extends Fragment {
             indoorMapManager = new IndoorMapManager(gMap);
         }
 
-        // Show GNSS marker and error if user enables it
-        if (gnss.isChecked() && gnssMarker != null) {
-            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-            LatLng gnssLocation = new LatLng(location[0], location[1]);
-            gnssError.setVisibility(View.VISIBLE);
-            gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
-                    UtilFunctions.distanceBetweenPoints(fusedLatLng, gnssLocation)));
-            gnssMarker.setPosition(gnssLocation);
-        }
+//        // Show GNSS marker and error if user enables it
+//        if (gnss.isChecked() && gnssMarker != null) {
+//            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+//            LatLng gnssLocation = new LatLng(location[0], location[1]);
+//            gnssError.setVisibility(View.VISIBLE);
+//            gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm",
+//                    UtilFunctions.distanceBetweenPoints(fusedLatLng, gnssLocation)));
+//            gnssMarker.setPosition(gnssLocation);
+//        }
 
         // Update indoor map logic
         indoorMapManager.setCurrentLocation(fusedLatLng);

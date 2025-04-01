@@ -6,6 +6,8 @@ import android.util.Log;
 import android.widget.Toast;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.DataRecords.LocationData;
+import com.openpositioning.PositionMe.DataRecords.LocationHistory;
 import com.openpositioning.PositionMe.PdrProcessing;
 import com.openpositioning.PositionMe.fragments.StartLocationFragment;
 
@@ -52,6 +54,10 @@ public class PositioningFusion implements PositionObserver {
 
     private LatLng startPosition;
 
+    public LocationHistory wifiLocationHistory;
+    public LocationHistory gnssLocationHistory;
+    public LocationHistory pdrLocationHistory;
+
 
     // Private constructor for singleton
     private PositioningFusion() {
@@ -63,6 +69,9 @@ public class PositioningFusion implements PositionObserver {
         fusedPositionLocal = null;
         fusedPosition = null;
         startPosition = null;
+        wifiLocationHistory = new LocationHistory(20);
+        gnssLocationHistory = new LocationHistory(20);
+        pdrLocationHistory = new LocationHistory(10);
     }
 
 
@@ -100,14 +109,18 @@ public class PositioningFusion implements PositionObserver {
         pdrPosition = null;
         fusedPositionLocal = null;
         fusedPosition = null;
+        wifiLocationHistory.clearHistory();
+        gnssLocationHistory.clearHistory();
+        pdrLocationHistory.clearHistory();
         SensorFusion.getInstance().pdrReset();
         if (SensorFusion.getInstance().getLatLngWifiPositioning() != null) {
             Log.d("Fusion", "initialized position with wifi location");
             LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
             coordSystem.initReference(wifiLocation.latitude, wifiLocation.longitude);
-            ParticleFilter.initializeParticles(new PointF((float)wifiLocation.latitude, (float)wifiLocation.longitude));
+            currentParticles = null;
             startPosition = wifiLocation;
             Toast.makeText(getContext(), "Initialized with Wifi position", Toast.LENGTH_SHORT).show();
+
 
         }
 //        else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != null) {
@@ -117,9 +130,10 @@ public class PositioningFusion implements PositionObserver {
         else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != 0 && SensorFusion.getInstance().getGNSSLatitude(false)[1] != 0) {
             Log.d("Fusion", "initialized position with gnss location");
             coordSystem.initReference(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
-            ParticleFilter.initializeParticles(new PointF(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[0]));
+            currentParticles = null;
             Toast.makeText(getContext(), "Initialized with GNSS position", Toast.LENGTH_SHORT).show();
             startPosition = new LatLng(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
+            Toast.makeText(getContext(), "Stay still for 5 more seconds and reopen this page to use Wifi Positioning", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -131,6 +145,9 @@ public class PositioningFusion implements PositionObserver {
                 if (isReadyToFuse()) {
                     fusePosition();
                     coordinateConversionToGlobal();
+                    wifiLocationHistory.addRecord(new LocationData(getWifiPosition()));
+                    gnssLocationHistory.addRecord(new LocationData(getGnssPosition()));
+                    pdrLocationHistory.addRecord(new LocationData(getPdrPosition()));
                 }
             }
         }, 0, FUSION_INTERVAL_MS);

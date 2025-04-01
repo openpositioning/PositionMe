@@ -215,6 +215,32 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
 
+        <Switch
+            android:id="@+id/wifiSwitch"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="68dp"
+            android:background="@drawable/rounded_corner_pastel_blue"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="@string/wifiSwitch"
+            android:textColor="@color/black"
+            app:layout_constraintEnd_toEndOf="@+id/gnssSwitch"
+            app:layout_constraintStart_toStartOf="@+id/gnssSwitch"
+            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
+
+        <Switch
+            android:id="@+id/pdrSwitch"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="124dp"
+            android:background="@drawable/rounded_corner_pastel_blue"
+            android:buttonTint="@android:color/holo_green_dark"
+            android:text="@string/pdrSwitch"
+            android:textColor="@color/black"
+            app:layout_constraintEnd_toEndOf="@+id/wifiSwitch"
+            app:layout_constraintStart_toStartOf="@+id/wifiSwitch"
+            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
+
         <Button
             android:id="@+id/lineColorButton"
             android:layout_width="wrap_content"

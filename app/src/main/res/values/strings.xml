@@ -128,6 +128,8 @@
     <string name="gnss_disabled">GNSS_Disabled</string>
     <string name="start_recording">Start Recording</string>
     <string name="info">Info</string>
+    <string name="wifiSwitch">Wifi</string>
+    <string name="pdrSwitch">PDR</string>
 
     <string-array name="map_types">
         <item>@string/hybrid</item>
