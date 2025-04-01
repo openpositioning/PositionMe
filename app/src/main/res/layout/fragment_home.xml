@@ -22,11 +22,10 @@
             android:textSize="36sp"
             android:textStyle="bold"
             android:textColor="@color/purple_200"
-            app:layout_constraintBottom_toTopOf="@id/sloganText"
+            android:layout_marginTop="24dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_chainStyle="packed" />
+            app:layout_constraintTop_toTopOf="parent" />
 
         <TextView
             android:id="@+id/sloganText"
@@ -37,23 +36,28 @@
             android:textStyle="italic"
             android:textColor="@color/purple_500"
             android:layout_marginTop="8dp"
-            app:layout_constraintBottom_toTopOf="@id/horizontalGuideline"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/titleText" />
 
-        <androidx.constraintlayout.widget.Guideline
-            android:id="@+id/horizontalGuideline"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            app:layout_constraintGuide_percent="0.44347826" />
+        <androidx.fragment.app.FragmentContainerView
+            android:id="@+id/homeMap"
+            android:name="com.google.android.gms.maps.SupportMapFragment"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp"
+            app:layout_constraintTop_toBottomOf="@id/sloganText"
+            app:layout_constraintBottom_toTopOf="@id/startStopButton"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
         <Button
             android:id="@+id/startStopButton"
             android:layout_width="0dp"
             android:layout_height="150dp"
             android:layout_marginEnd="8dp"
+            android:layout_marginBottom="16dp"
             android:enabled="false"
             android:insetLeft="0dp"
             android:insetTop="0dp"
@@ -71,8 +75,6 @@
             app:layout_constraintBottom_toTopOf="@id/measurementButton"
             app:layout_constraintEnd_toStartOf="@id/sensorInfoButton"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="@id/horizontalGuideline"
-            app:layout_constraintVertical_chainStyle="packed"
             app:layout_constraintHorizontal_weight="1" />
 
         <com.google.android.material.button.MaterialButton
@@ -104,8 +106,8 @@
             android:id="@+id/measurementButton"
             android:layout_width="0dp"
             android:layout_height="150dp"
-            android:layout_marginTop="16dp"
             android:layout_marginEnd="8dp"
+            android:layout_marginBottom="24dp"
             android:insetLeft="0dp"
             android:insetTop="0dp"
             android:insetRight="0dp"
@@ -119,7 +121,6 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@id/filesButton"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/startStopButton"
             app:layout_constraintHorizontal_weight="1" />
 
         <Button
