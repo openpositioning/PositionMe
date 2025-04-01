@@ -709,25 +709,28 @@ public class SensorFusion implements SensorEventListener, Observer {
         // === Update step (WiFi) ===
         if (wifiMeters != null) {
             double[][] R_wifi = {{5.0, 0}, {0, 5.0}}; // WiFi = more accurate indoors
-            performMeasurementUpdate(wifiMeters, R_wifi);
-            // Perform outlier detection
-            double predictedX = state[0];
-            double predictedY = state[1];
-            double distanceToPrediction = Math.sqrt(Math.pow(wifiMeters[0] - predictedX, 2) + Math.pow(wifiMeters[1] - predictedY, 2));
-            // Define an outlier threshold based on WiFi resolution (e.g., 15 meters)
-            double outlierThreshold = 15.0;
+            if (isOutlier(wifiMeters, new double[]{state[0], state[1]}, R_wifi)) {
 
-            if (distanceToPrediction > outlierThreshold) {
-                Log.w("EKF", "WiFi measurement detected as outlier: distance=" + distanceToPrediction);
+                //Increase noise covariance to reduce influence of outlier
+                R_wifi = new double[][]{{50.0, 0}, {0, 50.0}};
 
-                // Increase measurement noise to reduce influence of outlier
-                R_wifi = new double[][]{{20.0, 0}, {0, 20.0}};
+                // Option 2: Skip update entirely
+                // continue; // Uncomment this line to skip the update
             }
+            performMeasurementUpdate(wifiMeters, R_wifi);
         }
 
         // === Update step (GNSS) ===
         if (gnssMeters != null) {
             double[][] R_gnss = {{10.0, 0}, {0, 10.0}}; // GNSS = less accurate indoors
+            if (isOutlier(gnssMeters, new double[]{state[0], state[1]}, R_gnss)) {
+
+                //Increase noise covariance to reduce influence of outlier
+                R_gnss = new double[][]{{50.0, 0}, {0, 50.0}};
+
+                // Option 2: Skip update entirely
+                // continue; // Uncomment this line to skip the update
+            }
             performMeasurementUpdate(gnssMeters, R_gnss);
         }
 
@@ -755,6 +758,25 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         double[][] I = {{1, 0}, {0, 1}};
         covariance = matrixMultiply(matrixSubtract(I, matrixMultiply(K, H)), covariance);
+    }
+
+    private boolean isOutlier(double[] measurement, double[] predicted, double[][] R_wifi) {
+        // Compute innovation (difference between measurement and prediction)
+        double[] innovation = {
+                measurement[0] - predicted[0],
+                measurement[1] - predicted[1]
+        };
+
+        // Compute Mahalanobis distance for outlier detection
+        double mahalanobisDistance = Math.sqrt(
+                (innovation[0] * innovation[0]) / R_wifi[0][0] +
+                        (innovation[1] * innovation[1]) / R_wifi[1][1]
+        );
+
+        // Threshold for outlier detection (e.g., 3σ)
+        double threshold = 2.0; // Adjust based on WiFi resolution and environment
+
+        return mahalanobisDistance > threshold; // Return true if the measurement is an outlier
     }
 
 
