@@ -54,6 +54,7 @@ public class ReplayTrajFragment extends Fragment {
     private Switch GNSSSwitchControl;
 
     private Switch pdrPathSwitch;
+    private Switch wifiSwitch;
     private TextView ElevationPres;
 
     private static final DecimalFormat df = new DecimalFormat("#.####");
@@ -62,14 +63,22 @@ public class ReplayTrajFragment extends Fragment {
     private LatLng startLoc;
     private Polyline pdrPolyline;
     private Polyline gnssPolyline;
+
+    private Polyline wifiPolyline;
+    private Polyline fusedPolyline;
     private List<Circle> circleList = new ArrayList<>();
     private Marker gnssMarker;
+    private Marker tagMarker;
+    private Marker wifiMarker;
     private boolean gnssEnabled = true;
 
     private boolean pdrEnabled = true;
     private LatLng currentLocation;
 
     private LatLng currentGnssLoc;
+    private LatLng currentWifiLoc;
+    private LatLng tagLocation;
+    private LatLng fusedCurrLocation;
 
     private float currentOrientation;
     private Marker orientationMarker;
@@ -84,11 +93,14 @@ public class ReplayTrajFragment extends Fragment {
     private ReplayDataProcessor.TrajRecorder trajProcessor;
 
     private List<LatLng> pdrLocList;
+
+    private List<LatLng> fusedDataList;
     private List<Traj.Motion_Sample> imuDataList;
     private List<Traj.Pressure_Sample> pressureSampleList;
     private List<Traj.GNSS_Sample> gnssDataList;
 
     private int currStepCount = 0;
+    private int currFusedStepCount = 0;
 
     private float currElevation;
 
@@ -129,7 +141,12 @@ public class ReplayTrajFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_replay, container, false);
-        pdrLocList = ReplayDataProcessor.translatePdrPath(this.trajectory);
+        pdrLocList = ReplayDataProcessor.translatePdrPath(this.trajectory, false);
+        if (!this.trajectory.getFusionDataList().isEmpty()) {
+            fusedDataList = ReplayDataProcessor.translatePdrPath(this.trajectory, true);
+        } else {
+            fusedDataList = ReplayDataProcessor.translatePdrPath(this.trajectory, false);
+        }
 //        imuDataList = this.trajectory.getImuDataList();
         imuDataList = ReplayDataProcessor.getMotionDataList(this.trajectory);
         pressureSampleList = ReplayDataProcessor.getPressureDataList(this.trajectory);
@@ -182,6 +199,7 @@ public class ReplayTrajFragment extends Fragment {
         setupPlayPauseButton();
         ProgressView();
         GNSSSwitch();
+        wifiSwitch();
         pdrPathSwitch();
 
         // Configuring dropdown for switching map types
@@ -214,12 +232,22 @@ public class ReplayTrajFragment extends Fragment {
         counterPressure = 0;
         currProgress = 0;
         currStepCount = 0;
+        currFusedStepCount = 0;
         counterGnss = 0;
         isPlaying = true;
         playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
 
         if(pdrPolyline != null) { pdrPolyline.remove(); }
+
+        if(tagMarker != null) { tagMarker.remove();}
+
+        if(fusedPolyline != null) { fusedPolyline.remove(); }
         if(orientationMarker != null) { orientationMarker.remove(); }
+
+        if(wifiPolyline != null) { wifiPolyline.remove(); }
+        if(wifiMarker != null) { wifiMarker.remove(); }
+
+        if(gnssPolyline != null) { gnssPolyline.remove(); }
         if(gnssMarker != null) { gnssMarker.remove(); }
         if(circleList != null) {
             for (Circle circle : circleList) {
@@ -227,7 +255,6 @@ public class ReplayTrajFragment extends Fragment {
             }
             circleList.clear();
         }
-        if(gnssPolyline != null) { gnssPolyline.remove(); }
 
         startLoc = !pdrLocList.isEmpty() ? pdrLocList.get(0) : new LatLng(0,0);
 //        currElevation = trajectory.getPressureData(counterPressure).getEstimatedElevation();
@@ -238,37 +265,71 @@ public class ReplayTrajFragment extends Fragment {
         currentOrientation = imuDataList.get(counterYaw).getAzimuth();
 //        System.out.println("init Orientation: " + currentOrientation);
 
-        if (!gnssDataList.isEmpty() ){
+
+        /**
+         * Gnss data is acquired for initialization and distinguish the provider: WiFi, Tag, or GNSS
+         * Each provider supports the location recorded for plotting
+         */
+        if (!gnssDataList.isEmpty()){
             Traj.GNSS_Sample gnssStartData = gnssDataList.get(counterGnss);
-            currentGnssLoc = new LatLng(gnssStartData.getLatitude(), gnssStartData.getLongitude());
-            float radius = gnssStartData.getAccuracy();
-            CircleOptions circleOptions = new CircleOptions()
-                    .strokeWidth(2)
-                    .strokeColor(Color.BLUE)
-                    .fillColor(0x0277A88D)
-                    .radius(radius)
-                    .center(currentGnssLoc)
-                    .zIndex(0)
-                    .visible(gnssEnabled);
-            circleList.add(replayMap.addCircle(circleOptions));
+            String provider = gnssStartData.getProvider();
 
-            PolylineOptions gnssPolylineOptions=new PolylineOptions()
-                    .color(Color.BLUE)
-                    .add(currentGnssLoc)
-                    .zIndex(6)
-                    .visible(gnssEnabled);
-            gnssPolyline = replayMap.addPolyline(gnssPolylineOptions);
+            //** Initialise the WiFi**//
+            if(provider.equals("wifi_fine")){
+                currentWifiLoc = new LatLng(gnssStartData.getLatitude(), gnssStartData.getLongitude());  // current wifi location
+                PolylineOptions wifiPolylineOptions = new PolylineOptions()
+                        .color(Color.GREEN)
+                        .add(currentWifiLoc)
+                        .zIndex(6)
+                        .visible(wifiSwitch.isChecked());
+                wifiPolyline = replayMap.addPolyline(wifiPolylineOptions);
+                wifiMarker = replayMap.addMarker(new MarkerOptions()
+                        .title("WiFi position")
+//                        .snippet("Acc: " + radius + " Alt: " + altitude)
+                        .position(currentWifiLoc)
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+                        .visible(wifiSwitch.isChecked()));
 
-            String formattedLat = df.format(currentGnssLoc.latitude);
-            String formattedLng = df.format(currentGnssLoc.longitude);
-            float altitude = gnssStartData.getAltitude();
-            gnssMarker = replayMap.addMarker(new MarkerOptions()
-                    .title("GNSS position")
-                    .snippet("Acc: " + radius + " Alt: " + altitude)
-                    .position(currentGnssLoc)
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
-                    .visible(gnssEnabled));
+                //** Initialise the Tag**//
+            }else if(provider.equals("fusion")){
+                tagLocation = new LatLng(gnssStartData.getLatitude(), gnssStartData.getLongitude());    // location of tag added
+                tagMarker = replayMap.addMarker(new MarkerOptions()
+                        .title("Tag Added")
+                        .position(tagLocation)
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+//                        .visible(wifiSwitch.isChecked()));
 
+                //** Initialise the GNSS**//
+            }else {
+                currentGnssLoc = new LatLng(gnssStartData.getLatitude(), gnssStartData.getLongitude());  // otherwise the point is the gnss location
+                float radius = gnssStartData.getAccuracy();
+                CircleOptions circleOptions = new CircleOptions()
+                        .strokeWidth(2)
+                        .strokeColor(Color.BLUE)
+                        .fillColor(0x0277A88D)
+                        .radius(radius)
+                        .center(currentGnssLoc)
+                        .zIndex(0)
+                        .visible(gnssEnabled);
+                circleList.add(replayMap.addCircle(circleOptions));
+
+                PolylineOptions gnssPolylineOptions = new PolylineOptions()
+                        .color(Color.BLUE)
+                        .add(currentGnssLoc)
+                        .zIndex(6)
+                        .visible(gnssEnabled);
+                gnssPolyline = replayMap.addPolyline(gnssPolylineOptions);
+
+                String formattedLat = df.format(currentGnssLoc.latitude);
+                String formattedLng = df.format(currentGnssLoc.longitude);
+                float altitude = gnssStartData.getAltitude();
+                gnssMarker = replayMap.addMarker(new MarkerOptions()
+                        .title("GNSS position")
+                        .snippet("Acc: " + radius + " Alt: " + altitude)
+                        .position(currentGnssLoc)
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
+                        .visible(gnssEnabled));
+            }
         }
 
         if (startLoc != null) {
@@ -279,10 +340,18 @@ public class ReplayTrajFragment extends Fragment {
                     .icon(BitmapDescriptorFactory.fromBitmap(
                             UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_24)))
                     .zIndex(6));
-            PolylineOptions polylineOptions=new PolylineOptions()
+            PolylineOptions pdrpolylineOptions = new PolylineOptions()
+                    .color(Color.parseColor("#FFA500"))
+                    .add(startLoc)
+                    .zIndex(6);
+            pdrPolyline = replayMap.addPolyline(pdrpolylineOptions);
+
+            PolylineOptions polylineOptions = new PolylineOptions()
                     .color(Color.RED)
                     .add(startLoc)
                     .zIndex(6);
+            fusedPolyline = replayMap.addPolyline(polylineOptions);
+
             if(indoorMapManager != null){
                 indoorMapManager.setCurrentLocation(startLoc);
                 if(indoorMapManager.getIsIndoorMapSet()){
@@ -290,14 +359,10 @@ public class ReplayTrajFragment extends Fragment {
                             ,true);
                 }
             }
-
-            pdrPolyline = replayMap.addPolyline(polylineOptions);
-
         }
     }
 
     public TimerTask drawPathView() {
-
         // ===== break logic ===== //
         if (counterYaw >= imuDataList.size() - 1) {
             if (currTask != null) {
@@ -336,40 +401,71 @@ public class ReplayTrajFragment extends Fragment {
 //        }
         String formatElevation = df.format(currElevation);
         ElevationPres.setText("Elevation:"+formatElevation+"m");
+
         // ===== GNSS value update logic ===== //
         if ((!gnssDataList.isEmpty()) && counterGnss < gnssDataList.size() - 1) {
             // always take the next gnss sample
+
             Traj.GNSS_Sample nextGnssSample = gnssDataList.get(counterGnss + 1);
             long nextTGnss = nextGnssSample.getRelativeTimestamp();
-            if (relativeTBase >= nextTGnss) {
-                currentGnssLoc = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());
-                float radius = nextGnssSample.getAccuracy();
-                CircleOptions circleOptions = new CircleOptions()
-                        .strokeWidth(2)
-                        .strokeColor(Color.BLUE)
-                        .fillColor(0x0277A88D)
-                        .radius(radius)
-                        .center(currentGnssLoc)
-                        .zIndex(0)
-                        .visible(gnssEnabled);
-                if (circleList != null && replayMap != null) {circleList.add(replayMap.addCircle(circleOptions));}
-                if (gnssPolyline != null) {
-                    List<LatLng> pointsMoved = gnssPolyline.getPoints();
-                    pointsMoved.add(currentGnssLoc);
-                    gnssPolyline.setPoints(pointsMoved);
-                    gnssPolyline.setVisible(gnssEnabled);
-                }
-                if (gnssMarker != null) {
-                    gnssMarker.setPosition(currentGnssLoc);
-                    gnssMarker.setVisible(gnssEnabled);
-                    float altitude = nextGnssSample.getAltitude();
-                    gnssMarker.setTitle("GNSS position");
-                    gnssMarker.setSnippet("Acc: " + radius + "m" + " Alt: " + altitude + "m");
-                }
+            String provider = nextGnssSample.getProvider();
 
+            if (relativeTBase >= nextTGnss) {
+            // WIFI point //
+                if(provider.equals("wifi_fine")){
+                    currentWifiLoc = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());  // current wifi location
+                    PolylineOptions wifiPolylineOptions = new PolylineOptions()
+                            .color(Color.GREEN)
+                            .add(currentWifiLoc)
+                            .zIndex(6)
+                            .visible(wifiSwitch.isChecked());
+                    wifiPolyline = replayMap.addPolyline(wifiPolylineOptions);
+                    wifiMarker = replayMap.addMarker(new MarkerOptions()
+                            .title("WiFi position")
+//                        .snippet("Acc: " + radius + " Alt: " + altitude)
+                            .position(currentWifiLoc)
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+                            .visible(wifiSwitch.isChecked()));
+                }
+            // Tag Point //
+                else if(provider.equals("fusion")){
+                    tagLocation = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());    // location of tag added
+                    tagMarker = replayMap.addMarker(new MarkerOptions()
+                            .title("Tag Added")
+                            .position(tagLocation)
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+                }
+            // GNSS Point //
+                else {
+                    currentGnssLoc = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());
+                    float radius = nextGnssSample.getAccuracy();
+                    CircleOptions circleOptions = new CircleOptions()
+                            .strokeWidth(2)
+                            .strokeColor(Color.BLUE)
+                            .fillColor(0x0277A88D)
+                            .radius(radius)
+                            .center(currentGnssLoc)
+                            .zIndex(0)
+                            .visible(gnssEnabled);
+                    if (circleList != null && replayMap != null) {
+                        circleList.add(replayMap.addCircle(circleOptions));
+                    }
+                    if (gnssPolyline != null) {
+                        List<LatLng> pointsMoved = gnssPolyline.getPoints();
+                        pointsMoved.add(currentGnssLoc);
+                        gnssPolyline.setPoints(pointsMoved);
+                        gnssPolyline.setVisible(gnssEnabled);
+                    }
+                    if (gnssMarker != null) {
+                        gnssMarker.setPosition(currentGnssLoc);
+                        gnssMarker.setVisible(gnssEnabled);
+                        float altitude = nextGnssSample.getAltitude();
+                        gnssMarker.setTitle("GNSS position");
+                        gnssMarker.setSnippet("Acc: " + radius + "m" + " Alt: " + altitude + "m");
+                    }
+                }
                 counterGnss++;
             }
-
         }
 
         // ===== pdr value update logic ===== //
@@ -377,12 +473,6 @@ public class ReplayTrajFragment extends Fragment {
         if (currStepCount != nextStepCount) {
             currStepCount = nextStepCount;
             currentLocation = pdrLocList.get(currStepCount);
-
-            // move the marker
-            if (orientationMarker!=null) {
-                orientationMarker.setPosition(currentLocation);
-            }
-
             if (pdrPolyline!=null) {
                 // get existing points
                 List<LatLng> pointsMoved = pdrPolyline.getPoints();
@@ -392,12 +482,33 @@ public class ReplayTrajFragment extends Fragment {
                 pdrPolyline.setColor(Color.parseColor("#FFA500"));
                 pdrPolyline.setVisible(pdrEnabled);
             }
+        }
+        // === fused value update logic == //
+        int nextFusedStepCount = imuDataList.get(counterYaw).getStepCount();
+        if (currFusedStepCount != nextFusedStepCount) {
+            currFusedStepCount = nextFusedStepCount;
+            Log.e("pdr", "test" + currFusedStepCount);
+            fusedCurrLocation = fusedDataList.get(currFusedStepCount);
 
-            if(indoorMapManager != null){
-                indoorMapManager.setCurrentLocation(currentLocation);
-                if(indoorMapManager.getIsIndoorMapSet()){
-                    indoorMapManager.setCurrentFloor((int)(currElevation/indoorMapManager.getFloorHeight())
-                            ,true);
+            // move the marker
+            if (orientationMarker!=null) {
+                orientationMarker.setPosition(fusedCurrLocation);
+            }
+
+            if (fusedPolyline!=null) {
+                // get existing points
+                List<LatLng> fusedPointsMoved = fusedPolyline.getPoints();
+                // add new point
+                fusedPointsMoved.add(fusedCurrLocation);
+                fusedPolyline.setPoints(fusedPointsMoved);
+                fusedPolyline.setColor(Color.RED);
+            }
+
+            if(indoorMapManager != null) {
+                indoorMapManager.setCurrentLocation(fusedCurrLocation);
+                if (indoorMapManager.getIsIndoorMapSet()) {
+                    indoorMapManager.setCurrentFloor((int) (currElevation / indoorMapManager.getFloorHeight())
+                            , true);
                 }
             }
         }
@@ -517,6 +628,28 @@ public class ReplayTrajFragment extends Fragment {
         });
     }
 
+    /**
+     * Control the visibility of the WIFI
+     */
+    private void wifiSwitch(){
+        wifiSwitch = requireView().findViewById(R.id.switchWifi);
+        wifiSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (isChecked) {
+                    if(wifiPolyline != null) wifiPolyline.setVisible(true);
+                    if(wifiMarker != null) wifiMarker.setVisible(true);
+                } else {
+                    if(wifiPolyline != null) wifiPolyline.setVisible(false);
+                    if(wifiMarker != null) wifiMarker.setVisible(false);
+                }
+            }
+        });
+    }
+
+    /**
+     * Control the visibility of the GNSS
+     */
     private void GNSSSwitch(){
         GNSSSwitchControl = requireView().findViewById(R.id.switchGNSS);
         GNSSSwitchControl.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -547,6 +680,9 @@ public class ReplayTrajFragment extends Fragment {
         });
     }
 
+    /**
+     * Control the visibility of the PDR
+     */
     private void pdrPathSwitch(){
         pdrPathSwitch = requireView().findViewById(R.id.switchPDR);
         pdrPathSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
