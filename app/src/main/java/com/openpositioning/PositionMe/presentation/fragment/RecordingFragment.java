@@ -8,35 +8,24 @@ import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.LinearInterpolator;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
-import android.widget.Spinner;
 import android.widget.TextView;
-import android.widget.Toast;
-
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
+import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.local.DataFileManager;
 import com.openpositioning.PositionMe.domain.SensorDataPredictor;
@@ -45,82 +34,32 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
-import com.google.android.gms.maps.model.LatLng;
 
 import org.json.JSONObject;
 
 import java.util.List;
 
-
-/**
- * Fragment responsible for managing the recording process of trajectory data.
- * <p>
- * The RecordingFragment serves as the interface for users to initiate, monitor, and
- * complete trajectory recording. It integrates sensor fusion data to track user movement
- * and updates a map view in real time. Additionally, it provides UI controls to cancel,
- * stop, and monitor recording progress.
- * <p>
- * Features:
- * - Starts and stops trajectory recording.
- * - Displays real-time sensor data such as elevation and distance traveled.
- * - Provides UI controls to cancel or complete recording.
- * - Uses {@link TrajectoryMapFragment} to visualize recorded paths.
- * - Manages GNSS tracking and error display.
- *
- * @see TrajectoryMapFragment The map fragment displaying the recorded trajectory.
- * @see RecordingActivity The activity managing the recording workflow.
- * @see SensorFusion Handles sensor data collection.
- * @see SensorTypes Enumeration of available sensor types.
- *
- * @author Shu Gu
- */
-
 public class RecordingFragment extends Fragment {
 
     private static final String TAG = "RecordingFragment";
 
-    // UI elements
     private Button completeButton, cancelButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
 
-    // Sensor and data management
-    private SensorDataPredictor predictor;
-    private Handler sensorUpdateHandler;
-    private Runnable sensorUpdateTask;
-    private long lastWifiRequestTime = 0;
-    private static final long WIFI_REQUEST_INTERVAL_MS = 8000; // 8 seconds between WiFi updates
-    private static final long PASSIVE_COLLECTION_INTERVAL_MS = 500; // e.g., 2 samples/second
-    private DataFileManager dataFileManager;
-
-    // UI elements & calibration fields
     private TrajectoryMapFragment trajectoryMapFragment;
-    private Spinner floorSpinner, indoorStateSpinner;
-    private EditText buildingNameEditText;
-    private Button calibrationButton;
-    private Marker calibrationMarker;
-    private boolean markerPlaced = false;
-    private int selectedFloorLevel = -1;
-    private int selectedIndoorState = 0;
-    private String buildingName = null;
+    private CalibrationFragment calibrationFragment;
 
-    // Location update for map (simulated)
-    private Handler locationUpdateHandler;
-    private Runnable locationUpdateRunnable;
-    private static final long UPDATE_INTERVAL = 1000; // 1 second
-
-
-
-    // App settings
+    private SensorFusion sensorFusion;
+    private DataFileManager dataFileManager;
     private SharedPreferences settings;
 
-    // Sensor & data logic
-    private SensorFusion sensorFusion;
     private Handler refreshDataHandler;
     private CountDownTimer autoStop;
+    private Handler sensorUpdateHandler;
+    private Runnable sensorUpdateTask;
 
-    // Distance tracking
     private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
@@ -129,148 +68,111 @@ public class RecordingFragment extends Fragment {
         @Override
         public void run() {
             updateUIandPosition();
-            // Loop again
-            refreshDataHandler.postDelayed(refreshDataTask, 200);
+            refreshDataHandler.postDelayed(this, 200);
         }
     };
 
-    public RecordingFragment() {
-        // Required empty public constructor
-    }
+    private static final long WIFI_REQUEST_INTERVAL_MS = 8000;
+    private static final long PASSIVE_COLLECTION_INTERVAL_MS = 500;
+    private long lastWifiRequestTime = 0;
+
+    public RecordingFragment() {}
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        this.sensorFusion = SensorFusion.getInstance();
+        sensorFusion = SensorFusion.getInstance();
         Context context = requireActivity();
-        this.settings = PreferenceManager.getDefaultSharedPreferences(context);
-        this.refreshDataHandler = new Handler();
+        settings = PreferenceManager.getDefaultSharedPreferences(context);
+        refreshDataHandler = new Handler();
+        dataFileManager = new DataFileManager(requireContext());
     }
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater,
-                             @Nullable ViewGroup container,
-                             @Nullable Bundle savedInstanceState) {
-        // Inflate only the "recording" UI parts (no map)
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_recording, container, false);
     }
 
     @Override
-    public void onViewCreated(@NonNull View view,
-                              @Nullable Bundle savedInstanceState) {
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        elevation = view.findViewById(R.id.elevationTextView);
+        distanceTravelled = view.findViewById(R.id.distanceTextView);
+        gnssError = view.findViewById(R.id.gnssErrorTextView);
+        completeButton = view.findViewById(R.id.finishRecordingButton);
+        cancelButton = view.findViewById(R.id.cancelRecordingButton);
+        recIcon = view.findViewById(R.id.recordingIcon);
+        timeRemaining = view.findViewById(R.id.circularProgressBar);
 
-        // Initialize DataFileManager for file I/O and buffering
-        dataFileManager = new DataFileManager(requireContext());
-
-        // Child Fragment: the container in fragment_recording.xml
-        // where TrajectoryMapFragment is placed
-        trajectoryMapFragment = (TrajectoryMapFragment)
-                getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
-
-        // If not present, create it
+        trajectoryMapFragment = (TrajectoryMapFragment) getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
         if (trajectoryMapFragment == null) {
             trajectoryMapFragment = new TrajectoryMapFragment();
             getChildFragmentManager()
                     .beginTransaction()
                     .replace(R.id.trajectoryMapFragmentContainer, trajectoryMapFragment)
-                    .commit();
+                    .commitNow();
         }
 
-        // Initialize UI references
-        elevation = view.findViewById(R.id.elevationTextView);
-        distanceTravelled = view.findViewById(R.id.distanceTextView);
-        gnssError = view.findViewById(R.id.gnssErrorTextView);
+        calibrationFragment = (CalibrationFragment) getChildFragmentManager().findFragmentById(R.id.calibrationFragmentContainer);
+        if (calibrationFragment == null) {
+            calibrationFragment = CalibrationFragment.newInstance();
+            getChildFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.calibrationFragmentContainer, calibrationFragment)
+                    .commitNow();
+        }
+        calibrationFragment.setSensorFusion(sensorFusion);
+        calibrationFragment.setDataFileManager(dataFileManager);
+        calibrationFragment.setTrajectoryMapFragment(trajectoryMapFragment);
 
-        completeButton = view.findViewById(R.id.stopRecordingButton);
-        cancelButton = view.findViewById(R.id.cancelRecordingButton);
-        recIcon = view.findViewById(R.id.recordingIcon);
-        timeRemaining = view.findViewById(R.id.timeRemainingBar);
+        Button toggleAdvancedMenuButton = view.findViewById(R.id.toggleCalibrationMenuButton);
+        View calibrationContainer = view.findViewById(R.id.calibrationFragmentContainer);
+        toggleAdvancedMenuButton.setOnClickListener(v -> {
+            if (calibrationContainer.getVisibility() == View.VISIBLE) {
+                calibrationContainer.setVisibility(View.GONE);
+                toggleAdvancedMenuButton.setText("Tag");
+            } else {
+                calibrationContainer.setVisibility(View.VISIBLE);
+                toggleAdvancedMenuButton.setText("Hide");
 
-        floorSpinner = view.findViewById(R.id.floorSpinner);
-        indoorStateSpinner = view.findViewById(R.id.indoorStateSpinner);
-        buildingNameEditText = view.findViewById(R.id.buildingNameEditText);
-        calibrationButton = view.findViewById(R.id.toggleCalibrationButton);
+            }
+        });
 
-
-
-
-
-        // Hide or initialize default values
-        gnssError.setVisibility(View.GONE);
-        elevation.setText(getString(R.string.elevation, "0"));
-        distanceTravelled.setText(getString(R.string.meter, "0"));
-
-        // Buttons
         completeButton.setOnClickListener(v -> {
-            // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
-            // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
         });
 
-
-        // Cancel button with confirmation dialog
         cancelButton.setOnClickListener(v -> {
             AlertDialog dialog = new AlertDialog.Builder(requireActivity())
                     .setTitle("Confirm Cancel")
                     .setMessage("Are you sure you want to cancel the recording? Your progress will be lost permanently!")
                     .setNegativeButton("Yes", (dialogInterface, which) -> {
-                        // User confirmed cancellation
                         sensorFusion.stopRecording();
                         if (autoStop != null) autoStop.cancel();
                         requireActivity().onBackPressed();
                     })
-                    .setPositiveButton("No", (dialogInterface, which) -> {
-                        // User cancelled the dialog. Do nothing.
-                        dialogInterface.dismiss();
-                    })
-                    .create(); // Create the dialog but do not show it yet
+                    .setPositiveButton("No", (dialogInterface, which) -> dialogInterface.dismiss())
+                    .create();
 
-            // Show the dialog and change the button color
             dialog.setOnShowListener(dialogInterface -> {
                 Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-                negativeButton.setTextColor(Color.RED); // Set "Yes" button color to red
+                negativeButton.setTextColor(Color.RED);
             });
 
-            dialog.show(); // Finally, show the dialog
+            dialog.show();
         });
 
-
-        setupFloorSpinner();
-        setupIndoorStateSpinner();
-
-        calibrationButton.setText("Add Tag");
-        calibrationButton.setOnClickListener(v -> {
-            if (!markerPlaced) {
-                placeCalibrationMarker();
-                markerPlaced = true;
-                calibrationButton.setBackgroundColor(android.graphics.Color.GREEN);
-                calibrationButton.setText("Confirm");
-                Log.d(TAG, "Calibration marker placed.");
-            } else {
-                confirmCalibration();
-                calibrationMarker = null;
-                markerPlaced = false;
-                calibrationButton.setBackgroundColor(android.graphics.Color.YELLOW);
-                calibrationButton.setText("Add Tag");
-            }
-        });
-
-        // The blinking effect for recIcon
         blinkingRecordingIcon();
 
-        // Start the timed or indefinite UI refresh
-        if (this.settings.getBoolean("split_trajectory", false)) {
-            // A maximum recording time is set
-            long limit = this.settings.getInt("split_duration", 30) * 60000L;
+        if (settings.getBoolean("split_trajectory", false)) {
+            long limit = settings.getInt("split_duration", 30) * 60000L;
             timeRemaining.setMax((int) (limit / 1000));
             timeRemaining.setProgress(0);
             timeRemaining.setScaleY(3f);
-
             autoStop = new CountDownTimer(limit, 1000) {
                 @Override
                 public void onTick(long millisUntilFinished) {
@@ -285,11 +187,9 @@ public class RecordingFragment extends Fragment {
                 }
             }.start();
         } else {
-            // No set time limit, just keep refreshing
             refreshDataHandler.post(refreshDataTask);
         }
 
-        // Start the passive sensor data collection loop
         sensorUpdateHandler = new Handler(Looper.getMainLooper());
         sensorUpdateTask = new Runnable() {
             @Override
@@ -301,11 +201,15 @@ public class RecordingFragment extends Fragment {
         sensorUpdateHandler.post(sensorUpdateTask);
     }
 
+    private void blinkingRecordingIcon() {
+        Animation blinking = new AlphaAnimation(1, 0);
+        blinking.setDuration(800);
+        blinking.setInterpolator(new LinearInterpolator());
+        blinking.setRepeatCount(Animation.INFINITE);
+        blinking.setRepeatMode(Animation.REVERSE);
+        recIcon.startAnimation(blinking);
+    }
 
-    /**
-     * Collects sensor data using SensorFusion.getAllSensorData() and delegates the record
-     * to DataFileManager. Also triggers WiFi positioning requests as needed.
-     */
     private void collectFullSensorData() {
         try {
             long now = System.currentTimeMillis();
@@ -321,10 +225,6 @@ public class RecordingFragment extends Fragment {
         }
     }
 
-
-    /**
-     * Requests a WiFi positioning update based on current WiFi scan results.
-     */
     private void requestWifiLocationUpdate() {
         List<Wifi> wifiList = sensorFusion.getWifiList();
         if (wifiList == null || wifiList.isEmpty()) {
@@ -340,9 +240,8 @@ public class RecordingFragment extends Fragment {
             fingerprint.put("wf", wifiAccessPoints);
             sensorFusion.getWiFiPositioning().request(fingerprint, new com.openpositioning.PositionMe.data.remote.WiFiPositioning.VolleyCallback() {
                 @Override
-                public void onSuccess(com.google.android.gms.maps.model.LatLng wifiLocation, int floor) {
-                    Log.d(TAG, "WiFi Positioning Success: lat=" + wifiLocation.latitude + ", lon=" +
-                            wifiLocation.longitude + ", floor=" + floor);
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    Log.d(TAG, "WiFi Positioning Success: lat=" + wifiLocation.latitude + ", lon=" + wifiLocation.longitude + ", floor=" + floor);
                 }
                 @Override
                 public void onError(String message) {
@@ -354,45 +253,32 @@ public class RecordingFragment extends Fragment {
         }
     }
 
-    /**
-     * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
-     */
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
-        // Distance
         distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
                 + Math.pow(pdrValues[1] - previousPosY, 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
-        // Elevation
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
+            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation();
             LatLng newLocation = UtilFunctions.calculateNewPos(
                     oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
                     new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
-
-            // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
                 trajectoryMapFragment.updateUserLocation(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
                 LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
@@ -408,140 +294,9 @@ public class RecordingFragment extends Fragment {
             }
         }
 
-        // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
     }
-
-
-
-
-
-    /**
-     * Start the blinking effect for the recording icon.
-     */
-    private void blinkingRecordingIcon() {
-        Animation blinking = new AlphaAnimation(1, 0);
-        blinking.setDuration(800);
-        blinking.setInterpolator(new LinearInterpolator());
-        blinking.setRepeatCount(Animation.INFINITE);
-        blinking.setRepeatMode(Animation.REVERSE);
-        recIcon.startAnimation(blinking);
-    }
-
-
-    private void onCalibrationTriggered(double userLat, double userLng, int indoorState, int floorLevel, String buildingName) {
-        try {
-            JSONObject calibrationRecord = sensorFusion.getAllSensorData();
-            calibrationRecord.put("isCalibration", true);
-            calibrationRecord.put("userLat", userLat);
-            calibrationRecord.put("userLng", userLng);
-            calibrationRecord.put("floorLevel", floorLevel);
-            calibrationRecord.put("indoorState", indoorState);
-            calibrationRecord.put("buildingName", buildingName);
-            dataFileManager.addRecord(calibrationRecord);
-            Log.d(TAG, "Calibration triggered.");
-        } catch (Exception e) {
-            Log.e(TAG, "Error triggering calibration", e);
-        }
-    }
-
-    private void setupFloorSpinner() {
-        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
-                requireContext(),
-                R.array.floor_levels,
-                android.R.layout.simple_spinner_item
-        );
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        floorSpinner.setAdapter(adapter);
-        floorSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                String selected = parent.getItemAtPosition(position).toString();
-                if (selected.contains("Outdoors") || selected.startsWith("-1")) {
-                    selectedFloorLevel = -1;
-                } else {
-                    try {
-                        selectedFloorLevel = Integer.parseInt(selected.split(" ")[0]);
-                    } catch (NumberFormatException e) {
-                        selectedFloorLevel = -1;
-                    }
-                }
-            }
-            @Override
-            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-        });
-    }
-
-    private void setupIndoorStateSpinner() {
-        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
-                requireContext(),
-                R.array.indoor_states,
-                android.R.layout.simple_spinner_item
-        );
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        indoorStateSpinner.setAdapter(adapter);
-        indoorStateSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                try {
-                    selectedIndoorState = Integer.parseInt(parent.getItemAtPosition(position).toString().substring(0, 1));
-                } catch (Exception e) {
-                    selectedIndoorState = 0;
-                }
-            }
-            @Override
-            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-        });
-    }
-
-    private void placeCalibrationMarker() {
-        GoogleMap map = trajectoryMapFragment.getGoogleMap();
-        if (map == null) return;
-        if (calibrationMarker != null) {
-            map.animateCamera(CameraUpdateFactory.newLatLng(calibrationMarker.getPosition()));
-            return;
-        }
-        LatLng userLocation = trajectoryMapFragment.getCurrentLocation();
-        if (userLocation == null) {
-            userLocation = new LatLng(55.9228, -3.1746); // fallback location
-        }
-        calibrationMarker = map.addMarker(new MarkerOptions()
-                .position(userLocation)
-                .title("Calibration Marker")
-                .draggable(true));
-        map.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, 19f));
-        trajectoryMapFragment.updateCalibrationPinLocation(userLocation, false);
-        map.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
-            @Override public void onMarkerDragStart(@NonNull Marker marker) {}
-            @Override public void onMarkerDrag(@NonNull Marker marker) {}
-            @Override public void onMarkerDragEnd(@NonNull Marker marker) {
-                if (calibrationMarker != null) {
-                    calibrationMarker.setPosition(marker.getPosition());
-                    trajectoryMapFragment.updateCalibrationPinLocation(marker.getPosition(), false);
-                }
-            }
-        });
-    }
-
-    private void confirmCalibration() {
-        if (calibrationMarker == null) {
-            Toast.makeText(getContext(), "No calibration marker placed!", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        buildingName = buildingNameEditText.getText().toString();
-        if (TextUtils.isEmpty(buildingName)) {
-            buildingName = null;
-        }
-        LatLng markerPos = calibrationMarker.getPosition();
-        trajectoryMapFragment.updateCalibrationPinLocation(markerPos, true);
-        double lat = markerPos.latitude;
-        double lng = markerPos.longitude;
-        Toast.makeText(getContext(), "Calibration confirmed at (" + lat + ", " + lng + ")", Toast.LENGTH_SHORT).show();
-        onCalibrationTriggered(lat, lng, selectedIndoorState, selectedFloorLevel, buildingName);
-        calibrationMarker.remove();
-    }
-
 
     @Override
     public void onPause() {
@@ -552,7 +307,7 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if(!this.settings.getBoolean("split_trajectory", false)) {
+        if (!settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
     }

@@ -19,8 +19,10 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.material.button.MaterialButton;
@@ -31,6 +33,7 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.presentation.trajmap.BuildingPolygonPlotter;
 import com.openpositioning.PositionMe.presentation.trajmap.TrajectoryPlotter;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import android.widget.Spinner;
 
@@ -48,6 +51,7 @@ public class TrajectoryMapFragment extends Fragment {
     // Plotter references (Raw and Fusion)
     private TrajectoryPlotter rawTrajectoryPlotter;
     private TrajectoryPlotter fusionTrajectoryPlotter;
+    private TrajectoryPlotter wifiTrajectoryPlotter;
 
     // GNSS-related members
     private com.google.android.gms.maps.model.Marker gnssMarker;
@@ -130,6 +134,10 @@ public class TrajectoryMapFragment extends Fragment {
                             gMap
                     );
                     fusionTrajectoryPlotter = new TrajectoryPlotter.FusionTrajectoryPlotter(
+                            requireContext(),
+                            gMap
+                    );
+                    wifiTrajectoryPlotter = new TrajectoryPlotter.WifiTrajectoryPlotter(
                             requireContext(),
                             gMap
                     );
@@ -281,6 +289,12 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    public void updatWifiLocation(@NonNull LatLng newLocation, float orientation) {
+        if (wifiTrajectoryPlotter != null) {
+            wifiTrajectoryPlotter.updateLocation(newLocation, orientation);
+        }
+    }
+
     public void setShowRawTrajectory(boolean show) {
         if (rawTrajectoryPlotter != null) {
             rawTrajectoryPlotter.setVisible(show);
@@ -429,20 +443,22 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap == null) return;
 
         if (pinConfirmed) {
-            // For example, place a marker to represent the "confirmed" pin:
-            gMap.addMarker(new MarkerOptions()
+            Marker orientationMarker = gMap.addMarker(new MarkerOptions()
                     .position(newLocation)
-                    .title("Calibration Pin")
-                    .icon(com.google.android.gms.maps.model.BitmapDescriptorFactory
-                            .defaultMarker(com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_ORANGE)));
-        } else {
-            // If not confirmed, you could place a draggable marker, or do something else.
-            // Example:
-            gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
-                    .title("Calibration (not confirmed)")
-                    .draggable(true)
+                    .flat(true)
+                    .title("Tagged Position")
+                    .icon(BitmapDescriptorFactory.fromBitmap(
+                            UtilFunctions.getBitmapFromVector(requireContext(),
+                                    R.drawable.ic_baseline_assignment_turned_in_24_red)))
             );
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+        }
+
+        //update indoor map overlay
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(newLocation);
+            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
     }
+
 }

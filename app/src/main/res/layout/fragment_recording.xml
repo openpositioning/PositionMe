@@ -13,11 +13,12 @@
         android:orientation="vertical"
         android:padding="12dp"
         android:background="#AAFFFFFF"
+        android:animateLayoutChanges="true"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Status Card: Displays recording icon, distance, elevation, and GNSS error -->
+        <!-- Status Card: Recording Status -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/currentPositionCard"
             android:layout_width="match_parent"
@@ -28,6 +29,7 @@
             app:cardElevation="4dp"
             app:strokeColor="@color/md_theme_outline"
             app:strokeWidth="1dp">
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -35,16 +37,32 @@
                 android:padding="12dp"
                 android:gravity="center_vertical">
 
-                <!-- Blinking recording icon -->
-                <ImageView
-                    android:id="@+id/recordingIcon"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:layout_marginEnd="8dp"
-                    android:contentDescription="@string/red_dot_description_text"
-                    android:src="@drawable/ic_baseline_red_dot_24" />
+                <FrameLayout
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginEnd="12dp">
 
-                <!-- Distance Traveled -->
+                    <ProgressBar
+                        android:id="@+id/circularProgressBar"
+                        style="@style/Widget.Material3.CircularProgressIndicator"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:indeterminate="false"
+                        android:progress="0"
+                        app:indicatorSize="48dp"
+                        app:trackThickness="6dp"
+                        app:indicatorColor="@color/md_theme_primary"
+                        app:layout_gravity="center" />
+
+                    <ImageView
+                        android:id="@+id/recordingIcon"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_baseline_red_dot_24"
+                        android:contentDescription="@string/red_dot_description_text" />
+                </FrameLayout>
+
                 <TextView
                     android:id="@+id/distanceTextView"
                     android:layout_width="wrap_content"
@@ -54,7 +72,6 @@
                     android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                     android:textStyle="bold" />
 
-                <!-- Elevation -->
                 <TextView
                     android:id="@+id/elevationTextView"
                     android:layout_width="wrap_content"
@@ -66,7 +83,6 @@
                     android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                     android:textStyle="bold" />
 
-                <!-- GNSS Error -->
                 <TextView
                     android:id="@+id/gnssErrorTextView"
                     android:layout_width="wrap_content"
@@ -79,40 +95,60 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Calibration Controls: Floor spinner, indoor state spinner, building name, calibration button -->
+        <!-- Control Row with buttons -->
         <LinearLayout
-            android:id="@+id/calibrationOverlay"
+            android:id="@+id/controlRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp">
-            <Spinner
-                android:id="@+id/floorSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:entries="@array/floor_levels"
-                android:prompt="@string/floor_level" />
-            <Spinner
-                android:id="@+id/indoorStateSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:entries="@array/indoor_states"
-                android:prompt="@string/indoor_state" />
-            <EditText
-                android:id="@+id/buildingNameEditText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/building_name_hint"
-                android:inputType="text" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:weightSum="4">
+
             <Button
-                android:id="@+id/toggleCalibrationButton"
+                android:id="@+id/cancelRecordingButton"
+                style="@style/Widget.MaterialComponents.Button"
+                app:icon="@drawable/ic_unavailable"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="@string/cancel"
+                android:textSize="16sp"
+                app:cornerRadius="16dp" />
+
+            <Button
+                android:id="@+id/finishRecordingButton"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:text="@string/stop"
+                android:textSize="16sp"
+                app:cornerRadius="16dp"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/toggleCalibrationMenuButton"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Add Tag" />
+                android:layout_height="56dp"
+                android:layout_weight="0.3"
+                app:icon="@drawable/ic_tag_plus_svgrepo_com"
+                android:text="@string/tag"
+                android:textSize="16sp"
+                app:cornerRadius="16dp" />
         </LinearLayout>
+
+        <!-- ⬇️ New CalibrationFragment Container (Initially GONE) -->
+        <FrameLayout
+            android:id="@+id/calibrationFragmentContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
     </LinearLayout>
 
-    <!-- MIDDLE SECTION: Map Container -->
+    <!-- MIDDLE SECTION: Map Fragment -->
     <FrameLayout
         android:id="@+id/trajectoryMapFragmentContainer"
         android:layout_width="0dp"
@@ -122,7 +158,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- BOTTOM SECTION: Controls (Progress Bar & Buttons) -->
+    <!-- BOTTOM SECTION: Reserved -->
     <LinearLayout
         android:id="@+id/controlLayout"
         android:layout_width="0dp"
@@ -132,48 +168,6 @@
         android:background="#AAFFFFFF"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <!-- Progress Indicator (Countdown or progress bar) -->
-        <com.google.android.material.progressindicator.LinearProgressIndicator
-            android:id="@+id/timeRemainingBar"
-            style="@style/Widget.Material3.LinearProgressIndicator"
-            android:layout_width="match_parent"
-            android:layout_height="20dp"
-            android:max="1800"
-            android:progress="0"
-            android:layout_marginBottom="12dp" />
-
-        <!-- Button Container -->
-        <LinearLayout
-            android:id="@+id/buttonContainer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
-
-            <!-- Cancel Recording Button -->
-            <Button
-
-                android:id="@+id/cancelRecordingButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
-                android:layout_height="56dp"
-                android:layout_marginEnd="16dp"
-                android:text="@string/cancel"
-                android:textSize="16sp"
-                app:cornerRadius="16dp" />
-
-            <!-- Stop Recording Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/stopRecordingButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
-                android:layout_height="56dp"
-                android:text="@string/stop"
-                android:textSize="16sp"
-                app:cornerRadius="16dp" />
-        </LinearLayout>
-    </LinearLayout>
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
