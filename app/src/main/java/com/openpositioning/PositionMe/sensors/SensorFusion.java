@@ -165,6 +165,13 @@ public class SensorFusion implements SensorEventListener, Observer {
             new LatLng(55.92298698483965, -3.1741890966446484)
     );
 
+    List<LatLng> wallSecondPointsLatLng = Arrays.asList(
+            new LatLng(55.923012912847625, -3.17430025206314),
+            new LatLng(55.9230128674766, -3.1741911042535036),
+            new LatLng(55.922952153773124, -3.174191226755363),
+            new LatLng(55.922952199155134, -3.17430037438893)
+    );
+
     List<float[]> windowList = new ArrayList<>();
 
     int MAX_WIFI_APS = 60;
@@ -430,6 +437,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 //                    double[] gpsPos = getGPSPosition();
 //                    pf.update(gpsPos[0], gpsPos[1]);
 //                }
+
                 // 4. 重采样
                 pf.resample();
 
@@ -458,64 +466,133 @@ public class SensorFusion implements SensorEventListener, Observer {
                 Log.e("Optimized", "x: " + newCords[0] + ", y: " + newCords[1]);
 
                 // test
-                List<float[]> wallPoints = new ArrayList<>();
-                for (LatLng point : wallPointsLatLng) {
-                    double[] addPoint = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, point);
-                    float[] addPointfloat = new float[]{(float) addPoint[0], (float) addPoint[1]};
-                    wallPoints.add(addPointfloat);
-                }
+                if (getWifiFloor() == 1){
+                    Log.e("Floor", "1");
+                    Log.e("Floor", String.valueOf(getWifiFloor()));
 
-                for (int i = 0; i < wallPoints.size() - 1; i++) {
-                    float[] wallA = wallPoints.get(i);
-                    float[] wallB = wallPoints.get(i + 1);
+                    List<float[]> wallPoints = new ArrayList<>();
+                    for (LatLng point : wallPointsLatLng) {
+                        double[] addPoint = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, point);
+                        float[] addPointfloat = new float[]{(float) addPoint[0], (float) addPoint[1]};
+                        wallPoints.add(addPointfloat);
+                    }
 
-                    float[] intersection = GeoUtils.getLineSegmentIntersection(currentStateCords, newCords, wallA, wallB);
+                    for (int i = 0; i < wallPoints.size() - 1; i++) {
+                        float[] wallA = wallPoints.get(i);
+                        float[] wallB = wallPoints.get(i + 1);
 
-                    if (intersection != null) {
-                        // 主方向：从交点指向起点
-                        float dx = currentStateCords[0] - intersection[0];
-                        float dy = currentStateCords[1] - intersection[1];
-                        float len = (float) Math.sqrt(dx * dx + dy * dy);
-                        if (len == 0) {
-                            Log.e("WallCheck", "⚠️ 起点与交点重合，无法偏移");
+                        float[] intersection = GeoUtils.getLineSegmentIntersection(currentStateCords, newCords, wallA, wallB);
+
+                        if (intersection != null) {
+                            // 主方向：从交点指向起点
+                            float dx = currentStateCords[0] - intersection[0];
+                            float dy = currentStateCords[1] - intersection[1];
+                            float len = (float) Math.sqrt(dx * dx + dy * dy);
+                            if (len == 0) {
+                                Log.e("WallCheck", "⚠️ 起点与交点重合，无法偏移");
+                                break;
+                            }
+                            float dirX = dx / len;
+                            float dirY = dy / len;
+
+                            // 墙体方向
+                            float wx = wallB[0] - wallA[0];
+                            float wy = wallB[1] - wallA[1];
+                            float wlen = (float) Math.sqrt(wx * wx + wy * wy);
+                            if (wlen == 0) {
+                                Log.e("WallCheck", "⚠️ 墙体端点重合，跳过该段");
+                                continue;
+                            }
+                            float wallDirX = wx / wlen;
+                            float wallDirY = wy / wlen;
+
+                            // 墙体右手法线方向
+                            float normalX = -wallDirY;
+                            float normalY = wallDirX;
+
+                            // 根据法线方向判断是否朝墙外，必要时反转法线
+                            float dot = dx * normalX + dy * normalY;
+                            if (dot < 0) {
+                                normalX = -normalX;
+                                normalY = -normalY;
+                            }
+
+                            // 组合偏移
+                            float offset = 0.25f;
+                            float slideOffset = 0.1f;
+                            float[] corrected = new float[]{
+                                    intersection[0] + dirX * offset + normalX * slideOffset,
+                                    intersection[1] + dirY * offset + normalY * slideOffset
+                            };
+
+                            Log.d("WallCheck", "✅ 修正点: " + corrected[0] + ", " + corrected[1]);
+                            newCords = corrected;
                             break;
                         }
-                        float dirX = dx / len;
-                        float dirY = dy / len;
+                    }
+                }else if (getWifiFloor()==2){
+                    Log.e("Floor", "2");
+                    Log.e("Floor", String.valueOf(getWifiFloor()));
 
-                        // 墙体方向
-                        float wx = wallB[0] - wallA[0];
-                        float wy = wallB[1] - wallA[1];
-                        float wlen = (float) Math.sqrt(wx * wx + wy * wy);
-                        if (wlen == 0) {
-                            Log.e("WallCheck", "⚠️ 墙体端点重合，跳过该段");
-                            continue;
+                    List<float[]> wallPoints = new ArrayList<>();
+                    for (LatLng point : wallSecondPointsLatLng) {
+                        double[] addPoint = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, point);
+                        float[] addPointfloat = new float[]{(float) addPoint[0], (float) addPoint[1]};
+                        wallPoints.add(addPointfloat);
+                    }
+
+                    for (int i = 0; i < wallPoints.size() - 1; i++) {
+                        float[] wallA = wallPoints.get(i);
+                        float[] wallB = wallPoints.get(i + 1);
+
+                        float[] intersection = GeoUtils.getLineSegmentIntersection(currentStateCords, newCords, wallA, wallB);
+
+                        if (intersection != null) {
+                            // 主方向：从交点指向起点
+                            float dx = currentStateCords[0] - intersection[0];
+                            float dy = currentStateCords[1] - intersection[1];
+                            float len = (float) Math.sqrt(dx * dx + dy * dy);
+                            if (len == 0) {
+                                Log.e("WallCheck", "⚠️ 起点与交点重合，无法偏移");
+                                break;
+                            }
+                            float dirX = dx / len;
+                            float dirY = dy / len;
+
+                            // 墙体方向
+                            float wx = wallB[0] - wallA[0];
+                            float wy = wallB[1] - wallA[1];
+                            float wlen = (float) Math.sqrt(wx * wx + wy * wy);
+                            if (wlen == 0) {
+                                Log.e("WallCheck", "⚠️ 墙体端点重合，跳过该段");
+                                continue;
+                            }
+                            float wallDirX = wx / wlen;
+                            float wallDirY = wy / wlen;
+
+                            // 墙体右手法线方向
+                            float normalX = -wallDirY;
+                            float normalY = wallDirX;
+
+                            // 根据法线方向判断是否朝墙外，必要时反转法线
+                            float dot = dx * normalX + dy * normalY;
+                            if (dot < 0) {
+                                normalX = -normalX;
+                                normalY = -normalY;
+                            }
+
+                            // 组合偏移
+                            float offset = 0.25f;
+                            float slideOffset = 0.1f;
+                            float[] corrected = new float[]{
+                                    intersection[0] + dirX * offset + normalX * slideOffset,
+                                    intersection[1] + dirY * offset + normalY * slideOffset
+                            };
+
+                            Log.d("WallCheck", "✅ 修正点: " + corrected[0] + ", " + corrected[1]);
+                            newCords = corrected;
+                            break;
                         }
-                        float wallDirX = wx / wlen;
-                        float wallDirY = wy / wlen;
-
-                        // 墙体右手法线方向
-                        float normalX = -wallDirY;
-                        float normalY = wallDirX;
-
-                        // 根据法线方向判断是否朝墙外，必要时反转法线
-                        float dot = dx * normalX + dy * normalY;
-                        if (dot < 0) {
-                            normalX = -normalX;
-                            normalY = -normalY;
-                        }
-
-                        // 组合偏移
-                        float offset = 0.25f;
-                        float slideOffset = 0.1f;
-                        float[] corrected = new float[]{
-                                intersection[0] + dirX * offset + normalX * slideOffset,
-                                intersection[1] + dirY * offset + normalY * slideOffset
-                        };
-
-                        Log.d("WallCheck", "✅ 修正点: " + corrected[0] + ", " + corrected[1]);
-                        newCords = corrected;
-                        break;
                     }
                 }
                 // test end
