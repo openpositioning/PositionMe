@@ -340,8 +340,8 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
             OptionalDouble optHorizontalAvg = horizontalMemory.stream().mapToDouble(Math::abs).average();
             float horizontalAvg = optHorizontalAvg.isPresent() ? (float) optHorizontalAvg.getAsDouble() : 0;
 
-            System.err.println("elevator: Vertical: " + verticalAvg);
-            System.err.println("elevator: Horizontal: " + horizontalAvg);
+//            System.err.println("elevator: Vertical: " + verticalAvg);
+//            System.err.println("elevator: Horizontal: " + horizontalAvg);
 
             if(this.settings.getBoolean("overwrite_constants", false)) {
                 float eps = Float.parseFloat(settings.getString("epsilon", "0.18"));

@@ -658,7 +658,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
       if(pdrData.newElevator()) {
         this.elevator = pdrData.inElevator();
         this.elevatorTrueCount = (this.elevator) ? this.elevatorTrueCount + 1 : 0;
-        if(!inElevator && pdrData.inElevator() && fusedLocation != null && elevatorTrueCount == 4) {
+        if(!inElevator && pdrData.inElevator() && fusedLocation != null && elevatorTrueCount == 8) {
           this.inElevator = true;
           this.elevatorTrueCount = 0;
           // Get the closest elevator's LatLng using the NucleusBuildingManager helper
