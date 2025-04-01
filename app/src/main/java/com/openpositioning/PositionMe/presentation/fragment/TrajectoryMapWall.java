@@ -26,46 +26,50 @@ public class TrajectoryMapWall {
         }
         wallPolylines.clear();
 
-        // ✅ 判断楼层 + 建筑（比如只在 nucleus 的 -1 楼才画）
+        // ✅ 判断楼层 + 建筑（比如只在 nucleus 的 ground 楼才画）
         if (currentFloor == 1 && Objects.equals(currentBuilding, "nucleus")) {
 
+//            // 🧱 示例：第一段墙
+//            List<LatLng> groundPointsAlderGroundWall = Arrays.asList(
+//                    new LatLng(55.92331122350826,  -3.1744644418358803),
+//                    new LatLng(55.9232702709005,  -3.1744711473584175),
+//                    new LatLng(55.92327064661266,  -3.17419420927763),
+//                    new LatLng(55.92311848287593, -3.17419420927763),
+//                    new LatLng(55.9231173557349,  -3.174203597009182),
+//                    new LatLng(55.92302417863057, -3.17420594394207)
+//            );
+//            addWallPolyline(gMap, groundPointsAlderGroundWall);
+//
+//            // 🧱 示例：第二段墙
+//            List<LatLng> groundPointsELMGroundWall = Arrays.asList(
+//                    new LatLng(55.92328548724146, -3.1738948076963425),
+//                    new LatLng(55.92328623866554, -3.1741197779774666),
+//                    new LatLng(55.92311998573056, -3.174123466014862),
+//                    new LatLng(55.92311923430324, -3.174075521528721),
+//                    new LatLng(55.92297965642705, -3.174077533185482),
+//                    new LatLng(55.92297195426851, -3.1738948076963425),
+//                    new LatLng(55.92291634839558, -3.1738948076963425),
+//                    new LatLng(55.92289624760431, -3.1739461049437523),
+//                    new LatLng(55.92293043772902, -3.1739886850118637),
+//                    new LatLng(55.9229214205562, -3.174011819064617)
+//            );
+//            addWallPolyline(gMap, groundPointsELMGroundWall);
+
             // 🧱 示例：第一段墙
-            List<LatLng> groundPointsAlderGroundWall = Arrays.asList(
-                    new LatLng(55.92331122350826,  -3.1744644418358803),
-                    new LatLng(55.9232702709005,  -3.1744711473584175),
-                    new LatLng(55.92327064661266,  -3.17419420927763),
-                    new LatLng(55.92311848287593, -3.17419420927763),
-                    new LatLng(55.9231173557349,  -3.174203597009182),
-                    new LatLng(55.92302417863057, -3.17420594394207)
+            List<LatLng> groundPointsEasierAlderGroundWall = Arrays.asList(
+                    new LatLng(55.92302380291602, -3.1742052733898163),
+                    new LatLng(55.9233059635427, -3.174182139337063)
             );
-            addWallPolyline(gMap, groundPointsAlderGroundWall);
+            addWallPolyline(gMap, groundPointsEasierAlderGroundWall);
 
             // 🧱 示例：第二段墙
-            List<LatLng> groundPointsELMGroundWall = Arrays.asList(
-                    new LatLng(55.92328548724146, -3.1738948076963425),
-                    new LatLng(55.92328623866554, -3.1741197779774666),
-//                new LatLng(55.923244346750266, -3.1741201132535934),
-//                new LatLng(55.923244346750266, -3.1741097196936607),
-//                new LatLng(55.923227063973826, -3.174109384417534),
-//                new LatLng(55.923227439686436, -3.1741217896342278),
-////                new LatLng(55.92322161614051, -3.174121454358101),
-//                new LatLng(55.92322124042784, -3.1741097196936607),
-//                new LatLng(55.92318366914247, -3.1741097196936607),
-//                new LatLng(55.923184232712, -3.1741217896342278),
-                    new LatLng(55.92311998573056, -3.174123466014862),
-//                new LatLng(55.92311923430324, -3.1741107255220413),
-//                new LatLng(55.92326613806612, -3.1740979850292206),
-//                new LatLng(55.92326369593649, -3.173898495733738),
-//                new LatLng(55.9231757791679, -3.1738998368382454),
-                    new LatLng(55.92311923430324, -3.174075521528721),
-                    new LatLng(55.92297965642705, -3.174077533185482),
-                    new LatLng(55.92297195426851, -3.1738948076963425),
-                    new LatLng(55.92291634839558, -3.1738948076963425),
-                    new LatLng(55.92289624760431, -3.1739461049437523),
-                    new LatLng(55.92293043772902, -3.1739886850118637),
-                    new LatLng(55.9229214205562, -3.174011819064617)
+            List<LatLng> groundPointsEasierELMGroundWall = Arrays.asList(
+                    new LatLng(55.92297946856955, -3.1740735098719597),
+                    new LatLng(55.9231190464464, -3.174114413559437),
+                    new LatLng(55.92330183071211, -3.174116760492325)
             );
-            addWallPolyline(gMap, groundPointsELMGroundWall);
+            addWallPolyline(gMap, groundPointsEasierELMGroundWall);
+
 
             // 🧱 示例：第三段墙
             List<LatLng> groundPointsNCCafeWall = Arrays.asList(
@@ -79,12 +83,12 @@ public class TrajectoryMapWall {
             // 🧱 示例：第四段墙
             List<LatLng> groundPointsNCKitchenWall = Arrays.asList(
                     new LatLng(55.92290207119912, -3.1745777651667595),
-                    new LatLng(55.92290244691486, -3.1745345145463943),
-                    new LatLng(55.92292480199627, -3.1745100393891335),
-                    new LatLng(55.922924989854025, -3.1744228675961494),
-                    new LatLng(55.92298397714947, -3.1744201853871346),
-                    new LatLng(55.922984352864454, -3.174312226474285),
-                    new LatLng(55.92290488906723, -3.174312561750412),
+//                    new LatLng(55.92290244691486, -3.1745345145463943),
+//                    new LatLng(55.92292480199627, -3.1745100393891335),
+//                    new LatLng(55.922924989854025, -3.1744228675961494),
+//                    new LatLng(55.92298397714947, -3.1744201853871346),
+//                    new LatLng(55.922984352864454, -3.174312226474285),
+//                    new LatLng(55.92290488906723, -3.174312561750412),
                     new LatLng(55.92290582835658, -3.174174763262272)
             );
             addWallPolyline(gMap, groundPointsNCKitchenWall);
@@ -96,9 +100,6 @@ public class TrajectoryMapWall {
                     new LatLng(55.92299337002261, -3.174283392727375),
                     new LatLng(55.922997315028674, -3.1744228675961494),
                     new LatLng(55.92300915004439, -3.174421191215515)
-//                    new LatLng(55.92300990147385, -3.174336366355419),
-//                    new LatLng(55.92302549363161, -3.174336366355419),
-//                    new LatLng(55.92302267577222, -3.1742676347494125)
             );
             addWallPolyline(gMap, groundPointsNCGroundLiftWall);
 
@@ -106,6 +107,47 @@ public class TrajectoryMapWall {
             List<LatLng> groundPointsNCGroundNorthWall = Arrays.asList(
                     new LatLng(55.9233059635427, -3.1744245439767838),
                     new LatLng(55.92330370927152, -3.1738927960395813)
+            );
+            addWallPolyline(gMap, groundPointsNCGroundNorthWall);
+        }
+
+        // ✅ 判断楼层 + 建筑（比如只在 nucleus 的 first 楼才画）
+        if (currentFloor == 2 && Objects.equals(currentBuilding, "nucleus")) {
+
+            // 🧱 示例：第一段墙
+            List<LatLng> groundPointsAlderGroundWall = Arrays.asList(
+
+            );
+            addWallPolyline(gMap, groundPointsAlderGroundWall);
+
+            // 🧱 示例：第二段墙
+            List<LatLng> groundPointsELMGroundWall = Arrays.asList(
+
+            );
+            addWallPolyline(gMap, groundPointsELMGroundWall);
+
+            // 🧱 示例：第三段墙
+            List<LatLng> groundPointsNCCafeWall = Arrays.asList(
+
+            );
+            addWallPolyline(gMap, groundPointsNCCafeWall);
+
+            // 🧱 示例：第四段墙
+            List<LatLng> groundPointsNCKitchenWall = Arrays.asList(
+
+            );
+            addWallPolyline(gMap, groundPointsNCKitchenWall);
+
+
+            // 🧱 示例：第五段墙
+            List<LatLng> groundPointsNCGroundLiftWall = Arrays.asList(
+
+            );
+            addWallPolyline(gMap, groundPointsNCGroundLiftWall);
+
+            // 🧱 示例：第六段墙
+            List<LatLng> groundPointsNCGroundNorthWall = Arrays.asList(
+
             );
             addWallPolyline(gMap, groundPointsNCGroundNorthWall);
         }
