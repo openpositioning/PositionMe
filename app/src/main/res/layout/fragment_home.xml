@@ -4,91 +4,144 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/very_light_purple"
     tools:context=".fragments.HomeFragment">
-
-
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:background="@color/very_light_purple"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp">
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/sensorInfoButton"
+        <TextView
+            android:id="@+id/titleText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="16dp"
-            android:clickable="true"
-            android:contentDescription="@string/info_description"
-            android:src="@drawable/ic_baseline_info_24"
-            app:backgroundTint="?attr/colorPrimaryVariant"
-            app:layout_constraintBottom_toBottomOf="parent"
+            android:text="PositionMe"
+            android:textSize="36sp"
+            android:textStyle="bold"
+            android:textColor="@color/purple_200"
+            app:layout_constraintBottom_toTopOf="@id/sloganText"
             app:layout_constraintEnd_toEndOf="parent"
-            app:tint="@color/white" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_chainStyle="packed" />
+
+        <TextView
+            android:id="@+id/sloganText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Let's Get a Little Closer"
+            android:textSize="18sp"
+            android:textStyle="italic"
+            android:textColor="@color/purple_500"
+            android:layout_marginTop="8dp"
+            app:layout_constraintBottom_toTopOf="@id/horizontalGuideline"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/titleText" />
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/horizontalGuideline"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:layout_constraintGuide_percent="0.44347826" />
 
         <Button
             android:id="@+id/startStopButton"
-            android:layout_width="300dp"
-            android:layout_height="300dp"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="24dp"
-            android:background="@drawable/round_button"
+            android:layout_width="0dp"
+            android:layout_height="150dp"
+            android:layout_marginEnd="8dp"
             android:enabled="false"
-            android:paddingStart="15dp"
-            android:paddingTop="5dp"
-            android:paddingBottom="10dp"
-            android:paddingEnd="10dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
             android:text="@string/start"
             android:textColor="@color/LightYellow"
             android:textSize="18dp"
             android:textStyle="bold"
+            app:backgroundTint="@color/purple_200"
+            app:cornerRadius="18dp"
             app:icon="@drawable/ic_baseline_directions_walk_24"
             app:iconGravity="textTop"
-            app:iconSize="170dp"
-            app:layout_constraintBottom_toTopOf="@+id/otherButtonLayout"
-            app:layout_constraintEnd_toEndOf="parent"
+            app:iconSize="50dp"
+            app:layout_constraintBottom_toTopOf="@id/measurementButton"
+            app:layout_constraintEnd_toStartOf="@id/sensorInfoButton"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="@id/horizontalGuideline"
+            app:layout_constraintVertical_chainStyle="packed"
+            app:layout_constraintHorizontal_weight="1" />
 
-        <LinearLayout
-            android:id="@+id/otherButtonLayout"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sensorInfoButton"
+            android:layout_width="0dp"
+            android:layout_height="150dp"
+            android:layout_marginStart="8dp"
+            android:contentDescription="@string/info_description"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            android:text="Sensor Information"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            app:backgroundTint="@color/purple_200"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_baseline_info_24"
+            app:iconGravity="textTop"
+            app:iconSize="50dp"
+            app:iconTint="@color/white"
+            app:layout_constraintBottom_toBottomOf="@id/startStopButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/startStopButton"
+            app:layout_constraintTop_toTopOf="@id/startStopButton"
+            app:layout_constraintHorizontal_weight="1" />
+
+        <Button
+            android:id="@+id/measurementButton"
+            android:layout_width="0dp"
+            android:layout_height="150dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginEnd="8dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/measurements"
+            app:backgroundTint="@color/purple_200"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_baseline_data_array_24"
+            app:iconGravity="textTop"
+            app:iconSize="50dp"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/filesButton"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/startStopButton">
+            app:layout_constraintTop_toBottomOf="@id/startStopButton"
+            app:layout_constraintHorizontal_weight="1" />
 
-            <Button
-                android:id="@+id/measurementButton"
-                android:layout_width="165dp"
-                android:layout_height="150dp"
-                android:layout_marginEnd="12dp"
-                android:layout_marginTop="6dp"
-                android:layout_marginBottom="6dp"
-                android:background="@drawable/rounded_corner"
-                android:scaleType="centerCrop"
-                android:text="@string/measurements"
-                app:icon="@drawable/ic_baseline_data_array_24"
-                app:iconGravity="textTop"
-                app:iconSize="50dp" />
-
-            <Button
-                android:id="@+id/filesButton"
-                android:layout_width="165dp"
-                android:layout_height="150dp"
-                android:layout_marginStart="12dp"
-                android:layout_marginTop="6dp"
-                android:layout_marginBottom="6dp"
-                android:background="@drawable/rounded_corner"
-                android:scaleType="centerCrop"
-                android:text="@string/files"
-                app:icon="@drawable/ic_baseline_folder_24"
-                app:iconGravity="textTop"
-                app:iconSize="50dp" />
-        </LinearLayout>
+        <Button
+            android:id="@+id/filesButton"
+            android:layout_width="0dp"
+            android:layout_height="150dp"
+            android:layout_marginStart="8dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/files"
+            app:backgroundTint="@color/purple_200"
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_baseline_folder_24"
+            app:iconGravity="textTop"
+            app:iconSize="50dp"
+            app:layout_constraintBottom_toBottomOf="@id/measurementButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/measurementButton"
+            app:layout_constraintTop_toTopOf="@id/measurementButton"
+            app:layout_constraintHorizontal_weight="1" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>

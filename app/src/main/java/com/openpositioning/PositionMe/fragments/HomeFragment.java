@@ -8,13 +8,12 @@ import android.widget.Button;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
 
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
 
 /**
@@ -32,10 +31,10 @@ import com.openpositioning.PositionMe.R;
 public class HomeFragment extends Fragment {
 
     // Interactive UI elements to navigate to other fragments
-    private FloatingActionButton goToInfo;
-    private Button start;
-    private Button measurements;
-    private Button files;
+    private MaterialButton sensorInfoButton;
+    private Button startStopButton;
+    private Button measurementButton;
+    private Button filesButton;
 
     /**
      * Default empty constructor, unused.
@@ -54,16 +53,12 @@ public class HomeFragment extends Fragment {
 
     /**
      * {@inheritDoc}
-     * Ensure the action bar is shown at the top of the screen. Set the title visible to Home.
      */
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         // Inflate the layout for this fragment
-        ((AppCompatActivity)getActivity()).getSupportActionBar().show();
-        View rootView =  inflater.inflate(R.layout.fragment_home, container, false);
-        getActivity().setTitle("Home");
-        return rootView;
+        return inflater.inflate(R.layout.fragment_home, container, false);
     }
 
     /**
@@ -75,10 +70,10 @@ public class HomeFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         
         // 获取各个按钮
-        Button startStopButton = view.findViewById(R.id.startStopButton);
-        FloatingActionButton sensorInfoButton = view.findViewById(R.id.sensorInfoButton);
-        Button measurementButton = view.findViewById(R.id.measurementButton);
-        Button filesButton = view.findViewById(R.id.filesButton);
+        startStopButton = view.findViewById(R.id.startStopButton);
+        sensorInfoButton = view.findViewById(R.id.sensorInfoButton);
+        measurementButton = view.findViewById(R.id.measurementButton);
+        filesButton = view.findViewById(R.id.filesButton);
         
         // 设置点击监听器
         startStopButton.setOnClickListener(v -> {

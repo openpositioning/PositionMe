@@ -2,20 +2,28 @@
     <!-- Base application theme. -->
     <style name="Theme.Cloud" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/primaryBlue</item>
-        <item name="colorPrimaryVariant">@color/darkLogoBlue</item>
-        <item name="colorOnPrimary">@color/LightYellow</item>
+        <item name="colorPrimary">@color/purple_200</item>
+        <item name="colorPrimaryVariant">@color/purple_200</item>
+        <item name="colorOnPrimary">@color/white</item>
         <!-- Secondary brand color. -->
-        <item name="colorSecondary">@color/lightLogoBlue</item>
-        <item name="colorSecondaryVariant">#025E93</item>
-        <item name="colorOnSecondary">@color/black</item>
+        <item name="colorSecondary">@color/purple_200</item>
+        <item name="colorSecondaryVariant">@color/purple_500</item>
+        <item name="colorOnSecondary">@color/white</item>
         <!-- Status bar color. -->
-        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorSecondary</item>
+        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimary</item>
         <item name="colorControlNormal">@color/white</item>
         <!-- Customize your theme here. -->
-
     </style>
 
+    <style name="MyActionBar" parent="@style/Widget.AppCompat.ActionBar.Solid">
+        <item name="android:background">@color/purple_200</item>
+        <item name="background">@color/purple_200</item>
+        <item name="android:titleTextStyle">@style/MyActionBarTitle</item>
+        <item name="titleTextStyle">@style/MyActionBarTitle</item>
+    </style>
 
+    <style name="MyActionBarTitle" parent="@style/TextAppearance.AppCompat.Widget.ActionBar.Title">
+        <item name="android:textColor">@color/white</item>
+    </style>
 
 </resources>
