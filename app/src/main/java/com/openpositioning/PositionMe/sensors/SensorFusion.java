@@ -425,6 +425,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 //                if (getLatLngWifiPositioning() != null) {
 //                    LatLng latLng = getLatLngWifiPositioning();
                 if (lastWifiPos != null && (System.currentTimeMillis()-lastWifiSuccessTime) < 15000) {
+                    pf.setMeasurementNoise(2.5);
+
                     LatLng latLng = lastWifiPos;
                     double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
                     Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
@@ -438,16 +440,18 @@ public class SensorFusion implements SensorEventListener, Observer {
                     }
                     Log.e("Ratio", String.valueOf(ratio));
                     pf.update(wifiPos[0], wifiPos[1]);
+                }  else if (lastGnssLocation != null && (System.currentTimeMillis()-lastGnssTime) < 60000) { // only step in when there is no wifi
+                    double[] gnssPos = new double[]{lastGnssLocation.getLatitude(), lastGnssLocation.getLongitude()};
+                    LatLng latLng = new LatLng(gnssPos[0], gnssPos[1]);
+                    gnssPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
+
+                    Log.e("GNSS debug", "x: " + gnssPos[0] + ", y: " + gnssPos[1] + ", accuracy: " + lastGnssLocation.getAccuracy());
+
+                    pf.setMeasurementNoise(lastGnssLocation.getAccuracy());
+                    pf.setWifiRatio(1);
+                    pf.update(gnssPos[0], gnssPos[1]);
                 }
-//                else if (lastGnssLocation != null && (System.currentTimeMillis()-lastWifiSuccessTime) < 60000) { // only step in when there is no wifi
-//                    double[] gnssPos = new double[]{lastGnssLocation.getLatitude(), lastGnssLocation.getLongitude()};
-//                    pf.update(gnssPos[0], gnssPos[1]);
-//                }
-//
-//                if (gpsDataAvailable()) {
-//                    double[] gpsPos = getGPSPosition();
-//                    pf.update(gpsPos[0], gpsPos[1]);
-//                }
+
                 // 4. 重采样
                 pf.resample();
 

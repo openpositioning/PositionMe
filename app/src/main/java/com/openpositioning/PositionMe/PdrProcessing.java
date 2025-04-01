@@ -286,7 +286,7 @@ public class PdrProcessing {
 
     public float[] getRawPDRMovement() {
         float [] pdrPosition = new float[] {rawPosX,rawPosY};
-        Log.e("Raw pdr test", pdrPosition[0] + " " + pdrPosition[1]);
+//        Log.e("Raw pdr test", pdrPosition[0] + " " + pdrPosition[1]);
         return pdrPosition;
     }
 

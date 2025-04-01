@@ -30,8 +30,8 @@ public class FilterUtils {
         Random random = new Random();
 
         // Noise parameters
-        double processNoisePos = 0.6;
-        double measurementNoise = 1.5; // Adjust based on your sensor characteristics
+        double processNoisePos = 0.8;
+        double measurementNoise = 2.5; // Adjust based on sensor characteristics
 
         // WiFi weight parameters: a constant base weight and an external ratio
         double wifiRatio;  // External factor that determines how important the WiFi measurement is
@@ -53,7 +53,7 @@ public class FilterUtils {
             }
         }
 
-        // Setter to update the WiFi ratio dynamically
+        // Setter to update the WiFi/gnss ratio dynamically
         public void setWifiRatio(double wifiRatio) {
             this.wifiRatio = wifiRatio;
         }
@@ -163,6 +163,10 @@ public class FilterUtils {
                 estY += p.y * p.weight;
             }
             return new Particle(estX, estY, 1.0);
+        }
+
+        public void setMeasurementNoise(double measurementNoise) {
+            this.measurementNoise = measurementNoise;
         }
     }
 
