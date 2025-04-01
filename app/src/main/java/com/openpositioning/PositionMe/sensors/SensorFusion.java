@@ -701,37 +701,58 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // === Prediction step (PDR) ===
         double[][] F = {{1, 0}, {0, 1}};
-        double[][] Q = {{1, 0}, {0, 1}}; // PDR noise in meters
+        double[][] Q = {{0.5, 0}, {0, 0.5}}; // PDR noise in meters
         state[0] += deltaX;
         state[1] += deltaY;
         covariance = matrixAdd(matrixMultiply(F, matrixMultiply(covariance, transpose(F))), Q);
 
         // === Update step (WiFi) ===
         if (wifiMeters != null) {
-            double[][] R_wifi = {{5.0, 0}, {0, 5.0}}; // WiFi = more accurate indoors
+            double[][] R_wifi = {{10.0, 0}, {0, 10.0}}; // WiFi = only accurate indoors
             if (isOutlier(wifiMeters, new double[]{state[0], state[1]}, R_wifi)) {
-
+                Log.d("EKF", "WiFi fingerprint outlier detected");
                 //Increase noise covariance to reduce influence of outlier
                 R_wifi = new double[][]{{50.0, 0}, {0, 50.0}};
 
                 // Option 2: Skip update entirely
                 // continue; // Uncomment this line to skip the update
+            } else {
+                R_wifi = new double[][]{{10.0, 0}, {0, 10.0}};
             }
             performMeasurementUpdate(wifiMeters, R_wifi);
         }
 
         // === Update step (GNSS) ===
         if (gnssMeters != null) {
-            double[][] R_gnss = {{10.0, 0}, {0, 10.0}}; // GNSS = less accurate indoors
+            double[][] R_gnss = {{20.0, 0}, {0, 20.0}}; // GNSS = less accurate indoors
             if (isOutlier(gnssMeters, new double[]{state[0], state[1]}, R_gnss)) {
-
+                Log.d("EKF", "GNSS outlier detected");
                 //Increase noise covariance to reduce influence of outlier
                 R_gnss = new double[][]{{50.0, 0}, {0, 50.0}};
 
                 // Option 2: Skip update entirely
                 // continue; // Uncomment this line to skip the update
+            } else {
+                R_gnss = new double[][]{{20.0, 0}, {0, 20.0}};
             }
             performMeasurementUpdate(gnssMeters, R_gnss);
+        }
+
+        // === Periodic Correction Logic ===
+
+        // Use WiFi or GNSS as external anchors for correction
+        double[] anchorPosition = wifiPos != null ? wifiMeters : gnssMeters;
+        if (anchorPosition != null) {
+            double deviation = Math.sqrt(
+                    Math.pow(state[0] - anchorPosition[0], 2) + Math.pow(state[1] - anchorPosition[1], 2)
+            );
+
+            // Apply correction if deviation exceeds threshold
+            double correctionThreshold = 10.0; // Threshold in meters
+            if (deviation > correctionThreshold) {
+                Log.d("EKF", "Applying periodic correction using external anchor.");
+                performMeasurementUpdate(anchorPosition, new double[][]{{5.0, 0}, {0, 5.0}});
+            }
         }
 
         // Convert back to lat/lng
@@ -760,7 +781,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         covariance = matrixMultiply(matrixSubtract(I, matrixMultiply(K, H)), covariance);
     }
 
-    private boolean isOutlier(double[] measurement, double[] predicted, double[][] R_wifi) {
+    private boolean isOutlier(double[] measurement, double[] predicted, double[][] R) {
         // Compute innovation (difference between measurement and prediction)
         double[] innovation = {
                 measurement[0] - predicted[0],
@@ -769,12 +790,12 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // Compute Mahalanobis distance for outlier detection
         double mahalanobisDistance = Math.sqrt(
-                (innovation[0] * innovation[0]) / R_wifi[0][0] +
-                        (innovation[1] * innovation[1]) / R_wifi[1][1]
+                (innovation[0] * innovation[0]) / R[0][0] +
+                        (innovation[1] * innovation[1]) / R[1][1]
         );
 
         // Threshold for outlier detection (e.g., 3σ)
-        double threshold = 2.0; // Adjust based on WiFi resolution and environment
+        double threshold = 3.0; // Adjust based on WiFi resolution and environment
 
         return mahalanobisDistance > threshold; // Return true if the measurement is an outlier
     }
