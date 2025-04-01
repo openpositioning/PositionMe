@@ -87,8 +87,11 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   private float fusedError;
 
   private boolean inElevator = false;
+  private int elevatorTrueCount = 0;
 
   private boolean elevator = false;
+
+
 
   // Store the last event timestamps for each sensor type
   private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -120,12 +123,13 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
       {0.0, 2.0}
   });
   public static final SimpleMatrix PDR_COVARIANCE = new SimpleMatrix(new double[][]{
-      {1.0, 0.0},
-      {0.0, 5.0}
+          {Math.pow(1.41,2), 0.0},
+          {0.0, Math.pow(0.32,2)}
   });
+
   public static final SimpleMatrix WIFI_COVARIANCE = new SimpleMatrix(new double[][]{
-      {2.0, 0.0},
-      {0.0, 2.0}
+          {Math.pow(0.5,2), 0.0},
+          {0.0, Math.pow(0.5,2)}
   });
   public static final SimpleMatrix GNSS_COVARIANCE = new SimpleMatrix(new double[][]{
       {5.0, 0.0},
@@ -620,7 +624,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
         if (startLocation != null && pdrData != null && !isWifiLocationOutlier && !inElevator) {
           updateFusionData(this.currentWifiLocation, WIFI_COVARIANCE, pdrData);
         }
-        if (this.isWifiLocationOutlier && inElevator && !getElevator() && pdrData != null) {  // Has just left an elevator
+        if (!this.isWifiLocationOutlier && inElevator && !getElevator() && pdrData != null) {  // Has just left an elevator
           resetFilter(this.currentWifiLocation, pdrData);
           inElevator = false;
         }
@@ -650,8 +654,11 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
       // Update the path view with the new PDR data
       pathView.drawTrajectory(pdrData.position());
       this.elevator = pdrData.inElevator();
-      if(!inElevator && pdrData.inElevator() && fusedLocation != null) {
+      this.elevatorTrueCount = (this.elevator) ? this.elevatorTrueCount + 1 : 0;
+
+      if(!inElevator && pdrData.inElevator() && fusedLocation != null && elevatorTrueCount == 4) {
         this.inElevator = true;
+        this.elevatorTrueCount = 0;
         // Get the closest elevator's LatLng using the NucleusBuildingManager helper
         LatLng closestElevator = NucleusBuildingManager.getClosestElevatorLatLng
                 (fusedLocation, coordinateTransformer);

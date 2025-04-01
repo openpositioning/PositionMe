@@ -107,7 +107,7 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         Sensor.TYPE_STEP_DETECTOR
     };
     private List<Double> accelMagnitude = new ArrayList<>();
-    private boolean elevator;
+    private boolean elevator = false;
     private GravityData gravityData;
     private PressureData pressureData;
     private LinearAccelerationData linearAccelerationData;
@@ -469,8 +469,8 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
     private void processGravityData(GravityData data) {
         this.gravityData = data;
         if (this.linearAccelerationData == null) {
-            elevator = estimateElevator(data.gravity, new float[]{0,0,0});
-            this.notifyObservers(0);
+//            elevator = estimateElevator(data.gravity, new float[]{0,0,0});
+//            this.notifyObservers(0);
         } else {
             elevator = estimateElevator(data.gravity, this.linearAccelerationData.filteredAcc);
             this.notifyObservers(0);
@@ -481,10 +481,14 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         this.linearAccelerationData = data;
         this.accelMagnitude.add(data.accelMagnitude);
         if (this.gravityData == null) {
-            elevator = estimateElevator(new float[]{0,0,0}, data.filteredAcc);
-            this.notifyObservers(0);
+//            this.elevator = estimateElevator(new float[]{0,0,0}, data.filteredAcc);
+//            this.notifyObservers(0);
         } else {
             elevator = estimateElevator(this.gravityData.gravity, data.filteredAcc);
+            // Log if elevator detected
+            if (elevator) {
+                Log.d("SensorFusion", "Elevator detected");
+            }
             this.notifyObservers(0);
         }
     }
