@@ -330,20 +330,18 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         this.horizontalAccel.putNewest(horizontalAcc);
         // Once buffer is full, evaluate data
         if(this.verticalAccel.isFull() && this.horizontalAccel.isFull()) {
-
             // calculate average vertical accel
             List<Float> verticalMemory = this.verticalAccel.getListCopy();
             OptionalDouble optVerticalAvg = verticalMemory.stream().mapToDouble(Math::abs).average();
             float verticalAvg = optVerticalAvg.isPresent() ? (float) optVerticalAvg.getAsDouble() : 0;
-
 
             // calculate average horizontal accel
             List<Float> horizontalMemory = this.horizontalAccel.getListCopy();
             OptionalDouble optHorizontalAvg = horizontalMemory.stream().mapToDouble(Math::abs).average();
             float horizontalAvg = optHorizontalAvg.isPresent() ? (float) optHorizontalAvg.getAsDouble() : 0;
 
-            //System.err.println("LIFT: Vertical: " + verticalAvg);
-            //System.err.println("LIFT: Horizontal: " + horizontalAvg);
+            System.err.println("elevator: Vertical: " + verticalAvg);
+            System.err.println("elevator: Horizontal: " + horizontalAvg);
 
             if(this.settings.getBoolean("overwrite_constants", false)) {
                 float eps = Float.parseFloat(settings.getString("epsilon", "0.18"));
@@ -471,7 +469,7 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
     private void processGravityData(GravityData data) {
         this.gravityData = data;
         if (this.linearAccelerationData == null) {
-//            elevator = estimateElevator(data.gravity, new float[]{0,0,0});
+            elevator = estimateElevator(data.gravity, new float[]{0,0,0});
 //            this.notifyObservers(0);
         } else {
             elevator = estimateElevator(data.gravity, this.linearAccelerationData.filteredAcc);
@@ -490,7 +488,7 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         this.linearAccelerationData = data;
         this.accelMagnitude.add(data.accelMagnitude);
         if (this.gravityData == null) {
-//            this.elevator = estimateElevator(new float[]{0,0,0}, data.filteredAcc);
+            this.elevator = estimateElevator(new float[]{0,0,0}, data.filteredAcc);
 //            this.notifyObservers(0);
         } else {
             elevator = estimateElevator(this.gravityData.gravity, data.filteredAcc);
