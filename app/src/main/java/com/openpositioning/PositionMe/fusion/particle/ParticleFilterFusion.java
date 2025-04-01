@@ -1,15 +1,18 @@
-package com.openpositioning.PositionMe.fusion;
+package com.openpositioning.PositionMe.fusion.particle;
 
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.fusion.IPositionFusionAlgorithm;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
 
 import org.apache.commons.math3.distribution.TDistribution;
 import org.ejml.simple.SimpleMatrix;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.Random;
 
 public class ParticleFilterFusion implements IPositionFusionAlgorithm {
@@ -18,23 +21,19 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     private static final int STATE_SIZE = 3;         // Total state vector size
     private static final int MEAS_SIZE = 2;         // Total measurement vector size
 
-    // Process noise scale (PDR) update {X, Y}
-    private static final double[] dynamicPdrStds = {0.5, 0.2, Math.PI/18};
+    // Process noise scale (PDR) update
+    private static final double[] dynamicPdrStds = {0.2, 0.2, Math.PI/12};
+    private static final double[] staticPdrStds = {0.2, 0.2, Math.PI/12};
     private SimpleMatrix measGnssMat;
     private SimpleMatrix measWifiMat;
     private SimpleMatrix forwardModel;
 
     // Adjustable GNSS noise based on accuracy
-    private static final double GNSS_NOISE = 20.0;  // Base measurement noise for GNSS (in meters)
-    private static final double BASE_WIFI_NOISE = 4.0;        // Measurement noise for WiFi (in meters)
+    private static final double BASE_GNSS_NOISE = 10.0;  // Base measurement noise for GNSS (in meters)
+    private static final double BASE_WIFI_NOISE = 5.0;  // Measurement noise for WiFi (in meters)
 
-    // GNSS outlier detection parameters
-    private static final double MAX_GNSS_INNOVATION = 25.0;  // Maximum acceptable innovation (m)
-    private static final double GNSS_OUTLIER_THRESHOLD = 3.0; // Number of standard deviations for outlier detection
-
-    // Particle diversity parameters
-    private static final double MIN_EFFECTIVE_PARTICLES_RATIO = 0.5; // Only resample if effective particles < 50%
-    private static final double JITTER_AFTER_RESAMPLE = 0.25; // Small jitter to add after resampling
+    // Outlier detection parameters
+    private static final double OUTLIER_THRESHOLD = 3.0; // Number of standard deviations for outlier detection
 
     // The reference point for ENU coordinates
     private double[] referencePosition;        // [lat, lng, alt]
@@ -45,12 +44,13 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     private int numParticles;
 
     // Position history for outlier detection
-    private List<double[]> positionHistory;
-    private static final int HISTORY_SIZE = 5;
+    private List<double[]> gnssPositionHistory;
+    private List<double[]> wifiPositionHistory;
+    private static final int HISTORY_SIZE = 8;
 
     // Movement state tracking
     private long lastUpdateTime;
-    private static final long STATIC_TIMEOUT_MS = 3000; // 3 seconds without updates = static
+    private static final long STATIC_TIMEOUT_MS = 1000; // 1 seconds without updates = static update
 
     // First position values to handle initialization correctly
     private LatLng firstGnssPosition;
@@ -63,15 +63,24 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     private double currentHeading;
     private double[] previousPdrPos;
     private double[] currentPdrPos;
-    private double previousStepLength;
-    private double currentStepLength;
+    private double enuAltitude;
+    private double latlngAltitude;
+
+    // Initialize WiFi and GNSS parameters
+    private double[] currentGNSSpositionEMU;
+    private SimpleMatrix gnssMeasurementVector;
+    private double[] currentWiFipositionEMU;
+    private SimpleMatrix wifiMeasurementVector;
 
     // Constructor
     public ParticleFilterFusion(int numParticles, double[] referencePosition) {
-        // Get particle positions
+        // Initialize particle array
         this.numParticles = numParticles;
         this.particles = new ArrayList<>();
-        this.positionHistory = new ArrayList<>();
+
+        // Initialize moving average history
+        this.gnssPositionHistory = new ArrayList<>();
+        this.wifiPositionHistory = new ArrayList<>();
 
         this.referencePosition = referencePosition.clone(); // Clone to prevent modification
         this.referenceInitialized = (referencePosition[0] != 0 || referencePosition[1] != 0);
@@ -86,11 +95,11 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         previousHeading = 0.0;
         currentHeading = 0.0;
 
-        previousStepLength = 0.0;
-        currentStepLength = 0.0;
-
         previousPdrPos = new double[]{0.0, 0.0};
         currentPdrPos = new double[]{0.0, 0.0};
+
+        currentGNSSpositionEMU = new double[]{0.0, 0.0};
+        currentWiFipositionEMU = new double[]{0.0, 0.0};
 
         // Set up measurement models
         forwardModel = new SimpleMatrix(MEAS_SIZE, STATE_SIZE);
@@ -98,12 +107,11 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         forwardModel.set(1, 1, 1.0);   // Measure north position
 
         measGnssMat = SimpleMatrix.identity(MEAS_SIZE);
-        measGnssMat = measGnssMat.scale(Math.pow(GNSS_NOISE, 2.0));
+        measGnssMat = measGnssMat.scale(Math.pow(BASE_GNSS_NOISE, 2.0));
 
         measWifiMat = SimpleMatrix.identity(MEAS_SIZE);
         measWifiMat = measWifiMat.scale(Math.pow(BASE_WIFI_NOISE, 2.0));
 
-        lastUpdateTime = 0;
     }
 
     @Override
@@ -127,15 +135,38 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         // Calculate PDR movement and speed
         double dx = currentPdrPos[0] - previousPdrPos[0];
         double dy = currentPdrPos[1] - previousPdrPos[1];
+        double stepLength = Math.sqrt(dx * dx + dy * dy);
 
-        currentStepLength = Math.sqrt(dx * dx + dy * dy);
-        currentHeading = Math.atan2(dx, dy); // 0 = North, positive clockwise
+        currentHeading = Math.atan2(dy, dx);
 
         // Update particle parameters
-        moveParticlesDynamic(currentStepLength, currentHeading, dynamicPdrStds);
+        moveParticlesDynamic(stepLength, currentHeading, dynamicPdrStds);
 
-        // Update history with current estimate
-        updatePositionHistory();
+        if (currentGNSSpositionEMU != null) {
+            gnssMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
+            double[] movingAvg = getMovingAvgGnss();
+
+            gnssMeasurementVector.set(0, 0, movingAvg[0]);
+            gnssMeasurementVector.set(1, 0, movingAvg[1]);
+
+            reweightParticles(measGnssMat, forwardModel, gnssMeasurementVector);
+        }
+
+        if (currentWiFipositionEMU != null) {
+            wifiMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
+            double[] movingAvg = getMovingAvgWifi();
+
+            wifiMeasurementVector.set(0, 0, movingAvg[0]);
+            wifiMeasurementVector.set(1, 0, movingAvg[1]);
+
+            reweightParticles(measWifiMat, forwardModel, wifiMeasurementVector);
+        }
+
+        resampleParticles();
+
+        previousHeading = currentHeading;
+        previousPdrPos = currentPdrPos.clone();
+
     }
 
     @Override
@@ -157,51 +188,43 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
             return;
         }
 
+        latlngAltitude = altitude;
+
         // Initialize particles if not yet initialized
         if (!particlesInitialized) {
             initializeParticles();
         }
 
-        /*
+        Random rand = new Random();
+
         // Convert GNSS position to ENU (using the reference position)
         double[] enu = CoordinateConverter.convertGeodeticToEnu(
-                position.latitude, position.longitude, altitude,
+                position.latitude, position.longitude, latlngAltitude,
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
-        // Create measurement vector
-        SimpleMatrix measurementVector = new SimpleMatrix(MEAS_SIZE, 1);
-        measurementVector.set(0, 0, enu[0]);
-        measurementVector.set(1, 0, enu[1]);
+        currentGNSSpositionEMU[0] = enu[0] + rand.nextGaussian() * BASE_GNSS_NOISE;
+        currentGNSSpositionEMU[1] = enu[1] + rand.nextGaussian() * BASE_GNSS_NOISE;
+        enuAltitude = enu[2];
 
-        // Perform outlier detection
-        if (isGnssOutlier(enu)) {
-            Log.w(TAG, "GNSS outlier detected and ignored");
-            dynamicUpdate = false;
-            previousHeading = currentHeading;
-            previousPdrPos = currentPdrPos.clone();
-            return;
-        }
+        double[] currMovAvg = getMovingAvgGnss();
+        double[] stdMovAvg = new double[] {0.0, 0.0};
+        if (gnssPositionHistory.size() > 2) {
+            stdMovAvg = gnssEstimateStd(currMovAvg);
 
-        // Reweight particles
-        reweightParticles(measGnssMat, forwardModel, measurementVector);
-
-        // Only resample if effective sample size is below threshold
-        if (calculateEffectiveSampleSize() < MIN_EFFECTIVE_PARTICLES_RATIO * numParticles) {
-            resampleParticles();
-            // Add a small jitter to particles after resampling to avoid sample impoverishment
-            if (isMoving) {
-                addJitterToParticles(JITTER_AFTER_RESAMPLE);
+            // Perform outlier detection
+            if (outlierDetection(currentGNSSpositionEMU, stdMovAvg, currMovAvg)) {
+                Log.w(TAG, "GNSS outlier detected and ignored");
+                return;
             }
         }
 
-        dynamicUpdate = false;
-        previousHeading = currentHeading;
-        previousPdrPos = currentPdrPos.clone();
+        // Update the moving average
+        updateMovingAvgGnss(currentGNSSpositionEMU);
 
-        // Update position history
-        updatePositionHistory();
-        */
+        // Create measurement vector
+        measGnssMat.set(0, 0, BASE_GNSS_NOISE + Math.pow(stdMovAvg[0], 2));
+        measGnssMat.set(1, 1, BASE_GNSS_NOISE + Math.pow(stdMovAvg[1], 2));
 
     }
 
@@ -213,33 +236,38 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
             return;
         }
 
+        Random rand = new Random();
 
-        // Convert WiFi position to ENU (using the reference position)
+        // Convert GNSS position to ENU (using the reference position)
         double[] enu = CoordinateConverter.convertGeodeticToEnu(
-                position.latitude, position.longitude, referencePosition[2],
+                position.latitude, position.longitude, latlngAltitude,
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
-        // Create measurement vector
-        SimpleMatrix measurementVector = new SimpleMatrix(MEAS_SIZE, 1);
-        measurementVector.set(0, 0, enu[0]);
-        measurementVector.set(1, 0, enu[1]);
+        currentWiFipositionEMU[0] = enu[0] + rand.nextGaussian() * BASE_GNSS_NOISE;
+        currentWiFipositionEMU[1] = enu[1] + rand.nextGaussian() * BASE_GNSS_NOISE;
+        enuAltitude = enu[2];
 
-        // Reweight particles
-        reweightParticles(measWifiMat, forwardModel, measurementVector);
+        double[] currMovAvg = getMovingAvgWifi();
+        double[] stdMovAvg = new double[] {0.0, 0.0};
+        if (wifiPositionHistory.size() > 3) {
+            stdMovAvg = wifiEstimateStd(currMovAvg);
 
-        // Only resample if effective sample size is below threshold
-        if (calculateEffectiveSampleSize() < MIN_EFFECTIVE_PARTICLES_RATIO * numParticles) {
-            resampleParticles();
-            // Add a small jitter to particles after resampling
-            addJitterToParticles(JITTER_AFTER_RESAMPLE);
+            // Perform outlier detection
+            if (outlierDetection(currentWiFipositionEMU, stdMovAvg, currMovAvg)) {
+                Log.w(TAG, "WiFi outlier detected and ignored");
+                return;
+            }
         }
 
-        previousHeading = currentHeading;
-        previousPdrPos = currentPdrPos.clone();
+        // Update the moving average
+        updateMovingAvgWifi(currentWiFipositionEMU);
 
-        // Update position history
-        updatePositionHistory();
+        // Create measurement vector
+        //gnssMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
+        measWifiMat.set(0, 0, BASE_WIFI_NOISE + Math.pow(stdMovAvg[0], 2));
+        measWifiMat.set(1, 1, BASE_WIFI_NOISE + Math.pow(stdMovAvg[1], 2));
+
     }
 
     public LatLng getFusedPosition() {
@@ -263,7 +291,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
         // Convert ENU back to latitude/longitude
         LatLng result = CoordinateConverter.convertEnuToGeodetic(
-                avgPosition[0], avgPosition[1], 0, // Assume altitude=0 for the return value
+                avgPosition[0], avgPosition[1], enuAltitude,
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
@@ -280,13 +308,9 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         particlesInitialized = false;
         dynamicUpdate = false;
         particles.clear();
-        positionHistory.clear();
+        gnssPositionHistory.clear();
+        wifiPositionHistory.clear();
         Log.d(TAG, "Particle filter reset");
-    }
-
-    public double scaleHeadingUncert(long currentTime) {
-        double scaling = 3*(currentTime - lastUpdateTime)/1000.0;
-        return Math.sqrt(scaling);
     }
 
     // Simulate motion update of particles
@@ -295,27 +319,6 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
             particle.updateDynamic(stepLength, headingChange, pdrStds);
             particle.theta = CoordinateConverter.normalizeAngleToPi(particle.theta);
         }
-    }
-
-
-    // Add jitter to particles to prevent sample impoverishment
-    private void addJitterToParticles(double jitterAmount) {
-        Random rand = new Random();
-        for (Particle particle : particles) {
-            particle.x += rand.nextGaussian() * jitterAmount;
-            particle.y += rand.nextGaussian() * jitterAmount;
-            particle.theta += rand.nextGaussian() * (jitterAmount * 0.5 * Math.PI);
-            particle.theta = CoordinateConverter.normalizeAngleToPi(particle.theta);
-        }
-    }
-
-    // Calculate effective sample size to determine when to resample
-    private double calculateEffectiveSampleSize() {
-        double sumSquaredWeights = 0.0;
-        for (Particle particle : particles) {
-            sumSquaredWeights += particle.weight * particle.weight;
-        }
-        return 1.0 / sumSquaredWeights;
     }
 
     public void reweightParticles(SimpleMatrix measurementCovariance,
@@ -336,7 +339,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
             double logWeight = -0.5 * error.transpose().mult(measurementCovariance.invert()).mult(error).get(0, 0);
 
             // Store log-weight temporarily and track maximum
-            particle.logWeight = logWeight;
+            particle.logWeight += logWeight;
         }
 
         // Second pass - normalize weights using log-sum-exp trick for numerical stability
@@ -378,7 +381,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
             // Create a copy of the selected particle
             Particle original = particles.get(index);
-            Particle newParticle = new Particle(original.x, original.y, original.theta, original.stepLength);
+            Particle newParticle = new Particle(original.x, original.y, original.theta);
             newParticle.weight = 1.0 / numParticles;  // Reset weights to uniform
             newParticles.add(newParticle);
         }
@@ -405,63 +408,87 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     }
 
     // Update position history for outlier detection
-    private void updatePositionHistory() {
-        double[] currentEstimate = getEstimatedPosition();
+    private void updateMovingAvgGnss(double[] gnssEmuPosition) {
+        gnssPositionHistory.add(gnssEmuPosition);
 
         // Add current position to history
-        positionHistory.add(currentEstimate);
-
-        // Keep history to manageable size
-        if (positionHistory.size() > HISTORY_SIZE) {
-            positionHistory.remove(0);
+        if (gnssPositionHistory.size() > HISTORY_SIZE) {
+            gnssPositionHistory.remove(0);
         }
     }
 
-    // Detect GNSS outliers using innovation and historical positions
-    private boolean isGnssOutlier(double[] gnssEnu) {
-        // If we don't have enough history, we can't detect outliers reliably
-        if (positionHistory.size() < 2) {
-            return false;
+    private double[] getMovingAvgGnss() {
+        double size = (double) gnssPositionHistory.size();
+
+        double[] result = new double[]{0.0, 0.0};
+        for (int i = 0; i < gnssPositionHistory.size(); i++) {
+            result[0] += gnssPositionHistory.get(i)[0];
+            result[1] += gnssPositionHistory.get(i)[1];
         }
 
-        // Get current estimated position
-        double[] currentEstimate = getEstimatedPosition();
+        return new double[] {result[0]/size, result[1]/size};
 
-        // 1. Check innovation (difference between measurement and prediction)
-        double innovationX = gnssEnu[0] - currentEstimate[0];
-        double innovationY = gnssEnu[1] - currentEstimate[1];
-        double innovation = Math.sqrt(innovationX*innovationX + innovationY*innovationY);
+    }
 
-        // Hard threshold to reject obviously bad measurements
-        if (innovation > MAX_GNSS_INNOVATION) {
-            Log.w(TAG, "GNSS outlier rejected: innovation = " + innovation + "m");
-            return true;
+    // Update position history for outlier detection
+    private void updateMovingAvgWifi(double[] wifiEmuPosition) {
+        wifiPositionHistory.add(wifiEmuPosition);
+
+        // Add current position to history
+        if (wifiPositionHistory.size() > HISTORY_SIZE) {
+            wifiPositionHistory.remove(0);
+        }
+    }
+
+    private double[] getMovingAvgWifi() {
+        double size = (double) wifiPositionHistory.size();
+
+        double[] result = new double[]{0.0, 0.0};
+        for (int i = 0; i < wifiPositionHistory.size(); i++) {
+            result[0] += wifiPositionHistory.get(i)[0];
+            result[1] += wifiPositionHistory.get(i)[1];
         }
 
-        // 2. Calculate average position and standard deviation from history
-        double sumX = 0, sumY = 0;
-        for (double[] pos : positionHistory) {
-            sumX += pos[0];
-            sumY += pos[1];
-        }
-        double avgX = sumX / positionHistory.size();
-        double avgY = sumY / positionHistory.size();
+        return new double[] {result[0]/size, result[1]/size};
+
+    }
+
+    private double[] gnssEstimateStd(double[] movingAvg) {
 
         // Calculate standard deviation
         double varX = 0, varY = 0;
-        for (double[] pos : positionHistory) {
-            varX += Math.pow(pos[0] - avgX, 2);
-            varY += Math.pow(pos[1] - avgY, 2);
+        for (double[] pos : gnssPositionHistory) {
+            varX += Math.pow(pos[0] - movingAvg[0], 2);
+            varY += Math.pow(pos[1] - movingAvg[1], 2);
         }
-        double stdX = Math.sqrt(varX / positionHistory.size());
-        double stdY = Math.sqrt(varY / positionHistory.size());
+        double stdX = Math.sqrt(varX / gnssPositionHistory.size());
+        double stdY = Math.sqrt(varY / gnssPositionHistory.size());
 
-        // 3. Check if GNSS measurement is within threshold of standard deviations
-        boolean isOutlierX = Math.abs(gnssEnu[0] - avgX) > GNSS_OUTLIER_THRESHOLD * stdX;
-        boolean isOutlierY = Math.abs(gnssEnu[1] - avgY) > GNSS_OUTLIER_THRESHOLD * stdY;
+        return new double[] {stdX, stdY};
+    }
+
+    private double[] wifiEstimateStd(double[] movingAvg) {
+
+        // Calculate standard deviation
+        double varX = 0, varY = 0;
+        for (double[] pos : wifiPositionHistory) {
+            varX += Math.pow(pos[0] - movingAvg[0], 2);
+            varY += Math.pow(pos[1] - movingAvg[1], 2);
+        }
+        double stdX = Math.sqrt(varX / wifiPositionHistory.size());
+        double stdY = Math.sqrt(varY / wifiPositionHistory.size());
+
+        return new double[] {stdX, stdY};
+    }
+
+    private boolean outlierDetection(double[] measEnu, double[] stdVal, double[] movingAvg){
+
+        //Check if measurement measurement is within threshold of standard deviations
+        boolean isOutlierX = Math.abs(measEnu[0] - movingAvg[0]) > OUTLIER_THRESHOLD * stdVal[0];
+        boolean isOutlierY = Math.abs(measEnu[1] - movingAvg[1]) > OUTLIER_THRESHOLD * stdVal[1];
 
         // If standard deviation is too small, don't mark as outlier (avoids false positives)
-        if ((stdX < 1.0 || stdY < 1.0) && innovation < MAX_GNSS_INNOVATION / 2) {
+        if (stdVal[0] < 1.0 || stdVal[1] < 1.0) {
             return false;
         }
 
@@ -487,10 +514,9 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
      * Particles have uniform weights of 1/numParticles.
      */
     private void initializeParticles() {
-        Random rand = new Random();
 
         double[] initGnssCoordEnu = CoordinateConverter.convertGeodeticToEnu(
-                firstGnssPosition.latitude, firstGnssPosition.longitude, 0,
+                firstGnssPosition.latitude, firstGnssPosition.longitude, latlngAltitude,
                 referencePosition[0], referencePosition[1], referencePosition[2]);
 
         currentPdrPos[0] = initGnssCoordEnu[0];
@@ -500,27 +526,22 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         previousPdrPos[1] = initGnssCoordEnu[1];
 
         // Initial dispersion - spread particles in a reasonable area
-        double initialDispersion = 2.5; // 2.5 meters initial uncertainty
+        double initialDispersion = 10.0; // 2.5 meters initial uncertainty
 
         for (int i = 0; i < numParticles; i++) {
-            TDistribution tdist = new TDistribution(2);
+            Random rand = new Random();
 
             // Add some random noise to initial positions
-            double x = previousPdrPos[0] + tdist.sample() * initialDispersion;
-            double y = previousPdrPos[1] + tdist.sample() * initialDispersion;
-            double theta = tdist.sample() * 2 * Math.PI;  // Random orientation
-            double stepLength = 0.75 + tdist.sample() * dynamicPdrStds[1];
+            double x = previousPdrPos[0] + rand.nextGaussian() * initialDispersion;
+            double y = previousPdrPos[1] + rand.nextGaussian() * initialDispersion;
+            double theta = rand.nextGaussian() * 2 * Math.PI;  // Random orientation
 
-            Particle particle = new Particle(x, y, theta, stepLength);
+            Particle particle = new Particle(x, y, theta);
             particle.weight = 1.0 / numParticles;
             particles.add(particle);
         }
 
         particlesInitialized = true;
-
-        // Initialize position history
-        double[] initialPos = {previousPdrPos[0], previousPdrPos[1], 0.0};
-        positionHistory.add(initialPos);
     }
 
     /**

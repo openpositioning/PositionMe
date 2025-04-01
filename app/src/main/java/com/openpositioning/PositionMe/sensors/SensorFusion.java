@@ -17,6 +17,7 @@ import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.fusion.particle.ParticleFilterFusion;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
@@ -27,7 +28,6 @@ import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 // New imports for positioning fusion
 import com.openpositioning.PositionMe.fusion.IPositionFusionAlgorithm;
 import com.openpositioning.PositionMe.fusion.KalmanFilterFusion;
-import com.openpositioning.PositionMe.fusion.ParticleFilterFusion;
 import com.openpositioning.PositionMe.utils.PositionListener;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
 import com.openpositioning.PositionMe.utils.SimpleFusionConverter;
@@ -400,8 +400,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                     float[] newCords = this.pdrProcessing.updatePdr(
                             stepTime,
                             this.accelMagnitude,
-                            this.orientation[0]
-                    );
+                            this.orientation[0] // Initially 0 degrees is North
+                    ); // At output 0 degrees is East
 
                     Log.d("SensorFusion", "PDR update calculated: X=" + newCords[0] + ", Y=" + newCords[1]);
 
@@ -502,8 +502,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
 
-            // Call fusion update with WiFi
-            updateFusionWithWifi();
         }
         createWifiPositioningRequest();
     }
@@ -550,8 +548,11 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Store WiFi position and notify listeners, but don't update fusion
+                    // Store WiFi position and notify listeners
                     wifiPosition = wifiLocation;
+
+                    // Call fusion update with WiFi
+                    updateFusionWithWifi();
 
                 }
 
@@ -1323,7 +1324,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 referencePosition[0] + ", " + referencePosition[1] + ", " + referencePosition[2]);
 
         // Create fusion algorithm with valid reference position
-        fusionAlgorithm = new KalmanFilterFusion(referencePosition);
+        fusionAlgorithm = new ParticleFilterFusion(NUM_PARTICLES, referencePosition);
     }
 
     /**
