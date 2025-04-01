@@ -136,13 +136,7 @@ public class ReplayFragment extends Fragment {
                 WIFI_data.add(point.cachedWiFiLocation);
             }
             // Pre-compute EKF data
-            LatLng prevPDR = (i > 0) ? replayData.get(i - 1).pdrLocation : point.pdrLocation;
-            LatLng ekfPoint = SensorFusion.getInstance().EKF_replay(
-                    point.cachedWiFiLocation != null ? point.cachedWiFiLocation : prevWiFiLocation,
-                    point.pdrLocation,
-                    prevPDR,
-                    point.gnssLocation
-            );
+            LatLng ekfPoint =EKF_point(i);
             if (ekfPoint != null) {
                 EKF_data.add(ekfPoint);
             }
