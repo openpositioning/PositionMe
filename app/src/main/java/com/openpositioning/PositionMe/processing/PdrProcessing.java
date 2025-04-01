@@ -470,8 +470,10 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         this.gravityData = data;
         if (this.linearAccelerationData == null) {
             elevator = estimateElevator(data.gravity, new float[]{0,0,0});
+            this.notifyObservers(0);
         } else {
             elevator = estimateElevator(data.gravity, this.linearAccelerationData.filteredAcc);
+            this.notifyObservers(0);
         }
     }
 
@@ -480,8 +482,10 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         this.accelMagnitude.add(data.accelMagnitude);
         if (this.gravityData == null) {
             elevator = estimateElevator(new float[]{0,0,0}, data.filteredAcc);
+            this.notifyObservers(0);
         } else {
             elevator = estimateElevator(this.gravityData.gravity, data.filteredAcc);
+            this.notifyObservers(0);
         }
     }
 
@@ -534,7 +538,7 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         observers.add(o);
     }
 
-    public record PdrData(float[] position, boolean inElevator) {};
+    public record PdrData(float[] position, boolean inElevator) {}
 
     @Override
     public void notifyObservers(int idx) {

@@ -86,9 +86,9 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   private LatLng fusedLocation;
   private float fusedError;
 
-  private boolean inElevator;
+  private boolean inElevator = false;
 
-  private boolean elevator;
+  private boolean elevator = false;
 
   // Store the last event timestamps for each sensor type
   private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -333,7 +333,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
    * @return true if the PDR estimates the user is in an elevator, false otherwise.
    */
   public boolean getElevator() {
-    return this.inElevator;
+    return this.elevator;
   }
 
   public float getFusionError() {
@@ -587,16 +587,15 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     this.gnssLoc = loc;
     float xAccuracy = data.accuracy;
     float xVariance = (float) Math.pow(xAccuracy, 2);
-    float yVariance = (float) Math.pow(data.verticalAccuracy, 2);
     SimpleMatrix currentGnssCovariance = GNSS_COVARIANCE.copy();
     currentGnssCovariance.set(0, 0, xVariance);
-    currentGnssCovariance.set(1, 1, yVariance);
+    currentGnssCovariance.set(1, 1, xVariance);
     if (startLocation != null && currPdrData != null) {
       this.isGnssOutlier = isOutlier(coordinateTransformer, fusedLocation, loc);
       if (!this.isGnssOutlier && !inElevator) {
         updateFusionData(loc, currentGnssCovariance, currPdrData);
       }
-      if (inElevator && !getElevator()) {  // Has just left an elevator
+      if (!this.isGnssOutlier && inElevator && !getElevator()) {  // Has just left an elevator
         resetFilter(loc, currPdrData);
         inElevator = false;
       }
@@ -621,7 +620,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
         if (startLocation != null && pdrData != null && !isWifiLocationOutlier && !inElevator) {
           updateFusionData(this.currentWifiLocation, WIFI_COVARIANCE, pdrData);
         }
-        if (inElevator && !getElevator() && pdrData != null) {  // Has just left an elevator
+        if (this.isWifiLocationOutlier && inElevator && !getElevator() && pdrData != null) {  // Has just left an elevator
           resetFilter(this.currentWifiLocation, pdrData);
           inElevator = false;
         }
@@ -650,11 +649,12 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
       PdrProcessing.PdrData pdrData = (PdrProcessing.PdrData) objList[0];
       // Update the path view with the new PDR data
       pathView.drawTrajectory(pdrData.position());
-
-      if(!inElevator && pdrData.inElevator()) {
+      this.elevator = pdrData.inElevator();
+      if(!inElevator && pdrData.inElevator() && fusedLocation != null) {
         this.inElevator = true;
         // Get the closest elevator's LatLng using the NucleusBuildingManager helper
-        LatLng closestElevator = NucleusBuildingManager.getClosestElevatorLatLng(fusedLocation, coordinateTransformer);
+        LatLng closestElevator = NucleusBuildingManager.getClosestElevatorLatLng
+                (fusedLocation, coordinateTransformer);
         if (closestElevator != null) {
           fusedLocation = closestElevator;
         }
