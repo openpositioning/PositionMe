@@ -59,7 +59,6 @@ public class TrajectoryMapFragment extends Fragment {
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
     private Polyline polyline; // Polyline representing user's movement path
-    private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
 
     private Polyline gnssPolyline; // Polyline for GNSS path
@@ -111,7 +110,7 @@ public class TrajectoryMapFragment extends Fragment {
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
-        switchColorButton = view.findViewById(R.id.lineColorButton);
+
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -156,20 +155,7 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // Color switch
-        switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
-                if (isRed) {
-                    switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
-                    isRed = false;
-                } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
-                    isRed = true;
-                }
-            }
-        });
+
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
@@ -213,7 +199,14 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-
+    // code by Jamie Arnott
+    /**
+     * Method to display correct nucleus floor based on floor level received from WiFi data
+     * @param floor
+     */
+    public void displayNucleusFloorLevel(int floor){
+        indoorMapManager.setCurrentFloor(floor, true);
+    }
 
 
 
