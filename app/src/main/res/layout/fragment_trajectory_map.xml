@@ -29,50 +29,65 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="8dp"
-            android:gravity="center">
+            android:gravity="start">
 
+            <!-- GNSS Switch -->
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/gnssSwitch"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch" />
+                android:drawableStart="@drawable/circle_blue"
+                android:drawablePadding="12dp"
+                android:text="@string/gnssSwitch"
+                android:gravity="center_vertical" />
+
+            <!-- WiFi Switch -->
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/wifiSwitch"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/wifiSwitch" />
+                android:drawableStart="@drawable/circle_magenta"
+                android:drawablePadding="12dp"
+                android:text="@string/wifiSwitch"
+                android:gravity="center_vertical" />
 
+            <!-- PDR Switch -->
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/pdrSwitch"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/pdrSwitch" />
+                android:drawableStart="@drawable/circle_red"
+                android:drawablePadding="12dp"
+                android:text="@string/pdrSwitch"
+                android:gravity="center_vertical" />
 
+            <!-- Auto Floor Switch -->
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/autoFloor"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/auto_floor" />
+                android:text="@string/auto_floor"
+                android:gravity="center_vertical" />
 
+            <!-- Line Color Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/lineColorButton"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
+                android:backgroundTint="@color/green"
                 android:textColor="@color/md_theme_onPrimary"
                 android:text="@string/color"
-                app:elevation="5dp"/>
+                app:elevation="5dp" />
 
+            <!-- Map Type Spinner -->
             <Spinner
                 android:id="@+id/mapSwitchSpinner"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginStart="0dp"
                 android:layout_marginTop="8dp"
                 android:background="@android:color/white"
                 android:spinnerMode="dropdown"
-                app:layout_constraintTop_toTopOf="parent"
-                android:elevation="5dp"/>
+                android:elevation="5dp" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
