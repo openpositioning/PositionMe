@@ -25,6 +25,7 @@ import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
 import com.openpositioning.PositionMe.sensors.SensorListeners.SensorDataListener;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
+import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
@@ -85,6 +86,9 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   private LatLng fusedLocation;
   private float fusedError;
 
+  private boolean inElevator;
+
+  private boolean elevator;
 
   // Store the last event timestamps for each sensor type
   private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -329,7 +333,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
    * @return true if the PDR estimates the user is in an elevator, false otherwise.
    */
   public boolean getElevator() {
-    return pdrProcessing.isElevator();
+    return this.inElevator;
   }
 
   public float getFusionError() {
@@ -382,6 +386,21 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     return mse;
   }
 
+
+  private double[] latLngToXY(LatLng reference, LatLng pt) {
+    ProjCoordinate startLocationNorthEast = coordinateTransformer.convertWGS84ToTarget(
+            reference.latitude,
+            reference.longitude);
+    ProjCoordinate observationNorthEast = coordinateTransformer.convertWGS84ToTarget(
+            pt.latitude,
+            pt.longitude);
+    double[] ptXYZ = CoordinateTransformer.getRelativePosition(
+            startLocationNorthEast,
+            observationNorthEast
+    );
+    return new double[]{ptXYZ[0], ptXYZ[1]};
+  }
+
   private void updateFusionData(LatLng observation, SimpleMatrix observationCov, float[] pdrData) {
     double[] pdrData64 = {pdrData[0], pdrData[1]};
 
@@ -415,6 +434,26 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   }
 
 
+  private void resetFilter(LatLng newPos, float[] pdrData) {
+    double[] newXY = latLngToXY(startLocation, newPos);
+
+    double[] pdrData64 = {pdrData[0], pdrData[1]};
+
+    // Get the current timestamp and update the filter
+    double timestamp = (System.currentTimeMillis() - absoluteStartTime) / 1e3;
+    if (!filter.reset(newXY, INIT_POS_COVARIANCE, pdrData64, timestamp)) {
+      Log.w("SensorFusion", "Filter reset failed");
+    }
+    double[] fusedPos = filter.getPos();
+
+    // Convert back to Lat-Long
+    ProjCoordinate fusedCoord = coordinateTransformer.applyDisplacementAndConvert(
+            startLocation.latitude, startLocation.longitude, fusedPos[0], fusedPos[1]);
+    fusedLocation = new LatLng(fusedCoord.y, fusedCoord.x);
+
+    SimpleMatrix fusedCov = filter.getCovariance();
+    this.fusedError = (float) Math.sqrt(computeMSE(fusedCov));
+  }
   public void addTag(){
     this.trajRecorder.addTag(new float[]{(float) this.fusedLocation.latitude,
         (float) this.fusedLocation.longitude});
@@ -553,11 +592,13 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     currentGnssCovariance.set(0, 0, xVariance);
     currentGnssCovariance.set(1, 1, yVariance);
     if (startLocation != null && currPdrData != null) {
-      if (!isOutlier(coordinateTransformer, fusedLocation, loc)) {
+      this.isGnssOutlier = isOutlier(coordinateTransformer, fusedLocation, loc);
+      if (!this.isGnssOutlier && !inElevator) {
         updateFusionData(loc, currentGnssCovariance, currPdrData);
-        this.isGnssOutlier = false;
-      } else {
-        this.isGnssOutlier = true;
+      }
+      if (inElevator && !getElevator()) {  // Has just left an elevator
+        resetFilter(loc, currPdrData);
+        inElevator = false;
       }
     }
   }
@@ -577,8 +618,12 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
         this.isWifiLocationOutlier = isOutlier(coordinateTransformer,
             fusedLocation,
             this.currentWifiLocation);
-        if (startLocation != null && pdrData != null && !isWifiLocationOutlier) {
+        if (startLocation != null && pdrData != null && !isWifiLocationOutlier && !inElevator) {
           updateFusionData(this.currentWifiLocation, WIFI_COVARIANCE, pdrData);
+        }
+        if (inElevator && !getElevator() && pdrData != null) {  // Has just left an elevator
+          resetFilter(this.currentWifiLocation, pdrData);
+          inElevator = false;
         }
       }
     }
@@ -598,12 +643,22 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   @Override
   public void update(Object[] objList) {
     // Convert to Float[] array, called by PDRProcessing
-    // to update the path view
-    float[] pdrData = new float[objList.length];
-    for (int i = 0; i < objList.length; i++) {
-      pdrData[i] = ((Number) objList[i]).floatValue();
-    }
-    // Update the path view with the new PDR data
-    pathView.drawTrajectory(pdrData);
+    // to update the path view\
+    // Update the trajectory with the PDR data
+    if (objList != null && objList.length > 0) {
+      // Update provides the X,Y float array of the PDR data
+      PdrProcessing.PdrData pdrData = (PdrProcessing.PdrData) objList[0];
+      // Update the path view with the new PDR data
+      pathView.drawTrajectory(pdrData.position());
+
+      if(!inElevator && pdrData.inElevator()) {
+        this.inElevator = true;
+        // Get the closest elevator's LatLng using the NucleusBuildingManager helper
+        LatLng closestElevator = NucleusBuildingManager.getClosestElevatorLatLng(fusedLocation, coordinateTransformer);
+        if (closestElevator != null) {
+          fusedLocation = closestElevator;
+        }
+      }
+  }
   }
 }

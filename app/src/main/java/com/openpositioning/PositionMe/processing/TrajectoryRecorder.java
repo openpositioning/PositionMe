@@ -103,11 +103,11 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
     // Update the trajectory with the PDR data
     if (objList != null && objList.length > 0) {
       // Update provides the X,Y float array of the PDR data
-      Float[] pdrData = (Float[]) objList;
+      PdrProcessing.PdrData pdrData = (PdrProcessing.PdrData) objList[0];
       trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
           .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-          .setX(pdrData[0])
-          .setY(pdrData[1]));
+          .setX(pdrData.position()[0])
+          .setY(pdrData.position()[1]));
     } else {
       Log.e("SensorFusion", "PDR data is null or empty.");
     }

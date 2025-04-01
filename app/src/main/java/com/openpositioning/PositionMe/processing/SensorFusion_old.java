@@ -1,4 +1,4 @@
-//package com.openpositioning.PositionMe.processing;
+//package com.openpositioning.PositionMe.sensors;
 //
 //import android.content.Context;
 //import android.content.SharedPreferences;
@@ -12,23 +12,28 @@
 //import android.os.PowerManager;
 //import android.os.SystemClock;
 //import android.util.Log;
+//
 //import androidx.annotation.NonNull;
 //import androidx.preference.PreferenceManager;
+//
 //import com.google.android.gms.maps.model.LatLng;
-//import com.openpositioning.PositionMe.Traj;
-//import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 //import com.openpositioning.PositionMe.presentation.activity.MainActivity;
-//import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 //import com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment;
-//import com.openpositioning.PositionMe.processing.filters.FilterAdapter;
-//import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;
-//import com.openpositioning.PositionMe.sensors.MovementSensor;
-//import com.openpositioning.PositionMe.sensors.Observer;
-//import com.openpositioning.PositionMe.sensors.SensorInfo;
-//import com.openpositioning.PositionMe.sensors.SensorTypes;
-//import com.openpositioning.PositionMe.sensors.Wifi;
+//import com.openpositioning.PositionMe.sensors.filters.FilterAdapter;
+//import com.openpositioning.PositionMe.sensors.filters.KalmanFilterAdapter;
 //import com.openpositioning.PositionMe.utils.CoordinateTransformer;
+//import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
 //import com.openpositioning.PositionMe.utils.PathView;
+//import com.openpositioning.PositionMe.utils.PdrProcessing;
+//import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+//import com.openpositioning.PositionMe.Traj;
+//import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
+//
+//import org.ejml.simple.SimpleMatrix;
+//import org.json.JSONException;
+//import org.json.JSONObject;
+//import org.locationtech.proj4j.ProjCoordinate;
+//
 //import java.util.ArrayList;
 //import java.util.HashMap;
 //import java.util.List;
@@ -37,10 +42,6 @@
 //import java.util.TimerTask;
 //import java.util.stream.Collectors;
 //import java.util.stream.Stream;
-//import org.ejml.simple.SimpleMatrix;
-//import org.json.JSONException;
-//import org.json.JSONObject;
-//import org.locationtech.proj4j.ProjCoordinate;
 //
 //
 ///**
@@ -52,7 +53,7 @@
 // * <p>
 // * The class implements {@link SensorEventListener} and has instances of {@link MovementSensor} for
 // * every device type necessary for data collection. As such, it implements the
-// * {@link SensorFusion_old#onSensorChanged(SensorEvent)} function, and process and records the data
+// * {@link SensorFusion#onSensorChanged(SensorEvent)} function, and process and records the data
 // * provided by the sensor hardware, which are stored in a {@link Traj} object. Data is read
 // * continuously but is only saved to the trajectory when recording is enabled.
 // * <p>
@@ -63,16 +64,12 @@
 // * @author Mate Stodulka
 // * @author Virginia Cangelosi
 // * <p>
-// * Kalman filter integration done by
+// * Particle filter integration done by
 // * @author Wojciech Boncela
 // * @author Philip Heptonstall
 // * @author Alexandros Zoupos
 // */
-//public class SensorFusion_old {
-//
-//
-//
-//
+//public class SensorFusion implements SensorEventListener, Observer {
 //
 //  // Store the last event timestamps for each sensor type
 //  private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -85,32 +82,32 @@
 //
 //  //region Static variables
 //  // Singleton Class
-//  private static final SensorFusion_old sensorFusion = new SensorFusion_old();
+//  private static final SensorFusion sensorFusion = new SensorFusion();
 //  // Static constant for calculations with milliseconds
 //  private static final long TIME_CONST = 10;
 //  // Coefficient for fusing gyro-based and magnetometer-based orientation
 //  public static final float FILTER_COEFFICIENT = 0.96f;
 //  //Tuning value for low pass filter
 //  private static final float ALPHA = 0.8f;
-//  // String for creating WiFi fingerprint JSON object
+//  // String for creating WiFi fingerprint JSO N object
 //  private static final String WIFI_FINGERPRINT = "wf";
 //
-//  private static final float OUTLIER_DISTANCE_THRESHOLD = 10;
+//  private static final float OUTLIER_DISTANCE_THRESHOLD = 15;
 //  public static final SimpleMatrix INIT_POS_COVARIANCE = new SimpleMatrix(new double[][]{
-//      {2.0, 0.0},
-//      {0.0, 2.0}
+//          {2.0, 0.0},
+//          {0.0, 2.0}
 //  });
 //  public static final SimpleMatrix PDR_COVARIANCE = new SimpleMatrix(new double[][]{
-//      {1.0, 0.0},
-//      {0.0, 5.0}
+//          {1.0, 0.0},
+//          {0.0, 5.0}
 //  });
 //  public static final SimpleMatrix WIFI_COVARIANCE = new SimpleMatrix(new double[][]{
-//      {2.0, 0.0},
-//      {0.0, 2.0}
+//          {2.0, 0.0},
+//          {0.0, 2.0}
 //  });
 //  public static final SimpleMatrix GNSS_COVARIANCE = new SimpleMatrix(new double[][]{
-//      {5.0, 0.0},
-//      {0.0, 5.0}
+//          {5.0, 0.0},
+//          {0.0, 5.0}
 //  });
 //  //endregion
 //
@@ -181,6 +178,7 @@
 //  // Location values
 //  private float gnssLatitude;
 //  private float gnssLongitude;
+//  private boolean isGnssOutlier;
 //  private float altitude;
 //  private LatLng startLocation;
 //  // Wifi values
@@ -190,6 +188,7 @@
 //  private boolean isWifiLocationOutlier = false;
 //  private float[] fusedLocation;
 //  private float fusedError;
+//  private boolean inElevator;
 //
 //
 //  // Over time accelerometer magnitude values since last step
@@ -211,7 +210,7 @@
 //   * Private constructor for implementing singleton design pattern for SensorFusion. Initialises
 //   * empty arrays and new objects that do not depends on outside information.
 //   */
-//  private SensorFusion_old() {
+//  private SensorFusion() {
 //    // Location listener to be used by the GNSS class
 //    this.locationListener = new myLocationListener();
 //    // Timer to store sensor values in the trajectory object
@@ -237,13 +236,13 @@
 //  }
 //
 //  public static boolean isOutlier(CoordinateTransformer transformer,
-//      LatLng currentPoint, LatLng update) {
+//                                  LatLng currentPoint, LatLng update) {
 //    ProjCoordinate currentPointXY = transformer
-//        .convertWGS84ToTarget(currentPoint.latitude, currentPoint.longitude);
+//            .convertWGS84ToTarget(currentPoint.latitude, currentPoint.longitude);
 //    ProjCoordinate updatePointXY = transformer
-//        .convertWGS84ToTarget(update.latitude, update.longitude);
+//            .convertWGS84ToTarget(update.latitude, update.longitude);
 //    double distance = CoordinateTransformer.calculateDistance(currentPointXY,
-//        updatePointXY);
+//            updatePointXY);
 //    return distance > OUTLIER_DISTANCE_THRESHOLD;
 //  }
 //
@@ -253,7 +252,7 @@
 //   *
 //   * @return singleton instance of SensorFusion class.
 //   */
-//  public static SensorFusion_old getInstance() {
+//  public static SensorFusion getInstance() {
 //    return sensorFusion;
 //  }
 //
@@ -303,7 +302,7 @@
 //    this.pathView = new PathView(context, null);
 //    this.wiFiPositioning = new WiFiPositioning(context);
 //    this.filter = new KalmanFilterAdapter(new double[]{0.0, 0.0}, INIT_POS_COVARIANCE,
-//        0.0, PDR_COVARIANCE);
+//            0.0, PDR_COVARIANCE);
 //
 //    if (settings.getBoolean("overwrite_constants", false)) {
 //      this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
@@ -313,7 +312,7 @@
 //
 //    // Keep app awake during the recording (using stored appContext)
 //    PowerManager powerManager = (PowerManager) this.appContext.getSystemService(
-//        Context.POWER_SERVICE);
+//            Context.POWER_SERVICE);
 //    wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
 //  }
 //
@@ -352,6 +351,19 @@
 //    lastEventTimestamps.put(sensorType, currentTime);
 //    eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
 //
+//    boolean elevatorEst = getElevator();
+//    if (fusedLocation != null && !inElevator && elevatorEst) {
+//      inElevator = true;
+//      // Create a LatLng from the current fused location
+//      LatLng userPosition = new LatLng(fusedLocation[0], fusedLocation[1]);
+//      // Get the closest elevator's LatLng using the NucleusBuildingManager helper
+//      LatLng closestElevator = NucleusBuildingManager.getClosestElevatorLatLng(userPosition, coordinateTransformer);
+//      if (closestElevator != null) {
+//        fusedLocation[0] = (float) closestElevator.latitude;
+//        fusedLocation[1] = (float) closestElevator.longitude;
+//      }
+//    }
+//
 //    switch (sensorType) {
 //      case Sensor.TYPE_ACCELEROMETER:
 //        acceleration[0] = sensorEvent.values[0];
@@ -360,13 +372,13 @@
 //        break;
 //
 //      case Sensor.TYPE_PRESSURE:
-//          pressure = (1 -  ALPHA) * pressure + ALPHA * sensorEvent.values[0];
-//          if (saveRecording) {
-//              this.elevation = pdrProcessing.updateElevation(
-//                      SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
-//              );
-//          }
-//          break;
+//        pressure = (1 -  ALPHA) * pressure + ALPHA * sensorEvent.values[0];
+//        if (saveRecording) {
+//          this.elevation = pdrProcessing.updateElevation(
+//                  SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
+//          );
+//        }
+//        break;
 //
 //      case Sensor.TYPE_GYROSCOPE:
 //        angularVelocity[0] = sensorEvent.values[0];
@@ -380,9 +392,9 @@
 //
 //        // Compute magnitude & add to accelMagnitude
 //        double accelMagFiltered = Math.sqrt(
-//            Math.pow(filteredAcc[0], 2) +
-//                Math.pow(filteredAcc[1], 2) +
-//                Math.pow(filteredAcc[2], 2)
+//                Math.pow(filteredAcc[0], 2) +
+//                        Math.pow(filteredAcc[1], 2) +
+//                        Math.pow(filteredAcc[2], 2)
 //        );
 //        this.accelMagnitude.add(accelMagFiltered);
 //
@@ -428,10 +440,11 @@
 //
 //      case Sensor.TYPE_STEP_DETECTOR:
 //        long stepTime = SystemClock.uptimeMillis() - bootTime;
+//
 //        if (currentTime - lastStepTime < 20) {
 //          Log.e("SensorFusion",
-//              "Ignoring step event, too soon after last step event:" + (currentTime - lastStepTime)
-//                  + " ms");
+//                  "Ignoring step event, too soon after last step event:" + (currentTime - lastStepTime)
+//                          + " ms");
 //          // Ignore rapid successive step events
 //          break;
 //        } else {
@@ -439,17 +452,17 @@
 //          // Log if accelMagnitude is empty
 //          if (accelMagnitude.isEmpty()) {
 //            Log.e("SensorFusion",
-//                "stepDetection triggered, but accelMagnitude is empty! " +
-//                    "This can cause updatePdr(...) to fail or return bad results.");
+//                    "stepDetection triggered, but accelMagnitude is empty! " +
+//                            "This can cause updatePdr(...) to fail or return bad results.");
 //          } else {
 //            Log.d("SensorFusion",
-//                "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
+//                    "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
 //          }
 //
 //          float[] newCords = this.pdrProcessing.updatePdr(
-//              stepTime,
-//              this.accelMagnitude,
-//              this.orientation[0]
+//                  stepTime,
+//                  this.accelMagnitude,
+//                  this.orientation[0]
 //          );
 //
 //          // Clear the accelMagnitude after using it
@@ -459,9 +472,9 @@
 //            this.pathView.drawTrajectory(newCords);
 //            stepCounter++;
 //            trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
-//                .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-//                .setX(newCords[0])
-//                .setY(newCords[1]));
+//                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+//                    .setX(newCords[0])
+//                    .setY(newCords[1]));
 //          }
 //          break;
 //        }
@@ -476,7 +489,7 @@
 //  public void logSensorFrequencies() {
 //    for (int sensorType : eventCounts.keySet()) {
 //      Log.d("SensorFusion",
-//          "Sensor " + sensorType + " | Event Count: " + eventCounts.get(sensorType));
+//              "Sensor " + sensorType + " | Event Count: " + eventCounts.get(sensorType));
 //    }
 //  }
 //
@@ -495,9 +508,10 @@
 //      //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
 //      gnssLatitude = (float) location.getLatitude();
 //      gnssLongitude = (float) location.getLongitude();
-//      if (fusedLocation == null) {
-//        // Initial fused location is GNSS latlng.
-//        fusedLocation = new float[]{gnssLatitude, gnssLongitude};
+//      if (fusedLocation != null && coordinateTransformer != null) {
+//        isGnssOutlier = isOutlier(coordinateTransformer,
+//                new LatLng(fusedLocation[0],fusedLocation[1]),
+//                new LatLng(gnssLatitude, gnssLongitude));
 //      }
 //      LatLng loc = new LatLng(gnssLatitude, gnssLongitude);
 //      float altitude = (float) location.getAltitude();
@@ -511,19 +525,25 @@
 //      String provider = location.getProvider();
 //      float[] pdrData = getSensorValueMap().get(SensorTypes.PDR);
 //      if (startLocation != null && pdrData != null) {
-//        if (!isOutlier(coordinateTransformer, new LatLng(fusedLocation[0], fusedLocation[1]), loc)) {
+//        if (!isOutlier(coordinateTransformer, new LatLng(fusedLocation[0], fusedLocation[1]), loc) &&
+//                !inElevator) {
 //          updateFusionData(loc, currentGnssCovariance, pdrData);
+//        }
+//
+//        if (inElevator && !getElevator()) {  // Has just left an elevator
+//          resetFilter(loc, pdrData);
+//          inElevator = false;
 //        }
 //      }
 //      if (saveRecording) {
 //        trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
-//            .setAccuracy(xAccuracy)
-//            .setAltitude(altitude)
-//            .setLatitude(gnssLatitude)
-//            .setLongitude(gnssLongitude)
-//            .setSpeed(speed)
-//            .setProvider(provider)
-//            .setRelativeTimestamp(System.currentTimeMillis() - absoluteStartTime));
+//                .setAccuracy(xAccuracy)
+//                .setAltitude(altitude)
+//                .setLatitude(gnssLatitude)
+//                .setLongitude(gnssLongitude)
+//                .setSpeed(speed)
+//                .setProvider(provider)
+//                .setRelativeTimestamp(System.currentTimeMillis() - absoluteStartTime));
 //      }
 //    }
 //  }
@@ -542,11 +562,11 @@
 //
 //    if (this.saveRecording) {
 //      Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
-//          .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
+//              .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
 //      for (Wifi data : this.wifiList) {
 //        wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
-//            .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-//            .setMac(data.getBssid()).setRssi(data.getLevel()));
+//                .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+//                .setMac(data.getBssid()).setRssi(data.getLevel()));
 //      }
 //      // Adding WiFi data to Trajectory
 //      this.trajectory.addWifiData(wifiData);
@@ -589,32 +609,56 @@
 //    return mse;
 //  }
 //
-//  private void updateFusionData(LatLng observation, SimpleMatrix observationCov, float[] pdrData) {
-//    double[] pdrData64 = {pdrData[0], pdrData[1]};
-//
-//    // Convert the WiFi location to XY
+//  private double[] latLngToXY(LatLng reference, LatLng pt) {
 //    ProjCoordinate startLocationNorthEast = coordinateTransformer.convertWGS84ToTarget(
-//        startLocation.latitude,
-//        startLocation.longitude);
+//            reference.latitude,
+//            reference.longitude);
 //    ProjCoordinate observationNorthEast = coordinateTransformer.convertWGS84ToTarget(
-//        observation.latitude,
-//        observation.longitude);
-//    double[] wifiXYZ = CoordinateTransformer.getRelativePosition(
-//        startLocationNorthEast,
-//        observationNorthEast
+//            pt.latitude,
+//            pt.longitude);
+//    double[] ptXYZ = CoordinateTransformer.getRelativePosition(
+//            startLocationNorthEast,
+//            observationNorthEast
 //    );
-//    double[] wifiXY = {wifiXYZ[0], wifiXYZ[1]};
+//    return new double[]{ptXYZ[0], ptXYZ[1]};
+//  }
+//
+//  private void updateFusionData(LatLng observation, SimpleMatrix observationCov, float[] pdrData) {
+//    double[] obsXY = latLngToXY(startLocation, observation);
+//
+//    double[] pdrData64 = {pdrData[0], pdrData[1]};
 //
 //    // Get the current timestamp and update the filter
 //    double timestamp = (System.currentTimeMillis() - absoluteStartTime) / 1e3;
-//    if (!filter.update(pdrData64, wifiXY, timestamp, observationCov)) {
+//    if (!filter.update(pdrData64, obsXY, timestamp, observationCov)) {
 //      Log.w("SensorFusion", "Filter update failed");
 //    }
 //    double[] fusedPos = filter.getPos();
 //
 //    // Convert back to Lat-Long
 //    ProjCoordinate fusedCoord = coordinateTransformer.applyDisplacementAndConvert(
-//        startLocation.latitude, startLocation.longitude, fusedPos[0], fusedPos[1]);
+//            startLocation.latitude, startLocation.longitude, fusedPos[0], fusedPos[1]);
+//    fusedLocation = new float[]{(float) fusedCoord.y, (float) fusedCoord.x};
+//
+//    SimpleMatrix fusedCov = filter.getCovariance();
+//    this.fusedError = (float) Math.sqrt(computeMSE(fusedCov));
+//  }
+//
+//  private void resetFilter(LatLng newPos, float[] pdrData) {
+//    double[] newXY = latLngToXY(startLocation, newPos);
+//
+//    double[] pdrData64 = {pdrData[0], pdrData[1]};
+//
+//    // Get the current timestamp and update the filter
+//    double timestamp = (System.currentTimeMillis() - absoluteStartTime) / 1e3;
+//    if (!filter.reset(newXY, INIT_POS_COVARIANCE, pdrData64, timestamp)) {
+//      Log.w("SensorFusion", "Filter reset failed");
+//    }
+//    double[] fusedPos = filter.getPos();
+//
+//    // Convert back to Lat-Long
+//    ProjCoordinate fusedCoord = coordinateTransformer.applyDisplacementAndConvert(
+//            startLocation.latitude, startLocation.longitude, fusedPos[0], fusedPos[1]);
 //    fusedLocation = new float[]{(float) fusedCoord.y, (float) fusedCoord.x};
 //
 //    SimpleMatrix fusedCov = filter.getCovariance();
@@ -646,11 +690,16 @@
 //            currentWifiLocation = wifiLocation;
 //            if (coordinateTransformer != null) {
 //              isWifiLocationOutlier = isOutlier(coordinateTransformer,
-//                  new LatLng(fusedLocation[0], fusedLocation[1]),
-//                  wifiLocation);
+//                      new LatLng(fusedLocation[0], fusedLocation[1]),
+//                      wifiLocation);
 //            }
-//            if (startLocation != null && pdrData != null && !isWifiLocationOutlier) {
+//            if (startLocation != null && pdrData != null && !isWifiLocationOutlier &&
+//                    !inElevator) {
 //              updateFusionData(wifiLocation, WIFI_COVARIANCE, pdrData);
+//            }
+//            if (inElevator && !getElevator() && pdrData != null) {  // Has just left an elevator
+//              resetFilter(wifiLocation, pdrData);
+//              inElevator = false;
 //            }
 //          }
 //        }
@@ -659,7 +708,7 @@
 //        public void onError(String message) {
 //          // Handle the error response
 //          Log.e("SensorFusion.WifiPositioning", "Wifi Positioning request" +
-//              "returned an error! " + message);
+//                  "returned an error! " + message);
 //        }
 //      });
 //    } catch (JSONException e) {
@@ -825,6 +874,7 @@
 //  public void setStartGNSSLatitude(float[] startPosition) {
 //    this.startLocation = new LatLng(startPosition[0], startPosition[1]);
 //    this.coordinateTransformer = new CoordinateTransformer(startPosition[0], startPosition[1]);
+//    this.fusedLocation = new float[] {startPosition[0], startPosition[1]};
 //  }
 //
 //
@@ -875,13 +925,14 @@
 //    sensorValueMap.put(SensorTypes.PRESSURE, new float[]{pressure});
 //    sensorValueMap.put(SensorTypes.PROXIMITY, new float[]{proximity});
 //    sensorValueMap.put(SensorTypes.GNSSLATLONG, this.getGNSSLatitude(false));
+//    sensorValueMap.put(SensorTypes.GNSS_OUTLIER, new float[] {isGnssOutlier ? 1 : 0});
 //    sensorValueMap.put(SensorTypes.PDR, pdrProcessing.getPDRMovement());
 //    if (currentWifiLocation != null) {
 //      sensorValueMap.put(SensorTypes.WIFI, new float[]{
-//          (float) currentWifiLocation.latitude,
-//          (float) currentWifiLocation.longitude});
+//              (float) currentWifiLocation.latitude,
+//              (float) currentWifiLocation.longitude});
 //      sensorValueMap.put(SensorTypes.WIFI_FLOOR, new float[]{this.getWifiFloor()});
-//      sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[isWifiLocationOutlier ? 1 : 0]);
+//      sensorValueMap.put(SensorTypes.WIFI_OUTLIER, new float[] {isWifiLocationOutlier ? 1 : 0});
 //    }
 //    sensorValueMap.put(SensorTypes.FUSED, fusedLocation);
 //    return sensorValueMap;
@@ -976,20 +1027,20 @@
 //   */
 //  public void resumeListening() {
 //    accelerometerSensor.sensorManager.registerListener(this, accelerometerSensor.sensor, 10000,
-//        (int) maxReportLatencyNs);
+//            (int) maxReportLatencyNs);
 //    accelerometerSensor.sensorManager.registerListener(this, linearAccelerationSensor.sensor, 10000,
-//        (int) maxReportLatencyNs);
+//            (int) maxReportLatencyNs);
 //    accelerometerSensor.sensorManager.registerListener(this, gravitySensor.sensor, 10000,
-//        (int) maxReportLatencyNs);
+//            (int) maxReportLatencyNs);
 //    barometerSensor.sensorManager.registerListener(this, barometerSensor.sensor, (int) 1e6);
 //    gyroscopeSensor.sensorManager.registerListener(this, gyroscopeSensor.sensor, 10000,
-//        (int) maxReportLatencyNs);
+//            (int) maxReportLatencyNs);
 //    lightSensor.sensorManager.registerListener(this, lightSensor.sensor, (int) 1e6);
 //    proximitySensor.sensorManager.registerListener(this, proximitySensor.sensor, (int) 1e6);
 //    magnetometerSensor.sensorManager.registerListener(this, magnetometerSensor.sensor, 10000,
-//        (int) maxReportLatencyNs);
+//            (int) maxReportLatencyNs);
 //    stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor,
-//        SensorManager.SENSOR_DELAY_NORMAL);
+//            SensorManager.SENSOR_DELAY_NORMAL);
 //    rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, (int) 1e6);
 //    wifiProcessor.startListening();
 //    gnssProcessor.startLocationUpdates();
@@ -1041,7 +1092,7 @@
 //    // If wakeLock is null (e.g. not initialized or was cleared), reinitialize it.
 //    if (wakeLock == null) {
 //      PowerManager powerManager = (PowerManager) this.appContext.getSystemService(
-//          Context.POWER_SERVICE);
+//              Context.POWER_SERVICE);
 //      wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
 //    }
 //    wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
@@ -1051,13 +1102,13 @@
 //    this.bootTime = SystemClock.uptimeMillis();
 //    // Protobuf trajectory class for sending sensor data to restful API
 //    this.trajectory = Traj.Trajectory.newBuilder()
-//        .setAndroidVersion(Build.VERSION.RELEASE)
-//        .setStartTimestamp(absoluteStartTime)
-//        .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
-//        .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
-//        .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
-//        .setBarometerInfo(createInfoBuilder(barometerSensor))
-//        .setLightSensorInfo(createInfoBuilder(lightSensor));
+//            .setAndroidVersion(Build.VERSION.RELEASE)
+//            .setStartTimestamp(absoluteStartTime)
+//            .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
+//            .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
+//            .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
+//            .setBarometerInfo(createInfoBuilder(barometerSensor))
+//            .setLightSensorInfo(createInfoBuilder(lightSensor));
 //    this.storeTrajectoryTimer = new Timer();
 //    this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
 //    this.pdrProcessing.resetPDR();
@@ -1114,43 +1165,43 @@
 //   */
 //  private Traj.Sensor_Info.Builder createInfoBuilder(MovementSensor sensor) {
 //    return Traj.Sensor_Info.newBuilder()
-//        .setName(sensor.sensorInfo.getName())
-//        .setVendor(sensor.sensorInfo.getVendor())
-//        .setResolution(sensor.sensorInfo.getResolution())
-//        .setPower(sensor.sensorInfo.getPower())
-//        .setVersion(sensor.sensorInfo.getVersion())
-//        .setType(sensor.sensorInfo.getType());
+//            .setName(sensor.sensorInfo.getName())
+//            .setVendor(sensor.sensorInfo.getVendor())
+//            .setResolution(sensor.sensorInfo.getResolution())
+//            .setPower(sensor.sensorInfo.getPower())
+//            .setVersion(sensor.sensorInfo.getVersion())
+//            .setType(sensor.sensorInfo.getType());
 //  }
 //
 //  /**
 //   * Timer task to record data with the desired frequency in the trajectory class.
 //   * <p>
-//   * Inherently threaded, runnables are created in {@link SensorFusion_old#startRecording()} and
-//   * destroyed in {@link SensorFusion_old#stopRecording()}.
+//   * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
+//   * destroyed in {@link SensorFusion#stopRecording()}.
 //   */
 //  private class storeDataInTrajectory extends TimerTask {
 //
 //    public void run() {
 //      // Store IMU and magnetometer data in Trajectory class
 //      trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-//              .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-//              .setAccX(acceleration[0])
-//              .setAccY(acceleration[1])
-//              .setAccZ(acceleration[2])
-//              .setGyrX(angularVelocity[0])
-//              .setGyrY(angularVelocity[1])
-//              .setGyrZ(angularVelocity[2])
-//              .setGyrZ(angularVelocity[2])
-//              .setRotationVectorX(rotation[0])
-//              .setRotationVectorY(rotation[1])
-//              .setRotationVectorZ(rotation[2])
-//              .setRotationVectorW(rotation[3])
-//              .setStepCount(stepCounter))
-//          .addPositionData(Traj.Position_Sample.newBuilder()
-//              .setMagX(magneticField[0])
-//              .setMagY(magneticField[1])
-//              .setMagZ(magneticField[2])
-//              .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
+//                      .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+//                      .setAccX(acceleration[0])
+//                      .setAccY(acceleration[1])
+//                      .setAccZ(acceleration[2])
+//                      .setGyrX(angularVelocity[0])
+//                      .setGyrY(angularVelocity[1])
+//                      .setGyrZ(angularVelocity[2])
+//                      .setGyrZ(angularVelocity[2])
+//                      .setRotationVectorX(rotation[0])
+//                      .setRotationVectorY(rotation[1])
+//                      .setRotationVectorZ(rotation[2])
+//                      .setRotationVectorW(rotation[3])
+//                      .setStepCount(stepCounter))
+//              .addPositionData(Traj.Position_Sample.newBuilder()
+//                      .setMagX(magneticField[0])
+//                      .setMagY(magneticField[1])
+//                      .setMagZ(magneticField[2])
+//                      .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
 ////                    .addGnssData(Traj.GNSS_Sample.newBuilder()
 ////                            .setLatitude(latitude)
 ////                            .setLongitude(longitude)
@@ -1163,12 +1214,12 @@
 //        // Store pressure and light data
 //        if (barometerSensor.sensor != null) {
 //          trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
-//                  .setPressure(pressure)
-//                  .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
-//              .addLightData(Traj.Light_Sample.newBuilder()
-//                  .setLight(light)
-//                  .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-//                  .build());
+//                          .setPressure(pressure)
+//                          .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
+//                  .addLightData(Traj.Light_Sample.newBuilder()
+//                          .setLight(light)
+//                          .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+//                          .build());
 //        }
 //
 //        // Divide the timer for storing AP data every 5 seconds
@@ -1177,9 +1228,9 @@
 //          //Current Wifi Object
 //          Wifi currentWifi = wifiProcessor.getCurrentWifiData();
 //          trajectory.addApsData(Traj.AP_Data.newBuilder()
-//              .setMac(currentWifi.getBssid())
-//              .setSsid(currentWifi.getSsid())
-//              .setFrequency(currentWifi.getFrequency()));
+//                  .setMac(currentWifi.getBssid())
+//                  .setSsid(currentWifi.getSsid())
+//                  .setFrequency(currentWifi.getFrequency()));
 //        } else {
 //          secondCounter++;
 //        }
@@ -1229,12 +1280,12 @@
 //
 //    // Construct a new GNSS_Sample protobuf message with the captured data
 //    Traj.GNSS_Sample tagSample = Traj.GNSS_Sample.newBuilder()
-//        .setRelativeTimestamp(currentTimestamp)  // Set timestamp relative to start
-//        .setLatitude(currentLatitude)  // Store latitude
-//        .setLongitude(currentLongitude)  // Store longitude
-//        .setAltitude(currentAltitude)  // Store altitude
-//        .setProvider(provider)  // Set provider information
-//        .build();
+//            .setRelativeTimestamp(currentTimestamp)  // Set timestamp relative to start
+//            .setLatitude(currentLatitude)  // Store latitude
+//            .setLongitude(currentLongitude)  // Store longitude
+//            .setAltitude(currentAltitude)  // Store altitude
+//            .setProvider(provider)  // Set provider information
+//            .build();
 //
 //    // Append the new GNSS sample to the trajectory's `gnss_data` list
 //    trajectory.addGnssData(tagSample);
@@ -1257,6 +1308,7 @@
 //  public float getFusionError() {
 //    return this.fusedError;
 //  }
+//
 //
 //  //endregion
 //

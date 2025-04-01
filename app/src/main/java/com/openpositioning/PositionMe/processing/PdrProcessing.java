@@ -534,11 +534,14 @@ public class PdrProcessing implements SensorDataListener<SensorData>, Observable
         observers.add(o);
     }
 
+    public record PdrData(float[] position, boolean inElevator) {};
+
     @Override
     public void notifyObservers(int idx) {
         if (observers != null) {
             for (Observer o : observers) {
-                o.update(new Float[] {this.positionX, this.positionY});
+                o.update(new PdrData[] {new PdrData(new float[] {this.positionX, this.positionY},
+                        elevator)});
             }
         }
     }
