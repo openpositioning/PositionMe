@@ -16,7 +16,6 @@ import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
-import com.openpositioning.PositionMe.GeoUtils;
 import com.openpositioning.PositionMe.MainActivity;
 import com.openpositioning.PositionMe.PathView;
 import com.openpositioning.PositionMe.PdrProcessing;
@@ -29,7 +28,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -157,8 +155,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private FilterUtils.ParticleFilter pf;
     private FilterUtils.EKFFilter ekf;
-
     private float[] fusionLocation;
+    private LatLng lastWifiPos;
+    private int lastWifiFloor;
 
 //    List<LatLng> wallPointsLatLng = Arrays.asList(
 //            new LatLng(55.92301090863321, -3.174221045188629),
@@ -719,6 +718,8 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
+                    lastWifiFloor = getWifiFloor();
+                    lastWifiPos = getLatLngWifiPositioning();
                     // 成功回调时，重置计时器（更新成功时间，并启动ratioUpdater）
                     lastWifiSuccessTime = System.currentTimeMillis();
                     // 移除之前可能存在的更新任务，确保计时器重置
@@ -779,7 +780,9 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return {@link LatLng} corresponding to user's position.
      */
-    public LatLng getLatLngWifiPositioning(){return this.wiFiPositioning.getWifiLocation();}
+    public LatLng getLatLngWifiPositioning(){
+        return this.wiFiPositioning.getWifiLocation();
+    }
 
     /**
      * Method to get current floor the user is at, obtained using WiFiPositioning
@@ -1328,7 +1331,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
     //endregion
 
-
     public float[] getFusionLocation() {
         return fusionLocation;
     }
@@ -1337,6 +1339,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     private long lastWifiSuccessTime = 0;
     private float ratio = 0f;
     private Handler ratioHandler = new Handler(Looper.getMainLooper());
+
+    public long getLastWifiSuccessTime() {
+        return lastWifiSuccessTime;
+    }
+    public LatLng getLastWifiPos() {
+        return lastWifiPos;
+    }
+    public int getLastWifiFloor() {
+        return lastWifiFloor;
+    }
 
     // 定时器任务：每隔一小段时间更新ratio值
     private Runnable ratioUpdater = new Runnable() {

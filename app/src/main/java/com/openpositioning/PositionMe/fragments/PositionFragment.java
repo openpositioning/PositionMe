@@ -82,25 +82,6 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
                     Toast.makeText(getContext(), "Location permission denied.", Toast.LENGTH_SHORT).show();
                 }
             });
-//
-//    @Override
-//    public void onCreate(Bundle savedInstanceState) {
-//        super.onCreate(savedInstanceState);
-//
-//        // ✅ 确保 SensorFusion 正确初始化
-//        // ✅ Make sure SensorFusion is initialized correctly
-//        this.sensorFusion = SensorFusion.getInstance();
-//        // 设置应用程序上下文
-//        // Set up the application context
-//        sensorFusion.setContext(getActivity().getApplicationContext());
-//        if (this.sensorFusion == null) {
-//            Log.e("SensorFusion", "❌ SensorFusion is NULL! Retrying initialization...");
-//            this.sensorFusion = SensorFusion.getInstance(); // 重新获取实例 Re-obtain the instance
-//            sensorFusion.setContext(getActivity().getApplicationContext());
-//            sensorFusion.resumeListening();  // 注册所有传感器监听器 Register all sensor listeners
-//        }
-//
-//    }
 
     @Nullable
     @Override
@@ -131,11 +112,11 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         this.sensorFusion = SensorFusion.getInstance();
         sensorFusion.setContext(getActivity().getApplicationContext());
 //        sensorFusion.resumeListening();  // 注册所有传感器监听器 Register all sensor listeners
-        sensorFusion.startWifiScanOnly();
         if (this.sensorFusion == null) {
             Log.e("SensorFusion", "❌ SensorFusion is NULL! Retrying initialization...");
             this.sensorFusion = SensorFusion.getInstance(); // 重新获取实例 Re-obtain the instance
         } else {
+            sensorFusion.startWifiScanOnly();
             Log.d("SensorFusion", "✅ SensorFusion 初始化成功");
         }
 //
@@ -218,9 +199,12 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         // ******** new wifi initial position ********
         if (sensorFusion != null) {
             Log.e("GNSS", "Sensor Fusion Ready");
-            if (sensorFusion.getLatLngWifiPositioning() != null) {
-                initialPosition = sensorFusion.getLatLngWifiPositioning();
-                Log.e("GNSS", "✅ Wifi initial position: " + initialPosition);
+//            if (sensorFusion.getLatLngWifiPositioning() != null) {
+            if (sensorFusion.getLastWifiPos() != null) {
+//                initialPosition = sensorFusion.getLatLngWifiPositioning();
+                initialPosition = sensorFusion.getLastWifiPos();
+            } else {
+                Toast.makeText(getContext(), "Can't resolve wifi position as initial position, please try again later!", Toast.LENGTH_SHORT).show();
             }
         }
         // ******** END new wifi initial position ********
@@ -288,7 +272,6 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         // Set reset button
         resetButton.setOnClickListener(v -> {
             if (currentMarker != null) {
-//                initialPosition = sensorFusion.getLatLngWifiPositioning();
                 this.rescanPosition();
                 currentMarker.setPosition(initialPosition);
                 currentMarkerPosition = initialPosition;
@@ -543,7 +526,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             locationManager.removeUpdates(locationListener);
             Log.d("GNSS", "GNSS Listener stopped.");
         }
-        sensorFusion.stopListening();
+//        sensorFusion.stopListening();
         sensorFusion.stopWifiScanOnly();
     }
 
@@ -601,9 +584,13 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
 
         if (sensorFusion != null) {
             Log.e("GNSS", "Sensor Fusion Ready");
-            if (sensorFusion.getLatLngWifiPositioning() != null) {
-                initialPosition = sensorFusion.getLatLngWifiPositioning();
-                Log.e("GNSS", "Wifi initial position: " + initialPosition);
+//            if (sensorFusion.getLatLngWifiPositioning() != null) {
+//                initialPosition = sensorFusion.getLatLngWifiPositioning();
+//            }
+            if (sensorFusion.getLastWifiPos() != null) {
+                initialPosition = sensorFusion.getLastWifiPos();
+            } else {
+                Toast.makeText(getContext(), "Can't resolve wifi position as initial position, please try again later!", Toast.LENGTH_SHORT).show();
             }
         }
         // set initial position
