@@ -6,13 +6,44 @@ import com.google.android.gms.maps.model.LatLngBounds;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.IndoorMapFragment;
 
+import org.locationtech.proj4j.ProjCoordinate;
+
 import java.util.ArrayList;
 
+/**
+ * The {@code NucleusBuildingManager} class is responsible for managing spatial
+ * information related to the Nucleus building, including indoor map overlays,
+ * floor management, and key infrastructure points like elevators.
+ *
+ * <p>Specifically, this class:
+ * <ul>
+ *   <li>Initializes indoor map fragments for each floor using pre-defined bounds and assets.</li>
+ *   <li>Defines the building footprint using a rectangular polygon for containment checks.</li>
+ *   <li>Provides functionality to determine whether a user is inside the building polygon.</li>
+ *   <li>Stores fixed locations of elevator shafts and can return the nearest one to a given user position
+ *       by computing distances in local projected (XY) coordinates using a {@link CoordinateTransformer}.</li>
+ * </ul>
+ *
+ * <p>This class is primarily used for location-aware applications such as indoor navigation,
+ * elevator matching, and floor-based positioning.
+ *
+ * @author Alexandros Zoupos (lift matching)
+ */
 public class NucleusBuildingManager {
     private IndoorMapFragment indoorMapFragment;
     private ArrayList<LatLng> buildingPolygon;
 
-    public NucleusBuildingManager(GoogleMap map) {
+  // Elevator center positions (in WGS84 LatLng)
+  private static final LatLng leftLift = new LatLng(55.923022, -3.17437);
+  private static final LatLng centerLift = new LatLng(55.923029, -3.17433);
+  private static final LatLng rightLift = new LatLng(55.923032, -3.17429);
+
+  // Array to loop through lifts if needed
+  private static final LatLng[] elevatorLifts = new LatLng[] { leftLift, centerLift, rightLift };
+
+
+
+  public NucleusBuildingManager(GoogleMap map) {
         // The nuclear building has 5 floors
         indoorMapFragment = new IndoorMapFragment(map, 5);
 
@@ -95,4 +126,32 @@ public class NucleusBuildingManager {
         // Return true if the intersection point is to the right of the point
         return x > pX;
     }
+
+  /**
+   * Determines and returns the LatLng of the closest elevator to the given user location.
+   * The method converts both the user position and each elevator's position into a local
+   * projected coordinate system and then computes their distances.
+   *
+   * @param userLocation the current user LatLng position (in WGS84)
+   * @param transformer  the CoordinateTransformer to convert WGS84 coordinates into local XY space
+   * @return the LatLng of the closest elevator
+   */
+  public static LatLng getClosestElevatorLatLng(LatLng userLocation, CoordinateTransformer transformer) {
+    // Convert the user's location into projected coordinates.
+    ProjCoordinate userXY = transformer.convertWGS84ToTarget(userLocation.latitude, userLocation.longitude);
+    double minDistance = Double.MAX_VALUE;
+    LatLng closestElevator = null;
+
+    // Iterate through the array of predefined elevator positions.
+    for (LatLng lift : elevatorLifts) {
+      ProjCoordinate liftXY = transformer.convertWGS84ToTarget(lift.latitude, lift.longitude);
+      double distance = CoordinateTransformer.calculateDistance(userXY, liftXY);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestElevator = lift;
+      }
+    }
+    return closestElevator;
+  }
+
 }

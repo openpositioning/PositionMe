@@ -7,7 +7,6 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -331,7 +330,7 @@ public class RecordingFragment extends Fragment {
                     trajectoryMapFragment.interpolateFusedLocation(estimatedLatLng);
                 }
             trajectoryMapFragment.updateUserLocation(fusedLocation,
-                    (float) Math.toDegrees(sensorFusion.passOrientation()));
+                    (float) Math.toDegrees(sensorFusion. passOrientation()));
 
             fusionError.setVisibility(View.VISIBLE);
             fusionError.setText(String.format(getString(R.string.fusion_error) + "%.2fm",

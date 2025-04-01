@@ -8,7 +8,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Spinner;
 import com.google.android.material.switchmaterial.SwitchMaterial;
@@ -681,7 +680,6 @@ public class TrajectoryMapFragment extends Fragment {
       Log.e("TrajectoryMapFragment", "GoogleMap is not ready");
       return;
     }
-
     // nuclear building polygon vertices
     LatLng nucleus1 = new LatLng(55.92279538827796, -3.174612147506538);
     LatLng nucleus2 = new LatLng(55.92278121423647, -3.174107900816096);

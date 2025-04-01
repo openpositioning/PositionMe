@@ -1,13 +1,27 @@
-package com.openpositioning.PositionMe.utils;
+package com.openpositioning.PositionMe.processing;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.hardware.Sensor;
 import android.hardware.SensorManager;
 
+import android.os.SystemClock;
+import android.util.Log;
 import androidx.preference.PreferenceManager;
 
+import com.openpositioning.PositionMe.sensors.Observable;
+import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.sensors.SensorData.GravityData;
+import com.openpositioning.PositionMe.sensors.SensorData.LinearAccelerationData;
+import com.openpositioning.PositionMe.sensors.SensorData.PressureData;
+import com.openpositioning.PositionMe.sensors.SensorData.RotationVectorData;
+import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
+import com.openpositioning.PositionMe.sensors.SensorData.StepDetectorData;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
-
+import com.openpositioning.PositionMe.sensors.SensorHub;
+import com.openpositioning.PositionMe.sensors.SensorListeners.SensorDataListener;
+import com.openpositioning.PositionMe.utils.CircularFloatBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -21,10 +35,15 @@ import java.util.stream.Collectors;
  * (eg. stride length from the Weiberg algorithm) or provided constants, calculates the elevation
  * and attempts to estimate the current floor as well as elevators.
  *
+ * Original Authors
  * @author Mate Stodulka
  * @author Michal Dvorak
+ *
+ * Updated by:
+ * @author Philip Heptonstall. Refactored to follow single-responsibility principles,
+ * and interface with sensors directly as a SensorDataListener.
  */
-public class PdrProcessing {
+public class PdrProcessing implements SensorDataListener<SensorData>, Observable {
 
     //region Static variables
     // Weiberg algorithm coefficient for stride calculations
@@ -38,11 +57,15 @@ public class PdrProcessing {
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
     private static final int MIN_REQUIRED_SAMPLES = 2;
+
+    private static final int MIN_TIME_BETWEEN_STEPS = 20; // ms
     //endregion
 
     //region Instance variables
     // Settings for accessing shared variables
     private SharedPreferences settings;
+
+    private long bootTime;
 
     // Step length
     private float stepLength;
@@ -69,9 +92,30 @@ public class PdrProcessing {
     private CircularFloatBuffer horizontalAccel;
 
     // Step sum and length aggregation variables
+    private long lastStepTime = 0;
     private float sumStepLength = 0;
     private int stepCount = 0;
     //endregion
+
+    private List<Observer> observers;
+
+    // Sensor Variables
+    private SensorHub sensorHub;
+    private final int[] INTERESTED_SENSORS = new int[] {
+        Sensor.TYPE_GRAVITY, Sensor.TYPE_PRESSURE,
+        Sensor.TYPE_LINEAR_ACCELERATION, Sensor.TYPE_ROTATION_VECTOR,
+        Sensor.TYPE_STEP_DETECTOR
+    };
+    private List<Double> accelMagnitude = new ArrayList<>();
+    private boolean elevator;
+    private GravityData gravityData;
+    private PressureData pressureData;
+    private LinearAccelerationData linearAccelerationData;
+
+
+
+    private RotationVectorData rotationVectorData;
+
 
     /**
      * Public constructor for the PDR class.
@@ -79,55 +123,15 @@ public class PdrProcessing {
      *
      * @param context   Application context for variable access.
      */
-    public PdrProcessing(Context context) {
+    public PdrProcessing(Context context, SensorHub sensorHub, long startTime, long bootTime) {
         // Initialise settings
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
+        this.sensorHub = sensorHub;
+        this.bootTime = bootTime;
+        // Register sensors
+        start();
         // Check if estimate or manual values should be used
-        this.useManualStep = this.settings.getBoolean("manual_step_values", false);
-        if(useManualStep) {
-            try {
-                // Retrieve manual step  length
-                this.stepLength = this.settings.getInt("user_step_length", 75) / 100f;
-            } catch (Exception e) {
-                // Invalid values - reset to defaults
-                this.stepLength = 0.75f;
-                this.settings.edit().putInt("user_step_length", 75).apply();
-            }
-        }
-        else {
-            // Using estimated step length - set to zero
-            this.stepLength = 0;
-        }
-
-        // Initial position and elevation - starts from zero
-        this.positionX = 0f;
-        this.positionY = 0f;
-        this.elevation = 0f;
-
-
-        if(this.settings.getBoolean("overwrite_constants", false)) {
-            // Capacity - pressure is read with 1Hz - store values of past 10 seconds
-            this.elevationList = new CircularFloatBuffer(Integer.parseInt(settings.getString("elevation_seconds", "4")));
-
-            // Buffer for most recent acceleration values
-            this.verticalAccel = new CircularFloatBuffer(Integer.parseInt(settings.getString("accel_samples", "4")));
-            this.horizontalAccel = new CircularFloatBuffer(Integer.parseInt(settings.getString("accel_samples", "4")));
-        }
-        else {
-            // Capacity - pressure is read with 1Hz - store values of past 10 seconds
-            this.elevationList = new CircularFloatBuffer(elevationSeconds);
-
-            // Buffer for most recent acceleration values
-            this.verticalAccel = new CircularFloatBuffer(accelSamples);
-            this.horizontalAccel = new CircularFloatBuffer(accelSamples);
-        }
-
-        // Distance between floors is building dependent, use manual value
-        this.floorHeight = settings.getInt("floor_height", 4);
-        // Array for holding initial values
-        this.startElevationBuffer = new Float[3];
-        // Start floor - assumed to be zero
-        this.currentFloor = 0;
+        resetPDR();
     }
 
     /**
@@ -268,10 +272,15 @@ public class PdrProcessing {
      * @return  float array of size 2, with the X and Y coordinates respectively.
      */
     public float[] getPDRMovement() {
-        float [] pdrPosition= new float[] {positionX,positionY};
-        return pdrPosition;
+      return new float[] {positionX,positionY};
 
     }
+
+    public int getStepCount() {
+        return stepCount;
+    }
+
+
 
     /**
      * Get the current elevation as calculated by the PDR class.
@@ -414,4 +423,130 @@ public class PdrProcessing {
         return averageStepLength;
     }
 
+    public RotationVectorData getRotationVectorData() {
+        return rotationVectorData;
+    }
+
+    @Override
+    public void onSensorDataReceived(SensorData data) {
+        // Check which sensor has updated
+        if (data instanceof LinearAccelerationData) {
+            processLinearAcceleration((LinearAccelerationData) data);
+        } else if (data instanceof StepDetectorData) {
+            processStepDetection((StepDetectorData) data);
+        } else if (data instanceof PressureData) {
+            processPressureData((PressureData) data);
+        } else if (data instanceof GravityData) {
+            processGravityData((GravityData) data);
+        } else if (data instanceof RotationVectorData) {
+            processRotationData((RotationVectorData) data);
+        } else {
+            Log.e("PDR Processing", "PDR Processing receiving data it is not listening to! "
+                + "Check the subscriptions.");
+        }
+    }
+
+    @Override
+    public void stop() {
+        // Unregister all listeners
+        for (int sensor_idx : INTERESTED_SENSORS) {
+            sensorHub.removeListener(sensor_idx, this);
+        }
+    }
+
+    @Override
+    public void start() {
+        // Register all listeners
+        for (int sensor_idx : INTERESTED_SENSORS) {
+            sensorHub.addListener(sensor_idx, this);
+        }
+    }
+
+    private void processRotationData(RotationVectorData data) {
+        this.rotationVectorData = data;
+    }
+
+    private void processGravityData(GravityData data) {
+        this.gravityData = data;
+        if (this.linearAccelerationData == null) {
+            elevator = estimateElevator(data.gravity, new float[]{0,0,0});
+            this.notifyObservers(0);
+        } else {
+            elevator = estimateElevator(data.gravity, this.linearAccelerationData.filteredAcc);
+            this.notifyObservers(0);
+        }
+    }
+
+    private void processLinearAcceleration(LinearAccelerationData data) {
+        this.linearAccelerationData = data;
+        this.accelMagnitude.add(data.accelMagnitude);
+        if (this.gravityData == null) {
+            elevator = estimateElevator(new float[]{0,0,0}, data.filteredAcc);
+            this.notifyObservers(0);
+        } else {
+            elevator = estimateElevator(this.gravityData.gravity, data.filteredAcc);
+            this.notifyObservers(0);
+        }
+    }
+
+    private void processStepDetection(StepDetectorData data) {
+        long stepTime = SystemClock.uptimeMillis() - this.bootTime;
+        long currentTime = System.currentTimeMillis(); // Get the current time in milliseconds
+
+        if (currentTime - lastStepTime < MIN_TIME_BETWEEN_STEPS) {
+            Log.e("SensorFusion",
+                "Ignoring step event, too soon after last step event:" +
+                    (data.timestamp - lastStepTime) + " ms");
+            // Ignore rapid successive step events
+        } else {
+            lastStepTime = currentTime;
+            // Log if accelMagnitude is empty
+            if (this.accelMagnitude.isEmpty()) {
+                Log.e("SensorFusion",
+                    "stepDetection triggered, but accelMagnitude is empty! " +
+                        "This can cause updatePdr(...) to fail or return bad results.");
+            } else {
+                Log.d("SensorFusion",
+                    "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
+                if(this.rotationVectorData == null) {
+                    updatePdr(stepTime, this.accelMagnitude, 0);
+                } else {
+                    updatePdr(stepTime, this.accelMagnitude, this.rotationVectorData.orientation[0]);
+                }
+                // Clear accel magntiude after using it.
+                this.accelMagnitude.clear();
+                notifyObservers(0);
+            }
+        }
+    }
+
+    private void processPressureData(PressureData data) {
+        this.pressureData = data;
+        updateElevation(SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE,
+            data.pressure));
+    }
+
+  public boolean isElevator() {
+    return elevator;
+  }
+
+    @Override
+    public void registerObserver(Observer o) {
+        if (observers == null) {
+            observers = new ArrayList<>();
+        }
+        observers.add(o);
+    }
+
+    public record PdrData(float[] position, boolean inElevator) {}
+
+    @Override
+    public void notifyObservers(int idx) {
+        if (observers != null) {
+            for (Observer o : observers) {
+                o.update(new PdrData[] {new PdrData(new float[] {this.positionX, this.positionY},
+                        elevator)});
+            }
+        }
+    }
 }

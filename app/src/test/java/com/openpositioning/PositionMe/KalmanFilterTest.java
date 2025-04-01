@@ -1,8 +1,7 @@
 package com.openpositioning.PositionMe;
 
-import com.google.android.gms.common.internal.Asserts;
-import com.openpositioning.PositionMe.sensors.filters.KalmanFilter;
-import com.openpositioning.PositionMe.sensors.filters.KalmanFilterAdapter;
+import com.openpositioning.PositionMe.processing.filters.KalmanFilter;
+import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;
 
 import org.ejml.simple.SimpleMatrix;
 import org.junit.Assert;

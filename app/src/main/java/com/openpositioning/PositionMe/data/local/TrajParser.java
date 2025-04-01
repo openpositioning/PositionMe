@@ -14,9 +14,9 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
-import com.openpositioning.PositionMe.sensors.WiFiPositioning;
-import com.openpositioning.PositionMe.sensors.filters.FilterAdapter;
-import com.openpositioning.PositionMe.sensors.filters.KalmanFilterAdapter;
+import com.openpositioning.PositionMe.processing.WiFiPositioning;
+import com.openpositioning.PositionMe.processing.filters.FilterAdapter;
+import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
 import com.openpositioning.PositionMe.utils.TimedData;
 
@@ -207,7 +207,7 @@ public class TrajParser {
       List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
       List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
       List<WifiRecord> wifiList = parseWifiData(root.getAsJsonArray("wifiData"));
-      
+
       // Send out asynchronous callbacks to get locations from the wifi points.
       List<WifiLocation> wifiLocations = getLocationsForWifi(
           new WiFiPositioning(context),

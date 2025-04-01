@@ -20,9 +20,9 @@ public enum SensorTypes {
     PRESSURE,
     PROXIMITY,
     GNSSLATLONG,
-    PDR,
     GNSS_OUTLIER,
     WIFI,
+    PDR,
     WIFI_FLOOR,
     WIFI_OUTLIER,
     FUSED;
