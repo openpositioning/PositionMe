@@ -303,20 +303,28 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
      */
     private void checkWiFiState() {
         // **** change using new wifi logic
-        LatLng wifiPosition = sensorFusion.getLatLngWifiPositioning();
+//        LatLng wifiPosition = sensorFusion.getLatLngWifiPositioning();
+        LatLng wifiPosition = sensorFusion.getLastWifiPos();
         if (wifiPosition != null) {
-            long currentTime = System.currentTimeMillis();
+              long currentTime = System.currentTimeMillis();
             if (currentWiFiLocation == null) {
                 lastWiFiUpdateTime = currentTime;
-                wifiUpdateTime.setText("WiFi last updated: Just now");
+                wifiUpdateTime.setText("WiFi last updated: Just Now");
             } else if (!wifiPosition.equals(currentWiFiLocation)) {
+
                 long timeDiff = (currentTime - lastWiFiUpdateTime) / (1000 * 60);
-                wifiUpdateTime.setText("WiFi last updated: " + timeDiff + " min ago");
-                lastWiFiUpdateTime = currentTime;
+                Log.d("WiFi", "Time difference: " + (currentTime - lastWiFiUpdateTime) / (1000 * 60));
+                if (timeDiff > 1) {
+                    wifiUpdateTime.setText("WiFi last updated: " + timeDiff + " min ago");
+                } else {
+                    wifiUpdateTime.setText("WiFi last updated: Just Now");
+                }
+//                lastWiFiUpdateTime = currentTime;
+                lastWiFiUpdateTime = sensorFusion.getLastWifiSuccessTime();
             }
             currentWiFiLocation = wifiPosition;
         }else{
-            wifiUpdateTime.setText("WiFi last updated: WiFi position not available");
+            wifiUpdateTime.setText("WiFi last updated: Position Not Available");
         }
     }
 

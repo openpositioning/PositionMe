@@ -422,8 +422,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // *** new
                 pf.predict(newCords[0], newCords[1]);
                 LatLng startLocLatLng = new LatLng(this.startLocation[0], this.startLocation[1]);
-                if (getLatLngWifiPositioning() != null) {
-                    LatLng latLng = getLatLngWifiPositioning();
+//                if (getLatLngWifiPositioning() != null) {
+//                    LatLng latLng = getLatLngWifiPositioning();
+                if (lastWifiPos != null && (System.currentTimeMillis()-lastWifiSuccessTime) < 15000) {
+                    LatLng latLng = lastWifiPos;
                     double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
                     Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
                     // if wifi is in front of the user orientation, assuming it's providing a similar
@@ -437,7 +439,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     Log.e("Ratio", String.valueOf(ratio));
                     pf.update(wifiPos[0], wifiPos[1]);
                 }
-//                else if (lastGnssLocation != null) { // only step in when there is no wifi
+//                else if (lastGnssLocation != null && (System.currentTimeMillis()-lastWifiSuccessTime) < 60000) { // only step in when there is no wifi
 //                    double[] gnssPos = new double[]{lastGnssLocation.getLatitude(), lastGnssLocation.getLongitude()};
 //                    pf.update(gnssPos[0], gnssPos[1]);
 //                }
@@ -454,24 +456,24 @@ public class SensorFusion implements SensorEventListener, Observer {
                 newCords = new float[]{(float) currentState.x, (float) currentState.y};
                 Log.e("Particle Filter", "x: " + currentState.x + ", y: " + currentState.y);
 
-                // 6. Batch Optimization
-
-                int historyPoints = 3; // 自定义历史点数量
-
-                if (windowList.size() >= historyPoints + 1) {
-                    windowList.remove(0); // 保持窗口长度
-                }
-                windowList.add(newCords); // 添加当前点
-
-                // 调用优化函数（参考历史 4 点）
-                newCords = TrajectoryOptimizer.weightedSmoothOptimizedPoint(
-                        windowList,
-                        1.0f,     // 平滑项权重
-                        5.0f,     // 拟合项权重
-                        historyPoints  // 自定义历史点数量
-                );
-
-                Log.e("Optimized", "x: " + newCords[0] + ", y: " + newCords[1]);
+//                // 6. Batch Optimization
+//
+//                int historyPoints = 3; // 自定义历史点数量
+//
+//                if (windowList.size() >= historyPoints + 1) {
+//                    windowList.remove(0); // 保持窗口长度
+//                }
+//                windowList.add(newCords); // 添加当前点
+//
+//                // 调用优化函数（参考历史 4 点）
+//                newCords = TrajectoryOptimizer.weightedSmoothOptimizedPoint(
+//                        windowList,
+//                        1.0f,     // 平滑项权重
+//                        5.0f,     // 拟合项权重
+//                        historyPoints  // 自定义历史点数量
+//                );
+//
+//                Log.e("Optimized", "x: " + newCords[0] + ", y: " + newCords[1]);
 
 //                // ***** GeoFence test block START *****
 //                List<float[]> wallPoints = new ArrayList<>();
