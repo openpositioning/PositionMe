@@ -735,16 +735,16 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // === Update step (GNSS) ===
         if (gnssMeters != null) {
-            double[][] R_gnss = {{20.0, 0}, {0, 20.0}}; // GNSS = less accurate indoors
+            double[][] R_gnss = {{50.0, 0}, {0, 50.0}}; // GNSS = less accurate indoors
             if (isOutlier(gnssMeters, new double[]{state[0], state[1]}, R_gnss)) {
                 Log.d("EKF", "GNSS outlier detected");
                 //Increase noise covariance to reduce influence of outlier
-                R_gnss = new double[][]{{50.0, 0}, {0, 50.0}};
+                R_gnss = new double[][]{{100.0, 0}, {0, 100.0}};
 
                 // Option 2: Skip update entirely
                 // continue; // Uncomment this line to skip the update
             } else {
-                R_gnss = new double[][]{{20.0, 0}, {0, 20.0}};
+                R_gnss = new double[][]{{50.0, 0}, {0, 50.0}};
             }
             performMeasurementUpdate(gnssMeters, R_gnss);
         }
@@ -779,6 +779,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param R
      */
     private void performMeasurementUpdate(double[] measurement, double[][] R) {
+        double maxDisplacement = 5.0;
         double[][] H = {{1, 0}, {0, 1}};
 
         double[] predicted = {state[0], state[1]};
@@ -786,6 +787,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                 measurement[0] - predicted[0],
                 measurement[1] - predicted[1]
         };
+
+        double innovationMagnitude = Math.sqrt(innovation[0] * innovation[0] + innovation[1] * innovation[1]);
+
+        // Limit innovation if it exceeds maxDisplacement
+        if (innovationMagnitude > maxDisplacement) {
+            double scalingFactor = maxDisplacement / innovationMagnitude;
+            innovation[0] *= scalingFactor;
+            innovation[1] *= scalingFactor;
+        }
+
 
         double[][] S = matrixAdd(matrixMultiply(H, matrixMultiply(covariance, transpose(H))), R);
         double[][] K = matrixMultiply(matrixMultiply(covariance, transpose(H)), inverse(S));
