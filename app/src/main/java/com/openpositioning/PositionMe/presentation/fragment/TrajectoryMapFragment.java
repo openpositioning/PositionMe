@@ -416,7 +416,7 @@ public class TrajectoryMapFragment extends Fragment {
         int floor = getCurrentFloor();
         String building = getCurrentBuilding();
 
-        TrajectoryMapWall.drawWalls(gMap);
+        TrajectoryMapWall.drawWalls(gMap, getCurrentFloor(), getCurrentBuilding());
 
         TrajectoryMapMaker.updateEmergencyExitMarkers(gMap, floor, building, emergencyExitMarkers, context);
         TrajectoryMapMaker.updateLiftMarkers(gMap, floor, building, liftMarkers, context);
