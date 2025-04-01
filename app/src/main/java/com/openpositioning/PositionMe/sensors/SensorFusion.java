@@ -656,6 +656,17 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new LatLng(predictedLL[0], predictedLL[1]);
     }
 
+    // Code by Marco Bancalari-Ruiz (Assisted by Jamie Arnott)
+    /**
+     * Method to compute the fused position using GNSS, WiFi and PDR data using an
+     * Extended Kalman-Filter
+     *
+     * @param wifiPos
+     * @param pdrPos
+     * @param prevPdrPos
+     * @param gnssPos
+     * @return
+     */
     public LatLng EKF_replay(LatLng wifiPos, LatLng pdrPos, LatLng prevPdrPos, LatLng gnssPos) {
         if (pdrPos == null || prevPdrPos == null) return null;
 
@@ -723,7 +734,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new LatLng(latLng[0], latLng[1]);
     }
 
-
+    // Code by Marco Bancalari-Ruiz
+    /**
+     * Method to perform a measurement update for next step
+     * Helper method for EKF_replay
+     * @param measurement
+     * @param R
+     */
     private void performMeasurementUpdate(double[] measurement, double[][] R) {
         double[][] H = {{1, 0}, {0, 1}};
 
