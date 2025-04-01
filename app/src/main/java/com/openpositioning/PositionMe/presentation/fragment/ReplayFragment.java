@@ -136,6 +136,7 @@ public class ReplayFragment extends Fragment {
                     .commit();
         }
 
+        // code by Jamie Arnott: WiFi Positioning
         // Use WiFi positioning from the first replay point if available.
         if (!replayData.isEmpty()) {
             TrajParser.ReplayPoint firstReplayPoint = replayData.get(0);
@@ -164,7 +165,7 @@ public class ReplayFragment extends Fragment {
                                 .setTitle("Choose Positioning Method")
                                 .setMessage("WiFi-based positioning is available for this trajectory. Do you want to use WiFi positioning?")
                                 .setPositiveButton("Use WiFi", (dialog, which) -> {
-                                    setupInitialMapPosition((float) wifiLocation.latitude, (float) wifiLocation.longitude);
+                                    setupInitialMapPosition((float) wifiLocation.latitude, (float) wifiLocation.longitude, floor);
                                     dialog.dismiss();
                                 })
                                 .setNegativeButton("Use GNSS", (dialog, which) -> {
@@ -331,6 +332,10 @@ public class ReplayFragment extends Fragment {
         }
     }
 
+    // code by Jamie Arnott
+    /**
+     * Method to set the maximum length for the seekbar using method getVisibleDataSize
+     */
     private void updateSeekBarMax() {
         int size = getVisibleDataSize(selectedMode);
         if (size > 0) {
@@ -338,6 +343,14 @@ public class ReplayFragment extends Fragment {
         }
     }
 
+    // Code by Jamie Arnott
+    /**
+     * Method to get the data sizes for displaying different data types
+     *
+     * Includes GNSS, WiFi, PDR, and Extended Kalman-Filter
+     * @param mode
+     * @return int representing data size
+     */
     private int getVisibleDataSize(String mode) {
         switch (mode) {
             case "GNSS":
@@ -362,9 +375,7 @@ public class ReplayFragment extends Fragment {
             if (currentIndex == 0) {
                 trajectoryMapFragment.clearMapAndReset(); // only clear once at the start
             }
-            LatLng ekfPoint = EKF_point(currentIndex);
-            EKF_data.add(ekfPoint);
-            Log.d(TAG, "Fused point: " + ekfPoint);
+
 
             drawReplayPointWithMode(currentIndex);
             currentIndex++;
@@ -393,11 +404,12 @@ public class ReplayFragment extends Fragment {
 
 
             case "WiFi":
-                // code by Jamie Arnott
+                // code by Jamie Arnott: WiFi Positioning
                 if (p.cachedWiFiLocation != null) {
                     trajectoryMapFragment.updateUserLocation(p.cachedWiFiLocation, p.orientation);
                     currentPoint = p.cachedWiFiLocation;
                 } else if (p.wifiSamples != null && !p.wifiSamples.isEmpty()) {
+                    // check that the phone has WiFi connection before performing WiFi fingerprint creation and request
                     ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
                     NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
                     boolean isConnected = activeNetwork != null && activeNetwork.isConnectedOrConnecting();
@@ -433,6 +445,7 @@ public class ReplayFragment extends Fragment {
                                 trajectoryMapFragment.addPolylinePoint(location); // Add trace point
                                 previousReplayPoint = location;
                                 prevWiFiLocation = location;
+                                trajectoryMapFragment.displayNucleusFloorLevel(floor);
 
                             }
 
@@ -449,10 +462,11 @@ public class ReplayFragment extends Fragment {
                     }
                 }
                 break;
-
+            // code by Jamie Arnott: EKF Positioning Integration
             case "EKF":
                 // call EKF_point() with the current index
                 currentPoint = EKF_point(index);
+                EKF_data.add(currentPoint); // add data to list
                 if (currentPoint != null){
                     trajectoryMapFragment.updateUserLocation(currentPoint,p.orientation);
                 }
@@ -482,7 +496,7 @@ public class ReplayFragment extends Fragment {
 
 
 
-
+    // code by Marco Bancalari-Ruiz & Jamie Arnott: Fuse data using EKF filter
     private LatLng EKF_point(int index){
         TrajParser.ReplayPoint p = replayData.get(index);
         TrajParser.ReplayPoint prev = replayData.get(index);
@@ -522,6 +536,7 @@ public class ReplayFragment extends Fragment {
                 @Override
                 public void onSuccess(LatLng location, int floor) {
                     Log.d(TAG, "WiFi Positioning Successful");
+                    trajectoryMapFragment.displayNucleusFloorLevel(floor);
                     p.cachedWiFiLocation = location; // keep this
 
                     prevWiFiLocation = location; // keep this to update prev location
@@ -594,24 +609,25 @@ public class ReplayFragment extends Fragment {
                 .setPositiveButton("File's GNSS", (dialog, which) -> {
                     LatLng firstGnss = getFirstGnssLocation(replayData);
                     if (firstGnss != null) {
-                        setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
+                        setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude, 1);
                     } else {
-                        setupInitialMapPosition(initialLat, initialLon);
+                        setupInitialMapPosition(initialLat, initialLon, 0);
                     }
                     dialog.dismiss();
                 })
                 .setNegativeButton("Manual Set", (dialog, which) -> {
-                    setupInitialMapPosition(initialLat, initialLon);
+                    setupInitialMapPosition(initialLat, initialLon, 0);
                     dialog.dismiss();
                 })
                 .setCancelable(false)
                 .show();
     }
 
-    private void setupInitialMapPosition(float latitude, float longitude) {
+    private void setupInitialMapPosition(float latitude, float longitude, int floor) {
         LatLng startPoint = new LatLng(latitude, longitude);
         Log.i(TAG, "Setting initial map position: " + startPoint);
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
+        trajectoryMapFragment.displayNucleusFloorLevel(floor);
     }
 
     private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {

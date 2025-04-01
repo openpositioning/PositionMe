@@ -213,7 +213,14 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-
+    // code by Jamie Arnott
+    /**
+     * Method to display correct nucleus floor based on floor level received from WiFi data
+     * @param floor
+     */
+    public void displayNucleusFloorLevel(int floor){
+        indoorMapManager.setCurrentFloor(floor, true);
+    }
 
 
 
