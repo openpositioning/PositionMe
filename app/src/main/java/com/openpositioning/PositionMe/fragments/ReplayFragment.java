@@ -517,6 +517,9 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
         
+        // 设置地图类型为卫星地图
+        mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
+        
         // 更新地图
         if (!trajectoryPoints.isEmpty()) {
             updateMap();
