@@ -45,15 +45,20 @@ import java.util.List;
 
 public class PositionFragment extends Fragment implements OnMapReadyCallback {
     private GoogleMap mMap;
-    private TextView tvLatitude, tvLongitude;
+    private TextView tvLatitude, tvLongitude, wifiUpdateTime;
     private Button setButton, resetButton;
     private LatLng initialPosition;
     private boolean isGpsInitialized = false;
     // current marker position
     private LatLng currentMarkerPosition;
+    private LatLng currentWiFiLocation;
+    private long lastWiFiUpdateTime = 0;
 
     // user fixed marker position
     private LatLng fixedMarkerPosition;
+
+    private final Handler handler = new Handler();
+    private final int WIFI_CHECK_INTERVAL = 1000;
 
 
     // Gnss
@@ -120,6 +125,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         // ui bounding
         tvLatitude = view.findViewById(R.id.tv_latitude);
         tvLongitude = view.findViewById(R.id.tv_longitude);
+        wifiUpdateTime = view.findViewById(R.id.wifi_updateTime);
         setButton = view.findViewById(R.id.button_set);
         resetButton = view.findViewById(R.id.button_reset);
 
@@ -236,6 +242,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
 
         // initialize interest zones
         initializeInterestZones();
+        startWiFiCheckLoop();
 
         // add marker drag listener
         mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
@@ -295,6 +302,39 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
                 updateMarkerInfo(initialPosition);
             }
         });
+    }
+
+    private void startWiFiCheckLoop() {
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                checkWiFiState();
+                handler.postDelayed(this, WIFI_CHECK_INTERVAL);
+            }
+        }, WIFI_CHECK_INTERVAL);
+    }
+    /**
+     * This block check the current state of wifi position
+     * if updated, updates the time it detects
+     * otherwise say the position not available
+     */
+    private void checkWiFiState() {
+        // **** change using new wifi logic
+        LatLng wifiPosition = sensorFusion.getLatLngWifiPositioning();
+        if (wifiPosition != null) {
+            long currentTime = System.currentTimeMillis();
+            if (currentWiFiLocation == null) {
+                lastWiFiUpdateTime = currentTime;
+                wifiUpdateTime.setText("WiFi last updated: Just now");
+            } else if (!wifiPosition.equals(currentWiFiLocation)) {
+                long timeDiff = (currentTime - lastWiFiUpdateTime) / (1000 * 60);
+                wifiUpdateTime.setText("WiFi last updated: " + timeDiff + " min ago");
+                lastWiFiUpdateTime = currentTime;
+            }
+            currentWiFiLocation = wifiPosition;
+        }else{
+            wifiUpdateTime.setText("WiFi last updated: WiFi position not available");
+        }
     }
 
     // initialize interest zones
@@ -545,6 +585,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         }
         sensorFusion.stopListening();
         sensorFusion.stopWifiScanOnly();
+        handler.removeCallbacksAndMessages(null);
     }
 
     @Override

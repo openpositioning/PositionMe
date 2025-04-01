@@ -256,13 +256,13 @@ public class RecordingFragment extends Fragment {
                 // ✅ Initialize PDR track (Polyline)
 
                 polyline = gMap.addPolyline(new PolylineOptions()
-                        .color(Color.RED)
+                        .color(Color.parseColor("#FFA500"))
                         .add(currentLocation)
                         .zIndex(6));
 
                 // initialize the fused position
                 fusedPolyline = gMap.addPolyline(new PolylineOptions()
-                        .color(Color.YELLOW)
+                        .color(Color.parseColor("#880000"))
                         .add(fusedCurrentLocation)
                         .zIndex(6));
 
@@ -540,20 +540,39 @@ public class RecordingFragment extends Fragment {
                     wifi.setChecked(false);
                     return;
                 }
-                if (orientationMarker == null) {
-                    if (wifiPositionMarker == null) {
-                        wifiPositionMarker = gMap.addMarker(new MarkerOptions()
-                                .title("WiFi Position")
-                                .position(wifiPosition)
-                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
-                    } else {
-                        wifiPositionMarker.setPosition(wifiPosition);
-                    }
-                }
-            }else{
                 if (wifiPositionMarker != null) {
-                    wifiPositionMarker.remove();
-                    wifiPositionMarker = null;
+                    wifiPositionMarker.setVisible(true);
+                }
+                if (wifiPolyline != null) {
+                    wifiPolyline.setVisible(true);
+                }
+                for (Marker marker : wifiMarkers) {
+                    marker.setVisible(true);
+                }
+//                if (orientationMarker == null) {
+//                    if (wifiPositionMarker == null) {
+//                        wifiPositionMarker = gMap.addMarker(new MarkerOptions()
+//                                .title("WiFi Position")
+//                                .position(wifiPosition)
+//                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+//                    } else {
+//                        wifiPositionMarker.setPosition(wifiPosition);
+//                    }
+//                }
+
+            }else{
+//                if (wifiPositionMarker != null) {
+//                    wifiPositionMarker.remove();
+//                    wifiPositionMarker = null;
+//                }
+                if (wifiPositionMarker != null) {
+                    wifiPositionMarker.setVisible(false);
+                }
+                if (wifiPolyline != null) {
+                    wifiPolyline.setVisible(false);
+                }
+                for (Marker marker : wifiMarkers) {
+                    marker.setVisible(false);
                 }
             }
         });
@@ -609,17 +628,17 @@ public class RecordingFragment extends Fragment {
                         gnssError.setVisibility(View.VISIBLE);
                         String GnssErrorRound = df.format(distance);
                         gnss.setText("GNSS error: " + GnssErrorRound + " m");
-//                        gnssError.setText("GNSS error: " + String.format("%.2f", distance) + " m (位置接近)");
+                        gnssError.setText("GNSS error: " + String.format("%.2f", distance) + " m (位置接近)");
                     } else {
                         // 如果距离大于阈值，则在地图上显示一个 GNSS Marker，
                         // 以便用户可以比较 orientationMarker 与 GNSS Marker 之间的距离
                         // If the distance is greater than the threshold, display a GNSS Marker on the map,
                         // so that the user can compare the distance between the orientationMarker and the GNSS Marker
                         if (gnssMarker == null) {
-                            gnssMarker = gMap.addMarker(new MarkerOptions()
-                                    .title("GNSS Position")
-                                    .position(gnssLocation)
-                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+//                            gnssMarker = gMap.addMarker(new MarkerOptions()
+//                                    .title("GNSS Position")
+//                                    .position(gnssLocation)
+//                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
                         } else {
                             gnssMarker.setPosition(gnssLocation);
                         }
@@ -627,6 +646,7 @@ public class RecordingFragment extends Fragment {
                         String GnssErrorRound = df.format(distance);
                         gnssError.setText("GNSS error: " + GnssErrorRound + " m");
                     }
+
                 } else {
                     // 如果 orientationMarker 尚未创建（这种情况比较少见），直接显示 GNSS Marker
                     // If orientationMarker has not been created (this is rare), display GNSS Marker directly
@@ -641,12 +661,32 @@ public class RecordingFragment extends Fragment {
                     gnssError.setVisibility(View.VISIBLE);
                     gnssError.setText("GNSS error: 无法比较（orientationMarker 未就绪）");
                 }
+
+                if (gnssMarker != null) {
+                    gnssMarker.setVisible(true);
+                }
+                if (gnssPolyline != null) {
+                    gnssPolyline.setVisible(true);
+                }
+                for (Marker marker : gnssMarkers) {
+                    marker.setVisible(true);
+                }
+
             } else {
                 // 当 GNSS 关闭时，只保留 orientationMarker，将 GNSS Marker 移除
                 // When GNSS is turned off, only orientationMarker is kept and GNSS Marker is removed
+//                if (gnssMarker != null) {
+//                    gnssMarker.remove();
+//                    gnssMarker = null;
+//                }
                 if (gnssMarker != null) {
-                    gnssMarker.remove();
-                    gnssMarker = null;
+                    gnssMarker.setVisible(false);
+                }
+                if (gnssPolyline != null) {
+                    gnssPolyline.setVisible(false);
+                }
+                for (Marker marker : gnssMarkers) {
+                    marker.setVisible(false);
                 }
                 gnssError.setVisibility(View.GONE);
                 Log.d("GNSS", "GNSS Marker 已移除，仅保留 orientationMarker");
@@ -662,6 +702,9 @@ public class RecordingFragment extends Fragment {
                         .position(fusedCurrentLocation)
                         .title("Added Tag")
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+                Toast.makeText(getContext(), "Tag added successfully!", Toast.LENGTH_SHORT).show();
+            }else{
+                Toast.makeText(getContext(), "Recording not started yet!", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -696,7 +739,7 @@ public class RecordingFragment extends Fragment {
         // 重新创建轨迹 Polyline，以初始位置为起点
         // Recreate the trajectory Polyline, starting from the initial position
         polyline = gMap.addPolyline(new PolylineOptions()
-                .color(Color.parseColor("#8B0000"))
+                .color(Color.parseColor("#FFA500"))
                 .add(currentLocation)
                 .zIndex(6));
         if(!pdr.isChecked()){
@@ -705,7 +748,7 @@ public class RecordingFragment extends Fragment {
             polyline.setVisible(true);
         }
         fusedPolyline = gMap.addPolyline(new PolylineOptions()
-                .color(Color.YELLOW)
+                .color(Color.parseColor("#880000"))
                 .add(fusedCurrentLocation)
                 .zIndex(6));
     }
@@ -840,7 +883,8 @@ public class RecordingFragment extends Fragment {
                                              Polyline polyline,
                                              Marker marker,
                                              float markerColor,
-                                             int lineColor) {
+                                             int lineColor,
+                                             boolean title) {
         if (newPosition == null) return polyline;
         if (!positionList.isEmpty() && positionList.get(positionList.size() - 1).equals(newPosition)) {
             return polyline;
@@ -854,11 +898,22 @@ public class RecordingFragment extends Fragment {
         marker = gMap.addMarker(new MarkerOptions()
                 .position(newPosition)
                 .icon(BitmapDescriptorFactory.defaultMarker(markerColor)));
+        if(marker != null) {
+            if (title) {
+                marker.setVisible(wifi.isChecked());
+            } else {
+                marker.setVisible(gnss.isChecked());
+            }
+        }
         markerList.add(marker);
         for (int i = 0; i < markerList.size(); i++) {
             float alpha = 0.3f + (0.7f * i / (markerList.size() - 1));
             markerList.get(i).setAlpha(alpha);
-            markerList.get(i).setTitle("Marker #" + (i+1));
+            if(title) {
+                markerList.get(i).setTitle("Wifi Marker #" + (i + 1));
+            }else{
+                markerList.get(i).setTitle("GNSS Marker #" + (i + 1));
+            }
         }
         if (polyline == null) {
             polyline = gMap.addPolyline(new PolylineOptions()
@@ -868,6 +923,11 @@ public class RecordingFragment extends Fragment {
                     .geodesic(true));
         } else {
             polyline.setPoints(positionList);
+        }
+        if(title){
+            polyline.setVisible(wifi.isChecked());
+        }else{
+            polyline.setVisible(gnss.isChecked());
         }
         return polyline;
     }
@@ -931,71 +991,9 @@ public class RecordingFragment extends Fragment {
         }
 
         //  WiFi marker position update
-        if(wifi != null && wifi.isChecked()) {
+        if(wifi != null) {
             LatLng wifiPosition = sensorFusion.getLatLngWifiPositioning();
-//            wifiPositions.add(wifiPosition);
-//            if (wifiPosition != null) {
-//                if (wifiPositionMarker != null) {
-//                    wifiPositionMarker.setPosition(wifiPosition);
-//
-//                    double[] result = convertLatLangToNorthingEasting(start, wifiPosition);
-//                    Log.d("LocationConversion", "Easting: " + result[0] + " meters");
-//                    Log.d("LocationConversion", "Northing: " + result[1] + " meters");
-//                } else {
-//                    wifiPositionMarker = gMap.addMarker(new MarkerOptions()
-//                            .position(wifiPosition)
-//                            .title("WiFi Position")
-//                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
-//                }
-//                if (!wifiPositions.isEmpty()) {
-//                    // Add polyline from the previous position to the new one
-//
-//                    LatLng lastPosition = wifiPosition;
-//
-//                }
-//            } else {
-//                if (wifiPositionMarker != null) {
-//                    wifiPositionMarker.remove();
-//                    wifiPositionMarker = null;
-//                }
-//            }
-            wifiPolyline = updatePositionHistory(wifiPosition, wifiPositions, wifiMarkers, wifiPolyline,wifiPositionMarker,BitmapDescriptorFactory.HUE_GREEN, Color.GREEN);
-//            if (wifiPosition == null) return;
-//
-//            if (lastPosition == wifiPosition) {
-//                return;
-//            }else{
-//                lastPosition = wifiPosition;
-//                wifiPositions.add(wifiPosition);
-//            }
-//
-//            if (wifiPositions.size() >= MAX_POSITIONS) {
-//                wifiPositions.remove(0);
-//                wifiMarkers.get(0).remove();
-//                wifiMarkers.remove(0);
-//            }
-//
-//            Marker wifiMarker = gMap.addMarker(new MarkerOptions()
-//                    .position(wifiPosition)
-//                    .title("WiFi Position " + wifiPositions.size())
-//                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
-//            wifiMarkers.add(wifiMarker);
-//
-//            for (int i = 0; i < wifiMarkers.size(); i++) {
-//                float alpha = 0.3f + (0.7f * i / (wifiMarkers.size() - 1));
-//                wifiMarkers.get(i).setAlpha(alpha);
-//            }
-//
-//            if (wifiPolyline == null) {
-//                wifiPolyline = gMap.addPolyline(new PolylineOptions()
-//                        .addAll(wifiPositions)
-//                        .width(8)
-//                        .color(Color.GREEN)
-//                        .geodesic(true));
-//
-//            } else {
-//                wifiPolyline.setPoints(wifiPositions);
-//            }
+            wifiPolyline = updatePositionHistory(wifiPosition, wifiPositions, wifiMarkers, wifiPolyline,wifiPositionMarker,BitmapDescriptorFactory.HUE_GREEN, Color.GREEN,true);
         }else{
             if (!wifiMarkers.isEmpty()) {
                 for (Marker marker : wifiMarkers) {
@@ -1019,7 +1017,7 @@ public class RecordingFragment extends Fragment {
 
         // ✅ **GNSS 误差计算 & GNSS Marker 位置更新**
         // ✅ **GNSS error calculation & GNSS Marker position update**
-        if (gnss != null && gnss.isChecked()) {
+        if (gnss != null) {
             float[] gnssData = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
             if (gnssData != null && gnssData.length >= 2) {
                 LatLng gnssLocation = new LatLng(gnssData[0], gnssData[1]);
@@ -1027,41 +1025,47 @@ public class RecordingFragment extends Fragment {
                 // 计算 GNSS 和 PDR 位置的误差
                 // Calculate the error between GNSS and PDR positions
                 double error = UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation);
-                gnssError.setVisibility(View.VISIBLE);
                 String GnssErrorRound = df.format(error);
-                gnssError.setText("GNSS error: " + GnssErrorRound + " m");
-
-                // 更新 GNSS Marker 位置
-                // Update GNSS Marker position
-//                if (gnssMarker != null) {
-//                    gnssMarker.setPosition(gnssLocation);
-//                } else {
-//                    gnssMarker = gMap.addMarker(new MarkerOptions()
-//                            .position(gnssLocation)
-//                            .title("GNSS Position")
-//                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-//                }
-                gnssPolyline = updatePositionHistory(gnssLocation, gnssPositions, gnssMarkers, gnssPolyline, gnssMarker ,BitmapDescriptorFactory.HUE_AZURE, Color.BLUE);
+                if(gnss.isChecked()) {
+                    gnssError.setVisibility(View.VISIBLE);
+                    gnssError.setText("GNSS error: " + GnssErrorRound + " m");
+                }else{
+                    gnssError.setVisibility(View.GONE);
+                }
+                gnssPolyline = updatePositionHistory(gnssLocation, gnssPositions, gnssMarkers, gnssPolyline, gnssMarker ,BitmapDescriptorFactory.HUE_AZURE, Color.BLUE, false);
             }
         } else {
             if (!gnssMarkers.isEmpty()) {
                 for (Marker marker : gnssMarkers) {
                     marker.remove();
-                    if (gnssMarker != null) {
-                        gnssMarker.remove();
-                        gnssMarker = null;
-                    }
                 }
                 gnssMarkers.clear();
             }
             gnssPositions.clear();
             if (gnssPolyline != null) {
+                gnssPolyline.setPoints(gnssPositions);
                 gnssPolyline.remove();
                 gnssPolyline = null;
             }
-            // remove single GNSS Marker
+            if (gnssMarker != null) {
+                gnssMarker.remove();
+                gnssMarker = null;
+            }
 
+//                    if (gnssMarker != null) {
+//                        gnssMarker.remove();
+//                        gnssMarker = null;
+//                    }
+//                }
+//                gnssMarkers.clear();
+//            }
+//            gnssPositions.clear();
+//            if (gnssPolyline != null) {
+//                gnssPolyline.remove();
+//                gnssPolyline = null;
+//            }
             gnssError.setVisibility(View.GONE);
+
         }
 
         // ✅ **室内地图管理**
@@ -1137,49 +1141,6 @@ public class RecordingFragment extends Fragment {
         // 平滑摄像机
         gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedCurrentLocation, 19f));
 
-//        if (currentLocation != null) {
-//            // ✅ **计算新位置**
-//            //✅ **Calculate new position**
-//            LatLng nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
-//            if (nextLocation == null) {
-//                Log.e("PlottingPDR", "❌ nextLocation is NULL!");
-//                return;
-//            }
-//            try {
-//                // ✅ **更新 PDR 轨迹**
-//                //✅ **Update PDR tracks**
-//                List<LatLng> points = new ArrayList<>(polyline.getPoints()); // 🔥 避免 GC 频繁回收 Avoid frequent GC collection
-//                points.add(nextLocation);
-//                polyline.setPoints(points);
-//
-//                // ✅ **移动方向指示 Marker**
-//                //✅ **Moving direction indicator Marker**
-//                if (orientationMarker != null) {
-//                    orientationMarker.setPosition(nextLocation);
-//                }
-//
-//                // ✅ **平滑移动摄像机**
-//                //✅ **Smooth camera movement**
-//                gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, 19f));
-//
-//            } catch (Exception ex) {
-//                Log.e("PlottingPDR", "❌ Exception: " + ex.getMessage());
-//            }
-//
-//            // ✅ **更新当前位置**
-//            //✅ **Update current location**
-//            currentLocation = nextLocation;
-//        } else {
-//            // **初始化起始位置**
-//            // **Initialize the starting position**
-//            float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-//            if (location != null && location.length >= 2) {
-//                currentLocation = new LatLng(location[0], location[1]);
-//                nextLocation = currentLocation;
-//            } else {
-//                Log.e("PlottingPDR", "❌ GNSS location unavailable!");
-//            }
-//        }
     }
 
     private void updatePDRandFusionPosition(float[] pdrMoved, boolean isFused) {

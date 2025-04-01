@@ -52,6 +52,8 @@ public class ReplayTrajFragment extends Fragment {
     public IndoorMapManager indoorMapManager;
     private Spinner switchMapSpinner;
     private Switch GNSSSwitchControl;
+
+    private Switch pdrPathSwitch;
     private TextView ElevationPres;
 
     private static final DecimalFormat df = new DecimalFormat("#.####");
@@ -63,6 +65,8 @@ public class ReplayTrajFragment extends Fragment {
     private List<Circle> circleList = new ArrayList<>();
     private Marker gnssMarker;
     private boolean gnssEnabled = true;
+
+    private boolean pdrEnabled = true;
     private LatLng currentLocation;
 
     private LatLng currentGnssLoc;
@@ -178,6 +182,7 @@ public class ReplayTrajFragment extends Fragment {
         setupPlayPauseButton();
         ProgressView();
         GNSSSwitch();
+        pdrPathSwitch();
 
         // Configuring dropdown for switching map types
         mapDropdown();
@@ -384,6 +389,8 @@ public class ReplayTrajFragment extends Fragment {
                 // add new point
                 pointsMoved.add(currentLocation);
                 pdrPolyline.setPoints(pointsMoved);
+                pdrPolyline.setColor(Color.parseColor("#FFA500"));
+                pdrPolyline.setVisible(pdrEnabled);
             }
 
             if(indoorMapManager != null){
@@ -534,6 +541,24 @@ public class ReplayTrajFragment extends Fragment {
                             circle.setVisible(false);
                         }
                     }
+
+                }
+            }
+        });
+    }
+
+    private void pdrPathSwitch(){
+        pdrPathSwitch = requireView().findViewById(R.id.switchPDR);
+        pdrPathSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (isChecked) {
+                    pdrEnabled = true;
+                    if(pdrPolyline != null) pdrPolyline.setVisible(true);
+
+                } else {
+                    pdrEnabled = false;
+                    if(pdrPolyline != null) pdrPolyline.setVisible(false);
 
                 }
             }
