@@ -716,6 +716,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                     wifiFloor = floor;
                     wifiPositionTimestamp = SystemClock.uptimeMillis();
                     wifiReceivedTime = System.currentTimeMillis();  // 用于日志分析
+                    if (trajectoryMapFragment != null && wifiLocation != null) {
+                        trajectoryMapFragment.updatWifiLocation(wifiLocation, 0f);  // 0f as placeholder heading
+                    }
                     Log.d("SensorFusion", "WiFi store success, store time: " + wifiReceivedTime);
                     long responseTime = System.currentTimeMillis();
                     long delay = responseTime - requestStartTime;
