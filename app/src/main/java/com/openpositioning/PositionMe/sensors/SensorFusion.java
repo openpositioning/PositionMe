@@ -758,10 +758,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (saveRecording) {
                         float lat = (float) lastWifiPos.latitude;
                         float lon = (float) lastWifiPos.longitude;
+                        float height = floor * 4.2F; // nucleus floor height is 4.2m
                         String provider = "wifi_fine";
                         trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
                                 .setAccuracy(0)
-                                .setAltitude(0)
+                                .setAltitude(height)
                                 .setLatitude(lat)
                                 .setLongitude(lon)
                                 .setSpeed(0)
