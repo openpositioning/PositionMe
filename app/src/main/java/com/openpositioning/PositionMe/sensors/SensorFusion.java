@@ -31,6 +31,8 @@ import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import com.openpositioning.PositionMe.FusionAlgorithms.EKF;
+import com.openpositioning.PositionMe.FusionAlgorithms.UKF;
+import com.openpositioning.PositionMe.FusionAlgorithms.SmoothThread;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -182,9 +184,17 @@ public class SensorFusion implements SensorEventListener, Observer {
     private long wifiReceivedTime = 0;
     private int wifiFloor = 0;
     private float gnssAccuracy = 100f;
+    private UKF ukf;
 
     private ParticleFilter particleFilter;
     private static final double PF_EKF_THRESHOLD = 10.0;
+
+    private LatLng previousWifiLatLng = null;
+    private int wifiSoftUpdateCounter = 0;
+    private SmoothThread smoothThread;
+    private LatLng previousFusionSmoothedPos = null;
+    private float previousFusionSmoothedHeading = 0;
+    private final double FUSION_SMOOTHING_ALPHA = 0.2;
 
     private com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment trajectoryMapFragment;
 
@@ -365,6 +375,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                 angularVelocity[0] = sensorEvent.values[0];
                 angularVelocity[1] = sensorEvent.values[1];
                 angularVelocity[2] = sensorEvent.values[2];
+                if (ukf != null) {
+                    long now = SystemClock.uptimeMillis();
+                    Long lastTs = lastEventTimestamps.get(Sensor.TYPE_GYROSCOPE);
+                    if (lastTs != null) {
+                double dt = (now - lastTs) / 1000.0; // ms -> s
+                if (dt > 0 && dt < 1.0) {  // Avoid long gaps
+                    ukf.predict(angularVelocity[2], dt); // 只用 Z 轴角速度
+                }
+                    }
+                }
 
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 filteredAcc[0] = sensorEvent.values[0];
@@ -410,6 +430,23 @@ public class SensorFusion implements SensorEventListener, Observer {
                 magneticField[0] = sensorEvent.values[0];
                 magneticField[1] = sensorEvent.values[1];
                 magneticField[2] = sensorEvent.values[2];
+                if (ukf != null && magneticField != null && gravity != null) {
+                    float[] R = new float[9];
+                    float[] orientationFromMag = new float[3];
+                    if (SensorManager.getRotationMatrix(R, null, gravity, magneticField)) {
+            SensorManager.getOrientation(R, orientationFromMag);
+            double magTheta = wrapToPi(orientationFromMag[0]);
+            float normMag = (float) Math.sqrt(
+                magneticField[0]*magneticField[0] +
+                magneticField[1]*magneticField[1] +
+                magneticField[2]*magneticField[2]);
+            if (normMag > 30 && normMag < 70) {
+                ukf.update(magTheta);
+            } else {
+                Log.d("SensorFusion", "Magnetometer reading ignored due to abnormal strength: " + normMag);
+            }
+                    }
+                }
                 break;
 
             case Sensor.TYPE_ROTATION_VECTOR:
@@ -431,11 +468,21 @@ public class SensorFusion implements SensorEventListener, Observer {
                     } else {
                         Log.d("SensorFusion", "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
                     }
+                    if (refLat == 0.0 && refLon == 0.0) {
+                        Location fallbackLocation = gnssProcessor.getLastKnownLocation();
+                        if (fallbackLocation != null) {
+                            refLat = fallbackLocation.getLatitude();
+                            refLon = fallbackLocation.getLongitude();
+                            refAlt = fallbackLocation.getAltitude();
+                            ecefRefCoords = CoordinateTransform.geodeticToEcef(refLat, refLon, refAlt);
+                            Log.w("SensorFusion", "Reference position was unset during step. Fallback to GNSS: refLat=" + refLat + ", refLon=" + refLon);
+                        }
+                    }
                     float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
                     this.accelMagnitude.clear();
                     float stepLen = this.pdrProcessing.getStepLength(); // 获取当前步长
 
-                    double theta = wrapToPi(this.orientation[0]); // 获取当前方向角
+                    double theta = ukf != null ? ukf.getTheta() : wrapToPi(this.orientation[0]);
                     Log.d("SensorFusion", "Step detected: stepLen=" + stepLen + ", theta=" + theta);
 
 
@@ -446,7 +493,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 newCords[0], newCords[1], 0.0,
                                 refLat, refLon, refAlt
                         );
-                        float headingDeg = (float) Math.toDegrees(this.orientation[0]);
+                        float headingDeg = (float) Math.toDegrees(theta);
                         trajectoryMapFragment.updateUserLocation(rawPdrLatLng, headingDeg);
                     }
                     if (extendedKalmanFilter != null) {
@@ -543,6 +590,21 @@ public class SensorFusion implements SensorEventListener, Observer {
                         if (trajectoryMapFragment != null) {
                         float headingDeg = (float) Math.toDegrees(this.orientation[0]);
                         trajectoryMapFragment.updateFusionLocation(fusedPos, headingDeg);
+                            if (smoothThread != null && fusedPos != null) {
+                                // 1) 将 (lat, lon) 转成 ENU
+                                double[] enu = CoordinateTransform.geodeticToEnu(
+                                        fusedPos.latitude,
+                                        fusedPos.longitude,
+                                        0.0,           // 以 0 作为高度
+                                        refLat, refLon, refAlt
+                                );
+                                // 2) 获取当前航向（弧度制）
+                                // 如果要用融合后的朝向，则从EKF状态提取；若暂时没对应方法，也可用 orientation[0]
+                                float headingRad = this.orientation[0];
+                                // 3) 调用 addState
+                                long nowMs = SystemClock.uptimeMillis();
+                                smoothThread.addState(nowMs, enu[0], enu[1], headingRad);
+                            }
                         }
                     } else {
                         Log.e("SensorFusion", "EKF is null when trying to get estimated position!");
@@ -573,6 +635,14 @@ public class SensorFusion implements SensorEventListener, Observer {
                 Log.d("SensorFusion", "WiFi response raw: " + wifiResponse.toString());
                 double lat = wifiResponse.getDouble("lat");
                 double lon = wifiResponse.getDouble("lon");
+                LatLng currentWifiLatLng = new LatLng(lat, lon);
+                if (previousWifiLatLng != null) {
+                    double wifiJump = computeDistance(currentWifiLatLng, previousWifiLatLng);
+                    if (wifiJump > 10.0) {
+                        Log.w("SensorFusion", "WiFi位置跳变过大: " + wifiJump + "m，忽略此WiFi融合");
+                        return;
+                    }
+                }
                 double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, getElevation(), refLat, refLon, refAlt);
 
                 Log.d("SensorFusion", "Using WiFi for EKF update: East=" + enuCoords[0] + ", North=" + enuCoords[1]);
@@ -586,6 +656,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     extendedKalmanFilter.update(enuCoords[0], enuCoords[1], penaltyFactor);
                     Log.d("SensorFusion", "EKF updated with WiFi: penaltyFactor=" + penaltyFactor);
+                    previousWifiLatLng = currentWifiLatLng;
+                    wifiSoftUpdateCounter = 3;  // 开启3次渐进融合
                 }
             } else if (useGNSS && gnssLocation != null) {
                 double lat = gnssLocation.getLatitude();
@@ -619,10 +691,14 @@ public class SensorFusion implements SensorEventListener, Observer {
             baseFactor = 1.5;  // 弱 WiFi 信号时增加噪声影响
         }
 
-        // 时间误差动态调整（0.1/秒，最多调整到 4.0）
-        double timePenalty = 1.0 + Math.min(elapsedTime / 10000.0, 3.0);
+        if (wifiSoftUpdateCounter > 0) {
+            baseFactor *= (1.0 + wifiSoftUpdateCounter); // 第1次=×4, 第2次=×3, 第3次=×2
+            wifiSoftUpdateCounter--;
+        } else if (elapsedTime > 5000) {
+            baseFactor *= Math.min(elapsedTime / 5000.0, 3.0); // Wi-Fi延迟长也做惩罚
+        }
 
-        return baseFactor * timePenalty;
+        return baseFactor;
     }
 
     /**
@@ -1083,6 +1159,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                 initLatLon[0] = (float) lastKnownLocation.getLatitude();
                 initLatLon[1] = (float) lastKnownLocation.getLongitude();
                 Log.d("SensorFusion", "Using lastKnownLocation: " + initLatLon[0] + ", " + initLatLon[1]);
+                refLat = initLatLon[0];
+                refLon = initLatLon[1];
+                refAlt = 0.0;
+                ecefRefCoords = CoordinateTransform.geodeticToEcef(refLat, refLon, refAlt);
+                Log.d("SensorFusion", "startRecording() - Set ref position from GNSS: refLat=" + refLat + ", refLon=" + refLon);
             }
         }
 
@@ -1139,6 +1220,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // 获取当前设备方向
         double initialTheta = wrapToPi(this.orientation[0]);
+        ukf = new UKF(initialTheta);
 
         Log.d("SensorFusion", "First EKF Init: Lat=" + initLatLon[0] + ", Lon=" + initLatLon[1]);
         Log.d("SensorFusion", "Initial Theta=" + initialTheta);
@@ -1150,6 +1232,39 @@ public class SensorFusion implements SensorEventListener, Observer {
         // 初始化 PF
         particleFilter = new ParticleFilter(100, refLat, refLon, refAlt);
         particleFilter.initializeParticles(enuCoords[0], enuCoords[1], initialTheta, 1.0, 1.0, 0.1);
+
+        smoothThread = new SmoothThread((e, n, headingRad) -> {
+
+        // Compute the current fusion position
+        LatLng currentFusionPos = CoordinateTransform.enuToGeodetic(
+                e, n, 0.0,
+                refLat, refLon, refAlt
+        );
+
+        // Exponential smoothing for position
+        if (previousFusionSmoothedPos == null) {
+            previousFusionSmoothedPos = currentFusionPos;
+        }
+        double smoothedLat = FUSION_SMOOTHING_ALPHA * currentFusionPos.latitude + (1 - FUSION_SMOOTHING_ALPHA) * previousFusionSmoothedPos.latitude;
+        double smoothedLon = FUSION_SMOOTHING_ALPHA * currentFusionPos.longitude + (1 - FUSION_SMOOTHING_ALPHA) * previousFusionSmoothedPos.longitude;
+        LatLng smoothedPos = new LatLng(smoothedLat, smoothedLon);
+        previousFusionSmoothedPos = smoothedPos;
+
+            // Exponential smoothing for heading
+            float currentHeadingDeg = (float) Math.toDegrees(headingRad);
+            if (previousFusionSmoothedHeading == 0) {
+                previousFusionSmoothedHeading = currentHeadingDeg;
+            }
+            float smoothedHeadingDeg = (float)(FUSION_SMOOTHING_ALPHA * currentHeadingDeg + (1 - FUSION_SMOOTHING_ALPHA) * previousFusionSmoothedHeading);
+            previousFusionSmoothedHeading = smoothedHeadingDeg;
+
+            if (trajectoryMapFragment != null && trajectoryMapFragment.getActivity() != null) {
+                trajectoryMapFragment.getActivity().runOnUiThread(() -> {
+                    trajectoryMapFragment.updateFusionLocation(smoothedPos, smoothedHeadingDeg);
+                });
+            }
+        });
+        smoothThread.start();
     }
 
     /**
@@ -1169,6 +1284,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         if(wakeLock.isHeld()) {
             this.wakeLock.release();
+        }
+        if (smoothThread != null) {
+            smoothThread.stopSmoothing();
+            smoothThread = null;
         }
     }
 
