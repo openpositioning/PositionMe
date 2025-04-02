@@ -44,7 +44,7 @@ public class ParticleFilter implements FusionAlgorithm {
         this.refLongitude = startRef[1];
         this.refAltitude  = startRef[2];
 
-        // 2) 将起始点自己转换为 ENU (它应当变成近似 (0,0) ).
+        // 2) Convert the starting point to ENU yourself (it should become approximately (0,0)).
         double[] enuRef = CoordinateTransform.geodeticToEnu(
                 refLatitude, refLongitude, refAltitude,
                 refLatitude, refLongitude, refAltitude
@@ -52,11 +52,11 @@ public class ParticleFilter implements FusionAlgorithm {
         this.initialEasting  = enuRef[0];
         this.initialNorthing = enuRef[1];
 
-        // 3) 初始化粒子数组与随机数生成器
+        // 3) Initialize particle array and random number generator
         this.particles = new Particle[NUM_PARTICLES];
         this.random = new Random();
 
-        // 4) 在初始位置附近随机撒一批粒子
+        // 4) Randomly scatter a batch of particles near the initial position
         initializeParticles();
     }
 
@@ -68,7 +68,7 @@ public class ParticleFilter implements FusionAlgorithm {
         for (int i = 0; i < NUM_PARTICLES; i++) {
             double easting = initialEasting  + random.nextGaussian() * initStdDev;
             double northing = initialNorthing + random.nextGaussian() * initStdDev;
-            // weight 先简单统一 = 1/NUM_PARTICLES
+            // Weight is simply unified first = 1/NUM_PARTICLES
             particles[i] = new Particle(easting, northing, 1.0 / NUM_PARTICLES);
         }
     }

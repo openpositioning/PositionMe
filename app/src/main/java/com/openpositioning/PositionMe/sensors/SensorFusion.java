@@ -498,7 +498,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         if (!wifiResponse.has("lat") || !wifiResponse.has("lon")) {
             Log.d("SensorFusion",
                     "WiFi Debug: wifiResponse lacks lat or lon ，" +
-                            "完整数据: " + wifiResponse.toString());
+                            "whole data: " + wifiResponse.toString());
         } else {
             try {
                 double lat = wifiResponse.getDouble("lat");

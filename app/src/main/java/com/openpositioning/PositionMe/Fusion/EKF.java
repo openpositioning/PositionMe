@@ -31,23 +31,19 @@ import org.ejml.simple.SimpleMatrix;
  */
 public class EKF implements FusionAlgorithm {
 
-    // ----------------------------
-    // 1) 常量或可调参数
-    // ---------------------------
+    // 1) Constant or tunable parameter
     private ExponentialSmoothingFilter smoothingFilter;
     private static final double DEFAULT_STEP_LENGTH = 0.7; // meters
     private static final double DEFAULT_BEARING_STD = Math.toRadians(10); // bearing noise std
     private static final double DEFAULT_STEP_STD = 0.5;    // step length noise std
-    private static final double DEFAULT_GNSS_STD = 5;      // GNSS 位置测量标准差
-    private static final double DEFAULT_WIFI_STD = 8;      // Wi-Fi 位置测量标准差
+    private static final double DEFAULT_GNSS_STD = 5;      // GNSS Position measurement standard deviation
+    private static final double DEFAULT_WIFI_STD = 8;      // Wi-Fi Position measurement standard deviation
     // Opportunistic update fields
     private long lastOpUpdateTime = 0; // stores the timestamp of the last opportunistic update
     private static final long RELEVANCE_THRESHOLD_MS = 10000; // example threshold (ms)
 
 
-    // ----------------------------
     // 2) State, Covariance, and Noise Matrices
-    // ----------------------------
     // State vector Xk: 3x1 = [ bearing; x; y ]
     private SimpleMatrix Xk;   // 3x1 state vector
     // Covariance matrix Pk: 3x3
@@ -71,7 +67,7 @@ public class EKF implements FusionAlgorithm {
     // 3) Other Parameters
 
     private boolean stopEKF = false;
-    private double prevStepLength = DEFAULT_STEP_LENGTH; // 上一次步长
+    private double prevStepLength = DEFAULT_STEP_LENGTH;
 
     /**
      * Constructor for the EKF.
