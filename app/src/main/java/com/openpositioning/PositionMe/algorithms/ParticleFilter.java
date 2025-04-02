@@ -16,8 +16,8 @@ import java.util.Random;
  */
 public class ParticleFilter {
     // Constants, may need to be tuned
-    private static final int NUM_PARTICLES = 100;
-    private static final double PARTICLE_STD_DEV = 0.0005;
+    private static final int NUM_PARTICLES = 200;
+    private static final double PARTICLE_STD_DEV = 0.0002;
 
     // Parameters
     private Particle[] particles;
