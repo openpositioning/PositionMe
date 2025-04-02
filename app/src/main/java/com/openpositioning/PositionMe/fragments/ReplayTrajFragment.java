@@ -548,7 +548,7 @@ public class ReplayTrajFragment extends Fragment {
                 if(provider.equals("wifi_fine")){
                     currentWifiLoc = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());  // current wifi location
                     currentFloor =  (int)((nextGnssSample.getAltitude()) /4.2 + 1);
-                    if (wifiPolyline == null) {
+                    if (wifiPolyline == null && replayMap!=null) {
                         wifiPolyline = replayMap.addPolyline(new PolylineOptions()
                                 .color(Color.GREEN)
                                 .zIndex(6));
@@ -558,7 +558,7 @@ public class ReplayTrajFragment extends Fragment {
                     wifipointsMoved.add(currentWifiLoc);
                     wifiPolyline.setPoints(wifipointsMoved);
 //                    wifiPolyline.setVisible(wifiEnabled);
-                    if (wifiMarker == null) {
+                    if (wifiMarker == null && replayMap!=null) {
                         wifiMarker = replayMap.addMarker(new MarkerOptions()
                                 .title("WiFi position")
                                 .position(currentWifiLoc)
