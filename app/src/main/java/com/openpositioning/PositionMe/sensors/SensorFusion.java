@@ -147,6 +147,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Fusion algorithm instance (EKF, PF, Batch Optimizer, etc.)
     private FusionAlgorithm fusionAlgorithm;
 
+    private int wifiFloor = 0;
+
     // 3) Singleton constructor
     private SensorFusion() {
         this.locationListener = new myLocationListener();
@@ -527,14 +529,15 @@ public class SensorFusion implements SensorEventListener, Observer {
             double lat = wifiResponse.getDouble("lat");
             double lon = wifiResponse.getDouble("lon");
             double floor = wifiResponse.getDouble("floor");
-
+            this.wifiFloor = (int) floor;
+            Log.d("WiFiFusion", "WiFi response: lat = " + lat + ", lon = " + lon + ", floor = " + floor);
             LatLng wifiLatLng = new LatLng(lat, lon);
 
             notifyWifiUpdate(wifiLatLng);
 
 
             if (fusionAlgorithm != null) {
-                // 做一些座标转换...
+
                 double[] enu = CoordinateTransform.geodeticToEnu(
                         lat, lon, 0,
                         startLocation[0],
@@ -627,7 +630,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // 8) start/stop recording
 
     public void startRecording() {
-        // 保持屏幕
+
         this.wakeLock.acquire(31 * 60 * 1000L);
         this.saveRecording = true;
         this.stepCounter = 0;
@@ -809,7 +812,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void removeSensorUpdate(SensorFusionUpdates observer) {
         recordingUpdates.remove(observer);
     }
-
+    public int getWifiFloor() {
+        return wifiFloor;
+    }
     /**
      * SensorFusionUpdates is an interface for notifying UI components about sensor fusion updates.
      */

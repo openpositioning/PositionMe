@@ -724,14 +724,30 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
         }
         //  Updates current location of user to show the indoor floor map (if applicable)
         indoorMapManager.setCurrentLocation(currentLocation);
-        float elevationVal = sensorFusion.getElevation();
+        float elevationVal;
+
+        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
+            int currentFloor = sensorFusion.getWifiFloor();
+            float floorHeight = indoorMapManager.getFloorHeight();
+            elevationVal = currentFloor * floorHeight;
+        } else {
+            // fallback to SensorFusion elevation (e.g. barometer) when outdoors
+            elevationVal = sensorFusion.getElevation();
+        }
+
         // Display buttons to allow user to change floors if indoor map is visible
         if(indoorMapManager.getIsIndoorMapSet()){
             setFloorButtonVisibility(View.VISIBLE);
             // Auto-floor logic
             if(autoFloor.isChecked()){
-                indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-                ,true);
+                int wifiFloor = sensorFusion.getWifiFloor();
+                if (wifiFloor != -2) {  // valid floor
+                    indoorMapManager.setCurrentFloor(wifiFloor, true);
+                } else {
+                    // Fallback to elevation if WiFi floor not available
+                    indoorMapManager.setCurrentFloor(
+                            (int) (elevationVal / indoorMapManager.getFloorHeight()), true);
+                }
             }
         }else{
             // Hide the buttons and switch used to change floor if indoor map is not visible
