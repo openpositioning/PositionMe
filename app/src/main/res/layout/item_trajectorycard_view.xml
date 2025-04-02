@@ -12,7 +12,7 @@
         android:layout_marginTop="15dp"
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="5dp"
-        app:cardBackgroundColor="@color/pastelBlue"
+        app:cardBackgroundColor="@color/myCustomDarkBlue"
         app:cardCornerRadius="20dp"
         app:cardElevation="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -22,7 +22,8 @@
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="match_parent"
+            android:backgroundTint="@color/filecolor">
 
             <TextView
                 android:id="@+id/trajectoryIdItem"
@@ -31,7 +32,7 @@
                 android:layout_marginStart="4dp"
                 android:gravity="center"
                 android:text="999"
-                android:textColor="@color/lightLogoBlue"
+                android:textColor="@color/white"
                 android:textSize="24sp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
@@ -63,7 +64,7 @@
                 android:layout_marginTop="8dp"
                 android:layout_marginEnd="4dp"
                 android:layout_marginBottom="8dp"
-                android:background="@drawable/rounded_corner_lightblue"
+                android:background="@color/filecolor"
                 android:contentDescription="@string/download"
                 android:scaleType="fitXY"
                 app:layout_constraintBottom_toBottomOf="parent"
@@ -77,6 +78,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/replay_button2"
+                app:backgroundTint="@color/filecolor"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
                 app:layout_constraintHorizontal_bias="0.468"
