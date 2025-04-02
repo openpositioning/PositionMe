@@ -23,7 +23,6 @@ public abstract class TimedData {
   public static <T extends TimedData> T findClosestRecord(List<T> timedData, long targetTimestamp) {
     int i = 0;
     while (i < timedData.size() && timedData.get(i).relativeTimestamp <= targetTimestamp) i++;
-    // TODO: THIS MAY RETURN 0 (BEFORE THE SUBTRACTION), indicating even the first element
     // is > the target timestamp. In these cases, we should show nothing.
     i--;
     if (i == -1) {

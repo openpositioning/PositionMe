@@ -14,6 +14,7 @@ import java.util.Map;
  * SensorViewListener is a class that listens to sensor data updates and notifies the callback
  * interface with the updated sensor values.
  * Primarily used in MeasurementsFragment to update the UI with sensor data.
+ *
  * @author Philip Heptonstall
  */
 public class SensorViewListener implements SensorDataListener<SensorData> {

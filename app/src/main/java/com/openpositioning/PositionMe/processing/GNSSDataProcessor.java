@@ -29,6 +29,7 @@ package com.openpositioning.PositionMe.processing;
     *
     * @author Virginia Cangelosi
     * @author Mate Stodulka
+    *
     * @Updated by Philip Heptonstall to extend SensorModule to generify, and to handle WiFi callbacks directly.
     */
    public class GNSSDataProcessor extends SensorModule<GNSSLocationData> implements LocationListener {
