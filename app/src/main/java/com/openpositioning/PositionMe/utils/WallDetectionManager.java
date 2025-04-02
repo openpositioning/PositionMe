@@ -18,7 +18,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Class to handle wall detection from floor plan images and trajectory intersection checking
+ * Handles wall detection from floor plan images and trajectory intersection checking.
+ *
+ * <p>This class processes floor plan images to extract wall data and provides
+ * methods to check if a trajectory would intersect with walls. It supports
+ * multiple buildings and floors.
+ *
+ * @author
  */
 public class WallDetectionManager extends BuildingPolygon{
     private static final String TAG = "WallDetectionManager";
@@ -57,7 +63,9 @@ public class WallDetectionManager extends BuildingPolygon{
 
 
     /**
-     * Constructor
+     * Constructs a WallDetectionManager with a reference position.
+     *
+     * @param referencePosition the reference position for coordinate conversion
      */
     public WallDetectionManager(double[] referencePosition) {
         this.xWallsMap = new HashMap<>();
@@ -71,7 +79,8 @@ public class WallDetectionManager extends BuildingPolygon{
     }
 
     /**
-     * Initialize wall detection data for all floor plans
+     * Initializes wall detection data for all floor plans.
+     *
      * @param context Android context to load resources
      */
     public void initializeWallData(Context context) {
@@ -93,7 +102,8 @@ public class WallDetectionManager extends BuildingPolygon{
     }
 
     /**
-     * Process a floor plan image to extract wall data
+     * Processes a floor plan image to extract wall data.
+     *
      * @param context Android context to load resources
      * @param resourceId Resource ID of the floor plan image
      * @param buildingType Type of building (NUCLEUS or LIBRARY)
@@ -130,18 +140,24 @@ public class WallDetectionManager extends BuildingPolygon{
     }
 
     /**
-     * Generate a unique key for the wallsMap
+     * Generates a unique key for the wallsMap.
+     *
+     * @param buildingType building identifier
+     * @param floor floor number
+     * @return unique key for map storage
      */
     private int generateMapKey(int buildingType, int floor) {
         return buildingType * 100 + floor;
     }
 
     /**
-     * Extract wall lines from a bitmap image
-     * @param bitmap The floor plan bitmap
-     * @param buildingType Type of building (NUCLEUS or LIBRARY)
-     * @param floor Floor number
-     * @return List of Line objects representing walls
+     * Extracts wall lines from a bitmap image.
+     *
+     * @param bitmap the floor plan bitmap
+     * @param buildingType type of building (NUCLEUS or LIBRARY)
+     * @param floor floor number
+     * @param xWallsList list to store horizontal wall lines
+     * @param yWallsList list to store vertical wall lines
      */
     private void extractWallsFromBitmap(Bitmap bitmap, int buildingType, int floor,
                                         List<xLine> xWallsList, List<yLine> yWallsList) {
@@ -212,10 +228,10 @@ public class WallDetectionManager extends BuildingPolygon{
     }
 
     /**
-     * Convert pixel coordinates to relative position
-     * @param buildingType Type of building (NUCLEUS or LIBRARY)
-     * @param floor Floor number
-     * @return LatLng coordinates
+     * Sets the bounds for the current floor plan.
+     *
+     * @param buildingType type of building (NUCLEUS or LIBRARY)
+     * @param floor floor number
      */
     private void setBounds(int buildingType, int floor) {
         List<LatLng> bounds;
@@ -244,11 +260,11 @@ public class WallDetectionManager extends BuildingPolygon{
     }
 
     /**
-     * Function to check if a point is in the Nucleus Building
-     * @param point the point to be checked if inside the building
-     * @return True if point is in Nucleus building else False
+     * Checks if a point is in the Nucleus Building.
+     *
+     * @param point the point to be checked [east, north]
+     * @return true if point is in Nucleus building, false otherwise
      */
-
     public boolean inNucleusENU(double[] point){
         if (point == null) {
             return false;
@@ -256,10 +272,12 @@ public class WallDetectionManager extends BuildingPolygon{
         return (pointInPolygonENU(point,NUCLEUS_POLYGON));
 
     }
+
     /**
-     * Function to check if a point is in the Library Building
-     * @param point the point which is checked if inside the building
-     * @return True if point is in Library building else False
+     * Checks if a point is in the Library Building.
+     *
+     * @param point the point to be checked [east, north]
+     * @return true if point is in Library building, false otherwise
      */
     public boolean inLibraryENU(double[] point){
         if (point == null) {
@@ -269,12 +287,14 @@ public class WallDetectionManager extends BuildingPolygon{
     }
 
     /**
-     * Function to check if point in polygon (approximates earth to be flat)
-     * Ray casting algorithm https://en.wikipedia.org/wiki/Point_in_polygon
-     * @param point point to be checked if in polygon
-     * @param polygon Boundaries of the building
-     * @return True if point in polygon
-     * False otherwise
+     * Checks if a point is inside a polygon using ray casting algorithm.
+     *
+     * <p>Ray casting algorithm: https://en.wikipedia.org/wiki/Point_in_polygon
+     * Approximates earth as flat.
+     *
+     * @param point point to be checked [east, north]
+     * @param polygon boundaries of the building
+     * @return true if point is in polygon, false otherwise
      */
     private boolean pointInPolygonENU(double[] point, List<LatLng> polygon) {
         int numCrossings = 0;
@@ -303,14 +323,13 @@ public class WallDetectionManager extends BuildingPolygon{
     }
 
     /**
-     * Ray Casting algorithm for a segment joining ab in ENU coordinates
+     * Ray casting algorithm for a segment joining ab in ENU coordinates.
+     *
      * @param point the point we check, represented as {E, N, U}
      * @param a the line segment's starting point, represented as {E, N, U}
      * @param b the line segment's ending point, represented as {E, N, U}
-     * @return True if the point is
-     *      1) To the left of the segment ab
-     *      2) Not above nor below the segment ab
-     *      Otherwise False
+     * @return true if the point is (1) to the left of the segment ab and
+     *         (2) not above nor below the segment ab, false otherwise
      */
     private static boolean crossingSegment(double[] point, double[] a, double[] b) {
         double pointE = point[0], pointN = point[1];
@@ -342,6 +361,14 @@ public class WallDetectionManager extends BuildingPolygon{
         }
     }
 
+    /**
+     * Creates an xLine from pixel coordinates.
+     *
+     * @param xStartPix x-start pixel coordinate
+     * @param xEndPix x-end pixel coordinate
+     * @param yPix y pixel coordinate
+     * @return an xLine in ENU coordinates
+     */
     private xLine getXLine(double xStartPix, double xEndPix, double yPix) {
 
         // Interpolate position within the building bounds
@@ -353,6 +380,14 @@ public class WallDetectionManager extends BuildingPolygon{
 
     }
 
+    /**
+     * Creates a yLine from pixel coordinates.
+     *
+     * @param yStartPix y-start pixel coordinate
+     * @param yEndPix y-end pixel coordinate
+     * @param xPix x pixel coordinate
+     * @return a yLine in ENU coordinates
+     */
     private yLine getYLine(double yStartPix, double yEndPix, double xPix) {
 
         // Interpolate position within the building bounds
@@ -365,9 +400,12 @@ public class WallDetectionManager extends BuildingPolygon{
     }
 
     /**
-     * Check if a trajectory intersects any walls
-     * @param start Starting point of trajectory
-     * @param end Ending point of trajectory
+     * Checks if a trajectory intersects any walls.
+     *
+     * @param start starting point of trajectory [east, north]
+     * @param end ending point of trajectory [east, north]
+     * @param buildingType building identifier
+     * @param floor floor number
      * @return true if the trajectory intersects any wall, false otherwise
      */
     public boolean doesTrajectoryIntersectWall(double[] start, double[] end, int buildingType, int floor) {
@@ -382,14 +420,14 @@ public class WallDetectionManager extends BuildingPolygon{
         // Check for intersection with each wall
         for (xLine xWall : xWalls) {
             if (doLinesIntersect(xWall.x1, xWall.y, xWall.x2, xWall.y,
-                                 start[0], start[1], end[0], end[1])) {
+                    start[0], start[1], end[0], end[1])) {
                 return true;
             }
         }
 
         for (yLine yWall : yWalls) {
             if (doLinesIntersect(yWall.x, yWall.y1, yWall.x, yWall.y2,
-                                start[0], start[1], end[0], end[1])) {
+                    start[0], start[1], end[0], end[1])) {
                 return true;
             }
         }
@@ -399,7 +437,8 @@ public class WallDetectionManager extends BuildingPolygon{
 
     /**
      * Determines if two line segments intersect.
-     * Each line is defined by its two endpoints: (x1, y1) -> (x2, y2)
+     *
+     * <p>Each line is defined by its two endpoints: (x1, y1) -> (x2, y2)
      *
      * @param line1X1 X-coordinate of first endpoint of line 1
      * @param line1Y1 Y-coordinate of first endpoint of line 1
@@ -460,16 +499,28 @@ public class WallDetectionManager extends BuildingPolygon{
         return (s >= 0 && s <= 1 && t >= 0 && t <= 1);
     }
 
+    /**
+     * Sets the reference position for coordinate conversion.
+     *
+     * @param referencePosition new reference position [lat, lng, alt]
+     */
     public void setReferencePosition(double[] referencePosition) {
         this.referencePosition = referencePosition;
     }
 
     /**
-     * Line class to represent wall segments and trajectories
+     * Horizontal line class to represent wall segments.
      */
     public class xLine {
         double x1, x2, y;
 
+        /**
+         * Creates a horizontal line.
+         *
+         * @param x1 start x-coordinate
+         * @param x2 end x-coordinate
+         * @param y y-coordinate
+         */
         xLine(double x1, double x2, double y) {
             this.x1 = x1;
             this.y = y;
@@ -477,9 +528,19 @@ public class WallDetectionManager extends BuildingPolygon{
         }
     }
 
+    /**
+     * Vertical line class to represent wall segments.
+     */
     public class yLine {
         double y1, y2, x;
 
+        /**
+         * Creates a vertical line.
+         *
+         * @param y1 start y-coordinate
+         * @param y2 end y-coordinate
+         * @param x x-coordinate
+         */
         yLine(double y1, double y2, double x) {
             this.y1 = y1;
             this.y2 = y2;
