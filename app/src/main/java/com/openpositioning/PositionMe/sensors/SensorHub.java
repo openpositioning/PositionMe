@@ -24,9 +24,9 @@ public class SensorHub implements SensorEventListener {
   private static final Map<Integer, int[]> SENSOR_DEFAULTS = new HashMap<>();
 
   static {
-    SENSOR_DEFAULTS.put(Sensor.TYPE_ACCELEROMETER, new int[]{10000, (int) 1e6});
-    SENSOR_DEFAULTS.put(Sensor.TYPE_LINEAR_ACCELERATION, new int[]{10000, (int) 1e6});
-    SENSOR_DEFAULTS.put(Sensor.TYPE_GRAVITY, new int[]{10000, (int) 1e6});
+    SENSOR_DEFAULTS.put(Sensor.TYPE_ACCELEROMETER, new int[]{10000, (int) 0});
+    SENSOR_DEFAULTS.put(Sensor.TYPE_LINEAR_ACCELERATION, new int[]{10000, (int) 0});
+    SENSOR_DEFAULTS.put(Sensor.TYPE_GRAVITY, new int[]{10000, (int) 0});
     SENSOR_DEFAULTS.put(Sensor.TYPE_PRESSURE, new int[]{(int) 1e6, 0});
     SENSOR_DEFAULTS.put(Sensor.TYPE_GYROSCOPE, new int[]{10000, (int) 1e6});
     SENSOR_DEFAULTS.put(Sensor.TYPE_LIGHT, new int[]{(int) 1e6, 0});
@@ -97,7 +97,14 @@ public class SensorHub implements SensorEventListener {
     }
 
     // Add listener
-    listeners.computeIfAbsent(sensorType, k -> new ArrayList<>()).add(listener);
+    List<SensorDataListener<? extends SensorData>> sensorListeners =
+            listeners.computeIfAbsent(sensorType, k -> new ArrayList<>());
+
+    if (!sensorListeners.contains(listener)) {
+      sensorListeners.add(listener);
+    } else {
+      Log.w("SensorHub", "Listener already registered for sensor type: " + sensorType);
+    }
   }
 
   public <T extends SensorData> void addListener(StreamSensor sensorType,
@@ -107,7 +114,13 @@ public class SensorHub implements SensorEventListener {
       SensorModule<?> module = createAndRegisterStreamSensor(sensorType);
       sensorModules.put(sensorType, module);
     }
-    streamSensorListeners.computeIfAbsent(sensorType, k -> new ArrayList<>()).add(listener);
+    List<SensorDataListener<?>> sensorListeners =
+            streamSensorListeners.computeIfAbsent(sensorType, k -> new ArrayList<>());
+    if (!sensorListeners.contains(listener)) {
+      sensorListeners.add(listener);
+    } else {
+      Log.w("SensorHub", "Listener already registered for stream sensor: " + sensorType);
+    }
   }
 
   // Unsubscribe to your sensor type.

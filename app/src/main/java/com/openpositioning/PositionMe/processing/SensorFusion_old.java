@@ -351,8 +351,7 @@
 //    lastEventTimestamps.put(sensorType, currentTime);
 //    eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
 //
-//    boolean elevatorEst = getElevator();
-//    if (fusedLocation != null && !inElevator && elevatorEst) {
+//    if (fusedLocation != null && !inElevator && this.elevator) {
 //      inElevator = true;
 //      // Create a LatLng from the current fused location
 //      LatLng userPosition = new LatLng(fusedLocation[0], fusedLocation[1]);

@@ -462,9 +462,9 @@ public class TrajectoryMapFragment extends Fragment {
     if (oldLocation != null && !oldLocation.equals(this.pdrCurrentLocation) && pdrPolyline != null) {
         List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
         points.add(this.pdrCurrentLocation);
-        while (points.size() > 50) {
-            points.remove(0);
-        }
+//        while (points.size() > 50) {
+//            points.remove(0);
+//        }
         pdrPolyline.setPoints(points);
     }
     }
