@@ -21,6 +21,15 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Class to parse the trajectory data from the downloaded file.
+ *
+ * This class receives the downloaded trajectory from the given file and then produces a list of ReplayPoints which contain
+ * location data for PDR, GNSS, WiFi for the timestamps in each PDR record (since there are the fewest PDR points in a trajectory).
+ *
+ * Contains:
+ * - Subclass: ReplayPoint -> contains data locations for PDR, GNSS, and WiFi samples for each replay
+ */
 public class TrajParser {
 
     private static final String TAG = "TrajParser";
