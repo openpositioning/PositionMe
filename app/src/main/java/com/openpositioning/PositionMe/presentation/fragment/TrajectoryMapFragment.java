@@ -211,7 +211,7 @@ public class TrajectoryMapFragment extends Fragment {
 
 
 
-    // Code by Guilherme
+    // Code by Guilherme: Draw the Polyline for user movement
     public void setPolylineColor(int color) {
         currentColor = color; // store the new color
         if (polyline != null) {

@@ -207,9 +207,9 @@ public class RecordingFragment extends Fragment {
 
         });
         // Import UUID at the top if not already imported:
-// import java.util.UUID;
 
-// ... inside onViewCreated (or after initializing UI controls)
+//Code By Guilherme: Set the tag button inside the recording view
+// inside onViewCreated (or after initializing UI controls)
         Button tagButton = view.findViewById(R.id.tagButton);
         tagButton.setOnClickListener(v -> {
             LatLng currentLocation = trajectoryMapFragment.getCurrentLocation();
@@ -228,7 +228,7 @@ public class RecordingFragment extends Fragment {
 
                 sensorFusion.trajectory.addGnssData(fusionTag);
 
-                // Optional: Show on map
+                // Show on map
                 String tagLabel = "Fusion Tag\nLat: " + currentLocation.latitude + "\nLon: " + currentLocation.longitude;
                 trajectoryMapFragment.addTagMarker(currentLocation, tagLabel);
 
@@ -279,6 +279,7 @@ public class RecordingFragment extends Fragment {
 
     // code by Jamie Arnott: EKF positioning in real time using PDR, GNSS and WiFi data
     private LatLng originLatLng = null; // This stays fixed once set
+
 
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
