@@ -242,6 +242,7 @@ public class TrajectoryMapFragment extends Fragment {
         sensorFusion = SensorFusion.getInstance();
         trajectoryFilter = new TrajectoryFilter();
         fusionPoints = new ArrayList<>();
+        sensorFusion.passContext(getContext());
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
@@ -404,6 +405,8 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
+
+        // Initialize wall detection
 
         // Initialize the main PDR polyline (red)
         polyline = map.addPolyline(new PolylineOptions()

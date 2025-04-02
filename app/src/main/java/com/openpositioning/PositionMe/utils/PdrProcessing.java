@@ -8,6 +8,7 @@ import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -63,6 +64,7 @@ public class PdrProcessing {
 
     // Buffer of most recent elevations calculated
     private CircularFloatBuffer elevationList;
+    private List<Float> absoluteElevation;
 
     // Buffer for most recent directional acceleration magnitudes
     private CircularFloatBuffer verticalAccel;
@@ -128,6 +130,8 @@ public class PdrProcessing {
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
+
+        this.absoluteElevation = new ArrayList<>();
     }
 
     /**
@@ -204,6 +208,8 @@ public class PdrProcessing {
             this.elevation = absoluteElevation - startElevation;
             // Add to buffer
             this.elevationList.putNewest(absoluteElevation);
+
+            this.absoluteElevation = this.elevationList.getListCopy();
 
             // Check if there was floor movement
             // Check if there is enough data to evaluate
@@ -412,6 +418,87 @@ public class PdrProcessing {
 
         //Return average step length
         return averageStepLength;
+    }
+
+    /**
+     * Detects continuous elevation changes over time.
+     * This function determines if a user is consistently moving up or down in elevation,
+     * which could indicate stair climbing, ramp walking, or elevator use.
+     *
+     * @param minConsecutiveChanges Minimum number of consecutive readings showing same direction change
+     * @param minElevationDelta     Minimum elevation change (in meters) to consider significant
+     * @return                      Direction enum: ASCENDING, DESCENDING, or NEUTRAL
+     */
+    public ElevationDirection detectContinuousElevationChange(int minConsecutiveChanges, float minElevationDelta) {
+
+        // Need enough data points for detection
+        if (!elevationList.isFull() ||absoluteElevation.size() < minConsecutiveChanges) {
+            return ElevationDirection.NEUTRAL;
+        }
+
+
+        // Count consecutive increases and decreases
+        int consecutiveIncreases = 0;
+        int consecutiveDecreases = 0;
+        float totalDelta = 0;
+
+        // Start from most recent values (assuming newest values are at end of list)
+        for (int i = absoluteElevation.size() - 1; i > 0; i--) {
+            float currentElevation = absoluteElevation.get(i);
+            float previousElevation = absoluteElevation.get(i - 1);
+            float delta = currentElevation - previousElevation;
+
+            // Check if the change is significant enough
+            if (Math.abs(delta) >= minElevationDelta) {
+                if (delta > 0) {
+                    // Elevation increasing
+                    consecutiveIncreases++;
+                    consecutiveDecreases = 0; // Reset opposite counter
+                    totalDelta += delta;
+                } else if (delta < 0) {
+                    // Elevation decreasing
+                    consecutiveDecreases++;
+                    consecutiveIncreases = 0; // Reset opposite counter
+                    totalDelta += delta;
+                }
+            } else {
+                // Change not significant - reset both counters
+                consecutiveIncreases = 0;
+                consecutiveDecreases = 0;
+            }
+
+            // Check if we've detected enough consecutive changes in the same direction
+            if (consecutiveIncreases >= minConsecutiveChanges) {
+                return ElevationDirection.ASCENDING;
+            } else if (consecutiveDecreases >= minConsecutiveChanges) {
+                return ElevationDirection.DESCENDING;
+            }
+
+            // Optional early termination if we've looked at enough data points
+            if (i < absoluteElevation.size() - (minConsecutiveChanges * 2)) {
+                break;
+            }
+        }
+
+        // Check total elevation change as an additional condition
+        float significantTotalChange = minElevationDelta * minConsecutiveChanges * 0.7f; // 70% threshold
+        if (totalDelta > significantTotalChange) {
+            return ElevationDirection.ASCENDING;
+        } else if (totalDelta < -significantTotalChange) {
+            return ElevationDirection.DESCENDING;
+        }
+
+        // No sustained directional change detected
+        return ElevationDirection.NEUTRAL;
+    }
+
+    /**
+     * Enum representing the direction of elevation change.
+     */
+    public enum ElevationDirection {
+        ASCENDING,   // Moving up (climbing stairs, uphill, elevator up)
+        DESCENDING,  // Moving down (descending stairs, downhill, elevator down)
+        NEUTRAL      // No significant change or inconsistent changes
     }
 
 }

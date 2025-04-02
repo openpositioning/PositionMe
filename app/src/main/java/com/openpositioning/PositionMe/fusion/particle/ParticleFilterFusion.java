@@ -1,10 +1,13 @@
 package com.openpositioning.PositionMe.fusion.particle;
 
+import android.content.Context;
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.fusion.IPositionFusionAlgorithm;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
+import com.openpositioning.PositionMe.utils.PdrProcessing;
+import com.openpositioning.PositionMe.utils.WallDetectionManager;
 
 import org.apache.commons.math3.distribution.TDistribution;
 import org.ejml.simple.SimpleMatrix;
@@ -24,14 +27,14 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     private static final int MEAS_SIZE = 2;         // Total measurement vector size
 
     // Process noise scale (PDR) update
-    private static final double[] dynamicPdrStds = {0.2, Math.PI/18};
-    private static final double[] staticPdrStds = {1.0, 1.0};
+    private static final double[] dynamicPdrStds = {0.2, Math.PI/12};
+    private static final double[] staticPdrStds = {1.5, 1.5, 0};
     private SimpleMatrix measGnssMat;
     private SimpleMatrix measWifiMat;
     private SimpleMatrix forwardModel;
 
     // Adjustable GNSS noise based on accuracy
-    private static final double BASE_GNSS_NOISE = 20.0;  // Base measurement noise for GNSS (in meters)
+    private static final double BASE_GNSS_NOISE = 10.0;  // Base measurement noise for GNSS (in meters)
     private static final double BASE_WIFI_NOISE = 5.0;  // Measurement noise for WiFi (in meters)
 
     // Outlier detection parameters
@@ -53,9 +56,9 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
     // Movement state tracking
     private long lastUpdateTime;
-    private static final long STATIC_TIMEOUT_MS = 1000; // 0.25 seconds without updates = static update
+    private static final long STATIC_TIMEOUT_MS = 1000; // 1 seconds without updates = static update
     private Timer updateTimer; // Timer for regular updates
-    private static final long UPDATE_INTERVAL_MS = 100; // Update every 0.1 second
+    private static final long UPDATE_INTERVAL_MS = 1000; // Update every 1 second
 
     // First position values to handle initialization correctly
     private LatLng firstGnssPosition;
@@ -80,6 +83,13 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
     private double[] currentWiFipositionEMU;
     private SimpleMatrix wifiMeasurementVector;
 
+    private PdrProcessing.ElevationDirection elevationDirection;
+    private WallDetectionManager wallDetectionManager;
+    private Context FragmentContext;
+    private int buildingType;
+    private int currentFloor;
+    private boolean buildingTypeInitialized;
+
     // Constructor
     public ParticleFilterFusion(int numParticles, double[] referencePosition) {
         // Initialize particle array
@@ -93,10 +103,13 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         this.referencePosition = referencePosition.clone(); // Clone to prevent modification
         this.referenceInitialized = (referencePosition[0] != 0 || referencePosition[1] != 0);
 
+        this.elevationDirection = PdrProcessing.ElevationDirection.NEUTRAL;
+
         // Initialize first position tracking
         hasInitialGnssPosition = false;
         particlesInitialized = false;
         dynamicUpdate = false;
+        buildingTypeInitialized = false;
         lastUpdateTime = System.currentTimeMillis();
 
         // Initialize heading and position estimates
@@ -209,15 +222,25 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         // Calculate PDR movement and speed
         double dx = currentPdrPos[0] - previousPdrPos[0];
         double dy = currentPdrPos[1] - previousPdrPos[1];
-        double stepLength = Math.sqrt(dx * dx + dy * dy);
-
+        double stepLength = 0;
+        if (this.elevationDirection != PdrProcessing.ElevationDirection.NEUTRAL){
+            stepLength = 0.25;
+            dynamicPdrStds[0] = 0.05;
+        }else {
+            stepLength = Math.sqrt(dx * dx + dy * dy);
+            dynamicPdrStds[0] = 0.2 + 0.1*stepLength;
+        }
         currentHeading = Math.atan2(dy, dx);
-        double headingChange = currentHeading - previousHeading;
+        if (!headingInitialized) {
+            initializeHeading();
+        }
 
-        initializeHeading();
-
-        // Update particle parameters
-        moveParticlesDynamic(stepLength, headingChange, dynamicPdrStds);
+        if (!hasInitialWifiPosition || buildingType == 0) {
+            // Update particle parameters
+            moveParticlesDynamic(stepLength, currentHeading, dynamicPdrStds, wallDetectionManager, buildingType, currentFloor);
+        } else {
+            moveParticlesDynamic(stepLength, currentHeading, dynamicPdrStds, null, buildingType, currentFloor);
+        }
 
         if (currentGNSSpositionEMU != null) {
             gnssMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
@@ -232,7 +255,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         if (currentWiFipositionEMU != null) {
             wifiMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
             for (int i = 0; i < wifiPositionHistory.size(); i++) {
-                double[] dummyPos = gnssPositionHistory.get(i);
+                double[] dummyPos = wifiPositionHistory.get(i);
                 wifiMeasurementVector.set(0, 0, dummyPos[0]);
                 wifiMeasurementVector.set(1, 0, dummyPos[1]);
                 reweightParticles(measWifiMat, forwardModel, wifiMeasurementVector);
@@ -282,6 +305,11 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
+        if (!buildingTypeInitialized && wallDetectionManager != null) {
+            setBuildingType(new double[] {enu[0], enu[1]});
+            buildingTypeInitialized = true;
+        }
+
         currentGNSSpositionEMU[0] = enu[0];
         currentGNSSpositionEMU[1] = enu[1];
         enuAltitude = enu[2];
@@ -307,7 +335,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         updateMovingAvgGnss(currentGNSSpositionEMU);
 
         // Update last update time
-        //lastUpdateTime = System.currentTimeMillis();
+        lastUpdateTime = System.currentTimeMillis();
     }
 
     @Override
@@ -327,11 +355,14 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
             return;
         }
 
+        currentFloor = floor;
+        hasInitialWifiPosition = true;
+
         Random rand = new Random();
 
         // Convert GNSS position to ENU (using the reference position)
         double[] enu = CoordinateConverter.convertGeodeticToEnu(
-                position.latitude, position.longitude, latlngAltitude,
+                position.latitude, position.longitude, 78,
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
@@ -357,7 +388,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         updateMovingAvgWifi(currentWiFipositionEMU);
 
         // Update last update time
-        //lastUpdateTime = System.currentTimeMillis();
+        lastUpdateTime = System.currentTimeMillis();
     }
 
     public LatLng getFusedPosition() {
@@ -377,6 +408,11 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         if (avgPosition[0] == 0 && avgPosition[1] == 0) {
             Log.d(TAG, "Returning reference position as fusion result (no updates yet)");
             return new LatLng(referencePosition[0], referencePosition[1]);
+        }
+
+        // Check if building was changed during propagation
+        if (avgPosition != null && this.wallDetectionManager != null) {
+            setBuildingType(new double[] {avgPosition[0], avgPosition[1]});
         }
 
         // Convert ENU back to latitude/longitude
@@ -496,7 +532,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
             Particle original = particles.get(index);
             Particle newParticle = new Particle(original.x, original.y, original.theta);
             newParticle.weight = 1.0 / numParticles;  // Reset weights to uniform
-            newParticle.logWeight = 0;
+            newParticle.logWeight = 0.0;
             newParticles.add(newParticle);
         }
 
@@ -522,7 +558,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
         // Calculate jitter standard deviations
         double positionJitterStd = jitterScale * dispersion;
-        double headingJitterStd = jitterScale * Math.PI / 6; // ~30 degrees scaled by jitter
+        double headingJitterStd = jitterScale * Math.PI / 12; // Was 6, ~30 degrees scaled by jitter
 
         Random rand = new Random();
 
@@ -659,6 +695,10 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         return Math.sqrt(sumSquaredDistance / numParticles);
     }
 
+    public void setElevationStatus(PdrProcessing.ElevationDirection elevationDirection) {
+        this.elevationDirection = elevationDirection;
+    }
+
     /**
      * Initializes the particles, centered at the reference position.
      * Particles have uniform weights of 1/numParticles.
@@ -703,26 +743,43 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         headingInitialized = true;
     }
 
+    public void retrieveContext(Context context) {
+        this.FragmentContext = context;
+    }
+
+    private void setBuildingType(double[] position) {
+        if (this.wallDetectionManager.inNucleusENU(position)) {
+            buildingType = 1;
+        } else if (this.wallDetectionManager.inLibraryENU(position)) {
+            buildingType = 2;
+        } else {
+            buildingType = 0;
+        }
+        Log.w(TAG, "Building type set to" + buildingType);
+    }
+
     /**
      * Initializes the reference position if it wasn't provided or was zeros.
      * Uses the first GNSS position as the reference.
      */
     private void initializeReferencePosition() {
-        if (referenceInitialized || !hasInitialGnssPosition || !hasInitialWifiPosition) {
+        if (referenceInitialized || !hasInitialGnssPosition) {
             return;
         }
 
-        if (!hasInitialWifiPosition) {
-            // Use the first GNSS position as reference
-            referencePosition[0] = firstGnssPosition.latitude;
-            referencePosition[1] = firstGnssPosition.longitude;
-            referencePosition[2] = 0; // Assume zero altitude if not provided
 
-            referenceInitialized = true;
-        } else {
-            referencePosition[0] = firstWifiPosition.latitude;
-            referencePosition[1] = firstWifiPosition.longitude;
-            referencePosition[2] = 0; // Assume zero altitude if not provided
+        // Use the first GNSS position as reference
+        referencePosition[0] = firstGnssPosition.latitude;
+        referencePosition[1] = firstGnssPosition.longitude;
+        referencePosition[2] = 78;
+
+        referenceInitialized = true;
+
+        this.wallDetectionManager = new WallDetectionManager(referencePosition);
+
+        if (FragmentContext != null) {
+        this.wallDetectionManager.initializeWallData(this.FragmentContext);
+        Log.d(TAG, "Wall data initialized at" + this.FragmentContext);
         }
 
         Log.d(TAG, "Reference position initialized from GNSS: " +

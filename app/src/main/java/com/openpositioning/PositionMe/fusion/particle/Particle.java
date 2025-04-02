@@ -1,15 +1,15 @@
 package com.openpositioning.PositionMe.fusion.particle;
 
-import com.openpositioning.PositionMe.utils.CoordinateConverter;
+import com.openpositioning.PositionMe.utils.WallDetectionManager;
 
 import org.apache.commons.math3.distribution.TDistribution;
 
 import java.util.Random;
 
 public class Particle {
-    double x, y, theta;  // Position and orientation of the particle
-    double weight;       // Weight assigned to each particle
-    double logWeight;    // Log-weight for numerical stability
+    Double x, y, theta;  // Position and orientation of the particle
+    Double weight;       // Weight assigned to each particle
+    Double logWeight;    // Log-weight for numerical stability
 
     // Constructor
     public Particle(double x, double y, double theta) {
@@ -22,18 +22,25 @@ public class Particle {
     }
 
     // Update particle position when step is detected
-    public void updateDynamic(double stepLength, double headingChange, double[] dynamicPDRStds) {
+    public void updateDynamic(double stepLength, double currentHeading, double[] dynamicPDRStds, WallDetectionManager wallChecker, int buildingType, int floor) {
         Random rand = new Random();
 
         // Add noise to heading change
-        this.theta += headingChange + rand.nextGaussian() * dynamicPDRStds[1];
-        //this.theta += Math.PI/4;
-        this.theta = CoordinateConverter.normalizeAngleToPi(this.theta);
+        this.theta = currentHeading + rand.nextGaussian() * dynamicPDRStds[1];
         stepLength += rand.nextGaussian() * dynamicPDRStds[0];
 
         // Update position using angle
-        this.x += stepLength * Math.cos(this.theta);
-        this.y += stepLength * Math.sin(this.theta);
+        double dx = stepLength * Math.cos(this.theta);
+        double dy = stepLength * Math.sin(this.theta);
+
+        if (wallChecker != null) {
+            boolean collision = wallChecker.doesTrajectoryIntersectWall(new double[] {this.x, this.y}, new double[] {this.x+dx, this.y+dy}, buildingType, floor);
+            this.weight = collision ? 0.0 : this.weight;
+            this.logWeight = collision ? Math.log(0.0) : this.logWeight;
+        }
+
+        this.x += dx;
+        this.y += dy;
     }
 
 }

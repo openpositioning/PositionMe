@@ -91,6 +91,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private static final int NUM_PARTICLES=10000;
 
+    // Stairs detection
+    private static final int MIN_CONSECUTIVE_CHANGES = 4;
+    private static final float MIN_ABSOLUTE_CHANGE = 1.5f;
+
     //region Instance variables
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
@@ -170,7 +174,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // New variables for position fusion
     private List<PositionListener> positionListeners = new ArrayList<>();
-    private IPositionFusionAlgorithm fusionAlgorithm;
+    private ParticleFilterFusion fusionAlgorithm;
     private LatLng fusedPosition;
     private LatLng wifiPosition;
     private double altitude;
@@ -179,6 +183,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private Timer updateTimer; // Timer for regular updates
     private static final long UPDATE_INTERVAL_MS = 1000; // Update every 1 second
+    private Context FragmentContext;
 
     //region Initialisation
     /**
@@ -329,6 +334,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                     this.elevation = pdrProcessing.updateElevation(
                             SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
                     );
+                    PdrProcessing.ElevationDirection elevationDirection = pdrProcessing.detectContinuousElevationChange(MIN_CONSECUTIVE_CHANGES, MIN_ABSOLUTE_CHANGE);
+                    updateFusionWithStairs(elevationDirection);
                 }
                 break;
 
@@ -1313,6 +1320,21 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+    public void updateFusionWithStairs(PdrProcessing.ElevationDirection elevationDirection){
+        if (fusionAlgorithm == null) {
+            Log.e("SensorFusion", "Cannot update fusion: fusionAlgorithm is null");
+
+            // Initialize fusion algorithm if not already done
+            initializeFusionAlgorithm();
+
+            // If still null, return
+            if (fusionAlgorithm == null) return;
+        }
+
+        fusionAlgorithm.setElevationStatus(elevationDirection);
+
+    }
+
     public boolean hasPositionListeners() {
         boolean hasListeners = !positionListeners.isEmpty();
         Log.d("SensorFusion", "Position listeners registered: " + hasListeners +
@@ -1365,6 +1387,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // Create fusion algorithm with valid reference position
         fusionAlgorithm = new ParticleFilterFusion(NUM_PARTICLES, referencePosition);
+
+        if (this.FragmentContext != null) {
+            fusionAlgorithm.retrieveContext(this.FragmentContext);
+        }
     }
 
     /**
@@ -1433,5 +1459,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         } catch (Exception e) {
             Log.e("SimpleFusion", "Error in fusion calculation: " + e.getMessage(), e);
         }
+    }
+
+    public void passContext(Context context) {
+        this.FragmentContext = context;
     }
 }
