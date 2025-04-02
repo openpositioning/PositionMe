@@ -639,7 +639,11 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             if (sensorFusion.getLastWifiPos() != null) {
                 initialPosition = sensorFusion.getLastWifiPos();
             } else {
-                Toast.makeText(getContext(), "Can't resolve wifi position as initial position, please try again later!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(
+                    getContext(),
+                "Can't resolve wifi position as initial position, please try again later! Using GPS/Default position",
+                    Toast.LENGTH_SHORT
+                ).show();
             }
         }
         // set initial position
