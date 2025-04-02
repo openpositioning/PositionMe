@@ -216,7 +216,6 @@ public class WifiDataProcessor implements Observable {
             context.registerReceiver(wifiScanReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
             wifiManager.startScan();
 
-            //}
         }
     }
 
