@@ -302,28 +302,25 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
      * otherwise say the position not available
      */
     private void checkWiFiState() {
-        // **** change using new wifi logic
-//        LatLng wifiPosition = sensorFusion.getLatLngWifiPositioning();
+        // Get the latest WiFi position from sensorFusion
         LatLng wifiPosition = sensorFusion.getLastWifiPos();
-        if (wifiPosition != null) {
-              long currentTime = System.currentTimeMillis();
-            if (currentWiFiLocation == null) {
-                lastWiFiUpdateTime = currentTime;
-                wifiUpdateTime.setText("WiFi last updated: Just Now");
-            } else if (!wifiPosition.equals(currentWiFiLocation)) {
+        long currentTime = System.currentTimeMillis();
 
-                long timeDiff = (currentTime - lastWiFiUpdateTime) / (1000 * 60);
-                Log.d("WiFi", "Time difference: " + (currentTime - lastWiFiUpdateTime) / (1000 * 60));
-                if (timeDiff > 1) {
-                    wifiUpdateTime.setText("WiFi last updated: " + timeDiff + " min ago");
-                } else {
-                    wifiUpdateTime.setText("WiFi last updated: Just Now");
-                }
-//                lastWiFiUpdateTime = currentTime;
+        if (wifiPosition != null) {
+            // If this is the first update or the position has changed, refresh the update time.
+            if (currentWiFiLocation == null || !wifiPosition.equals(currentWiFiLocation)) {
                 lastWiFiUpdateTime = sensorFusion.getLastWifiSuccessTime();
+                currentWiFiLocation = wifiPosition;
             }
-            currentWiFiLocation = wifiPosition;
-        }else{
+            // Calculate the elapsed time in minutes since the last update
+            long timeDiff = (currentTime - lastWiFiUpdateTime) / (1000 * 60);
+            Log.d("WiFi", "Time difference: " + (currentTime - lastWiFiUpdateTime));
+            if (timeDiff >= 1) {
+                wifiUpdateTime.setText("WiFi last updated: " + timeDiff + " min ago");
+            } else {
+                wifiUpdateTime.setText("WiFi last updated: Just Now");
+            }
+        } else {
             wifiUpdateTime.setText("WiFi last updated: Position Not Available");
         }
     }

@@ -265,6 +265,7 @@ public class RecordingFragment extends Fragment {
                 indoorMapManager.setCurrentLocation(fusedCurrentLocation);// fusedCurrentLocation or not?
                 indoorMapManager.setIndicationOfIndoorMap();
                 indoorMapManager.setCurrentFloor(sensorFusion.getLastWifiFloor(), true);
+//                Log.e("initial wifi", String.valueOf(sensorFusion.getLastWifiFloor()));
             });
         } else {
             Log.e("RecordingFragment", "❌ SupportMapFragment is NULL!");
@@ -1067,7 +1068,7 @@ public class RecordingFragment extends Fragment {
             if (autoFloor != null && autoFloor.isChecked()) {
                 int estimatedFloor;
                 if (sensorFusion != null && System.currentTimeMillis() - sensorFusion.getLastWifiSuccessTime() < 6000000) {
-//                    TODO: implement wifi floor estimation as a initial floor
+//                    TODO: implement wifi floor estimation as an initial floor
 //                          thereby if the wifi gone, barometer could still be used to estimate floor
 //                          NOT implemented since the barometer gives too many uncertainties over time
 //                    estimatedFloor = sensorFusion.getWifiFloor();

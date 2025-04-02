@@ -174,6 +174,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 //            new LatLng(55.92298698483965, -3.1741890966446484)
 //    );
 
+    // batch usage
     List<float[]> windowList = new ArrayList<>();
 
     int MAX_WIFI_APS = 60;
@@ -282,7 +283,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                 "MyApp::MyWakelockTag");
 
         pf = new FilterUtils.ParticleFilter(200, 0, 0, 1);
-        ekf = new FilterUtils.EKFFilter(0, 0, 1.0, 1, 2);
+        // *** examplar usage of ekf filter START***
+//        ekf = new FilterUtils.EKFFilter(0, 0, 1.0, 1, 2);
+        // *** examplar usage of ekf filter END***
 
     }
     //endregion
@@ -375,6 +378,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
             case Sensor.TYPE_STEP_DETECTOR:
 
+                // *** examplar usage of ekf filter START***
+
 //                long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
 //                float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
 //                Log.e("PDR", "x: " + newCords[0] + ", y: " + newCords[1]);
@@ -414,58 +419,61 @@ public class SensorFusion implements SensorEventListener, Observer {
 //                            .setX((float) ekf.getX())
 //                            .setY((float) ekf.getY()));
 //                }
+                // *** examplar usage of ekf filter END***
 
-                // *** Particle start ***
                 //Store time of step
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
 
 //                float [] currentStateCords = this.pdrProcessing.getPDRMovement();
-
+                //
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
                 Log.e("PDR", "x: " + newCords[0] + ", y: " + newCords[1]);
-                // *** new
-                pf.predict(newCords[0], newCords[1]);
-                LatLng startLocLatLng = new LatLng(this.startLocation[0], this.startLocation[1]);
-//                if (getLatLngWifiPositioning() != null) {
-//                    LatLng latLng = getLatLngWifiPositioning();
-                if (lastWifiPos != null && (System.currentTimeMillis()-lastWifiSuccessTime) < 15000) {
-                    pf.setMeasurementNoise(2.5);
-
-                    LatLng latLng = lastWifiPos;
-                    double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
-                    Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
-                    // if wifi is in front of the user orientation, assuming it's providing a similar
-                    if (isWifiNotBehind(new double[]{newCords[0], newCords[1]}, wifiPos, this.orientation[0])) {
-                        pf.setWifiRatio(ratio * 1);
-                        Log.e("Ratio", "wifi in front");
-                    } else {
-                        pf.setWifiRatio(ratio * 0.2);
-                        Log.e("Ratio", "wifi NOT in front");
-                    }
-                    Log.e("Ratio", String.valueOf(ratio));
-                    pf.update(wifiPos[0], wifiPos[1]);
-                }  else if (lastGnssLocation != null && (System.currentTimeMillis()-lastGnssTime) < 60000) { // only step in when there is no wifi
-                    double[] gnssPos = new double[]{lastGnssLocation.getLatitude(), lastGnssLocation.getLongitude()};
-                    LatLng latLng = new LatLng(gnssPos[0], gnssPos[1]);
-                    gnssPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
-
-                    Log.e("GNSS debug", "x: " + gnssPos[0] + ", y: " + gnssPos[1] + ", accuracy: " + lastGnssLocation.getAccuracy());
-
-                    pf.setMeasurementNoise(lastGnssLocation.getAccuracy());
-                    pf.setWifiRatio(1);
-                    pf.update(gnssPos[0], gnssPos[1]);
-                }
-
-                // 4. 重采样
-                pf.resample();
-
-                // 5. 估计当前状态
-                FilterUtils.Particle currentState = pf.estimate();
-                newCords = new float[]{(float) currentState.x, (float) currentState.y};
-                Log.e("Particle Filter", "x: " + currentState.x + ", y: " + currentState.y);
-
-//                // 6. Batch Optimization
+//                // *** Particle Filter start ***
+                newCords = applyParticleFilter(newCords);
+//                pf.predict(newCords[0], newCords[1]);
+//                LatLng startLocLatLng = new LatLng(this.startLocation[0], this.startLocation[1]);
+////                if (getLatLngWifiPositioning() != null) {
+////                    LatLng latLng = getLatLngWifiPositioning();
+//                if (lastWifiPos != null && (System.currentTimeMillis()-lastWifiSuccessTime) < 15000) {
+//                    pf.setMeasurementNoise(2.5);
 //
+//                    LatLng latLng = lastWifiPos;
+//                    double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
+//                    Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
+//                    // if wifi is in front of the user orientation, assuming it's providing a similar
+//                    if (isWifiNotBehind(new double[]{newCords[0], newCords[1]}, wifiPos, this.orientation[0])) {
+//                        pf.setWifiRatio(ratio * 1);
+//                        Log.e("Ratio", "wifi in front");
+//                    } else {
+//                        pf.setWifiRatio(ratio * 0.2);
+//                        Log.e("Ratio", "wifi NOT in front");
+//                    }
+//                    Log.e("Ratio", String.valueOf(ratio));
+//                    pf.update(wifiPos[0], wifiPos[1]);
+//                }  else if (lastGnssLocation != null && (System.currentTimeMillis()-lastGnssTime) < 60000) { // only step in when there is no wifi
+//                    double[] gnssPos = new double[]{lastGnssLocation.getLatitude(), lastGnssLocation.getLongitude()};
+//                    LatLng latLng = new LatLng(gnssPos[0], gnssPos[1]);
+//                    gnssPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
+//
+//                    Log.e("GNSS debug", "x: " + gnssPos[0] + ", y: " + gnssPos[1] + ", accuracy: " + lastGnssLocation.getAccuracy());
+//
+//                    pf.setMeasurementNoise(lastGnssLocation.getAccuracy());
+//                    pf.setWifiRatio(1);
+//                    pf.update(gnssPos[0], gnssPos[1]);
+//                }
+//
+//                // 4. 重采样
+//                pf.resample();
+//
+//                // 5. 估计当前状态
+//                FilterUtils.Particle currentState = pf.estimate();
+//                newCords = new float[]{(float) currentState.x, (float) currentState.y};
+//                Log.e("Particle Filter", "x: " + currentState.x + ", y: " + currentState.y);
+//                // *** Particle END ***
+
+                // 6. Batch Optimization
+                newCords = applyBatchOptimization(windowList, newCords);
+
 //                int historyPoints = 3; // 自定义历史点数量
 //
 //                if (windowList.size() >= historyPoints + 1) {
@@ -556,10 +564,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                     long relative_time = System.currentTimeMillis() - absoluteStartTime;
                     float[] raw_pdr = this.pdrProcessing.getRawPDRMovement();
 
+                    // save pdr data
                     trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
 //                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis() - bootTime)
                             .setRelativeTimestamp(relative_time)
                             .setX(raw_pdr[0]).setY(raw_pdr[1]));
+                    // save fusion data
                     trajectory.addFusionData(Traj.Pdr_Sample.newBuilder()
                             .setRelativeTimestamp(relative_time)
                             .setX(newCords[0]).setY(newCords[1]));
@@ -569,9 +579,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 currFusionLocation = UtilFunctions.calculateNewPos(new LatLng(startLocation[0], startLocation[1]), newCords);
                 fusionLocation = new float[]{newCords[0], newCords[1]};
 
+                // Update the current location to pdr processing as feedback
                 this.pdrProcessing.setCurrentLocation(newCords[0], newCords[1]);
                 break;
-            // *** Particle END ***
+
         }
     }
 
@@ -1453,6 +1464,71 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
         }
     };
+
+    private float[] applyParticleFilter(float[] newCords) {
+        // *** Particle Filter start ***
+        pf.predict(newCords[0], newCords[1]);
+        LatLng startLocLatLng = new LatLng(this.startLocation[0], this.startLocation[1]);
+
+        if (lastWifiPos != null && (System.currentTimeMillis() - lastWifiSuccessTime) < 15000) {
+            pf.setMeasurementNoise(2.5);
+
+            LatLng latLng = lastWifiPos;
+            double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
+            Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
+
+            if (isWifiNotBehind(new double[]{newCords[0], newCords[1]}, wifiPos, this.orientation[0])) {
+                pf.setWifiRatio(ratio * 1);
+                Log.e("Ratio", "wifi in front");
+            } else {
+                pf.setWifiRatio(ratio * 0.2);
+                Log.e("Ratio", "wifi NOT in front");
+            }
+
+            Log.e("Ratio", String.valueOf(ratio));
+            pf.update(wifiPos[0], wifiPos[1]);
+
+        } else if (lastGnssLocation != null && (System.currentTimeMillis() - lastGnssTime) < 60000) {
+            double[] gnssPos = new double[]{lastGnssLocation.getLatitude(), lastGnssLocation.getLongitude()};
+            LatLng latLng = new LatLng(gnssPos[0], gnssPos[1]);
+            gnssPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
+
+            Log.e("GNSS debug", "x: " + gnssPos[0] + ", y: " + gnssPos[1] + ", accuracy: " + lastGnssLocation.getAccuracy());
+
+            pf.setMeasurementNoise(lastGnssLocation.getAccuracy());
+            pf.setWifiRatio(1);
+            pf.update(gnssPos[0], gnssPos[1]);
+        }
+
+        // 4. 重采样
+        pf.resample();
+
+        // 5. 估计当前状态
+        FilterUtils.Particle currentState = pf.estimate();
+        newCords = new float[]{(float) currentState.x, (float) currentState.y};
+        Log.e("Particle Filter", "x: " + currentState.x + ", y: " + currentState.y);
+        // *** Particle END ***
+
+        return newCords;
+    }
+
+    private float[] applyBatchOptimization(List<float[]> windowList, float[] currentPoint) {
+        int historyPoints = 3; // 自定义历史点数量
+
+        if (windowList.size() >= historyPoints + 1) {
+            windowList.remove(0); // 保持窗口长度
+        }
+        windowList.add(currentPoint); // 添加当前点
+
+        return TrajectoryOptimizer.weightedSmoothOptimizedPoint(
+                windowList,
+                1.0f,     // 平滑项权重
+                5.0f,     // 拟合项权重
+                historyPoints
+        );
+    }
+
+
 
 
     /**
