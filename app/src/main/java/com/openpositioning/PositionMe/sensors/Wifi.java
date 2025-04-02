@@ -11,8 +11,9 @@ import org.json.JSONObject;
  * (the strength of the wifi in dB) and frequency (the frequency of the wifi network (2.4GHz or
  * 5GHz). For most objects only the bssid and the level are set.
  *
- * @author Virginia Cangelosi
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class Wifi {
     private String ssid;

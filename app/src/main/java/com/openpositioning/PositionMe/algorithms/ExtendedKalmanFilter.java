@@ -52,11 +52,11 @@ import java.util.Arrays;
  * ekf.update(new double[]{sensorX, sensorY}, currentPenaltyFactor);
  * ekf.onStepDetected(detectedEast, detectedNorth, currentAltitude, System.currentTimeMillis());
  *
- * @author Thomas Deppe
- * @author Alexandra Geciova
- * @author Christopher Khoo
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
-public class ExtendedKalmanFilter{
+public class ExtendedKalmanFilter {
 
     // Threshold for relevance in the given context, measured in a specific unit (e.g., points).
     private final static long relevanceThreshold = 5000;
@@ -188,7 +188,7 @@ public class ExtendedKalmanFilter{
      * @param theta_k The current orientation angle in radians, where 0 radians point east.
      * @param step_k The length of the current movement step, likely in meters.
      */
-    private void updateFk(double theta_k, double step_k){
+    private void updateFk(double theta_k, double step_k) {
 
         // Compute the cosine of theta_k, which represents the change in the eastward position component
         // due to the step in the direction of theta_k.
@@ -217,7 +217,7 @@ public class ExtendedKalmanFilter{
      * @param refTime The reference time, typically the time of the last significant update or event, in milliseconds.
      * @param thetaStd The standard deviation of the orientation angle, in radians.
      */
-    private void updateQk(double averageStepLength, double theta_k, long refTime, double thetaStd){
+    private void updateQk(double averageStepLength, double theta_k, long refTime, double thetaStd) {
         // Calculate a penalty factor based on the elapsed time since the last reference time.
         // This factor adjusts the perceived error in the model based on how long ago the last known good measurement occurred.
         double penaltyFactor = calculateTimePenalty(refTime);
@@ -246,9 +246,9 @@ public class ExtendedKalmanFilter{
      * @param penaltyFactor A factor that modifies the standard deviation of the noise based on external conditions,
      *                      based on the time since receiving the last Wifi or GNSS update.
      */
-    private void updateRk(double penaltyFactor){
+    private void updateRk(double penaltyFactor) {
         // Check if WiFi-based location measurements are being used.
-        if (this.usingWifi){
+        if (this.usingWifi) {
 
             // Set both diagonal elements of the matrix for WiFi measurements.
             // These elements represent the variance of the observation noise, scaled by the penalty factor,
@@ -262,7 +262,7 @@ public class ExtendedKalmanFilter{
     }
 
     private void resetFilter() {
-        Log.w("EKF", "⚠️ EKF 状态异常，正在重置滤波器...");
+        Log.w("EKF", "⚠️ EKF state is abnormal, resetting filter...");
         this.Xk = new SimpleMatrix(new double[][]{{0}, {0}, {0}});
         this.Pk = SimpleMatrix.diag(10, 10, 10);
     }
@@ -295,11 +295,11 @@ public class ExtendedKalmanFilter{
      * @param refTime The reference time for the current prediction, typically the time of the last update.
      * @param userMovementInStep The type of movement detected (e.g., walking, running), affecting the state prediction.
      */
-    // 在 predict() 结束后，也加入 condition number 监控
+    // Add condition number monitoring after predict()
     public void predict(double theta_k, double step_k, double averageStepLength, long refTime, TurnDetector.MovementType userMovementInStep) {
         if (stopEKF) return;
 
-        // 在lambda表达式外处理变量
+        // Process variables outside the lambda expression
         final double finalStep_k = Double.isNaN(step_k) || Double.isInfinite(step_k) ? defaultStepLength : step_k;
         final double finalPrevStepLength = Double.isNaN(prevStepLength) || Double.isInfinite(prevStepLength) ? defaultStepLength : prevStepLength;
         final double finalTheta_k = theta_k;
@@ -313,20 +313,20 @@ public class ExtendedKalmanFilter{
             double adaptedHeading = wrapToPi((Math.PI / 2 - finalTheta_k));
             Log.d("EKF", "Adapted bearing " + (Math.PI / 2 - finalTheta_k) + " wrapped bearing " + adaptedHeading);
 
-            // 添加数值稳定性检查
+            // Add numerical stability check
             if (Double.isNaN(adaptedHeading) || Double.isInfinite(adaptedHeading)) {
-                Log.e("EKF", "❗️ 无效的heading值,重置滤波器");
+                Log.e("EKF", "❗️ Invalid heading value, resetting filter");
                 resetFilter();
                 return;
             }
 
-            // 添加输入参数检查
-            Log.d("EKF", "输入参数: theta_k=" + finalTheta_k + ", step_k=" + finalStep_k + ", prevStepLength=" + finalPrevStepLength);
+            // Add input parameter check
+            Log.d("EKF", "Input parameters: theta_k=" + finalTheta_k + ", step_k=" + finalStep_k + ", prevStepLength=" + finalPrevStepLength);
 
-            // 检查三角函数计算结果
+            // Check trigonometric function results
             double sinTheta = Math.sin(finalTheta_k);
             double cosTheta = Math.cos(finalTheta_k);
-            Log.d("EKF", "三角函数值: sin(theta_k)=" + sinTheta + ", cos(theta_k)=" + cosTheta);
+            Log.d("EKF", "Trigonometric values: sin(theta_k)=" + sinTheta + ", cos(theta_k)=" + cosTheta);
 
             SimpleMatrix T_mat = new SimpleMatrix(new double[][]{
                     {1, 0},
@@ -334,9 +334,9 @@ public class ExtendedKalmanFilter{
                     {0, cosTheta}
             });
 
-            // 检查T_mat的有效性
+            // Check T_mat validity
             if (hasInvalidMatrix(T_mat)) {
-                Log.e("EKF", "❗️ T_mat包含无效值");
+                Log.e("EKF", "❗️ T_mat contains invalid values");
                 resetFilter();
                 return;
             }
@@ -346,36 +346,36 @@ public class ExtendedKalmanFilter{
                     {finalPrevStepLength}
             });
 
-            // 检查control_inputs的有效性
+            // Check control_inputs validity
             if (hasInvalidMatrix(control_inputs)) {
-                Log.e("EKF", "❗️ control_inputs包含无效值");
+                Log.e("EKF", "❗️ control_inputs contains invalid values");
                 resetFilter();
                 return;
             }
 
-            // 打印矩阵内容
+            // Print matrix contents
             Log.d("EKF", "T_mat:\n" + T_mat.toString());
             Log.d("EKF", "control_inputs:\n" + control_inputs.toString());
 
             SimpleMatrix add = T_mat.mult(control_inputs);
-            Log.d("EKF", "add矩阵:\n" + add.toString());
+            Log.d("EKF", "add matrix:\n" + add.toString());
 
-            // 检查计算结果
+            // Check calculation results
             if (hasInvalidMatrix(add)) {
-                Log.e("EKF", "❗️ 控制输入计算结果无效,重置滤波器");
+                Log.e("EKF", "❗️ Control input calculation result invalid, resetting filter");
                 resetFilter();
                 return;
             }
 
-            // 检查Xk的当前状态
-            Log.d("EKF", "当前Xk状态:\n" + Xk.toString());
+            // Check current Xk state
+            Log.d("EKF", "Current Xk state:\n" + Xk.toString());
 
             Xk.set(0, 0, Xk.get(0, 0) + add.get(0, 0));
             Xk.set(1, 0, Xk.get(1, 0) + add.get(1, 0));
             Xk.set(2, 0, Xk.get(2, 0) + add.get(2, 0));
 
-            // 检查更新后的Xk
-            Log.d("EKF", "更新后的Xk:\n" + Xk.toString());
+            // Check updated Xk
+            Log.d("EKF", "Updated Xk:\n" + Xk.toString());
 
             updateFk(adaptedHeading, finalPrevStepLength);
             updateQk(finalAverageStepLength, adaptedHeading, (finalRefTime - initialiseTime), getThetaStd(finalUserMovementInStep));
@@ -386,10 +386,10 @@ public class ExtendedKalmanFilter{
                     {0, cosTheta}
             });
 
-            // 添加数值稳定性调整
+            // Add numerical stability adjustment
             Pk = Fk.mult(Pk).mult(Fk.transpose()).plus(L_k.mult(Qk).mult(L_k.transpose()));
 
-            // 添加对角线元素的正定性保证
+            // Add diagonal element positive definiteness guarantee
             for (int i = 0; i < Pk.numRows(); i++) {
                 double diag = Pk.get(i, i);
                 if (diag < 1e-10) {
@@ -406,17 +406,17 @@ public class ExtendedKalmanFilter{
                 Log.d("EKF-Monitor", "Post-Predict Pk min singular value: " + pkMinEig);
 
                 if (pkCondition > 1e12 || pkMinEig < 1e-10 || hasInvalidState()) {
-                    Log.w("EKF-Monitor", "⚠️ Pk数值异常 (Predict)，condition=" + pkCondition + ", minEig=" + pkMinEig + " [AUTO-RECOVERED]");
+                    Log.w("EKF-Monitor", "⚠️ Pk numerical anomaly (Predict), condition=" + pkCondition + ", minEig=" + pkMinEig + " [AUTO-RECOVERED]");
                     resetFilter();
                 }
             } catch (Exception e) {
-                Log.e("EKF-Monitor", "❗️ Pk SVD 失败 (Predict) → 自动重置", e);
+                Log.e("EKF-Monitor", "❗️ Pk SVD failed (Predict) → Auto-reset", e);
                 resetFilter();
             }
         });
     }
 
-    // 添加辅助方法检查矩阵是否包含无效值
+    // Add helper method to check if matrix contains invalid values
     private boolean hasInvalidMatrix(SimpleMatrix matrix) {
         for (int i = 0; i < matrix.numRows(); i++) {
             for (int j = 0; j < matrix.numCols(); j++) {
@@ -450,7 +450,7 @@ public class ExtendedKalmanFilter{
         try {
             KalmanGain = Pk.mult(Hk.transpose().mult(Sk.pseudoInverse()));
         } catch (Exception e) {
-            Log.e("EKF", "伪逆失败，重置滤波器避免崩溃", e);
+            Log.e("EKF", "Pseudo-inverse failed, resetting filter to prevent crash", e);
             resetFilter();
             return;
         }
@@ -468,16 +468,14 @@ public class ExtendedKalmanFilter{
             Log.d("EKF-Monitor", "Post-Update Pk min singular value: " + pkMinEig);
 
             if (pkCondition > 1e12 || pkMinEig < 1e-10 || hasInvalidState()) {
-                Log.w("EKF-Monitor", "⚠️ Pk数值异常 (Update)，condition=" + pkCondition + ", minEig=" + pkMinEig + " [AUTO-RECOVERED]");
+                Log.w("EKF-Monitor", "⚠️ Pk numerical anomaly (Update), condition=" + pkCondition + ", minEig=" + pkMinEig + " [AUTO-RECOVERED]");
                 resetFilter();
             }
         } catch (Exception e) {
-            Log.e("EKF-Monitor", "❗️ Pk SVD 失败 (Update) → 自动重置", e);
+            Log.e("EKF-Monitor", "❗️ Pk SVD failed (Update) → Auto-reset", e);
             resetFilter();
         }
     }
-
-
 
     /**
      * Handles opportunistic updates to the state estimation process when new observations are available at unexpected times.
@@ -486,7 +484,7 @@ public class ExtendedKalmanFilter{
      * @param observe Array containing new observation data, typically positional coordinates like east and north.
      * @param refTime Reference time when the observation was made, used to timestamp this update.
      */
-    public void onOpportunisticUpdate(double[] observe, long refTime){
+    public void onOpportunisticUpdate(double[] observe, long refTime) {
         Log.d("EKF", "✅ Opportunistic Update triggered with ENU = " + Arrays.toString(observe) + ", timestamp = " + refTime);
 
         // Check if the EKF is set to stop and return immediately if true.
@@ -518,7 +516,7 @@ public class ExtendedKalmanFilter{
      * @param altitude The altitude level recorded with the step detection, which may affect some correction calculations.
      * @param refTime The reference time when the step was detected, used for timing and relevance checks.
      */
-    public void onStepDetected(double pdrEast, double pdrNorth, double altitude, long refTime){
+    public void onStepDetected(double pdrEast, double pdrNorth, double altitude, long refTime) {
         // Return immediately if the EKF has been flagged to stop, avoiding unnecessary computations.
         if (stopEKF) return;
 
@@ -556,7 +554,7 @@ public class ExtendedKalmanFilter{
      * @param refTime The current reference time, typically when a new measurement or observation is made.
      * @return true if the data is still relevant, false otherwise.
      */
-    private boolean checkRelevance(long refTime){
+    private boolean checkRelevance(long refTime) {
         // If WiFi is not being used, assume that the data is always relevant.
         // This might be under the assumption that other sensors or systems provide more consistent or reliable data.
         if (!usingWifi) return true;
@@ -638,7 +636,7 @@ public class ExtendedKalmanFilter{
      * @param penaltyFactor A factor applied to the observation noise covariance matrix to account for varying confidence levels.
      */
     public void onObservationUpdate(double observeEast, double observeNorth, double pdrEast, double pdrNorth,
-                                    double altitude, double penaltyFactor){
+                                    double altitude, double penaltyFactor) {
         // If the EKF is stopped, no further processing is done.
         if (stopEKF) return;
 
@@ -678,7 +676,7 @@ public class ExtendedKalmanFilter{
      * @param altitude The altitude, typically necessary for transformations or modeling.
      * @param penaltyFactor A factor that adjusts the influence of observation noise based on various criteria.
      */
-    public void performRecursiveCorrection(double pdrEast, double pdrNorth, double altitude, double penaltyFactor){
+    public void performRecursiveCorrection(double pdrEast, double pdrNorth, double altitude, double penaltyFactor) {
         // Stop further execution if the filter is flagged to stop.
         if (stopEKF) return;
 
@@ -721,8 +719,8 @@ public class ExtendedKalmanFilter{
      * @param userMovement The type of movement detected by the system.
      * @return A standard deviation value corresponding to the type of movement.
      */
-    private double getThetaStd(TurnDetector.MovementType userMovement){
-        switch (userMovement){
+    private double getThetaStd(TurnDetector.MovementType userMovement) {
+        switch (userMovement) {
             case TURN: // For a full turn, use a higher standard deviation reflecting higher uncertainty.
                 return sigma_dTheta;
             case PSEUDO_TURN: // For a pseudo-turn, use a moderate standard deviation.
@@ -773,7 +771,7 @@ public class ExtendedKalmanFilter{
      * Stops all operations related to the Extended Kalman Filter, cleans up resources, and logs the action.
      * This method should be called when the system no longer needs to perform state estimations or when it is being shut down.
      */
-    public void stopFusion(){
+    public void stopFusion() {
         this.stopEKF = true; // Set the flag to stop the EKF.
         Log.d("EKF:", "Stopping EKF handler"); // Log the stopping action for debugging.
         this.smoothingFilter.reset(); // Reset the smoothing filter to clear any retained state.
@@ -784,6 +782,7 @@ public class ExtendedKalmanFilter{
         this.Xk.set(1, 0, east);
         this.Xk.set(2, 0, north);
     }
+
     public double[] getCurrentState() {
         return new double[] { Xk.get(0,0), Xk.get(1,0), Xk.get(2,0) };
     }

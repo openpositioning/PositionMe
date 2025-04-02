@@ -6,9 +6,9 @@ import android.util.Log;
  * This class represents a Turn Detector used for monitoring user movement based on orientation data.
  * It detects turns and pseudo-turns and provides the corresponding movement type.
  *
- * @author Thomas Deppe
- * @author Alexandra Geciova
- * @author Christopher Khoo
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class TurnDetector {
     //Threshold to be classed as turn

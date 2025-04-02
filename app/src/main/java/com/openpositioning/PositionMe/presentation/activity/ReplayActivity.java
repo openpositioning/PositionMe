@@ -36,7 +36,9 @@ import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragmen
  * @see StartLocationFragment The fragment where the user selects their start location for the trajectory replay.
  * @see ReplayFragment The fragment responsible for showing the trajectory replay.
  *
- * @author Shu Gu
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 
 public class ReplayActivity extends AppCompatActivity {

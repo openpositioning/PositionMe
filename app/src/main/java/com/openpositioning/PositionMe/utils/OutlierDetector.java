@@ -9,9 +9,9 @@ import java.util.List;
 /**
  * Utility class for detecting outliers in a list of distances by employing the modified Z score.
  *
- * @author Thomas Deppe
- * @author Alexandra Geciova
- * @author Christopher Khoo
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class OutlierDetector {
     // Threshold for outlier detection

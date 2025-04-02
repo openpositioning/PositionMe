@@ -9,7 +9,9 @@ import com.google.android.gms.maps.model.LatLng;
  * WSG84 coordinates that google maps uses. This allows the relative coordinates to be accurately transformed into longitude and latitude
  * coordinates used by google maps. Largely adapted from the pymap3D library.
  *
- * @author Thomas Deppe
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public final class CoordinateTransform {
 

@@ -66,7 +66,9 @@ import org.json.JSONObject;
  * @see SensorFusion Handles sensor data collection.
  * @see SensorTypes Enumeration of available sensor types.
  *
- * @author Shu Gu
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 
 public class RecordingFragment extends Fragment {
@@ -262,7 +264,7 @@ public class RecordingFragment extends Fragment {
             }
         }
 
-        // 更新GNSS位置
+        // Update GNSS position
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
             if (trajectoryMapFragment.isGnssEnabled()) {
@@ -280,7 +282,7 @@ public class RecordingFragment extends Fragment {
             }
         }
 
-        // 更新WiFi位置
+        // Update Wi-Fi position
         LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
         if (wifiLocation != null && trajectoryMapFragment != null) {
             if (trajectoryMapFragment.isWifiEnabled()) {

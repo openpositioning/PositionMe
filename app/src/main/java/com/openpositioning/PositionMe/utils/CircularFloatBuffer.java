@@ -8,7 +8,9 @@ import java.util.stream.IntStream;
 /**
  * Ring buffer for floats that can constantly update values in a fixed sized array.
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class CircularFloatBuffer {
     // Default capacity for the buffer in case initial capacity is invalid

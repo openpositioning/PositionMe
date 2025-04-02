@@ -60,9 +60,9 @@ import java.util.stream.Stream;
  * The class provides a number of setters and getters so that other classes can have access to the
  * sensor data and influence the behaviour of data collection.
  *
- * @author Michal Dvorak
- * @author Mate Stodulka
- * @author Virginia Cangelosi
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class SensorFusion implements SensorEventListener, Observer {
 

@@ -41,7 +41,9 @@ import java.util.Map;
  * @see com.openpositioning.PositionMe.Traj the data structure sent and received.
  * @see ServerCommunications the class handling communication with the server.
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class FilesFragment extends Fragment implements Observer {
 

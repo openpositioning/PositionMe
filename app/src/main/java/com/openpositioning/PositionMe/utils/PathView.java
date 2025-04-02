@@ -22,8 +22,9 @@ import java.util.Collections;
  * device's screen. The scaling ratio is passed to the {@link CorrectionFragment} for calculating
  * the Google Maps zoom ratio.
  *
- * @author Michal Dvorak
- * @author Virginia Cangelosi
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class PathView extends View {
     // Set up drawing colour
@@ -96,7 +97,7 @@ public class PathView extends View {
 
             scaleTrajectory();
 
-            // 使用贝塞尔曲线绘制平滑路径
+            // Draw a smooth path using Bezier curves
             path.reset();
             path.moveTo(getWidth()/2, getHeight()/2);
             
@@ -107,13 +108,13 @@ public class PathView extends View {
                     float currX = xCoords.get(i);
                     float currY = yCoords.get(i);
                     
-                    // 计算控制点
+                    // Calculate control points
                     float controlX1 = prevX + (currX - prevX) / 3;
                     float controlY1 = prevY;
                     float controlX2 = prevX + (currX - prevX) * 2 / 3;
                     float controlY2 = currY;
                     
-                    // 使用三次贝塞尔曲线
+                    // Using a cubic Bezier curve
                     path.cubicTo(controlX1, controlY1, controlX2, controlY2, currX, currY);
                 }
             }
@@ -134,7 +135,7 @@ public class PathView extends View {
                 yCoords.set(i, newYCoord);
             }
 
-            // 使用贝塞尔曲线重新绘制平滑路径
+            // Use Bezier curves to redraw smooth paths
             path.moveTo(getWidth()/2, getHeight()/2);
             
             if (xCoords.size() > 1) {
@@ -144,13 +145,13 @@ public class PathView extends View {
                     float currX = xCoords.get(i);
                     float currY = yCoords.get(i);
                     
-                    // 计算控制点
+                    // Calculate control points
                     float controlX1 = prevX + (currX - prevX) / 3;
                     float controlY1 = prevY;
                     float controlX2 = prevX + (currX - prevX) * 2 / 3;
                     float controlY2 = currY;
                     
-                    // 使用三次贝塞尔曲线
+                    // Using a cubic Bezier curve
                     path.cubicTo(controlX1, controlY1, controlX2, controlY2, currX, currY);
                 }
             }
@@ -162,7 +163,7 @@ public class PathView extends View {
             if (xCoords.size() == 0)
                 return;
 
-            // 使用贝塞尔曲线绘制平滑路径
+            // Use Bezier curves to redraw smooth paths
             path.reset();
             path.moveTo(getWidth()/2, getHeight()/2);
             
@@ -173,13 +174,13 @@ public class PathView extends View {
                     float currX = xCoords.get(i);
                     float currY = yCoords.get(i);
                     
-                    // 计算控制点
+                    // Calculate control points
                     float controlX1 = prevX + (currX - prevX) / 3;
                     float controlY1 = prevY;
                     float controlX2 = prevX + (currX - prevX) * 2 / 3;
                     float controlY2 = currY;
                     
-                    // 使用三次贝塞尔曲线
+                    // Using a cubic Bezier curve
                     path.cubicTo(controlX1, controlY1, controlX2, controlY2, currX, currY);
                 }
             }

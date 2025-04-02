@@ -14,7 +14,9 @@ import com.openpositioning.PositionMe.R;
  *
  * @see HomeFragment the return fragment when leaving the settings.
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class SettingsFragment extends PreferenceFragmentCompat {
 

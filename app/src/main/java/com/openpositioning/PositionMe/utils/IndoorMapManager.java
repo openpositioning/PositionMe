@@ -20,7 +20,9 @@ import java.util.List;
  * Currently used by RecordingFragment
  * @see BuildingPolygon Describes the bounds of buildings and the methods to check if point is
  * in the building
- * @author Arun Gopalakrishnan
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class IndoorMapManager {
     // To store the map instance

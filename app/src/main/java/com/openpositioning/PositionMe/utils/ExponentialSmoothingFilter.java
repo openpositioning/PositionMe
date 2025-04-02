@@ -10,7 +10,9 @@ import java.util.Arrays;
  *
  * Smoothing is applied independently to each value in the sequence.
  *
- * @author Thomas Deppe
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class ExponentialSmoothingFilter {
 

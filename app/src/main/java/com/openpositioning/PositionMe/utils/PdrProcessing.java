@@ -21,8 +21,9 @@ import java.util.stream.Collectors;
  * (eg. stride length from the Weiberg algorithm) or provided constants, calculates the elevation
  * and attempts to estimate the current floor as well as elevators.
  *
- * @author Mate Stodulka
- * @author Michal Dvorak
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class PdrProcessing {
 

@@ -41,7 +41,9 @@ import java.util.List;
  * @see ReplayActivity The activity managing the replay workflow.
  * @see TrajParser Utility class for parsing trajectory data.
  *
- * @author Shu Gu
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class ReplayFragment extends Fragment {
 

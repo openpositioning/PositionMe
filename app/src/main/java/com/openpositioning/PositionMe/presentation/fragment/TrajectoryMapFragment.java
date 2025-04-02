@@ -51,7 +51,9 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.utils.IndoorMapManager Utility for managing indoor map overlays.
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 
 public class TrajectoryMapFragment extends Fragment implements SensorFusionUpdates {
@@ -342,16 +344,16 @@ public class TrajectoryMapFragment extends Fragment implements SensorFusionUpdat
             gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
 
-        // 更新所有轨迹线
+        // Update all trajectory lines
         if (oldLocation != null && !oldLocation.equals(newLocation)) {
-            // 更新EKF轨迹
+            // Update EKF trajectory
             if (ekfPolyline != null) {
                 List<LatLng> points = new ArrayList<>(ekfPolyline.getPoints());
                 points.add(newLocation);
                 ekfPolyline.setPoints(points);
             }
             
-            // 更新PF轨迹
+            // Update PF trajectory
             if (pfPolyline != null) {
                 List<LatLng> points = new ArrayList<>(pfPolyline.getPoints());
                 points.add(newLocation);
@@ -367,12 +369,12 @@ public class TrajectoryMapFragment extends Fragment implements SensorFusionUpdat
     }
 
     /**
-     * 更新PDR轨迹线
+     * Update PDR trajectory line
      */
     public void updatePDRTrajectory(@NonNull LatLng pdrLocation) {
         if (gMap == null || pdrLocation == null) return;
         
-        // 更新PDR轨迹线
+        // Update PDR trajectory line
         if (pdrPolyline != null) {
             List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
             points.add(pdrLocation);
@@ -656,10 +658,10 @@ public class TrajectoryMapFragment extends Fragment implements SensorFusionUpdat
 
     @Override
     public void onPDRUpdate() {
-        // 获取最新的PDR位置
+        // Get the latest PDR location
         float[] pdrValues = SensorFusion.getInstance().getCurrentPDRCalc();
         if (pdrValues != null) {
-            // 转换为地理坐标
+            // Convert to Geographic Coordinates
             LatLng pdrLocation = CoordinateTransform.enuToGeodetic(
                 pdrValues[0], pdrValues[1], 
                 SensorFusion.getInstance().getElevation(),
@@ -667,35 +669,35 @@ public class TrajectoryMapFragment extends Fragment implements SensorFusionUpdat
                 SensorFusion.getInstance().getGNSSLatLngAlt(true)[1],
                 SensorFusion.getInstance().getEcefRefCoords()
             );
-            // 更新PDR轨迹
+            // Update PDR trajectory
             updatePDRTrajectory(pdrLocation);
         }
     }
 
     @Override
     public void onOrientationUpdate() {
-        // 不需要实现
+        // No need to implement
     }
 
     @Override
     public void onGNSSUpdate() {
-        // 不需要实现
+        // No need to implement
     }
 
     @Override
     public void onFusedUpdate(LatLng coordinate) {
-        // 更新融合轨迹
+        // Update fusion trajectory
         if (coordinate != null) {
-            // 根据融合算法选择更新对应的轨迹线
+            // Select and update the corresponding trajectory line based on the fusion algorithm
             if (SensorFusion.getInstance().isFusionAlgorithmSelection()) {
-                // 更新EKF轨迹
+                // Update EKF trajectory
                 if (ekfPolyline != null) {
                     List<LatLng> points = new ArrayList<>(ekfPolyline.getPoints());
                     points.add(coordinate);
                     ekfPolyline.setPoints(points);
                 }
             } else {
-                // 更新PF轨迹
+                // Update PF trajectory
                 if (pfPolyline != null) {
                     List<LatLng> points = new ArrayList<>(pfPolyline.getPoints());
                     points.add(coordinate);
@@ -707,7 +709,7 @@ public class TrajectoryMapFragment extends Fragment implements SensorFusionUpdat
 
     @Override
     public void onWifiUpdate(LatLng wifi) {
-        // 更新WiFi位置标记
+        // Update WiFi location tags
         if (wifi != null && wifiEnabled) {
             updateWifi(wifi);
         }

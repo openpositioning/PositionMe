@@ -27,21 +27,23 @@ import java.util.TimerTask;
 
 /**
  * The WifiDataProcessor class is the Wi-Fi data gathering and processing class.
- * 它负责启动 WiFi 扫描、构造指纹数据，并通知观察者，同时调用 RESTful 定位请求。
+ * It is responsible for initiating WiFi scanning, constructing fingerprint data, and notifying observers, while calling RESTful location requests.
  *
- * @author ...
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class WifiDataProcessor implements Observable {
 
-    // 每次扫描的间隔（毫秒）
+    // Interval between each scan (in milliseconds)
     private static final long scanInterval = 5000;
     private final Context context;
     private final WifiManager wifiManager;
-    // 保存扫描到的 WiFi 数据
+    // Save scanned WiFi data
     private Wifi[] wifiData;
-    // 观察者列表
+    // Observer List
     private ArrayList<Observer> observers;
-    // 定时扫描对象
+    // Regularly scan objects
     private Timer scanWifiDataTimer;
 
 
@@ -58,8 +60,9 @@ public class WifiDataProcessor implements Observable {
      *
      * @see SensorFusion the intended parent class.
      *
-     * @author Virginia Cangelosi
-     * @author Mate Stodulka
+     * @author Yueyan Zhao
+     * @author Zizhen Wang
+     * @author Chen Zhao
      */
     public WifiDataProcessor(Context context) {
         this.context = context;
@@ -75,7 +78,7 @@ public class WifiDataProcessor implements Observable {
     }
 
     /**
-     * 广播接收器：接收扫描完成后的广播
+     * Broadcast receiver: Receive scanned broadcasts
      */
 
     BroadcastReceiver wifiScanReceiver = new BroadcastReceiver() {
@@ -111,7 +114,7 @@ public class WifiDataProcessor implements Observable {
     };
 
     /**
-     * 将 MAC 地址从字符串转换为 long 类型
+     * Convert MAC address from string to long type
      */
     private long convertBssidToLong(String wifiMacAddress) {
         long intMacAddress = 0;
@@ -132,7 +135,7 @@ public class WifiDataProcessor implements Observable {
     }
 
     /**
-     * 检查是否已授予所有必需的权限
+     * Check if all necessary permissions have been granted
      */
     private boolean checkWifiPermissions() {
         int wifiAccessPermission = ActivityCompat.checkSelfPermission(this.context, Manifest.permission.ACCESS_WIFI_STATE);
@@ -146,7 +149,7 @@ public class WifiDataProcessor implements Observable {
     }
 
     /**
-     * 发起一次 WiFi 扫描
+     * Initiate a WiFi scan
      */
     private void startWifiScan() {
         if (checkWifiPermissions()) {
@@ -156,7 +159,7 @@ public class WifiDataProcessor implements Observable {
     }
 
     /**
-     * 开始周期性扫描 WiFi 数据
+     * Start periodic scanning of WiFi data
      */
     public void startListening() {
         this.scanWifiDataTimer = new Timer();
@@ -164,19 +167,19 @@ public class WifiDataProcessor implements Observable {
     }
 
     /**
-     * 停止扫描
+     * Stop scanning
      */
     public void stopListening() {
         try {
             context.unregisterReceiver(wifiScanReceiver);
         } catch (IllegalArgumentException e) {
-            // 已经注销
+            // Already cancelled
         }
         this.scanWifiDataTimer.cancel();
     }
 
     /**
-     * 检查并提示用户禁用 WiFi 扫描节流
+     * Check and prompt the user to disable WiFi scanning throttling
      */
     public void checkWifiThrottling(){
         if(checkWifiPermissions()) {
@@ -203,7 +206,7 @@ public class WifiDataProcessor implements Observable {
     }
 
     /**
-     * 定时任务，每 scanInterval 毫秒发起一次 WiFi 扫描
+     * Scheduled task, initiate WiFi scan every scanInterval milliseconds
      */
     private class scheduledWifiScan extends TimerTask {
         @Override
@@ -213,7 +216,7 @@ public class WifiDataProcessor implements Observable {
     }
 
     /**
-     * 获取当前已连接的 WiFi 信息
+     * Get information about the currently connected WiFi
      */
     public Wifi getCurrentWifiData(){
         ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);

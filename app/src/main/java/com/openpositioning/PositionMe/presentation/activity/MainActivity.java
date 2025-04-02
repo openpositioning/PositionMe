@@ -57,8 +57,9 @@ import java.util.Objects;
  * @see com.openpositioning.PositionMe.R.navigation the navigation graph.
  * @see SensorFusion the singletion data processing class.
  *
- * @author Mate Stodulka
- * @author Virginia Cangelosi
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class MainActivity extends AppCompatActivity implements Observer {
 

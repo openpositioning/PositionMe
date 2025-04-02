@@ -31,7 +31,9 @@ import java.util.stream.Stream;
  * acceptable network was available to upload it when the recording finished. Trajectories can be
  * uploaded manually.
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class UploadFragment extends Fragment {
 

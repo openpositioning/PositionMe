@@ -27,7 +27,9 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.sensors.SensorFusion the class containing all sensors.
  * @see SensorInfo the class used for each sensor instance's metadata
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class InfoFragment extends Fragment {
 

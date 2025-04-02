@@ -35,7 +35,9 @@ import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
  * @see CorrectionFragment Allows users to review and make corrections before finalizing the process.
  * @see com.openpositioning.PositionMe.R.layout#activity_recording The associated layout for this activity.
  *
- * @author ShuGu
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 
 public class RecordingActivity extends AppCompatActivity {

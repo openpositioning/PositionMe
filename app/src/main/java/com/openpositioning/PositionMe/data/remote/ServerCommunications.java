@@ -67,8 +67,9 @@ import okhttp3.ResponseBody;
  *
  * Keys and URLs are hardcoded strings, given the simple and academic nature of the project.
  *
- * @author Michal Dvorak
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class ServerCommunications implements Observable {
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();

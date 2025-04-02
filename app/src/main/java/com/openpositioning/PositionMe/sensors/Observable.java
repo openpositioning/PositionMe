@@ -5,8 +5,9 @@ package com.openpositioning.PositionMe.sensors;
  * Simplified version of default Observable interface, with only the resgisterObserver and
  * notifyObservers methods included see {@link java.util.Observable}.
  *
- * @author Virginia Cangelosi
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public interface Observable {
     /**

@@ -18,7 +18,9 @@ import java.util.List;
  * @see WifiViewHolder corresponding View Holder class
  * @see com.openpositioning.PositionMe.R.layout#item_wifi_card_view xml layout file
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class WifiListAdapter extends RecyclerView.Adapter<WifiViewHolder> {
 
