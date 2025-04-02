@@ -14,6 +14,8 @@ import java.lang.Math; // Explicit import
  * and step error estimation. It also incorporates outlier detection for position deviations.
  * The core logic of calculating penalties and uncertainties remains consistent with the
  * original implementation, but method names and structure have been revised for clarity.
+ *
+ * @author Michal Wiercigroch
  */
 public class MovementModel {
 

@@ -64,6 +64,7 @@ import java.util.stream.Stream;
  * @author Michal Dvorak
  * @author Mate Stodulka
  * @author Virginia Cangelosi
+ * @author Michal Wiercigroch
  */
 public class SensorFusion implements SensorEventListener, Observer {
 

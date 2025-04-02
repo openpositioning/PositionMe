@@ -5,6 +5,12 @@ import android.util.Log;
 /**
  * Handles measurement models for different sensors, providing noise characteristics
  * and uncertainty estimates for fusion algorithms.
+ *
+ * <p>This class manages sensor measurement uncertainties and provides methods
+ * for updating and accessing these uncertainty values for use in fusion algorithms.
+ * It handles PDR, GNSS, and WiFi measurement sources with time-based degradation.</p>
+ *
+ * @author Michal Wiercigroch
  */
 public class MeasurementModel {
     private static final String TAG = "MeasurementModel";

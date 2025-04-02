@@ -19,6 +19,8 @@ import java.util.Objects;
  * This implementation provides accurate position estimates by incorporating
  * movement models, outlier detection, and adaptive measurement handling.
  * It only updates the state when a PDR step is detected.
+ *
+ * @author Michal Wiercigroch
  */
 public class KalmanFilterFusion implements IPositionFusionAlgorithm {
     private static final String TAG = "KalmanFilterFusion";

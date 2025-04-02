@@ -58,6 +58,7 @@ import com.google.android.gms.maps.model.LatLng;
  * @see SensorTypes Enumeration of available sensor types.
  *
  * @author Shu Gu
+ * @author Michal Wiercigroch
  */
 
 public class RecordingFragment extends Fragment implements PositionListener {
