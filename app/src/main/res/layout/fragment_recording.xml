@@ -11,133 +11,91 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp"
+        android:padding="5dp"
         android:background="#AAFFFFFF"
         android:animateLayoutChanges="true"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Status Card: Recording Status -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/currentPositionCard"
+        <!-- Extracted Status Fragment Container -->
+        <FrameLayout
+            android:id="@+id/recordingStatusFragmentContainer"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            app:cardBackgroundColor="@color/md_theme_surfaceContainer"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="4dp"
-            app:strokeColor="@color/md_theme_outline"
-            app:strokeWidth="1dp">
+            android:layout_height="wrap_content" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="12dp"
-                android:gravity="center_vertical">
-
-                <FrameLayout
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:layout_marginEnd="12dp">
-
-                    <ProgressBar
-                        android:id="@+id/circularProgressBar"
-                        style="@style/Widget.Material3.CircularProgressIndicator"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:indeterminate="false"
-                        android:progress="0"
-                        app:indicatorSize="48dp"
-                        app:trackThickness="6dp"
-                        app:indicatorColor="@color/md_theme_primary"
-                        app:layout_gravity="center" />
-
-                    <ImageView
-                        android:id="@+id/recordingIcon"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:layout_gravity="center"
-                        android:src="@drawable/ic_baseline_red_dot_24"
-                        android:contentDescription="@string/red_dot_description_text" />
-                </FrameLayout>
-
-                <TextView
-                    android:id="@+id/distanceTextView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/meter"
-                    android:textColor="@color/md_theme_secondary"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/elevationTextView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginEnd="16dp"
-                    android:text="@string/elevation"
-                    android:textColor="@color/md_theme_secondary"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/gnssErrorTextView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/gnss_error"
-                    android:textColor="@color/md_theme_error"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                    android:layout_marginStart="16dp"
-                    android:visibility="gone" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Control Row with buttons -->
+        <!-- Control Row with buttons (Reorganized Layout) -->
         <LinearLayout
             android:id="@+id/controlRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="8dp"
-            android:weightSum="4">
+            android:layout_marginTop="3dp"
+            android:layout_marginBottom="3dp">
 
-            <Button
-                android:id="@+id/cancelRecordingButton"
-                style="@style/Widget.MaterialComponents.Button"
-                app:icon="@drawable/ic_unavailable"
-                android:layout_width="0dp"
-                android:layout_height="56dp"
-                android:layout_marginEnd="8dp"
-                android:layout_weight="1"
-                android:text="@string/cancel"
-                android:textSize="16sp"
-                app:cornerRadius="16dp" />
-
-            <Button
-                android:id="@+id/finishRecordingButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="0dp"
-                android:layout_height="56dp"
-                android:layout_weight="1"
-                android:text="@string/stop"
-                android:textSize="16sp"
-                app:cornerRadius="16dp"
-                android:layout_marginEnd="8dp" />
-
-            <Button
-                android:id="@+id/toggleCalibrationMenuButton"
+            <!-- Grouped Left Buttons -->
+            <LinearLayout
                 android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_weight="0">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/moreInfoButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:contentDescription="@string/more_info"
+                    app:icon="@drawable/ic_info_svgrepo_com"
+                    app:backgroundTint="@color/md_theme_primary"
+                    app:iconGravity="textStart"
+                    app:cornerRadius="16dp"
+                    app:iconSize="24dp"
+                    android:padding="0dp"
+                    app:strokeWidth="0dp"
+                    android:backgroundTint="@color/md_theme_light_primary"
+                    app:iconPadding="0dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/toggleCalibrationMenuButton"
+                    android:layout_width="120dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/tag"
+                    android:textSize="18sp"
+                    android:contentDescription="@string/more_info"
+                    app:icon="@drawable/ic_tag_plus_svgrepo_com"
+                    app:backgroundTint="@color/md_theme_primary"
+                    app:iconGravity="textStart"
+                    app:cornerRadius="16dp"
+                    app:iconSize="24dp"
+                    android:padding="0dp"
+                    app:strokeWidth="0dp"
+                    android:backgroundTint="@color/md_theme_light_primary"
+                    app:iconPadding="0dp" />
+            </LinearLayout>
+
+            <!-- Spacer -->
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/finishRecordingButton"
+                android:layout_width="56dp"
                 android:layout_height="56dp"
-                android:layout_weight="0.3"
-                app:icon="@drawable/ic_tag_plus_svgrepo_com"
-                android:text="@string/tag"
-                android:textSize="16sp"
-                app:cornerRadius="16dp" />
+                android:layout_marginStart="8dp"
+                android:contentDescription="@string/more_info"
+                app:icon="@drawable/next_svgrepo_com"
+                app:backgroundTint="@color/md_theme_primary"
+                app:iconGravity="textStart"
+                app:cornerRadius="16dp"
+                app:iconSize="24dp"
+                android:padding="0dp"
+                app:strokeWidth="0dp"
+                android:backgroundTint="@color/md_theme_light_primary"
+                app:iconPadding="0dp" />
         </LinearLayout>
 
         <!-- ⬇️ New CalibrationFragment Container (Initially GONE) -->

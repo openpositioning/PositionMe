@@ -3,7 +3,6 @@ package com.openpositioning.PositionMe.presentation.fragment;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
@@ -12,12 +11,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.animation.AlphaAnimation;
-import android.view.animation.Animation;
-import android.view.animation.LinearInterpolator;
 import android.widget.Button;
-import android.widget.ImageView;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -28,7 +22,6 @@ import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.local.DataFileManager;
-import com.openpositioning.PositionMe.domain.SensorDataPredictor;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
@@ -43,13 +36,11 @@ public class RecordingFragment extends Fragment {
 
     private static final String TAG = "RecordingFragment";
 
-    private Button completeButton, cancelButton;
-    private ImageView recIcon;
-    private ProgressBar timeRemaining;
-    private TextView elevation, distanceTravelled, gnssError;
+    private Button completeButton;
 
     private TrajectoryMapFragment trajectoryMapFragment;
     private CalibrationFragment calibrationFragment;
+    private StatusFragment recordingStatusFragment;
 
     private SensorFusion sensorFusion;
     private DataFileManager dataFileManager;
@@ -98,17 +89,11 @@ public class RecordingFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        elevation = view.findViewById(R.id.elevationTextView);
-        distanceTravelled = view.findViewById(R.id.distanceTextView);
-        gnssError = view.findViewById(R.id.gnssErrorTextView);
         completeButton = view.findViewById(R.id.finishRecordingButton);
-        cancelButton = view.findViewById(R.id.cancelRecordingButton);
-        recIcon = view.findViewById(R.id.recordingIcon);
-        timeRemaining = view.findViewById(R.id.circularProgressBar);
 
         trajectoryMapFragment = (TrajectoryMapFragment) getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
         if (trajectoryMapFragment == null) {
-            trajectoryMapFragment = new TrajectoryMapFragment();
+            trajectoryMapFragment = new TrajectoryMapFragment.RecordingTrajectoryMapFragment();
             getChildFragmentManager()
                     .beginTransaction()
                     .replace(R.id.trajectoryMapFragmentContainer, trajectoryMapFragment)
@@ -127,6 +112,15 @@ public class RecordingFragment extends Fragment {
         calibrationFragment.setDataFileManager(dataFileManager);
         calibrationFragment.setTrajectoryMapFragment(trajectoryMapFragment);
 
+        recordingStatusFragment = (StatusFragment) getChildFragmentManager().findFragmentById(R.id.recordingStatusFragmentContainer);
+        if (recordingStatusFragment == null) {
+            recordingStatusFragment = new StatusFragment();
+            getChildFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.recordingStatusFragmentContainer, recordingStatusFragment)
+                    .commitNow();
+        }
+
         Button toggleAdvancedMenuButton = view.findViewById(R.id.toggleCalibrationMenuButton);
         View calibrationContainer = view.findViewById(R.id.calibrationFragmentContainer);
         toggleAdvancedMenuButton.setOnClickListener(v -> {
@@ -136,7 +130,6 @@ public class RecordingFragment extends Fragment {
             } else {
                 calibrationContainer.setVisibility(View.VISIBLE);
                 toggleAdvancedMenuButton.setText("Hide");
-
             }
         });
 
@@ -146,37 +139,15 @@ public class RecordingFragment extends Fragment {
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
         });
 
-        cancelButton.setOnClickListener(v -> {
-            AlertDialog dialog = new AlertDialog.Builder(requireActivity())
-                    .setTitle("Confirm Cancel")
-                    .setMessage("Are you sure you want to cancel the recording? Your progress will be lost permanently!")
-                    .setNegativeButton("Yes", (dialogInterface, which) -> {
-                        sensorFusion.stopRecording();
-                        if (autoStop != null) autoStop.cancel();
-                        requireActivity().onBackPressed();
-                    })
-                    .setPositiveButton("No", (dialogInterface, which) -> dialogInterface.dismiss())
-                    .create();
-
-            dialog.setOnShowListener(dialogInterface -> {
-                Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-                negativeButton.setTextColor(Color.RED);
-            });
-
-            dialog.show();
-        });
-
-        blinkingRecordingIcon();
-
         if (settings.getBoolean("split_trajectory", false)) {
             long limit = settings.getInt("split_duration", 30) * 60000L;
-            timeRemaining.setMax((int) (limit / 1000));
-            timeRemaining.setProgress(0);
-            timeRemaining.setScaleY(3f);
+            recordingStatusFragment.setMaxProgress((int) (limit / 1000));
+            recordingStatusFragment.setProgress(0);
+            recordingStatusFragment.setScaleY(3f);
             autoStop = new CountDownTimer(limit, 1000) {
                 @Override
                 public void onTick(long millisUntilFinished) {
-                    timeRemaining.incrementProgressBy(1);
+                    recordingStatusFragment.incrementProgress();
                     updateUIandPosition();
                 }
 
@@ -199,15 +170,6 @@ public class RecordingFragment extends Fragment {
             }
         };
         sensorUpdateHandler.post(sensorUpdateTask);
-    }
-
-    private void blinkingRecordingIcon() {
-        Animation blinking = new AlphaAnimation(1, 0);
-        blinking.setDuration(800);
-        blinking.setInterpolator(new LinearInterpolator());
-        blinking.setRepeatCount(Animation.INFINITE);
-        blinking.setRepeatMode(Animation.REVERSE);
-        recIcon.startAnimation(blinking);
     }
 
     private void collectFullSensorData() {
@@ -257,12 +219,8 @@ public class RecordingFragment extends Fragment {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
-                + Math.pow(pdrValues[1] - previousPosY, 2));
-        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
-
         float elevationVal = sensorFusion.getElevation();
-        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
+        recordingStatusFragment.updateElevation(String.format("%.1f", elevationVal));
 
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
@@ -284,12 +242,11 @@ public class RecordingFragment extends Fragment {
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
                 if (currentLoc != null) {
                     double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
-                    gnssError.setVisibility(View.VISIBLE);
-                    gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
+                    recordingStatusFragment.updateGnssError(String.format("%.2fm", errorDist), View.VISIBLE);
                 }
                 trajectoryMapFragment.updateGNSS(gnssLocation);
             } else {
-                gnssError.setVisibility(View.GONE);
+                recordingStatusFragment.updateGnssError("", View.GONE);
                 trajectoryMapFragment.clearGNSS();
             }
         }

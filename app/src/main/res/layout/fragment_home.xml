@@ -71,17 +71,6 @@
             app:iconGravity="top"
             app:iconSize="24dp"/>
 
-        <!-- 按钮示例：室内定位 -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/indoorButton"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Indoor Positioning\n(In Development)"
-            android:textSize="12sp"
-            android:textAlignment="center"
-            android:backgroundTint="#9E9E9E"/>
 
     </LinearLayout>
 

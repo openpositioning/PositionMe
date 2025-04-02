@@ -116,12 +116,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             Navigation.findNavController(v).navigate(action);
         });
 
-        MaterialButton indoorButton = view.findViewById(R.id.indoorButton);
-        indoorButton.setOnClickListener(v -> {
-            Intent intent = new Intent(requireContext(), com.openpositioning.PositionMe.presentation.activity.CollectionActivity.class);
-            startActivity(intent);
-        });
-
         // TextView to display GNSS disabled message
         gnssStatusTextView = view.findViewById(R.id.gnssStatusTextView);
 

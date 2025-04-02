@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="12dp">
+
+    <FrameLayout
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginEnd="12dp">
+
+        <ProgressBar
+            android:id="@+id/circularProgressBar"
+            style="@style/Widget.Material3.CircularProgressIndicator"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:indeterminate="false"
+            android:progress="0"
+            app:indicatorSize="48dp"
+            app:trackThickness="6dp"
+            app:indicatorColor="@color/md_theme_primary"
+            app:layout_gravity="center" />
+
+        <ImageView
+            android:id="@+id/recordingIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_baseline_red_dot_24"
+            android:contentDescription="@string/red_dot_description_text" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/elevationTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/elevation"
+        android:textColor="@color/md_theme_secondary"
+        android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/gnssErrorTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/gnss_error"
+        android:textColor="@color/md_theme_error"
+        android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+        android:layout_marginStart="16dp"
+        android:visibility="gone" />
+</LinearLayout>

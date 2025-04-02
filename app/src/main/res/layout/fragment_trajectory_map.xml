@@ -6,119 +6,167 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- The actual map container -->
+    <!-- The map -->
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/trajectoryMap"
         android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Top horizontal layout for map controls -->
+    <!-- Top control bar floating over map -->
     <LinearLayout
-        android:id="@+id/top_control_layout"
+        android:id="@+id/top_control_bar"
         android:layout_width="match_parent"
-        android:layout_height="116dp"
-        android:layout_margin="10dp"
-        android:background="?attr/colorSurface"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="12dp"
-        app:layout_anchor="@id/trajectoryMap"
-        app:layout_anchorGravity="top">
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="4dp"
+        android:background="@android:color/transparent"
+        android:layout_gravity="top"
+        android:elevation="8dp">
 
-        <!-- Toggle Raw Trajectory button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/showRawButton"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginEnd="8dp"
-            android:backgroundTint="@color/md_theme_surface"
-            android:contentDescription="Toggle Raw Trajectory"
-            android:icon="@drawable/ic_baseline_navigation_24"
-            android:iconTint="@color/red"
-            app:cornerRadius="28dp" />
-
-        <!-- Toggle Fusion Trajectory button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/showFusionButton"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginEnd="8dp"
-            android:backgroundTint="@color/md_theme_surface"
-            android:contentDescription="Toggle Fusion Trajectory"
-            android:icon="@drawable/ic_baseline_navigation_24_green"
-            android:iconTint="@android:color/holo_green_dark"
-            app:cornerRadius="28dp" />
-
-        <!-- GNSS switch -->
-        <com.google.android.material.switchmaterial.SwitchMaterial
-            android:id="@+id/gnssSwitch"
-            android:layout_width="wrap_content"
+        <!-- Left side buttons -->
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:text="@string/gnssSwitch" />
+            android:layout_weight="1"
+            android:orientation="horizontal">
 
-        <!-- Auto-floor switch -->
-        <com.google.android.material.switchmaterial.SwitchMaterial
-            android:id="@+id/autoFloor"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:text="@string/auto_floor" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/pdrButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                app:icon="@drawable/ic_baseline_directions_walk_24"
+                app:iconTint="@color/white"
+                app:backgroundTint="@color/red"
+                app:cornerRadius="24dp"
+                app:iconGravity="textStart"
+                app:iconSize="24dp"
+                android:padding="0dp"
+                app:strokeColor="@color/md_theme_primary"
+                app:strokeWidth="0dp"
+                app:iconPadding="0dp"/>
 
-        <!-- Change line color button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/gnssButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                app:icon="@drawable/ic_satellite_dish_svgrepo_com"
+                app:iconTint="@color/white"
+                app:iconGravity="textStart"
+                app:cornerRadius="24dp"
+                app:iconSize="24dp"
+                android:padding="0dp"
+                app:backgroundTint="@color/md_theme_outline"
+                app:strokeColor="@color/md_theme_primary"
+                app:strokeWidth="0dp"
+                app:iconPadding="0dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/wifiButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                app:icon="@drawable/ic_router_svgrepo_com"
+                app:iconTint="@color/white"
+                app:iconGravity="textStart"
+                app:cornerRadius="24dp"
+                app:iconSize="22dp"
+                android:padding="0dp"
+                app:backgroundTint="@color/goldYellow"
+                app:strokeColor="@color/md_theme_primary"
+                app:strokeWidth="0dp"
+                app:iconPadding="0dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/fusionButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                app:icon="@drawable/ic_cube_alt_1_svgrepo_com"
+                app:iconTint="@color/white"
+                app:iconGravity="textStart"
+                app:cornerRadius="24dp"
+                app:iconSize="24dp"
+                android:padding="0dp"
+                app:backgroundTint="@color/green"
+                app:strokeColor="@color/md_theme_primary"
+                app:strokeWidth="0dp"
+                app:iconPadding="0dp" />
+        </LinearLayout>
+
+        <!-- Auto Floor Toggle -->
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/lineColorButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:backgroundTint="@color/red"
-            android:text="@string/color"
-            android:textColor="@color/md_theme_onPrimary"
-            app:elevation="5dp" />
-
-        <!-- Spinner for map switching -->
-        <Spinner
-            android:id="@+id/mapSwitchSpinner"
-            android:layout_width="wrap_content"
+            android:id="@+id/autoFloorButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
-            android:background="@android:color/white"
-            android:elevation="5dp"
-            android:spinnerMode="dropdown" />
-
+            android:layout_marginStart="8dp"
+            app:icon="@drawable/ic_floorplan_svgrepo_com"
+            app:iconTint="@color/white"
+            app:iconGravity="textStart"
+            app:cornerRadius="24dp"
+            app:iconSize="20dp"
+            android:padding="0dp"
+            app:backgroundTint="@color/md_theme_primary"
+            app:strokeColor="@color/md_theme_primary"
+            app:strokeWidth="0dp"
+            app:iconPadding="0dp" />
     </LinearLayout>
 
-    <!-- Floating action buttons for floor control, properly spaced -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:layout_anchor="@+id/trajectoryMap"
-        app:layout_anchorGravity="center">
+        android:layout_height="match_parent">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/floorDownButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:id="@+id/recenterButton"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
             android:layout_margin="16dp"
-            android:contentDescription="@string/floor_down"
-            android:src="@android:drawable/arrow_down_float"
-            app:backgroundTint="@color/md_theme_primary"
+            android:contentDescription="@string/recenter"
+            android:src="@drawable/location_target_svgrepo_com"
+            android:scaleType="centerInside"
+            app:backgroundTint="@color/md_theme_light_primary"
+            app:tint="@color/md_theme_onPrimary"
+            app:cornerRadius="100dp"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:tint="@color/md_theme_onPrimary" />
+            app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Floor Up Button (top-right) -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
+            android:layout_marginTop="96dp"
+            android:layout_marginEnd="16dp"
             android:contentDescription="@string/floor_up"
-            android:src="@android:drawable/arrow_up_float"
+            android:src="@drawable/ic_up"
             app:backgroundTint="@color/md_theme_primary"
-            app:layout_constraintBottom_toTopOf="@id/floorDownButton"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:tint="@color/md_theme_onPrimary" />
+            app:tint="@color/md_theme_onPrimary"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Floor Down Button (below Floor Up) -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorDownButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
+            android:contentDescription="@string/floor_down"
+            android:src="@drawable/ic_down"
+            app:backgroundTint="@color/md_theme_primary"
+            app:tint="@color/md_theme_onPrimary"
+            app:layout_constraintTop_toBottomOf="@id/floorUpButton"
+            app:layout_constraintEnd_toEndOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

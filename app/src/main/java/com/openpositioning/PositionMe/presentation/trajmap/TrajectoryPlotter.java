@@ -17,7 +17,6 @@ import java.util.List;
  * It handles creation/updating of a marker and polyline.
  */
 public abstract class TrajectoryPlotter {
-    // static log id
     private static final String TAG = "TrajectoryPlotter";
     protected GoogleMap map;
     protected Context context;
@@ -36,7 +35,8 @@ public abstract class TrajectoryPlotter {
         initPolyline();
     }
 
-    private void initPolyline() {
+    // Made protected in case subclasses need to ensure polyline exists.
+    protected void initPolyline() {
         polyline = map.addPolyline(new PolylineOptions()
                 .color(polylineColor)
                 .width(5f));
@@ -46,6 +46,10 @@ public abstract class TrajectoryPlotter {
      * Update the plotted location with a new LatLng and orientation.
      */
     public void updateLocation(LatLng newLocation, float orientation) {
+        // Create the polyline if it does not exist.
+        if (polyline == null) {
+            initPolyline();
+        }
         // Create the marker if it does not exist.
         if (marker == null) {
             // Move the camera to the new location
@@ -99,6 +103,78 @@ public abstract class TrajectoryPlotter {
 
     public Polyline getPolyline() {
         return polyline;
+    }
+
+    // --- New GNSS Trajectory Plotter subclass ---
+    public static class GnssTrajectoryPlotter extends TrajectoryPlotter {
+        private Circle accuracyCircle;
+
+        /**
+         * We pass 0 as markerDrawableRes since we override marker creation.
+         */
+        public GnssTrajectoryPlotter(Context context, GoogleMap map) {
+            super(context, map, Color.BLUE, 0);
+        }
+
+        @Override
+        protected String getTitle() {
+            return "GNSS Position";
+        }
+
+        /**
+         * Update the GNSS location with an accuracy value.
+         *
+         * @param newLocation The new GNSS location.
+         * @param accuracy    The accuracy (in meters) from GNSS.
+         */
+        public void updateGnssLocation(LatLng newLocation, float accuracy) {
+            if(polyline == null) {
+                initPolyline();
+            }
+            if (marker == null) {
+                marker = map.addMarker(new MarkerOptions()
+                        .position(newLocation)
+                        .title(getTitle())
+                        // Use default marker with azure hue for GNSS
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+                accuracyCircle = map.addCircle(new CircleOptions()
+                        .center(newLocation)
+                        .radius(accuracy)
+                        .strokeColor(Color.BLUE)
+                        .fillColor(Color.argb(50, 0, 0, 255))
+                        .strokeWidth(2f));
+            } else {
+                marker.setPosition(newLocation);
+                if (accuracyCircle != null) {
+                    accuracyCircle.setCenter(newLocation);
+                    accuracyCircle.setRadius(accuracy);
+                }
+            }
+
+            if (points.isEmpty() || !points.get(points.size() - 1).equals(newLocation)) {
+                points.add(newLocation);
+                polyline.setPoints(points);
+            }
+        }
+
+        /**
+         * To satisfy the abstract method, we override updateLocation.
+         * In this case, we call updateGnssLocation with a default accuracy (0).
+         * In practice, use updateGnssLocation(newLocation, accuracy) instead.
+         */
+        @Override
+        public void updateLocation(LatLng newLocation, float orientation) {
+            updateGnssLocation(newLocation, 0);
+        }
+
+        @Override
+        public void clear() {
+            super.clear();
+            if (accuracyCircle != null) {
+                accuracyCircle.remove();
+                accuracyCircle = null;
+            }
+        }
     }
 
 
@@ -169,7 +245,6 @@ public abstract class TrajectoryPlotter {
                                 UtilFunctions.getBitmapFromVector(context, markerDrawableRes))));
             } else {
                 marker.setPosition(newLocation);
-                marker.setRotation(orientation);
             }
         }
     }
