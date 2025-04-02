@@ -68,7 +68,38 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // 实时添加轨迹点
     public void addTrajectoryPoint(float latitude, float longitude) {
-        trajectoryPoints.add(new float[]{latitude, longitude});
+        // 更新滑动窗口
+        latitudeWindow[windowIndex] = latitude;
+        longitudeWindow[windowIndex] = longitude;
+        windowIndex = (windowIndex + 1) % TRAJECTORY_WINDOW_SIZE;
+        if (windowIndex == 0) {
+            windowFull = true;
+        }
+
+        // 计算平滑后的位置
+        float smoothedLat = 0;
+        float smoothedLon = 0;
+        int count = windowFull ? TRAJECTORY_WINDOW_SIZE : windowIndex;
+        
+        if (count > 0) {
+            // 使用加权移动平均
+            float totalWeight = 0;
+            for (int i = 0; i < count; i++) {
+                int idx = (windowIndex - 1 - i + TRAJECTORY_WINDOW_SIZE) % TRAJECTORY_WINDOW_SIZE;
+                float weight = (count - i) / (float)count; // 较新的数据权重更大
+                smoothedLat += latitudeWindow[idx] * weight;
+                smoothedLon += longitudeWindow[idx] * weight;
+                totalWeight += weight;
+            }
+            smoothedLat /= totalWeight;
+            smoothedLon /= totalWeight;
+            
+            // 添加平滑后的轨迹点
+            trajectoryPoints.add(new float[]{smoothedLat, smoothedLon});
+        } else {
+            // 如果没有历史数据，直接添加当前点
+            trajectoryPoints.add(new float[]{latitude, longitude});
+        }
     }
 
     // 获取记录的轨迹点
@@ -182,24 +213,31 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // 重写EKF相关变量
     private Timer ekfTimer;
-    private static final int EKF_UPDATE_INTERVAL = 200; // 更快的更新频率
+    private static final int EKF_UPDATE_INTERVAL = 100; // 更快的更新频率
     private LatLng wifiLocation = null;
     private long lastWifiUpdateTime = 0;
-    private static final long WIFI_DATA_EXPIRY = 10000; // WiFi数据10秒内有效
+    private static final long WIFI_DATA_EXPIRY = 5000; // WiFi数据5秒内有效
     
     // EKF状态权重
-    private static final float GNSS_WEIGHT = 0.30f;
-    private static final float PDR_WEIGHT = 0.40f;
-    private static final float WIFI_WEIGHT = 0.30f;
+    private static final float GNSS_WEIGHT = 0.35f;
+    private static final float PDR_WEIGHT = 0.45f;
+    private static final float WIFI_WEIGHT = 0.20f; // 降低WiFi权重
 
     // 步伐检测相关变量
     private long lastStepTime = 0;
-    private static final long MIN_STEP_INTERVAL = 500; // 最小步伐间隔(毫秒)
-    private static final float STEP_THRESHOLD = 0.35f; // 步伐峰值阈值
+    private static final long MIN_STEP_INTERVAL = 300; // 降低最小步伐间隔
+    private static final float STEP_THRESHOLD = 0.30f; // 调整步伐峰值阈值
     private boolean isAscending = false;
     private double lastPeakValue = 0;
-    private final double[] recentPeaks = new double[3];
+    private final double[] recentPeaks = new double[5]; // 增加峰值历史记录
     private int peakIndex = 0;
+
+    // 轨迹平滑相关变量
+    private static final int TRAJECTORY_WINDOW_SIZE = 5;
+    private final float[] latitudeWindow = new float[TRAJECTORY_WINDOW_SIZE];
+    private final float[] longitudeWindow = new float[TRAJECTORY_WINDOW_SIZE];
+    private int windowIndex = 0;
+    private boolean windowFull = false;
 
     // 保存最后的PDR位置用于融合
     private float lastPdrLatitude = 0;

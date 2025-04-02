@@ -1,6 +1,7 @@
 package com.example.ekf;
 
 import com.google.android.gms.maps.model.LatLng;
+import android.util.Log;
 
 /**
  * 扩展卡尔曼滤波器(EKF)类用于融合GNSS、PDR和WiFi定位数据
@@ -44,7 +45,7 @@ public class EKF {
         // 调整过程噪声协方差矩阵 - 降低PDR的过程噪声
         Q[0][0] = 0.005; // x位置过程噪声 (降低)
         Q[1][1] = 0.005; // y位置过程噪声 (降低)
-        Q[2][2] = 0.01; // 航向过程噪声 (保持不变)
+        Q[2][2] = 0.005; // 航向过程噪声 (降低，使方向更稳定)
         
         // 调整GNSS测量噪声协方差 - 增加，因为GNSS在室内或城市峡谷误差较大
         RGNSS[0][0] = 10.0; // x位置测量噪声 (增加)
@@ -64,11 +65,22 @@ public class EKF {
         if (initialLatLng != null) {
             state[0] = 0; // 初始x相对坐标设为0
             state[1] = 0; // 初始y相对坐标设为0
+            
+            // 对初始航向角进行标准化
+            while (initialHeading > Math.PI) initialHeading -= 2 * Math.PI;
+            while (initialHeading < -Math.PI) initialHeading += 2 * Math.PI;
+            
             state[2] = initialHeading;
+            
+            // 降低航向角的初始不确定性
+            P[2][2] = 0.1;  // 航向角初始协方差设为较小值
             
             this.initialPosition = initialLatLng;
             this.fusedPosition = initialLatLng;
             isInitialized = true;
+            
+            Log.d("EKF", String.format("EKF初始化完成 - 初始位置: [%.6f, %.6f], 初始航向: %.2f°", 
+                    initialLatLng.latitude, initialLatLng.longitude, Math.toDegrees(initialHeading)));
         }
     }
     
@@ -80,25 +92,49 @@ public class EKF {
     public void predict(double stepLength, double headingChange) {
         if (!isInitialized) return;
         
-        // 更新状态向量
-        double heading = state[2] + headingChange;
-        state[0] += stepLength * Math.cos(heading);
-        state[1] += stepLength * Math.sin(heading);
-        state[2] = heading;
+        // 限制航向变化幅度
+        while (headingChange > Math.PI) headingChange -= 2 * Math.PI;
+        while (headingChange < -Math.PI) headingChange += 2 * Math.PI;
         
-        // 计算状态转移雅可比矩阵
+        // 限制单次航向变化不超过90度
+        if (Math.abs(headingChange) > Math.PI/2) {
+            headingChange = Math.signum(headingChange) * Math.PI/2;
+        }
+        
+        // 更新状态
+        state[0] += stepLength * Math.cos(state[2]);
+        state[1] += stepLength * Math.sin(state[2]);
+        state[2] += headingChange;
+        
+        // 标准化航向角
+        while (state[2] > Math.PI) state[2] -= 2 * Math.PI;
+        while (state[2] < -Math.PI) state[2] += 2 * Math.PI;
+        
+        // 更新状态协方差
+        double cosHeading = Math.cos(state[2]);
+        double sinHeading = Math.sin(state[2]);
+        
+        // 计算雅可比矩阵
         double[][] F = new double[3][3];
-        F[0][0] = 1.0;
-        F[0][2] = -stepLength * Math.sin(heading);
-        F[1][1] = 1.0;
-        F[1][2] = stepLength * Math.cos(heading);
-        F[2][2] = 1.0;
+        F[0][0] = 1;
+        F[0][1] = 0;
+        F[0][2] = -stepLength * sinHeading;
+        F[1][0] = 0;
+        F[1][1] = 1;
+        F[1][2] = stepLength * cosHeading;
+        F[2][0] = 0;
+        F[2][1] = 0;
+        F[2][2] = 1;
         
-        // 更新协方差矩阵: P = F*P*F^T + Q
-        P = addMatrices(multiplyMatrices(multiplyMatrices(F, P), transpose(F)), Q);
+        // 更新状态协方差
+        P = multiplyMatrices(F, P);
+        P = addMatrices(P, Q);
         
         // 更新融合位置
         updateFusedPosition();
+        
+        Log.d("EKF", String.format("EKF预测更新 - 步长: %.2fm, 航向变化: %.2f°, 当前位置: [%.6f, %.6f]", 
+                stepLength, Math.toDegrees(headingChange), fusedPosition.latitude, fusedPosition.longitude));
     }
     
     /**
@@ -176,9 +212,26 @@ public class EKF {
         H[0][0] = 1.0; // x位置
         H[1][1] = 1.0; // y位置
         
+        // 动态调整WiFi测量噪声协方差
+        double[][] currentRWiFi = new double[2][2];
+        currentRWiFi[0][0] = RWiFi[0][0];
+        currentRWiFi[1][1] = RWiFi[1][1];
+        
+        // 计算与当前状态的差异
+        double dx = z[0] - state[0];
+        double dy = z[1] - state[1];
+        double distance = Math.sqrt(dx*dx + dy*dy);
+        
+        // 如果WiFi位置与当前状态差异较大，增加测量噪声
+        if (distance > 5.0) {
+            double factor = Math.min(distance / 5.0, 3.0); // 最多增加3倍
+            currentRWiFi[0][0] *= factor;
+            currentRWiFi[1][1] *= factor;
+        }
+        
         // 计算卡尔曼增益
         double[][] PHt = multiplyMatrices(P, transpose(H));
-        double[][] HPHt_R = addMatrices(multiplyMatrices(multiplyMatrices(H, P), transpose(H)), RWiFi);
+        double[][] HPHt_R = addMatrices(multiplyMatrices(multiplyMatrices(H, P), transpose(H)), currentRWiFi);
         double[][] inv_HPHt_R = inverse(HPHt_R);
         
         // 确认矩阵求逆成功
@@ -193,8 +246,8 @@ public class EKF {
         y[0] = z[0] - state[0];
         y[1] = z[1] - state[1];
         
-        // 限制残差大小，防止WiFi位置突变
-        double maxResidual = 10.0; // WiFi最大允许残差(米)，设置稍大因为WiFi定位本身误差较大
+        // 使用自适应残差限制
+        double maxResidual = Math.min(5.0 + Math.sqrt(P[0][0] + P[1][1]), 10.0);
         if (Math.abs(y[0]) > maxResidual) {
             y[0] = y[0] > 0 ? maxResidual : -maxResidual;
         }

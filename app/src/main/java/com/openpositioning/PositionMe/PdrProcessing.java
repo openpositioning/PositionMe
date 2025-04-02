@@ -80,8 +80,19 @@ public class PdrProcessing {
     // 调整卡尔曼滤波器参数以更快响应变化
     private float headingState = 0;
     private float headingCovariance = 1.0f;
-    private static final float Q = 0.2f;  // 增大过程噪声，使滤波器更快响应变化
-    private static final float R = 0.1f;  // 保持测量噪声不变
+    private static final float Q = 0.05f;  // 降低过程噪声，使滤波器更稳定
+    private static final float R = 0.15f;  // 增加测量噪声，减少传感器噪声影响
+    
+    // 磁力计校准相关变量
+    private float[] magnetometerBuffer = new float[10];  // 存储最近10个磁力计读数
+    private int magnetometerIndex = 0;
+    private boolean isMagnetometerCalibrated = false;
+    private static final float MAGNETOMETER_THRESHOLD = 0.5f;  // 磁力计数据稳定性阈值
+    
+    // 初始方向校准等待时间
+    private static final int CALIBRATION_WAIT_TIME = 2000;  // 2秒
+    private long calibrationStartTime = 0;
+    private boolean isCalibrating = false;
 
     // WGS84椭球体参数
     private static final double WGS84_A = 6378137.0;  // 长半轴
@@ -239,6 +250,30 @@ public class PdrProcessing {
      * 更新PDR坐标，包含WGS84转换
      */
     public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
+        // 初始方向校准
+        if (!isCalibrating) {
+            calibrationStartTime = currentStepEnd;
+            isCalibrating = true;
+        }
+        
+        // 在校准期间收集磁力计数据
+        if (isCalibrating && currentStepEnd - calibrationStartTime < CALIBRATION_WAIT_TIME) {
+            // 收集磁力计数据
+            magnetometerBuffer[magnetometerIndex] = headingRad;
+            magnetometerIndex = (magnetometerIndex + 1) % magnetometerBuffer.length;
+            
+            // 检查磁力计数据稳定性
+            if (magnetometerIndex == 0) {
+                float variance = calculateVariance(magnetometerBuffer);
+                if (variance < MAGNETOMETER_THRESHOLD) {
+                    isMagnetometerCalibrated = true;
+                    // 使用稳定的磁力计数据作为初始方向
+                    headingState = calculateMean(magnetometerBuffer);
+                    headingCovariance = 0.1f;  // 降低初始不确定性
+                }
+            }
+        }
+        
         // 使用卡尔曼滤波处理航向角
         float filteredHeading = kalmanFilter(headingRad);
         
@@ -591,6 +626,30 @@ public class PdrProcessing {
 
         //Return average step length
         return averageStepLength;
+    }
+
+    /**
+     * 计算数组的方差
+     */
+    private float calculateVariance(float[] data) {
+        float mean = calculateMean(data);
+        float sumSquaredDiff = 0;
+        for (float value : data) {
+            float diff = value - mean;
+            sumSquaredDiff += diff * diff;
+        }
+        return sumSquaredDiff / data.length;
+    }
+    
+    /**
+     * 计算数组的平均值
+     */
+    private float calculateMean(float[] data) {
+        float sum = 0;
+        for (float value : data) {
+            sum += value;
+        }
+        return sum / data.length;
     }
 
 }

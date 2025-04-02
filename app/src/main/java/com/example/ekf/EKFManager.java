@@ -50,14 +50,14 @@ public class EKFManager {
     
     // 位置平滑处理
     private LatLng smoothedPosition = null; // 平滑后的位置
-    private static final double SMOOTHING_FACTOR = 0.3; // 平滑因子(0-1)，值越小平滑效果越强
+    private static final double SMOOTHING_FACTOR = 0.15; // 降低平滑因子以增强平滑效果
+    private LatLng lastFusedPosition = null; // 上次融合后的位置
     
     // 位移限制相关参数
-    private static final double MAX_DISPLACEMENT_PER_UPDATE = 1.5; // 每次更新最大位移(米)
-    private static final long DISPLACEMENT_TIME_WINDOW = 500; // 位移时间窗口(毫秒)
-    private long lastDisplacementTime = 0; // 上次发生位移的时间
+    private static final double MAX_DISPLACEMENT_PER_UPDATE = 1.0; // 降低每次更新最大位移
+    private static final long DISPLACEMENT_TIME_WINDOW = 1000; // 增加位移时间窗口
+    private long lastDisplacementTime = 0;
     private double accumulatedDisplacement = 0; // 累积位移(米)
-    private LatLng lastFusedPosition = null; // 上次融合后的位置
     
     // 速度限制参数
     private static final double MAX_SPEED = 2.0; // 最大允许速度(米/秒)
@@ -72,6 +72,12 @@ public class EKFManager {
     private int displacementHistoryIndex = 0; // 位移历史记录索引
     private int displacementHistoryCount = 0; // 位移历史记录计数
     private float lastOrientation = 0; // 上次GNSS的航向角
+    
+    // WiFi相关参数
+    private static final double WIFI_MAX_SPEED = 2.0; // WiFi最大允许速度(米/秒)
+    private static final double WIFI_MIN_ACCURACY = 5.0; // WiFi最小精度要求(米)
+    private static final long WIFI_MIN_UPDATE_INTERVAL = 2000; // WiFi最小更新间隔(毫秒)
+    private long lastWifiUpdateTime = 0;
     
     /**
      * 私有构造函数，遵循单例模式
@@ -306,14 +312,20 @@ public class EKFManager {
      */
     public void updateWifiPosition(LatLng wifiPosition) {
         if (!isInitialized || !isEkfEnabled || wifiPosition == null) {
-            this.lastWifiPosition = wifiPosition;  // 即使未初始化也保存最新的WiFi位置
+            this.lastWifiPosition = wifiPosition;
+            return;
+        }
+        
+        long currentTime = System.currentTimeMillis();
+        
+        // 检查更新间隔
+        if (currentTime - lastWifiUpdateTime < WIFI_MIN_UPDATE_INTERVAL) {
             return;
         }
         
         // 如果处于静止状态，减小WiFi更新的影响
         if (isStaticState) {
-            // 静止状态下，仅小幅度修正位置，不进行大范围调整
-            if (Math.random() > 0.1) { // 静止时仅使用10%的WiFi数据
+            if (Math.random() > 0.05) { // 静止时仅使用5%的WiFi数据
                 return;
             }
         }
@@ -321,18 +333,23 @@ public class EKFManager {
         // 检查WiFi位置跳变
         if (lastWifiPosition != null) {
             double distance = calculateDistance(lastWifiPosition, wifiPosition);
-            double timeElapsed = (System.currentTimeMillis() - lastDisplacementTime) / 1000.0; // 转换为秒
+            double timeElapsed = (currentTime - lastWifiUpdateTime) / 1000.0;
             
             if (timeElapsed > 0) {
                 double wifiSpeed = distance / timeElapsed;
                 
-                // 如果WiFi速度明显高于当前速度，可能是位置跳变
-                if (wifiSpeed > MAX_SPEED && wifiSpeed > currentSpeed * 2) {
-                    Log.d(TAG, "检测到WiFi位置跳变: " + wifiSpeed + "m/s > " + MAX_SPEED + "m/s，减小WiFi权重");
-                    // 减小WiFi位置权重，这里简单地通过随机筛选来实现
-                    if (Math.random() > 0.1) { // 只有10%的跳变数据会被使用
-                        return;
-                    }
+                // 如果WiFi速度超过阈值，可能是位置跳变
+                if (wifiSpeed > WIFI_MAX_SPEED) {
+                    Log.d(TAG, "检测到WiFi位置跳变: " + wifiSpeed + "m/s > " + WIFI_MAX_SPEED + "m/s，跳过此次更新");
+                    return;
+                }
+                
+                // 如果位移过大，进行线性插值
+                if (distance > MAX_DISPLACEMENT_PER_UPDATE) {
+                    double ratio = MAX_DISPLACEMENT_PER_UPDATE / distance;
+                    double interpolatedLat = lastWifiPosition.latitude + (wifiPosition.latitude - lastWifiPosition.latitude) * ratio;
+                    double interpolatedLng = lastWifiPosition.longitude + (wifiPosition.longitude - lastWifiPosition.longitude) * ratio;
+                    wifiPosition = new LatLng(interpolatedLat, interpolatedLng);
                 }
             }
         }
@@ -340,6 +357,8 @@ public class EKFManager {
         // 更新EKF使用WiFi数据
         ekf.updateWithWiFi(wifiPosition);
         this.lastWifiPosition = wifiPosition;
+        this.lastWifiUpdateTime = currentTime;
+        
         Log.d(TAG, "EKF更新: 使用WiFi位置 " + wifiPosition);
     }
     
