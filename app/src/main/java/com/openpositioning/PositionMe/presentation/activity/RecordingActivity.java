@@ -46,7 +46,7 @@ public class RecordingActivity extends AppCompatActivity {
         setContentView(R.layout.activity_recording);
 
         if (savedInstanceState == null) {
-            showStartLocationScreen(); // Start with the user selecting the start location
+            showRecordingScreen();
         }
 
         // Keep screen on

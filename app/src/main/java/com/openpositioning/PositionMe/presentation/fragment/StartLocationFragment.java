@@ -167,7 +167,7 @@ public class StartLocationFragment extends Fragment {
                 float chosenLat = startPosition[0];
                 float chosenLon = startPosition[1];
 
-                // If the Activity is RecordingActivity
+                // DEDUCTED // // No longer used  // //If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
                     // Start sensor recording + set the start location
                     sensorFusion.startRecording();
@@ -176,7 +176,7 @@ public class StartLocationFragment extends Fragment {
                     // Now switch to the recording screen
                     ((RecordingActivity) requireActivity()).showRecordingScreen();
 
-                    // If the Activity is ReplayActivity
+                // Still using // If the Activity is ReplayActivity
                 } else if (requireActivity() instanceof ReplayActivity) {
                     // *Do not* cast to RecordingActivity here
                     // Just call the Replay method

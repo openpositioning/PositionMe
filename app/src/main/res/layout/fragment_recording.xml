@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- TOP SECTION: Status & Calibration Controls -->
+    <!-- TOP SECTION: Calibration & Other Controls -->
     <LinearLayout
         android:id="@+id/topSection"
         android:layout_width="0dp"
@@ -18,13 +18,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Extracted Status Fragment Container -->
-        <FrameLayout
-            android:id="@+id/recordingStatusFragmentContainer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
-        <!-- Control Row with buttons (Reorganized Layout) -->
+        <!-- Control Row with Buttons -->
         <LinearLayout
             android:id="@+id/controlRow"
             android:layout_width="match_parent"
@@ -98,7 +92,7 @@
                 app:iconPadding="0dp" />
         </LinearLayout>
 
-        <!-- ⬇️ New CalibrationFragment Container (Initially GONE) -->
+        <!-- Calibration Fragment Container (Initially GONE) -->
         <FrameLayout
             android:id="@+id/calibrationFragmentContainer"
             android:layout_width="match_parent"
@@ -116,7 +110,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- BOTTOM SECTION: Reserved -->
+    <!-- BOTTOM SECTION: Reserved for Other Controls -->
     <LinearLayout
         android:id="@+id/controlLayout"
         android:layout_width="0dp"
@@ -124,6 +118,16 @@
         android:orientation="vertical"
         android:padding="12dp"
         android:background="#AAFFFFFF"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- CALL-OUT FRAGMENT CONTAINER for Status (Initially GONE) -->
+    <FrameLayout
+        android:id="@+id/recordingStatusFragmentContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />

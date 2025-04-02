@@ -1,6 +1,5 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
-import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -10,9 +9,10 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -37,6 +37,8 @@ public class RecordingFragment extends Fragment {
     private static final String TAG = "RecordingFragment";
 
     private Button completeButton;
+    // NEW: Info button to toggle call-out fragment
+    private Button moreInfoButton;
 
     private TrajectoryMapFragment trajectoryMapFragment;
     private CalibrationFragment calibrationFragment;
@@ -81,7 +83,8 @@ public class RecordingFragment extends Fragment {
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_recording, container, false);
     }
 
@@ -89,9 +92,15 @@ public class RecordingFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        completeButton = view.findViewById(R.id.finishRecordingButton);
+        sensorFusion.startRecording();
 
-        trajectoryMapFragment = (TrajectoryMapFragment) getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
+        completeButton = view.findViewById(R.id.finishRecordingButton);
+        // NEW: Initialize the info button for toggling call-out fragment
+        moreInfoButton = view.findViewById(R.id.moreInfoButton);
+        final View callOutContainer = view.findViewById(R.id.recordingStatusFragmentContainer);
+
+        trajectoryMapFragment = (TrajectoryMapFragment) getChildFragmentManager()
+                .findFragmentById(R.id.trajectoryMapFragmentContainer);
         if (trajectoryMapFragment == null) {
             trajectoryMapFragment = new TrajectoryMapFragment.RecordingTrajectoryMapFragment();
             getChildFragmentManager()
@@ -100,7 +109,8 @@ public class RecordingFragment extends Fragment {
                     .commitNow();
         }
 
-        calibrationFragment = (CalibrationFragment) getChildFragmentManager().findFragmentById(R.id.calibrationFragmentContainer);
+        calibrationFragment = (CalibrationFragment) getChildFragmentManager()
+                .findFragmentById(R.id.calibrationFragmentContainer);
         if (calibrationFragment == null) {
             calibrationFragment = CalibrationFragment.newInstance();
             getChildFragmentManager()
@@ -112,7 +122,8 @@ public class RecordingFragment extends Fragment {
         calibrationFragment.setDataFileManager(dataFileManager);
         calibrationFragment.setTrajectoryMapFragment(trajectoryMapFragment);
 
-        recordingStatusFragment = (StatusFragment) getChildFragmentManager().findFragmentById(R.id.recordingStatusFragmentContainer);
+        recordingStatusFragment = (StatusFragment) getChildFragmentManager()
+                .findFragmentById(R.id.recordingStatusFragmentContainer);
         if (recordingStatusFragment == null) {
             recordingStatusFragment = new StatusFragment();
             getChildFragmentManager()
@@ -120,6 +131,19 @@ public class RecordingFragment extends Fragment {
                     .replace(R.id.recordingStatusFragmentContainer, recordingStatusFragment)
                     .commitNow();
         }
+        // Initially hide the call-out container
+        callOutContainer.setVisibility(View.GONE);
+
+        // NEW: Set click listener on the info button to toggle the call-out fragment
+        moreInfoButton.setOnClickListener(v -> {
+            if (callOutContainer.getVisibility() == View.GONE) {
+                // Slide up animation to show call-out
+                callOutContainer.setVisibility(View.VISIBLE);
+            } else {
+                // Slide down animation to hide call-out
+                callOutContainer.setVisibility(View.GONE);
+            }
+        });
 
         Button toggleAdvancedMenuButton = view.findViewById(R.id.toggleCalibrationMenuButton);
         View calibrationContainer = view.findViewById(R.id.calibrationFragmentContainer);
@@ -203,7 +227,8 @@ public class RecordingFragment extends Fragment {
             sensorFusion.getWiFiPositioning().request(fingerprint, new com.openpositioning.PositionMe.data.remote.WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    Log.d(TAG, "WiFi Positioning Success: lat=" + wifiLocation.latitude + ", lon=" + wifiLocation.longitude + ", floor=" + floor);
+                    Log.d(TAG, "WiFi Positioning Success: lat=" + wifiLocation.latitude +
+                            ", lon=" + wifiLocation.longitude + ", floor=" + floor);
                 }
                 @Override
                 public void onError(String message) {
