@@ -462,16 +462,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                         // --- PF 辅助 EKF 逻辑（仅在室内场景启用）---
                         if (particleFilter != null) {
                             particleFilter.predict(stepLen, deltaHeading);
-                            if (pendingWifiPosition != null &&
-                                    SystemClock.uptimeMillis() - wifiPositionTimestamp < 2000) {
-                                double[] wifiENU = CoordinateTransform.geodeticToEnu(
-                                        pendingWifiPosition.latitude,
-                                        pendingWifiPosition.longitude,
-                                        0.0,
-                                        refLat, refLon, refAlt
-                                );
-                                particleFilter.updateWiFi(wifiENU[0], wifiENU[1]);
-                            }
+//                            if (pendingWifiPosition != null &&
+//                                    SystemClock.uptimeMillis() - wifiPositionTimestamp < 2000) {
+//                                double[] wifiENU = CoordinateTransform.geodeticToEnu(
+//                                        pendingWifiPosition.latitude,
+//                                        pendingWifiPosition.longitude,
+//                                        0.0,
+//                                        refLat, refLon, refAlt
+//                                );
+//                                particleFilter.updateWiFi(wifiENU[0], wifiENU[1]);
+//                            }
                             if (stepCounter % 5 == 0) {
                                 particleFilter.resample();
                             }
@@ -540,12 +540,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                         double lon = gnssLocation.getLongitude();
                         double alt = gnssLocation.getAltitude();
                         double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, alt, refLat, refLon, refAlt);
-                        extendedKalmanFilter.updateGNSS(enuCoords[0], enuCoords[1], enuCoords[2], 1.0);
+                       // extendedKalmanFilter.updateGNSS(enuCoords[0], enuCoords[1], enuCoords[2], 1.0);
                     }
                     // 从融合算法中获取修正后的定位结果
                     if (extendedKalmanFilter != null) {
                         LatLng fusedPos = extendedKalmanFilter.getEstimatedPosition(refLat, refLon, refAlt);
-                        pathView.drawTrajectory(new float[]{(float) fusedPos.latitude, (float) fusedPos.longitude});
+                        //pathView.drawTrajectory(new float[]{(float) fusedPos.latitude, (float) fusedPos.longitude});
                         trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
                                 .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                 .setX((float) fusedPos.latitude)
@@ -596,6 +596,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     extendedKalmanFilter.update(enuCoords[0], enuCoords[1], penaltyFactor);
                     Log.d("SensorFusion", "EKF updated with WiFi: penaltyFactor=" + penaltyFactor);
+                }
+                if (particleFilter != null) {
+                    particleFilter.updateWiFi(enuCoords[0], enuCoords[1]);
+                    Log.d("SensorFusion", "PF updated with WiFi");
                 }
             } else if (useGNSS && gnssLocation != null) {
                 double lat = gnssLocation.getLatitude();

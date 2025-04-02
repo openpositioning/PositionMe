@@ -87,13 +87,13 @@ public class EKF {
         // partial(newX)/partial(y) = 0
         // partial(newX)/partial(z) = 0
         // partial(newX)/partial(theta) = -stepLen*sin(theta)
-        double f00 = 1;    double f01 = 0;    double f02 = 0;    double f03 = stepLen*Math.sin(newTheta);
+        double f00 = 1;    double f01 = 0;    double f02 = 0;    double f03 = stepLen*Math.cos(newTheta);
 
         // partial(newY)/partial(x) = 0
         // partial(newY)/partial(y) = 1
         // partial(newY)/partial(z) = 0
         // partial(newY)/partial(theta) = stepLen*cos(theta)
-        double f10 = 0;    double f11 = 1;    double f12 = 0;    double f13 = -stepLen*Math.cos(newTheta);
+        double f10 = 0;    double f11 = 1;    double f12 = 0;    double f13 = -stepLen*Math.sin(newTheta);
 
         // z 不变
         double f20 = 0;    double f21 = 0;    double f22 = 1;    double f23 = 0;
