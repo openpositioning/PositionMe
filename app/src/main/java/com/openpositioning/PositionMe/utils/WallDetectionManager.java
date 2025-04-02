@@ -24,7 +24,7 @@ import java.util.Map;
  * methods to check if a trajectory would intersect with walls. It supports
  * multiple buildings and floors.
  *
- * @author
+ * @author Nick Manturov
  */
 public class WallDetectionManager extends BuildingPolygon{
     private static final String TAG = "WallDetectionManager";
