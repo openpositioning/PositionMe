@@ -593,69 +593,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
-    /**
-     * Method to combine WiFi, GNSS, and PDR using EKF.
-     * Written by Marco Bancalari-Ruiz
-     */
-
-    public LatLng EKF_recording(){
-
-        createWifiPositioningRequest();
-
-        //Initialise local variables
-        float wifiLat = this.latitude;
-        float wifiLng = this.longitude;
-        float[] PDRMovement = PdrProcessing.getPDRMovement();
-        float pdrDeltaX = PDRMovement[0];
-        float pdrDeltaY = PDRMovement[1];
-
-        // Initialize on first valid WiFi reading
-        if (!isInitialized && wifiLat != 0 && wifiLng != 0) {
-            initialLocation = new Location("");
-            initialLocation.setLatitude(wifiLat);
-            initialLocation.setLongitude(wifiLng);
-            state[0] = 0;
-            state[1] = 0;
-            isInitialized = true;
-            return new LatLng(wifiLat, wifiLng);
-        }
-
-        if (!isInitialized) return null;
-
-        // Prediction step (PDR)
-        double[][] F = {{1, 0}, {0, 1}}; // State transition matrix
-        double[][] Q = {{0.1, 0}, {0, 0.1}}; // Process noise
-
-        state[0] += pdrDeltaX;
-        state[1] += pdrDeltaY;
-        covariance = matrixAdd(matrixMultiply(F, matrixMultiply(covariance, transpose(F))), Q);
-
-        // Update step (WiFi)
-        double[] measurement = {wifiLat, wifiLng};
-        double[] predictedLL = metersToLatLng(state[0], state[1]);
-        double[][] H = computeJacobian();
-        double[][] R = {{1e-6, 0}, {0, 1e-6}}; // Measurement noise
-
-        // Kalman gain
-        double[][] S = matrixAdd(matrixMultiply(H, matrixMultiply(covariance, transpose(H))), R);
-        double[][] K = matrixMultiply(matrixMultiply(covariance, transpose(H)), inverse(S));
-
-        // State update
-        double[] innovation = {
-                measurement[0] - predictedLL[0],
-                measurement[1] - predictedLL[1]
-        };
-        double[] update = matrixVectorMultiply(K, innovation);
-        state[0] += update[0];
-        state[1] += update[1];
-
-        // Covariance update
-        double[][] I = {{1, 0}, {0, 1}};
-        covariance = matrixMultiply(matrixSubtract(I, matrixMultiply(K, H)), covariance);
-
-        return new LatLng(predictedLL[0], predictedLL[1]);
-    }
-
     // Code by Marco Bancalari-Ruiz (Assisted by Jamie Arnott)
     /**
      * Method to compute the fused position using GNSS, WiFi and PDR data using an
@@ -719,7 +656,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // === Update step (WiFi) ===
         if (wifiMeters != null) {
-            double[][] R_wifi = {{15.0, 0}, {0, 15.0}}; // WiFi = only accurate indoors
+            double[][] R_wifi = {{20.0, 0}, {0, 20.0}}; // WiFi = only accurate indoors
             if (isOutlier(wifiMeters, new double[]{state[0], state[1]}, R_wifi)) {
                 Log.d("EKF", "WiFi fingerprint outlier detected");
                 //Increase noise covariance to reduce influence of outlier
@@ -728,7 +665,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // Option 2: Skip update entirely
                 // continue; // Uncomment this line to skip the update
             } else {
-                R_wifi = new double[][]{{10.0, 0}, {0, 10.0}};
+                R_wifi = new double[][]{{20.0, 0}, {0, 20.0}};
             }
             performMeasurementUpdate(wifiMeters, R_wifi);
         }
@@ -759,7 +696,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             );
 
             // Apply correction if deviation exceeds threshold
-            double correctionThreshold = 10.0; // Threshold in meters
+            double correctionThreshold = 2; // Threshold in meters
             if (deviation > correctionThreshold) {
                 Log.d("EKF", "Applying periodic correction using external anchor.");
                 performMeasurementUpdate(anchorPosition, new double[][]{{5.0, 0}, {0, 5.0}});
@@ -780,7 +717,9 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     private void performMeasurementUpdate(double[] measurement, double[][] R) {
         double maxDisplacement = 5.0;
-        double[][] H = {{1, 0}, {0, 1}};
+        // Convert state (meters) to current latitude
+        double currentLat = initialLocation.getLatitude() + (state[1] / 6371e3) * (180 / Math.PI);
+        double[][] H = {{1, 0}, {0, 1}};//computeJacobian(currentLat);
 
         double[] predicted = {state[0], state[1]};
         double[] innovation = {
@@ -834,12 +773,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         return new double[]{lat, lng};
     }
 
-    private static double[][] computeJacobian() {
-        double R = 6371e3;
-        double cosLat = Math.cos(Math.toRadians(initialLocation.getLatitude()));
+    private static double[][] computeJacobian(double currentLatDegrees) {
+        double R = 6371e3; // Earth radius in meters
+        double cosLat = Math.cos(Math.toRadians(currentLatDegrees));
         return new double[][] {
-                {0, 180/(Math.PI * R)},
-                {180/(Math.PI * R * cosLat), 0}
+                // Derivatives of [latitude, longitude] w.r.t. [x (east), y (north)] in meters
+                {0, 180.0 / (Math.PI * R)},          // dLat/dx, dLat/dy
+                {180.0 / (Math.PI * R * cosLat), 0}  // dLon/dx, dLon/dy
         };
     }
 
