@@ -194,8 +194,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // 步伐检测相关变量
     private long lastStepTime = 0;
-    private static final long MIN_STEP_INTERVAL = 400; // 最小步伐间隔(毫秒)
-    private static final float STEP_THRESHOLD = 0.28f; // 步伐峰值阈值
+    private static final long MIN_STEP_INTERVAL = 500; // 最小步伐间隔(毫秒)
+    private static final float STEP_THRESHOLD = 0.35f; // 步伐峰值阈值
     private boolean isAscending = false;
     private double lastPeakValue = 0;
     private final double[] recentPeaks = new double[3];

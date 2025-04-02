@@ -34,9 +34,9 @@ public class PdrProcessing {
     // Number of samples (0.01 seconds)
     private static final int accelSamples = 100;
     // Threshold used to detect significant movement
-    private static final float movementThreshold = 0.3f;
+    private static final float movementThreshold = 0.4f;
     // Threshold under which movement is considered non-existent
-    private static final float epsilon = 0.2f;
+    private static final float epsilon = 0.25f;
     //endregion
 
     //region Instance variables
@@ -348,7 +348,7 @@ public class PdrProcessing {
         double minAccel = Collections.min(filteredAccelMagnitude);
         
         // 最小加速度差异阈值，避免静止状态下微小振动导致的错误步长计算
-        double accelThreshold = 0.3;
+        double accelThreshold = 0.45;
         if ((maxAccel - minAccel) < accelThreshold) {
             Log.d("PdrProcessing", String.format("加速度差异(%.2f)低于阈值(%.2f)，使用默认步长", 
                     (maxAccel - minAccel), accelThreshold));
@@ -383,25 +383,58 @@ public class PdrProcessing {
             return accelMagnitude; // 数据点太少，不进行过滤
         }
         
+        // 使用更强的滤波处理
         List<Double> filtered = new ArrayList<>();
+        double sum = 0;
         
-        // 使用中值滤波减少异常值影响
+        // 先计算平均值以检测异常值
+        for (Double value : accelMagnitude) {
+            sum += value;
+        }
+        double mean = sum / accelMagnitude.size();
+        
+        // 计算标准差
+        double variance = 0;
+        for (Double value : accelMagnitude) {
+            variance += Math.pow(value - mean, 2);
+        }
+        double stdDev = Math.sqrt(variance / accelMagnitude.size());
+        double threshold = stdDev * 2.0; // 设置异常值阈值为2倍标准差
+        
+        // 排除异常值并进行中值滤波
         for (int i = 1; i < accelMagnitude.size() - 1; i++) {
-            // 取当前点和相邻两点
-            List<Double> window = new ArrayList<>();
-            window.add(accelMagnitude.get(i-1));
-            window.add(accelMagnitude.get(i));
-            window.add(accelMagnitude.get(i+1));
-            
-            // 排序并取中值
-            Collections.sort(window);
-            filtered.add(window.get(1));
+            // 检查是否是异常值
+            if (Math.abs(accelMagnitude.get(i) - mean) > threshold) {
+                // 异常值用相邻两点的平均值替代
+                filtered.add((accelMagnitude.get(i-1) + accelMagnitude.get(i+1)) / 2);
+            } else {
+                // 非异常值使用中值滤波
+                List<Double> window = new ArrayList<>();
+                window.add(accelMagnitude.get(i-1));
+                window.add(accelMagnitude.get(i));
+                window.add(accelMagnitude.get(i+1));
+                
+                Collections.sort(window);
+                filtered.add(window.get(1));
+            }
         }
         
-        // 添加首尾两点
+        // 处理首尾两点
         if (accelMagnitude.size() > 0) {
-            filtered.add(0, accelMagnitude.get(0));
-            filtered.add(accelMagnitude.get(accelMagnitude.size() - 1));
+            // 检查首点是否是异常值
+            if (accelMagnitude.size() > 1 && Math.abs(accelMagnitude.get(0) - mean) > threshold) {
+                filtered.add(0, accelMagnitude.get(1)); // 用第二点替代
+            } else {
+                filtered.add(0, accelMagnitude.get(0));
+            }
+            
+            // 检查尾点是否是异常值
+            int lastIdx = accelMagnitude.size() - 1;
+            if (accelMagnitude.size() > 1 && Math.abs(accelMagnitude.get(lastIdx) - mean) > threshold) {
+                filtered.add(accelMagnitude.get(lastIdx - 1)); // 用倒数第二点替代
+            } else {
+                filtered.add(accelMagnitude.get(lastIdx));
+            }
         }
         
         return filtered;

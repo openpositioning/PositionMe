@@ -762,26 +762,34 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
         // 调试：输出PDR原始值
         Log.d("LocationTracking", String.format("PDR原始值: X=%.6f, Y=%.6f", pdrValues[0], pdrValues[1]));
         
-        // Calculate distance travelled
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2) + Math.pow(pdrValues[1] - previousPosY, 2));
+        // 计算PDR移动距离
+        float pdrMoveDist = (float) Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2) + Math.pow(pdrValues[1] - previousPosY, 2));
+        
+        // 总距离计算
+        distance += pdrMoveDist;
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
+        
         // Net pdr movement
         float[] pdrMoved={pdrValues[0]-previousPosX,pdrValues[1]-previousPosY};
         
         // 调试：输出PDR移动量
-        Log.d("LocationTracking", String.format("PDR移动量: dX=%.6f, dY=%.6f", pdrMoved[0], pdrMoved[1]));
+        Log.d("LocationTracking", String.format("PDR移动量: dX=%.6f, dY=%.6f, 距离=%.6f", 
+                pdrMoved[0], pdrMoved[1], pdrMoveDist));
         
-        // if PDR has changed plot new line to indicate user movement
-        if (pdrMoved[0]!=0 ||pdrMoved[1]!=0) {
-            // 调试：PDR位置已更新
-            Log.d("LocationTracking", "PDR位置已更新，更新地图轨迹");
+        // 设置一个最小移动阈值，防止微小抖动导致的误更新
+        final float MIN_MOVE_THRESHOLD = 0.15f; // 最小移动阈值(米)
+        
+        // 只有PDR移动距离超过阈值才更新轨迹
+        if (pdrMoveDist > MIN_MOVE_THRESHOLD) {
+            // 调试：PDR位置已更新且超过移动阈值
+            Log.d("LocationTracking", "PDR移动距离("+pdrMoveDist+"m)超过阈值("+MIN_MOVE_THRESHOLD+"m)，更新地图轨迹");
             
             plotLines(pdrMoved);
             
             // PDR数据更新，SensorFusion内部会自动进行融合计算
         } else {
-            // 调试：PDR位置未变化
-            Log.d("LocationTracking", "PDR位置未变化");
+            // 调试：PDR位置变化太小，不更新轨迹
+            Log.d("LocationTracking", "PDR移动距离("+pdrMoveDist+"m)小于阈值("+MIN_MOVE_THRESHOLD+"m)，不更新轨迹");
         }
         
         // If not initialized, initialize
