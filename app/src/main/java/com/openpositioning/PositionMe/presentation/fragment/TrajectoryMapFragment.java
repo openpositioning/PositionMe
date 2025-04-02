@@ -1,11 +1,19 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.Spinner;
+import com.google.android.material.switchmaterial.SwitchMaterial;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -24,6 +32,18 @@ import com.openpositioning.PositionMe.presentation.trajmap.TrajectoryPlotter;
 import com.openpositioning.PositionMe.presentation.trajmap.TrajectoryPlotter.GnssTrajectoryPlotter;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.*;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import com.google.android.material.button.MaterialButton;
+import java.util.Objects;
+import android.widget.Spinner;
+
 
 public abstract class TrajectoryMapFragment extends Fragment {
 
@@ -54,14 +74,27 @@ public abstract class TrajectoryMapFragment extends Fragment {
     protected LatLng fusionCurrentLocation = new LatLng(0,0);
 
     protected boolean isAutoFloorOn = false;
+    private final List<Marker> emergencyExitMarkers = new ArrayList<>();
+    private final List<Marker> liftMarkers = new ArrayList<>();
+    private final List<Marker> toiletMarkers = new ArrayList<>();
+    private final List<Marker> accessibleRouteMarkers = new ArrayList<>();
+    private final List<Marker> accessibleToiletMarkers = new ArrayList<>();
+    private final List<Marker> drinkingWaterMarkers = new ArrayList<>();
+    private final List<Marker> medicalRoomMarkers = new ArrayList<>();
+    private boolean lastIndoorMapState = false;
 
-    public TrajectoryMapFragment() {}
+
+
+    public TrajectoryMapFragment() {
+        // Required empty public constructor
+    }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
+        // Inflate the layout containing map + map-related UI
         return inflater.inflate(R.layout.fragment_trajectory_map, container, false);
     }
 
@@ -78,11 +111,14 @@ public abstract class TrajectoryMapFragment extends Fragment {
         fusionButton     = view.findViewById(R.id.fusionButton);
         wifiButton       = view.findViewById(R.id.wifiButton);
 
+        // Initialize sensorFusion
         sensorFusion = SensorFusion.getInstance();
         sensorFusion.setTrajectoryMapFragment(this);
 
+        // Hide floor controls initially
         setFloorControlsVisibility(View.GONE);
 
+        // Set up button toggles
         showRawButton.setOnClickListener(v -> setShowRawTrajectory(!isRawTrajectoryVisible()));
         fusionButton.setOnClickListener(v -> setShowFusionTrajectory(!isFusionTrajectoryVisible()));
 
@@ -151,20 +187,39 @@ public abstract class TrajectoryMapFragment extends Fragment {
         map.getUiSettings().setScrollGesturesEnabled(true);
         map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
+        // Initialize Indoor map manager
         indoorMapManager = new IndoorMapManager(map);
     }
 
+    /**
+     * Update the user's "raw" location via the rawTrajectoryPlotter.
+     */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+        // keep track in rawCurrentLocation
         rawCurrentLocation = newLocation;
+
         if (rawTrajectoryPlotter != null) {
             rawTrajectoryPlotter.updateLocation(newLocation, orientation);
         }
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+
+            boolean currentState = indoorMapManager.getIsIndoorMapSet();
+            if (currentState != lastIndoorMapState) {
+                setFloorControlsVisibility(currentState ? View.VISIBLE : View.GONE);
+                lastIndoorMapState = currentState;
+
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
+                //update indoor maker
+                updateAllIndoorMarkers();
+            }
         }
     }
 
+    /**
+     * Update the user's "fusion" location via the fusionTrajectoryPlotter.
+     */
     public void updateFusionLocation(@NonNull LatLng newLocation, float orientation) {
         fusionCurrentLocation = newLocation;
         if (fusionTrajectoryPlotter != null) {
@@ -210,6 +265,10 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (fusionButton != null) {
             fusionButton.setBackgroundTintList(ColorStateList.valueOf(show ? Color.GREEN : Color.GRAY));
         }
+
+        //update indoor maker
+        updateAllIndoorMarkers();
+
     }
 
     protected boolean isRawTrajectoryVisible() {
@@ -230,10 +289,44 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (autoFloorButton != null) autoFloorButton.setVisibility(visibility);
     }
 
+    // get current floor - return current floor
+    public int getCurrentFloor() {
+        return indoorMapManager != null ? indoorMapManager.getCurrentFloor() : 0;
+    }
+
+    // get current building - return name of current building / int represent
+    public String getCurrentBuilding() {
+        return indoorMapManager != null ? indoorMapManager.getCurrentBuilding() : "";
+    }
+
+    private void updateAllIndoorMarkers() {
+        Context context = requireContext();
+        int floor = getCurrentFloor();
+        String building = getCurrentBuilding();
+
+        TrajectoryMapWall.drawWalls(gMap, getCurrentFloor(), getCurrentBuilding());
+
+        TrajectoryMapMaker.updateEmergencyExitMarkers(gMap, floor, building, emergencyExitMarkers, context);
+        TrajectoryMapMaker.updateLiftMarkers(gMap, floor, building, liftMarkers, context);
+        TrajectoryMapMaker.updateToiletMarkers(gMap, floor, building, toiletMarkers, context);
+        TrajectoryMapMaker.updateAccessibleToiletMarkers(gMap, floor, building, accessibleToiletMarkers, context);
+        TrajectoryMapMaker.updateDrinkingWaterMarkers(gMap, floor, building, drinkingWaterMarkers, context);
+        TrajectoryMapMaker.updateAccessibleRouteMarkers(gMap, floor, building, accessibleRouteMarkers, context);
+        TrajectoryMapMaker.updateMedicalRoomMarkers(gMap, floor, building, medicalRoomMarkers, context);
+    }
+
+
+
+    /**
+     * Allows other components to set the initial map camera position.
+     * If the map isn't ready, we store a pending movement.
+     */
     public void setInitialCameraPosition(@NonNull LatLng startLocation) {
+        // If the map is already ready, move camera immediately
         if (gMap != null) {
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLocation, 19f));
         } else {
+            // Otherwise, store it until onMapReady
             pendingCameraPosition = startLocation;
             hasPendingCameraMove = true;
         }
@@ -243,10 +336,18 @@ public abstract class TrajectoryMapFragment extends Fragment {
         return gMap;
     }
 
+    /**
+     * (Reintroduced) Provide the “raw” current location if needed.
+     * If you have code that calls getCurrentLocation() externally, this helps fix “cannot resolve” errors.
+     */
     public LatLng getCurrentLocation() {
         return rawCurrentLocation;
     }
 
+    /**
+     * (Reintroduced) Let other classes pass a pinned location or “tag” for calibration logic.
+     * If your code calls updateCalibrationPinLocation(), this is where you handle it.
+     */
     public void updateCalibrationPinLocation(@NonNull LatLng newLocation, boolean pinConfirmed) {
         if (gMap == null) return;
 
@@ -262,9 +363,14 @@ public abstract class TrajectoryMapFragment extends Fragment {
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
         }
 
+        //update indoor map overlay
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
+            //update indoor maker
+            updateAllIndoorMarkers();
         }
     }
 
@@ -299,7 +405,3 @@ public abstract class TrajectoryMapFragment extends Fragment {
         }
     }
 }
-
-
-
-
