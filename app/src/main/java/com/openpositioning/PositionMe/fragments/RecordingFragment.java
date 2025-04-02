@@ -875,7 +875,9 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
         }
         
         //  Updates current location of user to show the indoor floor map (if applicable)
-        indoorMapManager.setCurrentLocation(currentLocation);
+        // 使用EKF融合位置来判断是否在室内
+        LatLng positionForIndoorMap = fusedPosition != null ? fusedPosition : currentLocation;
+        indoorMapManager.setCurrentLocation(positionForIndoorMap);
         
         // 如果在室内且自动楼层开启，持续更新楼层
         if (indoorMapManager.getIsIndoorMapSet()) {

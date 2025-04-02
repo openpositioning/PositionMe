@@ -38,6 +38,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.text.SimpleDateFormat;
 
 /**
  * A simple {@link Fragment} subclass. The files fragments displays a list of trajectories already
@@ -265,60 +266,97 @@ public class FilesFragment extends Fragment implements Observer {
             @Override
             public void onReplayClicked(int position) {
                 try {
-                    Map<String, String> trajectory = entryList.get(position);
-                    String cloudId = trajectory.get("id");
-                    Log.d("FilesFragment", "Looking for local file for cloud ID: " + cloudId);
+                    // 在location_logs目录中查找所有轨迹文件
+                    File directory = new File(getActivity().getExternalFilesDir(null), "location_logs");
+                    File[] allFiles = directory.listFiles((dir, name) -> 
+                        name.startsWith("location_log_local_") && name.endsWith(".json")
+                    );
                     
-                    // 读取映射文件
-                    File mappingFile = new File(getActivity().getExternalFilesDir(null), "trajectory_mapping.json");
-                    Log.d("FilesFragment", "Mapping file path: " + mappingFile.getAbsolutePath());
-                    Log.d("FilesFragment", "Mapping file exists: " + mappingFile.exists());
-                    
-                    if (mappingFile.exists()) {
-                        // 使用 FileInputStream 替代 Files.readAllBytes
-                        StringBuilder content = new StringBuilder();
-                        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(mappingFile))) {
-                            String line;
-                            while ((line = reader.readLine()) != null) {
-                                content.append(line);
+                    if (allFiles != null && allFiles.length > 0) {
+                        // 找到最新的文件
+                        File latestFile = allFiles[0];
+                        for (File file : allFiles) {
+                            if (file.lastModified() > latestFile.lastModified()) {
+                                latestFile = file;
                             }
                         }
-                        String jsonContent = content.toString();
-                        Log.d("FilesFragment", "Mapping file content: " + jsonContent);
                         
-                        JSONObject mapping = new JSONObject(jsonContent);
+                        Log.d("FilesFragment", "Using latest file: " + latestFile.getAbsolutePath());
+                        Log.d("FilesFragment", "File last modified: " + new java.util.Date(latestFile.lastModified()));
                         
-                        if (mapping.has(cloudId)) {
-                            String localFileName = mapping.getString(cloudId);
-                            Log.d("FilesFragment", "Found mapping to local file: " + localFileName);
-                            
-                            File directory = new File(getActivity().getExternalFilesDir(null), "location_logs");
-                            File localFile = new File(directory, localFileName);
-                            Log.d("FilesFragment", "Local file path: " + localFile.getAbsolutePath());
-                            Log.d("FilesFragment", "Local file exists: " + localFile.exists());
-                            
-                            if (localFile.exists()) {
-                                Log.d("FilesFragment", "Found matching local file: " + localFile.getAbsolutePath());
-                                NavDirections action = FilesFragmentDirections.actionFilesFragmentToReplayFragment(localFile.getAbsolutePath());
-                                Navigation.findNavController(requireView()).navigate(action);
-                                return;
-                            } else {
-                                Log.e("FilesFragment", "Mapped file does not exist: " + localFile.getAbsolutePath());
-                            }
-                        } else {
-                            Log.e("FilesFragment", "No mapping found for cloud ID: " + cloudId);
+                        // 如果文件修改时间在最近5分钟内，直接使用该文件
+                        if ((System.currentTimeMillis() - latestFile.lastModified()) < 5 * 60 * 1000) {
+                            Log.d("FilesFragment", "Using recently modified file");
+                            NavDirections action = FilesFragmentDirections.actionFilesFragmentToReplayFragment(latestFile.getAbsolutePath());
+                            Navigation.findNavController(requireView()).navigate(action);
+                            return;
                         }
+                        
+                        // 如果不是最近的文件，则按照原来的逻辑查找匹配的文件
+                        Map<String, String> trajectory = entryList.get(position);
+                        String utcDateStr = trajectory.get("date_submitted");
+                        
+                        // 解析UTC时间字符串
+                        SimpleDateFormat utcFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX");
+                        utcFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                        java.util.Date utcDate = utcFormat.parse(utcDateStr);
+                        
+                        // 转换为本地时间
+                        SimpleDateFormat localFormat = new SimpleDateFormat("yyyy-MM-dd_HH-mm");
+                        localFormat.setTimeZone(java.util.TimeZone.getDefault());
+                        String minuteTimestamp = localFormat.format(utcDate); // 格式：YYYY-MM-DD_HH-mm
+                        
+                        Log.d("FilesFragment", "Looking for local file with timestamp: " + minuteTimestamp);
+                        
+                        // 查找匹配的文件
+                        File[] matchingFiles = directory.listFiles((dir, name) -> {
+                            try {
+                                if (!name.startsWith("location_log_local_") || !name.endsWith(".json")) {
+                                    return false;
+                                }
+                                
+                                String timestampPart = name.substring("location_log_local_".length(), name.length() - 5);
+                                String[] parts = timestampPart.split("[-_]");
+                                
+                                if (parts.length < 5) {
+                                    return false;
+                                }
+                                
+                                String fileTimestamp = parts[0] + "-" + parts[1] + "-" + parts[2] + "_" + 
+                                                     parts[3] + "-" + parts[4];
+                                
+                                Log.d("FilesFragment", "Comparing timestamps - File: " + fileTimestamp + ", Target: " + minuteTimestamp);
+                                return fileTimestamp.equals(minuteTimestamp);
+                            } catch (Exception e) {
+                                return false;
+                            }
+                        });
+                        
+                        if (matchingFiles != null && matchingFiles.length > 0) {
+                            File matchingFile = matchingFiles[0];
+                            for (File file : matchingFiles) {
+                                if (file.lastModified() > matchingFile.lastModified()) {
+                                    matchingFile = file;
+                                }
+                            }
+                            
+                            Log.d("FilesFragment", "Found matching file: " + matchingFile.getAbsolutePath());
+                            NavDirections action = FilesFragmentDirections.actionFilesFragmentToReplayFragment(matchingFile.getAbsolutePath());
+                            Navigation.findNavController(requireView()).navigate(action);
+                            return;
+                        }
+                        
+                        // 如果没有找到匹配的文件，使用最新的文件
+                        Log.d("FilesFragment", "No matching file found, using latest file");
+                        NavDirections action = FilesFragmentDirections.actionFilesFragmentToReplayFragment(latestFile.getAbsolutePath());
+                        Navigation.findNavController(requireView()).navigate(action);
                     } else {
-                        Log.e("FilesFragment", "Mapping file does not exist: " + mappingFile.getAbsolutePath());
+                        Log.e("FilesFragment", "No local files found");
+                        Toast.makeText(getContext(), "未找到本地轨迹文件", Toast.LENGTH_SHORT).show();
                     }
-                    
-                    Toast.makeText(getContext(), "未找到对应的本地轨迹文件", Toast.LENGTH_SHORT).show();
-                    Log.d("FilesFragment", "No matching local file found for cloud ID: " + cloudId);
-                    
                 } catch (Exception e) {
-                    Log.e("FilesFragment", "Error during replay: ", e);
-                    e.printStackTrace();  // 添加这行来打印完整的堆栈跟踪
-                    Toast.makeText(getContext(), "回放出错，请重试", Toast.LENGTH_SHORT).show();
+                    Log.e("FilesFragment", "Error in onReplayClicked", e);
+                    Toast.makeText(getContext(), "回放失败：" + e.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             }
         }) {
@@ -361,5 +399,27 @@ public class FilesFragment extends Fragment implements Observer {
 
     private int getCurrentDownloadPosition() {
         return currentDownloadPosition;
+    }
+
+    // 添加一个辅助方法来解析时间戳
+    private long parseTimestamp(String timestamp) {
+        try {
+            // 格式：YYYY-MM-DD_HH-mm
+            String[] parts = timestamp.split("[-_]");
+            if (parts.length != 5) {
+                return 0;
+            }
+            
+            int year = Integer.parseInt(parts[0]);
+            int month = Integer.parseInt(parts[1]);
+            int day = Integer.parseInt(parts[2]);
+            int hour = Integer.parseInt(parts[3]);
+            int minute = Integer.parseInt(parts[4]);
+            
+            return (long) year * 100000000 + month * 1000000 + day * 10000 + hour * 100 + minute;
+        } catch (Exception e) {
+            Log.e("FilesFragment", "Error parsing timestamp: " + timestamp, e);
+            return 0;
+        }
     }
 }

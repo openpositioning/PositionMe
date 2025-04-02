@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.viewitems;
 
 import android.content.Context;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
@@ -13,6 +14,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.text.SimpleDateFormat;
 
 /**
  * Adapter used for displaying Trajectory metadata in a RecyclerView list.
@@ -71,14 +73,33 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         holder.trajId.setText(id);
         if(id.length() > 2) holder.trajId.setTextSize(28);
         else holder.trajId.setTextSize(32);
-        holder.trajDate.setText(
+        
+        try {
+            String utcDateStr = responseItems.get(position).get("date_submitted");
+            
+            // 解析UTC时间字符串
+            SimpleDateFormat utcFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX");
+            utcFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+            java.util.Date utcDate = utcFormat.parse(utcDateStr);
+            
+            // 转换为本地时间
+            SimpleDateFormat displayFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            displayFormat.setTimeZone(java.util.TimeZone.getDefault());
+            String localDateStr = displayFormat.format(utcDate);
+            
+            holder.trajDate.setText(localDateStr);
+        } catch (Exception e) {
+            Log.e("TrajDownloadListAdapter", "Error converting timezone", e);
+            // 如果解析失败，使用原始格式显示
+            holder.trajDate.setText(
                 dateFormat.format(
-                        LocalDateTime.parse(
-                                responseItems.get(position)
-                                        .get("date_submitted").split("\\.")[0]
-                        )
+                    LocalDateTime.parse(
+                        responseItems.get(position)
+                            .get("date_submitted").split("\\.")[0]
+                    )
                 )
-        );
+            );
+        }
     }
 
     /**

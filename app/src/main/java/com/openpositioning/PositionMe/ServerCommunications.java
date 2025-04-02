@@ -9,6 +9,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.fragments.FilesFragment;
@@ -18,8 +19,10 @@ import com.openpositioning.PositionMe.sensors.Observer;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -119,7 +122,8 @@ public class ServerCommunications implements Observable {
         File path = context.getFilesDir();
 
         // Format the file name according to date
-        SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss");
+        dateFormat.setTimeZone(java.util.TimeZone.getDefault());  // 使用本地时区
         Date date = new Date();
         File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
 
@@ -148,7 +152,7 @@ public class ServerCommunications implements Observable {
             // Creaet a equest body with a file to upload in multipart/form-data format
             RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", file.getName(),
-                            RequestBody.create(MediaType.parse("text/plain"), file))
+                            RequestBody.create(MediaType.parse("application/json"), file))
                     .build();
 
             // Create a POST request with the required headers
@@ -225,13 +229,43 @@ public class ServerCommunications implements Observable {
      * @param localTrajectory the File object of the local trajectory to be uploaded
      */
     public void uploadLocalTrajectory(File localTrajectory) {
+        // 从文件名中提取时间并转换为本地时区
+        String fileName = localTrajectory.getName();
+        File finalTrajectory = localTrajectory;  // 初始化为原始文件
+        try {
+            // 提取时间部分
+            String timeStr = fileName.substring(fileName.indexOf("_") + 1, fileName.lastIndexOf("."));
+            SimpleDateFormat serverFormat = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss");
+            serverFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+            java.util.Date utcDate = serverFormat.parse(timeStr);
+            
+            // 转换为本地时区
+            SimpleDateFormat localFormat = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss");
+            localFormat.setTimeZone(java.util.TimeZone.getDefault());
+            String localTimeStr = localFormat.format(utcDate);
+            
+            // 更新文件名
+            String newFileName = fileName.replace(timeStr, localTimeStr);
+            File newFile = new File(localTrajectory.getParent(), newFileName);
+            if (!localTrajectory.renameTo(newFile)) {
+                Log.e("ServerCommunications", "Failed to rename file");
+                return;
+            }
+            finalTrajectory = newFile;  // 更新为新的文件
+        } catch (Exception e) {
+            Log.e("ServerCommunications", "Error processing timezone", e);
+            // 如果出错，保持使用原始文件
+        }
+
+        final File uploadFile = finalTrajectory;  // 创建一个final变量用于匿名内部类
+
         // Instantiate client for HTTP requests
         OkHttpClient client = new OkHttpClient();
 
         // Create request body with a file to upload in multipart/form-data format
         RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("file", localTrajectory.getName(),
-                        RequestBody.create(MediaType.parse("text/plain"), localTrajectory))
+                .addFormDataPart("file", uploadFile.getName(),
+                        RequestBody.create(MediaType.parse("application/json"), uploadFile))
                 .build();
 
         // Create a POST request with the required headers
@@ -244,7 +278,6 @@ public class ServerCommunications implements Observable {
             @Override public void onFailure(Call call, IOException e) {
                 // Print error message, set success to false and notify observers
                 e.printStackTrace();
-//                localTrajectory.delete();
                 success = false;
                 System.err.println("UPLOAD: Failure to get response");
                 notifyObservers(1);
@@ -257,9 +290,7 @@ public class ServerCommunications implements Observable {
                     if (!response.isSuccessful()) {
                         // Print error message, set success to false and throw an exception
                         success = false;
-//                        System.err.println("UPLOAD unsuccessful: " + responseBody.string());
                         notifyObservers(1);
-//                        localTrajectory.delete();
                         String errorBody = responseBody.string();
                         System.err.println("UPLOAD unsuccessful: " + errorBody);
                         infoResponse = "Upload failed: " + errorBody;
@@ -277,7 +308,7 @@ public class ServerCommunications implements Observable {
                     System.out.println("UPLOAD SUCCESSFUL: " + responseBody.string());
 
                     // Delete local file, set success to true and notify observers
-                    success = localTrajectory.delete();
+                    success = uploadFile.delete();
                     notifyObservers(1);
                 }
             }
@@ -301,28 +332,52 @@ public class ServerCommunications implements Observable {
         // 获取轨迹信息
         Map<String, String> trajectory = entryList.get(position);
         String id = trajectory.get("id");
-        String serverDate = trajectory.get("date_submitted")
-            .split("\\.")[0]
-            .replace(":", "-")
-            .replace("T", "_");
+        String utcDateStr = trajectory.get("date_submitted");
         
-        // 构建云端轨迹文件路径
-        String fileName = String.format("trajectory_%s_%s.json", serverDate, id);
-        File localDirectory = new File(context.getExternalFilesDir(null), "cloud_trajectories");
-        Log.d("ServerCommunications", "Cloud trajectories directory: " + localDirectory.getAbsolutePath());
-        File localFile = new File(localDirectory, fileName);
-        
-        // 如果本地文件已存在，直接返回成功
-        if (localFile.exists()) {
-            Log.d("ServerCommunications", "Local file already exists: " + localFile.getAbsolutePath());
-            new Handler(Looper.getMainLooper()).post(() -> {
-                success = true;
-                notifyObservers(1);
-            });
-            return;
+        // 添加时区转换
+        try {
+            // 解析UTC时间字符串
+            SimpleDateFormat utcFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX");
+            utcFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+            java.util.Date utcDate = utcFormat.parse(utcDateStr);
+            
+            // 转换为本地时间
+            SimpleDateFormat localFormat = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss");
+            localFormat.setTimeZone(java.util.TimeZone.getDefault());
+            String localDateStr = localFormat.format(utcDate);
+            
+            Log.d("ServerCommunications", "UTC time: " + utcDateStr);
+            Log.d("ServerCommunications", "Local time: " + localDateStr);
+            
+            // 构建云端轨迹文件路径
+            String fileName = String.format("trajectory_%s_%s.json", localDateStr, id);
+            File localDirectory = new File(context.getExternalFilesDir(null), "cloud_trajectories");
+            Log.d("ServerCommunications", "Cloud trajectories directory: " + localDirectory.getAbsolutePath());
+            File localFile = new File(localDirectory, fileName);
+            
+            // 如果本地文件已存在，直接返回成功
+            if (localFile.exists()) {
+                Log.d("ServerCommunications", "Local file already exists: " + localFile.getAbsolutePath());
+                // 更新映射文件
+                updateMappingFile(id, fileName);
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    success = true;
+                    notifyObservers(1);
+                });
+                return;
+            }
+            
+            // 否则从服务器下载
+            downloadFile(id, localFile, localDirectory);
+            
+        } catch (Exception e) {
+            Log.e("ServerCommunications", "Error converting timezone", e);
+            success = false;
+            notifyObservers(1);
         }
-        
-        // 否则从服务器下载
+    }
+
+    private void downloadFile(String id, File localFile, File localDirectory) {
         OkHttpClient client = new OkHttpClient();
         String downloadUrl = downloadURL + "&id=" + id;
         
@@ -331,82 +386,43 @@ public class ServerCommunications implements Observable {
             .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
             .get()
             .build();
-        
+            
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("ServerCommunications", "Download failed", e);
                 new Handler(Looper.getMainLooper()).post(() -> {
                     success = false;
                     notifyObservers(1);
                 });
             }
-            
-            @Override public void onResponse(Call call, Response response) throws IOException {
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful()) {
-                        throw new IOException("Unexpected code " + response);
+                        Log.e("ServerCommunications", "Download unsuccessful: " + responseBody.string());
+                        new Handler(Looper.getMainLooper()).post(() -> {
+                            success = false;
+                            notifyObservers(1);
+                        });
+                        return;
                     }
-                    
-                    // 保存云端轨迹数据到本地文件
+
+                    // 确保目录存在
                     if (!localDirectory.exists()) {
                         localDirectory.mkdirs();
                     }
-                    
+
+                    // 保存文件
                     try (FileOutputStream fos = new FileOutputStream(localFile)) {
                         fos.write(responseBody.bytes());
-                        
-                        // 创建映射文件来存储云端ID和本地文件的对应关系
-                        File mappingFile = new File(context.getExternalFilesDir(null), "trajectory_mapping.json");
-                        JSONObject mapping = new JSONObject();
-                        
-                        if (mappingFile.exists()) {
-                            // 如果文件存在，读取现有内容
-                            try {
-                                StringBuilder content = new StringBuilder();
-                                try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(mappingFile))) {
-                                    String line;
-                                    while ((line = reader.readLine()) != null) {
-                                        content.append(line);
-                                    }
-                                }
-                                mapping = new JSONObject(content.toString());
-                            } catch (JSONException e) {
-                                Log.e("ServerCommunications", "Error reading mapping file: ", e);
-                                // 如果文件损坏，使用新的空 JSONObject
-                                mapping = new JSONObject();
-                            }
-                        }
-                        
-                        // 找到最近的本地轨迹文件
-                        File logsDirectory = new File(context.getExternalFilesDir(null), "location_logs");
-                        File[] localFiles = logsDirectory.listFiles((dir, name) -> 
-                            name.startsWith("location_log_local_") && name.endsWith(".json"));
-                            
-                        if (localFiles != null && localFiles.length > 0) {
-                            // 获取最新的本地文件
-                            File latestFile = localFiles[0];
-                            for (File file : localFiles) {
-                                if (file.lastModified() > latestFile.lastModified()) {
-                                    latestFile = file;
-                                }
-                            }
-                            
-                            try {
-                                // 保存映射关系
-                                mapping.put(id, latestFile.getName());
-                                try (FileWriter writer = new FileWriter(mappingFile)) {
-                                    writer.write(mapping.toString());
-                                }
-                                
-                                Log.d("ServerCommunications", "Mapped cloud ID " + id + " to local file: " + latestFile.getName());
-                            } catch (JSONException e) {
-                                Log.e("ServerCommunications", "Error updating mapping: ", e);
-                            }
-                        }
                     }
-                    
-                    Log.d("ServerCommunications", "Successfully saved trajectory to: " + localFile.getAbsolutePath());
-                    
+
+                    // 更新映射文件
+                    updateMappingFile(id, localFile.getName());
+
+                    Log.d("ServerCommunications", "Download successful: " + localFile.getAbsolutePath());
                     new Handler(Looper.getMainLooper()).post(() -> {
                         success = true;
                         notifyObservers(1);
@@ -513,6 +529,41 @@ public class ServerCommunications implements Observable {
             }
         } else {
             Log.e("ServerCommunications", "No observers registered");
+        }
+    }
+
+    // 添加更新映射文件的方法
+    private void updateMappingFile(String cloudId, String localFileName) {
+        try {
+            File mappingFile = new File(context.getExternalFilesDir(null), "trajectory_mapping.json");
+            JSONObject mapping;
+            
+            if (mappingFile.exists()) {
+                // 读取现有映射
+                StringBuilder content = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new FileReader(mappingFile))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        content.append(line);
+                    }
+                }
+                mapping = new JSONObject(content.toString());
+            } else {
+                // 创建新的映射
+                mapping = new JSONObject();
+            }
+            
+            // 更新映射
+            mapping.put(cloudId, localFileName);
+            
+            // 保存映射文件
+            try (FileWriter writer = new FileWriter(mappingFile)) {
+                writer.write(mapping.toString());
+            }
+            
+            Log.d("ServerCommunications", "Updated mapping file for cloud ID: " + cloudId + " -> " + localFileName);
+        } catch (Exception e) {
+            Log.e("ServerCommunications", "Error updating mapping file", e);
         }
     }
 }

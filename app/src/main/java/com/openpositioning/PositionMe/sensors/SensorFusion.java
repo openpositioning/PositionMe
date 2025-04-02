@@ -1008,14 +1008,15 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see GNSSDataProcessor handles location data.
      */
     public void resumeListening() {
-        accelerometerSensor.sensorManager.registerListener(this, accelerometerSensor.sensor, 10000);
-        accelerometerSensor.sensorManager.registerListener(this, linearAccelerationSensor.sensor, 10000);
-        accelerometerSensor.sensorManager.registerListener(this, gravitySensor.sensor, 10000);
+        // 将IMU相关传感器的采样频率设置为5000微秒（200Hz）
+        accelerometerSensor.sensorManager.registerListener(this, accelerometerSensor.sensor, 5000);
+        accelerometerSensor.sensorManager.registerListener(this, linearAccelerationSensor.sensor, 5000);
+        accelerometerSensor.sensorManager.registerListener(this, gravitySensor.sensor, 5000);
         barometerSensor.sensorManager.registerListener(this, barometerSensor.sensor, (int) 1e6);
-        gyroscopeSensor.sensorManager.registerListener(this, gyroscopeSensor.sensor, 10000);
+        gyroscopeSensor.sensorManager.registerListener(this, gyroscopeSensor.sensor, 5000);
         lightSensor.sensorManager.registerListener(this, lightSensor.sensor, (int) 1e6);
         proximitySensor.sensorManager.registerListener(this, proximitySensor.sensor, (int) 1e6);
-        magnetometerSensor.sensorManager.registerListener(this, magnetometerSensor.sensor, 10000);
+        magnetometerSensor.sensorManager.registerListener(this, magnetometerSensor.sensor, 5000);
         
         // 降低步伐检测器的采样率，从SENSOR_DELAY_FASTEST改为SensorManager.SENSOR_DELAY_GAME
         // 这样可以减少过度灵敏的问题
