@@ -1626,14 +1626,22 @@ public class SensorFusion implements SensorEventListener, Observer {
     
     /**
      * 将PDR相对坐标转换为地理坐标
-     * @param x PDR坐标X分量(米)
-     * @param y PDR坐标Y分量(米)
-     * @return 经纬度坐标[纬度,经度]
+     * @param x PDR X坐标
+     * @param y PDR Y坐标
+     * @return 经纬度坐标数组 [纬度, 经度]
      */
-    private float[] getPdrLongLat(float x, float y) {
+    public float[] getPdrLongLat(float x, float y) {
+        // 如果没有起始位置，使用第一个GNSS位置作为起始位置
         if (startLocation[0] == 0 && startLocation[1] == 0) {
-            // 如果没有起始位置，使用当前GNSS位置
-            return new float[]{latitude, longitude};
+            // 获取第一个GNSS位置
+            float[] firstGnssPos = getGNSSLatitude(true);
+            if (firstGnssPos != null && firstGnssPos.length >= 2 && firstGnssPos[0] != 0 && firstGnssPos[1] != 0) {
+                startLocation = firstGnssPos;
+                Log.d("SensorFusion", "使用第一个GNSS位置作为PDR起始位置: [" + startLocation[0] + ", " + startLocation[1] + "]");
+            } else {
+                Log.e("SensorFusion", "无法获取有效的GNSS起始位置");
+                return new float[]{latitude, longitude};
+            }
         }
         
         // 每度对应的距离(米)

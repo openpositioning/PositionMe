@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.fragments;
 
 
+import android.graphics.Color;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
@@ -26,6 +27,7 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.openpositioning.PositionMe.R;
 
@@ -381,7 +383,14 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         // 按时间戳排序
         Collections.sort(originalPoints, (p1, p2) -> Long.compare(p1.timestamp, p2.timestamp));
         
-        // 如果点数太多, 进行降采样
+        // 对于PDR轨迹，保留所有原始点
+        if (targetList == pdrTrajectoryPoints) {
+            targetList.addAll(originalPoints);
+            Log.d(TAG, "PDR轨迹加载完成，保留所有原始点: " + targetList.size() + " 个点");
+            return;
+        }
+        
+        // 对于其他轨迹类型，进行降采样处理
         if (ENABLE_DOWNSAMPLING && originalPoints.size() > 100) {
             Log.d(TAG, "原始点数: " + originalPoints.size() + "，进行降采样处理");
             
@@ -520,7 +529,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         // 设置地图类型为卫星地图
         mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
         
-        // 更新地图
+        // 如果已经有轨迹数据，更新地图显示
         if (!trajectoryPoints.isEmpty()) {
             updateMap();
         }
@@ -604,65 +613,99 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void updateMap() {
-        if (mMap == null || trajectoryPoints.isEmpty()) {
+        if (mMap == null || trajectoryPoints == null || trajectoryPoints.isEmpty()) {
+            Log.e(TAG, "无法更新地图：地图未准备好或轨迹点为空");
             return;
         }
-        
-        // 清除地图
+
+        // 清除现有轨迹和标记
+        if (currentPositionMarker != null) {
+            currentPositionMarker.remove();
+            currentPositionMarker = null;
+        }
+
+        // 清除地图上所有现有的轨迹线
         mMap.clear();
-        currentPositionMarker = null;
-        
-        // 确定轨迹颜色
+
+        // 根据轨迹类型设置颜色
         int trajectoryColor;
         switch (currentTrajectoryType) {
             case PDR:
-                trajectoryColor = getResources().getColor(R.color.colorRed);
+                trajectoryColor = Color.RED;
                 break;
             case GNSS:
-                trajectoryColor = getResources().getColor(R.color.colorBlue);
+                trajectoryColor = Color.BLUE;
                 break;
             case EKF:
-                trajectoryColor = getResources().getColor(R.color.colorGreen);
+                trajectoryColor = Color.GREEN;
                 break;
             default:
-                trajectoryColor = getResources().getColor(R.color.primaryBlue);
+                trajectoryColor = Color.RED;
         }
-        
-        // 绘制完整轨迹
+
+        // 创建新的轨迹线
         PolylineOptions polylineOptions = new PolylineOptions()
-            .color(trajectoryColor)
-            .width(5);
-            
+                .color(trajectoryColor)
+                .width(8f)
+                .geodesic(true);
+
+        // 添加轨迹点
         for (TrajectoryPoint point : trajectoryPoints) {
             polylineOptions.add(new LatLng(point.latitude, point.longitude));
         }
-        mMap.addPolyline(polylineOptions);
-        
-        // 添加起点标记
-        TrajectoryPoint startPoint = trajectoryPoints.get(0);
-        mMap.addMarker(new MarkerOptions()
-            .position(new LatLng(startPoint.latitude, startPoint.longitude))
-            .title("Start point"));
+
+        // 添加轨迹线到地图
+        Polyline polyline = mMap.addPolyline(polylineOptions);
+
+        // 设置当前点标记
+        if (!trajectoryPoints.isEmpty()) {
+            TrajectoryPoint currentPoint = trajectoryPoints.get(currentPointIndex);
+            currentPositionMarker = mMap.addMarker(new MarkerOptions()
+                    .position(new LatLng(currentPoint.latitude, currentPoint.longitude))
+                    .title("当前位置")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
+        }
+
+        // 更新进度条
+        if (progressBar != null) {
+            progressBar.setMax(trajectoryPoints.size() - 1);
+            progressBar.setProgress(currentPointIndex);
+        }
+
+        // 计算轨迹边界
+        if (!trajectoryPoints.isEmpty()) {
+            double minLat = Double.MAX_VALUE;
+            double maxLat = Double.MIN_VALUE;
+            double minLng = Double.MAX_VALUE;
+            double maxLng = Double.MIN_VALUE;
+
+            for (TrajectoryPoint point : trajectoryPoints) {
+                minLat = Math.min(minLat, point.latitude);
+                maxLat = Math.max(maxLat, point.latitude);
+                minLng = Math.min(minLng, point.longitude);
+                maxLng = Math.max(maxLng, point.longitude);
+            }
+
+            // 计算合适的缩放级别
+            float zoomLevel = 19f; // 默认缩放级别
+            double latDiff = maxLat - minLat;
+            double lngDiff = maxLng - minLng;
             
-        // 添加终点标记
-        TrajectoryPoint endPoint = trajectoryPoints.get(trajectoryPoints.size() - 1);
-        mMap.addMarker(new MarkerOptions()
-            .position(new LatLng(endPoint.latitude, endPoint.longitude))
-            .title("End point")
-            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
-        
-        // 添加当前位置标记（初始位置设为起点）
-        currentPositionMarker = mMap.addMarker(new MarkerOptions()
-            .position(new LatLng(startPoint.latitude, startPoint.longitude))
-            .title("Current Position")
-            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
-        
-        // 移动相机到起点
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-            new LatLng(startPoint.latitude, startPoint.longitude), 17));
-            
-        // 设置进度条
-        progressBar.setMax(trajectoryPoints.size());
-        progressBar.setProgress(0);
+            // 根据轨迹范围调整缩放级别
+            if (latDiff > 0.01 || lngDiff > 0.01) {
+                zoomLevel = 18f;  // 增大缩放级别
+            } else if (latDiff > 0.005 || lngDiff > 0.005) {
+                zoomLevel = 19f;  // 增大缩放级别
+            } else {
+                zoomLevel = 20f;  // 对于更小的范围使用更大的缩放级别
+            }
+
+            // 使用轨迹的第一个点作为中心点
+            TrajectoryPoint firstPoint = trajectoryPoints.get(0);
+            LatLng center = new LatLng(firstPoint.latitude, firstPoint.longitude);
+
+            // 使用animateCamera进行平滑过渡
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(center, zoomLevel), 1000, null);
+        }
     }
 }

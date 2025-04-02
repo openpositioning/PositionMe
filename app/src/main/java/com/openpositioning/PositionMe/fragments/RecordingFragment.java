@@ -259,42 +259,20 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
         } else {
             Log.e("PositioningTest", "GNSS数据无效: " + 
                     (gnssValues == null ? "null" : "长度=" + gnssValues.length));
-            
-            // 创建模拟GNSS数据用于测试
-            double testLat = 55.9355 + (Math.random() - 0.5) * 0.001; // 添加随机偏移
-            double testLng = -3.1792 + (Math.random() - 0.5) * 0.001;
-            
-            Log.d("PositioningTest", String.format("创建模拟GNSS数据: lat=%.8f, lng=%.8f", 
-                    testLat, testLng));
-            
-            // 记录模拟数据
-            locationLogger.logGnssLocation(
-                System.currentTimeMillis(),
-                testLat,
-                testLng
-            );
-            Log.d("PositioningTest", "已记录模拟GNSS测试数据");
         }
         
         // 4. 测试PDR位置记录
         Log.d("PositioningTest", "测试PDR位置记录...");
-        double testLat = 55.9355;
-        double testLng = -3.1792;
-        for (int i = 0; i < 3; i++) {
-            double offsetLat = (Math.random() - 0.5) * 0.0001;
-            double offsetLng = (Math.random() - 0.5) * 0.0001;
-            
-            double pdrLat = testLat + offsetLat * i * 0.8;
-            double pdrLng = testLng + offsetLng * i * 0.8;
-            
-            Log.d("PositioningTest", String.format("记录PDR测试位置 #%d: lat=%.8f, lng=%.8f", 
-                    i+1, pdrLat, pdrLng));
+        if (pdrValues != null) {
+            float[] pdrLongLat = sensorFusion.getPdrLongLat(pdrValues[0], pdrValues[1]);
+            Log.d("PositioningTest", String.format("记录PDR测试位置: lat=%.8f, lng=%.8f", 
+                    pdrLongLat[0], pdrLongLat[1]));
             
             // 记录PDR位置
             locationLogger.logLocation(
                 System.currentTimeMillis(),
-                pdrLat,
-                pdrLng
+                pdrLongLat[0],
+                pdrLongLat[1]
             );
         }
         
@@ -963,8 +941,13 @@ public class RecordingFragment extends Fragment implements OnMapReadyCallback {
                 orientationMarker.setPosition(nextLocation);
                 // 设置位置标记的 zIndex 也为较大值
                 orientationMarker.setZIndex(1000f);
-                // 移动相机到PDR位置 (保持用户可以自由拖动地图)
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
+                
+                // 获取最新的Fusion位置
+                LatLng fusedPosition = sensorFusion.getEkfPosition();
+                if (fusedPosition != null) {
+                    // 移动相机到Fusion位置 (保持用户可以自由拖动地图)
+                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusedPosition, (float) 19f));
+                }
             }
             catch (Exception ex){
                 Log.e("PlottingPDR","Exception: "+ex);
