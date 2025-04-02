@@ -94,6 +94,7 @@ public class RecordingFragment extends Fragment {
     private LatLng prevPdrLocation = null;
     private LatLng prevWiFiLocation = null;
     private int prevFloorLocation = 0;
+    private float prevBearing;
 
 
     // References to the child map fragment
@@ -309,11 +310,21 @@ public class RecordingFragment extends Fragment {
             }
         }
 
+        // Distance
+        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
+                + Math.pow(pdrValues[1] - previousPosY, 2));
+        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
+
+        // Elevation
+        float elevationVal = sensorFusion.getElevation();
+        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
+
         // Convert PDR to LatLng relative to fixed origin
         LatLng pdrLatLng = null;
         if (originLatLng != null) {
-            float deltaX = pdrValues[0];
-            float deltaY = pdrValues[1];
+            float deltaX = pdrValues[0]-previousPosX;
+            float deltaY = pdrValues[1]-previousPosY;
+            Log.d("Deltas", "Deltax " + deltaX + "DeltaY " + deltaY);
 
             if (Math.abs(deltaX) > 20 || Math.abs(deltaY) > 20) {
                 Log.w("PDR", "Suspiciously large PDR delta: " + deltaX + "," + deltaY);
@@ -368,6 +379,7 @@ public class RecordingFragment extends Fragment {
                             Log.d("EKF", "EKF Point: " + ekfPoint);
                             if (ekfPoint != null && trajectoryMapFragment != null) {
                                 float bearing = (float) Math.toDegrees(sensorFusion.passOrientation());
+                                prevBearing = bearing;
                                 trajectoryMapFragment.updateUserLocation(ekfPoint, bearing);
                                 trajectoryMapFragment.displayNucleusFloorLevel(floor);
                             }
@@ -391,12 +403,19 @@ public class RecordingFragment extends Fragment {
                 );
                 if (ekfPoint != null) {
                     float bearing = (float) Math.toDegrees(sensorFusion.passOrientation());
+                    prevBearing = bearing;
                     trajectoryMapFragment.updateUserLocation(ekfPoint, bearing);
                     trajectoryMapFragment.displayNucleusFloorLevel(prevFloorLocation);
                 }
             }
         } else {
             Log.d("RecordingFragment", "Phone not connected to WiFi");
+            // if phone loses wifi signal then continue from last point with new PDR step
+            // create new position as PDR displacement from prevWiFiLocation
+
+            LatLng newPos = UtilFunctions.calculateNewPos(prevWiFiLocation,new float[]{pdrValues[0] - previousPosX, pdrValues[1] - previousPosY});
+            trajectoryMapFragment.updateUserLocation(newPos, prevBearing);
+            trajectoryMapFragment.displayNucleusFloorLevel(prevFloorLocation);
         }
 
         // Update previous PDR
