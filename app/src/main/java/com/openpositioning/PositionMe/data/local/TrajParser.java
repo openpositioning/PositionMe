@@ -28,7 +28,14 @@ import java.util.Objects;
  * location data for PDR, GNSS, WiFi for the timestamps in each PDR record (since there are the fewest PDR points in a trajectory).
  *
  * Contains:
- * - Subclass: ReplayPoint -> contains data locations for PDR, GNSS, and WiFi samples for each replay
+ * - Subclass: ReplayPoint -> contains data locations for PDR, GNSS, and WiFi samples for each sample of replayData
+ * - Subclass: ImuRecord -> data corresponding to imu sensor info
+ * - Subclass: PdrRecord -> data corresponding to pdr movement
+ * - Subclass: GnssRecord -> data corresponding to Gnss locations
+ * - Subclass: TagPoint -> data corresponding to tags containing a label and coordinates
+ *
+ * @Author Jamie Arnott
+ * @Author Guilherme Barreiros
  */
 public class TrajParser {
 
@@ -46,6 +53,16 @@ public class TrajParser {
         public LatLng cachedWiFiLocation = null;
         public TrajParser.TagPoint tagPoint;
 
+        /**
+         * Caller function for the ReplayPoint Class
+         * @param pdrLocation
+         * @param gnssLocation
+         * @param orientation
+         * @param speed
+         * @param timestamp
+         * @param wifiSamples
+         * @param tagPoint
+         */
         public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, float orientation,
                            float speed, long timestamp, List<Traj.WiFi_Sample> wifiSamples,
                            TrajParser.TagPoint tagPoint) {
@@ -83,6 +100,11 @@ public class TrajParser {
         public String label;
         public LatLng location;
 
+        /**
+         * Caller function for the TagPoint class
+         * @param label
+         * @param location
+         */
         public TagPoint(String label, LatLng location) {
             this.label = label;
             this.location = location;
@@ -119,6 +141,11 @@ public class TrajParser {
 
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " PDR: " + pdrList.size() + " GNSS: " + gnssList.size());
 
+            /**
+             * Code below by
+             * Jamie Arnott: Revised code to ensure functionality
+             * Guilherme: Initial Code
+             */
             // Extract tags from GNSS with provider "fusion"
             if (root.has("gnssData")) {
                 JsonArray gnssArray = root.getAsJsonArray("gnssData");
@@ -204,6 +231,7 @@ public class TrajParser {
                         }
                     }
                 }
+                // code by Jamie Arnott: add tagpoints to results
                 if (i < tagPoints.size()) {
                     result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
                             speed, pdr.relativeTimestamp, wifiSamples, tagPoints.get(i)));

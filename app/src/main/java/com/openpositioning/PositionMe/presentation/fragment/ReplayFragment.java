@@ -422,12 +422,14 @@ public class ReplayFragment extends Fragment {
         }
     };
 
-    // code by Jamie Arnott & Guilherme
+
 
     /**
      * Method to draw the next replayPoint on the map using the selected method from the dropdown.
      * Uses WiFi positioning with restful API requests to the openpositioning server
      * @param index
+     * @Author Jamie Arnott: WiFi and EKF cases including WiFi positioning through API request() and EKF fusion
+     * @Author Guilherme Barreiros: Wrote some initial functionality
      */
     private void drawReplayPointWithMode(int index) {
         if (index < 0 || index >= replayData.size()) return;

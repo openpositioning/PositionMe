@@ -354,7 +354,7 @@ public class RecordingFragment extends Fragment {
                         Log.e("EKF", "Failed to create fingerprint", e);
                     }
                 }
-
+                // obtain wifi fingerprint and process data using EKF
                 try {
                     wifiFingerprint.put("wf", wifiAccessPoints);
                     LatLng finalPdrLatLng = pdrLatLng;

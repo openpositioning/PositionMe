@@ -50,6 +50,10 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
  * @author Mate Stodulka
+ *
+ *
+ * ===== Revisions
+ * @Author Jamie Arnott
  */
 
 public class TrajectoryMapFragment extends Fragment {
@@ -212,6 +216,11 @@ public class TrajectoryMapFragment extends Fragment {
 
 
     // Code by Guilherme
+
+    /**
+     * Method to set the colour of the polyline
+     * @param color
+     */
     public void setPolylineColor(int color) {
         currentColor = color; // store the new color
         if (polyline != null) {
@@ -222,6 +231,11 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     // Code by Guilherme
+
+    /**
+     * Method to add a LatLng point to the polyline drawing
+     * @param point
+     */
     public void addPolylinePoint(@NonNull LatLng point) {
         if (gMap == null) return;
 

@@ -4,6 +4,7 @@ import com.google.android.gms.maps.model.LatLng;
 
 /**
  * Represents a tag placed during recording.
+ * @Author Guilherme Barreiros
  */
 public class Tag {
     private final String id;
@@ -11,6 +12,13 @@ public class Tag {
     private final LatLng location;
     private final String label;   // A string combining time, lat, lon.
 
+    /**
+     * Caller function for Tag class
+     * @param id
+     * @param timestamp
+     * @param location
+     * @param label
+     */
     public Tag(String id, long timestamp, LatLng location, String label) {
         this.id = id;
         this.timestamp = timestamp;

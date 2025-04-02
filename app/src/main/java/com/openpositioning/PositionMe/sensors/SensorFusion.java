@@ -57,6 +57,9 @@ import java.util.stream.Stream;
  * @author Michal Dvorak
  * @author Mate Stodulka
  * @author Virginia Cangelosi
+ *
+ * ====== revisions
+ * @Author Marco Bancalari-Ruiz
  */
 public class SensorFusion implements SensorEventListener, Observer {
 
@@ -602,7 +605,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param pdrPos
      * @param prevPdrPos
      * @param gnssPos
-     * @return
+     * @return LatLng representing fused coordinate
      */
     public LatLng EKF_replay(LatLng wifiPos, LatLng pdrPos, LatLng prevPdrPos, LatLng gnssPos) {
         if (pdrPos == null || prevPdrPos == null) return null;
