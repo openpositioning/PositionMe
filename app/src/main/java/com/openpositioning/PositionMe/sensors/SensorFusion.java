@@ -183,6 +183,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private Timer updateTimer; // Timer for regular updates
     private static final long UPDATE_INTERVAL_MS = 1000; // Update every 1 second
+    private Context FragmentContext;
 
     //region Initialisation
     /**
@@ -1386,6 +1387,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // Create fusion algorithm with valid reference position
         fusionAlgorithm = new ParticleFilterFusion(NUM_PARTICLES, referencePosition);
+
+        if (this.FragmentContext != null) {
+            fusionAlgorithm.retrieveContext(this.FragmentContext);
+        }
     }
 
     /**
@@ -1454,5 +1459,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         } catch (Exception e) {
             Log.e("SimpleFusion", "Error in fusion calculation: " + e.getMessage(), e);
         }
+    }
+
+    public void passContext(Context context) {
+        this.FragmentContext = context;
     }
 }
