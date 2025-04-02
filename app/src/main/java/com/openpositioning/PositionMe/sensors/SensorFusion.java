@@ -547,7 +547,16 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
     public double[] getCurrentEKFState() {
-        return this.extendedKalmanFilter.getCurrentState();
+        if (extendedKalmanFilter == null) {
+            Log.w("SensorFusion", "EKF未初始化");
+            return null;
+        }
+        try {
+            return this.extendedKalmanFilter.getCurrentState();
+        } catch (Exception e) {
+            Log.e("SensorFusion", "获取EKF状态失败", e);
+            return null;
+        }
     }
 
     // Callback Example Function
@@ -1139,34 +1148,50 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Calculates new PDR values and elevation, then calls the appropriate fusion algorithm.
      * Stores the resulting position and timestamps it.
      */
-    public void updateFusionPDR(){
-        // calculate new PDR, save as global variable
-        float[] pdrValues = getCurrentPDRCalc();
-        float elevationVal = getElevation();
+    public void updateFusionPDR() {
+        try {
+            // 计算新的PDR值
+            float[] pdrValues = getCurrentPDRCalc();
+            float elevationVal = getElevation();
 
-        // local PDR LatLn point
-        LatLng positionPDR = CoordinateTransform.enuToGeodetic(pdrValues[0], pdrValues[1], elevationVal, startRef[0], startRef[1], ecefRefCoords);
-        double latitude = positionPDR.latitude;
-        double longitude = positionPDR.longitude;
+            // 转换PDR坐标
+            LatLng positionPDR = CoordinateTransform.enuToGeodetic(pdrValues[0], pdrValues[1], elevationVal, 
+                                                                  startRef[0], startRef[1], ecefRefCoords);
+            double latitude = positionPDR.latitude;
+            double longitude = positionPDR.longitude;
 
-        // 通知UI更新PDR轨迹
-        notifySensorUpdate(SensorFusionUpdates.update_type.PDR_UPDATE);
+            // 通知UI更新PDR轨迹
+            notifySensorUpdate(SensorFusionUpdates.update_type.PDR_UPDATE);
 
-        // call fusion algorithm arg(double, double)
-        if (fusionAlgorithmSelection) {
-            this.extendedKalmanFilter.onStepDetected(pdrValues[0], pdrValues[1], elevationVal, (android.os.SystemClock.uptimeMillis()));
-            // 获取EKF位置并更新轨迹
-            double[] ekfState = this.extendedKalmanFilter.getCurrentState();
-            LatLng ekfPosition = CoordinateTransform.enuToGeodetic(
-                (float)ekfState[0], (float)ekfState[1], elevationVal,
-                startRef[0], startRef[1], ecefRefCoords
-            );
-            notifyFusedUpdate(ekfPosition);
-        } else {
-            this.particleFilter.update(latitude, longitude);
-            // 获取PF位置并更新轨迹
-            LatLng pfPosition = new LatLng(latitude, longitude); // 使用PDR位置作为PF位置
-            notifyFusedUpdate(pfPosition);
+            // 同时更新EKF和PF
+            if (extendedKalmanFilter != null) {
+                this.extendedKalmanFilter.onStepDetected(pdrValues[0], pdrValues[1], elevationVal, 
+                                                       (android.os.SystemClock.uptimeMillis()));
+                // 获取EKF位置
+                double[] ekfState = this.extendedKalmanFilter.getCurrentState();
+                LatLng ekfPosition = CoordinateTransform.enuToGeodetic(
+                    (float)ekfState[0], (float)ekfState[1], elevationVal,
+                    startRef[0], startRef[1], ecefRefCoords
+                );
+                
+                // 更新PF
+                if (particleFilter != null) {
+                    this.particleFilter.update(latitude, longitude);
+                    LatLng pfPosition = new LatLng(latitude, longitude);
+                    
+                    // 添加PDR更新日志
+                    Log.d("SensorFusion", String.format("PDR更新:\n" +
+                            "PDR原始位置: (%.6f, %.6f)\n" +
+                            "当前高度: %.2f米",
+                            latitude, longitude, elevationVal));
+                    
+                    // 融合两个滤波器的结果
+                    LatLng fusedPosition = fusePositions(ekfPosition, pfPosition);
+                    notifyFusedUpdate(fusedPosition);
+                }
+            }
+        } catch (Exception e) {
+            Log.e("SensorFusion", "更新PDR融合失败", e);
         }
     }
 
@@ -1178,17 +1203,10 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @param wifiResponse The JSON object containing WiFi positioning data.
      */
-    public void updateFusionWifi(JSONObject wifiResponse){
-        if (extendedKalmanFilter == null) {
-            Log.w("SensorFusion", "⚠️ EKF未初始化，忽略 WiFi更新");
-            return;
-        }
-
+    public void updateFusionWifi(JSONObject wifiResponse) {
         try {
-            if (wifiResponse == null){
+            if (wifiResponse == null) {
                 this.positionWifi = null;
-
-                // display the position on UI
                 notifySensorUpdate(SensorFusionUpdates.update_type.WIFI_UPDATE);
                 return;
             }
@@ -1198,24 +1216,26 @@ public class SensorFusion implements SensorEventListener, Observer {
             double floor = wifiResponse.getDouble("floor");
             this.positionWifi = new LatLng(latitude, longitude);
 
-            // display the position on UI
+            // 通知UI更新WiFi位置
             notifySensorUpdate(SensorFusionUpdates.update_type.WIFI_UPDATE);
 
-            // call fusion algorithm
-            if (fusionAlgorithmSelection){
-                if(!noCoverage) {
+            // 同时更新两个滤波器
+            if (!noCoverage) {
+                if (extendedKalmanFilter != null) {
                     this.extendedKalmanFilter.onOpportunisticUpdate(
-                            CoordinateTransform.geodeticToEnu(latitude, longitude, getElevation(), startRef[0], startRef[1], startRef[2]), (android.os.SystemClock.uptimeMillis())
+                        CoordinateTransform.geodeticToEnu(latitude, longitude, getElevation(), 
+                                                        startRef[0], startRef[1], startRef[2]), 
+                        (android.os.SystemClock.uptimeMillis())
                     );
                 }
-            } else {
-                this.particleFilter.update(latitude, longitude);
+                
+                if (particleFilter != null) {
+                    this.particleFilter.update(latitude, longitude);
+                }
             }
-
         } catch (JSONException e) {
-            e.printStackTrace();
+            Log.e("SensorFusion", "处理WiFi响应失败", e);
         }
-
     }
 
     /**
@@ -1226,20 +1246,24 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param longitude The longitude from GNSS data.
      * @param altitude  The altitude from GNSS data.
      */
-    public void updateFusionGNSS(double latitude,double longitude, double altitude){
-        if (extendedKalmanFilter == null) {
-            Log.w("SensorFusion", "⚠️ EKF未初始化，忽略 GNSS更新");
-            return;
-        }
-        // call fusion algorithm
-        if (fusionAlgorithmSelection) {
+    public void updateFusionGNSS(double latitude, double longitude, double altitude) {
+        try {
             if (noCoverage) {
-                this.extendedKalmanFilter.onOpportunisticUpdate(
-                        CoordinateTransform.geodeticToEnu(latitude, longitude, altitude, startRef[0], startRef[1], startRef[2]), (android.os.SystemClock.uptimeMillis())
-                );
+                // 同时更新两个滤波器
+                if (extendedKalmanFilter != null) {
+                    this.extendedKalmanFilter.onOpportunisticUpdate(
+                        CoordinateTransform.geodeticToEnu(latitude, longitude, altitude, 
+                                                        startRef[0], startRef[1], startRef[2]), 
+                        (android.os.SystemClock.uptimeMillis())
+                    );
+                }
+                
+                if (particleFilter != null) {
+                    this.particleFilter.update(latitude, longitude);
+                }
             }
-        } else {
-            particleFilter.update(latitude, longitude);
+        } catch (Exception e) {
+            Log.e("SensorFusion", "更新GNSS融合失败", e);
         }
     }
 
@@ -1248,13 +1272,14 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Creates either an Extended Kalman Filter or a Particle Filter instance.
      */
     public void initialiseFusionAlgorithm() {
-        // Picks the Fusion Algorithm to run
-        fusionAlgorithmSelection = !(this.settings.getBoolean("fusion_enable", false));
-        this.noCoverage = true;
-        if (fusionAlgorithmSelection) {
+        try {
+            // 同时初始化两个滤波器
+            Log.d("SensorFusion", "初始化EKF和PF算法");
             this.extendedKalmanFilter = new ExtendedKalmanFilter();
-        }else{
             this.particleFilter = new ParticleFilter();
+            this.noCoverage = true;
+        } catch (Exception e) {
+            Log.e("SensorFusion", "初始化融合算法失败", e);
         }
     }
 
@@ -1333,5 +1358,34 @@ public class SensorFusion implements SensorEventListener, Observer {
         pdrProcessing.setCurrentFloor(updatedFloor);
     }
 
+    /**
+     * 融合EKF和PF的位置估计结果
+     * @param ekfPosition EKF估计的位置
+     * @param pfPosition PF估计的位置
+     * @return 融合后的位置
+     */
+    private LatLng fusePositions(LatLng ekfPosition, LatLng pfPosition) {
+        // 这里可以实现不同的融合策略
+        // 例如：加权平均、卡尔曼滤波等
+        // 这里使用简单的加权平均作为示例
+        double ekfWeight = 0.3;  // EKF权重
+        double pfWeight = 0.7;   // PF权重
+        
+        double fusedLat = ekfPosition.latitude * ekfWeight + pfPosition.latitude * pfWeight;
+        double fusedLng = ekfPosition.longitude * ekfWeight + pfPosition.longitude * pfWeight;
+        
+        // 添加详细的日志输出
+        Log.d("SensorFusion", String.format("位置融合结果:\n" +
+                "EKF位置: (%.6f, %.6f)\n" +
+                "PF位置: (%.6f, %.6f)\n" +
+                "融合权重: EKF=%.2f, PF=%.2f\n" +
+                "融合后位置: (%.6f, %.6f)",
+                ekfPosition.latitude, ekfPosition.longitude,
+                pfPosition.latitude, pfPosition.longitude,
+                ekfWeight, pfWeight,
+                fusedLat, fusedLng));
+        
+        return new LatLng(fusedLat, fusedLng);
+    }
 
 }

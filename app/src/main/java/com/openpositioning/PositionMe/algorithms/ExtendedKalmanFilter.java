@@ -67,9 +67,9 @@ public class ExtendedKalmanFilter{
     // Default length of each step in the algorithm, likely measured in units relevant to the context (e.g., meters).
     private final static double defaultStepLength = 0.7;
     // Maximum elapsed time that triggers the maximum penalty, specified in milliseconds.
-    private final static long maxElapsedTimeForMaxPenalty = 6000;
+    private final static long maxElapsedTimeForMaxPenalty = 3000;
     // Time threshold for bearing penalty, expressed in minutes.
-    private final static long maxElapsedTimeForBearingPenalty = 15;
+    private final static long maxElapsedTimeForBearingPenalty = 10;
     // Maximum bearing penalty applied, converted from degrees to radians for internal calculations.
     private final static double maxBearingPenalty = Math.toRadians(22.5);
     // Standard deviation for the change in angle (θ) process noise, expressed in radians.
@@ -87,9 +87,9 @@ public class ExtendedKalmanFilter{
     // Standard deviation for eastward measurement noise, used in PDR.
     private double sigma_east_meas = 10;
     // Standard deviation for WiFi-based location measurements.
-    private double wifi_std = 10;
+    private double wifi_std = 5;
     // Standard deviation for GNSS (GPS) location measurements.
-    private double gnss_std = 5;
+    private double gnss_std = 2;
     // State transition matrix, defining how the state evolves from one time step to the next without considering the process noise.
     private SimpleMatrix Fk;
     // Process noise covariance matrix, quantifying the uncertainty in the process noise.
@@ -145,7 +145,7 @@ public class ExtendedKalmanFilter{
         this.Xk = new SimpleMatrix(new double[][]{{0}, {0}, {0}});
 
         // Initialize the error covariance matrix (Pk) with zeros on the diagonal, indicating no initial certainty in the estimates.
-        this.Pk = SimpleMatrix.diag(1000, 100, 10);
+        this.Pk = SimpleMatrix.diag(10, 10, 10);
 
 
         // Initialize the process noise covariance matrix (Qk) based on the variances of process noises (theta and displacement).
@@ -264,7 +264,7 @@ public class ExtendedKalmanFilter{
     private void resetFilter() {
         Log.w("EKF", "⚠️ EKF 状态异常，正在重置滤波器...");
         this.Xk = new SimpleMatrix(new double[][]{{0}, {0}, {0}});
-        this.Pk = SimpleMatrix.diag(1000, 100, 10);
+        this.Pk = SimpleMatrix.diag(10, 10, 10);
     }
 
     private boolean hasInvalidState() {
