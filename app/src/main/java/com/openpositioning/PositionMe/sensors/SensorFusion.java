@@ -188,6 +188,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private double previousOrientation = 0.0;
 
+    private double[] lastWifiENU = null;
+    private long lastWifiUpdateTime = 0;
+
     private com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment trajectoryMapFragment;
 
     //region Initialisation
@@ -585,6 +588,21 @@ public class SensorFusion implements SensorEventListener, Observer {
                 double lon = wifiResponse.getDouble("lon");
                 double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, getElevation(), refLat, refLon, refAlt);
 
+                // 添加冗余更新检查：如果在 3 秒内且 Wi-Fi 坐标变化不足 1 米，则跳过更新
+                long currentWifiTime = SystemClock.uptimeMillis();
+                if (lastWifiENU != null) {
+                    double dx = enuCoords[0] - lastWifiENU[0];
+                    double dy = enuCoords[1] - lastWifiENU[1];
+                    double distance = Math.sqrt(dx * dx + dy * dy);
+                    if ((currentWifiTime - lastWifiUpdateTime < 3000) && (distance < 1.0)) {
+                        Log.d("SensorFusion", "WiFi coordinate redundant: distance = " + distance + " m, skipping update.");
+                        return;  // 跳过此次更新
+                    }
+                }
+
+                lastWifiENU = enuCoords;
+                lastWifiUpdateTime = currentWifiTime;
+
                 Log.d("SensorFusion", "Using WiFi for EKF update: East=" + enuCoords[0] + ", North=" + enuCoords[1]);
                 long fusionTime = System.currentTimeMillis();
                 Log.d("SensorFusion", "WiFi定位结果使用时间: " + fusionTime + "，相对延迟: " + (fusionTime - wifiReceivedTime) + " ms");
@@ -593,13 +611,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                     double timeSinceLastUpdate = SystemClock.uptimeMillis() - lastOpUpdateTime;
                     lastOpUpdateTime = SystemClock.uptimeMillis();
                     double penaltyFactor = calculatePenaltyFactor(avgRssi, timeSinceLastUpdate);
-
                     extendedKalmanFilter.update(enuCoords[0], enuCoords[1], penaltyFactor);
                     Log.d("SensorFusion", "EKF updated with WiFi: penaltyFactor=" + penaltyFactor);
-                }
-                if (particleFilter != null) {
-                    particleFilter.updateWiFi(enuCoords[0], enuCoords[1]);
-                    Log.d("SensorFusion", "PF updated with WiFi");
                 }
             } else if (useGNSS && gnssLocation != null) {
                 double lat = gnssLocation.getLatitude();
@@ -626,11 +639,11 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // WiFi 误差自适应
         if (rssi > -50) {
-            baseFactor = 0.75;  // 强 WiFi 信号时减少噪声影响
+            baseFactor = 2;  // 强 WiFi 信号时减少噪声影响
         } else if (rssi > -75) {
-            baseFactor = 1.5;  // 普通 WiFi 信号，不做调整
+            baseFactor = 4;  // 普通 WiFi 信号，不做调整
         } else {
-            baseFactor = 2.0;  // 弱 WiFi 信号时增加噪声影响
+            baseFactor = 5;  // 弱 WiFi 信号时增加噪声影响
         }
 
         // 时间误差动态调整（0.1/秒，最多调整到 4.0）
