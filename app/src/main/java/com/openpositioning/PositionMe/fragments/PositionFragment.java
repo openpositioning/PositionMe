@@ -206,7 +206,8 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         if (sensorFusion != null) {
             Log.e("GNSS", "Sensor Fusion Ready");
 //            if (sensorFusion.getLatLngWifiPositioning() != null) {
-            if (sensorFusion.getLastWifiPos() != null) {
+            // if wifi position is out of date (more than 10s ago), use GNSS position
+            if (sensorFusion.getLastWifiPos() != null && (System.currentTimeMillis() - sensorFusion.getLastWifiSuccessTime()) < 10000) {
 //                initialPosition = sensorFusion.getLatLngWifiPositioning();
                 initialPosition = sensorFusion.getLastWifiPos();
             } else {
@@ -633,7 +634,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
 //            if (sensorFusion.getLatLngWifiPositioning() != null) {
 //                initialPosition = sensorFusion.getLatLngWifiPositioning();
 //            }
-            if (sensorFusion.getLastWifiPos() != null) {
+            if (sensorFusion.getLastWifiPos() != null && (System.currentTimeMillis() - sensorFusion.getLastWifiSuccessTime()) < 10000) {
                 initialPosition = sensorFusion.getLastWifiPos();
             } else {
                 Toast.makeText(

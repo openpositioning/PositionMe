@@ -86,13 +86,13 @@
             android:id="@+id/button_reset"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_margin="8dp"
             android:layout_weight="1"
-            android:text="Reset"
-            android:textSize="18sp"
             android:background="@drawable/button_background"
-            android:textColor="@android:color/white"
             android:padding="12dp"
-            android:layout_margin="8dp"/>
+            android:text="Rescan"
+            android:textColor="@android:color/white"
+            android:textSize="18sp" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
