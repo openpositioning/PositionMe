@@ -34,8 +34,8 @@ public class TrajectoryFilter {
     }
 
     private static final double FRACTION_RETAIN = 0.5;
-    public static final int RAW_WINDOW_SIZE = 15;
-    public static final int INTERPOLATION_FACTOR = 15;
+    public static final int RAW_WINDOW_SIZE = 10;
+    public static final int INTERPOLATION_FACTOR = 10;
     public static final double TENSION = 0.6;
 
     private final List<Point> fusionBufferEnu;

@@ -39,6 +39,8 @@ public class PdrProcessing {
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
     private static final int MIN_REQUIRED_SAMPLES = 2;
+
+    private static final int MIN_ELEVATIONS_NEEDED = 20;
     //endregion
 
     //region Instance variables
@@ -64,7 +66,7 @@ public class PdrProcessing {
 
     // Buffer of most recent elevations calculated
     private CircularFloatBuffer elevationList;
-    private List<Float> absoluteElevation;
+    private List<Float> relativeElevation;
 
     // Buffer for most recent directional acceleration magnitudes
     private CircularFloatBuffer verticalAccel;
@@ -73,6 +75,24 @@ public class PdrProcessing {
     // Step sum and length aggregation variables
     private float sumStepLength = 0;
     private int stepCount = 0;
+
+    // List to store raw elevation values
+    private List<Float> rawElevation = new ArrayList<>();
+
+    // List to store filtered elevation values
+    private List<Float> filteredElevation = new ArrayList<>();
+
+    // Butterworth filter parameters
+    private static final double CUTOFF_FREQUENCY = 0.1; // Adjust as needed (0.0-1.0)
+    private static final int FILTER_ORDER = 2;          // 2nd order filter
+    private static final double SAMPLING_FREQUENCY = 1.0; // Adjust based on your sampling rate
+
+    // Filter coefficients (will be calculated once)
+    private double[] a;
+    private double[] b;
+    private double[] xv;
+    private double[] yv;
+
     //endregion
 
     /**
@@ -131,7 +151,7 @@ public class PdrProcessing {
         // Start floor - assumed to be zero
         this.currentFloor = 0;
 
-        this.absoluteElevation = new ArrayList<>();
+        this.relativeElevation = new ArrayList<>();
     }
 
     /**
@@ -209,7 +229,7 @@ public class PdrProcessing {
             // Add to buffer
             this.elevationList.putNewest(absoluteElevation);
 
-            this.absoluteElevation = this.elevationList.getListCopy();
+            this.relativeElevation.add(this.elevation);
 
             // Check if there was floor movement
             // Check if there is enough data to evaluate
@@ -420,22 +440,19 @@ public class PdrProcessing {
         return averageStepLength;
     }
 
-    /**
-     * Detects continuous elevation changes over time.
-     * This function determines if a user is consistently moving up or down in elevation,
-     * which could indicate stair climbing, ramp walking, or elevator use.
-     *
-     * @param minConsecutiveChanges Minimum number of consecutive readings showing same direction change
-     * @param minElevationDelta     Minimum elevation change (in meters) to consider significant
-     * @return                      Direction enum: ASCENDING, DESCENDING, or NEUTRAL
-     */
-    public ElevationDirection detectContinuousElevationChange(int minConsecutiveChanges, float minElevationDelta) {
+    // Elevation direction enum
+    public enum ElevationDirection {
+        ASCENDING, DESCENDING, NEUTRAL
+    }
 
+    public ElevationDirection detectContinuousElevationChange(int minConsecutiveChanges, float minElevationDelta) {
         // Need enough data points for detection
-        if (!elevationList.isFull() ||absoluteElevation.size() < minConsecutiveChanges) {
+        if (relativeElevation.size() < MIN_ELEVATIONS_NEEDED) {
             return ElevationDirection.NEUTRAL;
         }
 
+        // Apply Butterworth low-pass filter to the elevation data
+        List<Float> filteredElevation = applyButterworthFilter(relativeElevation);
 
         // Count consecutive increases and decreases
         int consecutiveIncreases = 0;
@@ -443,9 +460,9 @@ public class PdrProcessing {
         float totalDelta = 0;
 
         // Start from most recent values (assuming newest values are at end of list)
-        for (int i = absoluteElevation.size() - 1; i > 0; i--) {
-            float currentElevation = absoluteElevation.get(i);
-            float previousElevation = absoluteElevation.get(i - 1);
+        for (int i = filteredElevation.size() - 1; i > 0; i--) {
+            float currentElevation = filteredElevation.get(i);
+            float previousElevation = filteredElevation.get(i - 1);
             float delta = currentElevation - previousElevation;
 
             // Check if the change is significant enough
@@ -475,7 +492,7 @@ public class PdrProcessing {
             }
 
             // Optional early termination if we've looked at enough data points
-            if (i < absoluteElevation.size() - (minConsecutiveChanges * 2)) {
+            if (i < filteredElevation.size() - (minConsecutiveChanges * 2)) {
                 break;
             }
         }
@@ -493,12 +510,75 @@ public class PdrProcessing {
     }
 
     /**
-     * Enum representing the direction of elevation change.
+     * Helper method to apply a Butterworth low-pass filter to elevation data
+     * @param inputData List of input elevation readings
+     * @return List of filtered elevation values
      */
-    public enum ElevationDirection {
-        ASCENDING,   // Moving up (climbing stairs, uphill, elevator up)
-        DESCENDING,  // Moving down (descending stairs, downhill, elevator down)
-        NEUTRAL      // No significant change or inconsistent changes
-    }
+    private List<Float> applyButterworthFilter(List<Float> inputData) {
+        // Filter parameters
+        final double cutoffFrequency = 0.1; // Adjust as needed (0.0-1.0)
+        final int filterOrder = 2;          // 2nd order filter
+        final double samplingFrequency = 1.0; // Adjust based on your sampling rate
 
+        // Calculate filter coefficients
+        double omega = Math.tan(Math.PI * cutoffFrequency / samplingFrequency);
+        double scale = 1.0 / (1.0 + Math.sqrt(2.0) * omega + omega * omega);
+
+        // Filter coefficients
+        double[] b = new double[3]; // Numerator coefficients
+        b[0] = omega * omega * scale;
+        b[1] = 2.0 * b[0];
+        b[2] = b[0];
+
+        double[] a = new double[3]; // Denominator coefficients
+        a[0] = 1.0;
+        a[1] = 2.0 * (omega * omega - 1.0) * scale;
+        a[2] = (1.0 - Math.sqrt(2.0) * omega + omega * omega) * scale;
+
+        // Apply the filter
+        List<Float> filteredData = new ArrayList<>(inputData.size());
+
+        // Initialize with first few values to handle filter startup
+        if (inputData.size() > 0) {
+            filteredData.add(inputData.get(0));
+        }
+        if (inputData.size() > 1) {
+            filteredData.add(inputData.get(1));
+        }
+
+        // Apply filter to the rest of the data
+        double[] x = new double[3]; // Input samples buffer
+        double[] y = new double[3]; // Output samples buffer
+
+        // Initialize buffers with available data
+        if (inputData.size() > 0) {
+            x[0] = inputData.get(0);
+            y[0] = filteredData.get(0);
+        }
+        if (inputData.size() > 1) {
+            x[1] = inputData.get(1);
+            y[1] = filteredData.get(1);
+        }
+
+        // Process remaining samples
+        for (int i = 2; i < inputData.size(); i++) {
+            // Shift values in the buffer
+            x[2] = x[1];
+            x[1] = x[0];
+            x[0] = inputData.get(i);
+
+            y[2] = y[1];
+            y[1] = y[0];
+
+            // Apply filter equation
+            y[0] = b[0] * x[0] + b[1] * x[1] + b[2] * x[2]
+                    - a[1] * y[1] - a[2] * y[2];
+
+            filteredData.add((float) y[0]);
+        }
+
+        return filteredData;
+    }
 }
+
+

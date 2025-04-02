@@ -242,7 +242,7 @@ public class TrajectoryMapFragment extends Fragment {
         sensorFusion = SensorFusion.getInstance();
         trajectoryFilter = new TrajectoryFilter();
         fusionPoints = new ArrayList<>();
-        sensorFusion.passContext(getContext());
+        //sensorFusion.passContext(requireContext());
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
@@ -330,10 +330,10 @@ public class TrajectoryMapFragment extends Fragment {
             Log.d("TrajectoryMapFragment", "Created new fusion polyline");
         } else {
             // Add new point to fusion path
-            List<LatLng> fusionPoints = new ArrayList<>(fusionPolyline.getPoints());
+            //List<LatLng> fusionPoints = new ArrayList<>(fusionPolyline.getPoints());
             fusionPoints.add(fusionLocation);
             // TODO: Add filter for points
-            //List<LatLng> fusionPoints = trajectoryFilter.processData(fusionLocation, sensorFusion.getReferencePosition());
+            List<LatLng> fusionPoints = trajectoryFilter.processData(fusionLocation, sensorFusion.getReferencePosition());
             fusionPolyline.setPoints(fusionPoints);
             Log.d("TrajectoryMapFragment", "Added point to fusion polyline, total points: " + fusionPoints.size());
         }

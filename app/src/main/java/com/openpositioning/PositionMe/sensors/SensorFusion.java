@@ -1184,11 +1184,13 @@ public class SensorFusion implements SensorEventListener, Observer {
             public void run() {
                 performIntervalUpdate();
             }
-        }, (int) UPDATE_INTERVAL_MS, UPDATE_INTERVAL_MS);
+        }, (int) 0, UPDATE_INTERVAL_MS);
     }
 
     private void performIntervalUpdate() {
         if (fusionAlgorithm != null) {
+            if (System.currentTimeMillis() - lastStepTime > 1000) {
+            fusionAlgorithm.staticUpdate();
             fusedPosition = fusionAlgorithm.getFusedPosition();
             // Enhanced logging
             if (fusedPosition != null) {
@@ -1199,8 +1201,10 @@ public class SensorFusion implements SensorEventListener, Observer {
             } else {
                 Log.e("SensorFusion", "Fusion algorithm returned null position after PDR update");
             }
+            lastStepTime = System.currentTimeMillis();
         }
     }
+        }
 
     /**
      * Updates the fusion algorithm with new PDR data.
@@ -1239,6 +1243,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         } else {
             Log.e("SensorFusion", "Fusion algorithm returned null position after PDR update");
         }
+
+        lastStepTime = System.currentTimeMillis();
+
+        startUpdateTimer();
     }
 
     /**
@@ -1303,18 +1311,20 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Log WiFi position for debugging
         Log.d("SensorFusion", "Wifi LatLng update: " + wifiPosition.latitude + ", " + wifiPosition.longitude);
 
+        fusionAlgorithm.retrieveContext(appContext);
+
         // Update the fusion algorithm with new GNSS data
         fusionAlgorithm.processWifiUpdate(wifiPosition, floor);
 
         // Get the fused position
-        fusedPosition = fusionAlgorithm.getFusedPosition();
+        //fusedPosition = fusionAlgorithm.getFusedPosition();
 
         // Enhanced logging
         if (fusedPosition != null) {
             Log.d("SensorFusion", "Fusion after WiFi: " + fusedPosition.latitude + ", " + fusedPosition.longitude);
 
             // Notify listeners
-            notifyPositionListeners(PositionListener.UpdateType.FUSED_POSITION, fusedPosition);
+            //notifyPositionListeners(PositionListener.UpdateType.FUSED_POSITION, fusedPosition);
         } else {
             Log.e("SensorFusion", "Fusion algorithm returned null position after WiFi update");
         }
@@ -1387,10 +1397,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // Create fusion algorithm with valid reference position
         fusionAlgorithm = new ParticleFilterFusion(NUM_PARTICLES, referencePosition);
-
-        if (this.FragmentContext != null) {
-            fusionAlgorithm.retrieveContext(this.FragmentContext);
-        }
     }
 
     /**
@@ -1461,7 +1467,4 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
-    public void passContext(Context context) {
-        this.FragmentContext = context;
-    }
 }
