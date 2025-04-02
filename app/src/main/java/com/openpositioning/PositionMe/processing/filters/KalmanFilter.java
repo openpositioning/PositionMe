@@ -7,6 +7,7 @@ import org.ejml.simple.SimpleMatrix;
  * x_t = F * x_t-1 + B * u - linear motion update based on the previous state and current control inputs
  * y_t = H * x_t           - an observation that is a linear function of the current state
  * https://en.wikipedia.org/wiki/Kalman_filter
+ * @author Wojciech Boncela
  */
 public class KalmanFilter implements Filter{
     private double[] pos;

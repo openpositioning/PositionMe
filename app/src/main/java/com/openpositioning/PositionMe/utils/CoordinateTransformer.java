@@ -187,6 +187,18 @@ public class CoordinateTransformer {
     return convertTargetToWGS84(newEasting, newNorthing);
   }
 
+  /**
+   * Calculates the relative position of a point with respect to a reference point in the same
+   * projected coordinate system (e.g., OSGB36 or UTM).
+   *
+   * This method returns the displacement vector (deltaX, deltaY, deltaZ) between the given point
+   * and the reference point. This is useful for determining how far and in what direction
+   * a point lies relative to a known origin in a local Cartesian space.
+   *
+   * @param ref The reference coordinate (origin point) as a ProjCoordinate
+   * @param point The target coordinate whose relative position is being calculated
+   * @return A double array [deltaX, deltaY, deltaZ], representing the relative displacement
+   */
   public static double[] getRelativePosition(ProjCoordinate ref, ProjCoordinate point) {
     return new double[] {
             point.x - ref.x,
@@ -205,7 +217,6 @@ public class CoordinateTransformer {
     return Math.sqrt(
             Math.pow(point1.x - point2.x,2) +
             Math.pow(point1.y - point2.y,2)
-//            Math.pow(point1.z - point2.z,2)
             );
 
   }
