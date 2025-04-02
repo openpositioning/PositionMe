@@ -21,9 +21,9 @@
         android:layout_alignParentTop="true"
         android:layout_alignParentEnd="true"
         android:layout_margin="16dp"
-        android:background="#CCFFFFFF"
-        android:elevation="10dp"
+        android:background="@color/very_light_purple"
         android:clickable="true"
+        android:elevation="10dp"
         android:focusable="true"
         android:orientation="vertical"
         android:padding="12dp">
@@ -32,40 +32,43 @@
             android:id="@+id/pdr_radio_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="PDR轨迹"
             android:clickable="true"
             android:focusable="true"
             android:minHeight="48dp"
-            android:textSize="16sp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
-            android:textColor="@color/colorRed" />
+            android:text="PDR"
+            android:textColor="#B2FF0000"
+            android:textSize="24sp"
+            android:textStyle="bold" />
 
         <RadioButton
             android:id="@+id/gnss_radio_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="GNSS轨迹"
             android:clickable="true"
             android:focusable="true"
             android:minHeight="48dp"
-            android:textSize="16sp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
-            android:textColor="@color/colorBlue" />
+            android:text="GNSS"
+            android:textColor="@color/pastelBlue"
+            android:textSize="24sp"
+            android:textStyle="bold" />
 
         <RadioButton
             android:id="@+id/ekf_radio_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="融合轨迹"
             android:clickable="true"
             android:focusable="true"
             android:minHeight="48dp"
-            android:textSize="16sp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
-            android:textColor="@color/colorGreen" />
+            android:text="Fusion"
+            android:textColor="@android:color/holo_green_dark"
+            android:textSize="24sp"
+            android:textStyle="bold" />
     </RadioGroup>
 
     <!-- Playback Controls -->
@@ -74,9 +77,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
+        android:background="@color/very_light_purple"
         android:orientation="horizontal"
-        android:padding="16dp"
-        android:background="@color/white">
+        android:padding="16dp">
 
         <Button
             android:id="@+id/play_pause_button"

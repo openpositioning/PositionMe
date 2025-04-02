@@ -12,7 +12,7 @@
         android:layout_marginTop="15dp"
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="5dp"
-        app:cardBackgroundColor="@color/pastelBlue"
+        app:cardBackgroundColor="@color/purple_200"
         app:cardCornerRadius="20dp"
         app:cardElevation="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -26,13 +26,14 @@
 
             <TextView
                 android:id="@+id/trajectoryIdItem"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:layout_marginStart="8dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
                 android:gravity="center"
                 android:text="999"
-                android:textColor="@color/lightLogoBlue"
-                android:textSize="65dp"
+                android:textColor="#D17700EE"
+                android:textSize="32sp"
+                android:maxLines="1"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -50,8 +51,10 @@
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                app:layout_constraintHorizontal_bias="1.0"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.492" />
 
             <ImageButton
                 android:id="@+id/downloadTrajectoryButton"
@@ -60,7 +63,7 @@
                 android:layout_marginTop="8dp"
                 android:layout_marginEnd="8dp"
                 android:layout_marginBottom="8dp"
-                android:background="@drawable/rounded_corner_lightblue"
+                android:background="@drawable/unified_button_style"
                 android:contentDescription="@string/download"
                 android:scaleType="fitXY"
                 app:layout_constraintBottom_toBottomOf="parent"

@@ -59,9 +59,68 @@ public class SensorInfoListAdapter extends RecyclerView.Adapter<SensorInfoViewHo
      */
     @Override
     public void onBindViewHolder(@NonNull SensorInfoViewHolder holder, int position) {
-        holder.name.setText(sensorInfoList.get(position).getName());
+        String fullName = sensorInfoList.get(position).getName();
+        String displayName = "";
+        
+        // 定义传感器类型和它们的显示名称，以及可能的型号前缀
+        String[][] sensorMappings = {
+            {"Accelerometer", "Acceleration Sensor"},
+            {"Acceleration", "Acceleration Sensor"},
+            {"Gyroscope", "Gyroscope Sensor"},
+            {"Magnetic", "Magnetic Sensor"},
+            {"Light", "Light Sensor"},
+            {"Pressure", "Pressure Sensor"},
+            {"Proximity", "Proximity Sensor"}
+        };
 
-        String vendorString =  context.getString(R.string.vendor, sensorInfoList.get(position).getVendor());
+        // 定义要移除的型号前缀
+        String[] prefixesToRemove = {
+            "lsm6dso",
+            "LSM6DSO",
+            "ak0991x",
+            "AK0991X",
+            "Non-wakeup",
+            "Non-Wakeup"
+        };
+
+        // 移除所有已知的型号前缀
+        String cleanName = fullName;
+        for (String prefix : prefixesToRemove) {
+            cleanName = cleanName.replace(prefix, "").trim();
+        }
+        
+        // 遍历查找传感器类型
+        for (String[] mapping : sensorMappings) {
+            if (fullName.toLowerCase().contains(mapping[0].toLowerCase())) {
+                displayName = mapping[1];
+                break;
+            }
+        }
+        
+        // 如果没有找到匹配的类型，检查是否包含"Magnetic"或其他关键词
+        if (displayName.isEmpty()) {
+            if (fullName.toLowerCase().contains("magnetic") || 
+                fullName.toLowerCase().contains("mag") ||
+                fullName.toLowerCase().contains("ak")) {
+                displayName = "Magnetic Sensor";
+            } else if (fullName.toLowerCase().contains("accel")) {
+                displayName = "Acceleration Sensor";
+            } else if (fullName.toLowerCase().contains("gyro")) {
+                displayName = "Gyroscope Sensor";
+            } else {
+                // 如果还是没找到，使用清理后的名称
+                displayName = cleanName.trim();
+                if (displayName.isEmpty() || displayName.equals("Sensor")) {
+                    displayName = "Unknown Sensor";
+                } else if (!displayName.toLowerCase().contains("sensor")) {
+                    displayName += " Sensor";
+                }
+            }
+        }
+
+        holder.name.setText(displayName);
+
+        String vendorString = context.getString(R.string.vendor, sensorInfoList.get(position).getVendor());
         holder.vendor.setText(vendorString);
 
         String resolutionString =  context.getString(R.string.resolution, String.format("%.03g", sensorInfoList.get(position).getResolution()));

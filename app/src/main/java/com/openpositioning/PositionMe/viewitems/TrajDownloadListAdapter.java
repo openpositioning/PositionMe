@@ -69,8 +69,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     public void onBindViewHolder(@NonNull TrajDownloadViewHolder holder, int position) {
         String id = responseItems.get(position).get("id");
         holder.trajId.setText(id);
-        if(id.length() > 2) holder.trajId.setTextSize(58);
-        else holder.trajId.setTextSize(65);
+        if(id.length() > 2) holder.trajId.setTextSize(28);
+        else holder.trajId.setTextSize(32);
         holder.trajDate.setText(
                 dateFormat.format(
                         LocalDateTime.parse(
