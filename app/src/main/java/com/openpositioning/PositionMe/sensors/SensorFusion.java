@@ -500,8 +500,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                         Log.e("SensorFusion", "EKF is not initialized!");
                     }
 
-                    // 获取最新 GNSS 位置
-                    Location gnssLocation = gnssProcessor.getLastKnownLocation();
+                    // get newest Gnss position
+                    float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+                    Location gnssLocation = new Location(LocationManager.GPS_PROVIDER);
+                    gnssLocation.setLatitude(gnss[0]);
+                    gnssLocation.setLongitude(gnss[1]);
                     if (gnssLocation != null) {
                         Log.d("SensorFusion", "GNSS Location available for update: Lat=" + gnssLocation.getLatitude() +
                                 ", Lon=" + gnssLocation.getLongitude() + ", Accuracy=" + gnssLocation.getAccuracy());
@@ -576,7 +579,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             long currentTime = SystemClock.uptimeMillis();
             double gnssAccuracy = gnssLocation != null ? gnssLocation.getAccuracy() : Double.MAX_VALUE;
             boolean useWiFi = wifiResponse != null && wifiResponse.has("lat") && wifiResponse.has("lon");
-            boolean useGNSS =!useWiFi && gnssLocation != null && gnssAccuracy < 20.0 && (currentTime - lastGnssUpdateTime > 5000);
+            boolean useGNSS = (!useWiFi && gnssLocation != null && gnssAccuracy < 20.0 && currentTime - lastGnssUpdateTime > 3000);
             if(useGNSS){
                 lastGnssUpdateTime = currentTime;
             }
@@ -1121,12 +1124,14 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         if (ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            if (lastKnownLocation != null) {
-                initLatLon[0] = (float) lastKnownLocation.getLatitude();
-                initLatLon[1] = (float) lastKnownLocation.getLongitude();
-                Log.d("SensorFusion", "Using lastKnownLocation: " + initLatLon[0] + ", " + initLatLon[1]);
-            }
+            float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+            Location lastKnownLocation = new Location(LocationManager.GPS_PROVIDER);
+            assert gnss != null;
+            lastKnownLocation.setLatitude(gnss[0]);
+            lastKnownLocation.setLongitude(gnss[1]);
+            initLatLon[0] = (float) lastKnownLocation.getLatitude();
+            initLatLon[1] = (float) lastKnownLocation.getLongitude();
+            Log.d("SensorFusion", "Using lastKnownLocation: " + initLatLon[0] + ", " + initLatLon[1]);
         }
 
         double initAltitude = 0.0;
@@ -1150,7 +1155,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                 Log.d("SensorFusion", "GNSS initial LatLon: " + initLatLon[0] + ", " + initLatLon[1]);
                 if (ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
                     ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                    Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                    float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+                    Location lastKnownLocation = new Location(LocationManager.GPS_PROVIDER);
+                    assert gnss != null;
+                    lastKnownLocation.setLatitude(gnss[0]);
+                    lastKnownLocation.setLongitude(gnss[1]);
+                    initLatLon[0] = (float) lastKnownLocation.getLatitude();
+                    initLatLon[1] = (float) lastKnownLocation.getLongitude();
                     if (lastKnownLocation != null) {
                         initAltitude = lastKnownLocation.getAltitude();
                         Log.d("SensorFusion", "Using lastKnownLocation: " + initLatLon[0] + ", " + initLatLon[1] + ", Alt=" + initAltitude);
