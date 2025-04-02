@@ -270,7 +270,7 @@ public class RecordingFragment extends Fragment implements PositionListener {
 
             // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.pdrLocation(newLocation);
+                trajectoryMapFragment.updatePdr(newLocation);
 
                 // Force polyline update if there are no points yet
                 if (trajectoryMapFragment.isPolylineEmpty()) {

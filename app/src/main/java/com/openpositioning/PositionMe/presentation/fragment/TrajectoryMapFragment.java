@@ -1,9 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -530,7 +527,7 @@ public class TrajectoryMapFragment extends Fragment {
      *
      * @param newLocation The new location to plot.
      */
-    public void pdrLocation(@NonNull LatLng newLocation) {
+    public void updatePdr(@NonNull LatLng newLocation) {
         if (gMap == null) return;
         if (!isPdrOn) return;
 
@@ -556,10 +553,10 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         // Update indoor map overlay
-//        if (indoorMapManager != null) {
-//            indoorMapManager.setCurrentLocation(newLocation);
-//            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
-//        }
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(newLocation);
+            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+        }
     }
 
     /**
