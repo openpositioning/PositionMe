@@ -186,12 +186,12 @@ public class StartLocationFragment extends Fragment {
                 LatLng fusedLatLng = PositioningFusion.getInstance().getFusedPosition();
 
                 if (fusedLatLng == null) {
-                    Toast.makeText(requireContext(), "定位尚未准备好，请稍后再试", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), "Positioning is not ready yet, please try again later", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
                 // 弹出提示，等待 5 秒
-                Toast.makeText(requireContext(), "定位成功，5秒后开始录制...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(requireContext(), "Positioning successful, recording will start in 5 seconds...", Toast.LENGTH_SHORT).show();
 
                 // 禁用按钮避免重复点击（可选）
                 view.setEnabled(false);
