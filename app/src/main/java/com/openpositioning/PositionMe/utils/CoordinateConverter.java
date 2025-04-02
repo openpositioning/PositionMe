@@ -11,6 +11,8 @@ import com.google.android.gms.maps.model.LatLng;
  * <p>This implementation is based on standard geodetic formulas and ensures
  * consistency across transformations. All angles used as input parameters are expected
  * in degrees, while internal calculations often use radians.</p>
+ *
+ * @author Michal Wiercigroch
  */
 public final class CoordinateConverter { // Added final as it's a utility class with only static members
 

@@ -1,12 +1,10 @@
 package com.openpositioning.PositionMe.fusion;
 
-import android.content.Context;
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
 import com.openpositioning.PositionMe.utils.MeasurementModel;
-import com.openpositioning.PositionMe.utils.PdrProcessing;
 
 import org.ejml.simple.SimpleMatrix;
 
@@ -20,6 +18,9 @@ import java.util.Objects;
  * A Kalman Filter implementation for fusing position data from PDR and GNSS.
  * This implementation provides accurate position estimates by incorporating
  * movement models, outlier detection, and adaptive measurement handling.
+ * It only updates the state when a PDR step is detected.
+ *
+ * @author Michal Wiercigroch
  */
 public class KalmanFilterFusion extends IPositionFusionAlgorithm {
     private static final String TAG = "KalmanFilterFusion";
@@ -78,6 +79,18 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
     private boolean hasPendingMeasurement;     // Flag for pending measurement
     private boolean usePendingMeasurement;     // Flag to use pending measurement
 
+    // Pending GNSS update variables
+    private boolean hasPendingGnssUpdate;      // Flag for pending GNSS update
+    private LatLng pendingGnssPosition;        // Pending GNSS position
+    private double pendingGnssAltitude;        // Pending GNSS altitude
+    private long pendingGnssTime;              // Time of pending GNSS update (ms)
+
+    // Pending WiFi update variables
+    private boolean hasPendingWifiUpdate;      // Flag for pending WiFi update
+    private LatLng pendingWifiPosition;        // Pending WiFi position
+    private int pendingWifiFloor;              // Pending WiFi floor
+    private long pendingWifiTime;              // Time of pending WiFi update (ms)
+
     /**
      * Creates a new Kalman filter for position fusion.
      *
@@ -119,10 +132,10 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
 
         // Initialize measurement noise matrices for GNSS and WIFI
         measurementNoiseMatrixGnss = SimpleMatrix.identity(MEAS_SIZE);
-        measurementNoiseMatrixGnss = measurementNoiseMatrixGnss.scale(25); // Default 5m std
+        measurementNoiseMatrixGnss = measurementNoiseMatrixGnss.scale(49); //7m st dev
 
         measurementNoiseMatrixWifi = SimpleMatrix.identity(MEAS_SIZE);
-        measurementNoiseMatrixWifi = measurementNoiseMatrixWifi.scale(16); // Default 4m std
+        measurementNoiseMatrixWifi = measurementNoiseMatrixWifi.scale(121); //11m st dev
 
         // Initialize process matrix (will be updated with each time step)
         processMatrix = SimpleMatrix.identity(STATE_SIZE);
@@ -143,6 +156,18 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
         pendingMeasurementTime = 0;
         hasPendingMeasurement = false;
         usePendingMeasurement = false;
+
+        // Initialize pending GNSS update variables
+        hasPendingGnssUpdate = false;
+        pendingGnssPosition = null;
+        pendingGnssAltitude = 0;
+        pendingGnssTime = 0;
+
+        // Initialize pending WiFi update variables
+        hasPendingWifiUpdate = false;
+        pendingWifiPosition = null;
+        pendingWifiFloor = 0;
+        pendingWifiTime = 0;
 
         Log.d(TAG, "Kalman filter initialized with reference position: " +
                 referencePosition[0] + ", " + referencePosition[1] + ", " + referencePosition[2]);
@@ -174,6 +199,9 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
             measurementModel.updatePdrUncertainty(stepsSinceLastUpdate, currentTime);
 
             Log.d(TAG, "First PDR update: initializing state with E=" + eastMeters + ", N=" + northMeters);
+
+            // Apply any pending updates after initialization
+            processAllPendingUpdates(currentTime, eastMeters, northMeters);
             return;
         }
 
@@ -217,8 +245,8 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
         // Predict state using model
         predictState(bearing, stepLength, movementStdDev, timePenalty, currentTime, movementType);
 
-        // Check if we should process a pending measurement
-        processOpportunisticUpdateIfAvailable(currentTime, eastMeters, northMeters);
+        // Process all pending updates (GNSS, WiFi, and opportunistic)
+        processAllPendingUpdates(currentTime, eastMeters, northMeters);
 
         // Save last prediction time
         lastPredictTime = currentTime;
@@ -227,6 +255,28 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
                 " -> State=" + stateVector.get(STATE_IDX_EAST, 0) + ", " +
                 stateVector.get(STATE_IDX_NORTH, 0) + ", bearing=" +
                 Math.toDegrees(stateVector.get(STATE_IDX_BEARING, 0)) + "°");
+    }
+
+    /**
+     * Process all pending updates (GNSS, WiFi, and opportunistic) when a PDR step is detected.
+     *
+     * @param currentTime Current system time in milliseconds
+     * @param pdrEast Current PDR east position for comparison
+     * @param pdrNorth Current PDR north position for comparison
+     */
+    private void processAllPendingUpdates(long currentTime, double pdrEast, double pdrNorth) {
+        // Process pending GNSS update if available
+        if (hasPendingGnssUpdate) {
+            processPendingGnssUpdate(currentTime);
+        }
+
+        // Process pending WiFi update if available
+        if (hasPendingWifiUpdate) {
+            processPendingWifiUpdate(currentTime);
+        }
+
+        // Process pending opportunistic update if available
+        processOpportunisticUpdateIfAvailable(currentTime, pdrEast, pdrNorth);
     }
 
     @Override
@@ -244,22 +294,49 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
             }
         }
 
+        // Instead of applying the update immediately, store it for the next PDR update
+        pendingGnssPosition = position;
+        pendingGnssAltitude = altitude;
+        pendingGnssTime = currentTime;
+        hasPendingGnssUpdate = true;
+
+        Log.d(TAG, "GNSS update stored for next PDR step: " +
+                position.latitude + ", " + position.longitude + ", altitude=" + altitude);
+    }
+
+    /**
+     * Process a pending GNSS update that was stored.
+     *
+     * @param currentTime Current system time in milliseconds
+     */
+    private void processPendingGnssUpdate(long currentTime) {
+        if (!hasPendingGnssUpdate || pendingGnssPosition == null) {
+            return;
+        }
+
         // If reference still not initialized, we can't process
         if (!referenceInitialized) {
-            Log.w(TAG, "Skipping GNSS update: reference position not initialized");
+            Log.w(TAG, "Skipping pending GNSS update: reference position not initialized");
+            hasPendingGnssUpdate = false;
+            return;
+        }
+
+        // Check if the update is too old (more than 10 seconds)
+        if (currentTime - pendingGnssTime > MAX_TIME_WITHOUT_UPDATE) {
+            Log.d(TAG, "Skipping pending GNSS update: too old");
+            hasPendingGnssUpdate = false;
             return;
         }
 
         // Convert GNSS position to ENU (using the reference position)
         double[] enu = CoordinateConverter.convertGeodeticToEnu(
-                position.latitude, position.longitude, altitude,
+                pendingGnssPosition.latitude, pendingGnssPosition.longitude, pendingGnssAltitude,
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
-
         // Debug the conversion
-        Log.d(TAG, "GNSS geodetic->ENU: " +
-                position.latitude + "," + position.longitude + " -> " +
+        Log.d(TAG, "Pending GNSS geodetic->ENU: " +
+                pendingGnssPosition.latitude + "," + pendingGnssPosition.longitude + " -> " +
                 "E=" + enu[0] + ", N=" + enu[1]);
 
         // If this is the first position, initialize the state
@@ -270,6 +347,7 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
             lastUpdateTime = currentTime;
 
             Log.d(TAG, "First GNSS update: initializing state with E=" + enu[0] + ", N=" + enu[1]);
+            hasPendingGnssUpdate = false;
             return;
         }
 
@@ -277,13 +355,13 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
         measurementModel.updateGnssUncertainty(null, currentTime);
 
         // Apply Kalman update with GNSS measurement
-        // (Create measurement vector and noise matrix)
         SimpleMatrix measurementVector = new SimpleMatrix(MEAS_SIZE, 1);
         measurementVector.set(MEAS_IDX_EAST, 0, enu[0]);
         measurementVector.set(MEAS_IDX_NORTH, 0, enu[1]);
 
-        // Prepare measurement noise matrix
-        double gnssVar = measurementModel.getGnssStd() * measurementModel.getGnssStd();
+        // Apply additional uncertainty scaling factor for GNSS
+        double gnssUncertaintyScaleFactor = 1; // Makes GNSS 1.5x less trusted
+        double gnssVar = Math.pow(measurementModel.getGnssStd() * gnssUncertaintyScaleFactor, 2);
         measurementNoiseMatrixGnss.set(MEAS_IDX_EAST, MEAS_IDX_EAST, gnssVar);
         measurementNoiseMatrixGnss.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, gnssVar);
 
@@ -293,18 +371,22 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
         double distance = Math.sqrt(Math.pow(enu[0] - currentEast, 2) +
                 Math.pow(enu[1] - currentNorth, 2));
 
-        if (fusionOutlierDetector.evaluateDistance(distance)) { // NEW
-            Log.w(TAG, "Skipping GNSS update: detected as outlier (distance=" + distance + "m)");
+        if (fusionOutlierDetector.evaluateDistance(distance)) {
+            Log.w(TAG, "Skipping pending GNSS update: detected as outlier (distance=" + distance + "m)");
+            hasPendingGnssUpdate = false;
             return;
         }
 
         // Perform Kalman update
         performUpdate(measurementVector, measurementNoiseMatrixGnss, currentTime);
 
-        // Reset step counter since we've had a GNSS update
+        // Reset step counter since we've applied a GNSS update
         stepsSinceLastUpdate = 0;
 
-        Log.d(TAG, "GNSS update: E=" + enu[0] + ", N=" + enu[1] +
+        // Clear pending update flag
+        hasPendingGnssUpdate = false;
+
+        Log.d(TAG, "Applied pending GNSS update: E=" + enu[0] + ", N=" + enu[1] +
                 " -> State=" + stateVector.get(STATE_IDX_EAST, 0) + ", " +
                 stateVector.get(STATE_IDX_NORTH, 0));
     }
@@ -313,22 +395,50 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
     public void processWifiUpdate(LatLng position, int floor) {
         long currentTime = System.currentTimeMillis();
 
+        // Instead of applying the update immediately, store it for the next PDR update
+        pendingWifiPosition = position;
+        pendingWifiFloor = floor;
+        pendingWifiTime = currentTime;
+        hasPendingWifiUpdate = true;
+
+        Log.d(TAG, "WiFi update stored for next PDR step: " +
+                position.latitude + ", " + position.longitude + ", floor=" + floor);
+    }
+
+    /**
+     * Process a pending WiFi update that was stored.
+     *
+     * @param currentTime Current system time in milliseconds
+     */
+    private void processPendingWifiUpdate(long currentTime) {
+        if (!hasPendingWifiUpdate || pendingWifiPosition == null) {
+            return;
+        }
+
         // If reference still not initialized, we can't process
         if (!referenceInitialized) {
-            Log.w(TAG, "Skipping WiFi update: reference position not initialized");
+            Log.w(TAG, "Skipping pending WiFi update: reference position not initialized");
+            hasPendingWifiUpdate = false;
+            return;
+        }
+
+        // Check if the update is too old (more than 10 seconds)
+        if (currentTime - pendingWifiTime > MAX_TIME_WITHOUT_UPDATE) {
+            Log.d(TAG, "Skipping pending WiFi update: too old");
+            hasPendingWifiUpdate = false;
             return;
         }
 
         // Convert WiFi position to ENU (using the reference position)
         // TODO: Fix altitude estimate for wifi
         double[] enu = CoordinateConverter.convertGeodeticToEnu(
-                position.latitude, position.longitude, 0,
+                pendingWifiPosition.latitude, pendingWifiPosition.longitude, referencePosition[2],
                 referencePosition[0], referencePosition[1], referencePosition[2]
         );
 
         // Debug the conversion
-        Log.d(TAG, "WiFi geodetic->ENU: " +
-                position.latitude + "," + position.longitude + " -> " +
+        Log.d(TAG, "Pending WiFi geodetic->ENU: " +
+                pendingWifiPosition.latitude + "," + pendingWifiPosition.longitude + " -> " +
                 "E=" + enu[0] + ", N=" + enu[1]);
 
         // If this is the first position, initialize the state
@@ -339,6 +449,7 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
             lastUpdateTime = currentTime;
 
             Log.d(TAG, "First WiFi update: initializing state with E=" + enu[0] + ", N=" + enu[1]);
+            hasPendingWifiUpdate = false;
             return;
         }
 
@@ -346,23 +457,26 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
         measurementModel.updateWifiUncertainty(null, currentTime);
 
         // Apply Kalman update with WiFi measurement
-        // (Create measurement vector and noise matrix)
         SimpleMatrix measurementVector = new SimpleMatrix(MEAS_SIZE, 1);
         measurementVector.set(MEAS_IDX_EAST, 0, enu[0]);
         measurementVector.set(MEAS_IDX_NORTH, 0, enu[1]);
 
         // Prepare measurement noise matrix
-        double gnssVar = measurementModel.getWifiStd() * measurementModel.getWifiStd();
-        measurementNoiseMatrixWifi.set(MEAS_IDX_EAST, MEAS_IDX_EAST, gnssVar);
-        measurementNoiseMatrixWifi.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, gnssVar);
+        double wifiConfidenceScaleFactor = 2.5; // Makes WiFi less trusted
+        double wifiVar = Math.pow(measurementModel.getWifiStd() * wifiConfidenceScaleFactor, 2);
+        measurementNoiseMatrixWifi.set(MEAS_IDX_EAST, MEAS_IDX_EAST, wifiVar);
+        measurementNoiseMatrixWifi.set(MEAS_IDX_NORTH, MEAS_IDX_NORTH, wifiVar);
 
         // Perform Kalman update
         performUpdate(measurementVector, measurementNoiseMatrixWifi, currentTime);
 
-        // Reset step counter since we've had a WiFi update
+        // Reset step counter since we've applied a WiFi update
         stepsSinceLastUpdate = 0;
 
-        Log.d(TAG, "WiFi update: E=" + enu[0] + ", N=" + enu[1] +
+        // Clear pending update flag
+        hasPendingWifiUpdate = false;
+
+        Log.d(TAG, "Applied pending WiFi update: E=" + enu[0] + ", N=" + enu[1] +
                 " -> State=" + stateVector.get(STATE_IDX_EAST, 0) + ", " +
                 stateVector.get(STATE_IDX_NORTH, 0));
 
@@ -389,10 +503,8 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
         double east = stateVector.get(STATE_IDX_EAST, 0);
         double north = stateVector.get(STATE_IDX_NORTH, 0);
 
-        // Apply smoothing
-
-        double [] smoothed = smoothingFilter.update(new double[]{east, north});
-
+        // Apply smoothing if needed
+        double[] smoothed = smoothingFilter.update(new double[]{east, north});
 
         // Debug the state before conversion
         Log.d(TAG, "Fused position (before conversion): E=" + smoothed[0] + ", N=" + smoothed[1]);
@@ -431,6 +543,18 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
         pendingMeasurementTime = 0;
         hasPendingMeasurement = false;
         usePendingMeasurement = false;
+
+        // Reset pending GNSS update variables
+        hasPendingGnssUpdate = false;
+        pendingGnssPosition = null;
+        pendingGnssAltitude = 0;
+        pendingGnssTime = 0;
+
+        // Reset pending WiFi update variables
+        hasPendingWifiUpdate = false;
+        pendingWifiPosition = null;
+        pendingWifiFloor = 0;
+        pendingWifiTime = 0;
 
         // Reset helper models
         movementModel.resetState();
@@ -503,7 +627,7 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
         );
 
         // Check if this is an outlier
-        if (fusionOutlierDetector.evaluateDistance(distance)) { // NEW
+        if (fusionOutlierDetector.evaluateDistance(distance)) {
             Log.d(TAG, "Skipping opportunistic update: detected as outlier (distance=" + distance + "m)");
             hasPendingMeasurement = false;
             return;
@@ -657,6 +781,7 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
      * Performs the Kalman filter update step with a measurement.
      *
      * @param measurementVector The measurement vector (East, North)
+     * @param measurementNoiseMatrix The measurement noise matrix
      * @param currentTime Current system time in milliseconds
      */
     private void performUpdate(SimpleMatrix measurementVector, SimpleMatrix measurementNoiseMatrix, long currentTime) {
@@ -849,9 +974,7 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
                         (1.0 - effectiveFactor) * this.previousFilteredState[i];
             }
 
-            // CRITICAL: Update the internal state using the result calculated
-            // with the temporal factor. This means the *next* regular 'update'
-            // call will use this value as its 'previousFilteredState'.
+            // Update the internal state using the result calculated with the temporal factor
             System.arraycopy(filteredOutput, 0, this.previousFilteredState, 0, this.numDimensions);
 
             return filteredOutput;
@@ -1098,7 +1221,6 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
             }
 
             // The MAD is the median of these absolute deviations
-            // Relying on computeMedian's logic which uses calculationWorkList
             Collections.sort(calculationWorkList); // Need to sort the deviations before finding their median
 
             int size = calculationWorkList.size();
@@ -1111,8 +1233,6 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
                 // Odd number of elements: return the middle element
                 return calculationWorkList.get(midIndex);
             }
-            // Note: Could also call computeMedian(calculationWorkList) here,
-            // but direct implementation avoids redundant checks and clearing.
         }
 
         /**
@@ -1124,7 +1244,6 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
             calculationWorkList.clear(); // Also clear the work list
             Log.i(TAG, "History cleared.");
         }
-
 
         /**
          * Retrieves a copy of the current list of distance measurements stored in the window.
@@ -1144,6 +1263,5 @@ public class KalmanFilterFusion extends IPositionFusionAlgorithm {
         public int getBufferCapacity() {
             return bufferCapacity;
         }
-
     }
 }

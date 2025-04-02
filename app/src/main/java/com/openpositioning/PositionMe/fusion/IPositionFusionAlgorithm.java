@@ -10,7 +10,8 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
  * Implementing classes should provide algorithms for fusing PDR and GNSS
  * positioning sources into a single estimate.
  *
- * Note: WiFi fusion will be added in a future update.
+ *
+ * @author Michal Wiercigroch
  */
 public abstract class IPositionFusionAlgorithm {
 
