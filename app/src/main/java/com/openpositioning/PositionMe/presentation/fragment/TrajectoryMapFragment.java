@@ -8,7 +8,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -70,7 +69,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
     protected final List<Marker> drinkingWaterMarkers = new ArrayList<>();
     protected final List<Marker> medicalRoomMarkers = new ArrayList<>();
     protected boolean lastIndoorMapState = false;
-    protected int lastKnownFloor = Integer.MIN_VALUE;
 
     protected boolean isCameraTracking = true;
     protected boolean isAutoFloorOn = true;;
@@ -119,9 +117,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
             if (indoorMapManager != null) indoorMapManager.increaseFloor();
-
-            Log.d("currentfloor", "B1uilding polygon added, vertex count: " + this.getCurrentBuilding());
-            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             updateAllIndoorMarkers();
             updateFloorControlVisibility();
         });
@@ -130,9 +125,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
             if (indoorMapManager != null) indoorMapManager.decreaseFloor();
-
-            Log.d("currentfloor", "B2uilding polygon added, vertex count: " + this.getCurrentBuilding());
-            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             updateAllIndoorMarkers();
             updateFloorControlVisibility();
         });
@@ -164,9 +156,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
             if (indoorMapManager != null) indoorMapManager.increaseFloor();
-
-            Log.d("currentfloor", "B3uilding polygon added, vertex count: " + this.getCurrentBuilding());
-            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             updateAllIndoorMarkers();
         });
 
@@ -174,9 +163,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
             if (indoorMapManager != null) indoorMapManager.decreaseFloor();
-
-            Log.d("currentfloor", "B4uilding polygon added, vertex count: " + this.getCurrentBuilding());
-            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             updateAllIndoorMarkers();
         });
 
@@ -214,20 +200,11 @@ public abstract class TrajectoryMapFragment extends Fragment {
 
         sensorFusion.setOnWifiFloorChangedListener(newFloor -> {
             if (isAutoFloorOn && indoorMapManager != null) {
-                if (newFloor != lastKnownFloor) {
-                    lastKnownFloor = newFloor;
-                    indoorMapManager.setCurrentFloor(newFloor, true);
-
-                    Log.d("currentfloor", "B5uilding polygon added, vertex count: " + this.getCurrentBuilding());
-                    Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
-                    Toast.makeText(requireContext(), "Automatically switched to floor: " + this.getCurrentFloor(), Toast.LENGTH_SHORT).show();
-
-                    updateAllIndoorMarkers();
-                    updateFloorControlVisibility();
-                }
+                indoorMapManager.setCurrentFloor(newFloor, true);
+                updateAllIndoorMarkers();
+                updateFloorControlVisibility();
             }
         });
-
 
         sensorFusion.setTrajectoryMapFragment(this);
     }
@@ -236,18 +213,17 @@ public abstract class TrajectoryMapFragment extends Fragment {
         recenterButton.setOnClickListener(v -> {
             isCameraTracking = !isCameraTracking;
 
-            // 更改按钮颜色
+            // change button color
             recenterButton.setBackgroundTintList(ColorStateList.valueOf(
                     isCameraTracking ? getResources().getColor(R.color.pastelBlue) : Color.GRAY
             ));
 
-            // 立即移动镜头
-            if (gMap != null) {
+            // move camera immediately if isCameraTracking is true
+            if (gMap != null && isCameraTracking) {
+                updateFusionLocation(fusionCurrentLocation, 0);
                 gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusionCurrentLocation, 19f));
             }
 
-            Log.d("currentfloor", "B6uilding polygon added, vertex count: " + this.getCurrentBuilding());
-            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             updateAllIndoorMarkers();
         });
     }
@@ -285,21 +261,17 @@ public abstract class TrajectoryMapFragment extends Fragment {
             // keep track in rawCurrentLocation
             rawCurrentLocation = newLocation;
         }
-        if (isCameraTracking && gMap != null) {
-            gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
-        }
         if (rawTrajectoryPlotter != null) {
-            rawTrajectoryPlotter.updateLocation(newLocation, orientation);
+            rawTrajectoryPlotter.updateLocation(rawCurrentLocation, orientation);
         }
         if (indoorMapManager != null) {
-            // 只在 indoorMap 存在时才考虑更新
-            indoorMapManager.setCurrentLocation(newLocation);
+            indoorMapManager.setCurrentLocation(rawCurrentLocation);
 
             boolean currentState = indoorMapManager.getIsIndoorMapSet();
             if (currentState != lastIndoorMapState) {
                 lastIndoorMapState = currentState;
 
-                Log.d("currentfloor", "B7uilding polygon added, vertex count: " + this.getCurrentBuilding());
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
                 Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
                 //update indoor maker
                 updateAllIndoorMarkers();
@@ -328,12 +300,14 @@ public abstract class TrajectoryMapFragment extends Fragment {
         else{
             fusionCurrentLocation = newLocation;
         }
+        // keep track in rawCurrentLocation
+
 
         if (fusionTrajectoryPlotter != null) {
-            fusionTrajectoryPlotter.updateLocation(newLocation, orientation);
+            fusionTrajectoryPlotter.updateLocation(fusionCurrentLocation, orientation);
         }
         if (isCameraTracking && gMap != null) {
-            gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(fusionCurrentLocation));
         }
         updateFloorControlVisibility();
     }
@@ -381,8 +355,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
             fusionButton.setBackgroundTintList(ColorStateList.valueOf(show ? Color.GREEN : Color.GRAY));
         }
 
-        Log.d("currentfloor", "B8uilding polygon added, vertex count: " + this.getCurrentBuilding());
-        Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
         //update indoor maker
         updateAllIndoorMarkers();
 
@@ -515,14 +487,13 @@ public abstract class TrajectoryMapFragment extends Fragment {
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_assignment_turned_in_24_red)))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
         }
 
         //update indoor map overlay
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
             updateFloorControlVisibility();
-            Log.d("currentfloor", "B9uilding polygon added, vertex count: " + this.getCurrentBuilding());
+            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
             Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             //update indoor maker
             updateAllIndoorMarkers();
@@ -555,7 +526,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
         protected void initializeRecentreButton() {
             recenterButton.setOnClickListener(v -> {
                 if (rawCurrentLocation != null && gMap != null) {
-                    // 使用 rawCurrentLocation 而非 fusion
                     gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(rawCurrentLocation, 19f));
                 }
             });
@@ -589,7 +559,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
                 if (currentState != lastIndoorMapState) {
                     lastIndoorMapState = currentState;
 
-                    Log.d("currentfloor", "B10uilding polygon added, vertex count: " + this.getCurrentBuilding());
+                    Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
                     Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
                     //update indoor maker
                     updateAllIndoorMarkers();
@@ -598,7 +568,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
             }
 
             if (isCameraTracking && gMap != null) {
-                gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(rawCurrentLocation));
             }
         }
     }

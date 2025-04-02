@@ -704,16 +704,29 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void update(Object[] wifiList) {
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
-        // 构建 trajectory WiFi 数据（略）
-
-        // ✅ 计算 avgRssi
+        // Calculate avgRssi
         double avgRssi = -100;
         if (!this.wifiList.isEmpty()) {
             avgRssi = this.wifiList.stream().mapToInt(Wifi::getLevel).average().orElse(-100);
         }
 
-        // ✅ 传入 avgRssi
+        // Send avgRssi
         createWifiPositioningRequest(avgRssi);
+
+        // Save newest wifi values to local variable
+        this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
+
+        if(this.saveRecording) {
+            Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
+                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
+            for (Wifi data : this.wifiList) {
+                wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
+                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                        .setMac(data.getBssid()).setRssi(data.getLevel()));
+            }
+            // Adding WiFi data to Trajectory
+            this.trajectory.addWifiData(wifiData);
+        }
     }
 
 
@@ -1063,7 +1076,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @see Traj object for storing data.
      */
-    public void startRecording() {
+    public void startRecording(@NonNull Context context) {
         // If w`        ZakeLock is null (e.g. not initialized or was cleared), reinitialize it.
                  if (wakeLock == null) {
             PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
@@ -1263,7 +1276,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     /**
      * Timer task to record data with the desired frequency in the trajectory class.
      *
-     * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
+     * Inherently threaded, runnables are created and
      * destroyed in {@link SensorFusion#stopRecording()}.
      */
     private class storeDataInTrajectory extends TimerTask {
