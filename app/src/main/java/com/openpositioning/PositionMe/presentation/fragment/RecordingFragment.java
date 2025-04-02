@@ -272,15 +272,16 @@ public class RecordingFragment extends Fragment {
         }
     }
 
-    /**
-     * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
-     * Uses EKF_replay() from SensorFusion to plot fused data in real time.
-     */
+
 
     // code by Jamie Arnott: EKF positioning in real time using PDR, GNSS and WiFi data
     private LatLng originLatLng = null; // This stays fixed once set
 
-
+    /**
+     * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
+     * Uses EKF_replay() from SensorFusion to plot fused data in real time.
+     * Entire function updated by @Author Jamie Arnott
+     */
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
