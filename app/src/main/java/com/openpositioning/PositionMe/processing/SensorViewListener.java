@@ -1,8 +1,6 @@
 package com.openpositioning.PositionMe.processing;
 
 import android.hardware.Sensor;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 import com.openpositioning.PositionMe.sensors.SensorData.*;
 import com.openpositioning.PositionMe.sensors.SensorListeners.SensorDataListener;
@@ -10,14 +8,32 @@ import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.StreamSensor;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
+/**
+ * SensorViewListener is a class that listens to sensor data updates and notifies the callback
+ * interface with the updated sensor values.
+ * Primarily used in MeasurementsFragment to update the UI with sensor data.
+ * @author Philip Heptonstall
+ */
 public class SensorViewListener implements SensorDataListener<SensorData> {
+
+  /**
+   * Callback interface for sensor data updates.
+   */
   public interface SensorDataCallback {
+    /**
+     * Called when sensor data is updated.
+     *
+     * @param sensorValues Map of sensor types to their respective values.
+     * @param wifiData WiFi data.
+     * @param gnssLocationData GNSS location data.
+     */
     void onSensorDataUpdated(Map<SensorTypes, float[]> sensorValues, WiFiData wifiData,
         GNSSLocationData gnssLocationData);
   }
+
+  // Array of sensor types that are of interest.
   private static final int[] INTERESTED_SENSORS = {
       Sensor.TYPE_ACCELEROMETER,
       Sensor.TYPE_GRAVITY,
@@ -27,21 +43,33 @@ public class SensorViewListener implements SensorDataListener<SensorData> {
       Sensor.TYPE_PRESSURE,
       Sensor.TYPE_PROXIMITY,
   };
+
+  // Array of stream sensors that are of interest.
   private static final StreamSensor[] INTERESTED_STREAM_SENSORS = {
       StreamSensor.WIFI,
       StreamSensor.GNSS,
   };
 
+  // Sensor hub for managing sensors.
   private final SensorHub sensorHub;
+  // Callback for sensor data updates.
   private final SensorDataCallback callback;
-  private static final int REFRESH_TIME = 1000; // Refresh rate in milliseconds
 
-
+  // Map to store sensor values.
   private final Map<SensorTypes, float[]> sensorValueMap;
+  // WiFi data.
   private WiFiData wifiData;
+  // GNSS location data.
   private GNSSLocationData gnssLocationData;
+  // Flag to indicate if the listener has started.
   private boolean started = false;
 
+  /**
+   * Constructor for SensorViewListener.
+   *
+   * @param sensorHub Sensor hub for managing sensors.
+   * @param callback Callback for sensor data updates.
+   */
   public SensorViewListener(SensorHub sensorHub, SensorDataCallback callback) {
     this.sensorHub = sensorHub;
     this.sensorValueMap = new HashMap<>();
@@ -49,6 +77,11 @@ public class SensorViewListener implements SensorDataListener<SensorData> {
     start();
   }
 
+  /**
+   * Called when sensor data is received.
+   *
+   * @param data Sensor data.
+   */
   @Override
   public void onSensorDataReceived(SensorData data) {
     if (data instanceof AccelerometerData accelerometerData) {
@@ -83,6 +116,9 @@ public class SensorViewListener implements SensorDataListener<SensorData> {
     callback.onSensorDataUpdated(sensorValueMap, wifiData, gnssLocationData);
   }
 
+  /**
+   * Starts the sensor data listener.
+   */
   @Override
   public void start() {
     if(!started) {
@@ -96,6 +132,9 @@ public class SensorViewListener implements SensorDataListener<SensorData> {
     started = true;
   }
 
+  /**
+   * Stops the sensor data listener.
+   */
   @Override
   public void stop() {
     if(!started) {

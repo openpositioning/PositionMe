@@ -27,6 +27,25 @@ import com.openpositioning.PositionMe.sensors.Wifi;
 import java.util.Timer;
 import java.util.TimerTask;
 
+/**
+ * TrajectoryRecorder is a class that records sensor data and sends it to a server.
+ * It implements the SensorDataListener interface to receive sensor data updates from SensorHub.
+ * The class uses a Timer to periodically store sensor data in a Trajectory object.
+ * It implements the Observer interface to receive updates from the PDR processing class, whenever
+ * new PDR steps are available.
+ * <p>
+ * The trajectory object is built using the Traj protobuf class, which contains various sensor
+ * information and data samples.
+ * <p>
+ * The class also provides methods to start and stop recording, as well as to send the recorded
+ * trajectory to the server.
+ *
+ * @see SensorHub for source of sensor data.
+ * @see SensorDataListener for interface to receive sensor data.
+ * @see ServerCommunications for sending data to the server.
+ *
+ * @author Philip Heptonstall
+ **/
 public class TrajectoryRecorder implements SensorDataListener<SensorData>, Observer {
 
   // Data saving timer
@@ -37,20 +56,19 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
   private int counter;
   private int secondCounter;
 
-
   // Server communication class for sending data
-  private ServerCommunications serverCommunications;
+  private final ServerCommunications serverCommunications;
   // Trajectory object containing all data
   private Traj.Trajectory.Builder trajectory;
 
-  private PdrProcessing pdrProcessor;
-
-  private WifiDataProcessor wifiProcessor;
+  private final PdrProcessing pdrProcessor;
 
   // Sensor Variables
   private long startTime;
   private long bootTime;
   private SensorHub sensorHub;
+
+  // List of sensors of interest (int and stream sensors)
   private final int[] INTERESTED_SENSORS = new int[]{
       Sensor.TYPE_PRESSURE, Sensor.TYPE_ACCELEROMETER,
       Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_STEP_DETECTOR,
@@ -64,14 +82,23 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
   private PressureData pressureData;
   private AccelerometerData accelerometerData;
   private RotationVectorData rotationVectorData;
-  private StepDetectorData stepDetectorData;
   private MagneticFieldData magneticFieldData;
   private LightData lightData;
   private GyroscopeData gyroscopeData;
   private WiFiData wifiData;
   private GNSSLocationData gnssData;
 
-
+  /**
+   * Constructor for TrajectoryRecorder.
+   * <p>
+   * Initializes the trajectory object and registers the sensors of interest.
+   *
+   * @param sensorHub The sensor hub to be used for managing sensors.
+   * @param pdrProcessor The PDR processing object to be used for processing PDR data.
+   * @param serverCommunications The server communications object to be used for sending data.
+   * @param startTime The start time of the recording session.
+   * @param bootTime The boot time of the device.
+   **/
   public TrajectoryRecorder(SensorHub sensorHub, PdrProcessing pdrProcessor,
       ServerCommunications serverCommunications, long startTime, long bootTime) {
     // Register sensors
@@ -98,12 +125,20 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
         .setLightSensorInfo(createInfoBuilder(Sensor.TYPE_LIGHT));
   }
 
+  /**
+   * Updates the trajectory with the PDR data.
+   * <p>
+   * This method is called when new PDR data is received.
+   *
+   * @param objList The list of objects containing the PDR data.
+   */
   @Override
   public void update(Object[] objList) {
     // Update the trajectory with the PDR data
     if (objList != null && objList.length > 0) {
       // Update provides the X,Y float array of the PDR data
       PdrProcessing.PdrData pdrData = (PdrProcessing.PdrData) objList[0];
+      if pdrData.
       trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
           .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
           .setX(pdrData.position()[0])

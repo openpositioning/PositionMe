@@ -313,8 +313,9 @@ public class TrajParser {
         if (previousGnssLoc == null || !previousGnssLoc.equals(gnssLocation)) {
           boolean isOutlier = false;
           // New GNSS observation. Run sensor fusion if not an outlier
-//            SimpleMatrix currentGnssCovariance = SensorFusion.GNSS_COVARIANCE.copy();
-//            currentGnssCovariance.set(0, 0, Math.pow(closestGnss.get().accuracy,2));
+            SimpleMatrix currentGnssCovariance = SensorFusion.GNSS_COVARIANCE.copy();
+            currentGnssCovariance.set(0, 0, Math.pow(closestGnss.accuracy,2));
+            currentGnssCovariance.set(1, 1, Math.pow(closestGnss.accuracy,2));
           if (!SensorFusion.isOutlier(coordinateTransformer, fusedLocation, gnssLocation)) {
             fusedLocation = updateFusionData(gnssLocation, coordinateTransformer,
                 startTimestamp, initialPos, SensorFusion.GNSS_COVARIANCE,
