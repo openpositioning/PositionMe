@@ -1183,6 +1183,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         if(this.saveRecording) {
             this.saveRecording = false;
             storeTrajectoryTimer.cancel();
+
         }
         if(wakeLock.isHeld()) {
             this.wakeLock.release();
