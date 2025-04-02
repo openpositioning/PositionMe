@@ -20,6 +20,17 @@ import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 
+/**
+ * Particle filter implementation for sensor fusion in indoor positioning.
+ *
+ * <p>This class implements a particle filter to fuse GPS, WiFi, and PDR (Pedestrian Dead Reckoning)
+ * data for indoor positioning. It maintains a set of particles representing position hypotheses,
+ * updates them based on sensor measurements, and provides the estimated position as a weighted
+ * average of particle positions.
+ *
+ * @author Nick Manturov
+ */
+
 public class ParticleFilterFusion extends IPositionFusionAlgorithm {
     private static final String TAG = "ParticleFilterFusion";
 

@@ -6,12 +6,27 @@ import org.apache.commons.math3.distribution.TDistribution;
 
 import java.util.Random;
 
+/**
+ * Represents a particle for use in the particle filter algorithm.
+ *
+ * <p>Each particle maintains a position (x,y), orientation (theta) and weight.
+ * Particles are updated based on sensor measurements and weighted according to
+ * their likelihood of representing the true position.
+ *
+ * @author Nick Manturov
+ */
 public class Particle {
     Double x, y, theta;  // Position and orientation of the particle
     Double weight;       // Weight assigned to each particle
     Double logWeight;    // Log-weight for numerical stability
 
-    // Constructor
+    /**
+     * Creates a new particle with specified position and orientation.
+     *
+     * @param x x-coordinate position
+     * @param y y-coordinate position
+     * @param theta orientation angle in radians
+     */
     public Particle(double x, double y, double theta) {
         this.x = x;
         this.y = y;
@@ -21,7 +36,19 @@ public class Particle {
         this.logWeight = 0.0;
     }
 
-    // Update particle position when step is detected
+    /**
+     * Updates particle position when step is detected.
+     *
+     * <p>Applies noise to the heading and step length, then moves the particle.
+     * Checks for wall collisions if a wall detector is provided.
+     *
+     * @param stepLength detected step length in meters
+     * @param currentHeading current heading angle in radians
+     * @param dynamicPDRStds standard deviations for PDR noise model
+     * @param wallChecker wall detection manager for collision checking
+     * @param buildingType building identifier
+     * @param floor floor number
+     */
     public void updateDynamic(double stepLength, double currentHeading, double[] dynamicPDRStds, WallDetectionManager wallChecker, int buildingType, int floor) {
         Random rand = new Random();
 

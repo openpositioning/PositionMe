@@ -3,13 +3,17 @@ package com.openpositioning.PositionMe.fusion;
 import com.google.android.gms.maps.model.LatLng;
 
 /**
- * SmoothingFilter applies an exponential smoothing algorithm
+ * A filter that applies exponential smoothing to GPS positions.
+ *
+ * <p>SmoothingFilter applies an exponential smoothing algorithm
  * to successive LatLng positions. Each new value is combined with the
  * previous smoothed value using the smoothing factor (alpha). The formula is:
  *
- *     smoothed = previousSmoothed + alpha * (newValue - previousSmoothed)
+ * <p>smoothed = previousSmoothed + alpha * (newValue - previousSmoothed)
  *
- * When no previous value exists, the filter uses the new value directly.
+ * <p>When no previous value exists, the filter uses the new value directly.
+ *
+ * @author Nick Manturov
  */
 public class SmoothingFilter {
     private final double alpha;

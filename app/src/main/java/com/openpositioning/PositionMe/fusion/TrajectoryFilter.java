@@ -16,10 +16,13 @@ import org.apache.commons.math3.analysis.interpolation.SplineInterpolator;
 import org.apache.commons.math3.analysis.polynomials.PolynomialSplineFunction;
 
 /**
- * TrajectoryFilter provides methods to smooth coordinate data using the ---- algorithm.
- * Handles the simultaneous smoothing of x and y coordinates
+ * Provides methods to smooth coordinate data for pedestrian tracking.
+ *
+ * <p>TrajectoryFilter smooths trajectory data using the Visvalingam-Whyatt algorithm
+ * and Catmull-Rom spline interpolation. It handles the simultaneous smoothing of x and y coordinates
  * for pedestrian movement tracking applications.
  *
+ * @author Nick Manturov
  */
 public class TrajectoryFilter {
 
@@ -68,7 +71,7 @@ public class TrajectoryFilter {
         fusionBuffer.add(rawPoint);
 
         double[] enu = CoordinateConverter.convertGeodeticToEnu(rawPoint.latitude, rawPoint.longitude, referencePosition[2],
-                                                                referencePosition[0], referencePosition[1], referencePosition[2]);
+                referencePosition[0], referencePosition[1], referencePosition[2]);
         fusionBufferEnu.add(new Point(enu[0], enu[1]));
 
         int pointsRetained = (int) Math.round(fusionBufferEnu.size()*FRACTION_RETAIN);
@@ -84,7 +87,7 @@ public class TrajectoryFilter {
             int numPrevious = Math.min(INTERPOLATION_FACTOR, reducedBufferEnu.size());
             List<Point> EnuBufferSublist = reducedBufferEnu.subList(reducedBufferEnu.size()-numPrevious, reducedBufferEnu.size());
             List<Point> extendedPolyline = Stream.concat(EnuBufferSublist.stream(), reducedPolyline.stream())
-                                                         .collect(Collectors.toList());
+                    .collect(Collectors.toList());
             reducedBufferEnu.add(reducedPolyline.get(0));
 
             List<Point> interpolatedPolyline = interpolateNaturalMovement(extendedPolyline);
@@ -96,7 +99,7 @@ public class TrajectoryFilter {
             }
 
             List<LatLng> result = Stream.concat(interpolatedBuffer.stream(), geoPolyline.stream())
-                                                .collect(Collectors.toList());
+                    .collect(Collectors.toList());
             interpolatedBuffer.addAll(geoPolyline.subList(0, INTERPOLATION_FACTOR));
             count++;
             return result;
@@ -113,12 +116,25 @@ public class TrajectoryFilter {
         }
     }
 
-    // Method to calculate the area of a triangle formed by three points
+    /**
+     * Calculates the area of a triangle formed by three points.
+     *
+     * @param p1 First point of the triangle
+     * @param p2 Second point of the triangle
+     * @param p3 Third point of the triangle
+     * @return The area of the triangle
+     */
     public static double calculateTriangleArea(Point p1, Point p2, Point p3) {
         return 0.5 * Math.abs(p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
     }
 
-    // Method to simplify a polyline using the Visvalingam-Whyatt algorithm
+    /**
+     * Simplifies a polyline using the Visvalingam-Whyatt algorithm.
+     *
+     * @param points List of points to simplify
+     * @param targetPointCount Target number of points to retain
+     * @return A simplified list of points
+     */
     public static List<Point> simplifyPolyline(List<Point> points, int targetPointCount) {
         if (points.size() <= targetPointCount) {
             return new ArrayList<>(points); // No simplification needed if already under target
@@ -186,7 +202,12 @@ public class TrajectoryFilter {
         return simplifiedPoints;
     }
 
-    // Helper method to find the index of the minimum area in the list
+    /**
+     * Helper method to find the index of the minimum area in the list.
+     *
+     * @param areas List of triangle areas
+     * @return Index of the minimum area value
+     */
     private static int findMinAreaIndex(List<Double> areas) {
         if (areas.isEmpty()) {
             return -1; // Handle empty list case
@@ -272,7 +293,15 @@ public class TrajectoryFilter {
     }
 
     /**
-     * Calculates a point value using Catmull-Rom interpolation formula
+     * Calculates a point value using Catmull-Rom interpolation formula.
+     *
+     * @param p0 First control point
+     * @param p1 Second control point (curve start)
+     * @param p2 Third control point (curve end)
+     * @param p3 Fourth control point
+     * @param t Parameter between 0 and 1
+     * @param tension Tension parameter controlling curve tightness
+     * @return The interpolated value
      */
     private static double catmullRomInterpolate(double p0, double p1, double p2, double p3, double t, double tension) {
         double t2 = t * t;
@@ -288,7 +317,12 @@ public class TrajectoryFilter {
     }
 
     /**
-     * Creates an extrapolated control point beyond the endpoints
+     * Creates an extrapolated control point beyond the endpoints.
+     *
+     * @param p1 First existing point
+     * @param p2 Second existing point
+     * @param isFirst True if creating a point before the sequence, false for after
+     * @return A new extrapolated control point
      */
     private static Point createExtrapolatedPoint(Point p1, Point p2, boolean isFirst) {
         // For first point, extrapolate backwards; for last point, extrapolate forwards
@@ -305,7 +339,12 @@ public class TrajectoryFilter {
     }
 
     /**
-     * Simple linear interpolation between two points
+     * Simple linear interpolation between two points.
+     *
+     * @param start Starting point
+     * @param end Ending point
+     * @param steps Number of steps to interpolate
+     * @return List of interpolated points
      */
     private static List<Point> interpolateLinearSegment(Point start, Point end, int steps) {
         List<Point> result = new ArrayList<>();
