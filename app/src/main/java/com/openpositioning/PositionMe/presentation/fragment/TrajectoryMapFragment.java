@@ -69,6 +69,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
     protected final List<Marker> drinkingWaterMarkers = new ArrayList<>();
     protected final List<Marker> medicalRoomMarkers = new ArrayList<>();
     protected boolean lastIndoorMapState = false;
+    protected int lastKnownFloor = Integer.MIN_VALUE;
 
     protected boolean isCameraTracking = true;
     protected boolean isAutoFloorOn = true;;
@@ -117,6 +118,9 @@ public abstract class TrajectoryMapFragment extends Fragment {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
             if (indoorMapManager != null) indoorMapManager.increaseFloor();
+
+            Log.d("currentfloor", "B1uilding polygon added, vertex count: " + this.getCurrentBuilding());
+            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             updateAllIndoorMarkers();
             updateFloorControlVisibility();
         });
@@ -125,6 +129,9 @@ public abstract class TrajectoryMapFragment extends Fragment {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
             if (indoorMapManager != null) indoorMapManager.decreaseFloor();
+
+            Log.d("currentfloor", "B2uilding polygon added, vertex count: " + this.getCurrentBuilding());
+            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             updateAllIndoorMarkers();
             updateFloorControlVisibility();
         });
@@ -156,6 +163,9 @@ public abstract class TrajectoryMapFragment extends Fragment {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
             if (indoorMapManager != null) indoorMapManager.increaseFloor();
+
+            Log.d("currentfloor", "B3uilding polygon added, vertex count: " + this.getCurrentBuilding());
+            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             updateAllIndoorMarkers();
         });
 
@@ -163,6 +173,9 @@ public abstract class TrajectoryMapFragment extends Fragment {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
             if (indoorMapManager != null) indoorMapManager.decreaseFloor();
+
+            Log.d("currentfloor", "B4uilding polygon added, vertex count: " + this.getCurrentBuilding());
+            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             updateAllIndoorMarkers();
         });
 
@@ -200,11 +213,19 @@ public abstract class TrajectoryMapFragment extends Fragment {
 
         sensorFusion.setOnWifiFloorChangedListener(newFloor -> {
             if (isAutoFloorOn && indoorMapManager != null) {
-                indoorMapManager.setCurrentFloor(newFloor, true);
-                updateAllIndoorMarkers();
-                updateFloorControlVisibility();
+                if (newFloor != lastKnownFloor) {
+                    lastKnownFloor = newFloor;
+                    indoorMapManager.setCurrentFloor(newFloor, true);
+
+                    Log.d("currentfloor", "B5uilding polygon added, vertex count: " + this.getCurrentBuilding());
+                    Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
+
+                    updateAllIndoorMarkers();
+                    updateFloorControlVisibility();
+                }
             }
         });
+
 
         sensorFusion.setTrajectoryMapFragment(this);
     }
@@ -223,6 +244,8 @@ public abstract class TrajectoryMapFragment extends Fragment {
                 gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusionCurrentLocation, 19f));
             }
 
+            Log.d("currentfloor", "B6uilding polygon added, vertex count: " + this.getCurrentBuilding());
+            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             updateAllIndoorMarkers();
         });
     }
@@ -274,7 +297,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
             if (currentState != lastIndoorMapState) {
                 lastIndoorMapState = currentState;
 
-                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+                Log.d("currentfloor", "B7uilding polygon added, vertex count: " + this.getCurrentBuilding());
                 Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
                 //update indoor maker
                 updateAllIndoorMarkers();
@@ -356,6 +379,8 @@ public abstract class TrajectoryMapFragment extends Fragment {
             fusionButton.setBackgroundTintList(ColorStateList.valueOf(show ? Color.GREEN : Color.GRAY));
         }
 
+        Log.d("currentfloor", "B8uilding polygon added, vertex count: " + this.getCurrentBuilding());
+        Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
         //update indoor maker
         updateAllIndoorMarkers();
 
@@ -495,7 +520,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
             updateFloorControlVisibility();
-            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+            Log.d("currentfloor", "B9uilding polygon added, vertex count: " + this.getCurrentBuilding());
             Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             //update indoor maker
             updateAllIndoorMarkers();
@@ -562,7 +587,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
                 if (currentState != lastIndoorMapState) {
                     lastIndoorMapState = currentState;
 
-                    Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+                    Log.d("currentfloor", "B10uilding polygon added, vertex count: " + this.getCurrentBuilding());
                     Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
                     //update indoor maker
                     updateAllIndoorMarkers();
