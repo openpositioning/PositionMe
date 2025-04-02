@@ -32,7 +32,7 @@ import java.util.Map;
  * The class also maintains default configurations for various sensor types.
  * </p>
  *
- * @author
+ * @author Philip heptonstall
  */
 public class SensorHub implements SensorEventListener {
 
@@ -43,9 +43,9 @@ public class SensorHub implements SensorEventListener {
   private static final Map<Integer, int[]> SENSOR_DEFAULTS = new HashMap<>();
 
   static {
-    SENSOR_DEFAULTS.put(Sensor.TYPE_ACCELEROMETER, new int[]{10000, (int) 0});
-    SENSOR_DEFAULTS.put(Sensor.TYPE_LINEAR_ACCELERATION, new int[]{10000, (int) 0});
-    SENSOR_DEFAULTS.put(Sensor.TYPE_GRAVITY, new int[]{10000, (int) 0});
+    SENSOR_DEFAULTS.put(Sensor.TYPE_ACCELEROMETER, new int[]{10000, 0});
+    SENSOR_DEFAULTS.put(Sensor.TYPE_LINEAR_ACCELERATION, new int[]{10000, 0});
+    SENSOR_DEFAULTS.put(Sensor.TYPE_GRAVITY, new int[]{10000, 0});
     SENSOR_DEFAULTS.put(Sensor.TYPE_PRESSURE, new int[]{(int) 1e6, 0});
     SENSOR_DEFAULTS.put(Sensor.TYPE_GYROSCOPE, new int[]{10000, (int) 1e6});
     SENSOR_DEFAULTS.put(Sensor.TYPE_LIGHT, new int[]{(int) 1e6, 0});
@@ -57,6 +57,7 @@ public class SensorHub implements SensorEventListener {
 
   // The application context with which this SensorHub was initialized.
   private Context context;
+
   // The SensorManager for accessing sensors.
   private final SensorManager sensorManager;
 

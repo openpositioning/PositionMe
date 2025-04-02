@@ -1,7 +1,5 @@
 package com.openpositioning.PositionMe.sensors.SensorData;
 
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
 import android.os.SystemClock;
 
 /**

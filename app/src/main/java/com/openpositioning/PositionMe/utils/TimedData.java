@@ -1,7 +1,5 @@
 package com.openpositioning.PositionMe.utils;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Abstract class to aid with storing timed datapoints.

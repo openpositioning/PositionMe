@@ -19,7 +19,6 @@ import com.openpositioning.PositionMe.sensors.SensorData.RotationVectorData;
 import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
 import com.openpositioning.PositionMe.sensors.SensorData.StepDetectorData;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorListeners.SensorDataListener;
 import com.openpositioning.PositionMe.sensors.StreamSensor;
@@ -31,7 +30,6 @@ import java.util.TimerTask;
  * TrajectoryRecorder is a class that records sensor data and sends it to a server.
  * It implements the SensorDataListener interface to receive sensor data updates from SensorHub.
  * The class uses a Timer to periodically store sensor data in a Trajectory object.
- *
  * It implements the Observer interface to receive updates from the PDR processing class, whenever
  * new PDR steps are available.
  * <p>

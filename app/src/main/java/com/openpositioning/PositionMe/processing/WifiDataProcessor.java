@@ -16,10 +16,7 @@ import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.openpositioning.PositionMe.sensors.Observable;
-import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorModule;
 import com.openpositioning.PositionMe.sensors.StreamSensor;
@@ -37,23 +34,18 @@ import org.json.JSONObject;
  * It is initialised by SensorHub when any device requests Wi-Fi data.
  * It implements the wifi scanning and broadcasting design to identify a list of nearby Wi-Fis as
  * well as collecting information about the current Wi-Fi connection.
- *
  * The class ensures all required permissions are granted before enabling the Wi-Fi. The class will
  * periodically start a wifi scan with the rate given by constants
  * SCAN_RATE_WITH or WITHOUT_THROTTLING.
- *
  * When a broadcast is received it will collect a list of nearby Wi-Fi networks and their
  * associated signal strength (RSSI). This list is immediately passed to the WiFiPositioning API to
  * obtain a location estimate. Results are used to construct a WiFiData object which is passed
  * to SensorHub to coordinate updates.
- *
  * The {@link WifiDataProcessor#getCurrentWifiData()} function will return information about the
  * current wifi connection.
- *
  * Initial Authors:
  * @author Mate Stodulka
  * @author Virginia Cangelosi
- *
  * Updated by:
  * @author Philip Heptonstall, to extend the SensorModule class and integrate with SensorHub
  */
@@ -230,7 +222,7 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
       }
 
       //Notify observers of change in wifiData variable
-      List<Wifi> newData = Stream.of(wifiData).map(o -> (Wifi) o).collect(Collectors.toList());
+      List<Wifi> newData = Stream.of(wifiData).collect(Collectors.toList());
       createWifiPositionRequestCallback(newData);
     }
   };
