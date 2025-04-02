@@ -118,6 +118,7 @@ public class MeasurementsFragment extends Fragment {
     /**
      * {@inheritDoc}
      * Pauses the data refreshing when the fragment is not in focus.
+     * Code by Guilherme Evaluate battery performance added function
      */
     @Override
     public void onPause() {
@@ -142,6 +143,7 @@ public class MeasurementsFragment extends Fragment {
     /**
      * {@inheritDoc}
      * Restarts the data refresh when the fragment returns to focus.
+     * Code by Guilherme Evaluate battery performance added function
      */
     @Override
     public void onResume() {
