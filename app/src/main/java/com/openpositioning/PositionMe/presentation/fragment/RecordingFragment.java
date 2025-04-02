@@ -4,6 +4,8 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
@@ -34,9 +36,12 @@ import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.sensors.WiFiPositioning;
 import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
+
+import org.json.JSONObject;
 
 import java.util.List;
 import java.util.UUID;
@@ -85,6 +90,11 @@ public class RecordingFragment extends Fragment {
     private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
+
+    private LatLng prevPdrLocation = null;
+    private LatLng prevWiFiLocation = null;
+    private int prevFloorLocation = 0;
+
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
@@ -263,97 +273,138 @@ public class RecordingFragment extends Fragment {
 
     /**
      * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
+     * Uses EKF_replay() from SensorFusion to plot fused data in real time.
      */
+
+    // code by Jamie Arnott: EKF positioning in real time using PDR, GNSS and WiFi data
+    private LatLng originLatLng = null; // This stays fixed once set
+
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
+
+        // Add WiFi sample to trajectory if recording
         if (sensorFusion.saveRecording) {
             List<Wifi> wifiList = sensorFusion.getWifiList();
             if (wifiList != null && !wifiList.isEmpty()) {
-                // Create a new WiFi sample
                 Traj.WiFi_Sample.Builder wifiSample = Traj.WiFi_Sample.newBuilder()
                         .setRelativeTimestamp(SystemClock.uptimeMillis() - sensorFusion.bootTime);
 
-                // Add all detected WiFi MAC scans
                 for (Wifi wifi : wifiList) {
                     wifiSample.addMacScans(Traj.Mac_Scan.newBuilder()
                             .setRelativeTimestamp(SystemClock.uptimeMillis() - sensorFusion.bootTime)
                             .setMac(wifi.getBssid())
                             .setRssi(wifi.getLevel()));
                 }
-
-                for (Wifi data : wifiList) {
-                    if (data.getLevel() == 0) {
-                        Log.e("RecordingFragment", "WiFi scan missing RSSI value!");
-                    } else {
-                        Log.d("RecordingFragment", "Recording WiFi RSSI: " + data.getLevel());
-                    }
-
-                    if (data.getBssid() == 0){
-                        Log.e("RecordingFragment", "WiFi scan missing MAC value");
-                    } else{
-                        Log.d("RecordingFragment", "Recording WiFi MAC" + data.getBssid());
-                    }
-                }
-
-
-                // Store WiFi sample in the trajectory
-                sensorFusion.trajectory.addWifiData(wifiSample);
+                sensorFusion.trajectory.addWifiData(wifiSample.build());
             }
         }
 
-
-        // Distance
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
-                + Math.pow(pdrValues[1] - previousPosY, 2));
-        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
-
-        // Elevation
-        float elevationVal = sensorFusion.getElevation();
-        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
-
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
-
-            // Pass the location + orientation to the map
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+        // Get fixed origin once (GNSS preferred, fallback to WiFi later)
+        if (originLatLng == null) {
+            float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+            if (gnss != null) {
+                originLatLng = new LatLng(gnss[0], gnss[1]);
+                Log.d("EKF", "Origin set from GNSS: " + originLatLng);
             }
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
+        // Convert PDR to LatLng relative to fixed origin
+        LatLng pdrLatLng = null;
+        if (originLatLng != null) {
+            float deltaX = pdrValues[0];
+            float deltaY = pdrValues[1];
+
+            if (Math.abs(deltaX) > 20 || Math.abs(deltaY) > 20) {
+                Log.w("PDR", "Suspiciously large PDR delta: " + deltaX + "," + deltaY);
+            }
+
+            pdrLatLng = UtilFunctions.calculateNewPos(originLatLng, new float[]{deltaX, deltaY});
+        }
+
+        // GNSS live reading
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-        if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
-            if (trajectoryMapFragment.isGnssEnabled()) {
-                LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
-                LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
-                if (currentLoc != null) {
-                    double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
-                    gnssError.setVisibility(View.VISIBLE);
-                    gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
+        LatLng gnssLatLng = (gnss != null) ? new LatLng(gnss[0], gnss[1]) : null;
+
+        // Get WiFi fingerprint if available
+        ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+        boolean isConnected = activeNetwork != null && activeNetwork.isConnectedOrConnecting();
+
+        if (isConnected) {
+            List<Wifi> wifiList = sensorFusion.getWifiList();
+            if (wifiList != null && !wifiList.isEmpty()) {
+                JSONObject wifiFingerprint = new JSONObject();
+                JSONObject wifiAccessPoints = new JSONObject();
+                for (Wifi wifi : wifiList) {
+                    try {
+                        wifiAccessPoints.put(String.valueOf(wifi.getBssid()), wifi.getLevel());
+                    } catch (Exception e) {
+                        Log.e("EKF", "Failed to create fingerprint", e);
+                    }
                 }
-                trajectoryMapFragment.updateGNSS(gnssLocation);
-            } else {
-                gnssError.setVisibility(View.GONE);
-                trajectoryMapFragment.clearGNSS();
+
+                try {
+                    wifiFingerprint.put("wf", wifiAccessPoints);
+                    LatLng finalPdrLatLng = pdrLatLng;
+
+                    new WiFiPositioning(getContext()).request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
+                        @Override
+                        public void onSuccess(LatLng wifiLocation, int floor) {
+                            prevWiFiLocation = wifiLocation;
+                            prevFloorLocation = floor;
+                            if (originLatLng == null) {
+                                originLatLng = wifiLocation; // fallback origin if GNSS was missing
+                                Log.d("EKF", "Origin set from WiFi: " + originLatLng);
+                            }
+
+                            LatLng ekfPoint = SensorFusion.getInstance().EKF_replay(
+                                    wifiLocation,
+                                    finalPdrLatLng,
+                                    prevPdrLocation != null ? prevPdrLocation : finalPdrLatLng,
+                                    gnssLatLng
+                            );
+
+                            Log.d("EKF", "EKF Point: " + ekfPoint);
+                            if (ekfPoint != null && trajectoryMapFragment != null) {
+                                float bearing = (float) Math.toDegrees(sensorFusion.passOrientation());
+                                trajectoryMapFragment.updateUserLocation(ekfPoint, bearing);
+                                trajectoryMapFragment.displayNucleusFloorLevel(floor);
+                            }
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            Log.w("EKF", "WiFi Positioning failed: " + message);
+                        }
+                    });
+                } catch (Exception e) {
+                    Log.e("EKF", "Failed to send WiFi request", e);
+                }
+            } else if (prevWiFiLocation != null && pdrLatLng != null) {
+                // fallback EKF update with previous WiFi
+                LatLng ekfPoint = SensorFusion.getInstance().EKF_replay(
+                        prevWiFiLocation,
+                        pdrLatLng,
+                        prevPdrLocation != null ? prevPdrLocation : pdrLatLng,
+                        gnssLatLng
+                );
+                if (ekfPoint != null) {
+                    float bearing = (float) Math.toDegrees(sensorFusion.passOrientation());
+                    trajectoryMapFragment.updateUserLocation(ekfPoint, bearing);
+                    trajectoryMapFragment.displayNucleusFloorLevel(prevFloorLocation);
+                }
             }
+        } else {
+            Log.d("RecordingFragment", "Phone not connected to WiFi");
         }
 
-        // Update previous
+        // Update previous PDR
+        prevPdrLocation = pdrLatLng;
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
     }
+
 
     /**
      * Start the blinking effect for the recording icon.
