@@ -188,9 +188,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final long WIFI_DATA_EXPIRY = 10000; // WiFi数据10秒内有效
     
     // EKF状态权重
-    private static final float GNSS_WEIGHT = 0.40f;
-    private static final float PDR_WEIGHT = 0.45f; 
-    private static final float WIFI_WEIGHT = 0.15f;
+    private static final float GNSS_WEIGHT = 0.30f;
+    private static final float PDR_WEIGHT = 0.40f;
+    private static final float WIFI_WEIGHT = 0.30f;
 
     // 步伐检测相关变量
     private long lastStepTime = 0;
