@@ -236,13 +236,14 @@ public abstract class TrajectoryMapFragment extends Fragment {
         recenterButton.setOnClickListener(v -> {
             isCameraTracking = !isCameraTracking;
 
-            // 更改按钮颜色
+            // change button color
             recenterButton.setBackgroundTintList(ColorStateList.valueOf(
                     isCameraTracking ? getResources().getColor(R.color.pastelBlue) : Color.GRAY
             ));
 
-            // 立即移动镜头
-            if (gMap != null) {
+            // move camera immediately if isCameraTracking is true
+            if (gMap != null && isCameraTracking) {
+                updateFusionLocation(fusionCurrentLocation, 0);
                 gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusionCurrentLocation, 19f));
             }
 
@@ -285,15 +286,10 @@ public abstract class TrajectoryMapFragment extends Fragment {
             // keep track in rawCurrentLocation
             rawCurrentLocation = newLocation;
         }
-        if (isCameraTracking && gMap != null) {
-            gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
-        }
         if (rawTrajectoryPlotter != null) {
-            rawTrajectoryPlotter.updateLocation(newLocation, orientation);
+            rawTrajectoryPlotter.updateLocation(rawCurrentLocation, orientation);
         }
         if (indoorMapManager != null) {
-            // 只在 indoorMap 存在时才考虑更新
-            indoorMapManager.setCurrentLocation(newLocation);
 
             boolean currentState = indoorMapManager.getIsIndoorMapSet();
             if (currentState != lastIndoorMapState) {
@@ -328,12 +324,14 @@ public abstract class TrajectoryMapFragment extends Fragment {
         else{
             fusionCurrentLocation = newLocation;
         }
+        // keep track in rawCurrentLocation
+
 
         if (fusionTrajectoryPlotter != null) {
-            fusionTrajectoryPlotter.updateLocation(newLocation, orientation);
+            fusionTrajectoryPlotter.updateLocation(fusionCurrentLocation, orientation);
         }
         if (isCameraTracking && gMap != null) {
-            gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(fusionCurrentLocation));
         }
         updateFloorControlVisibility();
     }
@@ -342,7 +340,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (wifiTrajectoryPlotter != null) {
             wifiTrajectoryPlotter.updateLocation(newLocation, orientation);
         }
-        indoorMapManager.setCurrentLocation(newLocation);
         updateFloorControlVisibility();
     }
 
@@ -350,7 +347,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (gMap == null || !isGnssOn || gnssTrajectoryPlotter == null) return;
         float accuracy = sensorFusion.getGnssAccuracy();
         gnssTrajectoryPlotter.updateGnssLocation(location, accuracy);
-        indoorMapManager.setCurrentLocation(location);
         updateFloorControlVisibility();
     }
 
@@ -515,7 +511,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_assignment_turned_in_24_red)))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
         }
 
         //update indoor map overlay
@@ -555,7 +550,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
         protected void initializeRecentreButton() {
             recenterButton.setOnClickListener(v -> {
                 if (rawCurrentLocation != null && gMap != null) {
-                    // 使用 rawCurrentLocation 而非 fusion
                     gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(rawCurrentLocation, 19f));
                 }
             });
@@ -598,7 +592,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
             }
 
             if (isCameraTracking && gMap != null) {
-                gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(rawCurrentLocation));
             }
         }
     }

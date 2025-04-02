@@ -129,7 +129,8 @@ public abstract class TrajectoryPlotter {
          * @param accuracy    The accuracy (in meters) from GNSS.
          */
         public void updateGnssLocation(LatLng newLocation, float accuracy) {
-            if(polyline == null) {
+            // Create the polyline if it does not exist.
+            if (polyline == null) {
                 initPolyline();
             }
             if (marker == null) {
@@ -200,6 +201,10 @@ public abstract class TrajectoryPlotter {
 
         @Override
         public void updateLocation(LatLng newLocation, float orientation) {
+            // Create the polyline if it does not exist.
+            if (polyline == null) {
+                initPolyline();
+            }
             // Create the marker if it does not exist.
             if (marker == null) {
                 marker = map.addMarker(new MarkerOptions()

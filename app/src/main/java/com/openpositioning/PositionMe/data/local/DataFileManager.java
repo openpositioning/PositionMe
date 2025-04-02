@@ -79,7 +79,7 @@ public class DataFileManager {
                 outStream.write(jsonLine.getBytes());
             }
             outStream.flush();
-            Log.d(TAG, "Flushed " + dataBuffer.size() + " records to file.");
+//            Log.d(TAG, "Flushed " + dataBuffer.size() + " records to file.");
             dataBuffer.clear();
         } catch (IOException e) {
             Log.e(TAG, "Error flushing data", e);
