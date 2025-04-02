@@ -7,7 +7,12 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import java.util.Random;
 
 /**
- *  Particle Filter.
+ * ParticleFilter is a simple implementation of a particle filter for fusing sensor-based position estimates.
+ * It maintains an array of particles representing possible positions in the ENU coordinate system relative to a reference point obtained from SensorFusion.
+ * The filter initializes by converting the reference latitude, longitude, and altitude to ENU coordinates and then randomly dispersing a fixed number of particles around this reference using a Gaussian distribution.
+ * When a new position measurement (such as from GNSS or Wi-Fi) is received, the measurement is transformed into ENU coordinates and each particle is slightly nudged toward this measurement.
+ * The overall estimated position is then computed as the average of the particles’ positions, which is converted back to geographic coordinates for further processing.
+ * This minimal design does not implement advanced resampling or weight adjustments, but it provides a straightforward framework for fusing sensor data to estimate position.
  */
 public class ParticleFilter implements FusionAlgorithm {
 
@@ -33,7 +38,7 @@ public class ParticleFilter implements FusionAlgorithm {
      *  - initializes particles around that reference
      */
     public ParticleFilter() {
-        // 1) 取起始参考坐标
+        // 1) Initial Refference
         double[] startRef = SensorFusion.getInstance().getGNSSLatLngAlt(true);
         this.refLatitude  = startRef[0];
         this.refLongitude = startRef[1];

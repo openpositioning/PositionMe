@@ -2,6 +2,8 @@ package com.openpositioning.PositionMe.fragments;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
@@ -43,6 +45,20 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.LatLng;
+
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.Text;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+
+
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
+import com.openpositioning.PositionMe.BuildingPolygon;
+
+import android.graphics.Rect;
+
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.R;
@@ -54,20 +70,28 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A simple {@link Fragment} subclass. The recording fragment is displayed while the app is actively
- * saving data, with UI elements and a map with a marker indicating current PDR location and
- * direction of movement status. The user's PDR trajectory/path being recorded
- * is drawn on the map as well.
- * An overlay of indoor maps for the building is achieved when the user is in the Nucleus
- * and Library buildings to allow for a better user experience.
+ * This fragment handles the active data recording session by capturing sensor inputs,
+ * displaying a real-time map with markers for the current pedestrian dead reckoning (PDR)
+ * position and orientation, and drawing the evolving user trajectory on the map.
+ * It also overlays indoor floor plans when the user is within supported buildings,
+ * thereby enhancing navigation accuracy in indoor environments.
  *
- * @see HomeFragment the previous fragment in the nav graph.
- * @see CorrectionFragment the next fragment in the nav graph.
- * @see SensorFusion the class containing sensors and recording.
- * @see IndoorMapManager responsible for overlaying the indoor floor maps
+ * In this updated version, additional functionalities have been introduced:
+ * <ul>
+ *   <li>Enhanced fusion support for integrating WiFi, GNSS, and PDR data.</li>
+ *   <li>New tagging functionality to mark specific positions during recording.</li>
+ *   <li>Improved UI controls for switching map types and adjusting floor overlays.</li>
+ * </ul>
  *
- * @author Mate Stodulka
- * @author Arun Gopalakrishnan
+ * These improvements provide a more robust framework for post-processing and correcting
+ * the recorded trajectory.
+ *
+ * @see HomeFragment for navigation from the home screen.
+ * @see CorrectionFragment for reviewing and adjusting recorded data.
+ * @see SensorFusion for the sensor integration and fusion algorithms.
+ * @see IndoorMapManager for managing indoor map overlays.
+ *  addtage for the new location tagging functionality.
+ *
  */
 public class RecordingFragment extends Fragment implements SensorFusion.SensorFusionUpdates {
     private Marker gnssMarker;
@@ -143,6 +167,17 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
 
     private LatLng currentFusedLocation = null;
     private Marker tempFusedArrowMarker = null;
+
+
+    // List to store detected lift positions from OCR (as LatLng)
+    private List<LatLng> detectedLifts = new ArrayList<>();
+    // Marker used to show the lift icon when the user is near a detected lift
+    private Marker liftMarker;
+    // Proximity threshold in meters to consider the user “near” a lift
+    private static final float LIFT_PROXIMITY_THRESHOLD_METERS = 1.5f;
+
+    private Button liftIconButton;
+    private List<Marker> liftMarkers = new ArrayList<>();
 
     /**
      * Public Constructor for the class.
@@ -243,6 +278,25 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
                 fusionPolyline.setVisible(visible);
                 fusedOrientationMarker.setVisible(visible);
             }
+
+            // Check if the fused coordinate is near any detected lift from OCR
+            boolean nearLift = false;
+            for (LatLng liftLatLng : detectedLifts) {
+                float distance = (float) UtilFunctions.distanceBetweenPoints(fusedCoordinate, liftLatLng);
+
+                if (distance < LIFT_PROXIMITY_THRESHOLD_METERS) {
+                    nearLift = true;
+                    break;
+                }
+            }
+// Toggle the visibility of the Lift icon based on proximity
+            if (nearLift) {
+                liftIconButton.setVisibility(View.VISIBLE);
+            } else {
+                liftIconButton.setVisibility(View.GONE);
+            }
+
+
         });
         Log.d("FUSION_PATH", "Fused location: " + fusedCoordinate);
 
@@ -313,6 +367,11 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
                 indoorMapManager.setCurrentLocation(currentLocation);
                 //Showing an indication of available indoor maps using PolyLines
                 indoorMapManager.setIndicationOfIndoorMap();
+
+// Load the floor plan bitmap (adjust resource ID as needed)
+                Bitmap floorPlanBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.nucleusg);
+                runOCROnFloorPlan(floorPlanBitmap);
+
             }
         });
 
@@ -343,6 +402,10 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
         this.distanceTravelled = getView().findViewById(R.id.currentDistanceTraveled);
         this.gnssError =getView().findViewById(R.id.gnssError);
 
+        // Get reference to the Lift icon (predefined in XML)
+        liftIconButton = view.findViewById(R.id.Lift);
+        // Initially hide it (or set to GONE as default)
+        liftIconButton.setVisibility(View.GONE);
 
         //Set default text of TextViews to 0
         this.gnssError.setVisibility(View.GONE);
@@ -694,7 +757,7 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
             nextLocation = UtilFunctions.calculateNewPos(currentLocation, pdrMoved);
 
             try {
-                // ✅ Lazy-initialize the PDR polyline
+                // Lazy-initialize the PDR polyline
                 if (pdrPolyline == null && gMap != null) {
                     pdrPolyline = gMap.addPolyline(new PolylineOptions()
                             .color(Color.argb(150, 255, 0, 0)) // semi-transparent red
@@ -703,7 +766,7 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
                             .add(currentLocation));
                 }
 
-                // ✅ Lazy-initialize the orientation marker
+                // Lazy-initialize the orientation marker
                 if (orientationMarker == null && gMap != null) {
                     orientationMarker = gMap.addMarker(new MarkerOptions()
                             .position(currentLocation)
@@ -714,7 +777,7 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
                                     UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_24))));
                 }
 
-                // ✅ Add to polyline and update
+                // Add to polyline and update
                 if (pdrPolyline != null) {
                     List<LatLng> pointsMoved = pdrPolyline.getPoints();
                     pointsMoved.add(nextLocation);
@@ -724,7 +787,7 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
                     }
                 }
 
-                // ✅ Update orientation marker
+                // Update orientation marker
                 if (orientationMarker != null) {
                     orientationMarker.setPosition(nextLocation);
                     orientationMarker.setRotation((float) Math.toDegrees(sensorFusion.passOrientation()));
@@ -749,6 +812,83 @@ public class RecordingFragment extends Fragment implements SensorFusion.SensorFu
         }
     }
 
+    /**
+     * Converts a pixel coordinate (x, y) from the floor plan image to a LatLng coordinate.
+     *
+     * @param x           The x-coordinate (in pixels) from OCR.
+     * @param y           The y-coordinate (in pixels) from OCR.
+     * @param imageWidth  The width of the floor plan image in pixels.
+     * @param imageHeight The height of the floor plan image in pixels.
+     * @param bounds      The LatLngBounds of the overlay (e.g. for Nucleus or Library).
+     * @return            The corresponding LatLng coordinate.
+     */
+    private LatLng convertPixelToLatLng(int x, int y, int imageWidth, int imageHeight, LatLngBounds bounds) {
+        // Compute the top-left and bottom-right coordinates from the bounds.
+        LatLng topLeft = new LatLng(bounds.northeast.latitude, bounds.southwest.longitude);
+        LatLng bottomRight = new LatLng(bounds.southwest.latitude, bounds.northeast.longitude);
+
+        double latRange = topLeft.latitude - bottomRight.latitude; // decreases downward
+        double lngRange = bottomRight.longitude - topLeft.longitude; // increases to the right
+
+        double lat = topLeft.latitude - ((double) y / imageHeight) * latRange;
+        double lng = topLeft.longitude + ((double) x / imageWidth) * lngRange;
+        return new LatLng(lat, lng);
+    }
+
+
+    private void runOCROnFloorPlan(Bitmap floorPlanBitmap) {
+        // Determine which building overlay is active.
+        LatLngBounds overlayBounds;
+        if (BuildingPolygon.inNucleus(currentLocation)) {
+            overlayBounds = new LatLngBounds(BuildingPolygon.NUCLEUS_SW, BuildingPolygon.NUCLEUS_NE);
+        } else if (BuildingPolygon.inLibrary(currentLocation)) {
+            overlayBounds = new LatLngBounds(BuildingPolygon.LIBRARY_SW, BuildingPolygon.LIBRARY_NE);
+        } else {
+            // Not in a building with an indoor overlay; do nothing.
+            return;
+        }
+
+        InputImage image = InputImage.fromBitmap(floorPlanBitmap, 0);
+        TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+
+
+        recognizer.process(image)
+                .addOnSuccessListener(result -> {
+                    for (Text.TextBlock block : result.getTextBlocks()) {
+                        for (Text.Line line : block.getLines()) {
+                            String text = line.getText().toLowerCase();
+                            if (text.contains("lift") || text.contains("elevator")) {
+                                Rect boundingBox = line.getBoundingBox();
+                                if (boundingBox != null) {
+                                    int centerX = boundingBox.centerX();
+                                    int centerY = boundingBox.centerY();
+                                    // Convert the OCR pixel coordinate to a LatLng
+                                    LatLng liftLatLng = convertPixelToLatLng(centerX, centerY,
+                                            floorPlanBitmap.getWidth(), floorPlanBitmap.getHeight(), overlayBounds);
+                                    detectedLifts.add(liftLatLng);
+                                    Log.d("OCR", "Detected lift at: " + liftLatLng);
+
+                                    if (gMap != null) {
+                                        Marker liftMarker = gMap.addMarker(new MarkerOptions()
+                                                .position(liftLatLng)
+                                                .title("Lift")
+                                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW))); // or custom icon
+                                        liftMarker.setVisible(false);
+                                        liftMarkers.add(liftMarker);  // Optional: maintain list if you want to remove/hide later
+                                    }
+                                    Log.d("OCR", "Total lifts detected: " + detectedLifts.size());
+
+                                }
+
+                            }
+                        }
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("OCR", "OCR processing failed", e);
+                });
+
+    }
 
 
     /**

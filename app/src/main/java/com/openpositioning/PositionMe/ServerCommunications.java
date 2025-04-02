@@ -43,15 +43,15 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 
 /**
- * This class handles communications with the server through HTTPs. The class uses an
- * {@link OkHttpClient} for making requests to the server. The class includes methods for sending
- * a recorded trajectory, uploading locally-stored trajectories, downloading trajectories from the
- * server and requesting information about the uploaded trajectories.
+ * ServerCommunications - This class manages HTTPS communications with the backend server using an OkHttpClient.
+ * It supports uploading recorded trajectories and locally stored trajectory files, downloading trajectories,
+ * sending WiFi fingerprint data for positioning, and requesting information about previously submitted trajectories.
  *
- * Keys and URLs are hardcoded strings, given the simple and academic nature of the project.
+ * New features include enhanced error handling, callbacks for download completion, and support for WiFi-based
+ * positioning requests. Observers can register to receive asynchronous updates on upload/download statuses and
+ * positioning responses.
+ * Keys, URLs, and other configuration parameters are hardcoded for simplicity and academic purposes.
  *
- * @author Michal Dvorak
- * @author Mate Stodulka
  */
 public class ServerCommunications implements Observable {
     private static ServerCommunications mainInstance;

@@ -6,7 +6,16 @@ import com.openpositioning.PositionMe.utils.CoordinateTransform;
 
 import java.util.ArrayList;
 import java.util.List;
-
+/**
+ * BatchOptimizer - A basic fusion algorithm for position optimization.
+ *
+ * This implementation collects trajectory data and computes a fused position by simply averaging
+ * the most recent measurements. In this minimal version, position updates from GNSS and Wi-Fi are
+ * blended with the current state by averaging, and each step detection is treated as a forward movement.
+ *
+ * Note: This optimizer is still under development. Future enhancements may include more sophisticated
+ * optimization techniques and weighting methods.
+ */
 public class BatchOptimizer implements FusionAlgorithm {
     private List<float[]> trajectory = new ArrayList<>();
     private float[] lastPos = new float[]{0f, 0f};

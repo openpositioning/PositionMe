@@ -260,7 +260,22 @@
             app:layout_constraintTop_toBottomOf="@+id/timeRemainingBar"
             app:layout_constraintVertical_bias="1" />
 
-
+        <Button
+            android:id="@+id/Lift"
+            android:layout_width="79dp"
+            android:layout_height="63dp"
+            android:layout_marginTop="10dp"
+            android:background="@android:color/transparent"
+            android:backgroundTint="@android:color/transparent"
+            app:icon="@drawable/ic_baseline_elevator_24"
+            app:iconGravity="start"
+            app:iconSize="60dp"
+            app:iconTint="#94a3b8"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHeight_percent="0.25"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
