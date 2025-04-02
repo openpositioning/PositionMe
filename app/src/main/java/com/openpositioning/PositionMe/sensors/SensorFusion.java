@@ -983,13 +983,11 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     //endregion
     /**
-     * 获取当前设备朝向角度（单位：度），0° 表示正北，顺时针递增。
+     * Get the current device heading angle (unit: degree), 0° represents true north, and it increases clockwise.
      */
     public float getHeading() {
         float heading = (float) Math.toDegrees(orientation[0]);
         if (heading < 0) heading += 360;
         return heading;
     }
-
-
 }

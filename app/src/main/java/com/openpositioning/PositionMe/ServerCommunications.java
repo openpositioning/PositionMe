@@ -377,7 +377,7 @@ public class ServerCommunications implements Observable {
         if (file.exists()) {
             return file.getAbsolutePath();
         } else {
-            return null; // 如果文件不存在，返回 null
+            return null; // If the file does not exist, returns null
         }
     }
 

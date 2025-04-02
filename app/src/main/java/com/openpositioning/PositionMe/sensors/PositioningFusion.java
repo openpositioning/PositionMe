@@ -19,17 +19,23 @@ import java.util.TimerTask;
 import android.content.Context;
 
 
-
+/**
+ * Singleton class responsible for fusing different positioning sources:
+ * WiFi, GNSS, and PDR using a Particle Filter-based approach.
+ */
 public class PositioningFusion implements PositionObserver {
 
     // Singleton instance
     private static final PositioningFusion instance = new PositioningFusion();
 
+    // Application context for UI feedback (e.g., Toast)
     private static Context appContext;
 
+    // Particle filter used to fuse position inputs
     private ParticleFilter particleFilter = new ParticleFilter();
     private List<ParticleFilter.Particle> currentParticles;     // Current set of particles
 
+    // Coordinate transformation system
     private LocalCoordinateSystem coordSystem = new LocalCoordinateSystem();
 
     // Position data sources
@@ -44,9 +50,9 @@ public class PositioningFusion implements PositionObserver {
     private float[] lastPdrPosition;
     private float[] pdrPosition; // [x, y] in meters
 
-    // 定时器
+    // Periodic fusion timer
     private java.util.Timer fusionTimer = new java.util.Timer();
-    private static final long FUSION_INTERVAL_MS = 1000; // 1秒
+    private static final long FUSION_INTERVAL_MS = 1000; // 1 second
 
     // Fused position
     private float[] fusedPositionLocal;
@@ -123,10 +129,7 @@ public class PositioningFusion implements PositionObserver {
 
 
         }
-//        else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != null) {
-//            LatLng gnssLocation = positioningFusion.getGnssPosition();
-//            coordSystem.initReference(gnssLocation.latitude, gnssLocation.longitude);
-//        }
+
         else if (SensorFusion.getInstance().getGNSSLatitude(false)[0] != 0 && SensorFusion.getInstance().getGNSSLatitude(false)[1] != 0) {
             Log.d("Fusion", "initialized position with gnss location");
             coordSystem.initReference(SensorFusion.getInstance().getGNSSLatitude(false)[0], SensorFusion.getInstance().getGNSSLatitude(false)[1]);
@@ -156,14 +159,13 @@ public class PositioningFusion implements PositionObserver {
     public void stopPeriodicFusion() {
         Log.d("Fusion", "stopPeriodicFusion");
         fusionTimer.cancel();
-        fusionTimer = new java.util.Timer(); // 允许后续重新 start
+        fusionTimer = new java.util.Timer(); // reinitializes for future use
     }
 
     // --- Update Methods ---
     public void updateFromWiFi(LatLng wifiLocation) {
         this.wifiPosition = wifiLocation;
-//        Log.d("Fusion", "WiFi updated: " + wifiLocation);
-//        fusePosition();
+
     }
 
     public boolean isWifiPositionSet() {
@@ -214,17 +216,19 @@ public class PositioningFusion implements PositionObserver {
         return startPosition;
     }
 
+
+    // --- Data Updates ---
     public void updateFromGNSS(LatLng gnssLocation) {
         this.gnssPosition = gnssLocation;
-//        Log.d("Fusion", "GNSS updated: " + gnssLocation);
-//        fusePosition();
     }
 
     public void updateFromPDR(float[] pdrXY) {
         this.pdrPosition = pdrXY;
-//        Log.d("Fusion", "PDR updated: " + Arrays.toString(pdrXY));
     }
 
+    /**
+     * Updates all sources from the SensorFusion singleton.
+     */
     public void updateAllSourse() {
         updateFromWiFi(SensorFusion.getInstance().getLatLngWifiPositioning());
         float[] gnssLatLon = SensorFusion.getInstance().getGNSSLatitude(false);
@@ -234,6 +238,7 @@ public class PositioningFusion implements PositionObserver {
         updateFromPDR(pdrXY);
     }
 
+    // --- Conversion Methods ---
     public void coordinateConversionToLocal() {
         if (this.wifiPosition != null) {
             this.wifiPositionLocal = coordSystem.toLocal(this.wifiPosition.latitude, this.wifiPosition.longitude);
@@ -273,8 +278,16 @@ public class PositioningFusion implements PositionObserver {
     }
 
 
-//    // --- Fusion Logic ---
-//
+
+    // --- Fusion Logic ---
+
+    /**
+     * Performs fusion using particle filter:
+     * - Builds motion vector from PDR
+     * - Chooses observation (WiFi preferred, GNSS fallback)
+     * - Runs particle filter update
+     * - Stores fused position
+     */
     private void fusePosition() {
         float[] pdrMotion = new float[2];
         if (lastPdrPosition != null) {
@@ -283,11 +296,10 @@ public class PositioningFusion implements PositionObserver {
         } else {
             pdrMotion = pdrPosition;
         }
-        //Log.d("Posotioning Fusion",String.format("gnss local position: %s", gnssPositionLocal.toString()));
+
         if (gnssPositionLocal != null) {
-            // 1. |EN: Construct Observation Data (WiFi/GNSS first)
-            //    |CHS: 构造观测数据（WiFi/GNSS 优先使用）
-//            Log.d("Posotioning Fusion",String.format("gnss local position: %s", gnssPositionLocal.toString()));
+
+            //Construct Observation Data (WiFi/GNSS first)
             PointF observation = null;
             if (wifiPositionLocal != null) {
                 observation = new PointF(wifiPositionLocal[0], wifiPositionLocal[1]);
@@ -295,15 +307,13 @@ public class PositioningFusion implements PositionObserver {
                 observation = new PointF(gnssPositionLocal[0], gnssPositionLocal[1]);
             }
 
-            // 2. |EN: Construct PDR Motion Vector
-            //    |CHS: 构造 PDR 位移向量
+            //Construct PDR Motion Vector
             PointF motion = null;
             if (pdrMotion != null) {
                 motion = new PointF(pdrMotion[0], pdrMotion[1]);
             }
 
-            // 3. |EN: Update Particle Filter
-            //    |CHS: 执行粒子滤波更新
+            //Update Particle Filter
             ParticleFilter.Result result = particleFilter.updateParticleFilter(
                     currentParticles,
                     wifiPositionLocal != null ? new PointF(wifiPositionLocal[0], wifiPositionLocal[1]) : null,
@@ -312,8 +322,7 @@ public class PositioningFusion implements PositionObserver {
             );
 
 
-            // 4. |EN: Update fused position
-            //    |CHS: 更新粒子集合和融合位置
+            //Update fused position
             currentParticles = result.particles;
             fusedPositionLocal = new float[]{(float) result.bestX, (float) result.bestY};
             Log.d("Posotioning Fusion",String.format("fused position: %s", Arrays.toString(fusedPositionLocal)));
@@ -322,20 +331,14 @@ public class PositioningFusion implements PositionObserver {
         }
     }
 
-    // --- Accessor for fused result ---
-//    public LatLng getFusedPosition() {
-//        updateAllSourse();
-//        coordinateConversionToLocal();
-////        outlierRemoval();
-//        fusePosition();
-//        coordinateConversionToGlobal();
-//        return this.fusedPosition;
-//    }
 
+    // --- Getters ---
     public LatLng getFusedPosition() {
-        return this.fusedPosition; // 直接读，谁改过就读谁融合后的
+        return this.fusedPosition;
     }
 
+
+    // Called whenever sensor values are updated from SensorFusion
     @Override
     public void onSensorFusionUpdate() {
         updateAllSourse();
@@ -344,7 +347,4 @@ public class PositioningFusion implements PositionObserver {
             coordinateConversionToLocal();
         }
     }
-
-//    fusePosition();
-//    coordinateConversionToGlobal();
 }

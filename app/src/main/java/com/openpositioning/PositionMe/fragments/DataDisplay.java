@@ -44,22 +44,10 @@ import java.util.Arrays;
 
 
 /**
- * A simple {@link Fragment} subclass.
- * Use the {@link DataDisplay#newInstance} factory method to
- * create an instance of this fragment.
+ * Fragment responsible for displaying real-time location data on a Google Map.
  */
 public class DataDisplay extends Fragment implements OnMapReadyCallback {
-
-//    // TODO: Rename parameter arguments, choose names that match
-//    // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-//    private static final String ARG_PARAM1 = "param1";
-//    private static final String ARG_PARAM2 = "param2";
-//
-//    // TODO: Rename and change types of parameters
-//    private String mParam1;
-//    private String mParam2;
-
-    // For the map
+    // GoogleMap instance
     private GoogleMap mMap;
 
     // Add a field for the marker
@@ -68,22 +56,33 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     private Marker gnssMarker = null;
     private Marker pdrMarker = null;
 
+    // Google Maps fragment
     private SupportMapFragment mapFragment;
+
+    // Handler for periodic UI updates
     private final android.os.Handler handler = new android.os.Handler();
     private final int updateInterval = 1000; // 1 second
 
+
+    // Positioning fusion system (fuses WiFi, GNSS, and PDR)
     private PositioningFusion positioningFusion = PositioningFusion.getInstance();
 
+
+    // Manages indoor map display and floor info
     private IndoorMapManager indoorMapManager;
 
+
+    // Spinner to select map type
     private Spinner mapTypeSpinner;
 
+
+    // Utility to draw trajectory lines on the map
     TrajectoryDrawer trajectoryDrawer;
 
     private Marker directionMarker;
 
 
-
+    // Runnable to periodically update WiFi-related location info on screen
     private final Runnable updateWifiLocationRunnable = new Runnable() {
         @Override
         public void run() {
@@ -92,6 +91,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         }
     };
 
+
+    // UI text element for status
     private TextView statusText;
 
     public DataDisplay() {
@@ -119,10 +120,6 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-//        if (getArguments() != null) {
-//            mParam1 = getArguments().getString(ARG_PARAM1);
-//            mParam2 = getArguments().getString(ARG_PARAM2);
-//        }
     }
 
     @Override
@@ -135,8 +132,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     }
 
     /**
-     * {@inheritDoc}
-     * Initialise UI elements and set onClick actions for the buttons.
+     * Initializes the view elements once the layout is inflated.
      */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
@@ -150,16 +146,23 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
             mapFragment.getMapAsync(this);
         }
 
+        // Reference UI elements
         statusText = view.findViewById(R.id.textView3);
 
         mapTypeSpinner = view.findViewById(R.id.spinner2);
         setupMapTypeSpinner();
 
         Log.d("Data Display", "View Created");
+
+        // Initialize coordinate system and start fusion process
         positioningFusion.initCoordSystem();
         positioningFusion.startPeriodicFusion();
     }
 
+
+    /**
+     * Called when the map is ready. Starts drawing and updates.
+     */
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
@@ -170,6 +173,9 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         trajectoryDrawer = new TrajectoryDrawer(mMap);
     }
 
+    /**
+     * Displays the initial WiFi location on the map.
+     */
     public void showCurrentLocation(){
         LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
         if (wifiLocation != null) {
@@ -181,10 +187,13 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
     }
 
+
+    /**
+     * Updates the UI with the latest fused, WiFi, GNSS, and PDR locations.
+     */
     private void updateWifiLocationText() {
         Log.d("DataDisplay", String.format("Inilization status: %s", positioningFusion.isInitialized()));
         LatLng fusedLocation = PositioningFusion.getInstance().getFusedPosition();
-//        LatLng wifiLocation = SensorFusion.getInstance().getLatLngWifiPositioning();
         int floor = SensorFusion.getInstance().getWifiFloor();
         Location locationData = SensorFusion.getInstance().getLocationData();
 
@@ -199,7 +208,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                 accuracy = -1;
             }
 
-            // 显示 estimated 经纬度 + 楼层
+            // Display current fused location and floor info
             String display = String.format(
                     "Location:\nLat: %.6f\nLon: %.6f\nFloor: %d\nAccuracy: %.2fm",
                     fusedLocation.latitude,
@@ -209,25 +218,11 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
             );
             statusText.setText(display);
 
-//            if (fusedMarker == null) {
-//                // Create marker only once
-//                fusedMarker = mMap.addMarker(new MarkerOptions()
-//                        .position(fusedLocation)
-//                        .title("Estimated Position"));
-//                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 18f));
-//            } else {
-//                // Just move the marker
-//                fusedMarker.setPosition(fusedLocation);
-//            }
-
-            // --- Fused ---
-            //float bearing = SensorFusion.getInstance().getHeading(); // 获取朝向角度（度）
-
-            // 初始化图标
+            // Icons for fused position marker
             BitmapDescriptor blueDotIcon = vectorToBitmap(requireContext(), R.drawable.ic_blue_dot);
             BitmapDescriptor coneIcon = vectorToBitmap(requireContext(), R.drawable.ic_direction_cone);
 
-
+            // Add or update fused marker
             if (fusedMarker == null) {
                 // Create marker only once
                 fusedMarker = mMap.addMarker(new MarkerOptions()
@@ -243,7 +238,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                 fusedMarker.setPosition(fusedLocation);
             }
 
-            // --- WiFi ---
+            // --- WiFi marker update ---
             LatLng wifiLocation = positioningFusion.getWifiPosition();
             if (positioningFusion.isWifiPositionSet()) {
                 if (wifiMarker == null) {
@@ -258,7 +253,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                 }
             }
 
-            // --- GNSS ---
+            // --- GNSS marker update ---
             LatLng gnssLocation = positioningFusion.getGnssPosition();
             if (positioningFusion.isGNSSPositionSet()) {
                 if (gnssMarker == null) {
@@ -273,7 +268,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                 }
             }
 
-            // --- PDR ---
+            // --- PDR marker update ---
             LatLng pdrLocation = positioningFusion.getPdrPosition();
             if (positioningFusion.isPDRPositionSet()) {
                 if (pdrMarker == null) {
@@ -288,19 +283,7 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
                 }
             }
 
-
-            /*if (directionMarker == null) {
-                directionMarker = mMap.addMarker(new MarkerOptions()
-                        .position(fusedLocation)
-                        .icon(coneIcon)
-                        .anchor(0.5f, 0.5f)
-                        .flat(true)
-                        .rotation(bearing));
-            } else {
-                directionMarker.setPosition(fusedLocation);
-                directionMarker.setRotation(bearing);
-            }*/
-
+            // Indoor floor handling
             if (indoorMapManager != null) {
                 indoorMapManager.setCurrentLocation(fusedLocation);
             }
@@ -316,6 +299,10 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
     }
 
+
+    /**
+     * Sets up the map type selection spinner (hybrid, normal, satellite).
+     */
     private void setupMapTypeSpinner() {
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
                 requireContext(), R.array.map_types, android.R.layout.simple_spinner_item);
@@ -349,6 +336,10 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         });
     }
 
+
+    /**
+     * Converts a vector drawable resource to a BitmapDescriptor for map markers.
+     */
     private BitmapDescriptor vectorToBitmap(Context context, @DrawableRes int vectorResId) {
         Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
         vectorDrawable.setBounds(0, 0, vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight());
@@ -363,8 +354,9 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     }
 
 
-
-
+    /**
+     * Called when the fragment's view is destroyed; stops fusion and updates.
+     */
     @Override
     public void onDestroyView() {
         super.onDestroyView();

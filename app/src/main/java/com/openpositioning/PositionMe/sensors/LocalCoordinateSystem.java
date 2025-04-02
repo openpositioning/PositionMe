@@ -4,19 +4,36 @@ import com.google.android.gms.maps.model.LatLng;
 
 import java.lang.Math;
 
+/**
+ * A utility class for converting between global coordinates (latitude, longitude)
+ * and local 2D Cartesian coordinates (x, y in meters), using a reference origin point.
+ * The conversion is based on the WGS84 ellipsoid model.
+ */
 public class LocalCoordinateSystem {
 
+    // Earth's radius in meters (WGS84 standard)
     private static final double EARTH_RADIUS = 6378137.0; // meters (WGS84)
+
+    // Reference latitude and longitude (origin for local coordinate system)
     private Double refLat = null;  // 原点纬度
     private Double refLon = null;  // 原点经度
+
+    // Indicates whether the reference has been initialized
     private boolean initialized = false;
 
+    /**
+     * Returns true if the reference location has been set.
+     */
     public boolean isInitialized() {
         return initialized;
     }
 
     /**
-     * 初始化参考坐标（只设置一次）
+     * Initializes the reference latitude and longitude used for local coordinate conversion.
+     * This sets the origin point of the local coordinate system.
+     *
+     * @param latitude  Latitude of the reference point
+     * @param longitude Longitude of the reference point
      */
     public void initReference(double latitude, double longitude) {
 //        if (!initialized) {
@@ -27,7 +44,12 @@ public class LocalCoordinateSystem {
     }
 
     /**
-     * 将 lat/lon 转换为相对坐标（单位：米）
+     * Converts a global (lat/lon) coordinate to local (x/y) coordinates in meters.
+     * If the reference is not initialized, it will auto-initialize to the first input coordinate.
+     *
+     * @param latitude  Latitude to convert
+     * @param longitude Longitude to convert
+     * @return A float array [x, y] representing the position in meters from the reference point
      */
     public float[] toLocal(double latitude, double longitude) {
         if (!initialized) {
@@ -45,7 +67,11 @@ public class LocalCoordinateSystem {
     }
 
     /**
-     * 将本地坐标转换回经纬度
+     * Converts a local coordinate (x, y) in meters back to global (lat/lon) format.
+     *
+     * @param x Local X (easting) in meters
+     * @param y Local Y (northing) in meters
+     * @return The corresponding LatLng (latitude, longitude) in global coordinates
      */
     public LatLng toGlobal(double x, double y) {
         if (!initialized) {
@@ -60,6 +86,13 @@ public class LocalCoordinateSystem {
         return new LatLng(lat, lon);
     }
 
+
+    /**
+     * Gets the reference latitude and longitude as an array.
+     *
+     * @return [latitude, longitude] of the reference point
+     * @throws IllegalStateException if the reference point is not set
+     */
     public double[] getReferenceLatLon() {
         if (!initialized) {
             throw new IllegalStateException("Reference point not initialized.");
