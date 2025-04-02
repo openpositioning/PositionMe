@@ -78,7 +78,8 @@ public class LocationHistory {
         if (history.isEmpty()) return;
 
         List<LatLng> points = new ArrayList<>();
-        for (LocationData record : history) {
+        List<LocationData> safeCopy = new ArrayList<>(history);
+        for (LocationData record : safeCopy) {
             if (record != null && record.getLocation() != null) {
                 points.add(record.getLocation());
             }

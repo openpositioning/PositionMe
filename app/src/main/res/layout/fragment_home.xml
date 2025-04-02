@@ -87,7 +87,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 android:contentDescription="@string/start_recording"
-                app:backgroundTint="@color/md_theme_primary"
+                app:backgroundTint="@color/LPcolor"
                 app:srcCompat="@drawable/ic_baseline_directions_walk_24"
                 app:tint="@android:color/white" />
 
@@ -97,9 +97,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 android:contentDescription="@string/files"
-                app:backgroundTint="@color/md_theme_secondaryContainer"
+                app:backgroundTint="@color/filecolor"
                 app:srcCompat="@drawable/ic_baseline_folder_24"
-                app:tint="@color/md_theme_onSecondaryContainer" />
+                app:iconTint="@android:color/white" />
+
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/infoFab"
@@ -107,7 +108,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 android:contentDescription="@string/info"
-                app:backgroundTint="@color/md_theme_tertiaryContainer"
+                app:backgroundTint="@color/infocolor"
                 app:srcCompat="@drawable/ic_baseline_info_24"
                 app:tint="@color/md_theme_onTertiaryContainer" />
 
@@ -128,9 +129,9 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="20dp"
 
-            android:text="Live Position"
+            android:text="  Live Position"
             android:textColor="@android:color/white"
-            app:backgroundTint="@color/md_theme_primaryContainer"
+            app:backgroundTint="@color/LPcolor"
             app:iconTint="@android:color/white"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"

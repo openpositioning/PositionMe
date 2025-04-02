@@ -163,4 +163,10 @@
     <color name="md_theme_surfaceContainer_highContrast">#DEE3E6</color>
     <color name="md_theme_surfaceContainerHigh_highContrast">#D0D5D8</color>
     <color name="md_theme_surfaceContainerHighest_highContrast">#C2C7CA</color>
+    <color name="myCustomDarkBlue">#142A31</color>
+    <color name="LPcolor">#123350</color>
+    <color name="filecolor">#3D6287</color>
+    <color name="infocolor">#A8C4DC</color>
+    <color name="markerred">#9D4022</color>
+
 </resources>
