@@ -37,7 +37,6 @@ import java.util.Map;
  * A simple {@link Fragment} subclass. The files fragments displays a list of trajectories already
  * uploaded with some metadata, and enabled re-downloading them to the device's local storage.
  *
- * @see HomeFragment the connected fragment in the nav graph.
  * @see UploadFragment sub-menu for uploading recordings that failed during recording.
  * @see com.openpositioning.PositionMe.Traj the data structure sent and received.
  * @see ServerCommunications the class handling communication with the server.

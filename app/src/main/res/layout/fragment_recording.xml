@@ -126,20 +126,9 @@
         android:orientation="vertical"
         android:padding="12dp"
         android:background="#AAFFFFFF"
-        app:layout_constraintBottom_toTopOf="@id/recordingStatusFragmentContainer"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- CALL-OUT FRAGMENT CONTAINER for Status -->
-    <!-- 激活时显示，并固定高度为屏幕下 1/3 -->
-    <FrameLayout
-        android:id="@+id/recordingStatusFragmentContainer"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/statusGuideline"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>

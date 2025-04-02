@@ -1,7 +1,9 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.content.res.Resources;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,10 +17,11 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.constraintlayout.widget.ConstraintLayout;
-import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
@@ -29,13 +32,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class StatusFragment extends Fragment {
+public class StatusBottomSheetFragment extends BottomSheetDialogFragment {
 
     private ProgressBar circularProgressBar;
     private ImageView recordingIcon;
     private TextView elevationTextView;
     private TextView gnssErrorTextView;
-
     private RecyclerView wifiListView;
 
     private int progress = 0;
@@ -45,14 +47,13 @@ public class StatusFragment extends Fragment {
     private Handler refreshDataHandler;
     private static final long REFRESH_TIME = 2000;
 
-    // 用于映射每个传感器到其 TextView ID（每项可能 1~3 个维度）
+    // 映射每个传感器到其对应 TextView 的 ID 数组
     private final Map<SensorTypes, Integer[]> sensorViewMap = new HashMap<>();
 
     private final Runnable refreshTableTask = new Runnable() {
         @Override
         public void run() {
             Map<SensorTypes, float[]> sensorValueMap = sensorFusion.getSensorValueMap();
-
             for (Map.Entry<SensorTypes, Integer[]> entry : sensorViewMap.entrySet()) {
                 SensorTypes sensor = entry.getKey();
                 float[] values = sensorValueMap.get(sensor);
@@ -108,8 +109,8 @@ public class StatusFragment extends Fragment {
         refreshDataHandler = new Handler();
 
         setupSensorViewMap();
-
         startBlinkingAnimation();
+
         refreshDataHandler.post(refreshTableTask);
     }
 
@@ -193,6 +194,22 @@ public class StatusFragment extends Fragment {
         super.onResume();
         if (refreshDataHandler != null) {
             refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
+        }
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        // 设置 BottomSheet 的 peekHeight 为屏幕高度的 1/3
+        View view = getView();
+        if (view != null) {
+            View parent = (View) view.getParent();
+            if (parent != null) {
+                BottomSheetBehavior<View> behavior = BottomSheetBehavior.from(parent);
+                int screenHeight = Resources.getSystem().getDisplayMetrics().heightPixels;
+                behavior.setPeekHeight((int) (screenHeight * 0.33f));
+                behavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+            }
         }
     }
 }

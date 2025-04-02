@@ -9,20 +9,19 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.animation.Animation;
-import android.view.animation.AnimationUtils;
 import android.view.ViewGroup;
 import android.widget.Button;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.NavDirections;
+import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.local.DataFileManager;
-import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
@@ -37,12 +36,11 @@ public class RecordingFragment extends Fragment {
     private static final String TAG = "RecordingFragment";
 
     private Button completeButton;
-    // NEW: Info button to toggle call-out fragment
     private Button moreInfoButton;
 
     private TrajectoryMapFragment trajectoryMapFragment;
     private CalibrationFragment calibrationFragment;
-    private StatusFragment recordingStatusFragment;
+    private StatusBottomSheetFragment statusBottomSheet;
 
     private SensorFusion sensorFusion;
     private DataFileManager dataFileManager;
@@ -53,7 +51,6 @@ public class RecordingFragment extends Fragment {
     private Handler sensorUpdateHandler;
     private Runnable sensorUpdateTask;
 
-    private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
 
@@ -91,14 +88,13 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
         float[] startPosition = sensorFusion.getGNSSLatitude(false);
         sensorFusion.setStartGNSSLatitude(startPosition);
         sensorFusion.startRecording();
 
         completeButton = view.findViewById(R.id.finishRecordingButton);
-        // NEW: Initialize the info button for toggling call-out fragment
         moreInfoButton = view.findViewById(R.id.moreInfoButton);
-        final View callOutContainer = view.findViewById(R.id.recordingStatusFragmentContainer);
 
         trajectoryMapFragment = (TrajectoryMapFragment) getChildFragmentManager()
                 .findFragmentById(R.id.trajectoryMapFragmentContainer);
@@ -123,29 +119,17 @@ public class RecordingFragment extends Fragment {
         calibrationFragment.setDataFileManager(dataFileManager);
         calibrationFragment.setTrajectoryMapFragment(trajectoryMapFragment);
 
-        recordingStatusFragment = (StatusFragment) getChildFragmentManager()
-                .findFragmentById(R.id.recordingStatusFragmentContainer);
-        if (recordingStatusFragment == null) {
-            recordingStatusFragment = new StatusFragment();
-            getChildFragmentManager()
-                    .beginTransaction()
-                    .replace(R.id.recordingStatusFragmentContainer, recordingStatusFragment)
-                    .commitNow();
-        }
-        // Initially hide the call-out container
-        callOutContainer.setVisibility(View.GONE);
-
-        // NEW: Set click listener on the info button to toggle the call-out fragment
+        // Show/hide bottom sheet
         moreInfoButton.setOnClickListener(v -> {
-            if (callOutContainer.getVisibility() == View.GONE) {
-                // Slide up animation to show call-out
-                callOutContainer.setVisibility(View.VISIBLE);
+            if (statusBottomSheet == null || !statusBottomSheet.isAdded()) {
+                statusBottomSheet = new StatusBottomSheetFragment();
+                statusBottomSheet.show(getChildFragmentManager(), "StatusBottomSheet");
             } else {
-                // Slide down animation to hide call-out
-                callOutContainer.setVisibility(View.GONE);
+                statusBottomSheet.dismiss();
             }
         });
 
+        // Toggle calibration
         Button toggleAdvancedMenuButton = view.findViewById(R.id.toggleCalibrationMenuButton);
         View calibrationContainer = view.findViewById(R.id.calibrationFragmentContainer);
         toggleAdvancedMenuButton.setOnClickListener(v -> {
@@ -158,28 +142,35 @@ public class RecordingFragment extends Fragment {
             }
         });
 
+        // 点击完成按钮，停止记录并跳转到 CorrectionFragment
         completeButton.setOnClickListener(v -> {
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
-            ((RecordingActivity) requireActivity()).showCorrectionScreen();
+
+            // 使用 Safe Args 导航到 CorrectionFragment
+            NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
+            Navigation.findNavController(v).navigate(action);
         });
 
+        // 如果开启了 split 计时功能
         if (settings.getBoolean("split_trajectory", false)) {
             long limit = settings.getInt("split_duration", 30) * 60000L;
-            recordingStatusFragment.setMaxProgress((int) (limit / 1000));
-            recordingStatusFragment.setProgress(0);
-            recordingStatusFragment.setScaleY(3f);
             autoStop = new CountDownTimer(limit, 1000) {
                 @Override
                 public void onTick(long millisUntilFinished) {
-                    recordingStatusFragment.incrementProgress();
+                    if (statusBottomSheet != null && statusBottomSheet.isAdded()) {
+                        statusBottomSheet.incrementProgress();
+                    }
                     updateUIandPosition();
                 }
 
                 @Override
                 public void onFinish() {
                     sensorFusion.stopRecording();
-                    ((RecordingActivity) requireActivity()).showCorrectionScreen();
+
+                    // 计时结束后也跳转到 CorrectionFragment
+                    NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
+                    Navigation.findNavController(getView()).navigate(action);
                 }
             }.start();
         } else {
@@ -245,15 +236,19 @@ public class RecordingFragment extends Fragment {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
+        // 更新海拔
         float elevationVal = sensorFusion.getElevation();
-        recordingStatusFragment.updateElevation(String.format("%.1f", elevationVal));
+        if (statusBottomSheet != null && statusBottomSheet.isAdded()) {
+            statusBottomSheet.updateElevation(String.format("%.1f", elevationVal));
+        }
 
+        // 更新 PDR
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
             LatLng oldLocation = trajectoryMapFragment.getCurrentLocation();
             LatLng newLocation = UtilFunctions.calculateNewPos(
                     oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
+                    new float[]{pdrValues[0] - previousPosX, pdrValues[1] - previousPosY}
             );
             if (trajectoryMapFragment != null) {
                 trajectoryMapFragment.updateUserLocation(newLocation,
@@ -261,6 +256,7 @@ public class RecordingFragment extends Fragment {
             }
         }
 
+        // 更新 GNSS 误差
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
             if (trajectoryMapFragment.isGnssEnabled()) {
@@ -268,11 +264,15 @@ public class RecordingFragment extends Fragment {
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
                 if (currentLoc != null) {
                     double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
-                    recordingStatusFragment.updateGnssError(String.format("%.2fm", errorDist), View.VISIBLE);
+                    if (statusBottomSheet != null && statusBottomSheet.isAdded()) {
+                        statusBottomSheet.updateGnssError(String.format("%.2fm", errorDist), View.VISIBLE);
+                    }
                 }
                 trajectoryMapFragment.updateGNSS(gnssLocation);
             } else {
-                recordingStatusFragment.updateGnssError("", View.GONE);
+                if (statusBottomSheet != null && statusBottomSheet.isAdded()) {
+                    statusBottomSheet.updateGnssError("", View.GONE);
+                }
                 trajectoryMapFragment.clearGNSS();
             }
         }

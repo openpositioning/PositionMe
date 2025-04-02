@@ -17,7 +17,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -150,7 +149,7 @@ public class CorrectionFragment extends Fragment {
                 //   ((AppCompatActivity)getActivity()).getSupportActionBar().show();
 
                 // Now, simply tell the Activity we are done:
-                ((RecordingActivity) requireActivity()).finishFlow();
+//                ((RecordingActivity) requireActivity()).finishFlow();
             }
         });
     }
