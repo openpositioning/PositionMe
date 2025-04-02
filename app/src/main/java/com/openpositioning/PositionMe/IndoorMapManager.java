@@ -97,13 +97,13 @@ public class IndoorMapManager {
      */
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
         if (BuildingPolygon.inNucleus(currentLocation)){
-            //Special case for nucleus when auto-floor is being used
-            if (autoFloor) {
-                // If nucleus add bias floor as lower-ground floor referred to as floor 0
-                newFloor += 1;
-            }
             // If within bounds and different from floor map currently being shown
             if (newFloor>=0 && newFloor<NUCLEUS_MAPS.size() && newFloor!=this.currentFloor) {
+                //Special case for nucleus when auto-floor is being used
+                if (autoFloor) {
+                    // If nucleus add bias floor as lower-ground floor referred to as floor 0
+                    newFloor += 1;
+                }
                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
                 this.currentFloor=newFloor;
             }

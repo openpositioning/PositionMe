@@ -162,6 +162,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     private Location lastGnssLocation;
     private long lastGnssTime;
 
+    private long lastWifiSuccessTime = 0;
+    private float ratio = 0f;
+    private Handler ratioHandler = new Handler(Looper.getMainLooper());
+
 //    List<LatLng> wallPointsLatLng = Arrays.asList(
 //            new LatLng(55.92301090863321, -3.174221045188629),
 //            new LatLng(55.92301094092557, -3.1742987516650873),
@@ -1379,87 +1383,128 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
     //endregion
 
+    /**
+     * Returns the most recent fused location estimate.
+     *
+     * @return A float array representing the fused location, typically in [x, y] or [latitude, longitude] format.
+     */
     public float[] getFusionLocation() {
         return fusionLocation;
     }
 
-    // 成员变量
-    private long lastWifiSuccessTime = 0;
-    private float ratio = 0f;
-    private Handler ratioHandler = new Handler(Looper.getMainLooper());
-
+    /**
+     * Returns the timestamp of the last successful WiFi retrieval.
+     *
+     * @return The time in milliseconds since epoch when the last WiFi update succeeded.
+     */
     public long getLastWifiSuccessTime() {
         return lastWifiSuccessTime;
     }
+
+    /**
+     * Returns the position of the last successful WiFi retrieval.
+     *
+     * @return A {@link LatLng} object representing the last known WiFi position.
+     */
     public LatLng getLastWifiPos() {
         return lastWifiPos;
     }
+
+    /**
+     * Returns the floor level associated with the last successful WiFi retrieval.
+     *
+     * @return An integer representing the last known WiFi floor.
+     */
     public int getLastWifiFloor() {
         return lastWifiFloor;
     }
 
-    // 定时器任务：每隔一小段时间更新ratio值
+
+    /**
+     * Runnable task that periodically updates the `ratio` value based on the time
+     * elapsed since the last successful WiFi retrieval.
+     *
+     * <p>The ratio stays at 1 for a short duration (`constantDuration` seconds),
+     * then decays exponentially down to 0 over the next few seconds, reaching 0 after 10 seconds total.
+     * The update runs every 100 milliseconds until 10 seconds have passed since the last WiFi success.
+     */
     private Runnable ratioUpdater = new Runnable() {
         @Override
         public void run() {
             long currentTime = System.currentTimeMillis();
-            // 计算上一次wifi成功召回后的已用时间（秒）
-            // calculate the last time wifi successfully retrieved
+            // Calculate time elapsed since the last successful WiFi update (in seconds)
             float elapsedSeconds = (currentTime - lastWifiSuccessTime) / 1000f;
 
             if (elapsedSeconds <= constantDuration) {
-                // constantDuration 秒以内保持为1
-                // within
+                // Within the constant duration window, keep ratio at 1
                 ratio = 1f;
             } else if (elapsedSeconds >= 10f) {
-                // 超过10秒后，ratio直接为0
+                // After 10 seconds, set ratio directly to 0
                 ratio = 0f;
             } else {
-                // 介于 constantDuration 到 10 秒之间，采用指数衰减
+                // Between constantDuration and 10 seconds, apply exponential decay
                 float k = (float)(Math.log(1.0 / 0.01) / (10 - constantDuration));
                 ratio = (float)Math.exp(-k * (elapsedSeconds - constantDuration));
             }
 
-            // 这里可以做一些UI更新或其他操作，例如打印当前ratio值
-//            Log.d("RatioUpdater", "当前ratio值：" + ratio);
-
-            // 若计时器未超过10秒，继续更新
+            // Continue updating every 100ms if still within 10 seconds window
             if (elapsedSeconds < 10f) {
-                ratioHandler.postDelayed(this, 100); // 每100毫秒更新一次
+                ratioHandler.postDelayed(this, 100);
             }
         }
     };
-    public static boolean isWifiNotBehind(double[] newCords, double[] wifiPos, double azimuthRadians) {
-        double dx = wifiPos[0] - newCords[0]; // easting 差值
-        double dy = wifiPos[1] - newCords[1]; // northing 差值
 
-        // 两点重合时，视为不在前方
+
+    /**
+     * Determines whether a WiFi access point is not located behind the user.
+     *
+     * <p>This method compares the position of the WiFi access point to the user's current coordinates
+     * and azimuth (direction the user is facing) to determine if the WiFi is within a 90° sector behind the user.
+     * If the WiFi lies within that rear sector, it is considered "behind" and the method returns false.
+     * Otherwise, it returns true, indicating the WiFi is not behind the user.
+     *
+     * @param newCords         A double array representing the user's current coordinates: [easting, northing].
+     * @param wifiPos          A double array representing the WiFi access point's coordinates: [easting, northing].
+     * @param azimuthRadians   The azimuth (facing direction) of the user, in radians. 0 points to true north,
+     *                         and increases clockwise (i.e., east is π/2).
+     *
+     * @return {@code true} if the WiFi is not behind the user (i.e., outside the 90° rear sector),
+     *         {@code false} otherwise.
+     */
+    public static boolean isWifiNotBehind(double[] newCords, double[] wifiPos, double azimuthRadians) {
+        // Calculate difference in easting and northing
+        double dx = wifiPos[0] - newCords[0];
+        double dy = wifiPos[1] - newCords[1];
+
+        // If the two points are the same, consider it not in front
         if (dx == 0 && dy == 0) {
             return false;
         }
 
-        // 计算从 newCords 指向 wifiPos 的方向角（相对于正北，单位：弧度）
-        // 使用 Math.atan2(dx, dy) 得到的角度正符合：正北 0，顺时针增加
+        // Calculate the angle from newCords to wifiPos (relative to north, in radians)
+        // Math.atan2(dx, dy) gives an angle with 0 pointing north, increasing clockwise
         double wifiAngle = Math.atan2(dx, dy);
         if (wifiAngle < 0) {
             wifiAngle += 2 * Math.PI;
         }
 
-        // 归一化用户的 azimuth 到 [0, 2π)
+        // Normalize user's azimuth to [0, 2π)
         double normalizedAzimuth = ((azimuthRadians % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
 
-        // 用户的背向角：即面朝方向加 π，再归一化到 [0,2π)
+        // Calculate the back-facing direction (user's facing direction + π), also normalized
         double backDirection = (normalizedAzimuth + Math.PI) % (2 * Math.PI);
 
-        // 计算 wifiAngle 与背向角之间的最小角差
+        // Calculate the smallest angular difference between wifiAngle and backDirection
         double diff = Math.abs(wifiAngle - backDirection);
         if (diff > Math.PI) {
             diff = 2 * Math.PI - diff;
         }
 
-        // 如果差值小于等于 π/4（45°），则 WiFi 落在背后 90° 扇形内，返回 false；否则返回 true
+        // If the angle difference is less than or equal to 45° (π/4),
+        // WiFi is within the 90° sector behind the user — return false; otherwise, return true
         return diff > (Math.PI / 4);
     }
+
 
 
 }

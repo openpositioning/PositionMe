@@ -273,6 +273,7 @@ public class RecordingFragment extends Fragment {
                 // ✅ Set up indoor maps (if applicable)
                 indoorMapManager.setCurrentLocation(fusedCurrentLocation);// fusedCurrentLocation or not?
                 indoorMapManager.setIndicationOfIndoorMap();
+                indoorMapManager.setCurrentFloor(sensorFusion.getLastWifiFloor(), true);
             });
         } else {
             Log.e("RecordingFragment", "❌ SupportMapFragment is NULL!");
@@ -1106,11 +1107,13 @@ public class RecordingFragment extends Fragment {
             // **Auto Floor 功能**
             // **Auto Floor Function**
             if (autoFloor != null && autoFloor.isChecked()) {
-//                int estimatedFloor = (int) (elevationVal / indoorMapManager.getFloorHeight());
-//                indoorMapManager.setCurrentFloor(estimatedFloor, true);
                 int estimatedFloor;
-                if (wifi != null) {
-                    estimatedFloor = sensorFusion.getWifiFloor();
+                if (sensorFusion != null && System.currentTimeMillis() - sensorFusion.getLastWifiSuccessTime() < 6000000) {
+//                    TODO: implement wifi floor estimation as a initial floor
+//                          thereby if the wifi gone, barometer could still be used to estimate floor
+//                          NOT implemented since the barometer gives too many uncertainties over time
+//                    estimatedFloor = sensorFusion.getWifiFloor();
+                    estimatedFloor = sensorFusion.getLastWifiFloor();
                 }else{
                     estimatedFloor = (int) (elevationVal / indoorMapManager.getFloorHeight());
                 }
@@ -1149,7 +1152,7 @@ public class RecordingFragment extends Fragment {
      * 🔄 Calculate and draw PDR trajectory
      * - Calculate user location
      * - Update trajectory polyline
-     * ​​- Adjust map perspective
+     * - Adjust map perspective
      * @param pdrMoved contains the PDR change in X/Y direction
      */
     private void plotLines(float[] pdrMoved, boolean isFused) {
@@ -1163,7 +1166,7 @@ public class RecordingFragment extends Fragment {
             updatePDRandFusionPosition(pdrMoved, false); // update PDR polyline
         }
 
-        // 平滑摄像机
+        // move camera to current location
         gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusedCurrentLocation, 19f));
 
     }
