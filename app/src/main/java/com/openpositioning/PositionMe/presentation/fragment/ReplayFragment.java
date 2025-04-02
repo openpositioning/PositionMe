@@ -135,9 +135,9 @@ public class ReplayFragment extends Fragment {
             if (point.gnssLocation != null) {
                 GNSS_data.add(point.gnssLocation);
             }
-            if (point.cachedWiFiLocation != null) {
-                WIFI_data.add(point.cachedWiFiLocation);
-            }
+            //if (point.cachedWiFiLocation != null) {
+            //    WIFI_data.add(point.cachedWiFiLocation);
+            //}
             // Pre-compute EKF data
             LatLng prevPDR = (i > 0) ? replayData.get(i - 1).pdrLocation : point.pdrLocation;
             LatLng ekfPoint = SensorFusion.getInstance().EKF_replay(
@@ -494,7 +494,7 @@ public class ReplayFragment extends Fragment {
                                 previousReplayPoint = location; // update previous location
                                 prevWiFiLocation = location;
                                 trajectoryMapFragment.displayNucleusFloorLevel(floor); // update the floor level inside nucleus
-
+                                WIFI_data.add(location);
                             }
 
                             @Override
