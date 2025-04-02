@@ -264,7 +264,9 @@ public class TrajectoryMapFragment extends Fragment {
         polylineOptions = new PolylineOptions()
                 .color(currentColor)
                 .width(8f)
-                .add(); // empty
+                .zIndex(10f)  // <-- Higher than buildings
+                .add();
+
 
         polyline = map.addPolyline(polylineOptions);
 
