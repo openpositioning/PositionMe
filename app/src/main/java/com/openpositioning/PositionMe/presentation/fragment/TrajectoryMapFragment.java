@@ -406,7 +406,7 @@ public class TrajectoryMapFragment extends Fragment {
         return indoorMapManager != null ? indoorMapManager.getCurrentFloor() : 0;
     }
 
-    // get current fuilding - return name of current building / int represent
+    // get current building - return name of current building / int represent
     public String getCurrentBuilding() {
         return indoorMapManager != null ? indoorMapManager.getCurrentBuilding() : "";
     }
@@ -559,6 +559,10 @@ public class TrajectoryMapFragment extends Fragment {
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+            Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
+            //update indoor maker
+            updateAllIndoorMarkers();
         }
     }
 
