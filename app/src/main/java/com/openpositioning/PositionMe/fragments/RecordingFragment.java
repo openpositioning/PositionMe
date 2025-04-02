@@ -1,6 +1,8 @@
 package com.openpositioning.PositionMe.fragments;
 
 
+import static com.openpositioning.PositionMe.GeoUtils.isInStairRegion;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -1071,8 +1073,7 @@ public class RecordingFragment extends Fragment {
             setFloorButtonVisibility(View.VISIBLE);
 
             // **Auto Floor Function**
-            if (autoFloor != null && autoFloor.isChecked() && (isInElevator(currentLocation) || isInFirstStaircase(currentLocation)
-            || isInSecondFloorStaircase(currentLocation) || isInBasementStaircase(currentLocation))) {
+            if (autoFloor != null && autoFloor.isChecked() && (isInStairRegion(fusedCurrentLocation))) {
                 int estimatedFloor;
                 if (sensorFusion != null && System.currentTimeMillis() - sensorFusion.getLastWifiSuccessTime() < 6000000) {
 //                    TODO: implement wifi floor estimation as an initial floor
@@ -1105,49 +1106,49 @@ public class RecordingFragment extends Fragment {
         }
     }
 
-    public boolean isInElevator(LatLng currentLocation) {
-        List<LatLng> elevatorPolygon = Arrays.asList(
-                new LatLng(55.92307361898947, -3.174281938426994),
-                new LatLng(55.92307368121945, -3.174432016879645),
-                new LatLng(55.92302088671354, -3.1744321230471044),
-                new LatLng(55.92302085467245, -3.1743548100179217),
-                new LatLng(55.923031413574854, -3.1743547887615846),
-                new LatLng(55.92303138337408, -3.174282023528208)
-        );
-        return PolyUtil.containsLocation(currentLocation, elevatorPolygon, true);
-    }
-
-    public boolean isInFirstStaircase(LatLng currentLocation) {
-        List<LatLng> staircasePolygon = Arrays.asList(
-                new LatLng(55.92302153551364, -3.1742210237571133),
-                new LatLng(55.923021575395175, -3.1743170141360544),
-                new LatLng(55.92291796333051, -3.1743172228541),
-                new LatLng(55.922917910116, -3.1741892360311152),
-                new LatLng(55.92298697722846, -3.174170812777022)
-        );
-        return PolyUtil.containsLocation(currentLocation, staircasePolygon, true);
-    }
-
-
-    public boolean isInSecondFloorStaircase(LatLng currentLocation) {
-        List<LatLng> secondFloorStaircasePolygon = Arrays.asList(
-                new LatLng(55.92305776740818, -3.174250135524168),
-                new LatLng(55.923057723893564, -3.1741455354069608),
-                new LatLng(55.923144834872836, -3.174145359592135),
-                new LatLng(55.92314487837232, -3.1742499599514304)
-        );
-        return PolyUtil.containsLocation(currentLocation, secondFloorStaircasePolygon, true);
-    }
-
-    public boolean isInBasementStaircase(LatLng currentLocation) {
-        List<LatLng> basementStaircasePolygon = Arrays.asList(
-                new LatLng(55.92301092610767, -3.1742902930391566),
-                new LatLng(55.92301088376152, -3.174188435819902),
-                new LatLng(55.92312678459982, -3.174188202011103),
-                new LatLng(55.92312682692639, -3.1742900595440013)
-        );
-        return PolyUtil.containsLocation(currentLocation, basementStaircasePolygon, true);
-    }
+//    public boolean isInElevator(LatLng currentLocation) {
+//        List<LatLng> elevatorPolygon = Arrays.asList(
+//                new LatLng(55.92307361898947, -3.174281938426994),
+//                new LatLng(55.92307368121945, -3.174432016879645),
+//                new LatLng(55.92302088671354, -3.1744321230471044),
+//                new LatLng(55.92302085467245, -3.1743548100179217),
+//                new LatLng(55.923031413574854, -3.1743547887615846),
+//                new LatLng(55.92303138337408, -3.174282023528208)
+//        );
+//        return PolyUtil.containsLocation(currentLocation, elevatorPolygon, true);
+//    }
+//
+//    public boolean isInFirstStaircase(LatLng currentLocation) {
+//        List<LatLng> staircasePolygon = Arrays.asList(
+//                new LatLng(55.92302153551364, -3.1742210237571133),
+//                new LatLng(55.923021575395175, -3.1743170141360544),
+//                new LatLng(55.92291796333051, -3.1743172228541),
+//                new LatLng(55.922917910116, -3.1741892360311152),
+//                new LatLng(55.92298697722846, -3.174170812777022)
+//        );
+//        return PolyUtil.containsLocation(currentLocation, staircasePolygon, true);
+//    }
+//
+//
+//    public boolean isInSecondFloorStaircase(LatLng currentLocation) {
+//        List<LatLng> secondFloorStaircasePolygon = Arrays.asList(
+//                new LatLng(55.92305776740818, -3.174250135524168),
+//                new LatLng(55.923057723893564, -3.1741455354069608),
+//                new LatLng(55.923144834872836, -3.174145359592135),
+//                new LatLng(55.92314487837232, -3.1742499599514304)
+//        );
+//        return PolyUtil.containsLocation(currentLocation, secondFloorStaircasePolygon, true);
+//    }
+//
+//    public boolean isInBasementStaircase(LatLng currentLocation) {
+//        List<LatLng> basementStaircasePolygon = Arrays.asList(
+//                new LatLng(55.92301092610767, -3.1742902930391566),
+//                new LatLng(55.92301088376152, -3.174188435819902),
+//                new LatLng(55.92312678459982, -3.174188202011103),
+//                new LatLng(55.92312682692639, -3.1742900595440013)
+//        );
+//        return PolyUtil.containsLocation(currentLocation, basementStaircasePolygon, true);
+//    }
 
     /**
      * Calculates and draws the PDR or fused trajectory on the map.

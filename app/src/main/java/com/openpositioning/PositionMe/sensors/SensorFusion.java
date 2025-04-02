@@ -24,6 +24,7 @@ import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.UtilFunctions;
+import com.openpositioning.PositionMe.GeoUtils;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -164,20 +165,20 @@ public class SensorFusion implements SensorEventListener, Observer {
     private Location lastGnssLocation;
     private long lastGnssTime;
 
-    List<LatLng> wallPointsLatLng = Arrays.asList(
-            new LatLng(55.92301090863321, -3.174221045188629),
-            new LatLng(55.92301094092557, -3.1742987516650873),
-            new LatLng(55.92292858261526, -3.174298917609189),
-            new LatLng(55.92292853699635, -3.174189214585424),
-            new LatLng(55.92298698483965, -3.1741890966446484)
-    );
-    List<LatLng> wallSecondPointsLatLng = Arrays.asList(
-            new LatLng(55.923012912847625, -3.17430025206314),
-            new LatLng(55.9230128674766, -3.1741911042535036),
-            new LatLng(55.922952153773124, -3.174191226755363),
-            new LatLng(55.922952199155134, -3.17430037438893),
-            new LatLng(55.923012912847625, -3.17430025206314)
-    );
+//    List<LatLng> wallPointsLatLng = Arrays.asList(
+//            new LatLng(55.92301090863321, -3.174221045188629),
+//            new LatLng(55.92301094092557, -3.1742987516650873),
+//            new LatLng(55.92292858261526, -3.174298917609189),
+//            new LatLng(55.92292853699635, -3.174189214585424),
+//            new LatLng(55.92298698483965, -3.1741890966446484)
+//    );
+//    List<LatLng> wallSecondPointsLatLng = Arrays.asList(
+//            new LatLng(55.923012912847625, -3.17430025206314),
+//            new LatLng(55.9230128674766, -3.1741911042535036),
+//            new LatLng(55.922952153773124, -3.174191226755363),
+//            new LatLng(55.922952199155134, -3.17430037438893),
+//            new LatLng(55.923012912847625, -3.17430025206314)
+//    );
 
     private int fenceCounter = 0;
 
@@ -324,10 +325,30 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_PRESSURE:
-                // Barometer processing - filter
-                pressure = (1- ALPHA) * pressure + ALPHA * sensorEvent.values[0];
-//                System.err.println("Pressure: " + pressure);
-                // Store pressure data in protobuf trajectory class
+                float rawPressure = sensorEvent.values[0];
+
+                // ✅ 1. 判空或非法值
+                if (Float.isNaN(rawPressure) || rawPressure <= 0) {
+                    Log.w("PDR", "Invalid pressure reading, skipped.");
+                    break;
+                }
+
+                // ✅ 2. 判定范围是否合理（地球大气压力范围大致是 850~1100 hPa）
+                if (rawPressure < 850f || rawPressure > 1100f) {
+                    Log.w("PDR", "Out-of-range pressure value: " + rawPressure);
+                    break;
+                }
+
+                // ✅ 3. 判断突变（与上一帧差值过大）
+                if (Math.abs(rawPressure - pressure) > 10f) {  // 可调阈值，比如超过10 hPa
+                    Log.w("PDR", "Sudden jump in pressure value, skipped.");
+                    break;
+                }
+
+                // ✅ 4. 平滑气压
+                pressure = (1 - ALPHA) * pressure + ALPHA * rawPressure;
+
+                // ✅ 5. 更新 elevation
                 if (saveRecording) {
                     this.elevation = pdrProcessing.updateElevation(SensorManager.getAltitude(
                             SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure));
@@ -437,6 +458,15 @@ public class SensorFusion implements SensorEventListener, Observer {
                 //Store time of step
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
 
+                // ✅ 添加判断：如果加速度点太少，就跳过这次步长估计
+                int MIN_ACCEL_SAMPLES = 10;  // 可根据你采样率和步频实际情况调整
+                if (this.accelMagnitude.size() < MIN_ACCEL_SAMPLES) {
+                    // 不调用 updatePdr，跳过位置更新
+                    Log.w("PDR", "Skipped step: not enough accel samples (" + accelMagnitude.size() + ")");
+                    this.accelMagnitude.clear(); // 仍要清空缓存，准备下一步
+                    break;
+                }
+
                 float [] currentStateCords = this.pdrProcessing.getPDRMovement();
                 //
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
@@ -507,13 +537,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                 LatLng startLocLatLng = new LatLng(this.startLocation[0], this.startLocation[1]);
 
                 if (fenceCounter < 2){
-                    if (getWifiFloor() == 1 || getWifiFloor() == 2) {
-                        float[] corrected = getCorrectedCoords(getWifiFloor(), wallPointsLatLng, wallSecondPointsLatLng,
-                                startLocLatLng, currentStateCords, newCords);
-                        newCords = corrected;
+//                    if (getWifiFloor() == 1 || getWifiFloor() == 2) {
+                    if (lastWifiFloor == 1 || lastWifiFloor == 2){
+                        newCords = GeoUtils.getCorrectedCoords(getWifiFloor(),startLocLatLng, currentStateCords, newCords);
                         fenceCounter++;
                     }
-
                     if (fenceCounter >= 2){
                         fenceCounter = 0;
                     }
@@ -615,68 +643,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
-    public float[] getCorrectedCoords(int wifiFloor, List<LatLng> wallPointsLatLng, List<LatLng> wallSecondPointsLatLng,
-                                      LatLng startLocLatLng, float[] currentStateCords, float[] newCords) {
-
-        List<float[]> wallPoints = new ArrayList<>();
-        List<LatLng> selectedWallLatLng = (wifiFloor == 1) ? wallPointsLatLng : wallSecondPointsLatLng;
-
-        for (LatLng point : selectedWallLatLng) {
-            double[] converted = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, point);
-            wallPoints.add(new float[]{(float) converted[0], (float) converted[1]});
-        }
-
-        for (int i = 0; i < wallPoints.size() - 1; i++) {
-            float[] wallA = wallPoints.get(i);
-            float[] wallB = wallPoints.get(i + 1);
-
-            float[] intersection = GeoUtils.getLineSegmentIntersection(currentStateCords, newCords, wallA, wallB);
-
-            if (intersection != null) {
-                float dx = currentStateCords[0] - intersection[0];
-                float dy = currentStateCords[1] - intersection[1];
-                float len = (float) Math.sqrt(dx * dx + dy * dy);
-                if (len == 0) {
-                    Log.e("WallCheck", "⚠️ 起点与交点重合，无法偏移");
-                    break;
-                }
-                float dirX = dx / len;
-                float dirY = dy / len;
-
-                float wx = wallB[0] - wallA[0];
-                float wy = wallB[1] - wallA[1];
-                float wlen = (float) Math.sqrt(wx * wx + wy * wy);
-                if (wlen == 0) {
-                    Log.e("WallCheck", "⚠️ 墙体端点重合，跳过该段");
-                    continue;
-                }
-                float wallDirX = wx / wlen;
-                float wallDirY = wy / wlen;
-
-                float normalX = -wallDirY;
-                float normalY = wallDirX;
-
-                float dot = dx * normalX + dy * normalY;
-                if (dot < 0) {
-                    normalX = -normalX;
-                    normalY = -normalY;
-                }
-
-                float offset = 0.25f;
-                float slideOffset = 0.1f;
-                float[] corrected = new float[]{
-                        intersection[0] + dirX * offset + normalX * slideOffset,
-                        intersection[1] + dirY * offset + normalY * slideOffset
-                };
-
-                Log.d("WallCheck", "✅ 修正点: " + corrected[0] + ", " + corrected[1]);
-                return corrected;
-            }
-        }
-
-        return newCords; // 没有交点则返回原始坐标
-    }
-
     /**
      * {@inheritDoc}
      *
@@ -770,7 +736,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
-     *
+     * DISCARDED, use callback instead
      */
     private void createWifiPositioningRequest(){
         // Try catch block to catch any errors and prevent app crashing
@@ -828,48 +794,56 @@ public class SensorFusion implements SensorEventListener, Observer {
             Log.e("jsonErrors","Error creating json object"+e.toString());
         }
     }
-    // Callback Example Function
+
+    // Callback Function
     /**
-     * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
-     * using Volley Callback
+     * Creates and sends a request to obtain a WiFi-based location
+     * using the collected WiFi fingerprint and handles the response via a Volley callback.
      */
-    private void createWifiPositionRequestCallback(){
+    private void createWifiPositionRequestCallback() {
         try {
-            // 创建用于存储WiFi接入点的JSON对象
+            // Construct a JSON object to store WiFi access point data (BSSID -> signal level)
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList) {
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
-            // 创建POST请求所需的JSON对象
+
+            // Create the final JSON object to be sent in the POST request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+
+            // Make the WiFi positioning request using the VolleyCallback
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // 如果位置和楼层都和上一次相同，就不更新
+                    // Do not update if the location and floor haven't changed
                     if (lastWifiPos != null &&
                             wifiLocation != null &&
                             lastWifiPos.latitude == wifiLocation.latitude &&
                             lastWifiPos.longitude == wifiLocation.longitude &&
                             lastWifiFloor == floor) {
-                        Log.d("WiFiPosition", "位置未变化，不更新");
+                        Log.d("WiFiPosition", "Location unchanged, skipping update.");
                         return;
                     }
-//                    lastWifiFloor = getWifiFloor();
-//                    lastWifiPos = getLatLngWifiPositioning();
+
+                    // Update the last known WiFi location and floor
                     lastWifiFloor = floor;
                     lastWifiPos = wifiLocation;
-                    // 成功回调时，重置计时器（更新成功时间，并启动ratioUpdater）
+
+                    // Update the timestamp of the last successful WiFi positioning
                     lastWifiSuccessTime = System.currentTimeMillis();
-                    // 移除之前可能存在的更新任务，确保计时器重置
+
+                    // Reset any previous handler callbacks to avoid overlapping tasks
                     ratioHandler.removeCallbacks(ratioUpdater);
                     ratioHandler.post(ratioUpdater);
 
+                    // Save the WiFi positioning data into the recorded trajectory, if recording is enabled
                     if (saveRecording) {
                         float lat = (float) lastWifiPos.latitude;
                         float lon = (float) lastWifiPos.longitude;
-                        float height = floor * 4.2F; // nucleus floor height is 4.2m
+                        float height = floor * 4.2F; // Estimated floor height is 4.2 meters
                         String provider = "wifi_fine";
+
                         trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
                                 .setAccuracy(0)
                                 .setAltitude(height)
@@ -880,54 +854,24 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 .setRelativeTimestamp(System.currentTimeMillis() - absoluteStartTime));
                     }
 
-                    // 其他成功逻辑处理
-                    Log.d("WiFiSuccess", "WiFi定位成功：" + wifiLocation.toString());
-                    Log.d("WiFiSuccess", "所在楼层：" + floor);
+                    // Log successful location and floor detection
+                    Log.d("WiFiSuccess", "WiFi positioning succeeded: " + wifiLocation.toString());
+                    Log.d("WiFiSuccess", "Detected floor: " + floor);
                 }
 
                 @Override
                 public void onError(String message) {
-                    // 错误回调处理
+                    // Handle and log error during WiFi positioning request
                     Log.e("WiFiError", message);
                 }
             });
         } catch (JSONException e) {
-            // 捕获创建JSON对象过程中可能出现的异常，防止崩溃
-            Log.e("jsonErrors", "创建json对象错误: " + e.toString());
+            // Handle exception that may occur while building the JSON request
+            Log.e("jsonErrors", "Failed to create JSON object: " + e.toString());
         }
     }
 
-//    private void createWifiPositionRequestCallback(){
-//        try {
-//            // Creating a JSON object to store the WiFi access points
-//            JSONObject wifiAccessPoints=new JSONObject();
-//            for (Wifi data : this.wifiList){
-//                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
-//            }
-//            // Creating POST Request
-//            JSONObject wifiFingerPrint = new JSONObject();
-//            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-//            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
-//                @Override
-//                public void onSuccess(LatLng wifiLocation, int floor) {
-//                    // Handle the success response
-////                    Log.e("Call back WiFi-Location", wifiLocation.toString());
-////                    Log.e("Call back WiFi-Floor", String.valueOf(floor));
-//                }
-//
-//                @Override
-//                public void onError(String message) {
-//                    // Handle the error response
-////                    Log.e("Call back WiFi-Error", message);
-//                }
-//            });
-//        } catch (JSONException e) {
-//            // Catching error while making JSON object, to prevent crashes
-//            // Error log to keep record of errors (for secure programming and maintainability)
-//            Log.e("jsonErrors","Error creating json object"+e.toString());
-//        }
-//
-//    }
+
 
     /**
      * Method to get user position obtained using {@link WiFiPositioning}.
@@ -1671,7 +1615,4 @@ public class SensorFusion implements SensorEventListener, Observer {
         // WiFi is within the 90° sector behind the user — return false; otherwise, return true
         return diff > (Math.PI / 4);
     }
-
-
-
 }

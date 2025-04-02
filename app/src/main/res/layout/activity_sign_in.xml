@@ -32,7 +32,7 @@
         android:layout_width="0dp"
         android:layout_height="50dp"
         android:background="@drawable/rounded_edittext"
-        android:text="zhaohanwang319@gmail.com"
+        android:text="s2229486@ed.ac.uk"
         android:drawableStart="@drawable/ic_email"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
