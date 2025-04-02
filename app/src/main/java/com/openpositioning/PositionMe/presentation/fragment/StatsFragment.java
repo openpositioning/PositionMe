@@ -101,6 +101,7 @@ public class StatsFragment extends Fragment {
         return rootView;
     }
 
+    //Code By Guilherme change between each position type to show on the map and attributes
     private void updateTrajectoryMap() {
         if (trajectoryMapFragment == null) return;
 
@@ -152,6 +153,7 @@ public class StatsFragment extends Fragment {
 
     }
 
+    //Code By Guilherme: Perform the calculations based on each data type to calculate attributes
     private void calculateAndDisplayStats(List<LatLng> trajectory) {
         if (trajectory == null || trajectory.size() < 2) return;
 
@@ -183,6 +185,7 @@ public class StatsFragment extends Fragment {
         avgSpeedTextView.setText(df.format(avgSpeed) + " km/h");
         paceTextView.setText(String.format("%d:%02d", paceMin, paceSec));
     }
+
     @Override
     public void onDestroyView() {
         super.onDestroyView();
