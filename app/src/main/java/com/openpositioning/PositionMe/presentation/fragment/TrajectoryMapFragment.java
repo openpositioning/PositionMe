@@ -664,11 +664,6 @@ public class TrajectoryMapFragment extends Fragment {
         // Check if the new wifi location is an outlier
         if (isOutlier(lastWifiLocation, wifiLocation)) {
             Log.w("OutlierDetection", "Rejected outlier WiFi location: " + wifiLocation.toString());
-            // Add a red marker for the outlier for testing
-//            gMap.addMarker(new MarkerOptions()
-//                    .position(wifiLocation)
-//                    .title("Outlier Position")
-//                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
             return; // Skip updating the marker
         }
 

@@ -147,8 +147,6 @@ public class RecordingFragment extends Fragment implements PositionListener {
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
 
-        // Find fusion info text if it exists in your layout
-        // If it doesn't exist in your layout, you can add it
 
 
         completeButton = view.findViewById(R.id.stopButton);

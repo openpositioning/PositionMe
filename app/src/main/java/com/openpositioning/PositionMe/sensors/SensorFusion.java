@@ -655,21 +655,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 public void onError(String message) {
                     // Handle the error response
                     Log.e("WiFiFusion", "Failed to get WiFi position: " + message);
-
-//                    // Show Toast directly from SensorFusion (must be on UI thread)
-//                    new android.os.Handler(Looper.getMainLooper()).post(() ->
-//                            Toast.makeText(appContext, "WiFi Error: " + message, Toast.LENGTH_LONG).show()
-//                    );
-
-
-
-                    // Send a broadcast with the error message
-
-                    //                    Intent intent = new Intent("WIFI_POSITIONING_ERROR");
-//                    intent.putExtra("errorMessage", message);
-//                    appContext.sendBroadcast(intent);  // using stored appContext from setContext()
-
-
                 }
             });
         } catch (JSONException e) {

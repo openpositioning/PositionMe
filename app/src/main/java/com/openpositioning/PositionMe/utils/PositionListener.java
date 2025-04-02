@@ -5,6 +5,8 @@ import com.google.android.gms.maps.model.LatLng;
 /**
  * Interface for listening to position updates from various sources.
  * Implementing classes can receive updates from PDR, GNSS, and fused positions.
+ *
+ * @author Michal Wiercigroch
  */
 public interface PositionListener {
 

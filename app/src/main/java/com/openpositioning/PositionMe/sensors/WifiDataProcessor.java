@@ -212,7 +212,6 @@ public class WifiDataProcessor implements Observable {
     private void startWifiScan() {
         //Check settings for wifi permissions
         if(checkWifiPermissions()) {
-            //if(sharedPreferences.getBoolean("wifi", false)) {
             //Register broadcast receiver for wifi scans
             context.registerReceiver(wifiScanReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
             wifiManager.startScan();
