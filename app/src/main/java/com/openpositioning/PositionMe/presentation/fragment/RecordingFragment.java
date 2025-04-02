@@ -91,7 +91,8 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-
+        float[] startPosition = sensorFusion.getGNSSLatitude(false);
+        sensorFusion.setStartGNSSLatitude(startPosition);
         sensorFusion.startRecording();
 
         completeButton = view.findViewById(R.id.finishRecordingButton);
