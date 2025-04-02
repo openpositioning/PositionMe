@@ -186,6 +186,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private ParticleFilter particleFilter;
     private static final double PF_EKF_THRESHOLD = 10.0;
 
+    private double previousOrientation = 0.0;
+
     private com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment trajectoryMapFragment;
 
     //region Initialisation
@@ -365,6 +367,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 angularVelocity[0] = sensorEvent.values[0];
                 angularVelocity[1] = sensorEvent.values[1];
                 angularVelocity[2] = sensorEvent.values[2];
+                break;
 
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 filteredAcc[0] = sensorEvent.values[0];
@@ -449,11 +452,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                         float headingDeg = (float) Math.toDegrees(this.orientation[0]);
                         trajectoryMapFragment.updateUserLocation(rawPdrLatLng, headingDeg);
                     }
+                    double currentOrientation = wrapToPi(this.orientation[0]);
+                    double deltaHeading = wrapToPi(currentOrientation - previousOrientation);
+                    previousOrientation = currentOrientation;
+                    Log.d("SensorFusion", "Step detected: stepLen=" + stepLen + ", deltaHeading=" + deltaHeading);
+
                     if (extendedKalmanFilter != null) {
-                        extendedKalmanFilter.predict(stepLen, theta);
+                        extendedKalmanFilter.predict(stepLen, deltaHeading);
                         // --- PF 辅助 EKF 逻辑（仅在室内场景启用）---
                         if (particleFilter != null) {
-                            particleFilter.predict(stepLen, theta);
+                            particleFilter.predict(stepLen, deltaHeading);
                             if (pendingWifiPosition != null &&
                                     SystemClock.uptimeMillis() - wifiPositionTimestamp < 2000) {
                                 double[] wifiENU = CoordinateTransform.geodeticToEnu(
@@ -614,11 +622,11 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // WiFi 误差自适应
         if (rssi > -50) {
-            baseFactor = 0.5;  // 强 WiFi 信号时减少噪声影响
+            baseFactor = 0.75;  // 强 WiFi 信号时减少噪声影响
         } else if (rssi > -75) {
-            baseFactor = 1.0;  // 普通 WiFi 信号，不做调整
+            baseFactor = 1.5;  // 普通 WiFi 信号，不做调整
         } else {
-            baseFactor = 1.5;  // 弱 WiFi 信号时增加噪声影响
+            baseFactor = 2.0;  // 弱 WiFi 信号时增加噪声影响
         }
 
         // 时间误差动态调整（0.1/秒，最多调整到 4.0）
