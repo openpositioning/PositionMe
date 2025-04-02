@@ -31,7 +31,7 @@ import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 // New imports for positioning fusion
 import com.openpositioning.PositionMe.fusion.IPositionFusionAlgorithm;
 import com.openpositioning.PositionMe.fusion.KalmanFilterFusion;
-import com.openpositioning.PositionMe.fusion.ParticleFilterFusion;
+import com.openpositioning.PositionMe.fusion.particle.ParticleFilterFusion;
 import com.openpositioning.PositionMe.utils.PositionListener;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
 import com.openpositioning.PositionMe.utils.SimpleFusionConverter;
@@ -1437,9 +1437,9 @@ public class SensorFusion implements SensorEventListener, Observer {
             // If still null, return
             if (fusionAlgorithm == null) return;
         }
-
-        fusionAlgorithm.setElevationStatus(elevationDirection);
-
+        if (this.filterType == "particle") {
+            fusionAlgorithm.setElevationStatus(elevationDirection);
+        }
     }
 
     public boolean hasPositionListeners() {

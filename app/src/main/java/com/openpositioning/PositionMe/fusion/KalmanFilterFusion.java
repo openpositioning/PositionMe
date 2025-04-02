@@ -1,10 +1,12 @@
 package com.openpositioning.PositionMe.fusion;
 
+import android.content.Context;
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.utils.CoordinateConverter;
 import com.openpositioning.PositionMe.utils.MeasurementModel;
+import com.openpositioning.PositionMe.utils.PdrProcessing;
 
 import org.ejml.simple.SimpleMatrix;
 
@@ -19,7 +21,7 @@ import java.util.Objects;
  * This implementation provides accurate position estimates by incorporating
  * movement models, outlier detection, and adaptive measurement handling.
  */
-public class KalmanFilterFusion implements IPositionFusionAlgorithm {
+public class KalmanFilterFusion extends IPositionFusionAlgorithm {
     private static final String TAG = "KalmanFilterFusion";
 
     // State vector components indices
@@ -437,6 +439,21 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         fusionOutlierDetector.clearHistory();
 
         Log.d(TAG, "Kalman filter reset");
+    }
+
+    @Override
+    public void staticUpdate() {
+
+    }
+
+    @Override
+    public void retrieveContext(Context context) {
+
+    }
+
+    @Override
+    public void setElevationStatus(PdrProcessing.ElevationDirection elevationDirection) {
+
     }
 
     /**
@@ -1108,6 +1125,7 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
             Log.i(TAG, "History cleared.");
         }
 
+
         /**
          * Retrieves a copy of the current list of distance measurements stored in the window.
          *
@@ -1126,5 +1144,6 @@ public class KalmanFilterFusion implements IPositionFusionAlgorithm {
         public int getBufferCapacity() {
             return bufferCapacity;
         }
+
     }
 }

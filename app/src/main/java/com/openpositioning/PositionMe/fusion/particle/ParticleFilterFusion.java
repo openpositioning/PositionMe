@@ -20,7 +20,7 @@ import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class ParticleFilterFusion implements IPositionFusionAlgorithm {
+public class ParticleFilterFusion extends IPositionFusionAlgorithm {
     private static final String TAG = "ParticleFilterFusion";
 
     private static final int STATE_SIZE = 3;         // Total state vector size
@@ -151,7 +151,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
         measWifiMat = measWifiMat.scale(Math.pow(BASE_WIFI_NOISE, 2.0));
 
     }
-
+    @Override
     public void staticUpdate() {
         // Check if particles are initialized
         if (!particlesInitialized) {
@@ -931,7 +931,7 @@ public class ParticleFilterFusion implements IPositionFusionAlgorithm {
 
         headingInitialized = true;
     }
-
+    @Override
     public void retrieveContext(Context context) {
         this.FragmentContext = context;
     }

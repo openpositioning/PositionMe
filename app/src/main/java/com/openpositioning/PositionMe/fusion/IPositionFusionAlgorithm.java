@@ -1,6 +1,9 @@
 package com.openpositioning.PositionMe.fusion;
 
+import android.content.Context;
+
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.utils.PdrProcessing;
 
 /**
  * Interface for position fusion algorithms.
@@ -9,7 +12,7 @@ import com.google.android.gms.maps.model.LatLng;
  *
  * Note: WiFi fusion will be added in a future update.
  */
-public interface IPositionFusionAlgorithm {
+public abstract class IPositionFusionAlgorithm {
 
     /**
      * Processes an update from the PDR system.
@@ -18,7 +21,7 @@ public interface IPositionFusionAlgorithm {
      * @param northMeters The north position in meters relative to the reference point
      * @param altitude The altitude in meters
      */
-    void processPdrUpdate(float eastMeters, float northMeters, float altitude);
+    public abstract void processPdrUpdate(float eastMeters, float northMeters, float altitude);
 
     /**
      * Processes an update from the GNSS system.
@@ -26,7 +29,7 @@ public interface IPositionFusionAlgorithm {
      * @param position The GNSS position (latitude, longitude)
      * @param altitude The altitude in meters
      */
-    void processGnssUpdate(LatLng position, double altitude);
+    public abstract void processGnssUpdate(LatLng position, double altitude);
 
     /**
      * Processes an update from the GNSS system.
@@ -34,19 +37,19 @@ public interface IPositionFusionAlgorithm {
      * @param position The WiFi position in LatLng format (latitude, longitude)
      * @param floor The floor index
      */
-    void processWifiUpdate(LatLng position, int floor);
+    public abstract void processWifiUpdate(LatLng position, int floor);
 
     /**
      * Gets the current fused position estimate.
      *
      * @return The fused position (latitude, longitude)
      */
-    LatLng getFusedPosition();
+    public abstract LatLng getFusedPosition();
 
     /**
      * Resets the fusion algorithm to its initial state.
      */
-    void reset();
+    public abstract void reset();
 
     /**
      * Future implementation: Processes an update from the WiFi positioning system.
@@ -54,4 +57,23 @@ public interface IPositionFusionAlgorithm {
      * @param position The WiFi position (latitude, longitude)
      */
     // void processWifiUpdate(LatLng position); - Will be implemented in future updates
+
+    /**
+     * Performs static positioning update every 1000ms
+     *
+     */
+    public abstract void staticUpdate();
+
+    /**
+     *
+     * @param context
+     */
+    public abstract void retrieveContext(Context context);
+
+    /**
+     *
+     * @param elevationDirection
+     */
+
+    public abstract void setElevationStatus(PdrProcessing.ElevationDirection elevationDirection);
 }
