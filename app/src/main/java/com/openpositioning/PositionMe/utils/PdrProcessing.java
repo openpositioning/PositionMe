@@ -413,6 +413,16 @@ public class PdrProcessing {
         //Return average step length
         return averageStepLength;
     }
+    /**
+     * 设置 PDR 的初始位置坐标（单位：米），用于对齐 GNSS / WiFi 初始点。
+     *
+     * @param x 初始东向坐标（ENU）
+     * @param y 初始北向坐标（ENU）
+     */
+    public void setInitialPosition(float x, float y) {
+        this.positionX = x;
+        this.positionY = y;
+    }
 
     /**
      * Returns the most recently calculated step length.

@@ -519,8 +519,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
-                        pendingWifiPosition = null;
+
+
                     }
+                    pendingWifiPosition = null;
                     updateFusion(wifiResponse, gnssLocation, avgRssi);
 
 
@@ -1092,14 +1094,14 @@ public class SensorFusion implements SensorEventListener, Observer {
         double initAltitude = 0.0;
         if (initLatLon[0] == 0.0 && initLatLon[1] == 0.0) {
             Log.e("SensorFusion", "GNSS lastKnownLocation unavailable, trying polling fallback.");
-            for (int i = 0; i < 10; i++) {
-                SystemClock.sleep(1000);
-                float[] polled = getGNSSLatitude(true);
-                if (polled[0] != 0.0 || polled[1] != 0.0) {
-                    initLatLon = polled;
-                    break;
-                }
-            }
+//            for (int i = 0; i < 10; i++) {
+//                SystemClock.sleep(1000);
+//                float[] polled = getGNSSLatitude(true);
+//                if (polled[0] != 0.0 || polled[1] != 0.0) {
+//                    initLatLon = polled;
+//                    break;
+//                }
+//            }
         }
 
         if (initLatLon[0] == 0.0 && initLatLon[1] == 0.0) {
@@ -1139,6 +1141,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 initLatLon[0], initLatLon[1], initAltitude,
                 refLat, refLon, refAlt
         );
+        this.pdrProcessing.resetPDR();
+        Log.d("SensorFusion", "Setting PDR initial ENU to: x=" + enuCoords[0] + ", y=" + enuCoords[1]);
+        pdrProcessing.setInitialPosition((float) enuCoords[0], (float) enuCoords[1]);
+
 
         // 获取当前设备方向
         double initialTheta = wrapToPi(this.orientation[0]);
