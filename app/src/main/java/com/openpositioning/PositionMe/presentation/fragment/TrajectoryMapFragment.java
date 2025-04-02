@@ -24,6 +24,7 @@ import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.fusion.TrajectoryFilter;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
@@ -76,6 +77,9 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
     private Polyline fusionPolyline; // Polyline for the fusion path
+
+    private List<LatLng> fusionPoints;
+
     private LatLng lastFusionLocation = null; // Last fusion position
     private Marker fusionMarker; // Marker for current fusion position
     private Marker pdrMarker;
@@ -98,6 +102,7 @@ public class TrajectoryMapFragment extends Fragment {
 
     private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
+    private TrajectoryFilter trajectoryFilter;
 
 
     // UI
@@ -244,6 +249,9 @@ public class TrajectoryMapFragment extends Fragment {
 
 
         sensorFusion = SensorFusion.getInstance();
+        trajectoryFilter = new TrajectoryFilter();
+        fusionPoints = new ArrayList<>();
+        //sensorFusion.passContext(requireContext());
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
@@ -341,8 +349,10 @@ public class TrajectoryMapFragment extends Fragment {
             Log.d("TrajectoryMapFragment", "Created new fusion polyline");
         } else {
             // Add new point to fusion path
-            List<LatLng> fusionPoints = new ArrayList<>(fusionPolyline.getPoints());
+            //List<LatLng> fusionPoints = new ArrayList<>(fusionPolyline.getPoints());
             fusionPoints.add(fusionLocation);
+            // TODO: Add filter for points
+            List<LatLng> fusionPoints = trajectoryFilter.processData(fusionLocation, sensorFusion.getReferencePosition());
             fusionPolyline.setPoints(fusionPoints);
             Log.d("TrajectoryMapFragment", "Added point to fusion polyline, total points: " + fusionPoints.size());
         }
@@ -414,6 +424,8 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
+
+        // Initialize wall detection
 
         // Initialize the main PDR polyline (red)
         polyline = map.addPolyline(new PolylineOptions()

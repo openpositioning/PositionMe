@@ -24,7 +24,7 @@ import java.util.List;
  */
 public class IndoorMapManager {
     // To store the map instance
-    private GoogleMap gMap;
+    public GoogleMap gMap;
     //Stores the overlay of the indoor maps
     private GroundOverlay groundOverlay;
     // Stores the current Location of user
@@ -36,10 +36,10 @@ public class IndoorMapManager {
     // Floor height of current building
     private float floorHeight;
     //Images of the Nucleus Building and Library indoor floor maps
-    private final List<Integer> NUCLEUS_MAPS =Arrays.asList(
+    public final List<Integer> NUCLEUS_MAPS =Arrays.asList(
             R.drawable.nucleuslg, R.drawable.nucleusg, R.drawable.nucleus1,
             R.drawable.nucleus2,R.drawable.nucleus3);
-    private final List<Integer> LIBRARY_MAPS =Arrays.asList(
+    public final List<Integer> LIBRARY_MAPS =Arrays.asList(
             R.drawable.libraryg, R.drawable.library1, R.drawable.library2,
             R.drawable.library3);
     // South-west and north east Bounds of Nucleus building and library to set the Overlay

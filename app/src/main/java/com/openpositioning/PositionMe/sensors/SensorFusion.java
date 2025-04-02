@@ -20,6 +20,7 @@ import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.fusion.particle.ParticleFilterFusion;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
@@ -92,7 +93,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final String WIFI_FINGERPRINT= "wf";
     //endregion
 
-    private static final int NUM_PARTICLES=2000;
+    private static final int NUM_PARTICLES=10000;
+
+    // Stairs detection
+    private static final int MIN_CONSECUTIVE_CHANGES = 4;
+    private static final float MIN_ABSOLUTE_CHANGE = 1.5f;
 
     //region Instance variables
     // Keep device awake while recording
@@ -191,6 +196,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
 
 
+    private Timer updateTimer; // Timer for regular updates
+    private static final long UPDATE_INTERVAL_MS = 1000; // Update every 1 second
+    private Context FragmentContext;
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -225,6 +234,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.startLocation = new float[2];
         // Initialize list for position listeners
         this.positionListeners = new ArrayList<>();
+        this.referencePosition = new double[3];
     }
 
 
@@ -338,6 +348,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                     this.elevation = pdrProcessing.updateElevation(
                             SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
                     );
+                    PdrProcessing.ElevationDirection elevationDirection = pdrProcessing.detectContinuousElevationChange(MIN_CONSECUTIVE_CHANGES, MIN_ABSOLUTE_CHANGE);
+                    updateFusionWithStairs(elevationDirection);
                 }
                 break;
 
@@ -413,8 +425,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                     float[] newCords = this.pdrProcessing.updatePdr(
                             stepTime,
                             this.accelMagnitude,
-                            this.orientation[0]
-                    );
+                            this.orientation[0] // Initially 0 degrees is North
+                    ); // At output 0 degrees is East
 
                     Log.d("SensorFusion", "PDR update calculated: X=" + newCords[0] + ", Y=" + newCords[1]);
 
@@ -632,6 +644,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     // Store WiFi position and notify listeners, but don't update fusion
                     wifiPosition = wifiLocation;
+
+                    // Call fusion update with WiFi
+                    updateFusionWithWifi();
 
                 }
 
@@ -932,6 +947,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     public boolean getElevator() {
         return this.elevator;
     }
+
+    public double[] getReferencePosition() {return this.referencePosition; }
 
     /**
      * Estimates position of the phone based on proximity and light sensors.
@@ -1248,6 +1265,45 @@ public class SensorFusion implements SensorEventListener, Observer {
     //region Position Fusion
 
     /**
+     * Starts a timer that triggers updates at regular intervals
+     */
+    private void startUpdateTimer() {
+        // Cancel any existing timer
+        if (updateTimer != null) {
+            updateTimer.cancel();
+            updateTimer = null;
+        }
+
+        // Create a new timer
+        updateTimer = new Timer("ParticleFilterUpdateTimer");
+        updateTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                performIntervalUpdate();
+            }
+        }, (int) 0, UPDATE_INTERVAL_MS);
+    }
+
+    private void performIntervalUpdate() {
+        if (fusionAlgorithm != null) {
+            if (System.currentTimeMillis() - lastStepTime > 1000) {
+            fusionAlgorithm.staticUpdate();
+            fusedPosition = fusionAlgorithm.getFusedPosition();
+            // Enhanced logging
+            if (fusedPosition != null) {
+                Log.d("SensorFusion", "Fusion after PDR: " + fusedPosition.latitude + ", " + fusedPosition.longitude);
+
+                // Notify listeners
+                notifyPositionListeners(PositionListener.UpdateType.FUSED_POSITION, fusedPosition);
+            } else {
+                Log.e("SensorFusion", "Fusion algorithm returned null position after PDR update");
+            }
+            lastStepTime = System.currentTimeMillis();
+        }
+    }
+        }
+
+    /**
      * Updates the fusion algorithm with new PDR data.
      * Called when a new step is detected.
      */
@@ -1284,6 +1340,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         } else {
             Log.e("SensorFusion", "Fusion algorithm returned null position after PDR update");
         }
+
+        lastStepTime = System.currentTimeMillis();
+
+        startUpdateTimer();
     }
 
     /**
@@ -1348,6 +1408,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Log WiFi position for debugging
         Log.d("SensorFusion", "Wifi LatLng update: " + wifiPosition.latitude + ", " + wifiPosition.longitude);
 
+        fusionAlgorithm.retrieveContext(appContext);
+
         // Update the fusion algorithm with new GNSS data
         fusionAlgorithm.processWifiUpdate(wifiPosition, floor);
 
@@ -1363,6 +1425,21 @@ public class SensorFusion implements SensorEventListener, Observer {
         } else {
             Log.e("SensorFusion", "Fusion algorithm returned null position after WiFi update");
         }
+    }
+
+    public void updateFusionWithStairs(PdrProcessing.ElevationDirection elevationDirection){
+        if (fusionAlgorithm == null) {
+            Log.e("SensorFusion", "Cannot update fusion: fusionAlgorithm is null");
+
+            // Initialize fusion algorithm if not already done
+            initializeFusionAlgorithm();
+
+            // If still null, return
+            if (fusionAlgorithm == null) return;
+        }
+
+        fusionAlgorithm.setElevationStatus(elevationDirection);
+
     }
 
     public boolean hasPositionListeners() {
@@ -1499,4 +1576,5 @@ public class SensorFusion implements SensorEventListener, Observer {
             Log.e("SimpleFusion", "Error in fusion calculation: " + e.getMessage(), e);
         }
     }
+
 }
