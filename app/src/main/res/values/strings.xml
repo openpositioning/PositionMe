@@ -147,6 +147,7 @@
     <string name="point_count_format">Tags: %1$d</string>
     <string name="recenter">Recentre Button\n</string>
     <string name="more_info">Button toggle showing more info\n</string>
+    <string name="autofloor_button">Auto\nFloor</string>
 
 
 </resources>

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.fragment;
+package com.openpositioning.PositionMe.presentation.trajmap;
 
 import android.graphics.Color;
 import com.google.android.gms.maps.GoogleMap;

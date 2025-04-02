@@ -8,11 +8,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
-import android.widget.Spinner;
-import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -22,33 +17,21 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.maps.model.Polyline;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.presentation.trajmap.TrajectoryMapMaker;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.presentation.trajmap.BuildingPolygonPlotter;
 import com.openpositioning.PositionMe.presentation.trajmap.TrajectoryPlotter;
 import com.openpositioning.PositionMe.presentation.trajmap.TrajectoryPlotter.GnssTrajectoryPlotter;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import com.google.android.material.button.MaterialButton;
-import java.util.Objects;
-import android.widget.Spinner;
 
 public abstract class TrajectoryMapFragment extends Fragment {
 
@@ -72,23 +55,23 @@ public abstract class TrajectoryMapFragment extends Fragment {
     protected FloatingActionButton floorUpButton, floorDownButton, recenterButton;
 
     // For deferring camera movement until map is ready
-    private LatLng pendingCameraPosition = null;
-    private boolean hasPendingCameraMove = false;
+    protected LatLng pendingCameraPosition = null;
+    protected boolean hasPendingCameraMove = false;
 
     protected LatLng rawCurrentLocation = new LatLng(0,0);
     protected LatLng fusionCurrentLocation = new LatLng(0,0);
 
+    protected final List<Marker> emergencyExitMarkers = new ArrayList<>();
+    protected final List<Marker> liftMarkers = new ArrayList<>();
+    protected final List<Marker> toiletMarkers = new ArrayList<>();
+    protected final List<Marker> accessibleRouteMarkers = new ArrayList<>();
+    protected final List<Marker> accessibleToiletMarkers = new ArrayList<>();
+    protected final List<Marker> drinkingWaterMarkers = new ArrayList<>();
+    protected final List<Marker> medicalRoomMarkers = new ArrayList<>();
+    protected boolean lastIndoorMapState = false;
 
-    private final List<Marker> emergencyExitMarkers = new ArrayList<>();
-    private final List<Marker> liftMarkers = new ArrayList<>();
-    private final List<Marker> toiletMarkers = new ArrayList<>();
-    private final List<Marker> accessibleRouteMarkers = new ArrayList<>();
-    private final List<Marker> accessibleToiletMarkers = new ArrayList<>();
-    private final List<Marker> drinkingWaterMarkers = new ArrayList<>();
-    private final List<Marker> medicalRoomMarkers = new ArrayList<>();
-    private boolean lastIndoorMapState = false;
-
-    protected boolean isAutoFloorOn = false;
+    protected boolean isCameraTracking = true;
+    protected boolean isAutoFloorOn = true;;
 
 
     public TrajectoryMapFragment() {
@@ -149,7 +132,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
         // Set up button toggles
         showRawButton.setOnClickListener(v -> setShowRawTrajectory(!isRawTrajectoryVisible()));
         fusionButton.setOnClickListener(v -> setShowFusionTrajectory(!isFusionTrajectoryVisible()));
-
+        wifiButton.setOnClickListener(v -> setShowWifiTrajectory(!isWifiTrajectoryVisible()));
         gnssButton.setOnClickListener(v -> {
             isGnssOn = !isGnssOn;
             gnssButton.setBackgroundTintList(ColorStateList.valueOf(
@@ -183,12 +166,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
             updateAllIndoorMarkers();
         });
 
-        recenterButton.setOnClickListener(v -> {
-            if (rawCurrentLocation != null && gMap != null) {
-                gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusionCurrentLocation, 19f));
-            }
-            updateAllIndoorMarkers();
-        });
+        initializeRecentreButton();
 
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.trajectoryMap);
@@ -231,6 +209,25 @@ public abstract class TrajectoryMapFragment extends Fragment {
         sensorFusion.setTrajectoryMapFragment(this);
     }
 
+    protected void initializeRecentreButton() {
+        recenterButton.setOnClickListener(v -> {
+            isCameraTracking = !isCameraTracking;
+
+            // 更改按钮颜色
+            recenterButton.setBackgroundTintList(ColorStateList.valueOf(
+                    isCameraTracking ? getResources().getColor(R.color.pastelBlue) : Color.GRAY
+            ));
+
+            // 立即移动镜头
+            if (gMap != null) {
+                gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusionCurrentLocation, 19f));
+            }
+
+            updateAllIndoorMarkers();
+        });
+    }
+
+
     protected void initMapSettings(GoogleMap map) {
         map.getUiSettings().setCompassEnabled(true);
         map.getUiSettings().setTiltGesturesEnabled(true);
@@ -246,14 +243,29 @@ public abstract class TrajectoryMapFragment extends Fragment {
      * Update the user's "raw" location via the rawTrajectoryPlotter.
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
-        // keep track in rawCurrentLocation
-        rawCurrentLocation = newLocation;
 
+        // if not initialize (0,0) skip this update
+        if (newLocation.latitude == 0 || newLocation.longitude == 0) {
+            // Set starting location using SensorFusion gnss location
+            rawCurrentLocation = new LatLng(
+                    sensorFusion.getGNSSLatitude(false)[0],
+                    sensorFusion.getGNSSLatitude(false)[1]
+            );
+            // clear the trajectory plotter
+            if (rawTrajectoryPlotter != null) {
+                rawTrajectoryPlotter.clear();
+            }
+        }
+        else{
+            // keep track in rawCurrentLocation
+            rawCurrentLocation = newLocation;
+        }
+        if (isCameraTracking && gMap != null) {
+            gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+        }
         if (rawTrajectoryPlotter != null) {
             rawTrajectoryPlotter.updateLocation(newLocation, orientation);
         }
-
-
         if (indoorMapManager != null) {
             // 只在 indoorMap 存在时才考虑更新
             indoorMapManager.setCurrentLocation(newLocation);
@@ -276,9 +288,27 @@ public abstract class TrajectoryMapFragment extends Fragment {
      * Update the user's "fusion" location via the fusionTrajectoryPlotter.
      */
     public void updateFusionLocation(@NonNull LatLng newLocation, float orientation) {
-        fusionCurrentLocation = newLocation;
+
+        // if not initialize (0,0) skip this update
+        if (newLocation.latitude == 0 || newLocation.longitude == 0) {
+            fusionCurrentLocation = new LatLng(
+                    sensorFusion.getGNSSLatitude(false)[0],
+                    sensorFusion.getGNSSLatitude(false)[1]
+            );
+            //clear the trajectory plotter
+            if (fusionTrajectoryPlotter != null) {
+                fusionTrajectoryPlotter.clear();
+            }
+        }
+        else{
+            fusionCurrentLocation = newLocation;
+        }
+
         if (fusionTrajectoryPlotter != null) {
             fusionTrajectoryPlotter.updateLocation(newLocation, orientation);
+        }
+        if (isCameraTracking && gMap != null) {
+            gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
         }
         updateFloorControlVisibility();
     }
@@ -287,6 +317,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (wifiTrajectoryPlotter != null) {
             wifiTrajectoryPlotter.updateLocation(newLocation, orientation);
         }
+        indoorMapManager.setCurrentLocation(newLocation);
         updateFloorControlVisibility();
     }
 
@@ -294,6 +325,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (gMap == null || !isGnssOn || gnssTrajectoryPlotter == null) return;
         float accuracy = sensorFusion.getGnssAccuracy();
         gnssTrajectoryPlotter.updateGnssLocation(location, accuracy);
+        indoorMapManager.setCurrentLocation(location);
         updateFloorControlVisibility();
     }
 
@@ -329,6 +361,19 @@ public abstract class TrajectoryMapFragment extends Fragment {
 
     }
 
+    public void setShowWifiTrajectory(boolean show) {
+        if (wifiTrajectoryPlotter != null) {
+            wifiTrajectoryPlotter.setVisible(show);
+        }
+        if (wifiButton != null) {
+            if (show) {
+                wifiButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.goldYellow, null)));
+            } else {
+                wifiButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
+            }
+        }
+    }
+
     private boolean isRawTrajectoryVisible() {
         return rawTrajectoryPlotter != null
                 && rawTrajectoryPlotter.getPolyline() != null
@@ -340,7 +385,13 @@ public abstract class TrajectoryMapFragment extends Fragment {
                 && fusionTrajectoryPlotter.getPolyline().isVisible();
     }
 
-    private void updateFloorControlVisibility() {
+    private boolean isWifiTrajectoryVisible() {
+        return wifiTrajectoryPlotter != null
+                && wifiTrajectoryPlotter.getPolyline() != null
+                && wifiTrajectoryPlotter.getPolyline().isVisible();
+    }
+
+    protected void updateFloorControlVisibility() {
         if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
             autoFloorButton.setVisibility(View.VISIBLE);
             if (isAutoFloorOn) {
@@ -374,7 +425,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (floorDownButton != null) floorDownButton.setVisibility(visibility);
     }
 
-    private void updateAllIndoorMarkers() {
+    protected void updateAllIndoorMarkers() {
         Context context = requireContext();
         int floor = getCurrentFloor();
         String building = getCurrentBuilding();
@@ -463,12 +514,24 @@ public abstract class TrajectoryMapFragment extends Fragment {
     }
 
     public static class ReplayTrajectoryMapFragment extends TrajectoryMapFragment {
+
+
         @Override
         public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
             super.onViewCreated(view, savedInstanceState);
             // Hide fusion and wifi buttons in replay mode
             if (fusionButton != null) fusionButton.setVisibility(View.GONE);
             if (wifiButton != null) wifiButton.setVisibility(View.GONE);
+        }
+
+        @Override
+        protected void initializeRecentreButton() {
+            recenterButton.setOnClickListener(v -> {
+                if (rawCurrentLocation != null && gMap != null) {
+                    // 使用 rawCurrentLocation 而非 fusion
+                    gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(rawCurrentLocation, 19f));
+                }
+            });
         }
 
         @Override
@@ -479,6 +542,37 @@ public abstract class TrajectoryMapFragment extends Fragment {
         @Override
         public void updateWifiLocation(@NonNull LatLng newLocation, float orientation) {
             // Disable WiFi plotting in replay mode
+        }
+
+        @Override
+        public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+            // keep track in rawCurrentLocation
+            rawCurrentLocation = newLocation;
+
+            if (rawTrajectoryPlotter != null) {
+                rawTrajectoryPlotter.updateLocation(newLocation, orientation);
+            }
+
+
+            if (indoorMapManager != null) {
+                // 只在 indoorMap 存在时才考虑更新
+                indoorMapManager.setCurrentLocation(newLocation);
+
+                boolean currentState = indoorMapManager.getIsIndoorMapSet();
+                if (currentState != lastIndoorMapState) {
+                    lastIndoorMapState = currentState;
+
+                    Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+                    Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
+                    //update indoor maker
+                    updateAllIndoorMarkers();
+                }
+                updateFloorControlVisibility();
+            }
+
+            if (isCameraTracking && gMap != null) {
+                gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+            }
         }
     }
 }

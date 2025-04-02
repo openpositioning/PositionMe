@@ -107,7 +107,7 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/autoFloorButton"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="48dp"
+            android:layout_width="wrap_content"
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
             app:icon="@drawable/ic_floorplan_svgrepo_com"
@@ -115,11 +115,14 @@
             app:iconGravity="textStart"
             app:cornerRadius="24dp"
             app:iconSize="20dp"
+            android:text="@string/autofloor_button"
+            android:textColor="@color/white"
+            android:textSize="11sp"
             android:padding="0dp"
             app:backgroundTint="@color/md_theme_primary"
             app:strokeColor="@color/md_theme_primary"
             app:strokeWidth="0dp"
-            app:iconPadding="0dp" />
+            app:iconPadding="7dp" />
     </LinearLayout>
 
     <androidx.constraintlayout.widget.ConstraintLayout
