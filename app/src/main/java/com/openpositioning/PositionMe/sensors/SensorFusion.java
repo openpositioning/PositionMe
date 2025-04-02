@@ -16,6 +16,7 @@ import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
+import com.openpositioning.PositionMe.GeoUtils;
 import com.openpositioning.PositionMe.MainActivity;
 import com.openpositioning.PositionMe.PathView;
 import com.openpositioning.PositionMe.PdrProcessing;
@@ -28,6 +29,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -162,17 +164,28 @@ public class SensorFusion implements SensorEventListener, Observer {
     private Location lastGnssLocation;
     private long lastGnssTime;
 
+    List<LatLng> wallPointsLatLng = Arrays.asList(
+            new LatLng(55.92301090863321, -3.174221045188629),
+            new LatLng(55.92301094092557, -3.1742987516650873),
+            new LatLng(55.92292858261526, -3.174298917609189),
+            new LatLng(55.92292853699635, -3.174189214585424),
+            new LatLng(55.92298698483965, -3.1741890966446484)
+    );
+    List<LatLng> wallSecondPointsLatLng = Arrays.asList(
+            new LatLng(55.923012912847625, -3.17430025206314),
+            new LatLng(55.9230128674766, -3.1741911042535036),
+            new LatLng(55.922952153773124, -3.174191226755363),
+            new LatLng(55.922952199155134, -3.17430037438893),
+            new LatLng(55.923012912847625, -3.17430025206314)
+    );
+
+    private int fenceCounter = 0;
+
     private long lastWifiSuccessTime = 0;
     private float ratio = 0f;
     private Handler ratioHandler = new Handler(Looper.getMainLooper());
 
-//    List<LatLng> wallPointsLatLng = Arrays.asList(
-//            new LatLng(55.92301090863321, -3.174221045188629),
-//            new LatLng(55.92301094092557, -3.1742987516650873),
-//            new LatLng(55.92292858261526, -3.174298917609189),
-//            new LatLng(55.92292853699635, -3.174189214585424),
-//            new LatLng(55.92298698483965, -3.1741890966446484)
-//    );
+
 
     // batch usage
     List<float[]> windowList = new ArrayList<>();
@@ -424,7 +437,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 //Store time of step
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
 
-//                float [] currentStateCords = this.pdrProcessing.getPDRMovement();
+                float [] currentStateCords = this.pdrProcessing.getPDRMovement();
                 //
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
                 Log.e("PDR", "x: " + newCords[0] + ", y: " + newCords[1]);
@@ -490,6 +503,22 @@ public class SensorFusion implements SensorEventListener, Observer {
 //                );
 //
 //                Log.e("Optimized", "x: " + newCords[0] + ", y: " + newCords[1]);
+                // GeoFence
+                LatLng startLocLatLng = new LatLng(this.startLocation[0], this.startLocation[1]);
+
+                if (fenceCounter < 2){
+                    if (getWifiFloor() == 1 || getWifiFloor() == 2) {
+                        float[] corrected = getCorrectedCoords(getWifiFloor(), wallPointsLatLng, wallSecondPointsLatLng,
+                                startLocLatLng, currentStateCords, newCords);
+                        newCords = corrected;
+                        fenceCounter++;
+                    }
+
+                    if (fenceCounter >= 2){
+                        fenceCounter = 0;
+                    }
+                }
+                // GeoFence end
 
 //                // ***** GeoFence test block START *****
 //                List<float[]> wallPoints = new ArrayList<>();
@@ -584,6 +613,68 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
         }
+    }
+
+    public float[] getCorrectedCoords(int wifiFloor, List<LatLng> wallPointsLatLng, List<LatLng> wallSecondPointsLatLng,
+                                      LatLng startLocLatLng, float[] currentStateCords, float[] newCords) {
+
+        List<float[]> wallPoints = new ArrayList<>();
+        List<LatLng> selectedWallLatLng = (wifiFloor == 1) ? wallPointsLatLng : wallSecondPointsLatLng;
+
+        for (LatLng point : selectedWallLatLng) {
+            double[] converted = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, point);
+            wallPoints.add(new float[]{(float) converted[0], (float) converted[1]});
+        }
+
+        for (int i = 0; i < wallPoints.size() - 1; i++) {
+            float[] wallA = wallPoints.get(i);
+            float[] wallB = wallPoints.get(i + 1);
+
+            float[] intersection = GeoUtils.getLineSegmentIntersection(currentStateCords, newCords, wallA, wallB);
+
+            if (intersection != null) {
+                float dx = currentStateCords[0] - intersection[0];
+                float dy = currentStateCords[1] - intersection[1];
+                float len = (float) Math.sqrt(dx * dx + dy * dy);
+                if (len == 0) {
+                    Log.e("WallCheck", "⚠️ 起点与交点重合，无法偏移");
+                    break;
+                }
+                float dirX = dx / len;
+                float dirY = dy / len;
+
+                float wx = wallB[0] - wallA[0];
+                float wy = wallB[1] - wallA[1];
+                float wlen = (float) Math.sqrt(wx * wx + wy * wy);
+                if (wlen == 0) {
+                    Log.e("WallCheck", "⚠️ 墙体端点重合，跳过该段");
+                    continue;
+                }
+                float wallDirX = wx / wlen;
+                float wallDirY = wy / wlen;
+
+                float normalX = -wallDirY;
+                float normalY = wallDirX;
+
+                float dot = dx * normalX + dy * normalY;
+                if (dot < 0) {
+                    normalX = -normalX;
+                    normalY = -normalY;
+                }
+
+                float offset = 0.25f;
+                float slideOffset = 0.1f;
+                float[] corrected = new float[]{
+                        intersection[0] + dirX * offset + normalX * slideOffset,
+                        intersection[1] + dirY * offset + normalY * slideOffset
+                };
+
+                Log.d("WallCheck", "✅ 修正点: " + corrected[0] + ", " + corrected[1]);
+                return corrected;
+            }
+        }
+
+        return newCords; // 没有交点则返回原始坐标
     }
 
     /**
