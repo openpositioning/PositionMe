@@ -104,6 +104,8 @@ public abstract class TrajectoryMapFragment extends Fragment {
         return inflater.inflate(R.layout.fragment_trajectory_map, container, false);
     }
 
+
+
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -120,9 +122,29 @@ public abstract class TrajectoryMapFragment extends Fragment {
         // Initialize sensorFusion
         sensorFusion = SensorFusion.getInstance();
         sensorFusion.setTrajectoryMapFragment(this);
+        
+        autoFloorButton.setOnClickListener(v -> {
+            isAutoFloorOn = !isAutoFloorOn;
+            autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(
+                    isAutoFloorOn ? getResources().getColor(R.color.md_theme_primary) : Color.GRAY));
+            updateFloorControlVisibility();
+        });
 
-        // Hide floor controls initially
-        setFloorControlsVisibility(View.GONE);
+        floorUpButton.setOnClickListener(v -> {
+            isAutoFloorOn = false;
+            autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
+            if (indoorMapManager != null) indoorMapManager.increaseFloor();
+            updateAllIndoorMarkers();
+            updateFloorControlVisibility();
+        });
+
+        floorDownButton.setOnClickListener(v -> {
+            isAutoFloorOn = false;
+            autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
+            if (indoorMapManager != null) indoorMapManager.decreaseFloor();
+            updateAllIndoorMarkers();
+            updateFloorControlVisibility();
+        });
 
         // Set up button toggles
         showRawButton.setOnClickListener(v -> setShowRawTrajectory(!isRawTrajectoryVisible()));
@@ -151,18 +173,21 @@ public abstract class TrajectoryMapFragment extends Fragment {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
             if (indoorMapManager != null) indoorMapManager.increaseFloor();
+            updateAllIndoorMarkers();
         });
 
         floorDownButton.setOnClickListener(v -> {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
             if (indoorMapManager != null) indoorMapManager.decreaseFloor();
+            updateAllIndoorMarkers();
         });
 
         recenterButton.setOnClickListener(v -> {
             if (rawCurrentLocation != null && gMap != null) {
                 gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(fusionCurrentLocation, 19f));
             }
+            updateAllIndoorMarkers();
         });
 
         SupportMapFragment mapFragment = (SupportMapFragment)
@@ -195,15 +220,11 @@ public abstract class TrajectoryMapFragment extends Fragment {
             });
         }
 
-        // Register callback for Wi-Fi floor changes
         sensorFusion.setOnWifiFloorChangedListener(newFloor -> {
             if (isAutoFloorOn && indoorMapManager != null) {
-                Log.d("TrajectoryMapFragment", "Wi-Fi floor changed, updating floor to: " + newFloor);
                 indoorMapManager.setCurrentFloor(newFloor, true);
-                Log.d("currentfloor", "Register callback for Wi-Fi floor changes: " + this.getCurrentBuilding());
-                Log.d("currentfloor", "Register callback for Wi-Fi floor changes: " + this.getCurrentFloor());
-                //update indoor maker
                 updateAllIndoorMarkers();
+                updateFloorControlVisibility();
             }
         });
 
@@ -239,7 +260,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
 
             boolean currentState = indoorMapManager.getIsIndoorMapSet();
             if (currentState != lastIndoorMapState) {
-                setFloorControlsVisibility(currentState ? View.VISIBLE : View.GONE);
                 lastIndoorMapState = currentState;
 
                 Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
@@ -247,6 +267,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
                 //update indoor maker
                 updateAllIndoorMarkers();
             }
+            updateFloorControlVisibility();
         }
     }
 
@@ -259,18 +280,21 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (fusionTrajectoryPlotter != null) {
             fusionTrajectoryPlotter.updateLocation(newLocation, orientation);
         }
+        updateFloorControlVisibility();
     }
 
     public void updateWifiLocation(@NonNull LatLng newLocation, float orientation) {
         if (wifiTrajectoryPlotter != null) {
             wifiTrajectoryPlotter.updateLocation(newLocation, orientation);
         }
+        updateFloorControlVisibility();
     }
 
     public void updateGNSS(@NonNull LatLng location) {
         if (gMap == null || !isGnssOn || gnssTrajectoryPlotter == null) return;
         float accuracy = sensorFusion.getGnssAccuracy();
         gnssTrajectoryPlotter.updateGnssLocation(location, accuracy);
+        updateFloorControlVisibility();
     }
 
     public boolean isGnssEnabled() {
@@ -315,13 +339,23 @@ public abstract class TrajectoryMapFragment extends Fragment {
                 && fusionTrajectoryPlotter.getPolyline() != null
                 && fusionTrajectoryPlotter.getPolyline().isVisible();
     }
-    /**
-     * Sets the floor control buttons & switch to visible or gone.
-     */
-    private void setFloorControlsVisibility(int visibility) {
-        floorUpButton.setVisibility(visibility);
-        floorDownButton.setVisibility(visibility);
-        autoFloorButton.setVisibility(visibility);
+
+    private void updateFloorControlVisibility() {
+        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
+            autoFloorButton.setVisibility(View.VISIBLE);
+            if (isAutoFloorOn) {
+                floorUpButton.setVisibility(View.GONE);
+                floorDownButton.setVisibility(View.GONE);
+            } else {
+                autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
+                floorUpButton.setVisibility(View.VISIBLE);
+                floorDownButton.setVisibility(View.VISIBLE);
+            }
+        } else {
+            floorUpButton.setVisibility(View.GONE);
+            floorDownButton.setVisibility(View.GONE);
+            autoFloorButton.setVisibility(View.GONE);
+        }
     }
 
 
@@ -345,7 +379,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
         int floor = getCurrentFloor();
         String building = getCurrentBuilding();
 
-        TrajectoryMapWall.drawWalls(gMap, getCurrentFloor(), getCurrentBuilding());
+//        TrajectoryMapWall.drawWalls(gMap, getCurrentFloor(), getCurrentBuilding());
 
         TrajectoryMapMaker.updateEmergencyExitMarkers(gMap, floor, building, emergencyExitMarkers, context);
         TrajectoryMapMaker.updateLiftMarkers(gMap, floor, building, liftMarkers, context);
@@ -409,7 +443,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
         //update indoor map overlay
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+            updateFloorControlVisibility();
             Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
             Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
             //update indoor maker

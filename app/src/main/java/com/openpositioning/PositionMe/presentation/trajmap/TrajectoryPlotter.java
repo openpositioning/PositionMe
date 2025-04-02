@@ -39,6 +39,7 @@ public abstract class TrajectoryPlotter {
     protected void initPolyline() {
         polyline = map.addPolyline(new PolylineOptions()
                 .color(polylineColor)
+                .zIndex(99) // highest layer to ensure visibility
                 .width(5f));
     }
 
