@@ -122,7 +122,7 @@
     <string name="delete_button">Delete</string>
     <string name="replay_button">REPLAY</string>
     <string name="replay_button2">REPLAY</string>
-    <string name="position_me">Posion me</string>
+    <string name="position_me">Position me</string>
     <string name="positionme">position me</string>
     <string name="fragment_home_slogan">Coordinates Start with Your First Move</string>
     <string name="gnss_disabled">GNSS_Disabled</string>
