@@ -67,11 +67,12 @@ public class ReplayTrajFragment extends Fragment {
     private Polyline wifiPolyline;
     private Polyline fusedPolyline;
     private List<Circle> circleList = new ArrayList<>();
+    private List<Marker> tagMarkers = new ArrayList<>();
     private Marker gnssMarker;
     private Marker tagMarker;
     private Marker wifiMarker;
     private boolean gnssEnabled = true;
-
+    private boolean wifiEnabled = true;
     private boolean pdrEnabled = true;
     private LatLng currentLocation;
 
@@ -80,6 +81,10 @@ public class ReplayTrajFragment extends Fragment {
     private LatLng tagLocation;
     private LatLng fusedCurrLocation;
 
+    private int currentFloor;
+
+    private int startFloor;
+    private int startEleFloor;
     private float currentOrientation;
     private Marker orientationMarker;
 
@@ -120,44 +125,69 @@ public class ReplayTrajFragment extends Fragment {
 
     private boolean isPlaying = true;
 
+    /**
+     * Called when the activity is first created.
+     * Initializes the trajectory processor, prepares trajectory data, and sets up the timer for PDR readings.
+     *
+     * @param savedInstanceState A Bundle containing the activity's previously saved state.
+     */
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Initialize the trajectory processor and obtain the replay trajectory
         this.trajProcessor = ReplayDataProcessor.TrajRecorder.getInstance();
         this.trajectory = trajProcessor.getReplayTraj();
+        // Initialize the timer for processing PDR data
         readPdrTimer = new Timer();
     }
 
+    /**
+     * Called when the activity is resumed.
+     * Hides the bottom navigation bar if it is present.
+     */
     @Override
     public void onResume() {
         super.onResume();
-        // 获取主界面的 BottomNavigationView，并隐藏它
         BottomNavigationView bottomNav = getActivity().findViewById(R.id.bottom_navigation);
         if (bottomNav != null) {
             bottomNav.setVisibility(View.GONE);
         }
     }
 
+    /**
+     * Inflates the fragment's layout and sets up the map and data processing.
+     * Translates the trajectory data (PDR, IMU, pressure, and GNSS) into usable lists.
+     * Initializes the map and sets up the initial map view and camera position.
+     *
+     * @param inflater           The LayoutInflater object to inflate the layout.
+     * @param container          The container view that the fragment will be attached to.
+     * @param savedInstanceState A Bundle containing the saved state of the fragment.
+     * @return The root view of the fragment.
+     */
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
+        // Inflate the fragment layout
         View rootView = inflater.inflate(R.layout.fragment_replay, container, false);
+
+        // Translate trajectory data into usable lists (PDR, IMU, pressure, GNSS)
         pdrLocList = ReplayDataProcessor.translatePdrPath(this.trajectory, false);
+
+        // Check if fusion data is available, and translate the path accordingly
         if (!this.trajectory.getFusionDataList().isEmpty()) {
             fusedDataList = ReplayDataProcessor.translatePdrPath(this.trajectory, true);
         } else {
             fusedDataList = ReplayDataProcessor.translatePdrPath(this.trajectory, false);
         }
-//        imuDataList = this.trajectory.getImuDataList();
+
+        // Retrieve IMU, pressure, and GNSS data lists
         imuDataList = ReplayDataProcessor.getMotionDataList(this.trajectory);
         pressureSampleList = ReplayDataProcessor.getPressureDataList(this.trajectory);
-
         gnssDataList = this.trajectory.getGnssDataList();
 
+        // Get the size of the IMU data list (trajectory size)
         trajSize = imuDataList.size();
-//        float[] startLoc = ReplayDataProcessor.getStartLocation(trajectory);
-//        currentLocation = new LatLng(startLoc[0], startLoc[1]);
 
-        // Initialize map/ indoor map
+        // Initialize and configure the map fragment for displaying the indoor map
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.ReplayMap);
         if (mapFragment != null) {
@@ -165,39 +195,53 @@ public class ReplayTrajFragment extends Fragment {
                 @Override
                 public void onMapReady(@NonNull GoogleMap map) {
                     replayMap = map;
-                    //Initialising the indoor map manager object
+
+                    // Initialize the indoor map manager to handle the indoor map features
                     indoorMapManager = new IndoorMapManager(replayMap);
-                    // Setting map attributes
+
+                    // Set map attributes (type, gestures, etc.)
                     replayMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                     replayMap.getUiSettings().setCompassEnabled(true);
                     replayMap.getUiSettings().setTiltGesturesEnabled(true);
                     replayMap.getUiSettings().setRotateGesturesEnabled(true);
                     replayMap.getUiSettings().setScrollGesturesEnabled(true);
 
-                    // Add a marker at the start position and move the camera
+                    // Initialize the start position marker and move the camera to it
                     PositionInitialization();
 
-                    //Center the camera
+                    // Center the camera on the start location with a zoom level of 19
                     replayMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLoc, (float) 19f));
+
+                    // Set the current location and indoor map indication
                     indoorMapManager.setCurrentLocation(startLoc);
-                    //Showing an indication of available indoor maps using PolyLines
                     indoorMapManager.setIndicationOfIndoorMap();
                 }
             });
         }
+
+        // Set up the SeekBar and Elevation view
         seekBar = rootView.findViewById(R.id.seekBar);
         ElevationPres = rootView.findViewById(R.id.ElevationView);
         seekBar.setMax(100);
+
         return rootView;
     }
 
+    /**
+     * Called when the fragment's view has been created.
+     * Sets up various UI elements and starts necessary tasks such as replay controls and timer.
+     *
+     * @param view The root view of the fragment.
+     * @param savedInstanceState A Bundle containing the saved state of the fragment.
+     */
     public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        ReplayBackButton();
-        setupReplayButton();
-        setupGoToEndButton();
-        setupPlayPauseButton();
-        ProgressView();
+        ReplayBackButton();         // Initialize replay back button functionality
+        setupReplayButton();        // Set up replay button functionality
+        setupGoToEndButton();       // Set up go to end button functionality
+        setupPlayPauseButton();     // Set up play/pause button functionality
+        ProgressView();             // Initialize progress view UI elements
+
         GNSSSwitch();
         wifiSwitch();
         pdrPathSwitch();
@@ -211,6 +255,11 @@ public class ReplayTrajFragment extends Fragment {
         this.readPdrTimer.schedule(currTask, 0, TimeInterval);
     }
 
+    /**
+     * Creates a TimerTask to periodically update the path view.
+     *
+     * @return TimerTask that will update the path view on the main thread.
+     */
     private TimerTask createTimerTask() {
         return new TimerTask() {
             @Override
@@ -227,82 +276,174 @@ public class ReplayTrajFragment extends Fragment {
         };
     }
 
-    public void PositionInitialization(){
+    /**
+     * Initializes the starting location by setting up pdr and fusion path markers, polylines, and location data.
+     * Configures the indoor map manager and sets the current location and floor if available.
+     */
+    private void setupStartLocation() {
+        if (startLoc != null) {
+            // Add a marker for the current position on the map
+            orientationMarker = replayMap.addMarker(new MarkerOptions()
+                    .position(startLoc)
+                    .title("Current Position")
+                    .flat(true)
+                    .icon(BitmapDescriptorFactory.fromBitmap(
+                            UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_24)))
+                    .zIndex(6));
+
+            // Create and add a polyline for the PDR path
+            PolylineOptions pdrpolylineOptions = new PolylineOptions()
+                    .color(Color.parseColor("#FFA500"))
+                    .add(startLoc)
+                    .zIndex(6);
+            pdrPolyline = replayMap.addPolyline(pdrpolylineOptions);
+
+            // Create and add a polyline for the fused path
+            PolylineOptions polylineOptions = new PolylineOptions()
+                    .color(Color.RED)
+                    .add(startLoc)
+                    .zIndex(7);
+            fusedPolyline = replayMap.addPolyline(polylineOptions);
+
+            // If the indoor map manager is available, update the current location and floor
+            if (indoorMapManager != null) {
+                indoorMapManager.setCurrentLocation(startLoc);
+                if (indoorMapManager.getIsIndoorMapSet()) {
+
+                    startFloor = currentFloor;
+                    startEleFloor = (int)(currElevation / indoorMapManager.getFloorHeight());
+                    if(currentWifiLoc != null) {
+                        indoorMapManager.setCurrentFloor(startFloor, true);
+                    }else {
+                        indoorMapManager.setCurrentFloor(startEleFloor,true);
+                    }
+                    // The start floor value is saved for reapply
+
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Resets various counters and the play/pause button status.
+     */
+    private void resetCounters() {
         counterYaw = 0;
         counterPressure = 0;
         currProgress = 0;
         currStepCount = 0;
         currFusedStepCount = 0;
+        currentWifiLoc = null;
         counterGnss = 0;
         isPlaying = true;
         playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
+    }
 
-        if(pdrPolyline != null) { pdrPolyline.remove(); }
+    /**
+     * Resets the UI elements, removing markers, polylines, and circles.
+     */
+    private void resetUI() {
+        // Remove PDR polyline and markers
+        if (pdrPolyline != null) { pdrPolyline.remove(); }
+        if (tagMarkers != null) {
+            for (Marker marker : tagMarkers) {
+                marker.remove();
+            }
+            tagMarkers.clear();
+        }
 
-        if(tagMarker != null) { tagMarker.remove();}
+        // Remove fused polyline and orientation marker
+        if (fusedPolyline != null) { fusedPolyline.remove(); }
+        if (orientationMarker != null) { orientationMarker.remove(); }
 
-        if(fusedPolyline != null) { fusedPolyline.remove(); }
-        if(orientationMarker != null) { orientationMarker.remove(); }
+        // Remove WiFi polyline and marker if they exist
+        if (wifiPolyline != null) {
+            wifiPolyline.remove();
+            wifiPolyline.setVisible(wifiSwitch.isChecked());
+            wifiPolyline = null;
+        }
+        if (wifiMarker != null) {
+            wifiMarker.remove();
+            wifiMarker.setVisible(wifiSwitch.isChecked());
+            wifiMarker = null;
+        }
 
-        if(wifiPolyline != null) { wifiPolyline.remove(); }
-        if(wifiMarker != null) { wifiMarker.remove(); }
+        // Remove GNSS polyline and marker if they exist
+        if (gnssPolyline != null) { gnssPolyline.remove(); }
+        if (gnssMarker != null) { gnssMarker.remove(); }
 
-        if(gnssPolyline != null) { gnssPolyline.remove(); }
-        if(gnssMarker != null) { gnssMarker.remove(); }
-        if(circleList != null) {
+        // Remove circles if they exist
+        if (circleList != null) {
             for (Circle circle : circleList) {
                 circle.remove();
             }
             circleList.clear();
         }
+    }
 
-        startLoc = !pdrLocList.isEmpty() ? pdrLocList.get(0) : new LatLng(0,0);
-//        currElevation = trajectory.getPressureData(counterPressure).getEstimatedElevation();
+    /**
+     * Initializes the position by resetting counters and UI, setting the start location,
+     * and handling GNSS, WiFi, and PDR path data.
+     *
+     * This method distinguishes the provider (WiFi, GNSS, or tag) and sets the corresponding
+     * markers and polylines for visualization on the map.
+     */
+    public void PositionInitialization() {
+        resetCounters();
+        resetUI();
 
+        // Set the starting location from the PDR data list or default to (0, 0)
+        startLoc = !pdrLocList.isEmpty() ? pdrLocList.get(0) : new LatLng(0, 0);
         currElevation = pressureSampleList.get(counterPressure).getEstimatedElevation();
-        String formatElevation = df.format(currElevation);
-        ElevationPres.setText("Elevation:"+formatElevation+"m");
-        currentOrientation = imuDataList.get(counterYaw).getAzimuth();
-//        System.out.println("init Orientation: " + currentOrientation);
 
+        // Format and display the current elevation
+        String formatElevation = df.format(currElevation);
+        ElevationPres.setText("Elevation:" + formatElevation + "m");
+
+        // Get the current orientation (azimuth) from the IMU data
+        currentOrientation = imuDataList.get(counterYaw).getAzimuth();
 
         /**
-         * Gnss data is acquired for initialization and distinguish the provider: WiFi, Tag, or GNSS
-         * Each provider supports the location recorded for plotting
+         * GNSS data is acquired for initialization and distinguishing the provider: WiFi, Tag, or GNSS.
+         * Each provider supports the location recorded for plotting on the map.
          */
-        if (!gnssDataList.isEmpty()){
+        if (!gnssDataList.isEmpty()) {
             Traj.GNSS_Sample gnssStartData = gnssDataList.get(counterGnss);
             String provider = gnssStartData.getProvider();
 
-            //** Initialise the WiFi**//
-            if(provider.equals("wifi_fine")){
-                currentWifiLoc = new LatLng(gnssStartData.getLatitude(), gnssStartData.getLongitude());  // current wifi location
-                PolylineOptions wifiPolylineOptions = new PolylineOptions()
-                        .color(Color.GREEN)
-                        .add(currentWifiLoc)
-                        .zIndex(6)
-                        .visible(wifiSwitch.isChecked());
-                wifiPolyline = replayMap.addPolyline(wifiPolylineOptions);
-                wifiMarker = replayMap.addMarker(new MarkerOptions()
-                        .title("WiFi position")
-//                        .snippet("Acc: " + radius + " Alt: " + altitude)
-                        .position(currentWifiLoc)
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
-                        .visible(wifiSwitch.isChecked()));
+            // Initialize WiFi location
+            if (provider.equals("wifi_fine")) {
+                currentWifiLoc = new LatLng(gnssStartData.getLatitude(), gnssStartData.getLongitude());
+                currentFloor =  (int)((gnssStartData.getAltitude())/4.2 + 1);
+                // If WiFi polyline doesn't exist, create it
+                if (wifiPolyline == null) {
+                    wifiPolyline = replayMap.addPolyline(new PolylineOptions()
+                            .color(Color.GREEN)
+                            .zIndex(6));
+                }
+                // Add the current WiFi location to the polyline
+                List<LatLng> wifipointsMoved = new ArrayList<>(wifiPolyline.getPoints());
+                wifipointsMoved.add(currentWifiLoc);
+                wifiPolyline.setPoints(wifipointsMoved);
 
-                //** Initialise the Tag**//
-            }else if(provider.equals("fusion")){
-                tagLocation = new LatLng(gnssStartData.getLatitude(), gnssStartData.getLongitude());    // location of tag added
-                tagMarker = replayMap.addMarker(new MarkerOptions()
-                        .title("Tag Added")
-                        .position(tagLocation)
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
-//                        .visible(wifiSwitch.isChecked()));
+                // Add a WiFi marker if it doesn't exist
+                if (wifiMarker == null) {
+                    wifiMarker = replayMap.addMarker(new MarkerOptions()
+                            .title("WiFi position")
+                            .position(currentWifiLoc)
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+                            .visible(wifiEnabled));
+                } else {
+                    wifiMarker.setPosition(currentWifiLoc);
+                }
 
-                //** Initialise the GNSS**//
-            }else {
-                currentGnssLoc = new LatLng(gnssStartData.getLatitude(), gnssStartData.getLongitude());  // otherwise the point is the gnss location
+                // Initialize GNSS location
+            } else {
+                currentGnssLoc = new LatLng(gnssStartData.getLatitude(), gnssStartData.getLongitude());
                 float radius = gnssStartData.getAccuracy();
+
+                // Create a circle to represent GNSS accuracy
                 CircleOptions circleOptions = new CircleOptions()
                         .strokeWidth(2)
                         .strokeColor(Color.BLUE)
@@ -313,6 +454,7 @@ public class ReplayTrajFragment extends Fragment {
                         .visible(gnssEnabled);
                 circleList.add(replayMap.addCircle(circleOptions));
 
+                // Create and add a polyline for GNSS path
                 PolylineOptions gnssPolylineOptions = new PolylineOptions()
                         .color(Color.BLUE)
                         .add(currentGnssLoc)
@@ -320,6 +462,7 @@ public class ReplayTrajFragment extends Fragment {
                         .visible(gnssEnabled);
                 gnssPolyline = replayMap.addPolyline(gnssPolylineOptions);
 
+                // Create and add a GNSS marker with additional information
                 String formattedLat = df.format(currentGnssLoc.latitude);
                 String formattedLng = df.format(currentGnssLoc.longitude);
                 float altitude = gnssStartData.getAltitude();
@@ -332,36 +475,26 @@ public class ReplayTrajFragment extends Fragment {
             }
         }
 
-        if (startLoc != null) {
-            orientationMarker = replayMap.addMarker(new MarkerOptions()
-                    .position(startLoc)
-                    .title("Current Position")
-                    .flat(true)
-                    .icon(BitmapDescriptorFactory.fromBitmap(
-                            UtilFunctions.getBitmapFromVector(getContext(), R.drawable.ic_baseline_navigation_24)))
-                    .zIndex(6));
-            PolylineOptions pdrpolylineOptions = new PolylineOptions()
-                    .color(Color.parseColor("#FFA500"))
-                    .add(startLoc)
-                    .zIndex(6);
-            pdrPolyline = replayMap.addPolyline(pdrpolylineOptions);
-
-            PolylineOptions polylineOptions = new PolylineOptions()
-                    .color(Color.RED)
-                    .add(startLoc)
-                    .zIndex(6);
-            fusedPolyline = replayMap.addPolyline(polylineOptions);
-
-            if(indoorMapManager != null){
-                indoorMapManager.setCurrentLocation(startLoc);
-                if(indoorMapManager.getIsIndoorMapSet()){
-                    indoorMapManager.setCurrentFloor((int)(currElevation/indoorMapManager.getFloorHeight())
-                            ,true);
-                }
-            }
-        }
+        // Setup the start location marker and polylines
+        setupStartLocation();
     }
 
+    /**
+     * Updates the path view on the map by processing the latest sensor data (IMU, GNSS, WiFi, etc.)
+     * and drawing corresponding markers, polylines, and progress on the map.
+     * It handles the following types of data:
+     * <ul>
+     *     <li>IMU data for orientation updates</li>
+     *     <li>Pressure data for elevation updates</li>
+     *     <li>GNSS data for location updates (WiFi, Tag, and GNSS)</li>
+     *     <li>PDR data for step tracking</li>
+     *     <li>Fused data for combined location updates</li>
+     * </ul>
+     *
+     * The method also updates the progress bar based on the current position in the trajectory.
+     *
+     * @return A {@link TimerTask} that is executed periodically to update the map view.
+     */
     public TimerTask drawPathView() {
         // ===== break logic ===== //
         if (counterYaw >= imuDataList.size() - 1) {
@@ -414,18 +547,28 @@ public class ReplayTrajFragment extends Fragment {
             // WIFI point //
                 if(provider.equals("wifi_fine")){
                     currentWifiLoc = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());  // current wifi location
-                    PolylineOptions wifiPolylineOptions = new PolylineOptions()
-                            .color(Color.GREEN)
-                            .add(currentWifiLoc)
-                            .zIndex(6)
-                            .visible(wifiSwitch.isChecked());
-                    wifiPolyline = replayMap.addPolyline(wifiPolylineOptions);
-                    wifiMarker = replayMap.addMarker(new MarkerOptions()
-                            .title("WiFi position")
-//                        .snippet("Acc: " + radius + " Alt: " + altitude)
-                            .position(currentWifiLoc)
-                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
-                            .visible(wifiSwitch.isChecked()));
+                    currentFloor =  (int)((nextGnssSample.getAltitude()) /4.2 + 1);
+                    if (wifiPolyline == null) {
+                        wifiPolyline = replayMap.addPolyline(new PolylineOptions()
+                                .color(Color.GREEN)
+                                .zIndex(6));
+//                                .visible(wifiEnabled));
+                    }
+                    List<LatLng> wifipointsMoved = new ArrayList<>(wifiPolyline.getPoints());
+                    wifipointsMoved.add(currentWifiLoc);
+                    wifiPolyline.setPoints(wifipointsMoved);
+//                    wifiPolyline.setVisible(wifiEnabled);
+                    if (wifiMarker == null) {
+                        wifiMarker = replayMap.addMarker(new MarkerOptions()
+                                .title("WiFi position")
+                                .position(currentWifiLoc)
+//                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+                                .visible(wifiEnabled));
+                    } else {
+                        wifiMarker.setPosition(currentWifiLoc);
+//                        wifiMarker.setVisible(wifiEnabled);
+                    }
                 }
             // Tag Point //
                 else if(provider.equals("fusion")){
@@ -434,6 +577,7 @@ public class ReplayTrajFragment extends Fragment {
                             .title("Tag Added")
                             .position(tagLocation)
                             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+                    tagMarkers.add(tagMarker);
                 }
             // GNSS Point //
                 else {
@@ -475,10 +619,10 @@ public class ReplayTrajFragment extends Fragment {
             currentLocation = pdrLocList.get(currStepCount);
             if (pdrPolyline!=null) {
                 // get existing points
-                List<LatLng> pointsMoved = pdrPolyline.getPoints();
+                List<LatLng> pdrpointsMoved = pdrPolyline.getPoints();
                 // add new point
-                pointsMoved.add(currentLocation);
-                pdrPolyline.setPoints(pointsMoved);
+                pdrpointsMoved.add(currentLocation);
+                pdrPolyline.setPoints(pdrpointsMoved    );
                 pdrPolyline.setColor(Color.parseColor("#FFA500"));
                 pdrPolyline.setVisible(pdrEnabled);
             }
@@ -502,13 +646,17 @@ public class ReplayTrajFragment extends Fragment {
                 fusedPointsMoved.add(fusedCurrLocation);
                 fusedPolyline.setPoints(fusedPointsMoved);
                 fusedPolyline.setColor(Color.RED);
+                fusedPolyline.setZIndex(7);
             }
 
-            if(indoorMapManager != null) {
+            if (indoorMapManager != null) {
                 indoorMapManager.setCurrentLocation(fusedCurrLocation);
                 if (indoorMapManager.getIsIndoorMapSet()) {
-                    indoorMapManager.setCurrentFloor((int) (currElevation / indoorMapManager.getFloorHeight())
-                            , true);
+                    if(currentWifiLoc != null) {
+                        indoorMapManager.setCurrentFloor(currentFloor, true);
+                    }else {
+                        indoorMapManager.setCurrentFloor((int)(currElevation / indoorMapManager.getFloorHeight()), true);
+                    }
                 }
             }
         }
@@ -522,12 +670,30 @@ public class ReplayTrajFragment extends Fragment {
         return null;
     }
 
+    /**
+     * Sets up the progress bar (seek bar) listener to handle changes in the playback progress.
+     * This method allows for controlling the playback through the seek bar.
+     * <p>
+     * When the user changes the progress, the corresponding marker and polyline visibility are updated.
+     * Also, cancels the current task when the user starts tracking, and initializes the path view when tracking stops.
+     */
     public void ProgressView() {
         if (seekBar == null) return;
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser)
             {
+
+                if(!wifiSwitch.isChecked()){
+                    if(wifiPolyline != null && wifiMarker != null) {
+                        wifiPolyline.setVisible(wifiEnabled);
+                        wifiMarker.setVisible(wifiEnabled);
+                        if(currentWifiLoc != null)
+                       indoorMapManager.setCurrentFloor(startFloor,true);
+                    }else{
+                    indoorMapManager.setCurrentFloor(startEleFloor,true);
+                    }
+                }
                 // No actions required
             }
             @Override
@@ -558,18 +724,29 @@ public class ReplayTrajFragment extends Fragment {
         });
     }
 
-    //return back to the last page/////////////////////////////////////////////////////
+    /**
+     * Sets up the "Replay Back" button to navigate back to the previous page in the fragment stack.
+     * <p>
+     * When the button is clicked, it checks if there are entries in the fragment back stack and pops the top fragment if available.
+     * Return back to the last page
+     */
     private void ReplayBackButton() {
         replayBackButton = requireView().findViewById(R.id.ReplayBackButton);
         replayBackButton.setOnClickListener(view -> {
             if (requireActivity().getSupportFragmentManager().getBackStackEntryCount() > 0) {
                 requireActivity().getSupportFragmentManager().popBackStack();
             }
+
         });
-    }//////////////////////////////////////////////////////////////////////////////////
+    }
 
 
-    // play / pause button control
+    /**
+     * Sets up the "Play / Pause" button to control the playback of the path.
+     * <p>
+     * If the current task is running, it will either pause or resume based on the current playback state.
+     * If the playback is paused, it shows the play icon. If it's playing, it shows the pause icon.
+     */
     private void setupPlayPauseButton() {
         playPauseButton = requireView().findViewById(R.id.PlayPauseButton);
         playPauseButton.setOnClickListener(v -> {
@@ -592,6 +769,11 @@ public class ReplayTrajFragment extends Fragment {
         });
     }
 
+    /**
+     * Sets up the "Replay" button to restart the playback from the beginning.
+     * <p>
+     * This method cancels the current task, initializes the position, and restarts the playback. It also ensures the WiFi polyline visibility is handled based on user settings.
+     */
     private void setupReplayButton() {
         replayButton = requireView().findViewById(R.id.ReplayButton);
         replayButton.setOnClickListener(v -> {
@@ -599,12 +781,28 @@ public class ReplayTrajFragment extends Fragment {
                 currTask.cancel();
             }
             PositionInitialization();
+            if(!wifiSwitch.isChecked()){
+                if(wifiPolyline != null && wifiMarker != null) {
+                    wifiPolyline.setVisible(wifiEnabled);
+                    wifiMarker.setVisible(wifiEnabled);
+                    indoorMapManager.setCurrentFloor(startFloor,true);
+                }else{
+                    indoorMapManager.setCurrentFloor(startEleFloor,true);
+                }
+            }
             currTask = createTimerTask();
             readPdrTimer.schedule(currTask, 0, TimeInterval);
             isPlaying = true;
             playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
         });
     }
+
+    /**
+     * Sets up the "Go to End" button to fast forward to the end of the path.
+     * <p>
+     * When clicked, this method cancels the current task, updates the seek bar to 100% progress, and stops the playback.
+     * It then draws the entire path up to the last point and pauses the playback.
+     */
     private void setupGoToEndButton() {
         goToEndButton = requireView().findViewById(R.id.GoToEndButton);
         goToEndButton.setOnClickListener(v -> {
@@ -637,9 +835,11 @@ public class ReplayTrajFragment extends Fragment {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (isChecked) {
+                    wifiEnabled = true;
                     if(wifiPolyline != null) wifiPolyline.setVisible(true);
                     if(wifiMarker != null) wifiMarker.setVisible(true);
                 } else {
+                    wifiEnabled = false;
                     if(wifiPolyline != null) wifiPolyline.setVisible(false);
                     if(wifiMarker != null) wifiMarker.setVisible(false);
                 }
