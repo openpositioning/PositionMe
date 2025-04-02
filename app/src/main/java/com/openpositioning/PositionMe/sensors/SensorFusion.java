@@ -719,7 +719,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         double maxDisplacement = 5.0;
         // Convert state (meters) to current latitude
         double currentLat = initialLocation.getLatitude() + (state[1] / 6371e3) * (180 / Math.PI);
-        double[][] H = {{1, 0}, {0, 1}};//computeJacobian(currentLat);
+        double[][] H = computeJacobian(currentLat);//{{1, 0}, {0, 1}};//
 
         double[] predicted = {state[0], state[1]};
         double[] innovation = {
