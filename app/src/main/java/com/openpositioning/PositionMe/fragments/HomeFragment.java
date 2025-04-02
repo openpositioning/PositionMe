@@ -3,6 +3,9 @@ package com.openpositioning.PositionMe.fragments;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.location.Criteria;
+import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -45,10 +48,10 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 public class HomeFragment extends Fragment implements OnMapReadyCallback {
 
     // Interactive UI elements to navigate to other fragments
-    private MaterialButton goToInfo;
-    private MaterialButton start;
-    private MaterialButton measurements;
-    private MaterialButton files;
+    private FloatingActionButton  goToInfo;
+    private FloatingActionButton  start;
+    private FloatingActionButton  measurements;
+    private FloatingActionButton  files;
 
     private MaterialButton dataDisplay;
 
@@ -96,7 +99,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         super.onViewCreated(view, savedInstanceState);
 
         // Button to navigate to Sensor Info display fragment
-        this.goToInfo = getView().findViewById(R.id.sensorInfoButton);
+        this.goToInfo = getView().findViewById(R.id.infoFab);
         this.goToInfo.setOnClickListener(new View.OnClickListener() {
             /**
              * {@inheritDoc}
@@ -110,7 +113,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         });
 
         // Button to start a recording session. Only enable if all relevant permissions are granted.
-        this.start = getView().findViewById(R.id.startStopButton);
+        this.start = getView().findViewById(R.id.startStopFab);
         start.setEnabled(!PreferenceManager.getDefaultSharedPreferences(getContext())
                 .getBoolean("permanentDeny", false));
         this.start.setOnClickListener(new View.OnClickListener() {
@@ -129,7 +132,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         });
 
         // Button to navigate to display of current sensor recording values
-        this.measurements = getView().findViewById(R.id.measurementButton);
+        this.measurements = getView().findViewById(R.id.measurementFab);
         this.measurements.setOnClickListener(new View.OnClickListener() {
             /**
              * {@inheritDoc}
@@ -143,7 +146,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         });
 
         // Button to navigate to the file system showing previous recordings
-        this.files = getView().findViewById(R.id.filesButton);
+        this.files = getView().findViewById(R.id.filesFab);
         this.files.setOnClickListener(new View.OnClickListener() {
             /**
              * {@inheritDoc}
@@ -157,7 +160,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         });
 
         // Button to navigate to the Data Display fragment
-        this.dataDisplay = getView().findViewById(R.id.indoorButton);
+        this.dataDisplay = getView().findViewById(R.id.indoorFab);
         this.dataDisplay.setOnClickListener(new View.OnClickListener() {
             /**
              * {@inheritDoc}
@@ -234,6 +237,33 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
 
                 // Enable the MyLocation layer of Google Map
                 mMap.setMyLocationEnabled(true);
+
+                LocationManager locationManager = (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
+
+                Criteria criteria = new Criteria();
+                criteria.setAccuracy(Criteria.ACCURACY_FINE); // 优先使用精确定位
+
+                String bestProvider = locationManager.getBestProvider(criteria, true);
+
+                if (bestProvider != null &&
+                        ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
+                    Location lastKnownLocation = locationManager.getLastKnownLocation(bestProvider);
+                    if (lastKnownLocation != null) {
+                        LatLng userLocation = new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(userLocation, 15f));
+                    } else {
+                        // 主动监听一次定位（仅触发一次）
+                        locationManager.requestSingleUpdate(bestProvider, new LocationListener() {
+                            @Override
+                            public void onLocationChanged(@NonNull Location location) {
+                                LatLng userLocation = new LatLng(location.getLatitude(), location.getLongitude());
+                                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(userLocation, 15f));
+                            }
+                        }, null);
+                    }
+                }
+
 
                 // Optionally move the camera to last known or default location:
                 //   (You could retrieve it from FusedLocationProvider or similar).

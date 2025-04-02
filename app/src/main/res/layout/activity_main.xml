@@ -9,23 +9,25 @@ android:layout_height="match_parent"
 tools:context=".MainActivity">
 
 <!-- Material Toolbar for App Bar -->
-<com.google.android.material.appbar.MaterialToolbar
-    android:id="@+id/main_toolbar"
-    android:layout_width="0dp"
-    android:layout_height="?attr/actionBarSize"
-    android:background="?attr/colorPrimary"
-    android:elevation="4dp"
-    android:title="@string/app_name"
-    android:titleTextColor="@color/md_theme_light_onPrimary"
-    app:layout_constraintTop_toTopOf="parent"
-    app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintEnd_toEndOf="parent"
-    app:popupTheme="@style/Widget.MaterialComponents.PopupMenu" />
 
 
+    <!-- Fragment container for navigation -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/main_toolbar"
+        android:layout_width="0dp"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/md_theme_primaryContainer"
+        android:elevation="4dp"
+        android:title="@string/app_name"
+        android:titleTextColor="@color/md_theme_light_onPrimary"
 
-<!-- Fragment container for navigation -->
-<androidx.fragment.app.FragmentContainerView
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:popupTheme="@style/Widget.MaterialComponents.PopupMenu" />
+
+    <androidx.fragment.app.FragmentContainerView
     android:id="@+id/nav_host_fragment"
     android:name="androidx.navigation.fragment.NavHostFragment"
     android:layout_width="0dp"
