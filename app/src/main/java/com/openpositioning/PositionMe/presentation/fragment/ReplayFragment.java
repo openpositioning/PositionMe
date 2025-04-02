@@ -139,16 +139,12 @@ public class ReplayFragment extends Fragment {
             //    WIFI_data.add(point.cachedWiFiLocation);
             //}
             // Pre-compute EKF data
-            LatLng prevPDR = (i > 0) ? replayData.get(i - 1).pdrLocation : point.pdrLocation;
-            LatLng ekfPoint = SensorFusion.getInstance().EKF_replay(
-                    point.cachedWiFiLocation != null ? point.cachedWiFiLocation : prevWiFiLocation,
-                    point.pdrLocation,
-                    prevPDR,
-                    point.gnssLocation
-            );
-            if (ekfPoint != null) {
-                EKF_data.add(ekfPoint);
-            }
+            //LatLng prevPDR = (i > 0) ? replayData.get(i - 1).pdrLocation : point.pdrLocation;
+            //LatLng ekfPoint = EKF_point(i);
+
+            //if (ekfPoint != null) {
+            //    EKF_data.add(ekfPoint);
+            //}
         }
 
     }
@@ -267,7 +263,7 @@ public class ReplayFragment extends Fragment {
         // code by Guilherme: Add the dropdown list adapter with desired options
         ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
                 android.R.layout.simple_spinner_dropdown_item,
-                new String[]{"PDR", "GNSS", "WiFi", "EKF"});
+                new String[]{"EKF", "PDR", "GNSS", "WiFi"});
         dataSourceSpinner.setAdapter(adapter);
         dataSourceSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
@@ -518,9 +514,11 @@ public class ReplayFragment extends Fragment {
 
             default: // EKF
                 // call EKF_point() with the current index
-                currentPoint = EKF_data.get(index);
+                currentPoint = EKF_point(index);
+
                 if (currentPoint != null){
                     trajectoryMapFragment.updateUserLocation(currentPoint,p.orientation); // update location
+                    EKF_data.add(currentPoint);
                 }
                 break;
         }
@@ -597,6 +595,7 @@ public class ReplayFragment extends Fragment {
 
                     prevWiFiLocation = location; // keep this to update prev location
                     // do the EKF using location
+                    WIFI_data.add(location); // add the wifi data
 
                 }
 
