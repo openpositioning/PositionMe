@@ -210,7 +210,7 @@ public class ReplayDataProcessor {
      * @param trajectory the trajectory to translate
      * @return the list of latlng, with the start location added
      */
-    public static List<LatLng> translatePdrPath(Traj.Trajectory trajectory) {
+    public static List<LatLng> translatePdrPath(Traj.Trajectory trajectory, boolean fused) {
         List<LatLng> latLngList = new ArrayList<>();
         LatLng startLocation = new LatLng(0, 0);
 
@@ -226,13 +226,22 @@ public class ReplayDataProcessor {
             startLocation = new LatLng(startLatLong[0], startLatLong[1]);
             latLngList.add(startLocation); // Temp solution
         }
+        if (!fused) {
+            List<Traj.Pdr_Sample> pdrDataList = trajectory.getPdrDataList();
 
-        List<Traj.Pdr_Sample> pdrDataList = trajectory.getPdrDataList();
+            for (Traj.Pdr_Sample data : pdrDataList) {
+                float[] pdrMoved = {data.getX(), data.getY()};
+                LatLng newLocation = UtilFunctions.calculateNewPos(startLocation, pdrMoved);
+                latLngList.add(newLocation);
+            }
+        } else {
+            List<Traj.Pdr_Sample> fusedDataList = trajectory.getFusionDataList();       // Fusion data is acquired here
 
-        for (Traj.Pdr_Sample data : pdrDataList) {
-            float[] pdrMoved = {data.getX(), data.getY()};
-            LatLng newLocation = UtilFunctions.calculateNewPos(startLocation, pdrMoved);
-            latLngList.add(newLocation);
+            for (Traj.Pdr_Sample data : fusedDataList) {
+                float[] pdrMoved = {data.getX(), data.getY()};
+                LatLng newLocation = UtilFunctions.calculateNewPos(startLocation, pdrMoved);
+                latLngList.add(newLocation);
+            }
         }
 
         return latLngList;
