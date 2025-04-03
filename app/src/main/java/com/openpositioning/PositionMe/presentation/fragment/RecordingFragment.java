@@ -265,6 +265,16 @@ public class RecordingFragment extends Fragment {
             }
         }
 
+        // WiFi location example
+        //sensorFusion.getWifiFloor() // Returns the current floor the user is on using WiFi positioning.
+        if(trajectoryMapFragment.isWiFiLocationOn()){
+            LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning(); // Returns the user's position obtained using WiFi positioning.
+            if(wifiLocation != null) {
+                trajectoryMapFragment.updateWifiLocation(wifiLocation);
+            }
+        }
+        //sensorFusion.getWifiList() // Returns the most recent list of WiFi names and levels.
+
         // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
