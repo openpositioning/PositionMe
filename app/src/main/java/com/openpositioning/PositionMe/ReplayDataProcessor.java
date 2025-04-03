@@ -369,7 +369,7 @@ public class ReplayDataProcessor {
             return motionDataList;
         }
 
-        List<Traj.Motion_Sample> updatedList = new ArrayList<>(); // 存储修改后的对象
+        List<Traj.Motion_Sample> updatedList = new ArrayList<>(); // save the updated list
 
         for (Traj.Motion_Sample motionSample : motionDataList) {
             float azimuth = calculateAzimuth(motionSample);

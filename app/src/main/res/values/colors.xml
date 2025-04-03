@@ -2,10 +2,10 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFF</color>
-    <color name="tab_background">#F287E0</color> <!-- 浅灰色背景 -->
-    <color name="tab_border">#0D0C0C</color> <!-- 细灰色边框 -->
-    <color name="tab_selected">#69169B</color> <!-- 紫色选中背景 -->
-    <color name="tab_unselected">#FAF9F9</color> <!-- 浅灰色未选中背景 -->
+    <color name="tab_background">#F287E0</color> <!-- gray -->
+    <color name="tab_border">#0D0C0C</color> <!-- small gray -->
+    <color name="tab_selected">#69169B</color> <!-- purple -->
+    <color name="tab_unselected">#FAF9F9</color> <!-- lite gray -->
 
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
