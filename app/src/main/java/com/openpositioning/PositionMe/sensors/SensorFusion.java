@@ -191,6 +191,17 @@ public class SensorFusion implements SensorEventListener, Observer {
     private double[] lastWifiENU = null;
     private long lastWifiUpdateTime = 0;
 
+    private final int WIFI_POS_SMOOTH_WINDOW = 5;
+    private final List<LatLng> wifiPosWindow = new ArrayList<>();
+    // 中值滤波窗口
+    private final int FUSED_POS_MEDIAN_WINDOW_SIZE = 5;
+    private final List<LatLng> fusedPosWindow = new ArrayList<>();
+
+    // 指数平滑状态
+    private LatLng fusedPosSmoothed = null;
+    private final double FUSED_SMOOTH_ALPHA = 0.7;
+
+
     private com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment trajectoryMapFragment;
 
     //region Initialisation
@@ -553,16 +564,20 @@ public class SensorFusion implements SensorEventListener, Observer {
                     }
                     // 从融合算法中获取修正后的定位结果
                     if (extendedKalmanFilter != null) {
-                        LatLng fusedPos = extendedKalmanFilter.getEstimatedPosition(refLat, refLon, refAlt);
-                        //pathView.drawTrajectory(new float[]{(float) fusedPos.latitude, (float) fusedPos.longitude});
+                        LatLng rawFusedPos = extendedKalmanFilter.getEstimatedPosition(refLat, refLon, refAlt);
+                        LatLng smoothFusedPos = applyDoubleSmoothedFusedPos(rawFusedPos);
+
                         trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
                                 .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                                .setX((float) fusedPos.latitude)
-                                .setY((float) fusedPos.longitude));
+                                .setX((float) smoothFusedPos.latitude)
+                                .setY((float) smoothFusedPos.longitude));
+
                         if (trajectoryMapFragment != null) {
-                        float headingDeg = (float) Math.toDegrees(this.orientation[0]);
-                        trajectoryMapFragment.updateFusionLocation(fusedPos, headingDeg);
+                            float headingDeg = (float) Math.toDegrees(this.orientation[0]);
+                            trajectoryMapFragment.updateFusionLocation(smoothFusedPos, headingDeg);
                         }
+
+
                     } else {
                         Log.e("SensorFusion", "EKF is null when trying to get estimated position!");
                     }
@@ -600,7 +615,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     double dx = enuCoords[0] - lastWifiENU[0];
                     double dy = enuCoords[1] - lastWifiENU[1];
                     double distance = Math.sqrt(dx * dx + dy * dy);
-                    if ((currentWifiTime - lastWifiUpdateTime < 3000) && (distance < 1.0)) {
+                    if ((currentWifiTime - lastWifiUpdateTime < 7000) && (distance < 2.0)) {
                         Log.d("SensorFusion", "WiFi coordinate redundant: distance = " + distance + " m, skipping update.");
                         return;  // 跳过此次更新
                     }
@@ -645,7 +660,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // WiFi 误差自适应
         if (rssi > -50) {
-            baseFactor = 2;  // 强 WiFi 信号时减少噪声影响
+            baseFactor = 3;  // 强 WiFi 信号时减少噪声影响
         } else if (rssi > -75) {
             baseFactor = 4;  // 普通 WiFi 信号，不做调整
         } else {
@@ -757,6 +772,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     Log.d("SensorFusion", "Received WiFi location: lat=" + wifiLocation.latitude + ", lon=" + wifiLocation.longitude + ", floor=" + floor);
+                    LatLng smoothedLocation = getSmoothedWifiPosition(wifiLocation);
+                    Log.d("SensorFusion", "Smoothed WiFi location: lat=" + smoothedLocation.latitude + ", lon=" + smoothedLocation.longitude);
 
                     pendingWifiPosition = wifiLocation;
                     wifiFloor = floor;
@@ -785,6 +802,45 @@ public class SensorFusion implements SensorEventListener, Observer {
             Log.e("SensorFusion", "JSON error while creating WiFi fingerprint", e);
         }
     }
+
+    private LatLng applyDoubleSmoothedFusedPos(LatLng rawFusedPos) {
+        // 第一步：中值滤波（抗抖动）
+        fusedPosWindow.add(rawFusedPos);
+        if (fusedPosWindow.size() > FUSED_POS_MEDIAN_WINDOW_SIZE) {
+            fusedPosWindow.remove(0);
+        }
+
+        List<Double> latList = fusedPosWindow.stream().map(p -> p.latitude).sorted().collect(Collectors.toList());
+        List<Double> lonList = fusedPosWindow.stream().map(p -> p.longitude).sorted().collect(Collectors.toList());
+        double medianLat = latList.get(latList.size() / 2);
+        double medianLon = lonList.get(lonList.size() / 2);
+        LatLng medianFusedPos = new LatLng(medianLat, medianLon);
+
+        // 第二步：指数平滑（流畅跟随）
+        if (fusedPosSmoothed == null) {
+            fusedPosSmoothed = medianFusedPos;
+        } else {
+            double lat = FUSED_SMOOTH_ALPHA * medianFusedPos.latitude + (1 - FUSED_SMOOTH_ALPHA) * fusedPosSmoothed.latitude;
+            double lon = FUSED_SMOOTH_ALPHA * medianFusedPos.longitude + (1 - FUSED_SMOOTH_ALPHA) * fusedPosSmoothed.longitude;
+            fusedPosSmoothed = new LatLng(lat, lon);
+        }
+
+        return fusedPosSmoothed;
+    }
+
+//    private LatLng getSmoothedFusedPosition(LatLng newFusedPos) {
+//        fusedPosWindow.add(newFusedPos);
+//        if (fusedPosWindow.size() > FUSED_POS_WINDOW_SIZE) {
+//            fusedPosWindow.remove(0);
+//        }
+//
+//        List<Double> latList = fusedPosWindow.stream().map(p -> p.latitude).sorted().collect(Collectors.toList());
+//        List<Double> lonList = fusedPosWindow.stream().map(p -> p.longitude).sorted().collect(Collectors.toList());
+//
+//        double medianLat = latList.get(latList.size() / 2);
+//        double medianLon = lonList.get(lonList.size() / 2);
+//        return new LatLng(medianLat, medianLon);
+//    }
 
 
     // Callback Example Function
@@ -1212,6 +1268,23 @@ public class SensorFusion implements SensorEventListener, Observer {
         particleFilter = new ParticleFilter(100, refLat, refLon, refAlt);
         particleFilter.initializeParticles(enuCoords[0], enuCoords[1], initialTheta, 1.0, 1.0, 0.1);
     }
+
+
+
+    private LatLng getSmoothedWifiPosition(LatLng newWifiPos) {
+        wifiPosWindow.add(newWifiPos);
+        if (wifiPosWindow.size() > WIFI_POS_SMOOTH_WINDOW) {
+            wifiPosWindow.remove(0); // 保持固定窗口大小
+        }
+
+        List<Double> latList = wifiPosWindow.stream().map(p -> p.latitude).sorted().collect(Collectors.toList());
+        List<Double> lonList = wifiPosWindow.stream().map(p -> p.longitude).sorted().collect(Collectors.toList());
+
+        double medianLat = latList.get(latList.size() / 2);
+        double medianLon = lonList.get(lonList.size() / 2);
+        return new LatLng(medianLat, medianLon);
+    }
+
 
     /**
      * Disables saving sensor values to the trajectory object.

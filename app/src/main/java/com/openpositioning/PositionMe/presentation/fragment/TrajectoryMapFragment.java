@@ -264,20 +264,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (rawTrajectoryPlotter != null) {
             rawTrajectoryPlotter.updateLocation(rawCurrentLocation, orientation);
         }
-        if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(rawCurrentLocation);
 
-            boolean currentState = indoorMapManager.getIsIndoorMapSet();
-            if (currentState != lastIndoorMapState) {
-                lastIndoorMapState = currentState;
-
-                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
-                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
-                //update indoor maker
-                updateAllIndoorMarkers();
-            }
-            updateFloorControlVisibility();
-        }
     }
 
 
@@ -308,6 +295,21 @@ public abstract class TrajectoryMapFragment extends Fragment {
         }
         if (isCameraTracking && gMap != null) {
             gMap.moveCamera(CameraUpdateFactory.newLatLng(fusionCurrentLocation));
+        }
+
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(rawCurrentLocation);
+
+            boolean currentState = indoorMapManager.getIsIndoorMapSet();
+            if (currentState != lastIndoorMapState) {
+                lastIndoorMapState = currentState;
+
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentBuilding());
+                Log.d("currentfloor", "Building polygon added, vertex count: " + this.getCurrentFloor());
+                //update indoor maker
+                updateAllIndoorMarkers();
+            }
+            updateFloorControlVisibility();
         }
         updateFloorControlVisibility();
     }
