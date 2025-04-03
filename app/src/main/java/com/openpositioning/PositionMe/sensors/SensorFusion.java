@@ -69,6 +69,7 @@ import java.util.stream.Stream;
  * @author Mate Stodulka
  * @author Virginia Cangelosi
  * @author Michal Wiercigroch
+ * @author Kalliopi Vakali
  */
 public class SensorFusion implements SensorEventListener, Observer {
 
@@ -569,15 +570,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                 }
 
 
-//                @Override
-//                public void onError(String message) {
-//                    Log.e("WiFiPositioning", "Failed to get WiFi position: " + message);
-//                    if (hasPositionListeners()) {
-//                        for (PositionListener listener : positionListeners) {
-//                            listener.onPositionUpdate(PositionListener.UpdateType.WIFI_ERROR, null); // custom type
-//                        }
-//                    }
-//                }
+                /**
+                 * Sends a wifi error trigger to the listener when there are consecutive errors withing the failure time threshold.
+                 *
+                 *
+                 *
+                 */
 
 
                 @Override

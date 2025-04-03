@@ -248,6 +248,7 @@ public class TrajectoryMapFragment extends Fragment {
         sensorFusion = SensorFusion.getInstance();
         trajectoryFilter = new TrajectoryFilter();
         fusionPoints = new ArrayList<>();
+        //sensorFusion.passContext(requireContext());
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
@@ -301,6 +302,7 @@ public class TrajectoryMapFragment extends Fragment {
      * @param map
      */
 
+    // Add this method to update the fusion position on the map
     /**
      * Updates the fusion position on the map with the latest estimate.
      *
@@ -522,8 +524,9 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Update the user's current location on the map, create or move orientation marker,
-     * and append to polyline if the user actually moved.
+     * Update the user's PDR location on the map, create or moves the PDR marker,
+     * and append to polyline if the user actually moved. Also updates indoor map
+     * if available.
      *
      * @param newLocation The new location to plot.
      */
@@ -721,7 +724,7 @@ public class TrajectoryMapFragment extends Fragment {
      * @return boolean - True if new wifi location is too far from last location
      */
     private boolean isOutlier(LatLng lastLocation, LatLng newLocation) {
-        if (lastLocation == null || newLocation == null) return false; // No comparison possible
+        if (lastLocation == null || newLocation == null) return false;
         double distance = SphericalUtil.computeDistanceBetween(lastLocation, newLocation);
         return distance > MAX_DISTANCE_THRESHOLD; // True if the new location is too far
     }
