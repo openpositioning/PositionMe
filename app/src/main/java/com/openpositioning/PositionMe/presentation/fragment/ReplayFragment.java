@@ -49,6 +49,9 @@ import java.util.concurrent.Future;
  * @see TrajectoryMapFragment The map fragment displaying the trajectory.
  * @see ReplayActivity The activity managing the replay workflow.
  * @see TrajParser Utility class for parsing trajectory data.
+ *
+ * @author Kleitos Kountouris (addition of methods for plotting WiFi, GNSS, PDR and fused data,
+ * and independent controls)
  */
 public class ReplayFragment extends Fragment {
 
