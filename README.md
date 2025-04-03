@@ -1,6 +1,8 @@
-# 📍 PositionMe – Indoor & Outdoor Positioning System
+# 📍 PositionMe
 
-PositionMe is a mobile Android application for **real-time indoor/outdoor positioning**, designed as part of the Huawei – University of Edinburgh 2025 Indoor Positioning Assignment. It fuses **WiFi**, **GNSS**, and **IMU (PDR)** data to provide accurate, robust user localization within university buildings like **The Nucleus** and **The Noreen and Kenneth Murray Library**.
+**Indoor & Outdoor Positioning System**
+
+PositionMe is a mobile Android application for **real-time indoor/outdoor positioning**. It fuses **WiFi**, **GNSS**, and **IMU (PDR)** data to provide accurate, robust user localization within university buildings like **The Nucleus** and **The Noreen and Kenneth Murray Library**.
 
 
 ## 🧠 Core Features
@@ -176,21 +178,3 @@ All scripts located in:
 | API keys not working          | Confirm `secrets.properties` setup                         |
 | GNSS/WiFi data missing        | Use a physical device and allow all permissions            |
 | Old WiFi data                 | Disable WiFi scan throttling in Developer Options          |
-
-
-## 🧑‍💻 Contributors
-
-| Name           | Student Number | Roles                            |
-|----------------|----------------|----------------------------------|
-| Lin Chen       | s2114912       | Fusion Algorithm Dev, Debug     |
-| Lai Gan        | s1917398       | UI & Accessibility, Side Features |
-| Shu Gu         | s2094833       | ML Dev, Map Dev, Architecture   |
-| Aaniket Nayak  | s2748053       | Debug & Test, Documentation     |
-
-
-## 📚 References
-
-1. Skobeleva et al., "Extended Kalman Filter for Indoor/Outdoor Robot Localization", 2016.
-2. Singh et al., "Wi-Fi RSSI Fingerprints for Indoor Localization", IEEE Access, 2021.
-3. Kakiuchi & Kamijo, "PDR for Mobile Phones through Mode Recognition", ITSC 2013.
-4. Ho-Sy et al., "Hybrid WiFi Algorithm for Indoor Positioning", ISCIT 2019.
