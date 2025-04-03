@@ -302,15 +302,20 @@ public class CalibrationFragment extends Fragment {
         double gnssLon = record.optDouble("gnssLon", Double.NaN);
         LatLng gnssPos = (!Double.isNaN(gnssLat) && !Double.isNaN(gnssLon)) ? new LatLng(gnssLat, gnssLon) : null;
 
-        // PDR位置（假设 pdrX 与 pdrY 表示经纬度，如有偏差请按实际转换）
+        // PDR位置
         double pdrX = record.optDouble("pdrX", Double.NaN);
         double pdrY = record.optDouble("pdrY", Double.NaN);
+        // convert pdr from meters to latitude/longitude
+        pdrX = lat + (pdrX / 111320); // 1 degree latitude ~ 111.32 km
+        pdrY = lng + (pdrY / (111320 * Math.cos(Math.toRadians(lat)))); // 1 degree longitude ~ 111.32 km * cos(latitude)
+
         LatLng pdrPos = (!Double.isNaN(pdrX) && !Double.isNaN(pdrY)) ? new LatLng(pdrX, pdrY) : null;
 
         // WiFi位置
         double wifiLat = record.optDouble("wifiLat", Double.NaN);
         double wifiLon = record.optDouble("wifiLon", Double.NaN);
         LatLng wifiPos = (!Double.isNaN(wifiLat) && !Double.isNaN(wifiLon)) ? new LatLng(wifiLat, wifiLon) : null;
+
 
         // 使用新的工具类计算误差
         CalibrationUtils.CalibrationErrors errors = CalibrationUtils.calculateCalibrationErrors(markerPos, gnssPos, pdrPos, wifiPos);

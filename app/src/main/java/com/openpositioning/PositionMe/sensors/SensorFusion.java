@@ -501,10 +501,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                     }
 
                     // get newest Gnss position
+
                     float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
                     Location gnssLocation = new Location(LocationManager.GPS_PROVIDER);
                     gnssLocation.setLatitude(gnss[0]);
                     gnssLocation.setLongitude(gnss[1]);
+                    Location tempgnssLocation = gnssProcessor.getLastKnownLocation();
+                    gnssLocation.setAccuracy(tempgnssLocation.getAccuracy());
                     if (gnssLocation != null) {
                         Log.d("SensorFusion", "GNSS Location available for update: Lat=" + gnssLocation.getLatitude() +
                                 ", Lon=" + gnssLocation.getLongitude() + ", Accuracy=" + gnssLocation.getAccuracy());
