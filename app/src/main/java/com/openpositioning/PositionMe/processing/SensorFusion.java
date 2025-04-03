@@ -227,9 +227,8 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
    * @param startPosition contains the initial location set by the user
    */
   public void setStartGNSSLatitude(float[] startPosition) {
-    // Set the starting fused location, start location and initialise the coordinate transformer
+    // Set the start location and initialise the coordinate transformer
     // with the starting position.
-    this.fusedLocation = new LatLng(startPosition[0], startPosition[1]);
     this.startLocation = new LatLng(startPosition[0], startPosition[1]);
     this.coordinateTransformer = new CoordinateTransformer(startPosition[0], startPosition[1]);
   }
@@ -558,6 +557,10 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
    * @param data GNSSLocationData object containing the GNSS data.
    */
   public void onSensorDataReceived(GNSSLocationData data) {
+    if (this.fusedLocation == null) {
+      this.fusedLocation = new LatLng(data.latitude, data.longitude);
+    }
+
     float[] currPdrData = this.pdrProcessing.getPDRMovement();
     LatLng loc = new LatLng(data.latitude, data.longitude);
     this.gnssLoc = loc;
@@ -596,6 +599,9 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
    * @param data WiFiData object containing the WiFi data.
    */
   public void onSensorDataReceived(WiFiData data) {
+    if (this.fusedLocation == null && data.location != null) {
+      this.fusedLocation = data.location;
+    }
     // Detect and notify the user if there is no coverage
     if (!this.noWifiCoverage && data.location == null) {
       Toast.makeText(this.appContext, "No Wifi Coverage!",Toast.LENGTH_SHORT).show();

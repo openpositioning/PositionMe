@@ -52,6 +52,8 @@ import java.util.List;
  * overlays.
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics
  * handling.
+ * @author Kleitos Kountouris (addition of methods for plotting WiFi, GNSS, PDR and fused data,
+ * and independent controls)
  */
 
 public class TrajectoryMapFragment extends Fragment {
