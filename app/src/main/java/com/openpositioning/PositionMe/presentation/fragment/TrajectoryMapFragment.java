@@ -313,7 +313,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
         }
 
         if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(rawCurrentLocation);
+            indoorMapManager.setCurrentLocation(fusionCurrentLocation);
 
             boolean currentState = indoorMapManager.getIsIndoorMapSet();
             if (currentState != lastIndoorMapState) {
@@ -338,7 +338,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (wifiTrajectoryPlotter != null) {
             wifiTrajectoryPlotter.updateLocation(newLocation, orientation);
         }
-        indoorMapManager.setCurrentLocation(newLocation);
         updateFloorControlVisibility();
     }
 
@@ -350,7 +349,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (gMap == null || !isGnssOn || gnssTrajectoryPlotter == null) return;
         float accuracy = sensorFusion.getGnssAccuracy();
         gnssTrajectoryPlotter.updateGnssLocation(location, accuracy);
-        indoorMapManager.setCurrentLocation(location);
         updateFloorControlVisibility();
     }
 
