@@ -95,7 +95,7 @@ public class RecordingFragment extends Fragment {
         Context context = requireContext(); // ensure context is not null
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             SensorFusion.getInstance().startRecording(context);
-        }, 3000); // 1000ms = 3 sec
+        }, 3000); // 3000ms = 3 sec
 
         completeButton = view.findViewById(R.id.finishRecordingButton);
         moreInfoButton = view.findViewById(R.id.moreInfoButton);

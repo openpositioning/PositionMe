@@ -23,6 +23,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:hint="@string/building_name_hint"
+            android:textSize="16sp"
             android:inputType="text"
             android:padding="8dp"
             android:background="@android:drawable/editbox_background" />
@@ -102,4 +103,14 @@
             android:layout_weight="0.2"
             android:textColor="@android:color/black" />
     </LinearLayout>
+
+    <!-- 新增 Row 4: 显示当前误差和累计平均误差 -->
+    <TextView
+        android:id="@+id/errorTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Current Errors: Set first tag to calculate..."
+        android:textColor="@android:color/black"
+        android:textStyle="bold"
+        android:layout_marginTop="8dp" />
 </LinearLayout>

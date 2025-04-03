@@ -41,9 +41,17 @@
         android:name="com.openpositioning.PositionMe.presentation.fragment.UploadFragment"
         android:label="Upload"
         tools:layout="@layout/fragment_upload" />
+
     <fragment
         android:id="@+id/correctionFragment"
         android:name="com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment"
-        android:label="CorrectionFragment" />
+        android:label="CorrectionFragment"
+        tools:layout="@layout/fragment_correction">
+
+        <action
+            android:id="@+id/action_correctionFragment_to_recordingFragment"
+            app:destination="@id/recordingFragment" />
+    </fragment>
+
 
 </navigation>

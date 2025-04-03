@@ -140,7 +140,7 @@
 
     <string name="floor_level">Select Floor Level</string>
     <string name="indoor_state">Select Indoor State</string>
-    <string name="building_name_hint">Extra Text Tag (optional)</string>
+    <string name="building_name_hint">Tag Name, press right green button start</string>
     <string name="tag">Tag</string>
     <string name="start_passive_recording">Passive recording button\n</string>
 

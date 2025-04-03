@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -100,7 +101,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
     protected void onResume() {
         super.onResume();
 
-        new Handler().postDelayed(() -> {
+        new Handler(Looper.getMainLooper()).post(() -> {
             if (!isFinishing() && !isDestroyed()) {
                 boolean locationGranted = ContextCompat.checkSelfPermission(
                         this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
@@ -124,7 +125,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
                     allPermissionsObtained();
                 }
             }
-        }, 300);
+        });
 
         if (sensorFusion != null) {
             sensorFusion.resumeListening();

@@ -9,9 +9,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -29,14 +27,18 @@ import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.local.DataFileManager;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.CalibrationUtils;
 
 import org.json.JSONObject;
+
+import java.util.List;
 
 /**
  * CalibrationFragment that:
  *  - Allows starting/stopping passive recording of sensor data at 0.5s intervals.
  *  - Enables calibration tagging only if recording is active.
  *  - Counts and displays how many total data records have been stored.
+ *  - 计算并显示PDR、GNSS、WiFi三者的当前误差和累计平均误差
  */
 public class CalibrationFragment extends Fragment {
 
@@ -47,7 +49,8 @@ public class CalibrationFragment extends Fragment {
     private Spinner indoorStateSpinner;
     private EditText buildingNameEditText;
     private MaterialButton calibrationButton, startRecordingButton;
-    private TextView pointCountTextView;   // Displays how many data points have been collected
+    private TextView pointCountTextView;   // Displays total collected data points
+    private TextView errorTextView;        // 显示当前误差和累计平均误差
 
     // Data references
     private SensorFusion sensorFusion;
@@ -68,6 +71,12 @@ public class CalibrationFragment extends Fragment {
 
     // Count of how many total points have been collected (both passive and calibration)
     private int recordCount = 0;
+
+    // 统计误差相关
+    private double totalPdrError = 0;
+    private double totalGnssError = 0;
+    private double totalWifiError = 0;
+    private int calibrationCount = 0;
 
     public CalibrationFragment() {
         // Required empty constructor
@@ -104,6 +113,7 @@ public class CalibrationFragment extends Fragment {
         calibrationButton      = view.findViewById(R.id.toggleCalibrationButton);
         startRecordingButton   = view.findViewById(R.id.startRecordingButton);
         pointCountTextView     = view.findViewById(R.id.pointCountTextView);
+        errorTextView          = view.findViewById(R.id.errorTextView); // 新增的 TextView
 
         // Setup spinners
         setupFloorSpinner();
@@ -152,8 +162,6 @@ public class CalibrationFragment extends Fragment {
                 );
             }
         });
-
-
 
         // Show initial count = 0
         updatePointCountDisplay();
@@ -266,7 +274,8 @@ public class CalibrationFragment extends Fragment {
     }
 
     /**
-     * Confirm the marker location, store calibration record
+     * Confirm the marker location, store calibration record,
+     * 并计算当前误差与累计平均误差，然后更新 errorTextView 显示
      */
     private void confirmCalibration() {
         if (calibrationMarker == null) {
@@ -286,6 +295,60 @@ public class CalibrationFragment extends Fragment {
                 "Calibration confirmed at (" + lat + ", " + lng + ")",
                 Toast.LENGTH_SHORT).show();
 
+        // 获取传感器数据记录（包含GNSS、PDR、WiFi的位置数据）
+        JSONObject record = sensorFusion.getAllSensorData();
+        // GNSS位置
+        double gnssLat = record.optDouble("gnssLat", Double.NaN);
+        double gnssLon = record.optDouble("gnssLon", Double.NaN);
+        LatLng gnssPos = (!Double.isNaN(gnssLat) && !Double.isNaN(gnssLon)) ? new LatLng(gnssLat, gnssLon) : null;
+
+        // PDR位置（假设 pdrX 与 pdrY 表示经纬度，如有偏差请按实际转换）
+        double pdrX = record.optDouble("pdrX", Double.NaN);
+        double pdrY = record.optDouble("pdrY", Double.NaN);
+        LatLng pdrPos = (!Double.isNaN(pdrX) && !Double.isNaN(pdrY)) ? new LatLng(pdrX, pdrY) : null;
+
+        // WiFi位置
+        double wifiLat = record.optDouble("wifiLat", Double.NaN);
+        double wifiLon = record.optDouble("wifiLon", Double.NaN);
+        LatLng wifiPos = (!Double.isNaN(wifiLat) && !Double.isNaN(wifiLon)) ? new LatLng(wifiLat, wifiLon) : null;
+
+        // 使用新的工具类计算误差
+        CalibrationUtils.CalibrationErrors errors = CalibrationUtils.calculateCalibrationErrors(markerPos, gnssPos, pdrPos, wifiPos);
+        double currentGnssError = errors.gnssError;
+        double currentPdrError = errors.pdrError;
+        double currentWifiError = errors.wifiError;
+
+        // 更新累计误差与标记次数（仅对有效误差值累计）
+        if (currentGnssError >= 0) {
+            totalGnssError += currentGnssError;
+        }
+        if (currentPdrError >= 0) {
+            totalPdrError += currentPdrError;
+        }
+        if (currentWifiError >= 0) {
+            totalWifiError += currentWifiError;
+        }
+        calibrationCount++;
+
+        double avgGnssError = (calibrationCount > 0) ? totalGnssError / calibrationCount : 0;
+        double avgPdrError = (calibrationCount > 0) ? totalPdrError / calibrationCount : 0;
+        double avgWifiError = (calibrationCount > 0) ? totalWifiError / calibrationCount : 0;
+
+        Log.d(TAG, String.format("Calibration Error — PDR: %.2f m, GNSS: %.2f m, WiFi: %.2f m",
+                currentPdrError, currentGnssError, currentWifiError));
+        Log.d(TAG, String.format("Avg Error after %d tags — PDR: %.2f m, GNSS: %.2f m, WiFi: %.2f m",
+                calibrationCount, avgPdrError, avgGnssError, avgWifiError));
+
+        // 更新 TextView 显示当前误差与累计平均误差
+        if (errorTextView != null) {
+            String errorText = "Current Errors:\n" +
+                    String.format("PDR: %.2f m, GNSS: %.2f m, WiFi: %.2f m\n", currentPdrError, currentGnssError, currentWifiError) +
+                    "Average Errors:\n" +
+                    String.format("PDR: %.2f m, GNSS: %.2f m, WiFi: %.2f m", avgPdrError, avgGnssError, avgWifiError);
+            errorTextView.setText(errorText);
+        }
+
+        // 触发并保存标记数据记录
         onCalibrationTriggered(lat, lng, selectedIndoorState, selectedFloorLevel, buildingName);
         calibrationMarker.remove();
     }
@@ -326,8 +389,8 @@ public class CalibrationFragment extends Fragment {
     private void startPassiveRecording() {
         passiveRecordingActive = true;
         calibrationButton.setEnabled(true); // Now user can do tagging
-        // make the calibration button to be look like enabled
-        calibrationButton.setBackgroundColor(getResources().getColor(R. color. md_theme_primaryContainer_highContrast));
+        // make the calibration button to look enabled
+        calibrationButton.setBackgroundColor(getResources().getColor(R.color.md_theme_primaryContainer_highContrast));
 
         passiveRecordingHandler = new Handler();
         passiveRecordingTask = new Runnable() {
@@ -338,7 +401,7 @@ public class CalibrationFragment extends Fragment {
                         JSONObject record = sensorFusion.getAllSensorData();
                         record.put("isCalibration", false);
                         dataFileManager.addRecord(record);
-//                        recordCount++;    // don't count it into the total calibration tag
+                        // recordCount++;    // passive recording not counted into calibration tag total
                         updatePointCountDisplay();
                     }
                 } catch (Exception e) {
@@ -352,12 +415,22 @@ public class CalibrationFragment extends Fragment {
         passiveRecordingHandler.post(passiveRecordingTask);
     }
 
+    /**
+     * Stops the passive recording of sensor data.
+     *
+     * This method disables the calibration button, stops the passive recording
+     * handler, optionally flushes the data buffer, and displays a toast message
+     * indicating that recording has stopped and data has been saved.
+     */
     private void stopPassiveRecording() {
+        // Set the passive recording flag to false
         passiveRecordingActive = false;
-        calibrationButton.setEnabled(false); // User can't tag if not recording
-        calibrationButton.setBackgroundColor(getResources().getColor(R. color. md_theme_inverseOnSurface));
 
+        // Disable the calibration button as tagging is not allowed when not recording
+        calibrationButton.setEnabled(false);
+        calibrationButton.setBackgroundColor(getResources().getColor(R.color.md_theme_inverseOnSurface));
 
+        // Remove callbacks to stop the passive recording task if the handler and task are not null
         if (passiveRecordingHandler != null && passiveRecordingTask != null) {
             passiveRecordingHandler.removeCallbacks(passiveRecordingTask);
         }
@@ -365,9 +438,10 @@ public class CalibrationFragment extends Fragment {
         // Optionally flush or finalize data here
         if (dataFileManager != null) {
             dataFileManager.flushBuffer();
-            // dataFileManager.close(); // only if you want to close the file entirely
+            // dataFileManager.close(); // Uncomment if you want to close the file entirely
         }
 
+        // Show a toast message indicating that recording has stopped and data has been saved
         Toast.makeText(getContext(), "Recording stopped and data saved.", Toast.LENGTH_SHORT).show();
     }
 

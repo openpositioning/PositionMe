@@ -15,6 +15,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.NavController;
+import androidx.navigation.NavDirections;
+import androidx.navigation.fragment.NavHostFragment;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
@@ -70,6 +73,9 @@ public class CorrectionFragment extends Fragment {
         // Initialize map fragment
         SupportMapFragment supportMapFragment=(SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.map);
+
+        this.button = rootView.findViewById(R.id.correction_done);
+
 
         supportMapFragment.getMapAsync(new OnMapReadyCallback() {
             @Override
@@ -137,21 +143,20 @@ public class CorrectionFragment extends Fragment {
             }
         });
 
-        // Button to finalize corrections
-        this.button = view.findViewById(R.id.correction_done);
-        this.button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                // ************* CHANGED CODE HERE *************
-                // Before:
-                //   NavDirections action = CorrectionFragmentDirections.actionCorrectionFragmentToHomeFragment();
-                //   Navigation.findNavController(view).navigate(action);
-                //   ((AppCompatActivity)getActivity()).getSupportActionBar().show();
 
-                // Now, simply tell the Activity we are done:
-//                ((RecordingActivity) requireActivity()).finishFlow();
+
+
+        this.button.setOnClickListener(v -> {
+            NavController navController = NavHostFragment.findNavController(CorrectionFragment.this);
+            NavDirections action = CorrectionFragmentDirections.actionCorrectionFragmentToRecordingFragment();
+            navController.navigate(action);
+
+            AppCompatActivity activity = (AppCompatActivity) getActivity();
+            if (activity != null && activity.getSupportActionBar() != null) {
+                activity.getSupportActionBar().show();
             }
         });
+
     }
 
     public void setScalingRatio(float scalingRatio) {
