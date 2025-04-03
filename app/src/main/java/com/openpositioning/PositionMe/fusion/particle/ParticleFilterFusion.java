@@ -38,16 +38,16 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
     private static final int MEAS_SIZE = 2;         // Total measurement vector size
 
     // Process noise scale (PDR) update
-    private static final double[] dynamicPdrStds = {0.2, Math.PI/12};
-    private static final double[] staticPdrStds = {1.0, 1.0, 0};
-    private SimpleMatrix measGnssMat;
-    private SimpleMatrix measWifiMat;
-    private SimpleMatrix forwardModel;
+    private static final double[] dynamicPdrStds = {0.2, Math.PI/12}; // std of step length, std of heading angle
+    private static final double[] staticPdrStds = {1.0, 1.0, 0}; // std of x, y, heading angle (theta)
+    private SimpleMatrix measGnssMat; // GNSS Measurement covariance
+    private SimpleMatrix measWifiMat; // WiFi Measurement covariance
+    private SimpleMatrix forwardModel; // Forward Model Matrix
 
     // Adjustable GNSS noise based on accuracy
     private static final double BASE_GNSS_NOISE = 20.0;  // Base measurement noise for GNSS (in meters)
     private static final double BASE_WIFI_NOISE = 5.0;  // Measurement noise for WiFi (in meters)
-    private static final double UNCERT_INC_PS = 2.0;
+    private static final double UNCERT_INC_PS = 2.0; // Incremental uncertainty increase WiFi
 
     // Outlier detection parameters
     private static final double OUTLIER_THRESHOLD = 3.0; // Number of standard deviations for outlier detection
@@ -56,17 +56,17 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
     // The reference point for ENU coordinates
     private double[] referencePosition;        // [lat, lng, alt]
     private boolean referenceInitialized;      // Flag to track if reference is properly set
-    private boolean headingInitialized;
+    private boolean headingInitialized;        // Flag to track if particle heading was initialized
 
     // Particle parameters
     private List<Particle> particles;  // List of particles
-    private int numParticles;
+    private int numParticles; // Number of particles
 
     // Position history for outlier detection
-    private List<double[]> gnssPositionHistory;
-    private List<double[]> wifiPositionHistory;
-    private List<double[]> fusionPositionHistory;
-    private static final int HISTORY_SIZE = 5;
+    private List<double[]> gnssPositionHistory; // Position History of GNSS measurements
+    private List<double[]> wifiPositionHistory; // Position History of WiFi measurements
+    private List<double[]> fusionPositionHistory; // Position History of fusion measurements (outlier detection)
+    private static final int HISTORY_SIZE = 5; // Memory Length position history
 
     private static final int OUTPUT_HISTORY_SIZE = 7; // Slightly larger window for better statistics
 
@@ -104,9 +104,9 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
 
     private PdrProcessing.ElevationDirection elevationDirection;
     private WallDetectionManager wallDetectionManager; // Wall detection - currently disabled
-    private Context FragmentContext;
-    private int buildingType;
-    private int currentFloor;
+    private Context FragmentContext; // Context to load Indoor Map images - currently disabled
+    private int buildingType; // 1 - Nucleus, 2 - Library, 0 - None
+    private int currentFloor; // WiFi floor estimate
     private boolean buildingTypeInitialized;
 
     // Added to track the last valid output position
@@ -123,9 +123,9 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         this.wifiPositionHistory = new ArrayList<>();
         this.fusionPositionHistory = new ArrayList<>();
 
+        // Initialize reference position
         this.referencePosition = referencePosition.clone(); // Clone to prevent modification
         this.referenceInitialized = (referencePosition[0] != 0 || referencePosition[1] != 0);
-
         this.elevationDirection = PdrProcessing.ElevationDirection.NEUTRAL;
 
         // Initialize first position tracking
@@ -162,66 +162,83 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         measWifiMat = measWifiMat.scale(Math.pow(BASE_WIFI_NOISE, 2.0));
 
     }
+
+    /**
+     * Static Update function - called after a 1000 ms interval if PDR step is not detected,
+     * updates particles following the static noise model,
+     * reweighs and resamples particles
+     */
     @Override
     public void staticUpdate() {
+
         // Check if particles are initialized
         if (!particlesInitialized) {
             return;
         }
 
         long currentTime = System.currentTimeMillis();
-        // Check if we should do a static update
 
+        // Check static update needed
         Log.d(TAG, "Performing static update with timer");
 
         // Apply static update to particles
         moveParticlesStatic(staticPdrStds);
 
-                    // Reweight particles with available measurements
-                if (currentTime - lastUpdateTime > 1000) {
-                    if (currentGNSSpositionEMU != null) {
-                        gnssMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
-                        for (int i = 0; i < gnssPositionHistory.size(); i++) {
-                            double[] dummyPos = gnssPositionHistory.get(i);
-                            gnssMeasurementVector.set(0, 0, dummyPos[0]);
-                            gnssMeasurementVector.set(1, 0, dummyPos[1]);
+        // Reweight particles with available measurements
+        // Executed only if there was no PDR movement for 1000ms
+        if (currentTime - lastUpdateTime > 1000) {
+            // Gaussian Mixture Measurement Model
+            // For each GNSS Measurement Position - Calculate Covariance, add logProbability to logWeight of each particle
+            if (currentGNSSpositionEMU != null) {
+                gnssMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
+                for (int i = 0; i < gnssPositionHistory.size(); i++) {
+                    double[] dummyPos = gnssPositionHistory.get(i);
+                    gnssMeasurementVector.set(0, 0, dummyPos[0]);
+                    gnssMeasurementVector.set(1, 0, dummyPos[1]);
 
-                            // Increase estimate variance with time
-                            int j = gnssPositionHistory.size() - 1 - i;
-                            SimpleMatrix effMeasGnssMat = new SimpleMatrix(MEAS_SIZE, MEAS_SIZE);
-                            effMeasGnssMat.set(0, 0, Math.pow(BASE_GNSS_NOISE + j * UNCERT_INC_PS, 2));
-                            effMeasGnssMat.set(1, 1, Math.pow(BASE_GNSS_NOISE + j * UNCERT_INC_PS, 2));
+                    // Increase estimate variance with time
+                    int j = gnssPositionHistory.size() - 1 - i;
+                    SimpleMatrix effMeasGnssMat = new SimpleMatrix(MEAS_SIZE, MEAS_SIZE);
+                    effMeasGnssMat.set(0, 0, Math.pow(BASE_GNSS_NOISE + j * UNCERT_INC_PS, 2));
+                    effMeasGnssMat.set(1, 1, Math.pow(BASE_GNSS_NOISE + j * UNCERT_INC_PS, 2));
 
-                            reweightParticles(effMeasGnssMat, forwardModel, gnssMeasurementVector);
-                        }
-                    }
-
-                    if (currentWiFipositionEMU != null) {
-                        wifiMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
-                        for (int i = 0; i < wifiPositionHistory.size(); i++) {
-                            double[] dummyPos = wifiPositionHistory.get(i);
-                            wifiMeasurementVector.set(0, 0, dummyPos[0]);
-                            wifiMeasurementVector.set(1, 0, dummyPos[1]);
-
-                            // Increase estimate variance with time
-                            int j = wifiPositionHistory.size() - 1 - i;
-                            SimpleMatrix effMeasWifiMat = new SimpleMatrix(MEAS_SIZE, MEAS_SIZE);
-                            effMeasWifiMat.set(0, 0, Math.pow(BASE_WIFI_NOISE + j * UNCERT_INC_PS, 2));
-                            effMeasWifiMat.set(1, 1, Math.pow(BASE_WIFI_NOISE + j * UNCERT_INC_PS, 2));
-
-                            reweightParticles(effMeasWifiMat, forwardModel, wifiMeasurementVector);
-                        }
-                    }
+                    reweightParticles(effMeasGnssMat, forwardModel, gnssMeasurementVector);
                 }
+            }
+            // For each WiFi Measurement Position - Calculate Covariance, add logProbability to logWeight of each particle
+            if (currentWiFipositionEMU != null) {
+                wifiMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
+                for (int i = 0; i < wifiPositionHistory.size(); i++) {
+                    double[] dummyPos = wifiPositionHistory.get(i);
+                    wifiMeasurementVector.set(0, 0, dummyPos[0]);
+                    wifiMeasurementVector.set(1, 0, dummyPos[1]);
 
-                // Resample the particles
-            resampleParticles();
-                // Update last update time
-            lastUpdateTime = currentTime;
+                    // Increase estimate variance with time
+                    int j = wifiPositionHistory.size() - 1 - i;
+                    SimpleMatrix effMeasWifiMat = new SimpleMatrix(MEAS_SIZE, MEAS_SIZE);
+                    effMeasWifiMat.set(0, 0, Math.pow(BASE_WIFI_NOISE + j * UNCERT_INC_PS, 2));
+                    effMeasWifiMat.set(1, 1, Math.pow(BASE_WIFI_NOISE + j * UNCERT_INC_PS, 2));
 
+                    reweightParticles(effMeasWifiMat, forwardModel, wifiMeasurementVector);
+                }
+            }
+        }
+
+        // Resample the particles
+        resampleParticles();
+
+        // Store latest update time
+        lastUpdateTime = currentTime;
 
         }
 
+    /**
+     * PDR update processor, follows dynamic update model using the heading and step length
+     *
+     * @param eastMeters The east position in meters relative to the reference point
+     * @param northMeters The north position in meters relative to the reference point
+     * @param altitude The altitude in meters
+     */
     @Override
     public void processPdrUpdate(float eastMeters, float northMeters, float altitude) {
         long currentTime = System.currentTimeMillis();
@@ -230,7 +247,7 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         if (!referenceInitialized && hasInitialGnssPosition) {
             initializeReferencePosition();
         }
-        /*
+        /* // Wall Detection Initialization - Disabled due to very high computational expense
         if (!wallDetectorInitialized || ! referenceInitialized) {
             this.wallDetectionManager = new WallDetectionManager(referencePosition);
 
@@ -242,7 +259,7 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
             wallDetectorInitialized = true;
         } */
 
-        // If reference still not initialized, we can't process
+        // If reference still not initialized cannot process
         if (!referenceInitialized) {
             Log.w(TAG, "Skipping PDR update: reference position not initialized");
             return;
@@ -272,13 +289,11 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
             initializeHeading();
         }
 
-        //if (!hasInitialWifiPosition || buildingType == 0) {
-        //    // Update particle parameters
-        //    moveParticlesDynamic(stepLength, currentHeading, dynamicPdrStds, wallDetectionManager, buildingType, currentFloor);
-        //} else {
+        // Generate dynamic particle movement
         moveParticlesDynamic(stepLength, currentHeading, dynamicPdrStds, null, buildingType, currentFloor);
-        //}
 
+        // Gaussian Mixture Measurement Model
+        // For each GNSS Measurement Position - Calculate Covariance, add logProbability to logWeight of each particle
         if (currentGNSSpositionEMU != null) {
             gnssMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
             for (int i = 0; i < gnssPositionHistory.size(); i++) {
@@ -296,6 +311,7 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
             }
         }
 
+        // For each WiFi Measurement Position - Calculate Covariance, add logProbability to logWeight of each particle
         if (currentWiFipositionEMU != null) {
             wifiMeasurementVector = new SimpleMatrix(MEAS_SIZE, 1);
             for (int i = 0; i < wifiPositionHistory.size(); i++) {
@@ -303,7 +319,7 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
                 wifiMeasurementVector.set(0, 0, dummyPos[0]);
                 wifiMeasurementVector.set(1, 0, dummyPos[1]);
 
-                // Increase estimate variance with time
+                // Increase estimated variance with time
                 int j = wifiPositionHistory.size() - 1 - i;
                 SimpleMatrix effMeasWifiMat = new SimpleMatrix(MEAS_SIZE, MEAS_SIZE);
                 effMeasWifiMat.set(0, 0, Math.pow(BASE_WIFI_NOISE + j*UNCERT_INC_PS, 2));
@@ -322,6 +338,11 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         lastUpdateTime = currentTime;
     }
 
+    /**
+     *
+     * @param position The GNSS position (latitude, longitude)
+     * @param altitude The altitude in meters
+     */
     @Override
     public void processGnssUpdate(LatLng position, double altitude) {
         // Store first GNSS position for reference initialization if needed
@@ -395,10 +416,13 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
 
         // Update the moving average
         updateMovingAvgGnss(currentGNSSpositionEMU);
-
-        // Update last update time
     }
 
+    /**
+     *
+     * @param position The WiFi position in LatLng format (latitude, longitude)
+     * @param floor The floor index
+     */
     @Override
     public void processWifiUpdate(LatLng position, int floor) {
         if (!hasInitialGnssPosition) {
@@ -462,6 +486,10 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         // Update last update time
     }
 
+    /**
+     * Method to get the resulting fused position
+     * @return result - Fused Position in LatLng format
+     */
     public LatLng getFusedPosition() {
         if (!referenceInitialized) {
             if (hasInitialGnssPosition) {
@@ -520,7 +548,10 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         return result;
     }
 
-    // New method: Update position history for the fusion output
+    /**
+     * Update Fusion buffer with latest value
+     * @param fusionPosition
+     */
     private void updateMovingAvgFusion(double[] fusionPosition) {
         // Create a new array to avoid reference issues
         double[] positionCopy = new double[fusionPosition.length];
@@ -534,7 +565,9 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         }
     }
 
-    // New method: Get moving average of fusion positions
+    /**
+     * Get moving average of fusion positions within the buffer
+     */
     private double[] getMovingAvgFusion() {
         double size = (double) fusionPositionHistory.size();
         if (size == 0) return new double[]{0.0, 0.0, 0.0};
@@ -553,7 +586,11 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         };
     }
 
-    // New method: Estimate standard deviation of fusion positions
+    /**
+     * Estimate standard deviation of fusion positions
+     * @param movingAvg - mean position of N measurements
+     * @return
+     */
     private double[] fusionEstimateStd(double[] movingAvg) {
         if (fusionPositionHistory.size() < 2) {
             return new double[]{1.0, 1.0, 0.5}; // Default values if not enough history
@@ -585,7 +622,13 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         return new double[]{stdX, stdY, stdTheta};
     }
 
-    // New method: Outlier detection for fusion position output
+    /**
+     * Outlier detection for a position
+     * @param position
+     * @param stdVal
+     * @param movingAvg
+     * @return
+     */
     private boolean outlierDetectionOutput(double[] position, double[] stdVal, double[] movingAvg) {
         // Skip outlier detection if standard deviations are too small (prevents false positives)
         if (stdVal[0] < 0.5 || stdVal[1] < 0.5) {
@@ -604,6 +647,9 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         return isOutlierX || isOutlierY;
     }
 
+    /**
+     * Reset
+     */
     @Override
     public void reset() {
         // Stop the update timer
@@ -622,14 +668,26 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         Log.d(TAG, "Particle filter reset");
     }
 
-    // Simulate motion update of particles
+    /**
+     * Simulate motion update of particles
+     * @param stepLength
+     * @param headingChange
+     * @param pdrStds
+     * @param wallDetectionManager
+     * @param buildingType
+     * @param currentFloor
+     */
     public void moveParticlesDynamic(double stepLength, double headingChange, double[] pdrStds, WallDetectionManager wallDetectionManager, int buildingType, int currentFloor) {
         for (Particle particle : particles) {
             particle.updateDynamic(stepLength, headingChange, pdrStds, wallDetectionManager, buildingType, currentFloor);
         }
     }
 
-    // Add this method to your ParticleFilterFusion class
+
+    /**
+     * Static particle movement
+     * @param staticStds
+     */
     public void moveParticlesStatic(double[] staticStds) {
         Random rand = new Random();
 
@@ -682,7 +740,9 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         }
     }
 
-    // Resample particles based on their weights using systematic resampling
+    /**
+     * Resample particles based on their weights using systematic resampling
+     */
     public void resampleParticles() {
         List<Particle> newParticles = new ArrayList<>();
 
@@ -756,7 +816,10 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         Log.d(TAG, "Added jitter with scale: " + jitterScale + ", dispersion: " + dispersion);
     }
 
-    // Get the estimated position (weighted average of all particles)
+    /**
+     * Get the estimated position (weighted average of all particles)
+     * @return
+     */
     public double[] getEstimatedPosition() {
         double avgX=0, avgY=0, cosSum = 0, sinSum = 0;
 
@@ -773,7 +836,10 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         return new double[]{avgX, avgY, avgTheta};
     }
 
-    // Update position history for outlier detection
+    /**
+     * Update position history for outlier detection
+     * @param gnssEmuPosition
+     */
     private void updateMovingAvgGnss(double[] gnssEmuPosition) {
         gnssPositionHistory.add(gnssEmuPosition);
 
@@ -861,7 +927,9 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
         return isOutlierX || isOutlierY;
     }
 
-    // Calculate particle dispersion as a measure of uncertainty
+    /**
+     * Calculate particle dispersion as a measure of uncertainty
+     */
     private double calculateParticleDispersion() {
         double[] mean = getEstimatedPosition();
         double sumSquaredDistance = 0.0;
@@ -933,7 +1001,9 @@ public class ParticleFilterFusion extends IPositionFusionAlgorithm {
 
         particlesInitialized = true;
     }
-
+    /**
+     * Initializes the heading estimate for particles
+     */
     private void initializeHeading() {
         for (Particle particle : particles) {
             Random rand = new Random();

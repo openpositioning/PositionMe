@@ -248,7 +248,6 @@ public class TrajectoryMapFragment extends Fragment {
         sensorFusion = SensorFusion.getInstance();
         trajectoryFilter = new TrajectoryFilter();
         fusionPoints = new ArrayList<>();
-        //sensorFusion.passContext(requireContext());
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
@@ -302,13 +301,12 @@ public class TrajectoryMapFragment extends Fragment {
      * @param map
      */
 
-    // Add this method to update the fusion position on the map
     /**
      * Updates the fusion position on the map with the latest estimate.
      *
      * @param fusionLocation The latest fusion position estimate
      */
-    // 2. In the updateFusionPosition method, add style enhancements:
+    // In the updateFusionPosition method, add style enhancements:
     public void updateFusionPosition(@NonNull LatLng fusionLocation, float orientation) {
         if (gMap == null || fusionLocation == null) {
             Log.e("TrajectoryMapFragment", "Cannot update fusion: gMap or fusionLocation is null");
@@ -348,8 +346,10 @@ public class TrajectoryMapFragment extends Fragment {
             // Add new point to fusion path
             //List<LatLng> fusionPoints = new ArrayList<>(fusionPolyline.getPoints());
             fusionPoints.add(fusionLocation);
-            // TODO: Add filter for points
+
+            // Utilize Trajectory Filter to smooth the trajectory line
             List<LatLng> fusionPoints = trajectoryFilter.processData(fusionLocation, sensorFusion.getReferencePosition());
+
             fusionPolyline.setPoints(fusionPoints);
             Log.d("TrajectoryMapFragment", "Added point to fusion polyline, total points: " + fusionPoints.size());
         }
