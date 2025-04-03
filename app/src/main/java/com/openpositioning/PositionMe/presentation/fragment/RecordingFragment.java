@@ -18,6 +18,8 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
@@ -27,10 +29,14 @@ import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
+
+import org.locationtech.proj4j.ProjCoordinate;
+
+import java.util.Objects;
 
 
 /**
@@ -54,15 +60,17 @@ import com.google.android.gms.maps.model.LatLng;
  * @see SensorTypes Enumeration of available sensor types.
  *
  * @author Shu Gu
+ * @author Alexandros Zoupos (Adjusted for AddTag functionality)
+ * @author Kleitos Kountouris (Wifi points, fused trajectory plotting)
  */
 
 public class RecordingFragment extends Fragment {
 
     // UI elements
-    private MaterialButton completeButton, cancelButton;
+    private MaterialButton completeButton, cancelButton, addTagButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
-    private TextView elevation, distanceTravelled, gnssError;
+    private TextView elevation, distanceTravelled, gnssError, fusionError;
 
     // App settings
     private SharedPreferences settings;
@@ -134,14 +142,17 @@ public class RecordingFragment extends Fragment {
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
+        fusionError = view.findViewById(R.id.fusionError);
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
+        addTagButton = view.findViewById(R.id.addTagButton);
 
         // Hide or initialize default values
         gnssError.setVisibility(View.GONE);
+        fusionError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
@@ -181,6 +192,13 @@ public class RecordingFragment extends Fragment {
             dialog.show(); // Finally, show the dialog
         });
 
+        // Add tag button
+      addTagButton.setOnClickListener(v -> {
+        sensorFusion.addTag(); // Calls the method to store a GNSS tag
+        showToast("Tag added successfully!"); // Notify the user
+      });
+
+
         // The blinking effect for recIcon
         blinkingRecordingIcon();
 
@@ -218,9 +236,16 @@ public class RecordingFragment extends Fragment {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
+        // PDR movement difference
+        float[] pdrDelta = new float[] {pdrValues[0] - previousPosX, pdrValues[1] - previousPosY};
+        // Update previous
+        previousPosX = pdrValues[0];
+        previousPosY = pdrValues[1];
+
         // Distance
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
-                + Math.pow(pdrValues[1] - previousPosY, 2));
+        distance += (float) Math.sqrt(Math.pow(pdrDelta[0], 2)
+                + Math.pow(pdrDelta[1], 2));
+
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
         // Elevation
@@ -233,21 +258,26 @@ public class RecordingFragment extends Fragment {
         // For example:
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
+            LatLng oldLocation = trajectoryMapFragment.getPdrCurrentLocation(); // or store locally
+//            LatLng newLocation = sensorFusion.
+
             LatLng newLocation = UtilFunctions.calculateNewPos(
                     oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
+                    new float[]{ pdrDelta[0], pdrDelta[1] }
             );
 
+
             // Pass the location + orientation to the map
+            LatLng dummy = new LatLng(0,0);
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+                trajectoryMapFragment.updatePdrLocation(newLocation);
+
             }
         }
 
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+        float[] gnssIsOutlier = sensorFusion.getSensorValueMap().get(SensorTypes.GNSS_OUTLIER);
         if (gnss != null && trajectoryMapFragment != null) {
             // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
@@ -258,16 +288,63 @@ public class RecordingFragment extends Fragment {
                     gnssError.setVisibility(View.VISIBLE);
                     gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
                 }
-                trajectoryMapFragment.updateGNSS(gnssLocation);
+                trajectoryMapFragment.updateGNSS(gnssLocation, gnssIsOutlier);
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
+                fusionError.setVisibility(View.GONE);
             }
         }
 
-        // Update previous
-        previousPosX = pdrValues[0];
-        previousPosY = pdrValues[1];
+        // Get and plot wifi data
+        float[] wifi = sensorFusion.getSensorValueMap().get(SensorTypes.WIFI);
+        float[] wifiIsOutlier = sensorFusion.getSensorValueMap().get(SensorTypes.WIFI_OUTLIER);
+        if (wifi != null && trajectoryMapFragment != null) {
+            // If user toggles showing GNSS in the map, call e.g.
+            if (trajectoryMapFragment.isWifiEnabled()) {
+                LatLng wifiLocation = new LatLng(wifi[0], wifi[1]);
+                trajectoryMapFragment.updateWifi(wifiLocation, wifiIsOutlier);
+            } else {
+                trajectoryMapFragment.clearWifi();
+            }
+        }
+
+        // Get and plot fused data
+        float[] fused = sensorFusion.getSensorValueMap().get(SensorTypes.FUSED);
+        if (fused != null && trajectoryMapFragment != null) {
+            LatLng fusedLocation = new LatLng(fused[0], fused[1]);
+            LatLng currentFusedLocation = trajectoryMapFragment.getCurrentLocation();
+            if(currentFusedLocation != null
+                && (Double.compare(fused[0], currentFusedLocation.latitude) == 0
+                && Double.compare(fused[1], currentFusedLocation.longitude) == 0)) {
+                    LatLng currEstimate = trajectoryMapFragment.getEstimatedLocation();
+                    if (currEstimate == null) {
+                        currEstimate = currentFusedLocation;
+                    }
+                    ProjCoordinate estimatedLocation = sensorFusion.coordinateTransformer.
+                            applyDisplacementAndConvert(currEstimate.latitude, currEstimate.longitude,
+                                    pdrDelta[0], pdrDelta[1]);
+//                Log.i("RecordingFragment", "Calling interpolate fused location with" +
+//                        "")
+                    LatLng estimatedLatLng = new LatLng(estimatedLocation.y, estimatedLocation.x);
+                    trajectoryMapFragment.interpolateFusedLocation(estimatedLatLng);
+                }
+            trajectoryMapFragment.updateUserLocation(fusedLocation,
+                    (float) Math.toDegrees(sensorFusion. passOrientation()));
+
+            fusionError.setVisibility(View.VISIBLE);
+            fusionError.setText(String.format(getString(R.string.fusion_error) + "%.2fm",
+                    this.sensorFusion.getFusionError()));
+        }
+
+        // Get and use floor provided by WIFI
+        float floor = Objects.requireNonNull(
+                sensorFusion.getSensorValueMap().
+                        getOrDefault(SensorTypes.WIFI_FLOOR,new float[]{(float) -10.0}))[0];
+        if (floor != -10) {
+            trajectoryMapFragment.updateFloor(Math.round(floor));
+        }
+
     }
 
     /**
@@ -295,4 +372,11 @@ public class RecordingFragment extends Fragment {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
     }
+
+  /**
+   * Utility function to show a toast message.
+   */
+  private void showToast(String message) {
+    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+  }
 }

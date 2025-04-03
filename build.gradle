@@ -1,12 +1,16 @@
 // Top-level build file
 buildscript {
+    ext {
+        agp_version = '8.7.1'
+        ejml_version = '0.41'
+    }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
         // NOTE: Only classpath deps (plugins) go here
-        classpath 'com.android.tools.build:gradle:8.8.0'
+        classpath "com.android.tools.build:gradle:$agp_version"
         classpath 'com.google.gms:google-services:4.4.2'
         def nav_version = "2.5.3"
         classpath "androidx.navigation:navigation-safe-args-gradle-plugin:$nav_version"

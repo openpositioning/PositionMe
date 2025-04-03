@@ -14,10 +14,10 @@
             android:id="@+id/sensorMeasurementList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            app:layout_constraintBottom_toTopOf="@id/dividerLine"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toTopOf="@id/dividerLine">
+            app:layout_constraintTop_toTopOf="parent">
 
             <androidx.cardview.widget.CardView
                 android:id="@+id/accelerometerView"
@@ -506,7 +506,7 @@
                     android:layout_height="match_parent">
 
                     <TextView
-                        android:id="@+id/pdrLabel"
+                        android:id="@+id/wifiPosition"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -518,29 +518,28 @@
                         app:layout_constraintTop_toTopOf="parent" />
 
                     <TextView
-                        android:id="@+id/pdrX"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="32dp"
-                        android:text="@string/x"
-                        android:textColor="@color/LightYellow"
-                        android:textStyle="bold"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintEnd_toStartOf="@+id/pdrY"
-                        app:layout_constraintTop_toTopOf="parent" />
-
+                      android:id="@+id/pdrX"
+                      android:textStyle="bold"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_marginEnd="60dp"
+                      android:text="@string/lati"
+                      android:textColor="@color/LightYellow"
+                      app:layout_constraintBottom_toBottomOf="parent"
+                      app:layout_constraintEnd_toStartOf="@+id/pdrY"
+                      app:layout_constraintTop_toTopOf="parent"
+                      app:layout_constraintVertical_bias="0.454" />
                     <TextView
-                        android:id="@+id/pdrY"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="32dp"
-                        android:text="@string/y"
-                        android:textColor="@color/LightYellow"
-                        android:textStyle="bold"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintTop_toTopOf="parent" />
-
+                      android:id="@+id/pdrY"
+                      android:textStyle="bold"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_marginEnd="32dp"
+                      android:text="@string/longi"
+                      android:textColor="@color/LightYellow"
+                      app:layout_constraintBottom_toBottomOf="parent"
+                      app:layout_constraintEnd_toEndOf="parent"
+                      app:layout_constraintTop_toTopOf="parent" />
                 </androidx.constraintlayout.widget.ConstraintLayout>
             </androidx.cardview.widget.CardView>
 

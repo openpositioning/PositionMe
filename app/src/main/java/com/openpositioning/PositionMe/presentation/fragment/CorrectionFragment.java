@@ -18,7 +18,7 @@ import androidx.fragment.app.Fragment;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -63,7 +63,7 @@ public class CorrectionFragment extends Fragment {
         View rootView = inflater.inflate(R.layout.fragment_correction, container, false);
 
         // Send trajectory data to the cloud
-        sensorFusion.sendTrajectoryToCloud();
+        sensorFusion.stop();
 
         //Obtain start position
         float[] startPosition = sensorFusion.getGNSSLatitude(true);

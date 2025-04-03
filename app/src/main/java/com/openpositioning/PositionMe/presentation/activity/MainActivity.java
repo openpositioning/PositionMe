@@ -3,7 +3,6 @@ import android.Manifest;
 import android.content.SharedPreferences;
 
 import android.content.pm.PackageManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.Menu;
@@ -31,7 +30,7 @@ import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.fragment.HomeFragment;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import com.openpositioning.PositionMe.sensors.Observer;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.utils.PermissionManager;
 
 
@@ -200,7 +199,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }, 300); // Delay ensures activity is fully visible before requesting permissions
 
         if (sensorFusion != null) {
-            sensorFusion.resumeListening();
+            sensorFusion.start();
         }
     }
 

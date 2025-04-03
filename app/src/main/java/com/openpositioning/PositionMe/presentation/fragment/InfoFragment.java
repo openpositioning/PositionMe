@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.viewitems.SensorInfoViewHolder;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorInfo;
 import com.openpositioning.PositionMe.presentation.viewitems.SensorInfoListAdapter;
 
@@ -24,7 +24,7 @@ import java.util.List;
  * collection devices with relevant information about their capabilities.
  *
  * @see HomeFragment the previous fragment in the nav graph.
- * @see com.openpositioning.PositionMe.sensors.SensorFusion the class containing all sensors.
+ * @see SensorFusion the class containing all sensors.
  * @see SensorInfo the class used for each sensor instance's metadata
  *
  * @author Mate Stodulka
