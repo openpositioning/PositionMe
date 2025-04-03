@@ -61,6 +61,7 @@ import com.google.android.gms.maps.model.LatLng;
  *
  * @author Shu Gu
  * @author Michal Wiercigroch
+ * @author Kalliopi Vakali
  */
 
 public class RecordingFragment extends Fragment implements PositionListener {
@@ -148,7 +149,7 @@ public class RecordingFragment extends Fragment implements PositionListener {
         gnssError = view.findViewById(R.id.gnssError);
 
 
-
+        //UI buttons and icons view
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
         recIcon = view.findViewById(R.id.redDot);
@@ -371,6 +372,14 @@ public class RecordingFragment extends Fragment implements PositionListener {
 
     @Override
     public void onPositionUpdate(PositionListener.UpdateType updateType, LatLng position) {
+
+        /**
+         *
+         *Triggers a toast message when WIFI_ERROR is triggered from SensorFusion
+         *
+         */
+
+
         if (updateType == PositionListener.UpdateType.WIFI_ERROR) {
             Log.e("RecordingFragment", "WiFi positioning failed while RecordingFragment is active.");
             Context context = getContext();
@@ -379,7 +388,7 @@ public class RecordingFragment extends Fragment implements PositionListener {
             } else {
                 Log.e("RecordingFragment", "Context is null - cannot show Toast");
             }
-           // return; // early exit after handling
+
         }
 
 
