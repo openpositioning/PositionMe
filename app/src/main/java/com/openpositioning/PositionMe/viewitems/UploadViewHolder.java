@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.viewitems;
 
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -26,6 +27,7 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
     ImageButton uploadButton;
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
+    public Button deletebutton;
 
     /**
      * {@inheritDoc}
@@ -45,6 +47,7 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
         this.uploadButton = itemView.findViewById(R.id.uploadTrajectoryButton);
 
         this.uploadButton.setOnClickListener(this);
+        this.deletebutton = itemView.findViewById(R.id.deletebutton);
     }
 
     /**
@@ -53,6 +56,6 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
      */
     @Override
     public void onClick(View view) {
-        listenerReference.get().onPositionClicked(getAdapterPosition());
+        listenerReference.get().onDownloadClicked(getAdapterPosition());
     }
 }

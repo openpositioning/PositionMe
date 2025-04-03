@@ -14,4 +14,9 @@
         <item name="colorControlNormal">@color/white</item>
         <!-- Customize your theme here. -->
     </style>
+  <!-- Base application theme. -->
+    <style name="Base.Theme.Cloud" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your dark theme here. -->
+        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+    </style>
 </resources>

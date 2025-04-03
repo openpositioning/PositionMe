@@ -5,8 +5,15 @@ plugins {
     id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('secrets.properties')
+if (localPropertiesFile.exists()) {
+    localProperties.load(new FileInputStream(localPropertiesFile))
+}
+
 android {
     compileSdk 33
+    namespace "com.openpositioning.PositionMe"
 
     defaultConfig {
         applicationId "com.openpositioning.PositionMe"
@@ -16,6 +23,27 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Read keys from the secrets.properties (with fallback defaults if needed)
+        def mapsApiKey = localProperties['MAPS_API_KEY'] ?: "DEFAULT_MAPS_API_KEY"
+        def openPositioningApiKey = localProperties['OPENPOSITIONING_API_KEY'] ?: "DEFAULT_OPENPOSITIONING_API_KEY"
+        def openPositioningMasterKey = localProperties['OPENPOSITIONING_MASTER_KEY'] ?: "DEFAULT_OPENPOSITIONING_MASTER_KEY"
+
+        // (Optional) If you also need these keys in your Java/Kotlin code:
+        buildConfigField "String", "MAPS_API_KEY", "\"${mapsApiKey}\""
+        buildConfigField "String", "OPENPOSITIONING_API_KEY", "\"${openPositioningApiKey}\""
+        buildConfigField "String", "OPENPOSITIONING_MASTER_KEY", "\"${openPositioningMasterKey}\""
+
+        // Pass the keys into the manifest using placeholders
+        manifestPlaceholders = [
+                googleMapsKey          : mapsApiKey,
+                openPositioningApiKey  : openPositioningApiKey,
+                openPositioningMasterKey: openPositioningMasterKey
+        ]
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     buildTypes {
@@ -24,11 +52,14 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
 }
+
+
 
 dependencies {
 
@@ -37,6 +68,7 @@ dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.preference:preference:1.2.0'
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    implementation 'com.android.volley:volley:1.2.1'
     testImplementation 'junit:junit:4.+'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'

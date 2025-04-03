@@ -2,7 +2,6 @@ package com.openpositioning.PositionMe.fragments;
 
 import android.app.AlertDialog;
 import android.app.DownloadManager;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
@@ -10,6 +9,7 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -23,12 +23,14 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.viewitems.DownloadClickListener;
 import com.openpositioning.PositionMe.viewitems.TrajDownloadListAdapter;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -38,13 +40,11 @@ import java.util.Map;
 /**
  * A simple {@link Fragment} subclass. The files fragments displays a list of trajectories already
  * uploaded with some metadata, and enabled re-downloading them to the device's local storage.
- *
+ * @author Mate Stodulka
  * @see HomeFragment the connected fragment in the nav graph.
  * @see UploadFragment sub-menu for uploading recordings that failed during recording.
  * @see com.openpositioning.PositionMe.Traj the data structure sent and received.
  * @see com.openpositioning.PositionMe.ServerCommunications the class handling communication with the server.
- *
- * @author Mate Stodulka
  */
 public class FilesFragment extends Fragment implements Observer {
 
@@ -92,7 +92,6 @@ public class FilesFragment extends Fragment implements Observer {
      * {@inheritDoc}
      * Initialises UI elements, including a navigation card to the {@link UploadFragment} and a
      * RecyclerView displaying online trajectories.
-     *
      * @see com.openpositioning.PositionMe.viewitems.TrajDownloadViewHolder the View Holder for the list.
      * @see TrajDownloadListAdapter the list adapter for displaying the recycler view.
      * @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view the elements in the list.
@@ -122,16 +121,15 @@ public class FilesFragment extends Fragment implements Observer {
     /**
      * {@inheritDoc}
      * Called by {@link ServerCommunications} when the response to the HTTP info request is received.
-     *
-     * @param singletonStringList   a single string wrapped in an object array containing the http
-     *                              response from the server.
+     * @param singletonStringList a single string wrapped in an object array containing the http
+     * response from the server.
      */
     @Override
     public void update(Object[] singletonStringList) {
         // Cast input as a string
         String infoString = (String) singletonStringList[0];
         // Check if the string is non-null and non-empty before processing
-        if(infoString != null && !infoString.isEmpty()) {
+        if (infoString != null && !infoString.isEmpty()) {
             // Process string
             List<Map<String, String>> entryList = processInfoResponse(infoString);
             // Start a handler to be able to modify UI elements
@@ -149,9 +147,8 @@ public class FilesFragment extends Fragment implements Observer {
      * Parses the info response string from the HTTP communication.
      * Process the data using the Json library and return the matching Java data structure as a
      * List of Maps of \<String, String\>. Throws a JSONException if the data is not valid.
-     *
-     * @param infoString    HTTP info request response as a single string
-     * @return              List of Maps of String to String containing ID, owner ID, and date.
+     * @param infoString HTTP info request response as a single string
+     * @return List of Maps of String to String containing ID, owner ID, and date.
      */
     private List<Map<String, String>> processInfoResponse(String infoString) {
         // Initialise empty list
@@ -183,32 +180,50 @@ public class FilesFragment extends Fragment implements Observer {
      * RecyclerView. Initialises a {@link TrajDownloadListAdapter} with the input array and setting
      * up a listener so that trajectories are downloaded when clicked, and a pop-up message is
      * displayed to notify the user.
-     *
      * @param entryList List of Maps of String to String containing metadata about the uploaded
-     *                  trajectories (ID, owner ID, date).
+     * trajectories (ID, owner ID, date).
      */
     private void updateView(List<Map<String, String>> entryList) {
         // Initialise RecyclerView with Manager and Adapter
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
-        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
-            // Download the appropriate trajectory instance
-            serverCommunications.downloadTrajectory(position);
-            // Display a pop-up message to direct the user to the download location if necessary.
-            new AlertDialog.Builder(getContext())
-                    .setTitle("File downloaded")
-                    .setMessage("Trajectory downloaded to local storage")
-                    .setPositiveButton(R.string.ok, null)
-                    .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
+
+        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, new DownloadClickListener() {
+            @Override
+            public void onDownloadClicked(int position) {
+                String trajectoryId = entryList.get(position).get("id");
+                serverCommunications.downloadTrajectory(position, trajectoryId);
+                new AlertDialog.Builder(getContext())
+                        .setTitle("File downloaded")
+                        .setMessage("Trajectory downloaded to local storage")
+                        .setPositiveButton(R.string.ok, null)
+                        .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
                             startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-                        }
-                    })
-                    .setIcon(R.drawable.ic_baseline_download_24)
-                    .show();
+                        })
+                        .setIcon(R.drawable.ic_baseline_download_24)
+                        .show();
+            }
+
+            @Override
+            public void onPlaybackClicked(int position) {
+                // Here, we get the trajectory ID or related info from responseItems
+                String trajectoryId = entryList.get(position).get("id");
+                String fileName = "received_trajectory" + trajectoryId + ".txt";
+                File file = new File(getContext().getFilesDir(), fileName);
+                if (file.exists()) {
+                    // Then we use Navigation to jump to PlaybackFragment, passing this ID
+                    FilesFragmentDirections.ActionFilesFragmentToPlaybackFragment action =
+                            FilesFragmentDirections.actionFilesFragmentToPlaybackFragment(trajectoryId);
+                    Navigation.findNavController(requireView()).navigate(action);
+                } else {
+                    String tip = trajectoryId + " is downloading, please try again when downloaded.";
+                    Toast.makeText(getContext(), tip, Toast.LENGTH_LONG).show();
+                    serverCommunications.downloadTrajectory(position, trajectoryId);
+                }
+            }
         });
+
         filesList.setAdapter(listAdapter);
     }
 }

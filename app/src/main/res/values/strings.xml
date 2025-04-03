@@ -109,5 +109,19 @@
     <!-- Building defaults -->
     <string name="building_def_title">Default building assumptions</string>
     <string name="floor_height">Floor height in meters</string>
+    <string name="color">Color</string>
+    <string name="gnssSwitch">GNSS</string>
+    <string name="floor_down_button">Floor Down button</string>
+    <string name="floor_up_button">Floor Up button</string>
+    <string name="choose_map">Choose Map</string>
+    <string name="auto_floor">Auto Floor</string>
+    <string name="gnss_error">GNSS error:</string>
+    <string name="satellite">Satellite</string>
+    <string name="normal">Normal</string>
+    <string name="hybrid">Hybrid</string>
+    <string name="delete_button">Delete</string>
+    <string name="Playback">Playback</string>
+    <string name="wifi_positioning">wifi_positioning</string>
+    <string name="floor_image">floor_image</string>
 
 </resources>

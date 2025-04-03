@@ -2,10 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.openpositioning.PositionMe">
 
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+
     <uses-feature android:name="android.hardware.sensor.stepdetector" android:required="true"/>
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true"/>
     <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="true"/>
-    <!-- Wake  -->
+    <!-- Wake -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Activity -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
@@ -28,9 +30,22 @@
         android:roundIcon="@mipmap/ic_launcher_icon_map_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Cloud">
+
+        <!-- Google Maps API key injected via manifest placeholder -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="${MAPS_API_KEY}"/>
+            android:value="${googleMapsKey}" />
+
+        <!-- OpenPositioning API key -->
+        <meta-data
+            android:name="com.openpositioning.api.API_KEY"
+            android:value="${openPositioningApiKey}" />
+
+        <!-- OpenPositioning Master key -->
+        <meta-data
+            android:name="com.openpositioning.master.API_KEY"
+            android:value="${openPositioningMasterKey}" />
+
         <activity
             android:name="com.openpositioning.PositionMe.MainActivity"
             android:exported="true"
@@ -38,10 +53,10 @@
             android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
     </application>
 
 </manifest>
