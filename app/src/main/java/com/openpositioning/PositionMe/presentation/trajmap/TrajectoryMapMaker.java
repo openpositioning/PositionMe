@@ -28,13 +28,13 @@ public class TrajectoryMapMaker {
             List<Marker> medicalRoomMarkers,
             Context context
     ) {
-        // 先移除已有标记，避免重复
+        // Remove existing markers first to avoid duplicates
         for (Marker marker : medicalRoomMarkers) {
             marker.remove();
         }
         medicalRoomMarkers.clear();
 
-        // 根据楼层和建筑名决定在哪些位置放置MedicalRoom
+        // Determine the placement of MedicalRoom based on floor and building name.
         List<LatLng> medicalRoomLocations = null;
         if (currentFloor == 0 && Objects.equals(currentBuilding, "nucleus")) {
             medicalRoomLocations = Arrays.asList(
@@ -58,7 +58,7 @@ public class TrajectoryMapMaker {
             );
         }
 
-        // 不为null，则依次添加Marker
+        // If not null, add Markers sequentially.
         if (medicalRoomLocations != null) {
             for (LatLng location : medicalRoomLocations) {
                 Marker marker = gMap.addMarker(new MarkerOptions()
@@ -138,7 +138,7 @@ public class TrajectoryMapMaker {
         }
     }
 
-    // 示例：更新 Lift 标记
+    // Example: Update Lift marker
     public static void updateLiftMarkers(
             GoogleMap gMap,
             int currentFloor,
@@ -204,7 +204,7 @@ public class TrajectoryMapMaker {
         }
     }
 
-    // 示例：更新 Accessible Toilet 标记
+    // Example: Update Accessible Toilet marker
     public static void updateAccessibleToiletMarkers(
             GoogleMap gMap,
             int currentFloor,
@@ -258,7 +258,7 @@ public class TrajectoryMapMaker {
         }
     }
 
-    // 示例：更新 Drinking Water 标记
+    // Example: Update Drinking Water marker
     public static void updateDrinkingWaterMarkers(
             GoogleMap gMap,
             int currentFloor,
@@ -311,7 +311,7 @@ public class TrajectoryMapMaker {
         }
     }
 
-    // 示例：更新 Toilet 标记
+    // Example: Update Toilet marker
     public static void updateToiletMarkers(
             GoogleMap gMap,
             int currentFloor,
@@ -367,7 +367,7 @@ public class TrajectoryMapMaker {
         }
     }
 
-    // 示例：更新 Accessible Route 标记
+    // Example: Update Accessible Route marker
     public static void updateAccessibleRouteMarkers(
             GoogleMap gMap,
             int currentFloor,

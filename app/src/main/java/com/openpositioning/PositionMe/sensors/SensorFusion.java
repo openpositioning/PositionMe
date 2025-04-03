@@ -71,7 +71,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Store the last event timestamps for each sensor type
     private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
     private HashMap<Integer, Integer> eventCounts = new HashMap<>();
-    // 回调接口，用于楼层变化通知
+    // Callback interface for floor change notifications
     private Consumer<Integer> wifiFloorChangedListener;
 
     long maxReportLatencyNs = 0;  // Disable batching to deliver events immediately
@@ -157,8 +157,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
-    private long lastOpUpdateTime = 0; // 存储 WiFi / GNSS 最后一次更新的时间戳
-    private long lastGnssUpdateTime = 0; // 记录上次 GNSS 更新时间
+    private long lastOpUpdateTime = 0; // Stores the timestamp of the last WiFi/GNSS update
+    private long lastGnssUpdateTime = 0; // Record the last GNSS update time
     private LatLng wifiPos;
 
 
@@ -193,11 +193,11 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private final int WIFI_POS_SMOOTH_WINDOW = 5;
     private final List<LatLng> wifiPosWindow = new ArrayList<>();
-    // 中值滤波窗口
+    // Median filter window
     private final int FUSED_POS_MEDIAN_WINDOW_SIZE = 5;
     private final List<LatLng> fusedPosWindow = new ArrayList<>();
 
-    // 指数平滑状态
+    // Exponential smoothing state
     private LatLng fusedPosSmoothed = null;
     private final double FUSED_SMOOTH_ALPHA = 0.7;
 
@@ -285,7 +285,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(this);
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
-        // 尝试获取最新 GNSS 坐标并更新 ECEF 参考坐标
+        // Attempt to get the latest GNSS coordinates and update the ECEF reference coordinates
         float[] latestLatLon = getGNSSLatitude(true);
         if (latestLatLon[0] != 0.0 || latestLatLon[1] != 0.0) {
             this.refLat = latestLatLon[0];
@@ -473,7 +473,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     if (extendedKalmanFilter != null) {
                         extendedKalmanFilter.predict(stepLen, deltaHeading);
-                        // --- PF 辅助 EKF 逻辑（仅在室内场景启用）---
+                        // --- PF-assisted EKF logic (enabled only in indoor scenes) ---
                         if (particleFilter != null) {
                             particleFilter.predict(stepLen, deltaHeading);
 //                            if (pendingWifiPosition != null &&
@@ -526,7 +526,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     } else {
                         Log.d("SensorFusion", "GNSS Location is null, skipping GNSS correction.");
                     }
-                    // 获取当前 WiFi 指纹数据
+                    // Get the current WiFi fingerprint data
                     List<Wifi> currentWifiList = getWifiList();  // 最新扫描结果
                     double avgRssi = Double.NaN;
                     if (currentWifiList != null && !currentWifiList.isEmpty()) {
@@ -554,7 +554,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     updateFusion(wifiResponse, gnssLocation, avgRssi);
 
 
-                    // 调用 EKF 的 updateGNSS 以确保 GNSS 数据被用于修正
+                    // Call EKF's updateGNSS to ensure GNSS data is used for correction
                     if (gnssLocation != null && extendedKalmanFilter != null) {
                         double lat = gnssLocation.getLatitude();
                         double lon = gnssLocation.getLongitude();
@@ -562,7 +562,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, alt, refLat, refLon, refAlt);
                        // extendedKalmanFilter.updateGNSS(enuCoords[0], enuCoords[1], enuCoords[2], 1.0);
                     }
-                    // 从融合算法中获取修正后的定位结果
+                    // Get the corrected positioning result from the fusion algorithm
                     if (extendedKalmanFilter != null) {
                         LatLng rawFusedPos = extendedKalmanFilter.getEstimatedPosition(refLat, refLon, refAlt);
                         LatLng smoothFusedPos = applyDoubleSmoothedFusedPos(rawFusedPos);
@@ -609,7 +609,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 double lon = wifiResponse.getDouble("lon");
                 double[] enuCoords = CoordinateTransform.geodeticToEnu(lat, lon, getElevation(), refLat, refLon, refAlt);
 
-                // 添加冗余更新检查：如果在 3 秒内且 Wi-Fi 坐标变化不足 1 米，则跳过更新
+                // Add a redundant update check: Skip the update if it's within 3 seconds and the Wi-Fi coordinates haven't changed by more than 1 meter
                 long currentWifiTime = SystemClock.uptimeMillis();
                 if (lastWifiENU != null) {
                     double dx = enuCoords[0] - lastWifiENU[0];
@@ -617,7 +617,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     double distance = Math.sqrt(dx * dx + dy * dy);
                     if ((currentWifiTime - lastWifiUpdateTime < 7000) && (distance < 2.0)) {
                         Log.d("SensorFusion", "WiFi coordinate redundant: distance = " + distance + " m, skipping update.");
-                        return;  // 跳过此次更新
+                        return;  // Skip this update
                     }
                 }
 
@@ -626,7 +626,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                 Log.d("SensorFusion", "Using WiFi for EKF update: East=" + enuCoords[0] + ", North=" + enuCoords[1]);
                 long fusionTime = System.currentTimeMillis();
-                Log.d("SensorFusion", "WiFi定位结果使用时间: " + fusionTime + "，相对延迟: " + (fusionTime - wifiReceivedTime) + " ms");
+                Log.d("SensorFusion", "WiFiPositioning result usage time: " + fusionTime + "，相对延迟: " + (fusionTime - wifiReceivedTime) + " ms");
 
                 if (extendedKalmanFilter != null) {
                     double timeSinceLastUpdate = SystemClock.uptimeMillis() - lastOpUpdateTime;
@@ -658,16 +658,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     private double calculatePenaltyFactor(double rssi, double elapsedTime) {
         double baseFactor;
 
-        // WiFi 误差自适应
+        // WiFi error self-adaptation
         if (rssi > -50) {
-            baseFactor = 3;  // 强 WiFi 信号时减少噪声影响
+            baseFactor = 3; // Reduce noise influence for strong WiFi signals
         } else if (rssi > -75) {
-            baseFactor = 4;  // 普通 WiFi 信号，不做调整
+            baseFactor = 4; // Normal WiFi signal, no adjustment
         } else {
-            baseFactor = 5;  // 弱 WiFi 信号时增加噪声影响
+            baseFactor = 5; // Increase noise influence for weak WiFi signals
         }
 
-        // 时间误差动态调整（0.1/秒，最多调整到 4.0）
+        // Dynamic time error adjustment (0.1/second, up to a maximum of 4.0)
         double timePenalty = 1.0 + Math.min(elapsedTime / 10000.0, 3.0);
 
         return baseFactor * timePenalty;
@@ -778,14 +778,14 @@ public class SensorFusion implements SensorEventListener, Observer {
                     pendingWifiPosition = wifiLocation;
                     wifiFloor = floor;
                     wifiPositionTimestamp = SystemClock.uptimeMillis();
-                    wifiReceivedTime = System.currentTimeMillis();  // 用于日志分析
+                    wifiReceivedTime = System.currentTimeMillis();  // For log analysis
                     if (trajectoryMapFragment != null && wifiLocation != null) {
                         trajectoryMapFragment.updateWifiLocation(wifiLocation, 0f);  // 0f as placeholder heading
                     }
                     Log.d("SensorFusion", "WiFi store success, store time: " + wifiReceivedTime);
                     long responseTime = System.currentTimeMillis();
                     long delay = responseTime - requestStartTime;
-                    Log.d("SensorFusion", "WiFi请求总延迟: " + delay + "ms");
+                    Log.d("SensorFusion", "WiFi total request latency: " + delay + "ms");
                     if (wifiFloorChangedListener != null) {
                         wifiFloorChangedListener.accept(floor);
                     }
@@ -804,7 +804,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     private LatLng applyDoubleSmoothedFusedPos(LatLng rawFusedPos) {
-        // 第一步：中值滤波（抗抖动）
+        // Step 1: Median filtering (anti-jitter)
         fusedPosWindow.add(rawFusedPos);
         if (fusedPosWindow.size() > FUSED_POS_MEDIAN_WINDOW_SIZE) {
             fusedPosWindow.remove(0);
@@ -816,7 +816,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         double medianLon = lonList.get(lonList.size() / 2);
         LatLng medianFusedPos = new LatLng(medianLat, medianLon);
 
-        // 第二步：指数平滑（流畅跟随）
+        // Step 2: Exponential smoothing (smooth following)
         if (fusedPosSmoothed == null) {
             fusedPosSmoothed = medianFusedPos;
         } else {
@@ -1171,13 +1171,13 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.filter_coefficient = FILTER_COEFFICIENT;
         }
 
-        // 先检查 orientation 是否为空
+        // First check if orientation is null
         if (orientation == null || orientation.length < 1) {
             Log.e("SensorFusion", "Orientation array is null or uninitialized!");
             return;
         }
 
-        // 获取 GNSS 初始经纬度 using system lastKnownLocation first, then fallback to polling
+        // Get GNSS initial latitude and longitude, using system lastKnownLocation first, then fallback to polling
         float[] initLatLon = new float[2];
         LocationManager locationManager = (LocationManager) appContext.getSystemService(Context.LOCATION_SERVICE);
 
@@ -1229,7 +1229,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 refLat = initLatLon[0];
                 refLon = initLatLon[1];
                 refAlt = initAltitude;
-                // 转换 GNSS 经纬度到 ECEF 坐标
+                // Convert GNSS latitude and longitude to ECEF coordinates
                 ecefRefCoords = CoordinateTransform.geodeticToEcef(initLatLon[0], initLatLon[1], initAltitude);
                 if (ecefRefCoords == null || ecefRefCoords.length < 3) {
                     Log.e("SensorFusion", "Failed to compute ECEF reference coordinates! Using default.");
@@ -1244,7 +1244,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         Log.d("SensorFusion", "startRef initialized with ECEF reference: " +
                 "X=" + startRef[0] + ", Y=" + startRef[1] + ", Z=" + startRef[2]);
 
-        // 进行地理坐标转换
+        // Perform geographic coordinate transformation
         double[] enuCoords = CoordinateTransform.geodeticToEnu(
                 initLatLon[0], initLatLon[1], initAltitude,
                 refLat, refLon, refAlt
@@ -1254,17 +1254,17 @@ public class SensorFusion implements SensorEventListener, Observer {
         pdrProcessing.setInitialPosition((float) enuCoords[0], (float) enuCoords[1]);
 
 
-        // 获取当前设备方向
+        // Get current device orientation
         double initialTheta = wrapToPi(this.orientation[0]);
 
         Log.d("SensorFusion", "First EKF Init: Lat=" + initLatLon[0] + ", Lon=" + initLatLon[1]);
         Log.d("SensorFusion", "Initial Theta=" + initialTheta);
 
-        // 初始化 EKF
+        // Initialize EKF
         extendedKalmanFilter = new EKF(enuCoords[0], enuCoords[1], 0.0, initialTheta);
         Log.d("SensorFusion", "EKF initialized successfully: " +
                 "East=" + enuCoords[0] + ", North=" + enuCoords[1] + ", Theta=" + initialTheta);
-        // 初始化 PF
+        // Initialize PF
         particleFilter = new ParticleFilter(100, refLat, refLon, refAlt);
         particleFilter.initializeParticles(enuCoords[0], enuCoords[1], initialTheta, 1.0, 1.0, 0.1);
     }
@@ -1274,7 +1274,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private LatLng getSmoothedWifiPosition(LatLng newWifiPos) {
         wifiPosWindow.add(newWifiPos);
         if (wifiPosWindow.size() > WIFI_POS_SMOOTH_WINDOW) {
-            wifiPosWindow.remove(0); // 保持固定窗口大小
+            wifiPosWindow.remove(0); // Maintain a fixed window size
         }
 
         List<Double> latList = wifiPosWindow.stream().map(p -> p.latitude).sorted().collect(Collectors.toList());
