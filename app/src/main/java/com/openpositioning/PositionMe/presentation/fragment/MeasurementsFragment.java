@@ -1,7 +1,9 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.os.BatteryManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -20,6 +22,10 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.presentation.viewitems.WifiListAdapter;
+
+import android.content.Context;
+import android.os.BatteryManager;
+
 
 import java.util.List;
 import java.util.Map;
@@ -44,12 +50,29 @@ public class MeasurementsFragment extends Fragment {
 
     // UI Handler
     private Handler refreshDataHandler;
+
+    private TextView batteryLevelText;
+    private long startTime;
+    private int startBattery;
+    private BatteryManager batteryManager;
+
+
     // UI elements
     private ConstraintLayout sensorMeasurementList;
     private RecyclerView wifiListView;
     // List of string resource IDs
     private int[] prefaces;
     private int[] gnssPrefaces;
+
+    private int startBatteryLevel;
+    private long startTimestamp;
+
+    private float lastUsageRate = 0f;
+
+    private TextView batteryUsageText;
+
+
+
 
 
     /**
@@ -69,14 +92,12 @@ public class MeasurementsFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Get sensor fusion instance
         sensorFusion = SensorFusion.getInstance();
-        // Initialise string prefaces for display
-        prefaces =  new int[]{R.string.x, R.string.y, R.string.z};
-        gnssPrefaces =  new int[]{R.string.lati, R.string.longi};
+        prefaces = new int[]{R.string.x, R.string.y, R.string.z};
+        gnssPrefaces = new int[]{R.string.lati, R.string.longi};
 
-        // Create new handler to refresh the UI.
         this.refreshDataHandler = new Handler();
+        batteryManager = (BatteryManager) requireContext().getSystemService(Context.BATTERY_SERVICE);
     }
 
     /**
@@ -97,22 +118,46 @@ public class MeasurementsFragment extends Fragment {
     /**
      * {@inheritDoc}
      * Pauses the data refreshing when the fragment is not in focus.
+     * Code by Guilherme Evaluate battery performance added function
      */
     @Override
     public void onPause() {
         refreshDataHandler.removeCallbacks(refreshTableTask);
+
+        if (batteryManager != null) {
+            int endBatteryLevel = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+            long elapsedTime = System.currentTimeMillis() - startTimestamp; // ms
+
+            float hours = elapsedTime / (1000f * 60f * 60f);
+            if (hours > 0) {
+                float used = startBatteryLevel - endBatteryLevel;
+                lastUsageRate = used / hours;
+            }
+        }
+
         super.onPause();
     }
+
+
 
     /**
      * {@inheritDoc}
      * Restarts the data refresh when the fragment returns to focus.
+     * Code by Guilherme Evaluate battery performance added function
      */
     @Override
     public void onResume() {
-        refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
         super.onResume();
+        refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
+
+        batteryManager = (BatteryManager) requireContext().getSystemService(getContext().BATTERY_SERVICE);
+        if (batteryManager != null) {
+            startBatteryLevel = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+        }
+        startTimestamp = System.currentTimeMillis();
     }
+
+
 
     /**
      * {@inheritDoc}
@@ -125,6 +170,10 @@ public class MeasurementsFragment extends Fragment {
         sensorMeasurementList = (ConstraintLayout) getView().findViewById(R.id.sensorMeasurementList);
         wifiListView = (RecyclerView) getView().findViewById(R.id.wifiList);
         wifiListView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        batteryLevelText = view.findViewById(R.id.batteryValue);
+        batteryUsageText = view.findViewById(R.id.batteryUsageRate);
+
+
     }
 
     /**
@@ -170,8 +219,21 @@ public class MeasurementsFragment extends Fragment {
             if(wifiObjects != null) {
                 wifiListView.setAdapter(new WifiListAdapter(getActivity(), wifiObjects));
             }
+
+            //Code By Guilherme Evaluate battery performance
+            android.os.BatteryManager bm = (android.os.BatteryManager)
+                    requireContext().getSystemService(android.content.Context.BATTERY_SERVICE);
+
+            if (batteryManager != null && batteryLevelText != null) {
+                int level = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+                batteryLevelText.setText("Battery: " + level + " %");
+            }
+
+
             // Restart the data updater task in REFRESH_TIME milliseconds.
             refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
+
         }
+
     };
 }

@@ -23,6 +23,7 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
+import com.openpositioning.PositionMe.utils.UtilFunctions;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -56,6 +57,9 @@ import java.util.stream.Stream;
  * @author Michal Dvorak
  * @author Mate Stodulka
  * @author Virginia Cangelosi
+ *
+ * ====== revisions
+ * @Author Marco Bancalari-Ruiz
  */
 public class SensorFusion implements SensorEventListener, Observer {
 
@@ -79,6 +83,12 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final float ALPHA = 0.8f;
     // String for creating WiFi fingerprint JSO N object
     private static final String WIFI_FINGERPRINT= "wf";
+
+    // State persistence variables
+    private static double[] state = new double[2]; // [x_meters, y_meters]
+    private static double[][] covariance = {{100, 0}, {0, 100}};
+    private static Location initialLocation = null;
+    private static boolean isInitialized = false;
     //endregion
 
     //region Instance variables
@@ -88,6 +98,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // Settings
     private SharedPreferences settings;
+
 
     // Movement sensor instances
     private MovementSensor accelerometerSensor;
@@ -109,14 +120,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Server communication class for sending data
     private ServerCommunications serverCommunications;
     // Trajectory object containing all data
-    private Traj.Trajectory.Builder trajectory;
+    public Traj.Trajectory.Builder trajectory;
 
     // Settings
-    private boolean saveRecording;
+    public boolean saveRecording;
     private float filter_coefficient;
     // Variables to help with timed events
     private long absoluteStartTime;
-    private long bootTime;
+    public long bootTime;
     long lastStepTime = 0;
     // Timer object for scheduling data recording
     private Timer storeTrajectoryTimer;
@@ -146,6 +157,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
+
+    private int floor = 0; // Store the detected floor level
 
 
     // Over time accelerometer magnitude values since last step
@@ -191,6 +204,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.R = new float[9];
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
+        this.floor = 0;
     }
 
 
@@ -467,45 +481,70 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     @Override
     public void update(Object[] wifiList) {
-        // Save newest wifi values to local variable
+        // Save newest WiFi values to local variable
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
-        if(this.saveRecording) {
+        if (this.saveRecording) {
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
+                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
+
             for (Wifi data : this.wifiList) {
                 wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
                         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                        .setMac(data.getBssid()).setRssi(data.getLevel()));
+                        .setMac(data.getBssid())
+                        .setRssi(data.getLevel()));
             }
-            // Adding WiFi data to Trajectory
-            this.trajectory.addWifiData(wifiData);
+
+            //  Correctly add WiFi data to Trajectory
+            this.trajectory.addWifiData(wifiData.build());  // <-- Fix: Ensure `.build()` is called
         }
+
         createWifiPositioningRequest();
     }
+
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      *
      */
-    private void createWifiPositioningRequest(){
-        // Try catch block to catch any errors and prevent app crashing
+    private void createWifiPositioningRequest() {
         try {
-            // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
-            for (Wifi data : this.wifiList){
+            JSONObject wifiAccessPoints = new JSONObject();
+            for (Wifi data : this.wifiList) {
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
-            // Creating POST Request
-            JSONObject wifiFingerPrint = new JSONObject();
-            wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint);
+
+            JSONObject wifiFingerprint = new JSONObject();
+            wifiFingerprint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+
+            // Send the WiFi fingerprint request with a callback
+            this.wiFiPositioning.request(wifiFingerprint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    updateWifiPosition(wifiLocation, floor);
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.e("SensorFusion", "WiFi positioning failed: " + message);
+                }
+            });
         } catch (JSONException e) {
-            // Catching error while making JSON object, to prevent crashes
-            // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors","Error creating json object"+e.toString());
+            Log.e("jsonErrors", "Error creating WiFi fingerprint JSON: " + e.toString());
         }
     }
+
+    private void updateWifiPosition(LatLng wifiLocation, int floor) {
+        Log.d("SensorFusion", "WiFi Positioning Successful: " + wifiLocation.toString() + ", Floor: " + floor);
+        this.latitude = (float) wifiLocation.latitude;
+        this.longitude = (float) wifiLocation.longitude;
+        this.floor = floor;
+
+        // No need to add WiFi data again here
+    }
+
+
+
     // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
@@ -554,6 +593,243 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public int getWifiFloor(){
         return this.wiFiPositioning.getFloor();
+    }
+
+
+    // Code by Marco Bancalari-Ruiz (Assisted by Jamie Arnott)
+    /**
+     * Method to compute the fused position using GNSS, WiFi and PDR data using an
+     * Extended Kalman-Filter
+     *
+     * @param wifiPos
+     * @param pdrPos
+     * @param prevPdrPos
+     * @param gnssPos
+     * @return LatLng representing fused coordinate
+     */
+    public LatLng EKF_replay(LatLng wifiPos, LatLng pdrPos, LatLng prevPdrPos, LatLng gnssPos) {
+        if (pdrPos == null || prevPdrPos == null) return null;
+
+        initialLocation = new Location("");
+        initialLocation.setLatitude(wifiPos != null ? wifiPos.latitude : gnssPos.latitude);
+        initialLocation.setLongitude(wifiPos != null ? wifiPos.longitude : gnssPos.longitude);
+
+        // Convert delta movement from degrees to meters
+        double deltaX = UtilFunctions.degreesToMetersLng(
+                pdrPos.longitude - prevPdrPos.longitude, initialLocation.getLatitude()
+        );
+        double deltaY = UtilFunctions.degreesToMetersLat(
+                pdrPos.latitude - prevPdrPos.latitude
+        );
+
+        // Convert WiFi and GNSS positions to meters from origin (if they exist)
+        double[] wifiMeters = null;
+        if (wifiPos != null) {
+            wifiMeters = UtilFunctions.latLngToMeters(wifiPos, initialLocation);
+        }
+
+        double[] gnssMeters = null;
+        if (gnssPos != null) {
+            gnssMeters = UtilFunctions.latLngToMeters(gnssPos, initialLocation);
+        }
+
+        // Initialize filter on first valid reading
+        if (!isInitialized && wifiMeters != null) {
+            state[0] = wifiMeters[0];
+            state[1] = wifiMeters[1];
+            isInitialized = true;
+            return wifiPos;
+        } else if (!isInitialized && gnssMeters != null) {
+            state[0] = gnssMeters[0];
+            state[1] = gnssMeters[1];
+            isInitialized = true;
+            return gnssPos;
+        }
+
+
+
+        if (!isInitialized) return null;
+
+        // === Prediction step (PDR) ===
+        double[][] F = {{1, 0}, {0, 1}};
+        double[][] Q = {{0.8, 0}, {0, 0.8}}; // PDR noise in meters
+        state[0] += deltaX;
+        state[1] += deltaY;
+        covariance = matrixAdd(matrixMultiply(F, matrixMultiply(covariance, transpose(F))), Q);
+
+        // === Update step (WiFi) ===
+        if (wifiMeters != null) {
+            double[][] R_wifi = {{20.0, 0}, {0, 20.0}}; // WiFi = only accurate indoors
+            if (isOutlier(wifiMeters, new double[]{state[0], state[1]}, R_wifi)) {
+                Log.d("EKF", "WiFi fingerprint outlier detected");
+                //Increase noise covariance to reduce influence of outlier
+                R_wifi = new double[][]{{50.0, 0}, {0, 50.0}};
+
+                // Option 2: Skip update entirely
+                // continue; // Uncomment this line to skip the update
+            } else {
+                R_wifi = new double[][]{{20.0, 0}, {0, 20.0}};
+            }
+            performMeasurementUpdate(wifiMeters, R_wifi);
+        }
+
+        // === Update step (GNSS) ===
+        if (gnssMeters != null) {
+            double[][] R_gnss = {{50.0, 0}, {0, 50.0}}; // GNSS = less accurate indoors
+            if (isOutlier(gnssMeters, new double[]{state[0], state[1]}, R_gnss)) {
+                Log.d("EKF", "GNSS outlier detected");
+                //Increase noise covariance to reduce influence of outlier
+                R_gnss = new double[][]{{100.0, 0}, {0, 100.0}};
+
+                // Option 2: Skip update entirely
+                //continue;  // Uncomment this line to skip the update
+            } else {
+                R_gnss = new double[][]{{50.0, 0}, {0, 50.0}};
+            }
+            performMeasurementUpdate(gnssMeters, R_gnss);
+        }
+
+        // === Periodic Correction Logic ===
+
+        // Use WiFi or GNSS as external anchors for correction
+        double[] anchorPosition = wifiPos != null ? wifiMeters : gnssMeters;
+        if (anchorPosition != null) {
+            double deviation = Math.sqrt(
+                    Math.pow(state[0] - anchorPosition[0], 2) + Math.pow(state[1] - anchorPosition[1], 2)
+            );
+
+            // Apply correction if deviation exceeds threshold
+            double correctionThreshold = 2; // Threshold in meters
+            if (deviation > correctionThreshold) {
+                Log.d("EKF", "Applying periodic correction using external anchor.");
+                performMeasurementUpdate(anchorPosition, new double[][]{{5.0, 0}, {0, 5.0}});
+            }
+        }
+
+        // Convert back to lat/lng
+        double[] latLng = UtilFunctions.metersToLatLng(state[0], state[1], initialLocation);
+        return new LatLng(latLng[0], latLng[1]);
+    }
+
+    // Code by Marco Bancalari-Ruiz
+    /**
+     * Method to perform a measurement update for next step
+     * Helper method for EKF_replay
+     * @param measurement
+     * @param R
+     */
+    private void performMeasurementUpdate(double[] measurement, double[][] R) {
+        double maxDisplacement = 5.0;
+        // Convert state (meters) to current latitude
+        double currentLat = initialLocation.getLatitude() + (state[1] / 6371e3) * (180 / Math.PI);
+        double[][] H = computeJacobian(currentLat);//{{1, 0}, {0, 1}};//
+
+        double[] predicted = {state[0], state[1]};
+        double[] innovation = {
+                measurement[0] - predicted[0],
+                measurement[1] - predicted[1]
+        };
+
+        double innovationMagnitude = Math.sqrt(innovation[0] * innovation[0] + innovation[1] * innovation[1]);
+
+        // Limit innovation if it exceeds maxDisplacement
+        if (innovationMagnitude > maxDisplacement) {
+            Log.d("EKF", "Max displacement surpassed, scaling innovation");
+            double scalingFactor = maxDisplacement / innovationMagnitude;
+            innovation[0] *= scalingFactor;
+            innovation[1] *= scalingFactor;
+        }
+
+
+        double[][] S = matrixAdd(matrixMultiply(H, matrixMultiply(covariance, transpose(H))), R);
+        double[][] K = matrixMultiply(matrixMultiply(covariance, transpose(H)), inverse(S));
+        double[] update = matrixVectorMultiply(K, innovation);
+
+        state[0] += update[0];
+        state[1] += update[1];
+
+        double[][] I = {{1, 0}, {0, 1}};
+        covariance = matrixMultiply(matrixSubtract(I, matrixMultiply(K, H)), covariance);
+    }
+
+    private boolean isOutlier(double[] measurement, double[] predicted, double[][] R) {
+        double[][] H = {{1, 0}, {0, 1}};
+        double[][] S = matrixAdd(matrixMultiply(H, matrixMultiply(covariance, transpose(H))), R);
+        double[] innovation = {measurement[0] - predicted[0], measurement[1] - predicted[1]};
+        double[][] S_inv = inverse(S);
+        double mahalanobis = innovation[0] * (S_inv[0][0] * innovation[0] + S_inv[0][1] * innovation[1]) +
+                innovation[1] * (S_inv[1][0] * innovation[0] + S_inv[1][1] * innovation[1]);
+        return Math.sqrt(mahalanobis) > 3.0;
+    }
+
+
+
+    /**
+     *
+     * Mathematical operations required for EKF
+     * Written by: Marco Bancalari-Ruiz
+     */
+    private static double[] metersToLatLng(double dx, double dy) {
+        double R = 6371e3; // Earth radius
+        double lat = initialLocation.getLatitude() + (dy/R) * (180/Math.PI);
+        double lng = initialLocation.getLongitude() + (dx/(R * Math.cos(Math.toRadians(initialLocation.getLatitude())))) * (180/Math.PI);
+        return new double[]{lat, lng};
+    }
+
+    private static double[][] computeJacobian(double currentLatDegrees) {
+        double R = 6371e3; // Earth radius in meters
+        double cosLat = Math.cos(Math.toRadians(currentLatDegrees));
+        return new double[][] {
+                // Derivatives of [latitude, longitude] w.r.t. [x (east), y (north)] in meters
+                {0, 180.0 / (Math.PI * R)},          // dLat/dx, dLat/dy
+                {180.0 / (Math.PI * R * cosLat), 0}  // dLon/dx, dLon/dy
+        };
+    }
+
+    // Matrix operations
+    private static double[][] transpose(double[][] m) {
+        return new double[][]{{m[0][0], m[1][0]}, {m[0][1], m[1][1]}};
+    }
+
+    private static double[][] matrixMultiply(double[][] a, double[][] b) {
+        return new double[][]{
+                {a[0][0]*b[0][0] + a[0][1]*b[1][0], a[0][0]*b[0][1] + a[0][1]*b[1][1]},
+                {a[1][0]*b[0][0] + a[1][1]*b[1][0], a[1][0]*b[0][1] + a[1][1]*b[1][1]}
+        };
+    }
+
+    private static double[] matrixVectorMultiply(double[][] m, double[] v) {
+        return new double[]{
+                m[0][0]*v[0] + m[0][1]*v[1],
+                m[1][0]*v[0] + m[1][1]*v[1]
+        };
+    }
+
+    private static double[][] inverse(double[][] m) {
+        double det = m[0][0]*m[1][1] - m[0][1]*m[1][0];
+        if (Math.abs(det) < 1e-10) {
+            Log.e("EKF", "Matrix is singular, cannot invert.");
+            return new double[][]{{1, 0}, {0, 1}}; // fallback identity
+        }
+
+        return new double[][]{
+                {m[1][1]/det, -m[0][1]/det},
+                {-m[1][0]/det, m[0][0]/det}
+        };
+    }
+
+    private static double[][] matrixAdd(double[][] a, double[][] b) {
+        return new double[][]{
+                {a[0][0]+b[0][0], a[0][1]+b[0][1]},
+                {a[1][0]+b[1][0], a[1][1]+b[1][1]}
+        };
+    }
+
+    private static double[][] matrixSubtract(double[][] a, double[][] b) {
+        return new double[][]{
+                {a[0][0]-b[0][0], a[0][1]-b[0][1]},
+                {a[1][0]-b[1][0], a[1][1]-b[1][1]}
+        };
     }
 
     /**
@@ -634,6 +910,10 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param start set true to get the initial location
      * @return longitude and latitude data in a float[2].
      */
+
+
+
+
     public float[] getGNSSLatitude(boolean start) {
         float [] latLong = new float[2];
         if(!start) {
@@ -685,6 +965,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         return orientation[0];
     }
 
+
+    // Code by Guilherme: List to store recorded tags.
+    private List<com.openpositioning.PositionMe.utils.Tag> tagList = new ArrayList<>();
+
     /**
      * Return most recent sensor readings.
      *
@@ -732,6 +1016,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         sensorInfoList.add(this.magnetometerSensor.sensorInfo);
         return sensorInfoList;
     }
+
+
 
     /**
      * Registers the caller observer to receive updates from the server instance.
@@ -899,6 +1185,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         if(this.saveRecording) {
             this.saveRecording = false;
             storeTrajectoryTimer.cancel();
+
         }
         if(wakeLock.isHeld()) {
             this.wakeLock.release();
@@ -946,6 +1233,157 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
      * destroyed in {@link SensorFusion#stopRecording()}.
      */
+
+
+    //Code By Guilherme: Finds the GNSS start location to be used as the initial location
+    private LatLng getStartLocationFromGNSS() {
+        float[] start = getGNSSLatitude(true); // returns startLocation when 'start' is true
+        if (start != null && start.length >= 2) {
+            return new LatLng(start[0], start[1]);
+        }
+        return new LatLng(0, 0); // fallback if not available
+    }
+
+/**
+ * Code By Guilherme
+ */
+
+    // New inner class to store a fused sample with its timestamp.
+    public static class FusedSample {
+        public LatLng fusedPosition;
+        public long timestamp;
+        public FusedSample(LatLng fusedPosition, long timestamp) {
+            this.fusedPosition = fusedPosition;
+            this.timestamp = timestamp;
+        }
+    }
+    // Helper method to get the reference point for conversion.
+// We use the first GNSS sample (when available) from the trajectory builder.
+// If not, we use the first PDR sample by converting it using our own conversion.
+    private LatLng getReferencePoint() {
+        if (trajectory.getGnssDataCount() > 0) {
+            Traj.GNSS_Sample firstGnss = trajectory.getGnssData(0);
+            return new LatLng(firstGnss.getLatitude(), firstGnss.getLongitude());
+        } else if (trajectory.getPdrDataCount() > 0) {
+            // If no GNSS, we assume the very first PDR sample can be used as reference.
+            // Note: This assumes that PDR data is stored in a coordinate system relative to the reference.
+            Traj.Pdr_Sample firstPdr = trajectory.getPdrData(0);
+            // Here you might need to convert the (x,y) to lat/lon using an approximate method.
+            // For simplicity, we assume the first PDR sample already corresponds to the start location.
+            return new LatLng(startLocation[0], startLocation[1]);
+        }
+        return new LatLng(0, 0); // Fallback.
+    }
+
+    // Update batch-optimized (fused) trajectory by fusing PDR, GNSS, and WiFi data.
+    // This method fuses data at each PDR time-step.
+    public List<FusedSample> updateBatchOptimizedPosition() {
+        List<FusedSample> fusedTrajectory = new ArrayList<>();
+
+        // Fixed weights for each sensor type.
+        double weightPDR = 0.2;
+        double weightGNSS = 0.5;
+        double weightWiFi = 0.3;
+
+        // Use the reference point from GNSS (if available), otherwise from PDR.
+        LatLng reference = getReferencePoint();
+
+        // Iterate over all PDR samples (assumed to be the most frequent).
+        for (int i = 0; i < trajectory.getPdrDataCount(); i++) {
+            Traj.Pdr_Sample pdrSample = trajectory.getPdrData(i);
+            long t = pdrSample.getRelativeTimestamp();
+            // For PDR, assume the x,y are already in local coordinates (meters).
+            double pdrX = pdrSample.getX();
+            double pdrY = pdrSample.getY();
+
+            // Find the closest GNSS sample.
+            double bestGnssDiff = Double.MAX_VALUE;
+            Traj.GNSS_Sample bestGnss = null;
+            for (int j = 0; j < trajectory.getGnssDataCount(); j++) {
+                long tGnss = trajectory.getGnssData(j).getRelativeTimestamp();
+                double diff = Math.abs(t - tGnss);
+                if (diff < bestGnssDiff) {
+                    bestGnssDiff = diff;
+                    bestGnss = trajectory.getGnssData(j);
+                }
+            }
+
+            // Find the closest WiFi sample.
+            double bestWifiDiff = Double.MAX_VALUE;
+            // Assuming your trajectory builder has a method getWifiDataCount()
+            // (if not, skip WiFi fusion).
+            Traj.WiFi_Sample bestWifi = null;
+            if (trajectory.getWifiDataCount() > 0) {
+                for (int j = 0; j < trajectory.getWifiDataCount(); j++) {
+                    long tWifi = trajectory.getWifiData(j).getRelativeTimestamp();
+                    double diff = Math.abs(t - tWifi);
+                    if (diff < bestWifiDiff) {
+                        bestWifiDiff = diff;
+                        bestWifi = trajectory.getWifiData(j);
+                    }
+                }
+            }
+
+            // Convert GNSS and WiFi data to local coordinates using UtilFunctions.
+            double[] gnssLocal = null;
+            if (bestGnss != null && bestGnssDiff < 1000) { // within 1 second
+                LatLng gnssLatLng = new LatLng(bestGnss.getLatitude(), bestGnss.getLongitude());
+                // Using the UtilFunctions method that converts lat/lon to North-East.
+                gnssLocal = UtilFunctions.convertLatLngToNorthEast(gnssLatLng, reference);
+            }
+
+            double[] wifiLocal = null;
+            if (bestWifi != null && bestWifiDiff < 1000) { // within 1 second
+                // Here, you need to have a method to get a representative LatLng from a WiFi sample.
+                // For this example, assume that bestWifi provides a valid lat/lon (e.g., via an API response).
+                // If not, skip WiFi fusion.
+                LatLng wifiLatLng = new LatLng(0, 0); // Replace with actual retrieval.
+                wifiLocal = UtilFunctions.convertLatLngToNorthEast(wifiLatLng, reference);
+            }
+
+            // For PDR, we already have (pdrX, pdrY) in local coordinates.
+            double fusedX = weightPDR * pdrX;
+            double fusedY = weightPDR * pdrY;
+            double totalWeight = weightPDR;
+            if (gnssLocal != null) {
+                fusedX += weightGNSS * gnssLocal[0];
+                fusedY += weightGNSS * gnssLocal[1];
+                totalWeight += weightGNSS;
+            }
+            if (wifiLocal != null) {
+                fusedX += weightWiFi * wifiLocal[0];
+                fusedY += weightWiFi * wifiLocal[1];
+                totalWeight += weightWiFi;
+            }
+            fusedX /= totalWeight;
+            fusedY /= totalWeight;
+
+            // Convert fused local coordinate back to WGS84 using UtilFunctions.
+            // Assume UtilFunctions has a method localToLatLng that takes local coordinate and a reference.
+            LatLng fusedLatLng = UtilFunctions.localToLatLng(new double[]{fusedX, fusedY}, reference);
+
+            fusedTrajectory.add(new FusedSample(fusedLatLng, t));
+        }
+
+        return fusedTrajectory;
+    }
+
+
+    /**
+     * Adds a new tag to the list.
+     */
+    public void addTag(com.openpositioning.PositionMe.utils.Tag tag) {
+        tagList.add(tag);
+    }
+
+    /**
+     * Returns the list of recorded tags.
+     */
+    public List<com.openpositioning.PositionMe.utils.Tag> getTagList() {
+        return tagList;
+    }
+
+
     private class storeDataInTrajectory extends TimerTask {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
@@ -968,10 +1406,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setMagY(magneticField[1])
                             .setMagZ(magneticField[2])
                             .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-//                    .addGnssData(Traj.GNSS_Sample.newBuilder()
-//                            .setLatitude(latitude)
-//                            .setLongitude(longitude)
-//                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
+                    .addGnssData(Traj.GNSS_Sample.newBuilder()
+                            .setLatitude(latitude)
+                            .setLongitude(longitude)
+                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
+
             ;
 
             // Divide timer with a counter for storing data every 1 second
@@ -1006,9 +1445,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                 counter++;
             }
 
+
+
         }
     }
+}
+
 
     //endregion
 
-}
+

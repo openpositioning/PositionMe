@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -49,6 +50,10 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
  * @author Mate Stodulka
+ *
+ *
+ * ===== Revisions
+ * @Author Jamie Arnott
  */
 
 public class TrajectoryMapFragment extends Fragment {
@@ -58,7 +63,6 @@ public class TrajectoryMapFragment extends Fragment {
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
     private Polyline polyline; // Polyline representing user's movement path
-    private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
 
     private Polyline gnssPolyline; // Polyline for GNSS path
@@ -80,6 +84,10 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+
+    // Code by Guilherme
+    private int currentColor = Color.RED;
+    private PolylineOptions polylineOptions;
 
 
     public TrajectoryMapFragment() {
@@ -106,7 +114,7 @@ public class TrajectoryMapFragment extends Fragment {
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
-        switchColorButton = view.findViewById(R.id.lineColorButton);
+
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -151,20 +159,7 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // Color switch
-        switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
-                if (isRed) {
-                    switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
-                    isRed = false;
-                } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
-                    isRed = true;
-                }
-            }
-        });
+
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
@@ -191,6 +186,71 @@ public class TrajectoryMapFragment extends Fragment {
         });
     }
 
+    // code by Guilherme: adds tag marker to map
+    public void addTagMarker(LatLng location, String label) {
+        if (gMap != null) {
+            Bitmap tagIcon = UtilFunctions.createTagMarkerIcon(getContext(), label);
+            int markerDiameter = UtilFunctions.dpToPx(getContext(), 40);
+            float textWidth = UtilFunctions.getTextWidth(getContext(), label);
+            int padding = UtilFunctions.dpToPx(getContext(), 8);
+            int totalWidth = markerDiameter + padding + (int)textWidth + 2 * UtilFunctions.dpToPx(getContext(), 4);
+            float anchorX = (float) markerDiameter / totalWidth;
+            MarkerOptions options = new MarkerOptions()
+                    .position(location)
+                    .icon(BitmapDescriptorFactory.fromBitmap(tagIcon))
+                    .anchor(anchorX, 0.5f);
+            gMap.addMarker(options);
+        }
+    }
+
+    // code by Jamie Arnott
+    /**
+     * Method to display correct nucleus floor based on floor level received from WiFi data
+     * @param floor
+     */
+    public void displayNucleusFloorLevel(int floor){
+        indoorMapManager.setCurrentFloor(floor, true);
+    }
+
+
+
+
+    // Code by Guilherme
+
+    /**
+     * Method to set the colour of the polyline
+     * @param color
+     */
+    public void setPolylineColor(int color) {
+        currentColor = color; // store the new color
+        if (polyline != null) {
+            polyline.setColor(color);
+        } else {
+            Log.e("TrajectoryMapFragment", "Polyline is null. Cannot set color.");
+        }
+    }
+
+    // Code by Guilherme
+
+    /**
+     * Method to add a LatLng point to the polyline drawing
+     * @param point
+     */
+    public void addPolylinePoint(@NonNull LatLng point) {
+        if (gMap == null) return;
+
+        if (polyline == null) {
+            polylineOptions = new PolylineOptions().color(currentColor).width(8f).add(point);
+            polyline = gMap.addPolyline(polylineOptions);
+        } else {
+            List<LatLng> points = new ArrayList<>(polyline.getPoints());
+            points.add(point);
+            polyline.setPoints(points);
+        }
+    }
+
+
+
     /**
      * Initialize the map settings with the provided GoogleMap instance.
      * <p>
@@ -214,11 +274,16 @@ public class TrajectoryMapFragment extends Fragment {
         indoorMapManager = new IndoorMapManager(map);
 
         // Initialize an empty polyline
-        polyline = map.addPolyline(new PolylineOptions()
-                .color(Color.RED)
-                .width(5f)
-                .add() // start empty
-        );
+        // Code by Guilherme
+        polylineOptions = new PolylineOptions()
+                .color(currentColor)
+                .width(8f)
+                .zIndex(10f)  // <-- Higher than buildings
+                .add();
+
+
+        polyline = map.addPolyline(polylineOptions);
+
 
         // GNSS path in blue
         gnssPolyline = map.addPolyline(new PolylineOptions()
@@ -434,14 +499,19 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.RED)
-                    .width(5f)
-                    .add());
+            // Code by Guilherme
+            // Code by Guilherme
+            polylineOptions = new PolylineOptions()
+                    .color(currentColor)
+                    .width(8f)
+                    .add();
+
+            polyline = gMap.addPolyline(polylineOptions);
             gnssPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.BLUE)
                     .width(5f)
                     .add());
+
         }
     }
 
@@ -536,6 +606,8 @@ public class TrajectoryMapFragment extends Fragment {
         gMap.addPolygon(buildingPolygonOptions4);
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
+
+
 
 
 }
