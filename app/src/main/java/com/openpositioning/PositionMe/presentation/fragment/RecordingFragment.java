@@ -177,17 +177,17 @@ public class RecordingFragment extends Fragment {
             }
         });
 
-        // 点击完成按钮，停止记录并跳转到 CorrectionFragment
+        // When the finish button is clicked, stop recording and navigate to CorrectionFragment
         completeButton.setOnClickListener(v -> {
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
 
-            // 使用 Safe Args 导航到 CorrectionFragment
+            // use Safe Args to navigate CorrectionFragment
             NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
             Navigation.findNavController(v).navigate(action);
         });
 
-        // 如果开启了 split 计时功能
+        // If split trajectory timing is enabled
         if (settings.getBoolean("split_trajectory", false)) {
             long limit = settings.getInt("split_duration", 30) * 60000L;
             autoStop = new CountDownTimer(limit, 1000) {
@@ -203,7 +203,7 @@ public class RecordingFragment extends Fragment {
                 public void onFinish() {
                     sensorFusion.stopRecording();
 
-                    // 计时结束后也跳转到 CorrectionFragment
+                    // When the timer ends, navigate to CorrectionFragment
                     NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
                     Navigation.findNavController(getView()).navigate(action);
                 }
@@ -271,13 +271,13 @@ public class RecordingFragment extends Fragment {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
-        // 更新海拔
+        // Update elevation
         float elevationVal = sensorFusion.getElevation();
         if (statusBottomSheet != null && statusBottomSheet.isAdded()) {
             statusBottomSheet.updateElevation(String.format("%.1f", elevationVal));
         }
 
-        // 更新 PDR
+        // Update PDR (Pedestrian Dead Reckoning)
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
             LatLng oldLocation = trajectoryMapFragment.getCurrentLocation();
@@ -291,7 +291,7 @@ public class RecordingFragment extends Fragment {
             }
         }
 
-        // 更新 GNSS 误差
+        // Update GNSS error
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
             if (trajectoryMapFragment.isGnssEnabled()) {
