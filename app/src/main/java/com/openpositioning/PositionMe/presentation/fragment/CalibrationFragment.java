@@ -151,6 +151,8 @@ public class CalibrationFragment extends Fragment {
 
             } else {
                 stopPassiveRecording();
+                // close the file
+
                 passiveRecordingActive = false;
 
                 // Change icon to "start" icon
@@ -160,6 +162,9 @@ public class CalibrationFragment extends Fragment {
                 startRecordingButton.setBackgroundTintList(
                         ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.md_theme_primary))
                 );
+                if (dataFileManager != null) {
+                    dataFileManager.close();
+                }
             }
         });
 

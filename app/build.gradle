@@ -5,7 +5,7 @@ plugins {
     id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
 }
 
-// (Optional) load local secrets file:
+
 def localProperties = new Properties()
 def localPropertiesFile = rootProject.file('secrets.properties')
 if (localPropertiesFile.exists()) {
@@ -22,12 +22,9 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
-
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
-        // Example of referencing secrets (if you use secrets.properties):
-        buildConfigField "String", "MAPS_API_KEY",
-                "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
+        resValue "string", "google_maps_key", localProperties['MAPS_API_KEY'] ?: ""
         buildConfigField "String", "OPENPOSITIONING_API_KEY",
                 "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
         buildConfigField "String", "OPENPOSITIONING_MASTER_KEY",

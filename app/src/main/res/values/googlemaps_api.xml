@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-        <string name="google_maps_key" translatable="false" templateMergeStrategy="preserve">
-        AIzaSyDDylFZM5nQrcSZ4jE3vOxXw2pcelrfysE
+    <string name="google_maps_key" translatable="false" templateMergeStrategy="preserve">
+        @string/google_maps_key_placeholder
     </string>
+    <string name="google_maps_key_placeholder">REPLACE_ME</string>
 </resources>

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.FusionAlgorithms;
+package com.openpositioning.PositionMe.domain;
 
 import com.google.android.gms.maps.model.LatLng;
 import org.ejml.simple.SimpleMatrix;

@@ -21,7 +21,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.openpositioning.PositionMe.FusionAlgorithms.ParticleFilter;
+import com.openpositioning.PositionMe.domain.ParticleFilter;
 import com.openpositioning.PositionMe.data.remote.WiFiPositioning;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.utils.CoordinateTransform;
@@ -30,7 +30,7 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
-import com.openpositioning.PositionMe.FusionAlgorithms.EKF;
+import com.openpositioning.PositionMe.domain.EKF;
 
 import org.json.JSONException;
 import org.json.JSONObject;
