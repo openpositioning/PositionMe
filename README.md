@@ -1,45 +1,196 @@
-**PositionMe** is an indoor positioning data collection application initially developed for the University of Edinburgh's Embedded Wireless course. The application now includes enhanced features, including **trajectory playback**, improved UI design, and comprehensive location tracking.
+# 📍 PositionMe – Indoor & Outdoor Positioning System
 
-## Features
+PositionMe is a mobile Android application for **real-time indoor/outdoor positioning**, designed as part of the Huawei – University of Edinburgh 2025 Indoor Positioning Assignment. It fuses **WiFi**, **GNSS**, and **IMU (PDR)** data to provide accurate, robust user localization within university buildings like **The Nucleus** and **The Noreen and Kenneth Murray Library**.
 
-- **Real-time Sensor Data Collection**: Captures sensor, location, and GNSS data.
-- **Trajectory Playback**: Simulates recorded movement from previously saved trajectory files (Trajectory proto files).
-- **Interactive Map Display**:
-    - Visualizes the user's **PDR trajectory/path**.
-    - Displays **received GNSS locations**.
-    - Supports **floor changes and indoor maps** for a seamless experience.
-- **Playback Controls**:
-    - **Play/Pause, Exit, Restart, Jump to End**.
-    - **Progress bar for tracking playback status**.
-- **Redesigned UI**: Modern and user-friendly interface for enhanced usability.
 
-## Requirements
+## 🧠 Core Features
 
-- **Android Studio 4.2** or later
-- **Android SDK 30** or later
+- 🔄 **Real-Time Sensor Fusion:** Combines PDR, GNSS, and WiFi using Kalman and Particle filters.
+- 🧭 **Interactive Map Interface:** Live visualization of position, tagging, and sensor info.
+- 📱 **Sensor Dashboard**: View all IMU, GNSS, and WiFi specs.
+- 🧪 **Manual Tagging System:** Add calibrated anchor points for ML training.
+- 📼 **Replay Mode:** Revisit recorded sessions with map visualization.
+- 🧠 **AI-based WiFi Prediction:** Predicts location using a TFLite ML model (offline-trained).
+- 🧰 **Developer-Friendly Architecture:** Modular components, extensible map utilities, and offline training pipelines.
 
-## Installation
+## 📦 APK Installation (For End-Users)
 
-1. **Clone the repository.**
-2. **Open the project in Android Studio**.
-3. Add your own API key for Google Maps in AndroidManifest.xml
-4. Set the website where you want to send your data. The application was built for use with [openpositioning.org](http://openpositioning.org/).
-5. **Build and run the project on your Android device**.
+1. Install APK on Android (Android 9+ recommended).
+2. Enable location, Wi-Fi, and sensor access.
+3. Use bottom nav bar to switch between Explore, Replay, Device, Settings.
 
-## Usage
+## 🚀 Getting Started (Developers)
 
-1. **Install the application** using Android Studio.
-2. **Launch the application** on your Android device.
-3. **Grant necessary permissions** when prompted:
-    - Sensor access
-    - Location services
-    - Internet connectivity
-4. **Collect real-time positioning data**:
-    - Follow on-screen instructions to record sensor data.
-5. **Replay previously recorded trajectories**:
-    - Navigate to the **Files** section.
-    - Select a saved trajectory and press **Play**.
-    - The recorded trajectory will be simulated and displayed on the map.
-6. **Control playback**:
-    - Pause, restart, or jump to the end using playback controls.
+### ✅ Prerequisites
 
+| Tool             | Version               |
+|------------------|------------------------|
+| Android Studio   | Arctic Fox (2020.3.1) or newer |
+| Android SDK      | API Level 34           |
+| Gradle           | 8.0+                   |
+| Java JDK         | 17+                    |
+| Git              | Latest stable          |
+
+**Device Requirements:**
+- Physical Android device with GNSS, WiFi, and IMU sensors.
+- Developer mode enabled.
+- Internet connection for OpenPositioning API.
+
+### 🛠️ Setup Instructions
+
+1. **Clone Repository**
+   ```bash
+   git clone https://github.com/Bol-C14/PositionMe_EWireless
+   cd PositionMe
+   ```
+
+2. **Open Project**
+   - Launch Android Studio → "Open existing project"
+   - Select project root → wait for Gradle sync
+
+3. **API Key Setup**
+   Create `secrets.properties` in project root:
+   ```
+   MAPS_API_KEY=your_google_maps_key
+   OPENPOSITIONING_API_KEY=your_openpositioning_key
+   OPENPOSITIONING_MASTER_KEY=your_openpositioning_master_key
+   ```
+   > ⚠️ Add `secrets.properties` to `.gitignore` to avoid leaking keys.
+
+4. **Build and Run**
+   - Connect Android device via USB
+   - Enable USB Debugging
+   - Click `Run > Run 'app'` in Android Studio
+   - Grant permissions when prompted
+
+---
+
+### 📁 Project Structure
+
+```
+com.openpositioning.PositionMe/
+├── data/                # File handling & API comms
+├── domain/              # Core algorithm logic
+├── presentation/        # UI components
+├── sensors/             # Sensor reading & fusion
+├── utils/               # Utilities
+└── Traj.java            # Trajectory data structure
+```
+
+## ⚙️ Core Functionalities
+
+### 🔴 Real-Time Tracking (Explore)
+- Live fused positioning using GNSS, WiFi, and IMU
+- Toggle modes: GNSS / PDR / WiFi / Fused
+- Tagging support for indoor calibration
+- Fragment: `RecordingFragment.java`
+
+### 🧭 Calibration
+- Manually anchor ground truth positions
+- Saved for ML training or evaluation
+- Fragment: `CalibrationFragment.java`
+
+### 📊 Sensor Fusion
+Implemented in `SensorFusion.java` using:
+- `EKF.java` – Extended Kalman Filter
+- `ParticleFilter.java` – Sampling-based estimator
+- Fallback ML model: `SensorDataPredictor.java` (TensorFlow Lite)
+
+### 🔁 Replay
+- Visualize past paths with interactive playback
+- Reposition start point manually
+- Fragment: `ReplayFragment.java`
+
+## 🧠 Fusion & AI Modules
+
+### 1. `SensorFusion.java`
+- Central controller for EKF, PF, and fallback models.
+
+### 2. `EKF.java`
+- Tracks state `[x, y, z, θ]`.
+- Updates from PDR, GNSS, WiFi, and optional barometer.
+
+### 3. `ParticleFilter.java`
+- Monte Carlo sampling-based backup.
+- Used to control drift when EKF fails.
+
+### 4. `SensorDataPredictor.java`
+- TFLite fallback ML model using top-20 BSSID+RSSI fingerprints.
+
+
+## 🗺️ Map Visualization Modules
+
+| File                     | Purpose                                  |
+|--------------------------|------------------------------------------|
+| `TrajectoryPlotter.java` | Draw real-time paths (raw, fusion, etc.) |
+| `TrajectoryMapWall.java` | Render wall outlines                     |
+| `BuildingPolygonPlotter` | Draw building boundaries                 |
+| `TrajectoryMapMaker`     | Add markers (e.g., toilet, lifts)        |
+
+> Tip: Add new building or floor support by editing coordinate lists.
+
+## 🧪 Machine Learning Pipeline (Offline)
+
+All scripts located in:
+```
+/projectSourceFolder/machine_learning/
+```
+
+### 🧭 Alignment – `alignment.py`
+- Uses **piecewise Procrustes alignment** between anchor points
+- Corrects PDR drift using user-tagged positions
+
+### 🤖 Training – `embedding_train_LSTM.py`
+1. Parse `.json` logs (recorded via app)
+2. Align PDR segments
+3. Extract WiFi top-20 BSSID-RSSI features
+4. Use aligned positions as labels
+5. Train and visualize prediction performance
+
+## 📱 User Interface Guide
+
+### 🌍 Explore Tab
+- Switch between GNSS / WiFi / PDR / Fused modes
+- Live sensor panel (accelerometer, gyroscope, etc.)
+- Tagging panel for collecting ground truth
+- Save and upload trajectories automatically
+
+### 🔁 Replay Tab
+- Download and view previous routes
+- Manual replay with adjustable start points
+
+### 📟 Device Tab
+- List all sensors (type, vendor, resolution, power)
+
+### ⚙️ Settings Tab
+- Manual stride length
+- Floor height setting
+- Data sync over WiFi/mobile
+- Edit advanced constants
+
+## 🧩 Common Issues & Fixes
+
+| Issue                          | Fix                                                        |
+|-------------------------------|-------------------------------------------------------------|
+| App crashes on launch         | Check permissions, enable location services                |
+| API keys not working          | Confirm `secrets.properties` setup                         |
+| GNSS/WiFi data missing        | Use a physical device and allow all permissions            |
+| Old WiFi data                 | Disable WiFi scan throttling in Developer Options          |
+
+
+## 🧑‍💻 Contributors
+
+| Name           | Student Number | Roles                            |
+|----------------|----------------|----------------------------------|
+| Lin Chen       | s2114912       | Fusion Algorithm Dev, Debug     |
+| Lai Gan        | s1917398       | UI & Accessibility, Side Features |
+| Shu Gu         | s2094833       | ML Dev, Map Dev, Architecture   |
+| Aaniket Nayak  | s2748053       | Debug & Test, Documentation     |
+
+
+## 📚 References
+
+1. Skobeleva et al., "Extended Kalman Filter for Indoor/Outdoor Robot Localization", 2016.
+2. Singh et al., "Wi-Fi RSSI Fingerprints for Indoor Localization", IEEE Access, 2021.
+3. Kakiuchi & Kamijo, "PDR for Mobile Phones through Mode Recognition", ITSC 2013.
+4. Ho-Sy et al., "Hybrid WiFi Algorithm for Indoor Positioning", ISCIT 2019.
