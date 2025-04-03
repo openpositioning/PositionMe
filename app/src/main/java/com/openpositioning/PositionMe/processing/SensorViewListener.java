@@ -12,8 +12,8 @@ import java.util.Map;
 
 /**
  * SensorViewListener is a class that listens to sensor data updates and notifies the callback
- * interface with the updated sensor values.
- * Primarily used in MeasurementsFragment to update the UI with sensor data.
+ * interface with the updated sensor values. Primarily used in MeasurementsFragment to update the UI
+ * with sensor data.
  *
  * @author Philip Heptonstall
  */
@@ -23,11 +23,12 @@ public class SensorViewListener implements SensorDataListener<SensorData> {
    * Callback interface for sensor data updates.
    */
   public interface SensorDataCallback {
+
     /**
      * Called when sensor data is updated.
      *
-     * @param sensorValues Map of sensor types to their respective values.
-     * @param wifiData WiFi data.
+     * @param sensorValues     Map of sensor types to their respective values.
+     * @param wifiData         WiFi data.
      * @param gnssLocationData GNSS location data.
      */
     void onSensorDataUpdated(Map<SensorTypes, float[]> sensorValues, WiFiData wifiData,
@@ -69,7 +70,7 @@ public class SensorViewListener implements SensorDataListener<SensorData> {
    * Constructor for SensorViewListener.
    *
    * @param sensorHub Sensor hub for managing sensors.
-   * @param callback Callback for sensor data updates.
+   * @param callback  Callback for sensor data updates.
    */
   public SensorViewListener(SensorHub sensorHub, SensorDataCallback callback) {
     this.sensorHub = sensorHub;
@@ -122,7 +123,7 @@ public class SensorViewListener implements SensorDataListener<SensorData> {
    */
   @Override
   public void start() {
-    if(!started) {
+    if (!started) {
       for (int sensorType : INTERESTED_SENSORS) {
         sensorHub.addListener(sensorType, this);
       }
@@ -138,7 +139,7 @@ public class SensorViewListener implements SensorDataListener<SensorData> {
    */
   @Override
   public void stop() {
-    if(!started) {
+    if (!started) {
       return;
     }
     for (int sensorType : INTERESTED_SENSORS) {

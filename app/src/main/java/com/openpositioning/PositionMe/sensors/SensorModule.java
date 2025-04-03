@@ -5,17 +5,16 @@ import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
 /**
  * Generic Interface for Sensor Modules that do not fit into
  * those defined by android.hardware.Sensor.
- * <p>
- * This abstract class provides a structure for sensor modules that are not covered by the standard Android hardware sensors.
+ * This abstract class provides a structure for sensor modules that are not covered by the
+ * standard Android hardware sensors.
  * It includes methods to start and stop the sensor module, and to notify listeners with sensor data.
- * </p>
  *
  * @param <T> The type of sensor data.
  *
  * @author Philip Heptonstall
  */
 public abstract class SensorModule<T extends SensorData> {
-  // The SensorHub instance to which this sensor module is connected.
+  // The SensorHub instance to which this sensor module is linked to
   protected final SensorHub sensorHub;
   // The type of the stream sensor.
   protected final StreamSensor sensorType;
@@ -26,7 +25,7 @@ public abstract class SensorModule<T extends SensorData> {
    * Initializes the SensorModule with the provided SensorHub and StreamSensor type.
    * </p>
    *
-   * @param sensorHub The SensorHub instance.
+   * @param sensorHub The SensorHub instance, which creates this Sensor module
    * @param sensorType The type of the stream sensor.
    */
   public SensorModule(SensorHub sensorHub, StreamSensor sensorType) {
@@ -53,7 +52,8 @@ public abstract class SensorModule<T extends SensorData> {
   /**
    * Notifies listeners with the provided sensor data.
    * <p>
-   * This method is used to send the collected sensor data to the registered listeners.
+   * This method is used to send the collected sensor data to the registered listeners, through
+   * the SensorHub.
    * </p>
    *
    * @param data The sensor data to be notified.

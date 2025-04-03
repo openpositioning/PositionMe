@@ -268,8 +268,8 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
         @Override
         public void onError(String message) {
           // Handle the error response
-          Log.e("SensorFusion.WifiPositioning", "Wifi Positioning request" +
-              "returned an error! " + message);
+          Log.e("SensorFusion.WifiPositioning", "Wifi Positioning request"
+              + "returned an error! " + message);
 
           // In an error, LatLng is set to null and floor level is set to -1.
           WifiDataProcessor.super.notifyListeners(new WiFiData(wifiScanResult, null,

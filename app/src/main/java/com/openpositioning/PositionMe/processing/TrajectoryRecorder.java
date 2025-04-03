@@ -32,10 +32,8 @@ import java.util.TimerTask;
  * The class uses a Timer to periodically store sensor data in a Trajectory object.
  * It implements the Observer interface to receive updates from the PDR processing class, whenever
  * new PDR steps are available.
- * <p>
  * The trajectory object is built using the Traj protobuf class, which contains various sensor
  * information and data samples.
- * <p>
  * The class also provides methods to start and stop recording, as well as to send the recorded
  * trajectory to the server.
  *
@@ -93,7 +91,7 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
    * <p>
    * Initializes the trajectory object and registers the sensors of interest.
    *
-   * @param sensorHub The sensor hub to be used for managing sensors.
+   * @param sensorHub The sensor hub to be used to get sensor information.
    * @param pdrProcessor The PDR processing object to be used for processing PDR data.
    * @param serverCommunications The server communications object to be used for sending data.
    * @param startTime The start time of the recording session.
@@ -101,13 +99,13 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
    **/
   public TrajectoryRecorder(SensorHub sensorHub, PdrProcessing pdrProcessor,
       ServerCommunications serverCommunications, long startTime, long bootTime) {
-    // Register sensors
     this.sensorHub = sensorHub;
 
     this.startTime = startTime;
 
     this.bootTime = bootTime;
 
+    // Register the sensors of interest
     start();
 
     this.pdrProcessor = pdrProcessor;
@@ -127,7 +125,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
 
   /**
    * Updates the trajectory with the PDR data.
-   * <p>
    * This method is called when new PDR data is received.
    *
    * @param objList The list of objects containing the PDR data.
@@ -136,7 +133,7 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
   public void update(Object[] objList) {
     // Update the trajectory with the PDR data
     if (objList != null && objList.length > 0) {
-      // Update provides the X,Y float array of the PDR data
+      // Retrieve the PDR data from the object list
       PdrProcessing.PdrData pdrData = (PdrProcessing.PdrData) objList[0];
       if (pdrData.newPosition()) {
         // Update the trajectory with the PDR data
@@ -181,11 +178,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
               .setMagY(magneticFieldData.magneticField[1])
               .setMagZ(magneticFieldData.magneticField[2])
               .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime));
-//                    .addGnssData(Traj.GNSS_Sample.newBuilder()
-//                            .setLatitude(latitude)
-//                            .setLongitude(longitude)
-//                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-
 
       // Divide timer with a counter for storing data every 1 second
       if (counter == 99) {
@@ -205,8 +197,8 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
         if (secondCounter == 4) {
           secondCounter = 0;
           //Current Wifi Object
-          Wifi currentWifi = ((WifiDataProcessor) sensorHub.getSensor(StreamSensor.WIFI)).
-              getCurrentWifiData();
+          Wifi currentWifi = ((WifiDataProcessor) sensorHub.getSensor(StreamSensor.WIFI))
+              .getCurrentWifiData();
           trajectory.addApsData(Traj.AP_Data.newBuilder()
               .setMac(currentWifi.getBssid())
               .setSsid(currentWifi.getSsid())
@@ -253,7 +245,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
 
   /**
    * Called when sensor data is received.
-   * <p>
    * This method is called when new sensor data is received from the SensorHub.
    *
    * @param data The sensor data received from the SensorHub.
@@ -291,12 +282,12 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
   @Override
   public void stop() {
     // Stop all sensors
-    for (int sensor_idx : INTERESTED_SENSORS) {
-      sensorHub.removeListener(sensor_idx, this);
+    for (int sensorIdx : INTERESTED_SENSORS) {
+      sensorHub.removeListener(sensorIdx, this);
     }
 
-    for (StreamSensor sensor_idx : INTERESTED_STREAM_SENSORS) {
-      sensorHub.removeListener(sensor_idx, this);
+    for (StreamSensor sensorIdx : INTERESTED_STREAM_SENSORS) {
+      sensorHub.removeListener(sensorIdx, this);
     }
 
     // Cancel the timer
@@ -311,12 +302,12 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
   @Override
   public void start() {
     // Start all sensors
-    for (int sensor_idx : INTERESTED_SENSORS) {
-      sensorHub.addListener(sensor_idx, this);
+    for (int sensorIdx : INTERESTED_SENSORS) {
+      sensorHub.addListener(sensorIdx, this);
     }
 
-    for (StreamSensor sensor_idx : INTERESTED_STREAM_SENSORS) {
-      sensorHub.addListener(sensor_idx, this);
+    for (StreamSensor sensorIdx : INTERESTED_STREAM_SENSORS) {
+      sensorHub.addListener(sensorIdx, this);
     }
 
     // Restart the timer
@@ -327,7 +318,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
 
   /**
    * Saves the WiFi data in the trajectory object.
-   * <p>
    * This method is called when new WiFi data is received.
    *
    * @param data The WiFi data received from the SensorHub.
@@ -346,9 +336,7 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
 
   /**
    * Saves the GNSS data in the trajectory object.
-   * <p>
-   * This method is called when new GNSS data is received.
-   *
+   * This method is called when new GNSS data is received from SensorHub
    * @param data The GNSS data received from the SensorHub.
    */
   private void saveGnssData(GNSSLocationData data) {
@@ -366,7 +354,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
    * Adds a GNSS tag to the trajectory when the user presses "Add Tag". This method captures the
    * current GNSS location, derived from the (latitude, longitude, altitude) fused data, and stores
    * it inside the trajectory's `gnss_data` array.
-   * <p>
    * The tag represents a marked position, which can later be used for debugging, validation, or
    * visualization on a map.
    */
@@ -427,7 +414,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
 
   /**
    * Send the trajectory object to servers.
-   *
    * @see ServerCommunications for sending and receiving data via HTTPS.
    */
   public void sendTrajectoryToCloud() {

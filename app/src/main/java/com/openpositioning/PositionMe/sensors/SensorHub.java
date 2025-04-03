@@ -18,19 +18,12 @@ import java.util.Map;
 
 /**
  * Class representing the SensorHub.
- * <p>
  * This class manages the registration, unregistration, and notification of sensor data listeners.
  * It supports both physical sensors and stream sensors (e.g., WiFi, GNSS).
- * </p>
- * <p>
- * The SensorHub is implemented as a singleton to ensure a single instance is used throughout the application.
- * </p>
- * <p>
+ * The SensorHub is implemented as a singleton to ensure a single instance is used throughout the
+ * application.
  * The class implements the SensorEventListener interface to receive sensor data updates.
- * </p>
- * <p>
  * The class also maintains default configurations for various sensor types.
- * </p>
  *
  * @author Philip heptonstall
  */
@@ -122,8 +115,8 @@ public class SensorHub implements SensorEventListener {
    * Subscribe to a specific sensor type.
    *
    * @param sensorType The type of the sensor.
-   * @param listener The listener to be added.
-   * @param <T> The type of sensor data.
+   * @param listener   The listener to be added.
+   * @param <T>        The type of sensor data.
    */
   public <T extends SensorData> void addListener(int sensorType, SensorDataListener<T> listener) {
     // Register sensor if not already initialized
@@ -132,7 +125,8 @@ public class SensorHub implements SensorEventListener {
     }
 
     // Add listener
-    List<SensorDataListener<? extends SensorData>> sensorListeners = listeners.computeIfAbsent(sensorType, k -> new ArrayList<>());
+    List<SensorDataListener<? extends SensorData>> sensorListeners = listeners.computeIfAbsent(
+        sensorType, k -> new ArrayList<>());
 
     if (!sensorListeners.contains(listener)) {
       sensorListeners.add(listener);
@@ -145,16 +139,18 @@ public class SensorHub implements SensorEventListener {
    * Subscribe to a specific stream sensor type.
    *
    * @param sensorType The type of the stream sensor.
-   * @param listener The listener to be added.
-   * @param <T> The type of sensor data.
+   * @param listener   The listener to be added.
+   * @param <T>        The type of sensor data.
    */
-  public <T extends SensorData> void addListener(StreamSensor sensorType, SensorDataListener<T> listener) {
+  public <T extends SensorData> void addListener(StreamSensor sensorType,
+      SensorDataListener<T> listener) {
     // Register sensor if not already initialized
     if (!streamSensorListeners.containsKey(sensorType)) {
       SensorModule<?> module = createAndRegisterStreamSensor(sensorType);
       sensorModules.put(sensorType, module);
     }
-    List<SensorDataListener<?>> sensorListeners = streamSensorListeners.computeIfAbsent(sensorType, k -> new ArrayList<>());
+    List<SensorDataListener<?>> sensorListeners = streamSensorListeners.computeIfAbsent(sensorType,
+        k -> new ArrayList<>());
     if (!sensorListeners.contains(listener)) {
       sensorListeners.add(listener);
     } else {
@@ -166,10 +162,11 @@ public class SensorHub implements SensorEventListener {
    * Unsubscribe from a specific sensor type.
    *
    * @param sensorType The type of the sensor.
-   * @param listener The listener to be removed.
-   * @param <T> The type of sensor data.
+   * @param listener   The listener to be removed.
+   * @param <T>        The type of sensor data.
    */
-  public <T extends SensorData> void removeListener(int sensorType, SensorDataListener<T> listener) {
+  public <T extends SensorData> void removeListener(int sensorType,
+      SensorDataListener<T> listener) {
     List<SensorDataListener<? extends SensorData>> list = listeners.get(sensorType);
     if (list != null) {
       list.remove(listener);
@@ -183,10 +180,11 @@ public class SensorHub implements SensorEventListener {
    * Unsubscribe from a specific stream sensor type.
    *
    * @param sensorType The type of the stream sensor.
-   * @param listener The listener to be removed.
-   * @param <T> The type of sensor data.
+   * @param listener   The listener to be removed.
+   * @param <T>        The type of sensor data.
    */
-  public <T extends SensorData> void removeListener(StreamSensor sensorType, SensorDataListener<T> listener) {
+  public <T extends SensorData> void removeListener(StreamSensor sensorType,
+      SensorDataListener<T> listener) {
     List<SensorDataListener<?>> list = streamSensorListeners.get(sensorType);
     if (list != null) {
       list.remove(listener);
@@ -204,7 +202,8 @@ public class SensorHub implements SensorEventListener {
   public void registerSensor(int sensorType) {
     Sensor sensor = sensorManager.getDefaultSensor(sensorType);
     if (sensor != null) {
-      int[] defaults = SENSOR_DEFAULTS.getOrDefault(sensorType, new int[]{SensorManager.SENSOR_DELAY_NORMAL, 0});
+      int[] defaults = SENSOR_DEFAULTS.getOrDefault(sensorType,
+          new int[]{SensorManager.SENSOR_DELAY_NORMAL, 0});
       sensorManager.registerListener(this, sensor, defaults[0], defaults[1]);
       sensors.put(sensorType, sensor);
     } else {
@@ -264,7 +263,7 @@ public class SensorHub implements SensorEventListener {
    */
   public List<SensorInfo> getSensorInfoList() {
     List<SensorInfo> sensorInfoList = new ArrayList<>();
-    for (Sensor sensor: sensors.values()) {
+    for (Sensor sensor : sensors.values()) {
       SensorInfo sensorInfo = new SensorInfo(
           sensor.getName(),
           sensor.getVendor(),
@@ -282,8 +281,8 @@ public class SensorHub implements SensorEventListener {
    * Notify StreamSensor (WiFi/GNSS) listeners.
    *
    * @param sensorType The type of the stream sensor.
-   * @param data The sensor data to be notified.
-   * @param <T> The type of sensor data.
+   * @param data       The sensor data to be notified.
+   * @param <T>        The type of sensor data.
    */
   public <T extends SensorData> void notifyStreamSensor(StreamSensor sensorType, T data) {
     List<SensorDataListener<?>> sensorListeners = streamSensorListeners.get(sensorType);
@@ -308,7 +307,7 @@ public class SensorHub implements SensorEventListener {
    * Notify listeners of the sensor data.
    *
    * @param sensorType The type of the sensor.
-   * @param data The sensor data to be notified.
+   * @param data       The sensor data to be notified.
    */
   private void notifyListeners(Integer sensorType, SensorData data) {
     List<SensorDataListener<? extends SensorData>> sensorListeners = listeners.get(sensorType);
@@ -323,8 +322,8 @@ public class SensorHub implements SensorEventListener {
    * Notify a specific listener of the sensor data.
    *
    * @param listener The listener to be notified.
-   * @param data The sensor data to be notified.
-   * @param <T> The type of sensor data.
+   * @param data     The sensor data to be notified.
+   * @param <T>      The type of sensor data.
    */
   @SuppressWarnings("unchecked")
   private <T extends SensorData> void notifyListener(SensorDataListener<T> listener, Object data) {
@@ -334,7 +333,7 @@ public class SensorHub implements SensorEventListener {
   /**
    * Called when the accuracy of a sensor has changed.
    *
-   * @param sensor The sensor whose accuracy has changed.
+   * @param sensor   The sensor whose accuracy has changed.
    * @param accuracy The new accuracy of the sensor.
    */
   @Override

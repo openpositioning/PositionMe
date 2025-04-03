@@ -1,9 +1,7 @@
-package com.openpositioning.PositionMe.sensors;
+package com.openpositioning.PositionMe.processing;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
@@ -13,17 +11,17 @@ import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
-import com.openpositioning.PositionMe.processing.GNSSDataProcessor;
-import com.openpositioning.PositionMe.processing.PdrProcessing;
-import com.openpositioning.PositionMe.processing.TrajectoryRecorder;
-import com.openpositioning.PositionMe.processing.WiFiPositioning;
-import com.openpositioning.PositionMe.processing.WifiDataProcessor;
 import com.openpositioning.PositionMe.processing.filters.FilterAdapter;
 import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;
+import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorData.GNSSLocationData;
 import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
+import com.openpositioning.PositionMe.sensors.SensorHub;
+import com.openpositioning.PositionMe.sensors.SensorInfo;
 import com.openpositioning.PositionMe.sensors.SensorListeners.SensorDataListener;
+import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.sensors.StreamSensor;
 import com.openpositioning.PositionMe.utils.CoordinateTransformer;
 import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
 import com.openpositioning.PositionMe.utils.PathView;
@@ -40,26 +38,22 @@ import java.util.Map;
 
 
 /**
- * The SensorFusion class is the main data gathering and processing class of the application.
- * <p>
- * It follows the singleton design pattern to ensure that every fragment and process has access to
- * the same date and sensor instances. Hence it has a private constructor, and must be initialised
- * with the application context after creation.
- * <p>
- * The class implements {@link SensorEventListener} and has instances of {@link MovementSensor} for
- * every device type necessary for data collection. As such, it implements the
- * {@link SensorFusion#onSensorChanged(SensorEvent)} function, and process and records the data
- * provided by the sensor hardware, which are stored in a {@link Traj} object. Data is read
- * continuously but is only saved to the trajectory when recording is enabled.
- * <p>
- * The class provides a number of setters and getters so that other classes can have access to the
- * sensor data and influence the behaviour of data collection.
+ * SensorFusion is a singleton class that handles the fusion of sensor data from various sources
+ * such as GNSS, WiFi, and PDR. It processes the data and provides a fused location estimate.
+ * It is composed of several components:
+ * - SensorHub: Manages the sensors and their data, to which SensorFusion subscribes to get GNSS,
+ * WiFi position updates
+ * - PdrProcessing: Processes PDR data and provides step count and orientation.
+ * - TrajectoryRecorder: Records the trajectory data and sends it to the server.
+ * - ServerCommunications: Handles the communication with the server for sending trajectory data
+ * (used by TrajectoryRecorder)
+ * To retrieve updates from SensorHub, this class implements the SensorDataListener interface.
+ * It also implements the Observer interface to receive PDR updates from PdrProcessing.
  *
  * @author Michal Dvorak
  * @author Mate Stodulka
  * @author Virginia Cangelosi
- * <p>
- * Kalman filter integration done by
+ * Kalman filter integration done by:
  * @author Wojciech Boncela
  * @author Philip Heptonstall
  * @author Alexandros Zoupos
@@ -94,28 +88,15 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
 
 
   // Store the last event timestamps for each sensor type
-  private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
   private HashMap<Integer, Integer> eventCounts = new HashMap<>();
-
-  long maxReportLatencyNs = 0;  // Disable batching to deliver events immediately
-
-  // Define a threshold for large time gaps (in milliseconds)
-  private static final long LARGE_GAP_THRESHOLD_MS = 500;  // Adjust this if needed
 
   //region Static variables
   // Singleton Class
   private static final SensorFusion sensorFusion = new SensorFusion();
-  // Static constant for calculations with milliseconds
-  private static final long TIME_CONST = 10;
-  // Coefficient for fusing gyro-based and magnetometer-based orientation
-  public static final float FILTER_COEFFICIENT = 0.96f;
-  //Tuning value for low pass filter
-  private static final float ALPHA = 0.8f;
-  // String for creating WiFi fingerprint JSON object
-  private static final String WIFI_FINGERPRINT = "wf";
-
   private static final float OUTLIER_DISTANCE_THRESHOLD = 15;
 
+  // Actual sensor Fusion
+  private FilterAdapter filter;
   // Tuned Sensor Fusion constants
 
   public static final SimpleMatrix INIT_POS_COVARIANCE = new SimpleMatrix(new double[][]{
@@ -123,13 +104,13 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
       {0.0, 2.0}
   });
   public static final SimpleMatrix PDR_COVARIANCE = new SimpleMatrix(new double[][]{
-          {Math.pow(1.41,2), 0.0},
-          {0.0, Math.pow(0.32,2)}
+          {Math.pow(1.41, 2), 0.0},
+          {0.0, Math.pow(0.32, 2)}
   });
 
   public static final SimpleMatrix WIFI_COVARIANCE = new SimpleMatrix(new double[][]{
-          {Math.pow(0.5,2), 0.0},
-          {0.0, Math.pow(0.5,2)}
+          {Math.pow(0.5, 2), 0.0},
+          {0.0, Math.pow(0.5, 2)}
   });
   public static final SimpleMatrix GNSS_COVARIANCE = new SimpleMatrix(new double[][]{
       {5.0, 0.0},
@@ -146,22 +127,14 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
 
   // Settings
   private boolean saveRecording;
-  private float filter_coefficient;
   // Variables to help with timed events
   private long absoluteStartTime;
   private long bootTime;
 
 
-  // Over time accelerometer magnitude values since last step
-  private List<Double> accelMagnitude;
-
-
   // Trajectory displaying class
   private PathView pathView;
-  // WiFi positioning object
-  private WiFiPositioning wiFiPositioning;
-  // Actual sensor Fusion
-  private FilterAdapter filter;
+
 
   //region Initialisation
 
@@ -181,21 +154,19 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     return sensorFusion;
   }
 
+
   /**
-   * Initialisation function for the SensorFusion instance.
-   * <p>
-   * Initialise all Movement sensor instances from context and predetermined types. Creates a server
-   * communication instance for sending trajectories. Saves current absolute and relative time, and
-   * initialises saving the recording to false.
+   * Function to set the context of the SensorFusion class.
+   * This function is called from the {@link MainActivity} when the application is started. It
+   * initialises the SensorHub, PdrProcessing, and ServerCommunications classes. It also sets up
+   * the wake lock to keep the device awake during recording.
    *
-   * @param context application context for permissions and device access.
-   * @see MovementSensor handling all SensorManager based data collection devices.
-   * @see ServerCommunications handling communication with the server.
-   * @see GNSSDataProcessor for location data processing.
-   * @see WifiDataProcessor for network data processing.
+   * @param context Context of object calling
    */
   public void setContext(Context context) {
     this.appContext = context.getApplicationContext(); // store app context for later use
+
+    // Initialise times
     this.absoluteStartTime = System.currentTimeMillis();
     this.bootTime = SystemClock.uptimeMillis();
     // Initialise saveRecording to false
@@ -206,23 +177,21 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     // Initialise the sensor hub
     this.sensorHub = SensorHub.getInstance(context);
 
-    this.sensorHub.addListener(StreamSensor.GNSS,this);
-    this.sensorHub.addListener(StreamSensor.WIFI,this);
+    // Subscribe to the SensorHub for GNSS and WiFi data
+    this.sensorHub.addListener(StreamSensor.GNSS, this);
+    this.sensorHub.addListener(StreamSensor.WIFI, this);
+
+    // Initialise the PDR processing class and register for updates
     this.pdrProcessing = new PdrProcessing(context, this.sensorHub, absoluteStartTime, bootTime);
     this.pdrProcessing.registerObserver(this);
-    // Sensor Fusion variables
+
+    // Initialise filter
     this.filter = new KalmanFilterAdapter(new double[]{0.0, 0.0}, INIT_POS_COVARIANCE,
         0.0, PDR_COVARIANCE);
 
     // Get settings and views
     this.settings = PreferenceManager.getDefaultSharedPreferences(context);
     this.pathView = new PathView(context, null);
-
-    if (settings.getBoolean("overwrite_constants", false)) {
-      this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
-    } else {
-      this.filter_coefficient = FILTER_COEFFICIENT;
-    }
 
     // Keep app awake during the recording (using stored appContext)
     PowerManager powerManager = (PowerManager) this.appContext.getSystemService(
@@ -232,17 +201,6 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
 
   //endregion
   // Getters/Setters
-  /**
-   * Method to get user position obtained using {@link WiFiPositioning}.
-   *
-   * @return {@link LatLng} corresponding to user's position.
-   */
-  public LatLng getLatLngWifiPositioning() {
-    return this.wiFiPositioning.getWifiLocation();
-  }
-
-  //region Getters/Setters
-
   /**
    * Getter function for core location data.
    *
@@ -266,10 +224,11 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
 
   /**
    * Setter function for core location data.
-   *
    * @param startPosition contains the initial location set by the user
    */
   public void setStartGNSSLatitude(float[] startPosition) {
+    // Set the starting fused location, start location and initialise the coordinate transformer
+    // with the starting position.
     this.fusedLocation = new LatLng(startPosition[0], startPosition[1]);
     this.startLocation = new LatLng(startPosition[0], startPosition[1]);
     this.coordinateTransformer = new CoordinateTransformer(startPosition[0], startPosition[1]);
@@ -278,7 +237,6 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   /**
    * Getter function for average step count. Calls the average step count function in pdrProcessing
    * class
-   *
    * @return average step count of total PDR.
    */
   public float passAverageStepLength() {
@@ -294,11 +252,8 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   }
 
   /**
-   * Return most recent sensor readings.
-   * <p>
-   * Collects all most recent readings from movement and location sensors, packages them in a map
-   * that is indexed by {@link SensorTypes} and makes it accessible for other classes.
-   *
+   * Return processed sensor readings from: GNSS, PDR, WIFI, and FUSED location.
+   * Indexed by SensorTypes enum.
    * @return Map of <code>SensorTypes</code> to float array of most recent values.
    * @author Philip Heptonstall, updated to enable wifi data and sensor data.
    */
@@ -340,25 +295,21 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     return this.elevator;
   }
 
+  /**
+   * Get the fusion error in meters. The fusion error is the square root of the sum of the diagonal
+   * elements of the covariance matrix.
+   * @return float of the fusion error in meters.
+   */
   public float getFusionError() {
     return this.fusedError;
   }
+
 
   public SensorHub getSensorHub() {
     return sensorHub;
   }
 
   //endregion
-
-//  /**
-//   * Return the most recent list of WiFi names and levels. Each Wifi object contains a BSSID and a
-//   * level value.
-//   *
-//   * @return list of Wifi objects.
-//   */
-//  public List<Wifi> getWifiList() {
-//    return Arrays.asList(this.wifiProcessor.getWifiData());
-//  }
 
   /**
    * Get information about all the sensors registered in SensorFusion.
@@ -381,6 +332,12 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     return distance > OUTLIER_DISTANCE_THRESHOLD;
   }
 
+  /**
+   * Compute the Mean Squared Error (MSE) of the covariance matrix.
+   *
+   * @param covariance The covariance matrix.
+   * @return The MSE value.
+   */
   private double computeMSE(SimpleMatrix covariance) {
     double mse = 0.0;
     // sum of diagonal elements (trace)
@@ -391,6 +348,13 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   }
 
 
+  /**
+   * Convert latitude and longitude to XY coordinates relative to the reference point.
+   *
+   * @param reference The reference point (start location).
+   * @param pt The point to convert.
+   * @return An array containing the X and Y coordinates.
+   */
   private double[] latLngToXY(LatLng reference, LatLng pt) {
     ProjCoordinate startLocationNorthEast = coordinateTransformer.convertWGS84ToTarget(
             reference.latitude,
@@ -405,6 +369,12 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     return new double[]{ptXYZ[0], ptXYZ[1]};
   }
 
+  /**
+   * Update the fusion data with the new observation and PDR data.
+   * @param observation The new observation (LatLng).
+   * @param observationCov The covariance matrix for the observation.
+   * @param pdrData The PDR data (delta x and y).
+   */
   private void updateFusionData(LatLng observation, SimpleMatrix observationCov, float[] pdrData) {
     double[] pdrData64 = {pdrData[0], pdrData[1]};
 
@@ -438,6 +408,11 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   }
 
 
+  /**
+   * Reset the filter with the new position and PDR data.
+   * @param newPos The new position (LatLng).
+   * @param pdrData The PDR data (delta x and y).
+   */
   private void resetFilter(LatLng newPos, float[] pdrData) {
     double[] newXY = latLngToXY(startLocation, newPos);
 
@@ -458,6 +433,13 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     SimpleMatrix fusedCov = filter.getCovariance();
     this.fusedError = (float) Math.sqrt(computeMSE(fusedCov));
   }
+
+  /**
+   * Function to add a tag to the trajectory recorder.
+   * This function is called from the
+   * {@link com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment}
+   * when the user wants to add a tag to the trajectory.
+   */
   public void addTag(){
     this.trajRecorder.addTag(new float[]{(float) this.fusedLocation.latitude,
         (float) this.fusedLocation.longitude});
@@ -510,18 +492,11 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     this.trajRecorder = new TrajectoryRecorder(sensorHub, pdrProcessing
         , serverCommunications, absoluteStartTime, bootTime);
 
-    if (settings.getBoolean("overwrite_constants", false)) {
-      this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
-    } else {
-      this.filter_coefficient = FILTER_COEFFICIENT;
-    }
-
     this.setStartGNSSLatitude(startingPoint);
   }
 
   /**
    * Disables saving sensor values to the trajectory object.
-   * <p>
    * Check if a recording is in progress. If it is, it sets save recording to false, and cancels the
    * timer objects.
    *
@@ -539,14 +514,10 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     }
   }
 
+
   /**
-   * Un-registers all device listeners and pauses data collection.
-   * <p>
-   * Should be called from {@link MainActivity} when pausing the application.
-   *
-   * @see MovementSensor handles SensorManager based devices.
-   * @see WifiDataProcessor handles wifi data.
-   * @see GNSSDataProcessor handles location data.
+   * Function to stop the SensorFusion class. Stops all listeners and processing classes.
+   * This function is called from the {@link MainActivity} when the application is stopped.
    */
   @Override
   public void stop() {
@@ -557,13 +528,8 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   }
 
   /**
-   * Registers all device listeners and enables updates with the specified sampling rate.
-   * <p>
-   * Should be called from {@link MainActivity} when resuming the application. Sampling rate is in
-   * microseconds, IMU needs 100Hz, rest 1Hz
-   *
-   * @see WifiDataProcessor handles wifi data.
-   * @see GNSSDataProcessor handles location data.
+   * Function to start the SensorFusion class. Starts all listeners and processing classes.
+   * This function is called from the {@link MainActivity} when the application is started.
    */
   @Override
   public void start() {
@@ -585,26 +551,50 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     }
   }
 
+  /**
+   * Function to handle GNSS data received from the SensorHub. It processes the data and updates
+   * the fused location.
+   *
+   * @param data GNSSLocationData object containing the GNSS data.
+   */
   public void onSensorDataReceived(GNSSLocationData data) {
     float[] currPdrData = this.pdrProcessing.getPDRMovement();
     LatLng loc = new LatLng(data.latitude, data.longitude);
     this.gnssLoc = loc;
+
+    // Get GNSS accuracy and variance
     float xAccuracy = data.accuracy;
     float xVariance = (float) Math.pow(xAccuracy, 2);
+
+    // Update GNSS covariance matrix according to variance
     SimpleMatrix currentGnssCovariance = GNSS_COVARIANCE.copy();
     currentGnssCovariance.set(0, 0, xVariance);
     currentGnssCovariance.set(1, 1, xVariance);
+
+    // Check if the coordinate transformer is initialized (i.e. starting location has been set)
     if (startLocation != null && currPdrData != null) {
+      // Check if the GNSS location is an outlier
       this.isGnssOutlier = isOutlier(coordinateTransformer, fusedLocation, loc);
+      // If GNSS update is not an outlier and the user is not in an elevator,
+      // update the filter with the new GNSS location
       if (!this.isGnssOutlier && !inElevator) {
         updateFusionData(loc, currentGnssCovariance, currPdrData);
       }
+      // If the user is in an elevator but has just left it, reset the filter with the new GNSS
+      // update
       if (!this.isGnssOutlier && inElevator && !getElevator()) {  // Has just left an elevator
         resetFilter(loc, currPdrData);
         inElevator = false;
       }
     }
   }
+
+  /**
+   * Function to handle WiFi data received from the SensorHub. It processes the data and updates
+   * the fused location.
+   *
+   * @param data WiFiData object containing the WiFi data.
+   */
   public void onSensorDataReceived(WiFiData data) {
     // Detect and notify the user if there is no coverage
     if (!this.noWifiCoverage && data.location == null) {
@@ -614,16 +604,25 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
     // Handle WiFi scan result
     if (data.location != this.currentWifiLocation) {
       float[] pdrData = pdrProcessing.getPDRMovement();
+      // Get the current location and floor estimates
       this.currentWifiLocation = data.location;
       this.currentWifiFloor = data.floor;
+
+      // Ensure the coordinate transformer is initialized (i.e. starting location has been set)
       if (coordinateTransformer != null && this.currentWifiLocation != null) {
         this.noWifiCoverage = false;
+        // Check if the WiFi location is an outlier
         this.isWifiLocationOutlier = isOutlier(coordinateTransformer,
             fusedLocation,
             this.currentWifiLocation);
+
+        // If we have pdr updates, wifi location is not an outlier, and the user is not in an
+        // elevator, update the filter with the new WiFi location
         if (startLocation != null && pdrData != null && !isWifiLocationOutlier && !inElevator) {
           updateFusionData(this.currentWifiLocation, WIFI_COVARIANCE, pdrData);
         }
+        // If the user is in an elevator but has just left it, reset the filter with the new WiFi
+        // location (if it is not an outlier)
         if (!this.isWifiLocationOutlier && inElevator && !getElevator() && pdrData != null) {  // Has just left an elevator
           resetFilter(this.currentWifiLocation, pdrData);
           inElevator = false;
@@ -636,6 +635,7 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
   public void onSensorDataReceived(SensorData data) {
     // Check if the data is from the GNSS sensor
     if (data instanceof GNSSLocationData gnssData) {
+      // Handle GNSS location data
       onSensorDataReceived(gnssData);
     } else if (data instanceof WiFiData wiFiData) {
       // Handle WiFi scan result
@@ -645,30 +645,33 @@ public class SensorFusion implements SensorDataListener<SensorData>, Observer {
 
   @Override
   public void update(Object[] objList) {
-    // Convert to Float[] array, called by PDRProcessing
-    // to update the path view\
     // Update the trajectory with the PDR data
     if (objList != null && objList.length > 0) {
-      // Update provides the X,Y float array of the PDR data
+      // Convert update to PdrData instance from PDR processing
       PdrProcessing.PdrData pdrData = (PdrProcessing.PdrData) objList[0];
-      if(pdrData.newPosition()) {
+      if (pdrData.newPosition()) {
         // Update the path view with the new PDR data
         pathView.drawTrajectory(pdrData.position());
       }
+      // If there is new elevator data,
       if(pdrData.newElevator()) {
+        // Update the current elevator status
         this.elevator = pdrData.inElevator();
+        // Debouncing - check that elevator is true for 8 consecutive updates before confirming
         this.elevatorTrueCount = (this.elevator) ? this.elevatorTrueCount + 1 : 0;
         if(!inElevator && pdrData.inElevator() && fusedLocation != null && elevatorTrueCount == 8) {
           this.inElevator = true;
           this.elevatorTrueCount = 0;
+
           // Get the closest elevator's LatLng using the NucleusBuildingManager helper
-          LatLng closestElevator = NucleusBuildingManager.getClosestElevatorLatLng
-                  (fusedLocation, coordinateTransformer);
+          // and set the fused location to it
+          LatLng closestElevator = NucleusBuildingManager.getClosestElevatorLatLng(
+                  fusedLocation, coordinateTransformer);
           if (closestElevator != null) {
             fusedLocation = closestElevator;
           }
         }
       }
-  }
+    }
   }
 }
