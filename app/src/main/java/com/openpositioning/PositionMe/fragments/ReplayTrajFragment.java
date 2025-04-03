@@ -496,93 +496,105 @@ public class ReplayTrajFragment extends Fragment {
      * @return A {@link TimerTask} that is executed periodically to update the map view.
      */
     public TimerTask drawPathView() {
+
         // ===== break logic ===== //
+        // Check if the current index (counterYaw) has reached the end of the IMU data list.
         if (counterYaw >= imuDataList.size() - 1) {
+            // If there is an active timer task, cancel it.
             if (currTask != null) {
                 currTask.cancel();
             }
+            // Stop playback and update the UI to show the play icon.
             isPlaying = false;
             playPauseButton.setImageResource(R.drawable.ic_baseline_play_arrow_24);
+            // End the timer task by returning null.
             return null;
         }
 
         // ===== orientation value update logic ===== //
-        // get base tick
+        // Get the base timestamp from the current IMU sample.
         long relativeTBase = imuDataList.get(counterYaw).getRelativeTimestamp();
 
+        // Retrieve the azimuth (orientation) value from the current IMU sample.
         float nextOrientation = imuDataList.get(counterYaw).getAzimuth();
-        if (orientationMarker!=null && currentOrientation!= nextOrientation) {
+        // If an orientation marker exists and the orientation has changed, update the marker's rotation.
+        if (orientationMarker != null && currentOrientation != nextOrientation) {
             currentOrientation = nextOrientation;
-//            System.out.println("Current Orientation: " + currentOrientation);
+            // Convert radians to degrees and set the new rotation.
             orientationMarker.setRotation((float) Math.toDegrees(currentOrientation));
         }
 
         // ===== pressure value update logic ===== //
+        // If there is a next pressure sample available, process it.
         if (counterPressure < pressureSampleList.size() - 1) {
-            // always take the next pressure sample
+            // Always consider the next sample in the pressure sample list.
             Traj.Pressure_Sample nextPressureSample = pressureSampleList.get(counterPressure + 1);
             long nextTPressure = nextPressureSample.getRelativeTimestamp();
             float nextElevation = nextPressureSample.getEstimatedElevation();
+            // If the IMU timestamp is ahead of the next pressure sample timestamp, update the current elevation.
             if (relativeTBase >= nextTPressure) {
                 currElevation = nextElevation;
-                counterPressure++;
+                counterPressure++;  // Move to the next pressure sample.
             }
         }
-//        else {
-//            // Ensure the last pressure sample is used when counterPressure reaches the last index
-//            currElevation = pressureSampleList.get(counterPressure).getEstimatedElevation();
-//        }
+        // Optionally, the commented-out code ensures the last pressure sample is used if no further samples exist.
+        // Format and display the elevation value.
         String formatElevation = df.format(currElevation);
-        ElevationPres.setText("Elevation:"+formatElevation+"m");
+        ElevationPres.setText("Elevation:" + formatElevation + "m");
 
         // ===== GNSS value update logic ===== //
+        // If there are available GNSS samples and we have not processed all of them:
         if ((!gnssDataList.isEmpty()) && counterGnss < gnssDataList.size() - 1) {
-            // always take the next gnss sample
-
+            // Get the next GNSS sample.
             Traj.GNSS_Sample nextGnssSample = gnssDataList.get(counterGnss + 1);
             long nextTGnss = nextGnssSample.getRelativeTimestamp();
             String provider = nextGnssSample.getProvider();
 
+            // Process the GNSS sample if the IMU timestamp has reached or passed the GNSS sample's timestamp.
             if (relativeTBase >= nextTGnss) {
-            // WIFI point //
-                if(provider.equals("wifi_fine")){
-                    currentWifiLoc = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());  // current wifi location
-                    currentFloor =  (int)((nextGnssSample.getAltitude()) /4.2 + 1);
-                    if (wifiPolyline == null && replayMap!=null) {
+                // --- WiFi Point Update --- //
+                if (provider.equals("wifi_fine")) {
+                    // Update current WiFi location.
+                    currentWifiLoc = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());
+                    // Calculate floor from altitude (assumes fixed conversion factor).
+                    currentFloor = (int) ((nextGnssSample.getAltitude()) / 4.2 + 1);
+                    // If no polyline exists for WiFi data, create one.
+                    if (wifiPolyline == null && replayMap != null) {
                         wifiPolyline = replayMap.addPolyline(new PolylineOptions()
                                 .color(Color.GREEN)
                                 .zIndex(6));
-//                                .visible(wifiEnabled));
                     }
+                    // Append the new WiFi location to the polyline.
                     List<LatLng> wifipointsMoved = new ArrayList<>(wifiPolyline.getPoints());
                     wifipointsMoved.add(currentWifiLoc);
                     wifiPolyline.setPoints(wifipointsMoved);
-//                    wifiPolyline.setVisible(wifiEnabled);
-                    if (wifiMarker == null && replayMap!=null) {
+                    // If no marker exists, create one; otherwise, update its position.
+                    if (wifiMarker == null && replayMap != null) {
                         wifiMarker = replayMap.addMarker(new MarkerOptions()
                                 .title("WiFi position")
                                 .position(currentWifiLoc)
-//                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
                                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
                                 .visible(wifiEnabled));
                     } else {
                         wifiMarker.setPosition(currentWifiLoc);
-//                        wifiMarker.setVisible(wifiEnabled);
                     }
                 }
-            // Tag Point //
-                else if(provider.equals("fusion")){
-                    tagLocation = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());    // location of tag added
+                // --- Tag Point Update --- //
+                else if (provider.equals("fusion")) {
+                    // Create a marker for a tag position (e.g., a special event point).
+                    tagLocation = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());
                     tagMarker = replayMap.addMarker(new MarkerOptions()
                             .title("Tag Added")
                             .position(tagLocation)
                             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
-                    tagMarkers.add(tagMarker);
+                    tagMarkers.add(tagMarker);  // Save this tag marker for future reference.
                 }
-            // GNSS Point //
+                // --- GNSS Standard Point Update --- //
                 else {
+                    // Update the current GNSS location.
                     currentGnssLoc = new LatLng(nextGnssSample.getLatitude(), nextGnssSample.getLongitude());
                     float radius = nextGnssSample.getAccuracy();
+                    // Create a visual circle representing the GNSS accuracy.
                     CircleOptions circleOptions = new CircleOptions()
                             .strokeWidth(2)
                             .strokeColor(Color.BLUE)
@@ -591,15 +603,18 @@ public class ReplayTrajFragment extends Fragment {
                             .center(currentGnssLoc)
                             .zIndex(0)
                             .visible(gnssEnabled);
+                    // Add the circle to the map.
                     if (circleList != null && replayMap != null) {
                         circleList.add(replayMap.addCircle(circleOptions));
                     }
+                    // Update the GNSS polyline to add the new location.
                     if (gnssPolyline != null) {
                         List<LatLng> pointsMoved = gnssPolyline.getPoints();
                         pointsMoved.add(currentGnssLoc);
                         gnssPolyline.setPoints(pointsMoved);
                         gnssPolyline.setVisible(gnssEnabled);
                     }
+                    // Update the GNSS marker position and information.
                     if (gnssMarker != null) {
                         gnssMarker.setPosition(currentGnssLoc);
                         gnssMarker.setVisible(gnssEnabled);
@@ -608,53 +623,65 @@ public class ReplayTrajFragment extends Fragment {
                         gnssMarker.setSnippet("Acc: " + radius + "m" + " Alt: " + altitude + "m");
                     }
                 }
+                // After processing the sample, move to the next GNSS sample.
                 counterGnss++;
             }
         }
 
         // ===== pdr value update logic ===== //
+        // Retrieve the step count from the current IMU sample.
         int nextStepCount = imuDataList.get(counterYaw).getStepCount();
+        // If the step count has increased, update the pedestrian dead reckoning (PDR) location.
         if (currStepCount != nextStepCount) {
             currStepCount = nextStepCount;
+            // Get the new position from the pre-computed PDR location list.
             currentLocation = pdrLocList.get(currStepCount);
-            if (pdrPolyline!=null) {
-                // get existing points
+            if (pdrPolyline != null) {
+                // Retrieve existing polyline points.
                 List<LatLng> pdrpointsMoved = pdrPolyline.getPoints();
-                // add new point
+                // Append the new position.
                 pdrpointsMoved.add(currentLocation);
-                pdrPolyline.setPoints(pdrpointsMoved    );
+                pdrPolyline.setPoints(pdrpointsMoved);
+                // Update the color and visibility of the PDR polyline.
                 pdrPolyline.setColor(Color.parseColor("#FFA500"));
                 pdrPolyline.setVisible(pdrEnabled);
             }
         }
-        // === fused value update logic == //
+
+        // === fused value update logic === //
+        // For fused data, again retrieve the step count.
         int nextFusedStepCount = imuDataList.get(counterYaw).getStepCount();
         if (currFusedStepCount != nextFusedStepCount) {
             currFusedStepCount = nextFusedStepCount;
+            // Log the current fused step count for debugging purposes.
             Log.e("pdr", "test" + currFusedStepCount);
+            // Retrieve the fused current location from a pre-computed list.
             fusedCurrLocation = fusedDataList.get(currFusedStepCount);
 
-            // move the marker
-            if (orientationMarker!=null) {
+            // Move the orientation marker to the new fused location.
+            if (orientationMarker != null) {
                 orientationMarker.setPosition(fusedCurrLocation);
             }
 
-            if (fusedPolyline!=null) {
-                // get existing points
+            // Update the fused polyline with the new location.
+            if (fusedPolyline != null) {
                 List<LatLng> fusedPointsMoved = fusedPolyline.getPoints();
-                // add new point
                 fusedPointsMoved.add(fusedCurrLocation);
                 fusedPolyline.setPoints(fusedPointsMoved);
                 fusedPolyline.setColor(Color.RED);
                 fusedPolyline.setZIndex(7);
             }
 
+            // Update the indoor map manager with the fused location.
             if (indoorMapManager != null) {
                 indoorMapManager.setCurrentLocation(fusedCurrLocation);
+                // If an indoor map is already set, update the current floor.
                 if (indoorMapManager.getIsIndoorMapSet()) {
-                    if(currentWifiLoc != null) {
+                    if (currentWifiLoc != null) {
+                        // Use the current WiFi-determined floor.
                         indoorMapManager.setCurrentFloor(currentFloor, true);
-                    }else {
+                    } else {
+                        // Otherwise, estimate the floor from the current elevation and the floor height.
                         indoorMapManager.setCurrentFloor((int)(currElevation / indoorMapManager.getFloorHeight()), true);
                     }
                 }
@@ -662,10 +689,13 @@ public class ReplayTrajFragment extends Fragment {
         }
 
         // ===== progress bar update logic ===== //
+        // Calculate current progress based on the ratio of counterYaw to total trajectory size.
         currProgress = (int) ((counterYaw * 100.0f) / trajSize);
+        // Update the seek bar (progress bar) with the current progress.
         seekBar.setProgress(currProgress);
 
         // ===== counter update logic ===== //
+        // Increment the counter to move to the next IMU sample on the next tick.
         counterYaw++;
         return null;
     }
