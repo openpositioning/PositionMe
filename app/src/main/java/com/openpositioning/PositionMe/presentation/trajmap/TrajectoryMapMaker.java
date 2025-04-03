@@ -15,12 +15,12 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 将各种更新Marker的方法抽取到这里，避免TrajectoryMapFragment过长
+ *
  */
 
 public class TrajectoryMapMaker {
 
-    // 示例：更新 Medical Room 标记
+    // updateMedicalRoomMarkers
     public static void updateMedicalRoomMarkers(
             GoogleMap gMap,
             int currentFloor,

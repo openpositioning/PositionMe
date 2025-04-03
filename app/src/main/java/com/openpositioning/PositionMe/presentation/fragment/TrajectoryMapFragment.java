@@ -105,7 +105,8 @@ public abstract class TrajectoryMapFragment extends Fragment {
         // Initialize sensorFusion
         sensorFusion = SensorFusion.getInstance();
         sensorFusion.setTrajectoryMapFragment(this);
-        
+
+        // Set up auto floor button that toggles between auto and manual floor control
         autoFloorButton.setOnClickListener(v -> {
             isAutoFloorOn = !isAutoFloorOn;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(
@@ -113,6 +114,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
             updateFloorControlVisibility();
         });
 
+        // Set up floor control buttons that increase the floor
         floorUpButton.setOnClickListener(v -> {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
@@ -121,6 +123,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
             updateFloorControlVisibility();
         });
 
+        // Set up floor control buttons that decrease the floor
         floorDownButton.setOnClickListener(v -> {
             isAutoFloorOn = false;
             autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
@@ -129,7 +132,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
             updateFloorControlVisibility();
         });
 
-        // Set up button toggles
+        // Set up button toggles that show/hide the trajectory plotters
         showRawButton.setOnClickListener(v -> setShowRawTrajectory(!isRawTrajectoryVisible()));
         fusionButton.setOnClickListener(v -> setShowFusionTrajectory(!isFusionTrajectoryVisible()));
         wifiButton.setOnClickListener(v -> setShowWifiTrajectory(!isWifiTrajectoryVisible()));
@@ -140,30 +143,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
             if (!isGnssOn && gnssTrajectoryPlotter != null) {
                 gnssTrajectoryPlotter.clear();
             }
-        });
-
-        autoFloorButton.setOnClickListener(v -> {
-            isAutoFloorOn = !isAutoFloorOn;
-            autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(
-                    isAutoFloorOn ? getResources().getColor(R.color.md_theme_primary) : Color.GRAY));
-            // hide the floor switch button if auto floor is on
-            if (indoorMapManager != null) {
-                setManualFloorControlVisibility(isAutoFloorOn ? View.GONE : View.VISIBLE);
-            }
-        });
-
-        floorUpButton.setOnClickListener(v -> {
-            isAutoFloorOn = false;
-            autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
-            if (indoorMapManager != null) indoorMapManager.increaseFloor();
-            updateAllIndoorMarkers();
-        });
-
-        floorDownButton.setOnClickListener(v -> {
-            isAutoFloorOn = false;
-            autoFloorButton.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
-            if (indoorMapManager != null) indoorMapManager.decreaseFloor();
-            updateAllIndoorMarkers();
         });
 
         initializeRecentreButton();
@@ -228,7 +207,12 @@ public abstract class TrajectoryMapFragment extends Fragment {
         });
     }
 
-
+    /**
+     * Initialize map settings.
+     * This method is called when the map is ready.
+     *
+     * @param map
+     */
     protected void initMapSettings(GoogleMap map) {
         map.getUiSettings().setCompassEnabled(true);
         map.getUiSettings().setTiltGesturesEnabled(true);
@@ -312,6 +296,11 @@ public abstract class TrajectoryMapFragment extends Fragment {
         updateFloorControlVisibility();
     }
 
+    /**
+     * Update the user's "wifi" location via the wifiTrajectoryPlotter.
+     * @param newLocation
+     * @param orientation
+     */
     public void updateWifiLocation(@NonNull LatLng newLocation, float orientation) {
         if (wifiTrajectoryPlotter != null) {
             wifiTrajectoryPlotter.updateLocation(newLocation, orientation);
@@ -320,6 +309,10 @@ public abstract class TrajectoryMapFragment extends Fragment {
         updateFloorControlVisibility();
     }
 
+    /**
+     * Update the user's "gnss" location via the gnssTrajectoryPlotter.
+     * @param location
+     */
     public void updateGNSS(@NonNull LatLng location) {
         if (gMap == null || !isGnssOn || gnssTrajectoryPlotter == null) return;
         float accuracy = sensorFusion.getGnssAccuracy();
@@ -328,16 +321,27 @@ public abstract class TrajectoryMapFragment extends Fragment {
         updateFloorControlVisibility();
     }
 
+    /**
+     * Get the current GNSS status.
+     * @return
+     */
     public boolean isGnssEnabled() {
         return isGnssOn;
     }
 
+    /**
+     * Clear the GNSS trajectory plotter.
+     */
     public void clearGNSS() {
         if (gnssTrajectoryPlotter != null) {
             gnssTrajectoryPlotter.clear();
         }
     }
 
+    /**
+     * Set the visibility of the raw trajectory plotter.
+     * @param show
+     */
     public void setShowRawTrajectory(boolean show) {
         if (rawTrajectoryPlotter != null) {
             rawTrajectoryPlotter.setVisible(show);
@@ -347,6 +351,10 @@ public abstract class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    /**
+     * Set the visibility of the fusion trajectory plotter.
+     * @param show
+     */
     public void setShowFusionTrajectory(boolean show) {
         if (fusionTrajectoryPlotter != null) {
             fusionTrajectoryPlotter.setVisible(show);
@@ -360,6 +368,10 @@ public abstract class TrajectoryMapFragment extends Fragment {
 
     }
 
+    /**
+     * Set the visibility of the wifi trajectory plotter.
+     * @param show
+     */
     public void setShowWifiTrajectory(boolean show) {
         if (wifiTrajectoryPlotter != null) {
             wifiTrajectoryPlotter.setVisible(show);
@@ -373,23 +385,40 @@ public abstract class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    /**
+     * Set the visibility of the GNSS trajectory plotter.
+     * @return
+     */
     private boolean isRawTrajectoryVisible() {
         return rawTrajectoryPlotter != null
                 && rawTrajectoryPlotter.getPolyline() != null
                 && rawTrajectoryPlotter.getPolyline().isVisible();
     }
+
+    /**
+     * Set the visibility of the fusion trajectory plotter.
+     * @return
+     */
     private boolean isFusionTrajectoryVisible() {
         return fusionTrajectoryPlotter != null
                 && fusionTrajectoryPlotter.getPolyline() != null
                 && fusionTrajectoryPlotter.getPolyline().isVisible();
     }
 
+    /**
+     * Set the visibility of the wifi trajectory plotter.
+     * @return
+     */
     private boolean isWifiTrajectoryVisible() {
         return wifiTrajectoryPlotter != null
                 && wifiTrajectoryPlotter.getPolyline() != null
                 && wifiTrajectoryPlotter.getPolyline().isVisible();
     }
 
+    /**
+     * Set the visibility of the GNSS trajectory plotter.
+     * @return
+     */
     protected void updateFloorControlVisibility() {
         if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
             autoFloorButton.setVisibility(View.VISIBLE);
@@ -409,28 +438,41 @@ public abstract class TrajectoryMapFragment extends Fragment {
     }
 
 
-    // get current floor - return current floor
+    /**
+     * Get the current floor of the indoor map.
+     * @return
+     */
     public int getCurrentFloor() {
         return indoorMapManager != null ? indoorMapManager.getCurrentFloor() : 0;
     }
 
-    // get current building - return name of current building / int represent
+    /**
+     * Get the current building of the indoor map.
+     * @return
+     */
     public String getCurrentBuilding() {
         return indoorMapManager != null ? indoorMapManager.getCurrentBuilding() : "";
     }
 
+    /**
+     * Set the floor control button visibility.
+     * @return
+     */
     protected void setManualFloorControlVisibility(int visibility) {
         if (floorUpButton != null) floorUpButton.setVisibility(visibility);
         if (floorDownButton != null) floorDownButton.setVisibility(visibility);
     }
 
+    /**
+     * Update all indoor markers (ROI icon) on the map.
+     */
     protected void updateAllIndoorMarkers() {
         Context context = requireContext();
         int floor = getCurrentFloor();
         String building = getCurrentBuilding();
 
 //        TrajectoryMapWall.drawWalls(gMap, getCurrentFloor(), getCurrentBuilding());
-
+        // Update the markers on the map
         TrajectoryMapMaker.updateEmergencyExitMarkers(gMap, floor, building, emergencyExitMarkers, context);
         TrajectoryMapMaker.updateLiftMarkers(gMap, floor, building, liftMarkers, context);
         TrajectoryMapMaker.updateToiletMarkers(gMap, floor, building, toiletMarkers, context);
@@ -439,10 +481,6 @@ public abstract class TrajectoryMapFragment extends Fragment {
         TrajectoryMapMaker.updateAccessibleRouteMarkers(gMap, floor, building, accessibleRouteMarkers, context);
         TrajectoryMapMaker.updateMedicalRoomMarkers(gMap, floor, building, medicalRoomMarkers, context);
     }
-
-
-
-
 
     /**
      * Allows other components to set the initial map camera position.
@@ -464,7 +502,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * (Reintroduced) Provide the “raw” current location if needed.
+     * Provide the “raw” current location if needed.
      * If you have code that calls getCurrentLocation() externally, this helps fix “cannot resolve” errors.
      */
     public LatLng getCurrentLocation() {
@@ -472,7 +510,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * (Reintroduced) Let other classes pass a pinned location or “tag” for calibration logic.
+     * Let other classes pass a pinned location or “tag” for calibration logic.
      * If your code calls updateCalibrationPinLocation(), this is where you handle it.
      */
     public void updateCalibrationPinLocation(@NonNull LatLng newLocation, boolean pinConfirmed) {
@@ -500,6 +538,9 @@ public abstract class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    /**
+     * Clear all current draw trajectory on on the map.
+     */
     public void clearMapAndReset() {
         if (rawTrajectoryPlotter != null) rawTrajectoryPlotter.clear();
         if (fusionTrajectoryPlotter != null) fusionTrajectoryPlotter.clear();
@@ -507,13 +548,33 @@ public abstract class TrajectoryMapFragment extends Fragment {
         if (gnssTrajectoryPlotter != null) gnssTrajectoryPlotter.clear();
     }
 
+
+    /**
+     * Extend this class to create a new fragment for recording mode.
+     *
+     * @see TrajectoryMapFragment
+     */
     public static class RecordingTrajectoryMapFragment extends TrajectoryMapFragment{
 
     }
 
+    /**
+     * Extend this class to create a new fragment for replay mode.
+     * Have more specialized logic for replay mode. (Hide fusion and wifi buttons)
+     *
+     * @see TrajectoryMapFragment
+     */
     public static class ReplayTrajectoryMapFragment extends TrajectoryMapFragment {
 
 
+        /**
+         * Override onCreateView to inflate the layout for this fragment.
+         * Modify the layout to hide fusion and wifi buttons.
+         *
+         * @param view The View returned by {@link #onCreateView(LayoutInflater, ViewGroup, Bundle)}.
+         * @param savedInstanceState If non-null, this fragment is being re-constructed
+         * from a previous saved state as given here.
+         */
         @Override
         public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
             super.onViewCreated(view, savedInstanceState);
@@ -522,6 +583,10 @@ public abstract class TrajectoryMapFragment extends Fragment {
             if (wifiButton != null) wifiButton.setVisibility(View.GONE);
         }
 
+        /**
+         * Override initMapSettings to set up the map for replay mode.
+         * Change the recenter button behaviour to only recenter the map based on the raw location.
+         */
         @Override
         protected void initializeRecentreButton() {
             recenterButton.setOnClickListener(v -> {
@@ -531,16 +596,31 @@ public abstract class TrajectoryMapFragment extends Fragment {
             });
         }
 
+        /**
+         * Override updateFusionLocation to disable tracking of fusion in replay mode.
+         * @param newLocation
+         * @param orientation
+         */
         @Override
         public void updateFusionLocation(@NonNull LatLng newLocation, float orientation) {
             // Disable fusion plotting in replay mode
         }
 
+        /**
+         * Override updateWifiLocation to disable tracking of wifi in replay mode.
+         * @param newLocation
+         * @param orientation
+         */
         @Override
         public void updateWifiLocation(@NonNull LatLng newLocation, float orientation) {
             // Disable WiFi plotting in replay mode
         }
 
+        /**
+         * Override updateUserLocation to change the logic of updating the indoor map.
+         * @param newLocation
+         * @param orientation
+         */
         @Override
         public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
             // keep track in rawCurrentLocation
@@ -552,7 +632,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
 
 
             if (indoorMapManager != null) {
-                // 只在 indoorMap 存在时才考虑更新
+                // only update indoor map if the map is set in the indoor map manager
                 indoorMapManager.setCurrentLocation(newLocation);
 
                 boolean currentState = indoorMapManager.getIsIndoorMapSet();
@@ -567,6 +647,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
                 updateFloorControlVisibility();
             }
 
+            // center the camera on the raw location if isCameraTracking is true
             if (isCameraTracking && gMap != null) {
                 gMap.moveCamera(CameraUpdateFactory.newLatLng(rawCurrentLocation));
             }

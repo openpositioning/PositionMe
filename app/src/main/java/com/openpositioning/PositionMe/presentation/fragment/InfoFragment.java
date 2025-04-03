@@ -27,6 +27,7 @@ import java.util.List;
  * @see SensorInfo the class used for each sensor instance's metadata
  *
  * @author Mate Stodulka
+ * @author Shu Gu
  */
 public class InfoFragment extends Fragment {
 

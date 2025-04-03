@@ -32,6 +32,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * A fragment that displays the status of various sensors and WiFi information in a bottom sheet.
+ * This fragment is used to show real-time data from the sensors and WiFi positioning system.
+ *
+ * It includes a circular progress bar, a recording icon, and text views for displaying
+ * sensor values such as accelerometer, gravity, magnetic field, gyroscope, light level,
+ * pressure level, proximity level, GNSS latitude and longitude, and PDR values.
+ *
+ * @author Shu Gu
+ */
 public class StatusBottomSheetFragment extends BottomSheetDialogFragment {
 
     private ProgressBar circularProgressBar;
@@ -47,7 +57,7 @@ public class StatusBottomSheetFragment extends BottomSheetDialogFragment {
     private Handler refreshDataHandler;
     private static final long REFRESH_TIME = 2000;
 
-    // 映射每个传感器到其对应 TextView 的 ID 数组
+    // Maps each sensor type to an array of TextView IDs that display its values
     private final Map<SensorTypes, Integer[]> sensorViewMap = new HashMap<>();
 
     private final Runnable refreshTableTask = new Runnable() {
@@ -114,6 +124,9 @@ public class StatusBottomSheetFragment extends BottomSheetDialogFragment {
         refreshDataHandler.post(refreshTableTask);
     }
 
+    /**
+     * Sets up the mapping between sensor types and their corresponding TextView IDs.
+     */
     private void setupSensorViewMap() {
         sensorViewMap.put(SensorTypes.ACCELEROMETER,
                 new Integer[]{R.id.accelerometerX, R.id.accelerometerY, R.id.accelerometerZ});
@@ -135,6 +148,9 @@ public class StatusBottomSheetFragment extends BottomSheetDialogFragment {
                 new Integer[]{R.id.pdrX, R.id.pdrY});
     }
 
+    /**
+     * Starts a blinking animation on the recording icon.
+     */
     private void startBlinkingAnimation() {
         Animation blinking = new AlphaAnimation(1, 0);
         blinking.setDuration(800);
@@ -144,12 +160,23 @@ public class StatusBottomSheetFragment extends BottomSheetDialogFragment {
         recordingIcon.startAnimation(blinking);
     }
 
+    /**
+     * Updates the elevation TextView with the given elevation value.
+     *
+     * @param elevation The elevation value to display.
+     */
     public void updateElevation(String elevation) {
         if (elevationTextView != null) {
             elevationTextView.setText(getString(R.string.elevation, elevation));
         }
     }
 
+    /**
+     * Updates the GNSS error TextView with the given error message and visibility.
+     *
+     * @param error      The error message to display.
+     * @param visibility The visibility state of the TextView.
+     */
     public void updateGnssError(String error, int visibility) {
         if (gnssErrorTextView != null) {
             gnssErrorTextView.setVisibility(visibility);
@@ -157,6 +184,11 @@ public class StatusBottomSheetFragment extends BottomSheetDialogFragment {
         }
     }
 
+    /**
+     * Sets the maximum progress value for the circular progress bar.
+     *
+     * @param max The maximum progress value.
+     */
     public void setMaxProgress(int max) {
         this.maxProgress = max;
         if (circularProgressBar != null) {
@@ -164,6 +196,11 @@ public class StatusBottomSheetFragment extends BottomSheetDialogFragment {
         }
     }
 
+    /**
+     * Sets the current progress value for the circular progress bar.
+     *
+     * @param progress The current progress value.
+     */
     public void setProgress(int progress) {
         this.progress = progress;
         if (circularProgressBar != null) {
@@ -171,10 +208,18 @@ public class StatusBottomSheetFragment extends BottomSheetDialogFragment {
         }
     }
 
+    /**
+     * Increments the current progress value by one.
+     */
     public void incrementProgress() {
         setProgress(++this.progress);
     }
 
+    /**
+     * Sets the scaleY value for the circular progress bar.
+     *
+     * @param scale The scaleY value.
+     */
     public void setScaleY(float scale) {
         if (circularProgressBar != null) {
             circularProgressBar.setScaleY(scale);
@@ -200,7 +245,7 @@ public class StatusBottomSheetFragment extends BottomSheetDialogFragment {
     @Override
     public void onStart() {
         super.onStart();
-        // 设置 BottomSheet 的 peekHeight 为屏幕高度的 1/3
+        // Set the BottomSheet's peek height to 1/3 of the screen height
         View view = getView();
         if (view != null) {
             View parent = (View) view.getParent();

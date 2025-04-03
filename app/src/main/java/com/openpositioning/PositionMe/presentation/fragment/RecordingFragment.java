@@ -31,6 +31,37 @@ import org.json.JSONObject;
 
 import java.util.List;
 
+
+/**
+ * Fragment used for collecting calibration data for indoor positioning systems.
+ *
+ * <p>This fragment allows users to:
+ * <ul>
+ *   <li>Toggle passive sensor data recording at fixed intervals (0.5s)</li>
+ *   <li>Place and confirm calibration markers on the map</li>
+ *   <li>Record labeled location data for machine learning model training</li>
+ *   <li>Tag each calibration point with floor, indoor state, and building name</li>
+ *   <li>Display current and average localization errors (GNSS, PDR, WiFi)</li>
+ * </ul>
+ *
+ * <p>To use this fragment, the following references must be injected via setters:
+ * {@link (SensorFusion)}, {@link (DataFileManager)},
+ * and {@link (TrajectoryMapFragment)}.
+ *
+ * <p>The fragment supports both manual calibration tagging and continuous background data collection.
+ * Data is written to {@link com.openpositioning.PositionMe.data.local.DataFileManager}.
+ *
+ * <p>This class works closely with:
+ * <ul>
+ *   <li>{@link com.openpositioning.PositionMe.sensors.SensorFusion} - for accessing fused location data</li>
+ *   <li>{@link com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment} - for map visualization and marker handling</li>
+ *   <li>{@link com.openpositioning.PositionMe.utils.CalibrationUtils} - for computing error metrics</li>
+ * </ul>
+ *
+ * @see TrajectoryMapFragment
+ * @see SensorFusion
+ * @see DataFileManager
+ */
 public class RecordingFragment extends Fragment {
 
     private static final String TAG = "RecordingFragment";

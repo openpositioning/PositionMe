@@ -2,14 +2,18 @@ import numpy as np
 
 def procrustes_similarity(P, Q):
     """
-    使用带缩放的 Procrustes 分析（2D）求解从 P -> Q 的相似变换 (scale, rotation, translation)。
-    - P: shape (N,2)，源点集 (待对齐)
-    - Q: shape (N,2)，目标点集 (真值或锚点对应坐标)
-    返回:
-       s: float, 同比缩放系数
-       R: (2,2)旋转矩阵
-       t: (2,)平移向量
-    令变换为: X' = s * R * X + t
+    Perform a 2D Procrustes analysis with scaling to compute the similarity transform from P -> Q.
+    
+    Parameters:
+        P (np.ndarray): shape (N,2), source point set (to be aligned)
+        Q (np.ndarray): shape (N,2), target point set (ground truth or anchor-aligned coordinates)
+
+    Returns:
+        s (float): uniform scaling factor
+        R (np.ndarray): shape (2,2), rotation matrix
+        t (np.ndarray): shape (2,), translation vector
+
+    The transform follows: X' = s * R * X + t
     """
     p_mean = np.mean(P, axis=0)
     q_mean = np.mean(Q, axis=0)
@@ -45,11 +49,26 @@ def piecewise_procrustes_alignment(
     debug=True
 ):
     """
-    对 data 做分段式 Procrustes 相似变换对齐（锚点 i+1 不被上一段修改）
-    """
+    Perform piecewise Procrustes similarity transformation alignment on data.
+    For each pair of adjacent anchor points, compute a transform that aligns the segment.
+    The i+1 anchor is excluded from being transformed by the current segment.
 
+    Parameters:
+        data (list): List of data points (dicts) to align
+        lat0, lon0: Origin reference latitude and longitude for coordinate transformation
+        pred_x_field, pred_y_field (str): Keys for predicted (unadjusted) local XY fields
+        true_lat_field, true_lng_field (str): Keys for true GPS coordinates
+        anchor_flag_field (str): Key indicating whether a record is an anchor
+        latlon_to_local_xy (function): Function to convert (lat, lon) to local XY
+        smoothing_count (int): Unused currently (reserved)
+        debug (bool): Whether to print debug info
+
+    Returns:
+        aligned_data (list): Modified data with adjusted coordinates
+        transforms (list): List of transformations applied per segment
+    """
     if latlon_to_local_xy is None:
-        raise ValueError("必须传入 latlon_to_local_xy 函数。")
+        raise ValueError("The 'latlon_to_local_xy' function must be provided.")
 
     data = sorted(data, key=lambda r: r["timestamp"])
 
@@ -62,7 +81,7 @@ def piecewise_procrustes_alignment(
         print("=== piecewise_procrustes_alignment DEBUG START ===")
         print(f"  Found total {len(anchors)} anchors with flag={anchor_flag_field}.")
     if len(anchors) < 2:
-        if debug: print("  不足两个锚点，跳过对齐。")
+        if debug: print("  Not enough anchors (less than 2). Skipping alignment.")
         return data, []
 
     transforms = []
@@ -80,7 +99,7 @@ def piecewise_procrustes_alignment(
         seg_anchor_tgt = []
         anchor_indices = []
 
-        for i_pt in range(start_i, end_i + 1):  # 包含 end_i 以供对齐用
+        for i_pt in range(start_i, end_i + 1):  # Include end_i for alignment reference
             r_pt = data[i_pt]
             if r_pt.get(anchor_flag_field, False) is True:
                 px = r_pt[pred_x_field]
@@ -101,7 +120,7 @@ def piecewise_procrustes_alignment(
 
         if len(seg_anchor_src) < 2:
             if debug:
-                print(f"  [Warning] Segment {seg_idx} has <2 anchors, skip alignment.")
+                print(f"  [Warning] Segment {seg_idx} has <2 anchors, skipping alignment.")
             continue
 
         P = np.array(seg_anchor_src, dtype=np.float64)
@@ -113,7 +132,7 @@ def piecewise_procrustes_alignment(
             print(f"     R=\n{R}")
             print(f"     t={t}")
 
-        # 应用变换：注意这里不更新 end_i (即 anchor i+1)
+        # Apply transform: note that end_i is not modified (i+1 anchor)
         for i_pt in range(start_i, end_i):
             r_pt = data[i_pt]
             px = r_pt[pred_x_field]

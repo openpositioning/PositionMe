@@ -38,7 +38,9 @@ import java.util.List;
  *  - Allows starting/stopping passive recording of sensor data at 0.5s intervals.
  *  - Enables calibration tagging only if recording is active.
  *  - Counts and displays how many total data records have been stored.
- *  - 计算并显示PDR、GNSS、WiFi三者的当前误差和累计平均误差
+ *  - Compute and display the current and average errors for PDR, GNSS, and WiFi.
+ *
+ * @author Shu Gu
  */
 public class CalibrationFragment extends Fragment {
 
@@ -50,7 +52,7 @@ public class CalibrationFragment extends Fragment {
     private EditText buildingNameEditText;
     private MaterialButton calibrationButton, startRecordingButton;
     private TextView pointCountTextView;   // Displays total collected data points
-    private TextView errorTextView;        // 显示当前误差和累计平均误差
+    private TextView errorTextView;        // Displays current and average errors
 
     // Data references
     private SensorFusion sensorFusion;
@@ -72,7 +74,7 @@ public class CalibrationFragment extends Fragment {
     // Count of how many total points have been collected (both passive and calibration)
     private int recordCount = 0;
 
-    // 统计误差相关
+    // Error computation and tracking
     private double totalPdrError = 0;
     private double totalGnssError = 0;
     private double totalWifiError = 0;
@@ -136,6 +138,7 @@ public class CalibrationFragment extends Fragment {
             }
         });
 
+        // Setup recording button that manage passive recording
         startRecordingButton.setOnClickListener(v -> {
             if (!passiveRecordingActive) {
                 startPassiveRecording();
@@ -280,7 +283,7 @@ public class CalibrationFragment extends Fragment {
 
     /**
      * Confirm the marker location, store calibration record,
-     * 并计算当前误差与累计平均误差，然后更新 errorTextView 显示
+     * And compute the errors for PDR, GNSS, and WiFi.
      */
     private void confirmCalibration() {
         if (calibrationMarker == null) {
@@ -300,14 +303,14 @@ public class CalibrationFragment extends Fragment {
                 "Calibration confirmed at (" + lat + ", " + lng + ")",
                 Toast.LENGTH_SHORT).show();
 
-        // 获取传感器数据记录（包含GNSS、PDR、WiFi的位置数据）
+        // get all sensor data
         JSONObject record = sensorFusion.getAllSensorData();
-        // GNSS位置
+        // get gnss position
         double gnssLat = record.optDouble("gnssLat", Double.NaN);
         double gnssLon = record.optDouble("gnssLon", Double.NaN);
         LatLng gnssPos = (!Double.isNaN(gnssLat) && !Double.isNaN(gnssLon)) ? new LatLng(gnssLat, gnssLon) : null;
 
-        // PDR位置
+        // get pdr position
         double pdrX = record.optDouble("pdrX", Double.NaN);
         double pdrY = record.optDouble("pdrY", Double.NaN);
         // convert pdr from meters to latitude/longitude
@@ -316,19 +319,19 @@ public class CalibrationFragment extends Fragment {
 
         LatLng pdrPos = (!Double.isNaN(pdrX) && !Double.isNaN(pdrY)) ? new LatLng(pdrX, pdrY) : null;
 
-        // WiFi位置
+        // WiFi position get
         double wifiLat = record.optDouble("wifiLat", Double.NaN);
         double wifiLon = record.optDouble("wifiLon", Double.NaN);
         LatLng wifiPos = (!Double.isNaN(wifiLat) && !Double.isNaN(wifiLon)) ? new LatLng(wifiLat, wifiLon) : null;
 
 
-        // 使用新的工具类计算误差
+        // Use the CalibrationUtils to calculate errors
         CalibrationUtils.CalibrationErrors errors = CalibrationUtils.calculateCalibrationErrors(markerPos, gnssPos, pdrPos, wifiPos);
         double currentGnssError = errors.gnssError;
         double currentPdrError = errors.pdrError;
         double currentWifiError = errors.wifiError;
 
-        // 更新累计误差与标记次数（仅对有效误差值累计）
+        // Update total errors
         if (currentGnssError >= 0) {
             totalGnssError += currentGnssError;
         }
@@ -340,6 +343,7 @@ public class CalibrationFragment extends Fragment {
         }
         calibrationCount++;
 
+        // Compute average errors
         double avgGnssError = (calibrationCount > 0) ? totalGnssError / calibrationCount : 0;
         double avgPdrError = (calibrationCount > 0) ? totalPdrError / calibrationCount : 0;
         double avgWifiError = (calibrationCount > 0) ? totalWifiError / calibrationCount : 0;
@@ -349,7 +353,7 @@ public class CalibrationFragment extends Fragment {
         Log.d(TAG, String.format("Avg Error after %d tags — PDR: %.2f m, GNSS: %.2f m, WiFi: %.2f m",
                 calibrationCount, avgPdrError, avgGnssError, avgWifiError));
 
-        // 更新 TextView 显示当前误差与累计平均误差
+        // Update the error text view
         if (errorTextView != null) {
             String errorText = "Current Errors:\n" +
                     String.format("PDR: %.2f m, GNSS: %.2f m, WiFi: %.2f m\n", currentPdrError, currentGnssError, currentWifiError) +
@@ -358,7 +362,7 @@ public class CalibrationFragment extends Fragment {
             errorTextView.setText(errorText);
         }
 
-        // 触发并保存标记数据记录
+        // Then trigger the calibration marker update
         onCalibrationTriggered(lat, lng, selectedIndoorState, selectedFloorLevel, buildingName);
         calibrationMarker.remove();
     }
@@ -393,9 +397,18 @@ public class CalibrationFragment extends Fragment {
         }
     }
 
+
     /************************************************
      *  Passive Recording (toggle on/off)
      ************************************************/
+    /**
+     * Starts the passive recording of sensor data at regular intervals.
+     * This method sets up a handler that periodically collects sensor data
+     * and saves it to a file. The recording is active until explicitly stopped.
+     * It also enables the calibration button for tagging.
+     *
+     * @author Shu Gu
+     */
     private void startPassiveRecording() {
         passiveRecordingActive = true;
         calibrationButton.setEnabled(true); // Now user can do tagging

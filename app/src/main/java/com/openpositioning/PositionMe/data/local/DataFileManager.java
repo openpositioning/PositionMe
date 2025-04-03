@@ -22,8 +22,11 @@ import java.util.List;
 
 /**
  * DataFileManager encapsulates all file I/O and buffering logic.
+ *
  * It creates a new output file in the public Downloads folder, buffers JSON records,
  * automatically flushes them when a threshold is reached, and finalizes the file on close.
+ *
+ * @author Shu Gu
  */
 public class DataFileManager {
     private static final String TAG = "DataFileManager";
@@ -34,12 +37,20 @@ public class DataFileManager {
     private OutputStream outStream;
     private List<JSONObject> dataBuffer;
 
+    /**
+     * Constructs a new DataFileManager instance.
+     *
+     * @param context the application context
+     */
     public DataFileManager(Context context) {
         this.context = context;
         this.dataBuffer = new ArrayList<>();
         prepareLocalFetch();
     }
 
+    /**
+     * Prepares the local fetch by creating an output file URI and opening an output stream.
+     */
     private void prepareLocalFetch() {
         outputFileUri = getDownloadOutputFile(context);
         if (outputFileUri != null) {
@@ -57,6 +68,8 @@ public class DataFileManager {
 
     /**
      * Adds a JSON record to the buffer. Flushes to file if the threshold is reached.
+     *
+     * @param record the JSON record to add
      */
     public void addRecord(JSONObject record) {
         dataBuffer.add(record);
@@ -79,7 +92,6 @@ public class DataFileManager {
                 outStream.write(jsonLine.getBytes());
             }
             outStream.flush();
-//            Log.d(TAG, "Flushed " + dataBuffer.size() + " records to file.");
             dataBuffer.clear();
         } catch (IOException e) {
             Log.e(TAG, "Error flushing data", e);
@@ -108,6 +120,12 @@ public class DataFileManager {
         }
     }
 
+    /**
+     * Creates a URI for the output file in the Downloads folder.
+     *
+     * @param context the application context
+     * @return the URI of the output file
+     */
     private Uri getDownloadOutputFile(Context context) {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmm").format(new Date());
         String fileName = "collection_data_" + Build.MODEL + "_" + timeStamp + ".json";
@@ -122,6 +140,13 @@ public class DataFileManager {
         }
     }
 
+    /**
+     * Creates a URI for the output file in the Downloads folder for API >= Q.
+     *
+     * @param context the application context
+     * @param fileName the name of the output file
+     * @return the URI of the output file
+     */
     @RequiresApi(api = Build.VERSION_CODES.Q)
     private Uri getDownloadOutputFileForQ(Context context, String fileName) {
         ContentValues values = new ContentValues();
