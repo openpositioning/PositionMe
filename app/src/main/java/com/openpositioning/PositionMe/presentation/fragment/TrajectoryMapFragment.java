@@ -308,7 +308,7 @@ public class TrajectoryMapFragment extends Fragment {
      *
      * @param fusionLocation The latest fusion position estimate
      */
-    // 2. In the updateFusionPosition method, add style enhancements:
+    //  In the updateFusionPosition method, add style enhancements:
     public void updateFusionPosition(@NonNull LatLng fusionLocation, float orientation) {
         if (gMap == null || fusionLocation == null) {
             Log.e("TrajectoryMapFragment", "Cannot update fusion: gMap or fusionLocation is null");
