@@ -87,7 +87,7 @@ public class FilesFragment extends Fragment implements Observer {
     @Override
     public void onResume() {
         super.onResume();
-        // 获取主界面的 BottomNavigationView，并隐藏它
+        // main BottomNavigationView
         BottomNavigationView bottomNav = getActivity().findViewById(R.id.bottom_navigation);
         if (bottomNav != null) {
             bottomNav.setVisibility(View.VISIBLE);

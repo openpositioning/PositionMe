@@ -20,7 +20,7 @@ public class SensorAdapter extends RecyclerView.Adapter<SensorAdapter.SensorView
 
     public SensorAdapter(List<SensorData> sensorList) {
         this.sensorList = sensorList;
-        this.sensorDataMap = new LinkedHashMap<>(); // ✅ 确保传感器顺序不变 Ensure the order of sensors remains unchanged
+        this.sensorDataMap = new LinkedHashMap<>(); //  Ensure the order of sensors remains unchanged
         for (SensorData data : sensorList) {
             sensorDataMap.put(data.getName(), data);
         }
@@ -45,15 +45,14 @@ public class SensorAdapter extends RecyclerView.Adapter<SensorAdapter.SensorView
         return sensorList.size();
     }
 
-    // ✅ **更新整个数据集（用于 `onResume()` 或初始化）**
-    // ✅ **Update the entire dataset (for `onResume()` or initialization)**
+    // Update the entire dataset (for `onResume()` or initialization)
     public void updateData(List<SensorData> newData) {
         sensorDataMap.clear();
         for (SensorData data : newData) {
             sensorDataMap.put(data.getName(), data);
         }
         sensorList.clear();
-        sensorList.addAll(sensorDataMap.values()); // ✅ 确保按原始顺序更新 Ensure updates are in original order
+        sensorList.addAll(sensorDataMap.values()); //  Ensure updates are in original order
         notifyDataSetChanged();
     }
 

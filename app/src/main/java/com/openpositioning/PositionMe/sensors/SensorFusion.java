@@ -165,21 +165,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     private Location lastGnssLocation;
     private long lastGnssTime;
 
-//    List<LatLng> wallPointsLatLng = Arrays.asList(
-//            new LatLng(55.92301090863321, -3.174221045188629),
-//            new LatLng(55.92301094092557, -3.1742987516650873),
-//            new LatLng(55.92292858261526, -3.174298917609189),
-//            new LatLng(55.92292853699635, -3.174189214585424),
-//            new LatLng(55.92298698483965, -3.1741890966446484)
-//    );
-//    List<LatLng> wallSecondPointsLatLng = Arrays.asList(
-//            new LatLng(55.923012912847625, -3.17430025206314),
-//            new LatLng(55.9230128674766, -3.1741911042535036),
-//            new LatLng(55.922952153773124, -3.174191226755363),
-//            new LatLng(55.922952199155134, -3.17430037438893),
-//            new LatLng(55.923012912847625, -3.17430025206314)
-//    );
-
     private int fenceCounter = 0;
 
     private long lastWifiSuccessTime = 0;

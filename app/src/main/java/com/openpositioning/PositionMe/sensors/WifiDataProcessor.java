@@ -129,30 +129,31 @@ public class WifiDataProcessor implements Observable {
                 return;
             }
 
-            //Collect the list of nearby wifis
+            // Collect the list of nearby Wi-Fi access points
             List<ScanResult> wifiScanList = wifiManager.getScanResults();
 
-            // 1. 过滤 + 排序 Wi-Fi 列表（按信号强度，从强到弱）
+            // 1. Filter and sort the Wi-Fi list (by signal strength, from strongest to weakest)
             List<ScanResult> filteredList = wifiScanList.stream()
-                    // RSSI 筛选
+                    // Filter by RSSI (signal strength threshold)
                     .filter(w -> w.level > MIN_RSSI)
-                    // SSID 黑名单过滤
+                    // Filter out SSIDs in the blacklist
                     .filter(w -> ssidBlacklist.stream().noneMatch(bad -> w.SSID.contains(bad)))
-                    // BSSID 合法性检查（非空、非 02:00:00）
+                    // Check BSSID validity (not null, not 02:00:00:00:00:00)
                     .filter(w -> w.BSSID != null && !w.BSSID.equals("02:00:00:00:00:00"))
-                    // 按信号强度排序
+                    // Sort by signal strength (descending)
                     .sorted(Comparator.comparingInt(w -> -w.level))
-                    // 最多选 MAX_WIFI_APS 个
+                    // Limit to at most MAX_WIFI_APS entries
                     .limit(MAX_WIFI_APS)
                     .collect(Collectors.toList());
-            //Stop receiver as scan is complete
-//            context.unregisterReceiver(this);
+
             try {
+                // Stop receiving broadcast after scan is complete
                 context.unregisterReceiver(this);
             } catch (IllegalArgumentException e) {
                 Log.w("WiFiReceiver", "Receiver already unregistered: " + e.getMessage());
             }
-            // 2. 将过滤后的结果转换为 wifiData[]
+
+            // 2. Convert the filtered list to a wifiData[] array
             wifiData = new Wifi[filteredList.size()];
             for (int i = 0; i < filteredList.size(); i++) {
                 ScanResult result = filteredList.get(i);
@@ -161,21 +162,9 @@ public class WifiDataProcessor implements Observable {
                 wifiData[i].setLevel(result.level);
             }
 
-
-//            //Loop though each item in wifi list
-//            wifiData = new Wifi[wifiScanList.size()];
-//            for(int i = 0; i < wifiScanList.size(); i++) {
-//                wifiData[i] = new Wifi();
-//                //Convert String mac address to an integer
-//                String wifiMacAddress = wifiScanList.get(i).BSSID;
-//                long intMacAddress = convertBssidToLong(wifiMacAddress);
-//                //store mac address and rssi of wifi
-//                wifiData[i].setBssid(intMacAddress);
-//                wifiData[i].setLevel(wifiScanList.get(i).level);
-//            }
-
-            //Notify observers of change in wifiData variable
+            // Notify observers that wifiData has changed
             notifyObservers(0);
+
         }
     };
 

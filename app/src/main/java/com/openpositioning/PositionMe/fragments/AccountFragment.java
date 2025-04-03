@@ -86,7 +86,7 @@ public class AccountFragment extends Fragment {
         if (sensorFusion == null) {
             Log.e("SensorFusion", "SensorFusion is null");
         }
-        sensorFusion.setContext(requireContext()); // 重要：传入 Context
+        sensorFusion.setContext(requireContext()); // pass Context
         List<SensorInfo> sensorInfoList = sensorFusion.getSensorInfos();
         // Set adapter for the recycler view.
         sensorInfoView.setAdapter(new SensorInfoListAdapter(getActivity(), sensorInfoList));
