@@ -25,7 +25,7 @@ public class HomePagerAdapter extends FragmentStateAdapter {
 
     @Override
     public int getItemCount() {
-        return 2; // 2个Fragment (Sensors, Wifi)
+        return 2; // 2 Fragment (Sensors, Wifi)
     }
 }
 
