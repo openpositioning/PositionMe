@@ -9,7 +9,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
-import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 
 
 /**
@@ -33,7 +32,6 @@ import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragmen
  * The ReplayActivity manages the interaction between fragments by facilitating communication from the
  * StartLocationFragment to the ReplayFragment, where the replay of the trajectory is displayed.
  *
- * @see StartLocationFragment The fragment where the user selects their start location for the trajectory replay.
  * @see ReplayFragment The fragment responsible for showing the trajectory replay.
  *
  * @author Shu Gu
@@ -42,8 +40,6 @@ import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragmen
 public class ReplayActivity extends AppCompatActivity {
 
     public static final String TAG = "ReplayActivity";
-    public static final String EXTRA_INITIAL_LAT = "extra_initial_lat";
-    public static final String EXTRA_INITIAL_LON = "extra_initial_lon";
     public static final String EXTRA_TRAJECTORY_FILE_PATH = "extra_trajectory_file_path";
 
     private String filePath;
@@ -71,46 +67,19 @@ public class ReplayActivity extends AppCompatActivity {
             Log.i(TAG, "Trajectory file exists: " + filePath);
         }
 
-        // Show StartLocationFragment first to let user pick location
-        if (savedInstanceState == null) {
-            showStartLocationFragment();
-        }
+        showReplayFragment(filePath);
     }
 
     /**
-     * Display a StartLocationFragment to let user set their start location.
-     * Displays the ReplayFragment and passes the trajectory file path as an argument.
+     * Display ReplayFragment, passing file path argument.
      */
-    private void showStartLocationFragment() {
-        Log.d(TAG, "Showing StartLocationFragment...");
-        StartLocationFragment startLocationFragment = new StartLocationFragment();
-        getSupportFragmentManager()
-                .beginTransaction()
-                .replace(R.id.replayActivityContainer, startLocationFragment)
-                .commit();
-    }
-
-    /**
-     * Called by StartLocationFragment when user picks their start location.
-     */
-    public void onStartLocationChosen(float lat, float lon) {
-        Log.i(TAG, "User selected start location: Lat=" + lat + ", Lon=" + lon);
-        showReplayFragment(filePath, lat, lon);
-    }
-
-    /**
-     * Display ReplayFragment, passing file path and starting lat/lon as arguments.
-     */
-    public void showReplayFragment(String filePath, float initialLat, float initialLon) {
-        Log.d(TAG, "Switching to ReplayFragment with file: " + filePath +
-                ", Initial Lat: " + initialLat + ", Initial Lon: " + initialLon);
+    public void showReplayFragment(String filePath) {
+        Log.d(TAG, "Switching to ReplayFragment with file: " + filePath);
 
         ReplayFragment replayFragment = new ReplayFragment();
         // Pass the file path through a Bundle
         Bundle args = new Bundle();
         args.putString(EXTRA_TRAJECTORY_FILE_PATH, filePath);
-        args.putFloat(EXTRA_INITIAL_LAT, initialLat);
-        args.putFloat(EXTRA_INITIAL_LON, initialLon);
         replayFragment.setArguments(args);
 
         getSupportFragmentManager()

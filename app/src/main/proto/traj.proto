@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+option java_package = "com.openpositioning.PositionMe";
+
 message Trajectory {
 string android_version = 1;
 repeated Motion_Sample imu_data = 2;
@@ -27,6 +29,10 @@ Sensor_Info rotation_vector_info = 14;
 Sensor_Info magnetometer_info = 15;
 Sensor_Info barometer_info = 16;
 Sensor_Info light_sensor_info = 17;
+
+Initial_Pos initial_pos = 18;
+
+repeated Fused_Pos fused_pos = 19;
 
 }
 
@@ -112,7 +118,15 @@ message GNSS_Sample {
 message WiFi_Sample {
     int64 relative_timestamp = 1;
     repeated Mac_Scan mac_scans = 2;
+    Position position = 3;
 
+}
+
+message Position {
+    int64 relative_timestamp = 1;
+    float latitude = 2;
+    float longitude = 3;
+    int32 floor = 4;
 }
 
 message Mac_Scan {
@@ -146,4 +160,16 @@ message Sensor_Info {
     float power = 4;
     int32 version = 5;
     int32 type = 6;
+}
+
+message Initial_Pos {
+    float initial_latitude = 1;
+    float initial_longitude = 2;
+}
+
+message Fused_Pos {
+    int64 relative_timestamp = 1;
+    float latitude = 2;
+    float longitude = 3;
+    string algorithm = 4;
 }

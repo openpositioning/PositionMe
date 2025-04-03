@@ -49,6 +49,13 @@
             app:defaultValue="75"
             android:max="150"
             android:min="50"/>
+            
+        <SwitchPreferenceCompat
+            app:key="enable_fall_detection"
+            app:title="@string/fall_detection_title"
+            app:summaryOff="@string/fall_detection_summary_off"
+            app:summaryOn="@string/fall_detection_summary_on"
+            app:defaultValue="true"/>
     </PreferenceCategory>
 
 
@@ -127,6 +134,14 @@
             app:dependency="overwrite_constants"
             app:defaultValue="5"
             android:summary="@string/wifi_scan_interval" />
+            
+        <EditTextPreference
+            android:id="@+id/gnssMaxErrorInput"
+            android:inputType="number"
+            app:key="gnss_max_error"
+            app:title="@string/gnss_max_error_title"
+            app:summary="@string/gnss_max_error_summary"
+            app:defaultValue="20" />
 
     </PreferenceCategory>
 

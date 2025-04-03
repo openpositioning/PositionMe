@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@android:color/white"
+    android:padding="20dp"
+    android:elevation="5dp"
+    android:gravity="center"
+    android:layout_margin="30dp">
+
+    <!-- Main Message Text -->
+    <TextView
+        android:id="@+id/fallMessage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Are you okay?"
+        android:textSize="18sp"
+        android:textColor="@android:color/black"
+        android:paddingBottom="20dp" />
+
+    <!-- Timer Text (for countdown) -->
+    <TextView
+        android:id="@+id/timerText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Emergency call in: 7s"
+        android:textSize="18sp"
+        android:textColor="@android:color/black"
+        android:paddingBottom="20dp" />
+
+    <!-- Button to Dismiss -->
+    <Button
+        android:id="@+id/dismissButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="I am safe, all good!"
+        android:background="@color/md_theme_light_primary"
+        android:textColor="@android:color/white"
+        android:padding="10dp"
+        android:textAllCaps="false"/>
+</LinearLayout>

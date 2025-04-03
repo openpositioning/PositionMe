@@ -1,6 +1,8 @@
 package com.openpositioning.PositionMe.utils;
 
 
+import android.util.Log;
+
 import com.google.android.gms.maps.model.LatLng;
 
 import java.util.ArrayList;
@@ -94,6 +96,12 @@ public class BuildingPolygon {
      *      Otherwise False
      */
     private static boolean crossingSegment(LatLng point, LatLng a,LatLng b) {
+
+        if (point == null || a == null || b == null) {
+            Log.e("BuildingPolygon", "crossingSegment: Null LatLng detected! point=" + point + ", a=" + a + ", b=" + b);
+            return false; // Prevent crash
+        }
+
         double pointLng = point.longitude,
                 pointLat = point.latitude,
                 aLng = a.longitude,

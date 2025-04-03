@@ -163,4 +163,14 @@
     <color name="md_theme_surfaceContainer_highContrast">#DEE3E6</color>
     <color name="md_theme_surfaceContainerHigh_highContrast">#D0D5D8</color>
     <color name="md_theme_surfaceContainerHighest_highContrast">#C2C7CA</color>
+
+    <color name="blue_track">#a6d2f5</color>   <!-- Blue -->
+    <color name="yellow_track">#f7db86</color> <!-- Yellow -->
+    <color name="red_track">#ff968f</color>    <!-- Red -->
+    <color name="gray_track">#BDBDBD</color>   <!-- Default Gray when OFF -->
+
+    <color name="blue_thumb">#1565C0</color>
+    <color name="yellow_thumb">#FFA000</color>
+    <color name="red_thumb">#D32F2F</color>
+    <color name="gray_thumb">#757575</color>  <!-- Default Thumb when OFF -->
 </resources>
