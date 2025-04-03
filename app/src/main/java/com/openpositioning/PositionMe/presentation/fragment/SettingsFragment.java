@@ -12,7 +12,6 @@ import com.openpositioning.PositionMe.R;
  * SettingsFragment that inflates and displays the preferences (settings).
  * Sets type for numeric only fields.
  *
- * @see HomeFragment the return fragment when leaving the settings.
  *
  * @author Mate Stodulka
  */

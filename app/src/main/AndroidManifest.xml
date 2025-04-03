@@ -77,12 +77,6 @@
     <activity
         android:name=".presentation.activity.ReplayActivity"
         android:exported="false" />
-    <activity
-        android:name=".presentation.activity.RecordingActivity"
-        android:exported="false" />
-
-    <activity android:name=".presentation.activity.CollectionActivity" />
-
 
         <!-- Google Maps API key metadata -->
     <meta-data
