@@ -7,7 +7,7 @@
     android:background="@color/white"
     tools:context=".Reset">
 
-    <!-- 顶部波浪背景 -->
+
     <ImageView
         android:id="@+id/top_background"
         android:layout_width="match_parent"
@@ -16,7 +16,7 @@
         android:src="@drawable/top"
         app:layout_constraintTop_toTopOf="parent"/>
 
-    <!-- 标题 "Reset Password" -->
+
     <TextView
         android:id="@+id/reset_title"
         android:layout_width="wrap_content"
@@ -30,7 +30,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="30dp"/>
 
-    <!-- 说明文字 -->
+
     <TextView
         android:id="@+id/reset_description"
         android:layout_width="0dp"
@@ -46,7 +46,7 @@
         android:layout_marginTop="15dp"
         android:layout_marginHorizontal="40dp"/>
 
-    <!-- E-mail 输入框 -->
+
     <EditText
         android:id="@+id/email"
         android:layout_width="0dp"
@@ -65,7 +65,7 @@
         android:layout_marginTop="30dp"
         android:layout_marginHorizontal="40dp"/>
 
-    <!-- Send 按钮 -->
+
     <Button
         android:id="@+id/send"
         android:layout_width="0dp"
@@ -81,7 +81,7 @@
         android:layout_marginTop="30dp"
         android:layout_marginHorizontal="40dp"/>
 
-    <!-- 底部波浪背景 -->
+
     <ImageView
         android:id="@+id/bottom_background"
         android:layout_width="100dp"

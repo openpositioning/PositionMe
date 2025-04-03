@@ -97,7 +97,7 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         if (currentMarker != null) {
             currentMarker.remove();
             currentMarker = null;
-            Log.d("MarkerReset", "🔥 旧 Marker 被移除");
+            Log.d("MarkerReset", "🔥 old Marker is removed!");
         }
 
         // initialise location manager
@@ -117,13 +117,13 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         }
         this.sensorFusion = SensorFusion.getInstance();
         sensorFusion.setContext(getActivity().getApplicationContext());
-//        sensorFusion.resumeListening();  // 注册所有传感器监听器 Register all sensor listeners
+//        sensorFusion.resumeListening();  // Register all sensor listeners
         if (this.sensorFusion == null) {
             Log.e("SensorFusion", "❌ SensorFusion is NULL! Retrying initialization...");
-            this.sensorFusion = SensorFusion.getInstance(); // 重新获取实例 Re-obtain the instance
+            this.sensorFusion = SensorFusion.getInstance(); // Re-obtain the instance
         } else {
             sensorFusion.startWifiScanOnly();
-            Log.d("SensorFusion", "✅ SensorFusion 初始化成功");
+            Log.d("SensorFusion", "✅ SensorFusion initialized!");
         }
 
         // initialize interest zones

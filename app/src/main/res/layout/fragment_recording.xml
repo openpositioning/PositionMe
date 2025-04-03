@@ -7,17 +7,16 @@
     tools:context=".fragments.RecordingFragment"
     android:background="@android:color/white">
 
-    <!-- 🟦 顶部消息栏 -->
+    <!-- 🟦 Top status bar -->
 
     <!-- 🗺️ Google Map -->
 
-    <!-- 📌 左侧控件：地图模式切换 & GNSS 开关 -->
+    <!-- 📌 Left-side controls: Map mode switch & GNSS toggle -->
 
     <LinearLayout
         android:id="@+id/status_bar"
         android:layout_width="match_parent"
         android:layout_height="85dp"
-
         android:background="@android:color/holo_blue_dark"
         android:backgroundTint="#F0A6E8"
         android:gravity="center_vertical"
@@ -72,12 +71,10 @@
         android:id="@+id/redDot"
         android:layout_width="48dp"
         android:layout_height="43dp"
-
         android:layout_marginBottom="80dp"
         android:layout_alignBottom="@id/control_panel"
         android:layout_alignEnd="@id/control_panel"
         android:contentDescription="@string/recording"
-
         android:src="@drawable/ic_baseline_red_dot_24" />
 
     <LinearLayout
@@ -128,12 +125,11 @@
             android:background="@drawable/rounded_corner_pink_rounder"
             android:backgroundTint="#F0A6E8"
             android:backgroundTintMode="src_in"
-
             android:popupBackground="@drawable/rounded_corner_pink_rounder" />
 
     </LinearLayout>
 
-    <!-- 📌 右侧控件：Auto Floor 开关 & 楼层增减按钮 -->
+    <!-- 📌 Right-side controls: Auto Floor toggle & floor increment/decrement buttons -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -179,7 +175,7 @@
             android:visibility="gone"/>
     </LinearLayout>
 
-    <!-- 🎮 底部控制面板 -->
+    <!-- 🎮 Bottom control panel -->
     <LinearLayout
         android:id="@+id/control_panel"
         android:layout_width="match_parent"
@@ -220,10 +216,8 @@
             android:layout_height="60dp"
             android:text="STOP"
             android:background="@drawable/rounded_corner_pink_rounder"
-
             android:textColor="@android:color/white"
             android:textStyle="bold"
             android:drawableLeft="@drawable/ic_baseline_stop_24" />
     </LinearLayout>
 </RelativeLayout>
-

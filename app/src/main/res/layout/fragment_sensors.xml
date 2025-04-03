@@ -6,7 +6,7 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- 传感器数据列表 -->
+    <!-- Sensor data list -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/sensor_recycler_view"
         android:layout_width="match_parent"
@@ -14,7 +14,7 @@
         android:layout_weight="1"
         android:paddingBottom="8dp"/>
 
-    <!-- 按钮布局 -->
+    <!-- Button layout -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

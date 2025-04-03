@@ -555,7 +555,7 @@ public class ServerCommunications implements Observable {
         Log.e("infoRequestURL", infoRequestURL);
 
         if (infoRequestURL == null) {
-            System.err.println("infoRequestURL 尚未初始化，无法发送请求");
+            System.err.println("infoRequestURL is not initialised，cannot send request");
             return;
         }
 

@@ -7,7 +7,7 @@
     android:padding="16dp"
     android:background="@android:color/white">
 
-    <!-- WiFi 标题栏 -->
+    <!-- WiFi title -->
     <LinearLayout
         android:id="@+id/wifi_header"
         android:layout_width="0dp"
@@ -39,7 +39,7 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- WiFi 列表 -->
+    <!-- WiFi list -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/wifi_recycler_view"
         android:layout_width="0dp"
@@ -50,7 +50,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- 按钮布局 -->
+    <!-- buttons -->
     <LinearLayout
         android:id="@+id/buttons_layout"
         android:layout_width="0dp"

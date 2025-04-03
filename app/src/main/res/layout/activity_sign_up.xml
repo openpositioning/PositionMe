@@ -6,7 +6,6 @@
     android:background="@color/white"
     tools:context=".SignUpActivity">
 
-    <!-- 顶部波浪背景 -->
     <ImageView
         android:id="@+id/top_background"
         android:layout_width="match_parent"
@@ -15,7 +14,7 @@
         android:src="@drawable/top"
         app:layout_constraintTop_toTopOf="parent"/>
 
-    <!-- 标题 "Create Account" -->
+    <!-- "Create Account" -->
     <TextView
         android:id="@+id/title"
         android:layout_width="wrap_content"
@@ -29,7 +28,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="30dp"/>
 
-    <!-- 用户名输入框 -->
+    <!-- Username input field -->
     <EditText
         android:id="@+id/username"
         android:layout_width="0dp"
@@ -48,7 +47,7 @@
         android:layout_marginTop="30dp"
         android:layout_marginHorizontal="40dp"/>
 
-    <!-- 密码输入框 -->
+    <!-- Password input field -->
     <EditText
         android:id="@+id/password"
         android:layout_width="0dp"
@@ -67,7 +66,7 @@
         android:layout_marginTop="15dp"
         android:layout_marginHorizontal="40dp"/>
 
-    <!-- 邮箱输入框 -->
+    <!-- Email input field -->
     <EditText
         android:id="@+id/email"
         android:layout_width="0dp"
@@ -86,7 +85,7 @@
         android:layout_marginTop="15dp"
         android:layout_marginHorizontal="40dp"/>
 
-    <!-- 手机号输入框 -->
+    <!-- Mobile number input field -->
     <EditText
         android:id="@+id/phone"
         android:layout_width="0dp"
@@ -105,7 +104,7 @@
         android:layout_marginTop="15dp"
         android:layout_marginHorizontal="40dp"/>
 
-    <!-- Create 按钮 -->
+    <!-- Create button -->
     <Button
         android:id="@+id/create"
         android:layout_width="0dp"
@@ -121,7 +120,7 @@
         android:layout_marginTop="30dp"
         android:layout_marginHorizontal="40dp"/>
 
-    <!-- 底部波浪背景 -->
+    <!-- Bottom wave background -->
     <ImageView
         android:id="@+id/bottom_background"
         android:layout_width="100dp"

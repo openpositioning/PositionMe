@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <!-- Fragment 容器（用于加载不同的页面） -->
+
     <FrameLayout
         android:id="@+id/fragment_container"
         android:layout_width="match_parent"

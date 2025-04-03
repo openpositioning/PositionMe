@@ -7,7 +7,7 @@
     android:gravity="center_horizontal"
     android:paddingTop="20dp">
 
-    <!-- 自定义 TabLayout -->
+    <!--  TabLayout -->
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tab_layout"
         android:layout_width="200dp"
@@ -34,7 +34,7 @@
             android:text="WIFI" />
     </com.google.android.material.tabs.TabLayout>
 
-    <!-- ViewPager2 (用于滑动切换内容) -->
+    <!-- ViewPager2  -->
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/view_pager"
         android:layout_width="match_parent"

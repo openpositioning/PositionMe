@@ -3,13 +3,13 @@
     <item android:state_pressed="true">
         <shape android:shape="rectangle">
             <corners android:radius="30dp"/>
-            <solid android:color="#E57373"/> <!-- 按下时颜色 -->
+            <solid android:color="#E57373"/>
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
             <corners android:radius="30dp"/>
-            <solid android:color="#FFCDD2"/> <!-- 默认颜色 -->
+            <solid android:color="#FFCDD2"/>
         </shape>
     </item>
 </selector>
