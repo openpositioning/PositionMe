@@ -1,7 +1,5 @@
 package com.openpositioning.PositionMe.sensors;
 
-import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment;
-
 /**
  * The Wifi object holds the Wifi parameters listed below.
  *
@@ -43,7 +41,7 @@ public class Wifi {
      * Generates a string containing mac address and rssi of Wifi.
      *
      * Concatenates mac address and rssi to display in the
-     * {@link MeasurementsFragment} fragment
+     * {@link com.openpositioning.PositionMe.fragments.MeasurementsFragment} fragment
      */
     @Override
     public String toString() {

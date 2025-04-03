@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -76,17 +77,23 @@ public class GNSSDataProcessor {
      * @return  boolean true if all permissions are granted for location access, false otherwise.
      */
     private boolean checkLocationPermissions() {
-        int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.ACCESS_COARSE_LOCATION);
-        int fineLocationPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.ACCESS_FINE_LOCATION);
-        int internetPermission = ActivityCompat.checkSelfPermission(this.context,
-                Manifest.permission.INTERNET);
+        if (Build.VERSION.SDK_INT >= 23) {
 
-        // Return missing permissions
-        return coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
-                fineLocationPermission == PackageManager.PERMISSION_GRANTED &&
-                internetPermission == PackageManager.PERMISSION_GRANTED;
+            int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION);
+            int fineLocationPermission = ActivityCompat.checkSelfPermission(this.context,
+                    Manifest.permission.ACCESS_FINE_LOCATION);
+            int internetPermission = ActivityCompat.checkSelfPermission(this.context,
+                    Manifest.permission.INTERNET);
+
+            // Return missing permissions
+            return coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
+                    fineLocationPermission == PackageManager.PERMISSION_GRANTED &&
+                    internetPermission == PackageManager.PERMISSION_GRANTED;
+        } else {
+            // Permissions are granted by default
+            return true;
+        }
     }
 
     /**
