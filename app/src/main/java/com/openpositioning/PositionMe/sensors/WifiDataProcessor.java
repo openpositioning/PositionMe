@@ -11,6 +11,7 @@ import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.provider.Settings;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -124,7 +125,7 @@ public class WifiDataProcessor implements Observable {
             //Collect the list of nearby wifis
             List<ScanResult> wifiScanList = wifiManager.getScanResults();
             //Stop receiver as scan is complete
-            context.unregisterReceiver(this);
+            //context.unregisterReceiver(this);
 
             //Loop though each item in wifi list
             wifiData = new Wifi[wifiScanList.size()];
@@ -137,6 +138,7 @@ public class WifiDataProcessor implements Observable {
                 wifiData[i].setBssid(intMacAddress);
                 wifiData[i].setLevel(wifiScanList.get(i).level);
             }
+            Log.d("WifiDataProcessor", "Scan result received: size = " + wifiScanList.size());
 
             //Notify observers of change in wifiData variable
             notifyObservers(0);

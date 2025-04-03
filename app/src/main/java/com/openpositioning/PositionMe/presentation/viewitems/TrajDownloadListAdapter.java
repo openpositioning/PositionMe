@@ -68,6 +68,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
      * @param listener      Callback listener for handling download click events.
      */
     public TrajDownloadListAdapter(Context context, List<Map<String, String>> responseItems, DownloadClickListener listener) {
+        if (context == null) {
+            throw new IllegalArgumentException("Context cannot be null");
+        }
         this.context = context;
         this.responseItems = responseItems;
         this.listener = listener;
@@ -76,6 +79,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
         // Initialize the FileObserver to listen for changes in the download records file.
         initFileObserver();
     }
+
+
 
     /**
      * Loads the local download records from storage.

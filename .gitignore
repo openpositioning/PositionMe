@@ -14,3 +14,7 @@
 .cxx
 local.properties
 /.idea/
+/machine_learning/.venv
+/machine_learning/__pycache__
+machine_learning/debug_plot.png
+/machine_learning/data

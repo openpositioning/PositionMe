@@ -1,0 +1,18 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+<item
+    android:id="@+id/recordingFragment"
+    android:title="Explore"
+    android:icon="@drawable/ic_baseline_directions_walk_24" />
+<item
+    android:id="@+id/filesFragment"
+    android:title="Replay"
+    android:icon="@drawable/ic_baseline_folder_24" />
+<item
+    android:id="@+id/infoFragment"
+    android:title="Device"
+    android:icon="@drawable/ic_device_info_svgrepo_com" />
+<item
+    android:id="@+id/settingsFragment"
+    android:title="Settings"
+    android:icon="@drawable/ic_baseline_settings_24" />
+</menu>

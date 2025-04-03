@@ -3,11 +3,13 @@ package com.openpositioning.PositionMe.utils;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.SensorManager;
+import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -188,43 +190,58 @@ public class PdrProcessing {
      * @return                  current elevation in meters relative to the start position.
      */
     public float updateElevation(float absoluteElevation) {
-        // Set start to median of first three values
-        if(setupIndex < 3) {
-            // Add values to buffer until it's full
-            this.startElevationBuffer[setupIndex] = absoluteElevation;
-            // When buffer is full, find median, assign as startElevation
-            if(setupIndex == 2) {
-                Arrays.sort(startElevationBuffer);
-                startElevation = startElevationBuffer[1];
-            }
-            this.setupIndex++;
+        // Step 0: Filter out invalid values
+        if (absoluteElevation < -100 || absoluteElevation > 10000) {
+            Log.w("PdrProcessing", "Ignoring invalid elevation reading: " + absoluteElevation);
+            return 0;
         }
-        else {
-            // Get relative elevation in meters
-            this.elevation = absoluteElevation - startElevation;
-            // Add to buffer
-            this.elevationList.putNewest(absoluteElevation);
 
-            // Check if there was floor movement
-            // Check if there is enough data to evaluate
-            if(this.elevationList.isFull()) {
-                // Check average of elevation array
-                List<Float> elevationMemory = this.elevationList.getListCopy();
-                OptionalDouble currentAvg = elevationMemory.stream().mapToDouble(f -> f).average();
-                float finishAvg = currentAvg.isPresent() ? (float) currentAvg.getAsDouble() : 0;
+        // Step 1: Use the median of the first 3 values as initial reference
+        if (setupIndex < 3) {
+            this.startElevationBuffer[setupIndex] = absoluteElevation;
 
-                // Check if we moved floor by comparing with start position
-                if(Math.abs(finishAvg - startElevation) > this.floorHeight) {
-                    // Change floors - 'floor' division
-                    this.currentFloor += (finishAvg - startElevation)/this.floorHeight;
+            if (setupIndex == 2) {
+                // Extract non-null values for safety
+                List<Float> nonNulls = new ArrayList<>();
+                for (Float f : startElevationBuffer) {
+                    if (f != null) nonNulls.add(f);
+                }
+
+                if (nonNulls.size() == 3) {
+                    Collections.sort(nonNulls);
+                    startElevation = nonNulls.get(1); // median
+                    Log.d("PdrProcessing", "startElevation initialized to: " + startElevation);
+                } else {
+                    Log.e("PdrProcessing", "startElevationBuffer incomplete: " + Arrays.toString(startElevationBuffer));
+                    startElevation = 0f;
                 }
             }
-            // Return current elevation
-            return elevation;
+
+            setupIndex++;
+            return 0;
         }
-        // Keep elevation at zero if there is no calculated value
-        return 0;
+
+        // Step 2: Normal elevation calculation (after initialization)
+        this.elevation = absoluteElevation - startElevation;
+
+        // Add to buffer for averaging
+        this.elevationList.putNewest(absoluteElevation);
+
+        // Step 3: Check if user moved to a different floor
+        if (this.elevationList.isFull()) {
+            List<Float> elevationMemory = this.elevationList.getListCopy();
+            OptionalDouble currentAvg = elevationMemory.stream().mapToDouble(f -> f).average();
+            float finishAvg = currentAvg.isPresent() ? (float) currentAvg.getAsDouble() : 0f;
+
+            if (Math.abs(finishAvg - startElevation) > this.floorHeight) {
+                this.currentFloor += (finishAvg - startElevation) / this.floorHeight;
+                Log.d("PdrProcessing", "Floor changed, new floor: " + currentFloor);
+            }
+        }
+
+        return elevation;
     }
+
 
     /**
      * Uses the Weiberg Stride Length formula to calculate step length from accelerometer values.
@@ -412,6 +429,25 @@ public class PdrProcessing {
 
         //Return average step length
         return averageStepLength;
+    }
+    /**
+     * 设置 PDR 的初始位置坐标（单位：米），用于对齐 GNSS / WiFi 初始点。
+     *
+     * @param x 初始东向坐标（ENU）
+     * @param y 初始北向坐标（ENU）
+     */
+    public void setInitialPosition(float x, float y) {
+        this.positionX = x;
+        this.positionY = y;
+    }
+
+    /**
+     * Returns the most recently calculated step length.
+     *
+     * @return the current step length in meters.
+     */
+    public float getStepLength() {
+        return this.stepLength;
     }
 
 }
