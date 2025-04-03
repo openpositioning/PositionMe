@@ -102,7 +102,7 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                     File storageDir = context.getFilesDir();
                     File file = new File(storageDir, "received_trajectory.txt");
 
-                    // **删除已有文件**
+                    // **Delete the existing file.**
                     if (file.exists()) {
                         boolean deleted = file.delete();
                         if (deleted) {
@@ -112,26 +112,26 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                         }
                     }
 
-                    // **调用下载方法**
+                    // **Call the download method.**
                     serverCommunications.downloadTrajectory(adapterPosition);
 
-                    // **轮询检查文件是否成功下载**
+                    // **Polling to check if the file has been successfully downloaded.**
                     boolean fileDownloaded = false;
                     int attempts = 0;
-                    while (attempts < 20) { // 最长尝试 10 秒（20 * 500ms）
+                    while (attempts < 20) { // Maximum attempt: 10 seconds (20 * 500ms).
                         if (file.exists()) {
                             fileDownloaded = true;
                             break;
                         }
                         try {
-                            Thread.sleep(500); // 每 500ms 检测一次
+                            Thread.sleep(500); // Check every 500ms.
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
                         attempts++;
                     }
 
-                    // **根据下载结果执行相应操作**
+                    // **Perform corresponding actions based on the download result.**
                     if (fileDownloaded) {
                         holder.downloadedFilePath = file.getAbsolutePath();
                         Log.d(TAG, "Download complete: File path -> " + holder.downloadedFilePath);

@@ -241,7 +241,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                 LocationManager locationManager = (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
 
                 Criteria criteria = new Criteria();
-                criteria.setAccuracy(Criteria.ACCURACY_FINE); // 优先使用精确定位
+                criteria.setAccuracy(Criteria.ACCURACY_FINE); // Prioritize using precise positioning.
 
                 String bestProvider = locationManager.getBestProvider(criteria, true);
 
@@ -253,7 +253,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                         LatLng userLocation = new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
                         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(userLocation, 15f));
                     } else {
-                        // 主动监听一次定位（仅触发一次）
+                        // Actively listen for a location update (only trigger once).
                         locationManager.requestSingleUpdate(bestProvider, new LocationListener() {
                             @Override
                             public void onLocationChanged(@NonNull Location location) {

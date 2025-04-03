@@ -76,7 +76,7 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
         // Set click listener for the delete button
         holder.deletebutton.setOnClickListener(v -> deleteFileAtPosition(position));
 
-        // 绑定 Replay 按钮
+        // Bind the Replay button.
         holder.replay_button.setOnClickListener(v -> {
             int adapterPosition = holder.getAdapterPosition();
             if (adapterPosition != RecyclerView.NO_POSITION) {

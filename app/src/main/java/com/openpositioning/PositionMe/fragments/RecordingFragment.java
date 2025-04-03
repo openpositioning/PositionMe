@@ -232,7 +232,7 @@ public class RecordingFragment extends Fragment {
                 //Showing an indication of available indoor maps using PolyLines
                 indoorMapManager.setIndicationOfIndoorMap();
                 polyline.setZIndex(500);
-                refreshDataHandler.post(refreshDataTask); // ✅ 地图准备好再更新 UI
+                refreshDataHandler.post(refreshDataTask); // ✅ Update the UI after the map is ready.
 
             }
         });
@@ -602,7 +602,7 @@ public class RecordingFragment extends Fragment {
         }
 
 
-        if (fusedLatLng == null) return; // 防止空指针
+        if (fusedLatLng == null) return; // Prevent a null pointer.
 
         double lat = fusedLatLng.latitude;
         double lng = fusedLatLng.longitude;
@@ -611,7 +611,7 @@ public class RecordingFragment extends Fragment {
             previousPosX = lat;
             previousPosY = lng;
             isFirstUpdate = false;
-            currentLocation = fusedLatLng; // 直接从 fused 点开始，不用默认 GNSS 点
+            currentLocation = fusedLatLng; // Start directly from the fused point instead of using the default GNSS point.
             polyline.setPoints(List.of(currentLocation));
             return;
         }

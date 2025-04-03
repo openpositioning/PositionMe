@@ -61,7 +61,7 @@ public class LocalCoordinateSystem {
      */
     public float[] toLocal(double latitude, double longitude) {
         if (!initialized) {
-            initReference(latitude, longitude);  // 自动初始化
+            initReference(latitude, longitude);  // Automatic initialization.
             return new float[]{0.0F, 0.0F};
         }
 

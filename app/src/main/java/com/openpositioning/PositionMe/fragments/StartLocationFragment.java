@@ -190,27 +190,27 @@ public class StartLocationFragment extends Fragment {
                     return;
                 }
 
-                // 弹出提示，等待 5 秒
+                // Pop up a prompt, wait for 5 seconds.
                 Toast.makeText(requireContext(), "Positioning successful, recording will start in 5 seconds...", Toast.LENGTH_SHORT).show();
 
-                // 禁用按钮避免重复点击（可选）
+                // Disable the button to avoid repeated clicks (optional).
                 view.setEnabled(false);
 
                 new Handler().postDelayed(() -> {
-                    // 启动录制
+                    // Start recording.
                     sensorFusion.startRecording();
 
-                    // 设置起始位置
+                    // Set starting position.
                     float[] fusedPosition = new float[]{
                             (float) fusedLatLng.latitude,
                             (float) fusedLatLng.longitude
                     };
                     sensorFusion.setStartGNSSLatitude(fusedPosition);
 
-                    // 页面跳转
+                    // Navigate to another page.
                     NavDirections action = StartLocationFragmentDirections.actionStartLocationFragmentToRecordingFragment();
                     Navigation.findNavController(view).navigate(action);
-                }, 5000); // 5000 毫秒 = 5 秒
+                }, 5000); // 5000 milliseconds = 5 seconds
             }
 
         });

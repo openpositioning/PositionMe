@@ -17,7 +17,7 @@ import com.openpositioning.PositionMe.R;
  *
  * @author Mate Stodulka
  *
- * @author Zonghanzhao @12/02/2025 From group09
+ * @author Zonghanzhao @12/02/2025 From group 02
  */
 public class SettingsFragment extends PreferenceFragmentCompat {
 
