@@ -97,12 +97,12 @@ public class HomeFragment extends Fragment {
         this.start.setOnClickListener(new View.OnClickListener() {
             /**
              * {@inheritDoc}
-             * Navigate to the {@link StartLocationFragment} using AndroidX Jetpack. Hides the
-             * action bar so the map appears on the full screen.
+             * Navigate to the {@link RecordingFragment} using AndroidX Jetpack. Hides the
+             * action bar.
              */
             @Override
             public void onClick(View view) {
-                NavDirections action = HomeFragmentDirections.actionHomeFragmentToStartLocationFragment();
+                NavDirections action = HomeFragmentDirections.actionHomeFragmentToRecordingFragment();
                 Navigation.findNavController(view).navigate(action);
                 //Show action bar
                 ((AppCompatActivity)getActivity()).getSupportActionBar().hide();

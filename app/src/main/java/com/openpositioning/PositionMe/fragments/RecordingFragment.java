@@ -23,6 +23,7 @@ import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -50,7 +51,9 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.TrajOptim;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -78,7 +81,7 @@ public class RecordingFragment extends Fragment {
     private ImageView recIcon;
     //Loading bar to show time remaining before recording automatically ends
     private ProgressBar timeRemaining;
-    //Text views to display distance travelled and elevation since beginning of recording
+    // Text views to display distance travelled and elevation since beginning of recording
 
     private TextView elevation;
     private TextView distanceTravelled;
@@ -123,12 +126,56 @@ public class RecordingFragment extends Fragment {
     private Switch gnss;
     // GNSS marker
     private Marker gnssMarker;
+    // WiFi marker
+    private Marker wifiMarker;
+    // WiFi Switch
+    private Switch wifiSwitch;
     // Button used to switch colour
     private Button switchColor;
     // Current color of polyline
     private boolean isRed=true;
     // Switch used to set auto floor
     private Switch autoFloor;
+    // Algorithm switch dropdown
+    private Spinner algorithmSwitchSpinner;
+    // Flag to track if recording is in progress
+    private boolean isRecording = false;
+    // Flag to track if signal is available for recording
+    private boolean isSignalAvailable = false;
+    // TextView to show waiting for signal message
+    private TextView waitingForSignalText;
+    
+    // --- Particle Filter Integration Variables ---
+    // Particle filter instance for sensor fusion
+    private com.openpositioning.PositionMe.FusionFilter.ParticleFilter particleFilter;
+    // Extended Kalman filter instance for sensor fusion
+    private com.openpositioning.PositionMe.FusionFilter.EKFFilter ekfFilter;
+    // Polyline for the fused path (blue)
+    private Polyline fusedPolyline;
+    // Store the fused position 
+    private LatLng currentFusedPosition;
+    // Next fused location
+    private LatLng nextFusedLocation;
+    // Flag indicating if we're in indoor environment
+    private boolean isIndoor = false;
+    // Flag indicating if particle filter is active
+    private boolean isParticleFilterActive = false;
+    // Flag indicating if EKF filter is active
+    private boolean isEKFActive = false;
+    // Flag indicating if batch optimization is active 
+    private boolean isBatchOptimizationActive = false;
+    // List to store fused trajectory points
+    private List<LatLng> fusedTrajectoryPoints = new ArrayList<>();
+    // --- End Particle Filter Integration Variables ---
+
+    // Switch for trajectory smoothing
+    private Switch smoothSwitch;
+    // Flag to track if smoothing is active
+    private boolean isSmoothing = false;
+    // Store the last smoothed position for low-pass filter
+    private LatLng lastSmoothedPosition = null;
+    // Alpha value for low-pass filter (0-1)
+    private final float SMOOTHING_ALPHA = 0.3f;
 
     /**
      * Public Constructor for the class.
@@ -142,7 +189,7 @@ public class RecordingFragment extends Fragment {
      * {@inheritDoc}
      * Gets an instance of the {@link SensorFusion} class, and initialises the context and settings.
      * Creates a handler for periodically updating the displayed data.
-     *
+     * Starts recording and initializes the start position since navigation now comes directly from HomeFragment.
      */
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -151,6 +198,16 @@ public class RecordingFragment extends Fragment {
         Context context = getActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.refreshDataHandler = new Handler();
+        
+        // Initialize fusion variables
+        this.isParticleFilterActive = false;
+        this.isEKFActive = false;
+        this.isBatchOptimizationActive = false;
+        this.isIndoor = false;
+        this.fusedTrajectoryPoints = new ArrayList<>();
+        
+        // Do not initialize recording here - wait for WiFi position if indoors
+        // Will be started in the start button handler after valid position is confirmed
     }
 
     /**
@@ -165,7 +222,7 @@ public class RecordingFragment extends Fragment {
         // Inflate the layout for this fragment
         ((AppCompatActivity)getActivity()).getSupportActionBar().hide();
         getActivity().setTitle("Recording...");
-        //Obtain start position set in the startLocation fragment
+        //Obtain start position that was set in onCreate
         float[] startPosition = sensorFusion.getGNSSLatitude(true);
 
         // Initialize map fragment
@@ -207,8 +264,23 @@ public class RecordingFragment extends Fragment {
                 // Adding polyline to map to plot real-time trajectory
                 PolylineOptions polylineOptions=new PolylineOptions()
                         .color(Color.RED)
-                        .add(currentLocation);
+                        .add(currentLocation)
+                        .width(10f)
+                        .zIndex(10f);
                 polyline = gMap.addPolyline(polylineOptions);
+                
+                // Add polyline for fused trajectory (blue)
+                PolylineOptions fusedPolylineOptions = new PolylineOptions()
+                        .color(Color.BLUE)
+                        .width(8f)
+                        .add(currentLocation)
+                        .visible(isParticleFilterActive || isEKFActive)
+                        .zIndex(20f);
+                fusedPolyline = gMap.addPolyline(fusedPolylineOptions);
+                
+                // Initialize fused position with current location
+                currentFusedPosition = currentLocation;
+                
                 // Setting current location to set Ground Overlay for indoor map (if in building)
                 indoorMapManager.setCurrentLocation(currentLocation);
                 //Showing an indication of available indoor maps using PolyLines
@@ -251,20 +323,100 @@ public class RecordingFragment extends Fragment {
         this.previousPosX = 0f;
         this.previousPosY = 0f;
 
-        // Stop button to save trajectory and move to corrections
+        // Initialize waiting for signal text
+        this.waitingForSignalText = getView().findViewById(R.id.waitingForSignalText);
+        
+        // Initialize recording icon (red dot) as invisible - only shown when recording
+        this.recIcon = getView().findViewById(R.id.redDot);
+        this.recIcon.setVisibility(View.GONE);
+        
+        // Initialize particle filter as active by default (set in algorithDropdown)
+        isParticleFilterActive = true;
+        
+        // Start/Stop button to control recording and save trajectory
         this.stopButton = getView().findViewById(R.id.stopButton);
+        // Initially set as "Start" and disabled
+        this.stopButton.setText(getString(R.string.start));
+        this.stopButton.setEnabled(false);
+        this.stopButton.setBackgroundColor(Color.GRAY);
+        // Show waiting for signal message
+        this.waitingForSignalText.setVisibility(View.VISIBLE);
+        this.waitingForSignalText.setText(getString(R.string.waiting_for_signal));
+        
         this.stopButton.setOnClickListener(new View.OnClickListener() {
             /**
              * {@inheritDoc}
-             * OnClick listener for button to go to next fragment.
-             * When button clicked the PDR recording is stopped and the {@link CorrectionFragment} is loaded.
+             * OnClick listener for Start/Stop button.
+             * When clicked in "Start" mode, it begins recording and changes to "Stop".
+             * When clicked in "Stop" mode, it stops recording and navigates to CorrectionFragment.
              */
             @Override
             public void onClick(View view) {
-                if(autoStop != null) autoStop.cancel();
-                sensorFusion.stopRecording();
-                NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
-                Navigation.findNavController(view).navigate(action);
+                if (!isRecording) {
+                    // Start recording
+                    isRecording = true;
+                    stopButton.setText(getString(R.string.stop));
+                    
+                    // Set the start location based on environment (indoor/outdoor)
+                    if (isIndoor) {
+                        // For indoor, use WiFi position if available
+                        LatLng wifiPosition = sensorFusion.getLatLngWifiPositioning();
+                        if (wifiPosition != null) {
+                            // Convert to float array for SensorFusion
+                            float[] wifiArray = new float[] {(float)wifiPosition.latitude, (float)wifiPosition.longitude};
+                            sensorFusion.setStartGNSSLatitude(wifiArray);
+                        } else {
+                            // Fallback to GNSS if WiFi not available
+                            float[] gnssPosition = sensorFusion.getGNSSLatitude(false);
+                            sensorFusion.setStartGNSSLatitude(gnssPosition);
+                        }
+                    } else {
+                        // For outdoor, use GNSS position
+                        float[] gnssPosition = sensorFusion.getGNSSLatitude(false);
+                        sensorFusion.setStartGNSSLatitude(gnssPosition);
+                    }
+                    
+                    // Start the actual recording
+                    sensorFusion.startRecording();
+                    // Display a blinking red dot to show recording is in progress
+                    blinkingRecording();
+                    // Start the refreshing tasks
+                    if (!settings.getBoolean("split_trajectory", false)) {
+                        refreshDataHandler.post(refreshDataTask);
+                    } else {
+                        // If that time limit has been reached:
+                        long limit = settings.getInt("split_duration", 30) * 60000L;
+                        // Set progress bar
+                        timeRemaining.setMax((int) (limit/1000));
+                        timeRemaining.setScaleY(3f);
+                        
+                        // Create a CountDownTimer object to adhere to the time limit
+                        autoStop = new CountDownTimer(limit, 1000) {
+                            @Override
+                            public void onTick(long l) {
+                                // increment progress bar
+                                timeRemaining.incrementProgressBy(1);
+                                // Get new position and update UI
+                                updateUIandPosition();
+                            }
+
+                            @Override
+                            public void onFinish() {
+                                // Timer done, move to next fragment automatically - will stop recording
+                                sensorFusion.stopRecording();
+                                NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
+                                Navigation.findNavController(view).navigate(action);
+                            }
+                        }.start();
+                    }
+                } else {
+                    // Stop recording
+                    isRecording = false;
+                    if(autoStop != null) autoStop.cancel();
+                    sensorFusion.stopRecording();
+                    NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
+                    Navigation.findNavController(view).navigate(action);
+                }
             }
         });
 
@@ -274,21 +426,28 @@ public class RecordingFragment extends Fragment {
             /**
              * {@inheritDoc}
              * OnClick listener for button to go to home fragment.
-             * When button clicked the PDR recording is stopped and the {@link HomeFragment} is loaded.
+             * When button clicked the PDR recording is stopped (if recording) and the {@link HomeFragment} is loaded.
              * The trajectory is not saved.
              */
             @Override
             public void onClick(View view) {
-                sensorFusion.stopRecording();
+                // Only stop recording if we're actually recording
+                if (isRecording) {
+                    sensorFusion.stopRecording();
+                    if(autoStop != null) autoStop.cancel();
+                }
                 NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToHomeFragment();
                 Navigation.findNavController(view).navigate(action);
-                if(autoStop != null) autoStop.cancel();
             }
         });
         // Configuring dropdown for switching map types
         mapDropdown();
         // Setting listener for the switching map types dropdown
         switchMap();
+        // Configuring dropdown for switching positioning algorithms
+        algorithmDropdown();
+        // Setting listener for the switching positioning algorithms dropdown
+        switchAlgorithm();
         // Floor changer Buttons
         this.floorUpButton=getView().findViewById(R.id.floorUpButton);
         this.floorDownButton=getView().findViewById(R.id.floorDownButton);
@@ -334,7 +493,15 @@ public class RecordingFragment extends Fragment {
                 if (isChecked){
                     // Show GNSS eror
                     float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-                    LatLng gnssLocation = new LatLng(location[0],location[1]);
+                    LatLng gnssLocation = null;
+                    
+                    // Validate location data before creating LatLng
+                    if (location != null && location.length >= 2 && 
+                        !Float.isNaN(location[0]) && !Float.isNaN(location[1]) &&
+                        !Float.isInfinite(location[0]) && !Float.isInfinite(location[1])) {
+                        gnssLocation = new LatLng(location[0], location[1]);
+                    }
+                    
                     gnssError.setVisibility(View.VISIBLE);
                     gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
                             UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
@@ -349,6 +516,38 @@ public class RecordingFragment extends Fragment {
                 }
             }
         });
+
+        //Obtain the WiFi toggle switch
+        this.wifiSwitch = getView().findViewById(R.id.wifiSwitch);
+        this.wifiSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            /**
+             * {@inheritDoc}
+             * Listener to set WiFi positioning marker.
+             */
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
+                if (isChecked) {
+                    // Get WiFi position
+                    LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+                    // Add WiFi marker with blue color if location is available
+                    if (wifiLocation != null) {
+                        wifiMarker = gMap.addMarker(
+                                new MarkerOptions().title("WiFi position")
+                                        .position(wifiLocation)
+                                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
+                    } else {
+                        // Inform user that WiFi positioning isn't available
+                        wifiSwitch.setChecked(false);
+                        Toast.makeText(getContext(), "WiFi positioning not available", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    if (wifiMarker != null) {
+                        wifiMarker.remove();
+                    }
+                }
+            }
+        });
+        
         // Switch colour button
         this.switchColor=getView().findViewById(R.id.lineColorButton);
         this.switchColor.setOnClickListener(new View.OnClickListener() {
@@ -375,50 +574,225 @@ public class RecordingFragment extends Fragment {
         // Display the progress of the recording when a max record length is set
         this.timeRemaining = getView().findViewById(R.id.timeRemainingBar);
 
-        // Display a blinking red dot to show recording is in progress
-        blinkingRecording();
-
-        // Check if there is manually set time limit:
-        if(this.settings.getBoolean("split_trajectory", false)) {
-            // If that time limit has been reached:
-            long limit = this.settings.getInt("split_duration", 30) * 60000L;
-            // Set progress bar
-            this.timeRemaining.setMax((int) (limit/1000));
-            this.timeRemaining.setScaleY(3f);
-
-            // Create a CountDownTimer object to adhere to the time limit
-            this.autoStop = new CountDownTimer(limit, 1000) {
-                /**
-                 * {@inheritDoc}
-                 * Increment the progress bar to display progress and remaining time. Update the
-                 * observed PDR values, and animate icons based on the data.
-                 */
-                @Override
-                public void onTick(long l) {
-                    // increment progress bar
-                    timeRemaining.incrementProgressBy(1);
-                    // Get new position and update UI
-                    updateUIandPosition();
+        // Check for signal availability periodically
+        checkSignalAvailability();
+        
+        // Obtain the Smooth toggle switch
+        this.smoothSwitch = getView().findViewById(R.id.smoothSwitch);
+        this.smoothSwitch.setChecked(false); // Default off
+        this.smoothSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            /**
+             * {@inheritDoc}
+             * Listener to enable/disable trajectory smoothing.
+             */
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
+                isSmoothing = isChecked;
+                if (isChecked) {
+                    // When smoothing is enabled, set the last smoothed position to current position
+                    if ((isParticleFilterActive || isEKFActive) && currentFusedPosition != null) {
+                        lastSmoothedPosition = currentFusedPosition;
+                    }
+                    Toast.makeText(getContext(), "Trajectory smoothing enabled", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(getContext(), "Trajectory smoothing disabled", Toast.LENGTH_SHORT).show();
                 }
+            }
+        });
+        
+        // Remove existing recording start logic and let the Start button handle it
+    }
 
-                /**
-                 * {@inheritDoc}
-                 * Finish recording and move to the correction fragment.
-                 * @see CorrectionFragment
-                 */
-                @Override
-                public void onFinish() {
-                    // Timer done, move to next fragment automatically - will stop recording
-                    sensorFusion.stopRecording();
-                    NavDirections action = RecordingFragmentDirections.actionRecordingFragmentToCorrectionFragment();
-                    Navigation.findNavController(view).navigate(action);
+    /**
+     * Check for GNSS or WiFi signal availability and update the Start button accordingly
+     */
+    private void checkSignalAvailability() {
+        Handler signalCheckHandler = new Handler();
+        signalCheckHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                // Check if GNSS or WiFi signals are available
+                boolean hasGnssSignal = false;
+                boolean hasWifiSignal = false;
+                
+                // Check GNSS availability
+                if (sensorFusion.getSensorValueMap().containsKey(SensorTypes.GNSSLATLONG)) {
+                    float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+                    if (location != null && location.length >= 2) {
+                        hasGnssSignal = true;
+                    }
                 }
-            }.start();
-        }
-        else {
-            // No time limit - use a repeating task to refresh UI.
-            this.refreshDataHandler.post(refreshDataTask);
-        }
+                
+                // Check if WiFi position not available, try GNSS
+                LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+                if (wifiLocation != null) {
+                    hasWifiSignal = true;
+                    // If this is our first WiFi position, determine we're indoors
+                    if (!isSignalAvailable && !isRecording) {
+                        isIndoor = true;
+                        // Update currentLocation to WiFi position for indoor environment
+                        currentLocation = wifiLocation;
+                        currentFusedPosition = wifiLocation;
+                        
+                        // Update marker position if marker exists
+                        if (orientationMarker != null) {
+                            orientationMarker.setPosition(wifiLocation);
+                            // Move camera to WiFi position
+                            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(wifiLocation, 19f));
+                            
+                            // Reset polylines with new start position
+                            List<LatLng> points = new ArrayList<>();
+                            points.add(wifiLocation);
+                            polyline.setPoints(points);
+                            fusedPolyline.setPoints(points);
+                        }
+                        
+                        // Validate WiFi position before initializing particle filter
+                        if (wifiLocation != null && 
+                            !Double.isNaN(wifiLocation.latitude) && !Double.isNaN(wifiLocation.longitude) &&
+                            !Double.isInfinite(wifiLocation.latitude) && !Double.isInfinite(wifiLocation.longitude) &&
+                            Math.abs(wifiLocation.latitude) <= 90 && Math.abs(wifiLocation.longitude) <= 180 &&
+                            !(wifiLocation.latitude == 0 && wifiLocation.longitude == 0)) {
+                            try {
+                                particleFilter = new com.openpositioning.PositionMe.FusionFilter.ParticleFilter(wifiLocation);
+                                Log.d("RecordingFragment", "Indoor environment detected, using WiFi position as start");
+                            } catch (IllegalArgumentException e) {
+                                Log.e("RecordingFragment", "Failed to initialize particle filter with WiFi position: " + e.getMessage());
+                                particleFilter = null;
+                            }
+                        } else {
+                            Log.e("RecordingFragment", "Invalid WiFi position for particle filter initialization");
+                        }
+                    }
+                } else if (hasGnssSignal && !isSignalAvailable && !isRecording) {
+                    // If no WiFi but GNSS available, we're outdoors
+                    isIndoor = false;
+                    // Initialize particle filter with GNSS position
+                    float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+                    // Validate GNSS location before initializing particle filter
+                    if (location != null && location.length >= 2 && 
+                        !Float.isNaN(location[0]) && !Float.isNaN(location[1]) &&
+                        !Float.isInfinite(location[0]) && !Float.isInfinite(location[1]) &&
+                        Math.abs(location[0]) <= 90 && Math.abs(location[1]) <= 180 &&
+                        !(location[0] == 0 && location[1] == 0)) {
+                        try {
+                            LatLng gnssLocation = new LatLng(location[0], location[1]);
+                            particleFilter = new com.openpositioning.PositionMe.FusionFilter.ParticleFilter(gnssLocation);
+                            Log.d("RecordingFragment", "Outdoor environment detected, using GNSS position as start");
+                        } catch (IllegalArgumentException e) {
+                            Log.e("RecordingFragment", "Failed to initialize particle filter with GNSS position: " + e.getMessage());
+                            particleFilter = null;
+                        }
+                    } else {
+                        Log.e("RecordingFragment", "Invalid GNSS position for particle filter initialization");
+                    }
+                }
+                
+                // Update button state based on signal availability
+                isSignalAvailable = hasGnssSignal || hasWifiSignal;
+                if (isSignalAvailable && !isRecording) {
+                    // Enable Start button if signal is available and not recording
+                    stopButton.setEnabled(true);
+                    stopButton.setBackgroundColor(Color.BLUE);
+                    waitingForSignalText.setVisibility(View.GONE);
+                } else if (!isSignalAvailable && !isRecording) {
+                    // Keep button disabled if no signal and update message
+                    stopButton.setEnabled(false);
+                    stopButton.setBackgroundColor(Color.GRAY);
+                    waitingForSignalText.setVisibility(View.VISIBLE);
+                }
+                
+                // Check again after a delay (500ms)
+                signalCheckHandler.postDelayed(this, 500);
+            }
+        }, 500); // Initial delay of 500ms
+        
+        // Start periodic position refresh before recording starts
+        startPreRecordingPositionRefresh();
+    }
+
+    /**
+     * Periodically refreshes the marker and camera position before recording starts
+     */
+    private void startPreRecordingPositionRefresh() {
+        Handler preRecordingHandler = new Handler();
+        preRecordingHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                // Only update if not recording yet
+                if (!isRecording) {
+                    // Try to get WiFi position first (for indoor)
+                    LatLng newPosition = sensorFusion.getLatLngWifiPositioning();
+                    
+                    // If WiFi position not available, try GNSS
+                    if (newPosition == null && sensorFusion.getSensorValueMap().containsKey(SensorTypes.GNSSLATLONG)) {
+                        float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+                        if (location != null && location.length >= 2 && 
+                            !Float.isNaN(location[0]) && !Float.isNaN(location[1]) &&
+                            !Float.isInfinite(location[0]) && !Float.isInfinite(location[1])) {
+                            newPosition = new LatLng(location[0], location[1]);
+                        }
+                    }
+                    
+                    // Update marker and camera if we have a valid position
+                    if (newPosition != null && gMap != null && orientationMarker != null) {
+                        // Additional validation to prevent invalid coordinates
+                        if (!Double.isNaN(newPosition.latitude) && !Double.isNaN(newPosition.longitude) &&
+                            !Double.isInfinite(newPosition.latitude) && !Double.isInfinite(newPosition.longitude) &&
+                            Math.abs(newPosition.latitude) <= 90 && Math.abs(newPosition.longitude) <= 180 &&
+                            !(newPosition.latitude == 0 && newPosition.longitude == 0)) {
+                            
+                            currentLocation = newPosition;
+                            currentFusedPosition = newPosition;
+                            orientationMarker.setPosition(newPosition);
+                            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newPosition, 19f));
+                            
+                            // Reset polylines with new position
+                            List<LatLng> points = new ArrayList<>();
+                            points.add(newPosition);
+                            if (polyline != null) {
+                                polyline.setPoints(points);
+                            }
+                            if (fusedPolyline != null) {
+                                fusedPolyline.setPoints(points);
+                            }
+                            
+                            // If particle filter is active but not initialized, try to initialize it
+                            if (isParticleFilterActive && particleFilter == null) {
+                                try {
+                                    particleFilter = new com.openpositioning.PositionMe.FusionFilter.ParticleFilter(newPosition);
+                                    Log.d("RecordingFragment", "Initialized particle filter with position: " + 
+                                          newPosition.latitude + ", " + newPosition.longitude);
+                                } catch (IllegalArgumentException e) {
+                                    Log.e("RecordingFragment", "Failed to initialize particle filter: " + e.getMessage());
+                                    // Don't disable particle filter, we'll try again next time
+                                }
+                            }
+                            // If EKF filter is active but not initialized, try to initialize it
+                            else if (isEKFActive) {
+                                try {
+                                    ekfFilter = new com.openpositioning.PositionMe.FusionFilter.EKFFilter();
+                                    // Initialize EKF with zero motion
+                                    com.openpositioning.PositionMe.FusionFilter.EKFFilter.ekfFusion(
+                                        newPosition, null, null, 0, 0);
+                                    Log.d("RecordingFragment", "Initialized EKF filter with position: " + 
+                                          newPosition.latitude + ", " + newPosition.longitude);
+                                } catch (Exception e) {
+                                    Log.e("RecordingFragment", "Failed to initialize EKF filter: " + e.getMessage());
+                                    // Don't disable EKF filter, we'll try again next time
+                                }
+                            }
+                        } else {
+                            Log.w("RecordingFragment", "Invalid position received: " + 
+                                  newPosition.latitude + ", " + newPosition.longitude);
+                        }
+                    }
+                    
+                    // Schedule next update in 5 seconds
+                    preRecordingHandler.postDelayed(this, 5000);
+                }
+            }
+        }, 5000); // Initial delay of 5 seconds
     }
 
     /**
@@ -470,6 +844,141 @@ public class RecordingFragment extends Fragment {
             }
         });
     }
+
+    /**
+     * Creates a dropdown for switching positioning algorithms
+     */
+    private void algorithmDropdown() {
+        // Creating and Initialising options for Algorithm's Dropdown Menu
+        algorithmSwitchSpinner = (Spinner) getView().findViewById(R.id.algorithmSwitchSpinner);
+        // Different Algorithm Types
+        String[] algorithms = new String[]{"No Fusion", "EKF", "Batch optimisation", "Particle filter"};
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_spinner_dropdown_item, algorithms);
+        // Set the Dropdowns menu adapter
+        algorithmSwitchSpinner.setAdapter(adapter);
+        // Set Particle filter as default
+        algorithmSwitchSpinner.setSelection(3);
+        isParticleFilterActive = true;
+    }
+
+    /**
+     * Spinner listener to change positioning algorithm based on user input
+     */
+    private void switchAlgorithm() {
+        this.algorithmSwitchSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                // Reset all algorithm flags
+                boolean wasFiltering = isParticleFilterActive || isEKFActive || isBatchOptimizationActive;
+                isParticleFilterActive = false;
+                isEKFActive = false;
+                isBatchOptimizationActive = false;
+                
+                switch (position) {
+                    case 0:
+                        // No Fusion selected
+                        if (fusedPolyline != null) {
+                            fusedPolyline.setVisible(false);
+                        }
+                        Toast.makeText(getContext(), "No Fusion algorithm selected", Toast.LENGTH_SHORT).show();
+                        break;
+                    case 1:
+                        // EKF selected
+                        if (fusedPolyline != null) {
+                            fusedPolyline.setVisible(true);
+                        }
+                        // Initialize EKF with current position
+                        if (currentLocation != null) {
+                            // Validate currentLocation before initializing
+                            if (!Double.isNaN(currentLocation.latitude) && !Double.isNaN(currentLocation.longitude) &&
+                                !Double.isInfinite(currentLocation.latitude) && !Double.isInfinite(currentLocation.longitude) &&
+                                Math.abs(currentLocation.latitude) <= 90 && Math.abs(currentLocation.longitude) <= 180) {
+                                
+                                try {
+                                    // Initialize EKF with current position
+                                    ekfFilter = new com.openpositioning.PositionMe.FusionFilter.EKFFilter();
+                                    // If we were previously using particle filter, continuity is maintained by using
+                                    // the last fused position as the initial position for EKF
+                                    LatLng initialPos = wasFiltering && currentFusedPosition != null ? 
+                                                       currentFusedPosition : currentLocation;
+                                    
+                                    // Reset EKF initial state with current position
+                                    com.openpositioning.PositionMe.FusionFilter.EKFFilter.ekfFusion(
+                                        initialPos, null, null, 0, 0);
+                                    
+                                    Log.d("RecordingFragment", "Initialized EKF filter with position: " + 
+                                          initialPos.latitude + ", " + initialPos.longitude);
+                                    isEKFActive = true;
+                                } catch (Exception e) {
+                                    Log.e("RecordingFragment", "Failed to initialize EKF filter: " + e.getMessage());
+                                    isEKFActive = false;
+                                }
+                            } else {
+                                Log.e("RecordingFragment", "Invalid currentLocation for EKF initialization");
+                                isEKFActive = false;
+                            }
+                        }
+                        Toast.makeText(getContext(), "EKF algorithm selected", Toast.LENGTH_SHORT).show();
+                        break;
+                    case 2:
+                        // Batch optimisation selected
+                        if (fusedPolyline != null) {
+                            fusedPolyline.setVisible(false);
+                        }
+                        isBatchOptimizationActive = false; // Not implemented
+                        Toast.makeText(getContext(), "Batch optimisation algorithm selected", Toast.LENGTH_SHORT).show();
+                        break;
+                    case 3:
+                        // Particle filter selected
+                        if (fusedPolyline != null) {
+                            fusedPolyline.setVisible(true);
+                        }
+                        // Initialize particle filter if not already done
+                        if (currentLocation != null) {
+                            // Validate currentLocation before initializing
+                            if (!Double.isNaN(currentLocation.latitude) && !Double.isNaN(currentLocation.longitude) &&
+                                !Double.isInfinite(currentLocation.latitude) && !Double.isInfinite(currentLocation.longitude) &&
+                                Math.abs(currentLocation.latitude) <= 90 && Math.abs(currentLocation.longitude) <= 180) {
+                                
+                                try {
+                                    // If we were previously using EKF, continuity is maintained by using
+                                    // the last fused position as the initial position for particle filter
+                                    LatLng initialPos = wasFiltering && currentFusedPosition != null ? 
+                                                       currentFusedPosition : currentLocation;
+                                    
+                                    particleFilter = new com.openpositioning.PositionMe.FusionFilter.ParticleFilter(initialPos);
+                                    Log.d("RecordingFragment", "Initialized particle filter with position: " + 
+                                          initialPos.latitude + ", " + initialPos.longitude);
+                                    isParticleFilterActive = true;
+                                } catch (IllegalArgumentException e) {
+                                    Log.e("RecordingFragment", "Failed to initialize particle filter: " + e.getMessage());
+                                    isParticleFilterActive = false;
+                                }
+                            } else {
+                                Log.e("RecordingFragment", "Invalid currentLocation for particle filter initialization");
+                                isParticleFilterActive = false;
+                            }
+                        } else {
+                            // If we can't initialize now, still mark it active but we'll try again later
+                            isParticleFilterActive = true;
+                        }
+                        Toast.makeText(getContext(), "Particle filter algorithm selected", Toast.LENGTH_SHORT).show();
+                        break;
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                // Default to No Fusion when nothing selected
+                isParticleFilterActive = false;
+                isEKFActive = false;
+                isBatchOptimizationActive = false;
+                if (fusedPolyline != null) {
+                    fusedPolyline.setVisible(false);
+                }
+            }
+        });
+    }
     /**
      * Runnable task used to refresh UI elements with live data.
      * Has to be run through a Handler object to be able to alter UI elements
@@ -507,22 +1016,71 @@ public class RecordingFragment extends Fragment {
         //Show GNSS marker and error if user enables it
         if (gnss.isChecked() && gnssMarker!=null){
             float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-            LatLng gnssLocation = new LatLng(location[0],location[1]);
+            LatLng gnssLocation = null;
+            
+            // Validate location data before creating LatLng
+            if (location != null && location.length >= 2 && 
+                !Float.isNaN(location[0]) && !Float.isNaN(location[1]) &&
+                !Float.isInfinite(location[0]) && !Float.isInfinite(location[1])) {
+                gnssLocation = new LatLng(location[0], location[1]);
+            }
+            
             gnssError.setVisibility(View.VISIBLE);
-            gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
-                    UtilFunctions.distanceBetweenPoints(currentLocation,gnssLocation)));
-            gnssMarker.setPosition(gnssLocation);
+            
+            // Show error based on current location (PDR or fused)
+            if ((isParticleFilterActive || isEKFActive) && currentFusedPosition != null) {
+                if (gnssLocation != null && currentFusedPosition != null) {
+                    gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
+                        UtilFunctions.distanceBetweenPoints(currentFusedPosition, gnssLocation)));
+                } else {
+                    gnssError.setText(getString(R.string.gnss_error)+"N/A");
+                }
+            } else {
+                if (gnssLocation != null && currentLocation != null) {
+                    gnssError.setText(String.format(getString(R.string.gnss_error)+"%.2fm",
+                        UtilFunctions.distanceBetweenPoints(currentLocation, gnssLocation)));
+                } else {
+                    gnssError.setText(getString(R.string.gnss_error)+"N/A");
+                }
+            }
+            
+            // Update the marker position only if we have a valid gnssLocation
+            if (gnssLocation != null) {
+                gnssMarker.setPosition(gnssLocation);
+            }
         }
+        
+        //Show WiFi positioning marker if enabled
+        if (wifiSwitch.isChecked() && wifiMarker != null) {
+            LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+            if (wifiLocation != null) {
+                wifiMarker.setPosition(wifiLocation);
+            }
+        }
+
         //  Updates current location of user to show the indoor floor map (if applicable)
-        indoorMapManager.setCurrentLocation(currentLocation);
+        if ((isParticleFilterActive || isEKFActive) && currentFusedPosition != null) {
+            // Use fused position for indoor map when any fusion filter is active
+            indoorMapManager.setCurrentLocation(currentFusedPosition);
+        } else {
+            indoorMapManager.setCurrentLocation(currentLocation);
+        }
+        
         float elevationVal = sensorFusion.getElevation();
         // Display buttons to allow user to change floors if indoor map is visible
         if(indoorMapManager.getIsIndoorMapSet()){
             setFloorButtonVisibility(View.VISIBLE);
             // Auto-floor logic
             if(autoFloor.isChecked()){
-                indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-                ,true);
+                // Get floor from WiFi positioning when available, default to calculated floor
+                int wifiFloor = 0;
+                if (sensorFusion.getLatLngWifiPositioning() != null) {
+                    wifiFloor = sensorFusion.getWifiFloor();
+                    indoorMapManager.setCurrentFloor(wifiFloor, true);
+                } else {
+                    // Fallback to elevation calculation if WiFi positioning not available
+                    indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight()), true);
+                }
             }
         }else{
             // Hide the buttons and switch used to change floor if indoor map is not visible
@@ -552,9 +1110,118 @@ public class RecordingFragment extends Fragment {
                     List<LatLng> pointsMoved = polyline.getPoints();
                     pointsMoved.add(nextLocation);
                     polyline.setPoints(pointsMoved);
-                    // Change current location to new location and zoom there
-                    orientationMarker.setPosition(nextLocation);
-                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
+                    
+                    // Apply sensor fusion based on selected algorithm
+                    if (isParticleFilterActive || isEKFActive) {
+                        // Get current WiFi and GNSS positions
+                        LatLng wifiPosition = null;
+                        LatLng gnssPosition = null;
+                        
+                        // Get WiFi position if available and indoors
+                        if (isIndoor) {
+                            wifiPosition = sensorFusion.getLatLngWifiPositioning();
+                        }
+                        
+                        // Get GNSS position if outdoors or WiFi not available
+                        if (!isIndoor || wifiPosition == null) {
+                            if (sensorFusion.getSensorValueMap().containsKey(SensorTypes.GNSSLATLONG)) {
+                                float[] location = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+                                if (location != null && location.length >= 2) {
+                                    gnssPosition = new LatLng(location[0], location[1]);
+                                }
+                            }
+                        }
+                        
+                        try {
+                            // Apply filter based on selected algorithm
+                            if (isParticleFilterActive) {
+                                // Initialize particle filter if needed
+                                if (particleFilter == null) {
+                                    try {
+                                        // Validate current location before initializing
+                                        if (!Double.isNaN(currentLocation.latitude) && !Double.isNaN(currentLocation.longitude) &&
+                                            !Double.isInfinite(currentLocation.latitude) && !Double.isInfinite(currentLocation.longitude) &&
+                                            Math.abs(currentLocation.latitude) <= 90 && Math.abs(currentLocation.longitude) <= 180 &&
+                                            !(currentLocation.latitude == 0 && currentLocation.longitude == 0)) {
+                                            particleFilter = new com.openpositioning.PositionMe.FusionFilter.ParticleFilter(currentLocation);
+                                            Log.d("RecordingFragment", "Initialized particle filter in plotLines");
+                                        } else {
+                                            // Skip particle filter processing this iteration
+                                            throw new IllegalArgumentException("Invalid position for filter initialization");
+                                        }
+                                    } catch (IllegalArgumentException e) {
+                                        Log.e("RecordingFragment", "Could not initialize particle filter: " + e.getMessage());
+                                        // Update marker with PDR position and continue
+                                        orientationMarker.setPosition(nextLocation);
+                                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
+                                        currentLocation = nextLocation;
+                                        return;
+                                    }
+                                }
+                                
+                                // Apply particle filter
+                                nextFusedLocation = particleFilter.particleFilter(wifiPosition, gnssPosition, nextLocation);
+                            } else if (isEKFActive) {
+                                // Apply EKF filter
+                                // Note: EKF requires PDR increments rather than absolute position
+                                nextFusedLocation = com.openpositioning.PositionMe.FusionFilter.EKFFilter.ekfFusion(
+                                    currentFusedPosition != null ? currentFusedPosition : currentLocation,
+                                    wifiPosition, 
+                                    gnssPosition,
+                                    pdrMoved[0], // dx
+                                    pdrMoved[1]  // dy
+                                );
+                            } else {
+                                // This should not happen - fallback to PDR position
+                                nextFusedLocation = nextLocation;
+                            }
+                            
+                            // Apply smoothing if enabled
+                            if (isSmoothing && nextFusedLocation != null) {
+                                // Use TrajOptim's low-pass filter for smoothing
+                                nextFusedLocation = TrajOptim.applyLowPassFilter(
+                                    lastSmoothedPosition, nextFusedLocation, SMOOTHING_ALPHA);
+                                // Update last smoothed position for next iteration
+                                lastSmoothedPosition = nextFusedLocation;
+                            }
+                            
+                            // Update fused trajectory if we have a valid fusion result
+                            if (nextFusedLocation != null && 
+                                !Double.isNaN(nextFusedLocation.latitude) && !Double.isNaN(nextFusedLocation.longitude) &&
+                                !Double.isInfinite(nextFusedLocation.latitude) && !Double.isInfinite(nextFusedLocation.longitude)) {
+                                
+                                // Update fused trajectory
+                                List<LatLng> fusedPoints = fusedPolyline.getPoints();
+                                fusedPoints.add(nextFusedLocation);
+                                fusedPolyline.setPoints(fusedPoints);
+                                
+                                // Store for later use
+                                fusedTrajectoryPoints.add(nextFusedLocation);
+                                
+                                // Update marker position with fused position
+                                orientationMarker.setPosition(nextFusedLocation);
+                                // Move camera to fused position
+                                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextFusedLocation, (float) 19f));
+                                
+                                // Update current fused position
+                                currentFusedPosition = nextFusedLocation;
+                            } else {
+                                // Invalid fusion result, fall back to PDR
+                                Log.w("RecordingFragment", "Invalid fusion result, falling back to PDR");
+                                orientationMarker.setPosition(nextLocation);
+                                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
+                            }
+                        } catch (Exception e) {
+                            // If filter fails, fall back to PDR position
+                            Log.e("RecordingFragment", "Filter error: " + e.getMessage());
+                            orientationMarker.setPosition(nextLocation);
+                            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
+                        }
+                    } else {
+                        // No fusion active, use PDR position directly
+                        orientationMarker.setPosition(nextLocation);
+                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
+                    }
                 }
                 catch (Exception ex){
                     Log.e("PlottingPDR","Exception: "+ex);
@@ -564,8 +1231,48 @@ public class RecordingFragment extends Fragment {
         else{
             //Initialise the starting location
             float[] location = sensorFusion.getGNSSLatitude(true);
-            currentLocation=new LatLng(location[0],location[1]);
-            nextLocation=currentLocation;
+            // Validate location data before creating LatLng
+            if (location != null && location.length >= 2 && 
+                !Float.isNaN(location[0]) && !Float.isNaN(location[1]) &&
+                !Float.isInfinite(location[0]) && !Float.isInfinite(location[1]) &&
+                Math.abs(location[0]) <= 90 && Math.abs(location[1]) <= 180) {
+                
+                currentLocation = new LatLng(location[0], location[1]);
+                nextLocation = currentLocation;
+                currentFusedPosition = currentLocation;
+                nextFusedLocation = currentLocation;
+                
+                // Initialize filters based on currently selected algorithm
+                if (isParticleFilterActive) {
+                    // Initialize particle filter
+                    if (particleFilter == null) {
+                        try {
+                            // Additional check for 0,0 coordinates which are invalid
+                            if (!(currentLocation.latitude == 0 && currentLocation.longitude == 0)) {
+                                particleFilter = new com.openpositioning.PositionMe.FusionFilter.ParticleFilter(currentLocation);
+                                Log.d("RecordingFragment", "Initialized particle filter with starting location");
+                            }
+                        } catch (IllegalArgumentException e) {
+                            Log.e("RecordingFragment", "Failed to initialize particle filter: " + e.getMessage());
+                        }
+                    }
+                } else if (isEKFActive) {
+                    // Initialize EKF filter
+                    try {
+                        if (!(currentLocation.latitude == 0 && currentLocation.longitude == 0)) {
+                            ekfFilter = new com.openpositioning.PositionMe.FusionFilter.EKFFilter();
+                            // Initialize EKF with zero motion (dx=0, dy=0)
+                            com.openpositioning.PositionMe.FusionFilter.EKFFilter.ekfFusion(
+                                currentLocation, null, null, 0, 0);
+                            Log.d("RecordingFragment", "Initialized EKF filter with starting location");
+                        }
+                    } catch (Exception e) {
+                        Log.e("RecordingFragment", "Failed to initialize EKF filter: " + e.getMessage());
+                    }
+                }
+            } else {
+                Log.e("RecordingFragment", "Invalid GNSS data for starting position");
+            }
         }
     }
 
@@ -586,6 +1293,10 @@ public class RecordingFragment extends Fragment {
     private void blinkingRecording() {
         //Initialise Image View
         this.recIcon = getView().findViewById(R.id.redDot);
+        
+        // Make the red dot visible
+        this.recIcon.setVisibility(View.VISIBLE);
+        
         //Configure blinking animation
         Animation blinking_rec = new AlphaAnimation(1, 0);
         blinking_rec.setDuration(800);

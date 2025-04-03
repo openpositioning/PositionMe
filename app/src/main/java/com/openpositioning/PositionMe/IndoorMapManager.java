@@ -25,30 +25,30 @@ import java.util.List;
  * @author Arun Gopalakrishnan
  */
 public class IndoorMapManager {
-    // Google Map 实例
+    // Google Map instance
     private GoogleMap gMap;
-    // 存储当前的 GroundOverlay
+    // Store current GroundOverlay
     private GroundOverlay groundOverlay;
-    // 当前用户位置
+    // Current user location
     private LatLng currentLocation;
-    // 是否显示了室内地图
+    // Whether indoor map is displayed
     private boolean isIndoorMapSet = false;
-    // 当前楼层
+    // Current floor
     private int currentFloor;
-    // 当前建筑的楼层高度
+    // Current building's floor height
     private float floorHeight;
 
-    // Nucleus Building 的楼层图片
+    // Nucleus Building floor images
     private final List<Integer> NUCLEUS_MAPS = Arrays.asList(
             R.drawable.nucleuslg, R.drawable.nucleusg, R.drawable.nucleus1,
             R.drawable.nucleus2, R.drawable.nucleus3);
 
-    // Library Building 的楼层图片
+    // Library Building floor images
     private final List<Integer> LIBRARY_MAPS = Arrays.asList(
             R.drawable.libraryg, R.drawable.library1, R.drawable.library2,
             R.drawable.library3);
 
-    // Fleeming Building 的楼层图片
+    // Fleeming Building floor images
     private final List<Integer> fleeming_MAPS = Arrays.asList(
             R.drawable.f0g, R.drawable.f1, R.drawable.f2,
             R.drawable.f3);
@@ -56,7 +56,7 @@ public class IndoorMapManager {
     private final List<Integer> Hudson_MAPS = Arrays.asList(
             R.drawable.h0g, R.drawable.h1, R.drawable.h2);
 
-    // Nucleus 和 Library 的边界
+    // Nucleus and Library boundaries
     private final LatLngBounds NUCLEUS = new LatLngBounds(
             BuildingPolygon.NUCLEUS_SW,
             BuildingPolygon.NUCLEUS_NE
@@ -66,16 +66,16 @@ public class IndoorMapManager {
             BuildingPolygon.LIBRARY_NE
     );
 
-    // Fleeming Building 的边界
+    // Fleeming Building boundaries
     private final LatLngBounds FLEEMING = new LatLngBounds(
-            new LatLng(55.9220823, -3.1732186), // ✅ 西南角 (SW)
-            new LatLng(55.9225463, -3.1726908)  // ✅ 东北角 (NE)
+            new LatLng(55.9220823, -3.1732186), // ✅ Southwest corner (SW)
+            new LatLng(55.9225463, -3.1726908)  // ✅ Northeast corner (NE)
     );
 
 
 
 
-    // 各建筑的楼层高度
+    // Floor heights for each building
     public static final float NUCLEUS_FLOOR_HEIGHT = 4.2F;
     public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
     public static final float FLEEMING_FLOOR_HEIGHT = 3.6F;
@@ -200,8 +200,8 @@ public class IndoorMapManager {
             else if (BuildingPolygon.inFleeming(currentLocation) && !isIndoorMapSet) {
                 groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
                         .image(BitmapDescriptorFactory.fromResource(R.drawable.f0g))
-                        .position(BuildingPolygon.Fleeming_CENTER, 26f, 77f) // 设置宽高
-                        .bearing(-31)); // 设置旋转角度
+                        .position(BuildingPolygon.Fleeming_CENTER, 26f, 77f) // Set width and height
+                        .bearing(-31)); // Set rotation angle
                 isIndoorMapSet = true;
                 currentFloor = 0;
                 floorHeight = FLEEMING_FLOOR_HEIGHT;
@@ -209,8 +209,8 @@ public class IndoorMapManager {
             else if (BuildingPolygon.inHudson(currentLocation) && !isIndoorMapSet) {
                 groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
                         .image(BitmapDescriptorFactory.fromResource(R.drawable.h0g))
-                        .position(BuildingPolygon.Hudson_CENTER, 35f, 18f) // 设置宽高
-                        .bearing(-31)); // 设置旋转角度
+                        .position(BuildingPolygon.Hudson_CENTER, 35f, 18f) // Set width and height
+                        .bearing(-31)); // Set rotation angle
                 isIndoorMapSet = true;
                 currentFloor = 0;
                 floorHeight = FLEEMING_FLOOR_HEIGHT;
@@ -220,7 +220,7 @@ public class IndoorMapManager {
                     !BuildingPolygon.inFleeming(currentLocation) && isIndoorMapSet&&
                     !BuildingPolygon.inHudson(currentLocation) && isIndoorMapSet) {
                 if (groundOverlay != null) {
-                    groundOverlay.remove();  // ✅ **确保不是 null 再删除**
+                    groundOverlay.remove();  // ✅ **Ensure it's not null before removing**
                     groundOverlay = null;
                 }
                 isIndoorMapSet = false;
@@ -252,34 +252,34 @@ public class IndoorMapManager {
         gMap.addPolyline(new PolylineOptions().color(Color.GREEN)
                 .addAll(points));
 
-        // 直接使用 4 个点定义 Fleeming Building 的边界
-        List<LatLng> fleemingPolygon = Arrays.asList(
-                new LatLng(55.9221059, -3.1723130), // 西南 (Southwest)
-                new LatLng(55.9222226, -3.1719519), // 东南 (Southeast)
-                new LatLng(55.9228053, -3.1726003), // 东北 (Northeast)
-                new LatLng(55.9226930, -3.1729124), // 西北 (Northwest)
-                new LatLng(55.9221059, -3.1723130)  // **闭合边界**
-        );
-
-        // 在 Google Maps 上绘制绿色 Polyline
+        // Define Fleeming Building boundaries with four points
+        LatLng[] fleemingPoints = new LatLng[] {
+                new LatLng(55.9221059, -3.1723130), // Southwest
+                new LatLng(55.9222226, -3.1719519), // Southeast
+                new LatLng(55.9228053, -3.1726003), // Northeast
+                new LatLng(55.9226930, -3.1729124), // Northwest
+                new LatLng(55.9221059, -3.1723130)  // **Close boundary**
+        };
+        
+        // Draw green Polyline on Google Maps
         gMap.addPolyline(new PolylineOptions()
-                .color(Color.GREEN) // 绿色边界
-                .width(5)           // 线条宽度
-                .addAll(fleemingPolygon));
-
-        List<LatLng> HudsonPolygon = Arrays.asList(
-                new LatLng(55.9223633, -3.1715301), // 西南 (Southwest)
-                new LatLng(55.9225434, -3.1710165), // 东南 (Southeast)
-                new LatLng(55.9226656, -3.1711522), // 东北 (Northeast)
-                new LatLng(55.9224837, -3.1716374), // 西北 (Northwest)
-                new LatLng(55.9223633, -3.1715301)  // **闭合边界**
-        );
-
-        // 在 Google Maps 上绘制绿色 Polyline
+                .color(Color.GREEN) // Green boundary
+                .width(5)           // Line width
+                .add(fleemingPoints));
+        
+        LatLng[] hudsonPoints = new LatLng[] {
+                new LatLng(55.9223633, -3.1715301), // Southwest
+                new LatLng(55.9225434, -3.1710165), // Southeast
+                new LatLng(55.9226656, -3.1711522), // Northeast
+                new LatLng(55.9224837, -3.1716374), // Northwest
+                new LatLng(55.9223633, -3.1715301)  // **Close boundary**
+        };
+        
+        // Draw green Polyline on Google Maps
         gMap.addPolyline(new PolylineOptions()
-                .color(Color.GREEN) // 绿色边界
-                .width(5)           // 线条宽度
-                .addAll(HudsonPolygon));
+                .color(Color.GREEN) // Green boundary
+                .width(5)           // Line width
+                .add(hudsonPoints));
 
     }
 

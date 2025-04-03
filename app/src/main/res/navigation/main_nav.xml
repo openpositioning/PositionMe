@@ -12,8 +12,8 @@
 "
         tools:layout="@layout/fragment_home" >
         <action
-            android:id="@+id/action_homeFragment_to_startLocationFragment"
-            app:destination="@id/startLocationFragment"
+            android:id="@+id/action_homeFragment_to_recordingFragment"
+            app:destination="@id/recordingFragment"
             app:enterAnim="@anim/slide_in_right"
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
@@ -50,19 +50,6 @@
         <action
             android:id="@+id/action_settingsFragment_to_homeFragment"
             app:destination="@id/homeFragment" />
-    </fragment>
-    <fragment
-        android:id="@+id/startLocationFragment"
-        android:name="com.openpositioning.PositionMe.fragments.StartLocationFragment"
-        android:label="fragment_startLocation"
-        tools:layout="@layout/fragment_startlocation" >
-        <action
-            android:id="@+id/action_startLocationFragment_to_recordingFragment"
-            app:destination="@id/recordingFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
     </fragment>
     <fragment
         android:id="@+id/recordingFragment"

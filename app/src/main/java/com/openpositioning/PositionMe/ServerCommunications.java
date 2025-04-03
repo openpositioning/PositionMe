@@ -76,7 +76,11 @@ public class ServerCommunications implements Observable {
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
 
-
+    // For storing the current download Call object to allow cancellation
+    private Call currentDownloadCall;
+    
+    // Download progress tracking
+    private int downloadProgress = 0;
 
     /**
      * Public default constructor of {@link ServerCommunications}. The constructor saves context,
@@ -273,6 +277,16 @@ public class ServerCommunications implements Observable {
     }
 
     /**
+     * Cancel the current download operation
+     */
+    public void cancelDownload() {
+        if (currentDownloadCall != null && !currentDownloadCall.isCanceled()) {
+            currentDownloadCall.cancel();
+            System.out.println("Download operation canceled by user");
+        }
+    }
+
+    /**
      * Perform API request for downloading a Trajectory uploaded to the server. The trajectory is
      * retrieved from a zip file, with the method accepting a position argument specifying the
      * trajectory to be downloaded. The trajectory is then converted to a protobuf object and
@@ -281,8 +295,31 @@ public class ServerCommunications implements Observable {
      * @param position the position of the trajectory in the zip file to retrieve
      */
     public void downloadTrajectory(int position) {
-        // Initialise OkHttp client
-        OkHttpClient client = new OkHttpClient();
+        // Reset download progress
+        downloadProgress = 0;
+        
+        // Initialise OkHttp client with progress interceptor
+        OkHttpClient client = new OkHttpClient.Builder()
+                .addNetworkInterceptor(chain -> {
+                    okhttp3.Response originalResponse = chain.proceed(chain.request());
+                    return originalResponse.newBuilder()
+                            .body(new ProgressResponseBody(originalResponse.body(), new ProgressResponseBody.ProgressListener() {
+                                @Override
+                                public void update(long bytesRead, long contentLength, boolean done) {
+                                    // Calculate progress percentage (0-100)
+                                    int progress = (int) ((100 * bytesRead) / contentLength);
+                                    
+                                    // Only update UI when progress changes significantly (every 5%)
+                                    if (progress > downloadProgress + 5 || done) {
+                                        downloadProgress = progress;
+                                        infoResponse = "DOWNLOAD_PROGRESS:" + progress;
+                                        notifyObservers(0);
+                                    }
+                                }
+                            }))
+                            .build();
+                })
+                .build();
 
         // Create GET request with required header
         okhttp3.Request request = new okhttp3.Request.Builder()
@@ -292,15 +329,32 @@ public class ServerCommunications implements Observable {
                 .build();
 
         // Enqueue the GET request for asynchronous execution
-        client.newCall(request).enqueue(new okhttp3.Callback() {
+        currentDownloadCall = client.newCall(request);
+        currentDownloadCall.enqueue(new okhttp3.Callback() {
             @Override public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
+                if (call.isCanceled()) {
+                    // User actively canceled the download
+                    infoResponse = "DOWNLOAD_CANCELED";
+                } else {
+                    // Other failure reasons
+                    e.printStackTrace();
+                    infoResponse = "DOWNLOAD_FAILED";
+                }
+                notifyObservers(0);
             }
 
             @Override public void onResponse(Call call, Response response) throws IOException {
+                // If the request has been canceled, don't process the response
+                if (call.isCanceled()) {
+                    return;
+                }
+                
                 try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful()) throw new IOException("Unexpected code "
-                            + response);
+                    if (!response.isSuccessful()) {
+                        infoResponse = "DOWNLOAD_FAILED";
+                        notifyObservers(0);
+                        throw new IOException("Unexpected code " + response);
+                    }
 
                     // Create input streams to process the response
                     InputStream inputStream = responseBody.byteStream();
@@ -335,7 +389,9 @@ public class ServerCommunications implements Observable {
                     JsonFormat.Printer printer = JsonFormat.printer();
                     String receivedTrajectoryString = printer.print(receivedTrajectory);
                     System.out.println("Successful download: "
-                            + receivedTrajectoryString.substring(0, 100));
+                            + (receivedTrajectoryString.length() >= 100 ? 
+                               receivedTrajectoryString.substring(0, 100) : 
+                               receivedTrajectoryString));
 
                     // Save the received trajectory to a file in the Downloads folder
                     //String storagePath = Environment.getExternalStoragePublicDirectory(Environment
@@ -350,8 +406,14 @@ public class ServerCommunications implements Observable {
                         System.err.println("Received trajectory stored in: " + file.getAbsolutePath());
                         System.out.println("ReplayFragment PDR number: " + receivedTrajectory.getPdrDataCount());
                         System.out.println("ReplayFragment GNSS number: " + receivedTrajectory.getGnssDataCount());
+                        
+                        // notify the observer that the download is complete
+                        infoResponse = "DOWNLOAD_COMPLETE";
+                        notifyObservers(0);
                     } catch (IOException ee) {
                         System.err.println("Trajectory download failed: " + ee.getMessage());
+                        infoResponse = "DOWNLOAD_FAILED";
+                        notifyObservers(0);
                     }
 
                     // Close all streams and entries to release resources
@@ -359,25 +421,9 @@ public class ServerCommunications implements Observable {
                     byteArrayOutputStream.close();
                     zipInputStream.close();
                     inputStream.close();
-
-                    // File file = new File(storagePath, "received_trajectory.txt");
-                    // try (FileWriter fileWriter = new FileWriter(file)) {
-                    //     fileWriter.write(receivedTrajectoryString);
-                    //     fileWriter.flush();
-                    //     System.err.println("Received trajectory stored in: " + storagePath);
-                    // } catch (IOException ee) {
-                    //     System.err.println("Trajectory download failed");
-                    // } finally {
-                    //     // Close all streams and entries to release resources
-                    //     zipInputStream.closeEntry();
-                    //     byteArrayOutputStream.close();
-                    //     zipInputStream.close();
-                    //     inputStream.close();
-                    // }
                 }
             }
         });
-
     }
 
     /**

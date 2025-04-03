@@ -75,6 +75,20 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
+        <TextView
+            android:id="@+id/waitingForSignalText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="@string/waiting_for_signal"
+            android:textColor="@android:color/holo_red_light"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@+id/timeRemainingBar"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
         <androidx.cardview.widget.CardView
             android:id="@+id/currentPositionCard"
             android:layout_width="411dp"
@@ -172,10 +186,19 @@
             android:layout_marginTop="68dp"
             android:background="@color/lightLogoBlue"
             android:spinnerMode="dropdown"
-            android:text="@string/choose_map"
-
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
+
+        <Spinner
+            android:id="@+id/algorithmSwitchSpinner"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="4dp"
+            android:background="@color/lightLogoBlue"
+            android:spinnerMode="dropdown"
+            app:layout_constraintStart_toEndOf="@+id/mapSwitchSpinner"
+            app:layout_constraintTop_toBottomOf="@+id/currentPositionCard" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
@@ -215,6 +238,32 @@
             android:textColor="@color/black"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/mapSwitchSpinner" />
+
+        <Switch
+            android:id="@+id/wifiSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/button_background_light"
+            android:buttonTint="@android:color/holo_blue_dark"
+            android:text="@string/wifi"
+            android:textColor="@color/black"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/gnssSwitch" />
+
+        <Switch
+            android:id="@+id/smoothSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/button_background_light"
+            android:buttonTint="@android:color/holo_purple"
+            android:text="@string/smoothSwitch"
+            android:textColor="@color/black"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/wifiSwitch" />
 
         <Button
             android:id="@+id/lineColorButton"

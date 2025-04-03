@@ -23,7 +23,7 @@
 
 
 
-        <!-- 悬浮按钮（添加波纹点击效果） -->
+        <!-- Floating button (add ripple effect on click) -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
 
             android:id="@+id/sensorInfoButton"
@@ -41,7 +41,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:tint="@color/white" />
 
-        <!-- Start 按钮 -->
+        <!-- Start button -->
         <FrameLayout
             android:id="@+id/otherButtonLayoutFrame"
             android:layout_width="wrap_content"
@@ -51,7 +51,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
 
-            <!-- 按钮 -->
+            <!-- Button -->
             <Button
                 android:id="@+id/startStopButton"
                 android:layout_width="300dp"
@@ -65,7 +65,7 @@
                 android:textSize="18dp"
                 android:textStyle="bold" />
 
-            <!-- 小人图标 -->
+            <!-- Person icon -->
             <ImageView
                 android:id="@+id/iconImage"
                 android:layout_width="170dp"
@@ -89,14 +89,14 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/otherButtonLayoutFrame">
             >
-                <!-- Measurement 按钮 -->
+                <!-- Measurement button -->
                 <FrameLayout
                     android:id="@+id/measurementButtonFrame"
                     android:layout_width="165dp"
                     android:layout_height="150dp"
                     android:layout_marginEnd="12dp">
 
-                    <!-- 按钮 -->
+                    <!-- Button -->
                     <Button
                         android:id="@+id/measurementButton"
                         android:layout_width="match_parent"
@@ -108,9 +108,9 @@
                         android:textSize="16sp"
                         android:textStyle="bold"
                         android:gravity="bottom|center_horizontal"
-                        android:paddingBottom="20dp"/>  <!-- 让文本靠近按钮底部 -->
+                        android:paddingBottom="20dp"/>  <!-- Position text at the bottom of the button -->
 
-                    <!-- 图标 -->
+                    <!-- Icon -->
                     <ImageView
                         android:id="@+id/measurementIcon"
                         android:layout_width="50dp"
@@ -118,17 +118,17 @@
                         android:layout_gravity="center_horizontal|top"
                         android:layout_marginTop="30dp"
                         android:src="@drawable/ic_baseline_data_array_24"
-                        android:elevation="6dp"/>  <!-- 让图标显示在按钮之上 -->
+                        android:elevation="6dp"/>  <!-- Make icon display above the button -->
                 </FrameLayout>
 
-                <!-- Files 按钮 -->
+                <!-- Files button -->
                 <FrameLayout
                     android:id="@+id/filesButtonFrame"
                     android:layout_width="165dp"
                     android:layout_height="150dp"
                     android:layout_marginStart="12dp">
 
-                    <!-- 按钮 -->
+                    <!-- Button -->
                     <Button
                         android:id="@+id/filesButton"
                         android:layout_width="match_parent"
@@ -140,9 +140,9 @@
                         android:textSize="16sp"
                         android:textStyle="bold"
                         android:gravity="bottom|center_horizontal"
-                        android:paddingBottom="20dp"/>  <!-- 让文本靠近按钮底部 -->
+                        android:paddingBottom="20dp"/>  <!-- Position text at the bottom of the button -->
 
-                    <!-- 图标 -->
+                    <!-- Icon -->
                     <ImageView
                         android:id="@+id/filesIcon"
                         android:layout_width="50dp"
@@ -150,7 +150,7 @@
                         android:layout_gravity="center_horizontal|top"
                         android:layout_marginTop="30dp"
                         android:src="@drawable/ic_baseline_folder_24"
-                        android:elevation="6dp"/>  <!-- 让图标显示在按钮之上 -->
+                        android:elevation="6dp"/>  <!-- Make icon display above the button -->
                 </FrameLayout>
 
             </LinearLayout>

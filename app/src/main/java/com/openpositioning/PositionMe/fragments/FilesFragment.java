@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.fragments;
 
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.app.DownloadManager;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -54,11 +55,14 @@ public class FilesFragment extends Fragment implements Observer {
     private RecyclerView filesList;
     private TrajDownloadListAdapter listAdapter;
     private CardView uploadCard;
-
+    private Button REPLAY;
+    
     // Class handling HTTP communication
     private ServerCommunications serverCommunications;
-
-    private Button REPLAY;
+    
+    // Download progress tracking
+    private boolean downloadInProgress = false;
+    private Dialog progressDialog;
 
     /**
      * Default public constructor, empty.
@@ -94,17 +98,6 @@ public class FilesFragment extends Fragment implements Observer {
 
     /**
      * {@inheritDoc}
-     * Initialises UI elements, including a navigation card to the {@link UploadFragment} and a
-     * RecyclerView displaying online trajectories.
-     *
-     * @see com.openpositioning.PositionMe.viewitems.TrajDownloadViewHolder the View Holder for the list.
-     * @see TrajDownloadListAdapter the list adapter for displaying the recycler view.
-     * @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view the elements in the list.
-     */
-
-
-    /**
-     * {@inheritDoc}
      * Called by {@link ServerCommunications} when the response to the HTTP info request is received.
      *
      * @param singletonStringList   a single string wrapped in an object array containing the http
@@ -116,17 +109,120 @@ public class FilesFragment extends Fragment implements Observer {
         String infoString = (String) singletonStringList[0];
         // Check if the string is non-null and non-empty before processing
         if(infoString != null && !infoString.isEmpty()) {
-            // Process string
-            List<Map<String, String>> entryList = processInfoResponse(infoString);
             // Start a handler to be able to modify UI elements
             new Handler(Looper.getMainLooper()).post(new Runnable() {
                 @Override
                 public void run() {
-                    // Update the RecyclerView with data from the server
-                    updateView(entryList);
+                    // Check if this is a progress update
+                    if (infoString.startsWith("DOWNLOAD_PROGRESS:")) {
+                        try {
+                            // Extract progress percentage
+                            int progress = Integer.parseInt(infoString.split(":")[1]);
+                            // Update progress in dialog
+                            updateProgressDialog(progress);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    // check if the download is complete
+                    else if (infoString.equals("DOWNLOAD_COMPLETE")) {
+                        if (progressDialog != null && progressDialog.isShowing()) {
+                            progressDialog.dismiss();
+                        }
+                        showDownloadCompleteDialog();
+                        downloadInProgress = false;
+                    } else if (infoString.equals("DOWNLOAD_FAILED")) {
+                        // handle the download failed case
+                        if (progressDialog != null && progressDialog.isShowing()) {
+                            progressDialog.dismiss();
+                        }
+                        showDownloadFailedDialog();
+                        downloadInProgress = false;
+                    } else if (infoString.equals("DOWNLOAD_CANCELED")) {
+                        // User has already canceled the download, no need to show dialog
+                        if (progressDialog != null && progressDialog.isShowing()) {
+                            progressDialog.dismiss();
+                        }
+                        downloadInProgress = false;
+                    } else {
+                        // handle the normal server info response
+                        List<Map<String, String>> entryList = processInfoResponse(infoString);
+                        updateView(entryList);
+                    }
                 }
             });
         }
+    }
+
+    /**
+     * Updates the progress dialog with the current download progress
+     * 
+     * @param progress download progress percentage (0-100)
+     */
+    private void updateProgressDialog(int progress) {
+        if (progressDialog != null && progressDialog.isShowing()) {
+            android.widget.TextView progressMessage = progressDialog.findViewById(R.id.progressMessage);
+            if (progressMessage != null) {
+                progressMessage.setText(getString(R.string.downloading) + " " + progress + "%");
+            }
+        }
+    }
+
+    /**
+     * Shows a dialog indicating the download has completed
+     */
+    private void showDownloadCompleteDialog() {
+        new AlertDialog.Builder(getContext())
+                .setTitle("File downloaded")
+                .setMessage("Trajectory downloaded to local storage")
+                .setPositiveButton(R.string.ok, null)
+                .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
+                    }
+                })
+                .setIcon(R.drawable.ic_baseline_download_24)
+                .show();
+    }
+
+    /**
+     * Shows a progress dialog for the download
+     */
+    private void showDownloadProgressDialog() {
+        progressDialog = new Dialog(getContext());
+        progressDialog.setContentView(R.layout.progress_dialog);
+        progressDialog.setCancelable(true);
+        
+        // Initialize with 0% progress
+        android.widget.TextView progressMessage = progressDialog.findViewById(R.id.progressMessage);
+        if (progressMessage != null) {
+            progressMessage.setText(getString(R.string.downloading) + " 0%");
+        }
+        
+        progressDialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
+            @Override
+            public void onCancel(DialogInterface dialog) {
+                // Cancel download flag
+                downloadInProgress = false;
+                // Cancel background download operation
+                serverCommunications.cancelDownload();
+            }
+        });
+        
+        progressDialog.show();
+    }
+
+    /**
+     * Shows a dialog indicating the download has failed
+     */
+    private void showDownloadFailedDialog() {
+        new AlertDialog.Builder(getContext())
+                .setTitle("Download Failed")
+                .setMessage("Failed to download trajectory. Please try again.")
+                .setPositiveButton(R.string.ok, null)
+                .setIcon(android.R.drawable.ic_dialog_alert)
+                .show();
     }
 
     /**
@@ -177,35 +273,24 @@ public class FilesFragment extends Fragment implements Observer {
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
         listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
+            // Show loading dialog
+            showDownloadProgressDialog();
+            // Set download in progress flag
+            downloadInProgress = true;
             // Download the appropriate trajectory instance
             serverCommunications.downloadTrajectory(position);
-            // Display a pop-up message to direct the user to the download location if necessary.
-            new AlertDialog.Builder(getContext())
-                    .setTitle("File downloaded")
-                    .setMessage("Trajectory downloaded to local storage")
-                    .setPositiveButton(R.string.ok, null)
-                    .setNegativeButton(R.string.show_storage, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-                        }
-                    })
-                    .setIcon(R.drawable.ic_baseline_download_24)
-                    .show();
         });
         filesList.setAdapter(listAdapter);
-
     }
-
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // 获取 RecyclerView
+        // Get RecyclerView
         filesList = view.findViewById(R.id.filesList);
 
-        // 获取上传按钮
+        // Get upload button
         uploadCard = view.findViewById(R.id.uploadCard);
         uploadCard.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -215,8 +300,8 @@ public class FilesFragment extends Fragment implements Observer {
             }
         });
 
-        // 获取并初始化 REPLAY 按钮
-        REPLAY = view.findViewById(R.id.replayButton); // 确保 fragment_files.xml 里有这个按钮
+        // Get and initialize REPLAY button
+        REPLAY = view.findViewById(R.id.replayButton); // Make sure there is this button in fragment_files.xml
         REPLAY.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -225,7 +310,7 @@ public class FilesFragment extends Fragment implements Observer {
             }
         });
 
-        // 请求服务器数据
+        // Request server data
         serverCommunications.sendInfoRequest();
     }
 }

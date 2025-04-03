@@ -10,6 +10,7 @@
     <string name="info_description">See sensor hardware information</string>
     <string name="refresh_read">Refresh readings</string>
     <string name="download">Download</string>
+    <string name="downloading">Downloading trajectory:</string>
     <string name="grant">Grant permissions</string>
     <string name="exit">Exit application</string>
     <string name="ok">Ok</string>
@@ -27,10 +28,9 @@
     <string name="proximity">Proximity sensor</string>
     <string name="gnssLatLong">GNSS (Lat/Long)</string>
     <string name="gnss">GNSS</string>
+    <string name="wifi">WiFi</string>
     <string name="pdr_pos">PDR Position</string>
     <string name="pdr">Pedestrian Dead Reckoning</string>
-    <string name="wifi">WiFi Networks</string>
-
 
     <!-- Misc -->
     <string name="x">X: %1s</string>
@@ -111,6 +111,8 @@
     <string name="floor_height">Floor height in meters</string>
     <string name="color">Color</string>
     <string name="gnssSwitch">GNSS</string>
+    <string name="wifiSwitch">WiFi</string>
+    <string name="smoothSwitch">Smooth</string>
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
     <string name="choose_map">Choose Map</string>
@@ -120,5 +122,6 @@
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
+    <string name="waiting_for_signal">Waiting for WiFi or GNSS signal...</string>
 
 </resources>

@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 按下时颜色变暗（使用 purple_700 代替 colorPrimaryDark） -->
+    <!-- When pressed, color darkens (using purple_700 instead of colorPrimaryDark) -->
     <item android:state_pressed="true">
         <shape android:shape="rectangle">
             <solid android:color="@color/lightLogoBlue"/>
             <corners android:radius="20dp"/>
         </shape>
     </item>
-    <!-- 默认状态 -->
+    <!-- Default state -->
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="@color/pastelBlue"/> <!-- 你可以改成 primaryBlue 或其他主色 -->
+            <solid android:color="@color/pastelBlue"/> <!-- You can change to primaryBlue or other primary color -->
             <corners android:radius="20dp"/>
         </shape>
     </item>

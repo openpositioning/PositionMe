@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     tools:context=".fragments.ReplayFragment">
 
-    <!-- 地图显示区域 -->
+    <!-- Map display area -->
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/replayMap"
@@ -24,7 +24,7 @@
             android:layout_height="match_parent"
             android:padding="16dp">
 
-            <!-- 快退按钮 -->
+            <!-- Rewind button -->
             <ImageButton
                 android:id="@+id/btn_rewind"
                 android:layout_width="60dp"
@@ -38,7 +38,7 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="@id/guideline2" />
 
-            <!-- 播放/暂停按钮 -->
+            <!-- Play/Pause button -->
             <ImageButton
                 android:id="@+id/btn_play_pause"
                 android:layout_width="101dp"
@@ -52,7 +52,7 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="@id/guideline2" />
 
-            <!-- 快进按钮 -->
+            <!-- Fast forward button -->
             <ImageButton
                 android:id="@+id/btn_forward"
                 android:layout_width="60dp"
@@ -66,8 +66,7 @@
                 app:layout_constraintStart_toEndOf="@id/btn_play_pause"
                 app:layout_constraintTop_toTopOf="@id/guideline2" />
 
-            <!-- GNSS 开关 -->
-            <!-- 播放进度时间显示 -->
+            <!-- GNSS switch -->
             <Switch
                 android:id="@+id/gnssSwitch"
                 android:layout_width="wrap_content"
@@ -82,6 +81,47 @@
                 app:layout_constraintTop_toTopOf="@id/guideline3"
                 app:layout_constraintVertical_bias="0.516" />
 
+            <!-- WiFi switch -->
+            <Switch
+                android:id="@+id/wifiSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="5dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/button_background_light"
+                android:buttonTint="@android:color/holo_blue_dark"
+                android:text="@string/wifiSwitch"
+                android:textColor="@color/black"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/gnssSwitch" />
+
+            <!-- Smooth switch -->
+            <Switch
+                android:id="@+id/smoothSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="5dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/button_background_light"
+                android:buttonTint="@android:color/holo_orange_dark"
+                android:text="@string/smoothSwitch"
+                android:textColor="@color/black"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/wifiSwitch" />
+
+            <!-- Algorithm Spinner -->
+            <Spinner
+                android:id="@+id/algorithmSwitchSpinner"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="5dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/button_background_light"
+                android:minWidth="150dp"
+                android:textColor="@color/black"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/smoothSwitch" />
+
             <TextView
                 android:id="@+id/tv_progress_time"
                 android:layout_width="wrap_content"
@@ -93,9 +133,9 @@
                 android:textSize="16sp"
                 app:layout_constraintBottom_toBottomOf="@id/seek_bar"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@id/seek_bar" /> <!-- 给时间文本和进度条之间留 8dp 间距 -->
+                app:layout_constraintStart_toEndOf="@id/seek_bar" /> <!-- Leave 8dp spacing between time text and progress bar -->
 
-            <!-- 按钮区域 -->
+            <!-- Button area -->
             <LinearLayout
                 android:id="@+id/button_container"
                 android:layout_width="match_parent"
@@ -107,7 +147,7 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent">
 
-                <!-- Restart 按钮 -->
+                <!-- Restart button -->
                 <Button
                     android:id="@+id/btn_restart"
                     android:layout_width="0dp"
@@ -117,7 +157,7 @@
 
                     android:text="Restart" />
 
-                <!-- Go to End 按钮 -->
+                <!-- Go to End button -->
                 <Button
                     android:id="@+id/btn_go_to_end"
                     android:layout_width="0dp"
@@ -127,7 +167,7 @@
 
                     android:text="Go to End" />
 
-                <!-- Exit 按钮 -->
+                <!-- Exit button -->
                 <Button
                     android:id="@+id/btn_exit"
                     android:layout_width="0dp"
@@ -138,7 +178,7 @@
                     android:text="Exit" />
             </LinearLayout>
 
-            <!-- 进度条 -->
+            <!-- Progress bar -->
             <SeekBar
                 android:id="@+id/seek_bar"
                 android:layout_width="0dp"
@@ -150,10 +190,10 @@
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@id/tv_progress_time"
                 app:layout_constraintHorizontal_weight="1"
-                app:layout_constraintStart_toStartOf="parent" /> <!-- 让 SeekBar 充满剩余空间 -->
+                app:layout_constraintStart_toStartOf="parent" /> <!-- Make SeekBar fill remaining space -->
 
 
-            <!-- 指南线 -->
+            <!-- Guide lines -->
             <androidx.constraintlayout.widget.Guideline
                 android:id="@+id/guideline2"
                 android:layout_width="wrap_content"

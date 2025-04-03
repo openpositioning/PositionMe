@@ -80,7 +80,7 @@ public class CorrectionFragment extends Fragment {
 
     /**
      * {@inheritDoc}
-     * Loads the starting position set in {@link StartLocationFragment}, and displays a map fragment.
+     * Loads the starting position set in {@link RecordingFragment}, and displays a map fragment.
      */
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
