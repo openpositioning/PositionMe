@@ -36,30 +36,47 @@
                 app:layout_constraintEnd_toEndOf="parent">
 
                 <TextView
-                    android:layout_gravity="center"
                     android:id="@+id/correctionInfoView"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_gravity="center"
                     android:layout_margin="16dp"
-                    android:text="@string/locationInstructions"
+                    android:text="@string/filterInstructions"
+                    android:textAlignment="center"
                     android:textAppearance="?attr/textAppearanceBodyLarge"
-                    android:textColor="@color/md_theme_onPrimary"
-                    android:textAlignment="center"/>
+                    android:textColor="@color/md_theme_onPrimary" />
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- With these two buttons -->
             <Button
-                android:id="@+id/startLocationDone"
-                android:layout_width="150dp"
+                android:id="@+id/useKalmanFilter"
+                android:layout_width="0dp"
                 android:layout_height="56dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="8dp"
                 android:layout_marginBottom="24dp"
-                android:text="@string/setLocation"
-                android:textSize="24sp"
-                app:icon="@drawable/ic_baseline_add_location_24"
+                android:text="Use Kalman Filter"
+                android:textSize="16sp"
                 app:iconGravity="start"
-                app:iconSize="30dp"
+                app:iconSize="24dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/useParticleFilter"
+                app:layout_constraintStart_toStartOf="parent" />
+
+            <Button
+                android:id="@+id/useParticleFilter"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="24dp"
+                android:text="Use Particle Filter"
+                android:textSize="16sp"
+                app:iconGravity="start"
+                app:iconSize="24dp"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toStartOf="parent" />
+                app:layout_constraintStart_toEndOf="@+id/useKalmanFilter" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 

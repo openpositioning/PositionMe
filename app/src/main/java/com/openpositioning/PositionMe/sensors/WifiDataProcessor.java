@@ -41,6 +41,7 @@ import java.util.TimerTask;
 public class WifiDataProcessor implements Observable {
 
     //Time over which a new scan will be initiated
+    // TODO: Check whether inc/decreasing interval improves positioning
     private static final long scanInterval = 5000;
 
     // Application context for handling permissions and WifiManager instances
@@ -211,12 +212,10 @@ public class WifiDataProcessor implements Observable {
     private void startWifiScan() {
         //Check settings for wifi permissions
         if(checkWifiPermissions()) {
-            //if(sharedPreferences.getBoolean("wifi", false)) {
             //Register broadcast receiver for wifi scans
             context.registerReceiver(wifiScanReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
             wifiManager.startScan();
 
-            //}
         }
     }
 

@@ -2,6 +2,7 @@ plugins {
     id 'com.android.application'
     id 'com.google.gms.google-services'
     id 'androidx.navigation.safeargs'
+
     id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
 }
 
@@ -23,18 +24,21 @@ android {
         versionCode 1
         versionName "1.0"
 
+
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Example of referencing secrets (if you use secrets.properties):
-        buildConfigField "String", "MAPS_API_KEY",
-                "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
-        buildConfigField "String", "OPENPOSITIONING_API_KEY",
-                "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
-        buildConfigField "String", "OPENPOSITIONING_MASTER_KEY",
-                "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
+        buildConfigField "String", "MAPS_API_KEY", "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
+        buildConfigField "String", "OPENPOSITIONING_API_KEY", "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
+        buildConfigField "String", "OPENPOSITIONING_MASTER_KEY", "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
+
+        resValue("string", "google_maps_key", localProperties.getProperty("MAPS_API_KEY"))
+
     }
 
     buildFeatures {
+
+
         // For example:
         // compose true    // if you want Jetpack Compose
         // viewBinding true
@@ -92,4 +96,15 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+
+    // Added EJML for matrix operations used in sensor fusion algorithms
+    implementation 'org.ejml:ejml-all:0.43.1'
+
+    // Added these for enhanced math operations
+    implementation 'org.apache.commons:commons-math3:3.6.1'
+
+    implementation 'com.google.maps.android:android-maps-utils:3.4.0'
+
+    implementation 'com.google.maps.android:android-maps-utils:2.3.0'
+
 }
