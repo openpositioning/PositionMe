@@ -1,11 +1,14 @@
 package com.openpositioning.PositionMe.presentation.activity;
 import android.Manifest;
+import android.content.Intent;
 import android.content.SharedPreferences;
 
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.provider.Settings;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
@@ -138,6 +141,11 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();
+
+        // Check for overlay permission
+        if (!Settings.canDrawOverlays(this)) {
+            showOverlayPermissionDialog();
+        }
     }
 
 
@@ -326,8 +334,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
     }
 
-
-
     //endregion
 
     //region Global toasts
@@ -352,7 +358,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
      * Called when {@link ServerCommunications} successfully uploads a trajectory.
      */
     private final Runnable displayToastTaskSuccess = () -> Toast.makeText(MainActivity.this,
-            "Trajectory uploaded", Toast.LENGTH_SHORT).show();
+            "Trajectory uploaded", Toast.LENGTH_SHORT                                                                                              ).show();
 
     /**
      * Task that displays negative toast on the main UI thread.
@@ -363,4 +369,67 @@ public class MainActivity extends AppCompatActivity implements Observer {
     };
 
     //endregion
+
+    /**
+     * Processes the result of the overlay permission request.
+     * 
+     * This method handles the response from the system settings screen where the user
+     * either granted or denied the overlay permission. If granted, the app continues 
+     * normal execution. If denied, the user is informed that some features (specifically
+     * system-wide fall detection alerts) may not function properly.
+     * 
+     * @param requestCode The integer request code originally supplied to startActivityForResult().
+     *                    Identifies which activity result is being returned.
+     * @param resultCode  The integer result code returned by the child activity.
+     * @param data        An Intent which can return result data to the caller.
+     * 
+     * @author 
+     */
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == 1234) {
+            if (Settings.canDrawOverlays(this)) {
+                // Permission granted, continue with the app
+                Toast.makeText(this, "Permission granted!", Toast.LENGTH_SHORT).show();
+            } else {
+                // Permission denied, show a message
+                Toast.makeText(this, "Permission denied. Some features may not work.", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    /**
+     * Displays a dialog requesting permission to draw overlays on the screen.
+     * 
+     * This method creates and shows an alert dialog informing the user about the need
+     * for overlay permission, which is required for the fall detection feature to display
+     * alerts even when the app is not in the foreground. The dialog cannot be dismissed
+     * without user interaction and provides a direct link to the system settings page
+     * where the permission can be granted.
+     * 
+     * The dialog includes:
+     * - An explanatory message about why the permission is needed
+     * - A button to navigate to the system settings screen
+     * - No option to dismiss without taking action (non-cancelable)
+     * 
+     * If the user clicks "Go to Settings", they are redirected to the system's
+     * overlay permission settings page specifically for this application.
+     * 
+     * @author Semih Vazgecen
+     */
+    private void showOverlayPermissionDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Overlay Permission Needed")
+                .setMessage("This app needs permission to display overlays for fall detection. Please enable it in the settings.")
+                .setCancelable(false)
+                .setPositiveButton("Go to Settings", (dialog, which) -> {
+                    // Redirect user to the system settings to enable overlay permission
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    startActivityForResult(intent, 1234);
+                })
+                .show();
+    }
 }

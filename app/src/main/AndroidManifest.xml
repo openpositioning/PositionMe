@@ -55,6 +55,8 @@
 
     <!-- Required if your app needs to access audio files that other apps created. -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Required for system wide fall detection alerts. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
 
     <!--

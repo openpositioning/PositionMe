@@ -12,18 +12,22 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.utils.FallDetectionService;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 
+
+import org.ejml.simple.SimpleMatrix;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -56,6 +60,10 @@ import java.util.stream.Stream;
  * @author Michal Dvorak
  * @author Mate Stodulka
  * @author Virginia Cangelosi
+ * @author Stone Anderson
+ * @author Sofea Jazlan Arif
+ * @author Semih Vazgecen
+ * @author Joseph Azrak
  */
 public class SensorFusion implements SensorEventListener, Observer {
 
@@ -100,6 +108,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private MovementSensor rotationSensor;
     private MovementSensor gravitySensor;
     private MovementSensor linearAccelerationSensor;
+    // Fall detection service
+    private FallDetectionService fallDetection;
+
     // Other data recording
     private WifiDataProcessor wifiProcessor;
     private GNSSDataProcessor gnssProcessor;
@@ -117,6 +128,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Variables to help with timed events
     private long absoluteStartTime;
     private long bootTime;
+    
+    // Getter for bootTime to calculate relative timestamps
+    public long getBootTime() {
+        return bootTime;
+    }
     long lastStepTime = 0;
     // Timer object for scheduling data recording
     private Timer storeTrajectoryTimer;
@@ -144,6 +160,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float latitude;
     private float longitude;
     private float[] startLocation;
+    // Track the provider of the last GNSS update
+    private String lastGnssProvider = null;
     // Wifi values
     private List<Wifi> wifiList;
 
@@ -158,6 +176,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
+    private EKFSensorFusion ekf;
+    private ParticleFilter particleFilter;
+
+    private Float prevPDRX = null;
+    private Float prevPDRY = null;
+    // Temporary list for added tags
+    private List<Traj.GNSS_Sample> taggedLocations = new ArrayList<>();
+
 
     //region Initialisation
     /**
@@ -193,6 +219,52 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.startLocation = new float[2];
     }
 
+
+    /**
+     * Initializes the Extended Kalman Filter (EKF) with the starting position.
+     * @param startPosition - float of starting position [latitude, longitude]
+     * @author Stone Anderson
+     */
+    public void initializeEKF(float[] startPosition) {
+
+        float latitude = startPosition[0];
+        float longitude = startPosition[1];
+        // Convert start position (lat, lon) to (x, y)
+        float[] initialXY = EKFSensorFusion.getTransformedCoordinate(new LatLng(latitude, longitude));
+        // Create initial state vector (2x1 matrix)
+        SimpleMatrix initialState = new SimpleMatrix(2, 1, true, new double[]{ initialXY[0], initialXY[1] });
+
+        // Initialize covariance and noise matrices
+        SimpleMatrix initialCovariance = SimpleMatrix.identity(2).scale(1.0);
+        SimpleMatrix Q = SimpleMatrix.identity(2).scale(0.1);
+
+        // Initialize GNSS and WiFi noise covariances
+        SimpleMatrix R_gnss = SimpleMatrix.identity(2).scale(1.0);
+        SimpleMatrix R_wifi = SimpleMatrix.identity(2).scale(1.0);
+
+        // Instantiate EKF
+        this.ekf = new EKFSensorFusion(initialState, initialCovariance, Q, R_gnss, R_wifi);
+    }
+
+    /**
+     * Initializes the Particle Filter with the starting position.
+     * Transforms initial coordinates (from GNSS to Wi-Fi) to a metric coordinate system and
+     * creates a new ParticleFilter with the specified number of particles.
+     *
+     * @param startPosition An array containing the starting position as [latitude, longitude]
+     * 
+     * @author Sofea Jazlan Arif
+     */
+    public void initializeParticle(float[] startPosition)
+    {
+        float latitude = startPosition[0];
+        float longitude = startPosition[1];
+
+        // Convert GNSS (lat, lon) to a metric coordinate system (x, y)
+        float[] initialXY = EKFSensorFusion.getTransformedCoordinate(new LatLng(latitude, longitude));
+
+        this.particleFilter = new ParticleFilter(50, initialXY[0], initialXY[1]);
+    }
 
     /**
      * Static function to access singleton instance of SensorFusion.
@@ -250,15 +322,31 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.pathView = new PathView(context, null);
         this.wiFiPositioning = new WiFiPositioning(context);
 
+        //
+
+
+
+
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
             this.filter_coefficient = FILTER_COEFFICIENT;
         }
+        
+        // Initialize the GNSS max error setting if it doesn't exist
+        if (!settings.contains("gnss_max_error")) {
+            SharedPreferences.Editor editor = settings.edit();
+            editor.putString("gnss_max_error", "20"); // Default is 20 meters as a string
+            editor.apply();
+        }
 
         // Keep app awake during the recording (using stored appContext)
         PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
+
+        fallDetection = new FallDetectionService(context);
+        // Register fall detection listener
+        fallDetection.setFallListener(() -> handleFallDetected());
     }
 
     //endregion
@@ -295,7 +383,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastEventTimestamps.put(sensorType, currentTime);
         eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
 
-
+        fallDetection.processAcceleration(acceleration[0], acceleration[1], acceleration[2], currentTime); // Send to FallDetection
 
         switch (sensorType) {
             case Sensor.TYPE_ACCELEROMETER:
@@ -439,12 +527,28 @@ public class SensorFusion implements SensorEventListener, Observer {
         @Override
         public void onLocationChanged(@NonNull Location location) {
             //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
+            float accuracy = (float) location.getAccuracy();
+            
+            // Get the maximum allowable GNSS error from settings as a string and convert to float
+            float maxGnssError = Float.parseFloat(settings.getString("gnss_max_error", "20"));
+            
+            // Filter out inaccurate GNSS readings
+            if (accuracy > maxGnssError) {
+                Log.w("SensorFusion", "Ignoring erroneous GNSS reading. Accuracy: " + 
+                      accuracy + "m exceeds threshold: " + maxGnssError + "m");
+                return; // Skip processing this location update
+            }
+            
+            // If accuracy is acceptable, process the location
             latitude = (float) location.getLatitude();
             longitude = (float) location.getLongitude();
             float altitude = (float) location.getAltitude();
-            float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
+            
+            // Store the provider for filtering out tag data in position calculation
+            lastGnssProvider = provider;
+            
             if(saveRecording) {
                 trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
                         .setAccuracy(accuracy)
@@ -458,6 +562,334 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+    // Semih - ADD
+    /**
+     * Handles the event when a fall is detected by the fall detection service.
+     * This method is called as a callback from the FallDetectionService when
+     * acceleration patterns indicate a possible fall event.
+     * 
+     * @author Semih Vazgecen
+     */
+    private void handleFallDetected() {
+        Log.e("SensorFusion", "FALL DETECTED! Sending alert...");
+    }
+
+    /**
+     * Sets the initial position of the trajectory using the provided latitude and longitude.
+     *
+     * @param lat   The latitude of the initial position.
+     * @param longi The longitude of the initial position.
+     */
+    /**
+     * Sets the initial position of the trajectory using the provided latitude and longitude.
+     * This method creates an Initial_Pos builder with the given coordinates and sets it
+     * in the trajectory builder.
+     *
+     * @param lat The latitude of the initial position
+     * @param longi The longitude of the initial position
+     * 
+     * @author Semih Vazgecen
+     */
+    public void writeInitialPositionToTraj(float lat, float longi)
+    {
+        trajectory.setInitialPos(createInitialPosBuilder(lat, longi));
+    }
+    // Semih - END
+
+
+    long lastUpdateTime = 0;
+    long updateIntervalMs = 2000; // Update every 2 seconds
+    double movementThreshold = 0.01; // Define a meaningful movement threshold
+
+    /**
+     * Updates the Extended Kalman Filter with new sensor data (PDR, WIFI and GNSS) to estimate new position
+     * This update only occurs every 2 seconds, if there is pdr displacement, and if ekf object is not null
+     * @author Stone Anderson
+     */
+    public void updateEKF() {
+
+        // log time so updateEKF is called only every 2 seconds
+        long currentTime = SystemClock.uptimeMillis();
+        if (currentTime - lastUpdateTime < updateIntervalMs) {
+            return;
+        }
+
+        // Get PDR measurement, compute displacement and only updateEKF if movement has been detected
+        float[] pdrXY = pdrProcessing.getPDRMovement();
+        double pdrMovement = Math.sqrt(pdrXY[0] * pdrXY[0] + pdrXY[1] * pdrXY[1]);
+        if (pdrMovement < movementThreshold) {
+            return;
+        }
+
+        // makes sure ekf is initialised
+        if (ekf == null) return;
+
+        // get GNSS data and convert it to (x,y)
+        float[] gnssLatLong = getGNSSLatitude(false);
+        if (lastGnssProvider != null && "fusion".equals(lastGnssProvider)) {
+            Log.d("SensorFusion", "Skipping EKF update with tag data");
+            return;
+        }
+        float[] gnssXY = EKFSensorFusion.getTransformedCoordinate(new LatLng(gnssLatLong[0], gnssLatLong[1]));
+
+
+        // Get WiFi data (if available) and convert it to (x,y)
+        LatLng wifiLatLng = getLatLngWifiPositioning();
+        float[] wifiXY;
+        if (wifiLatLng != null) {
+            wifiXY = EKFSensorFusion.getTransformedCoordinate(wifiLatLng);
+        } else {
+            wifiXY = gnssXY; // if WiFi data is unavailable, use GNSS coordinates
+        }
+
+        // Get PDR data
+        pdrXY = pdrProcessing.getPDRMovement();
+
+        // Convert measurements to 2x1 SimpleMatrix objects
+        SimpleMatrix z_gnss = new SimpleMatrix(2, 1, true, new double[]{ gnssXY[0], gnssXY[1] });
+        SimpleMatrix z_wifi = new SimpleMatrix(2, 1, true, new double[]{ wifiXY[0], wifiXY[1] });
+        SimpleMatrix z_pdr = new SimpleMatrix(2, 1, true, new double[]{ pdrXY[0], pdrXY[1] });
+
+
+        // Use latest PDR data for prediction.
+        ekf.predictWithPDR(z_pdr);
+
+        // Use GNSS and WiFi data for update
+        ekf.updateBatch(z_gnss, z_wifi);
+
+        // track time
+        lastUpdateTime = currentTime;
+
+        // get estimate location
+        LatLng fusedLocation = getEKFStateAsLatLng();
+
+        // store estimate fused location for replay purposes
+        if (saveRecording) {
+            addFusedPosition(fusedLocation, SystemClock.uptimeMillis() - bootTime, "EKF");
+        }
+
+    }
+
+    // Add a flag to prevent concurrent updates
+    private volatile boolean isParticleUpdating = false;
+    private ParticleAttribute lastParticlePosition = null;
+    
+    /**
+     * Updates the Particle Filter with new sensor measurements.
+     * This method calculates the movement deltas from PDR and uses GNSS and WiFi
+     * positioning data to update the particle filter. It implements thread safety
+     * by using a flag to prevent concurrent updates.
+     * 
+     * The process involves:
+     * 1. Getting GNSS and WiFi position data
+     * 2. Calculating PDR movement deltas since the last update
+     * 3. Running the particle filter with these inputs
+     * 4. Storing and returning the estimated position
+     *
+     * @return The estimated position as a ParticleAttribute or null if filter hasn't been initialized
+     * 
+     * @author Sofea Jazlan Arif
+     */
+    public ParticleAttribute updateParticle(){
+        Log.d("Particle Filter", "UPDATES PARTICLE = " );
+        if (particleFilter == null) return null;
+        
+        // If an update is already in progress, return the last position
+        if (isParticleUpdating) {
+            Log.d("Particle Filter", "Skipping update - already in progress");
+            return lastParticlePosition;
+        }
+        
+        // Set flag to prevent concurrent updates
+        isParticleUpdating = true;
+        
+        try {
+            // Check if this is real GNSS data (not a user tag)
+            if (lastGnssProvider != null && isUserTagProvider(lastGnssProvider)) {
+                Log.d("SensorFusion", "Skipping Particle update with tag data");
+                return lastParticlePosition;
+            }
+            
+            float[] gnssLatLong = getGNSSLatitude(false);
+            float[] gnssXY = EKFSensorFusion.getTransformedCoordinate(new LatLng(gnssLatLong[0], gnssLatLong[1]));
+    
+            LatLng wifiLatLng = getLatLngWifiPositioning();
+            float[] wifiXY;
+            if (wifiLatLng != null) {
+                wifiXY = EKFSensorFusion.getTransformedCoordinate(wifiLatLng);
+            } else {
+                wifiXY = gnssXY;
+            }
+    
+            float wifiLat = wifiXY[0];
+            float wifiLon = wifiXY[1];
+    
+            // get PDR location for step prediction
+            float[] pdrXY = pdrProcessing.getPDRMovement();
+    
+            Log.d("PDR Particle Filter", "PDR X " + pdrXY[0] + " PDR Y: " + pdrXY[1]);
+    
+            float gnssLat = gnssXY[0];
+            float gnssLon = gnssXY[1];
+    
+            float deltaX, deltaY;
+    
+            if (prevPDRX == null || prevPDRY == null){
+                deltaX = pdrXY[0] - 0;
+                deltaY = pdrXY[1] - 0;
+                Log.d("PDR Particle Filter", "Initial X " + gnssLat + " Initial Y: " + gnssLon);
+                Log.d("PDR Particle Filter", "Initial PDR X " + pdrXY[0] + " PDR Y: " + pdrXY[1]);
+                Log.d("PDR Particle Filter", "Initial delta PDR X " + deltaX + " delta PDR Y: " + deltaY);
+            } else {
+                deltaX = pdrXY[0] - prevPDRX;
+                deltaY = pdrXY[1] - prevPDRY;
+            }
+    
+            prevPDRX = pdrXY[0];
+            prevPDRY = pdrXY[1];
+    
+            Log.d("PDR Particle Filter", "PDR X " + pdrXY[0] + " PDR Y: " + pdrXY[1]);
+            Log.d("PDR Particle Filter", "delta PDR X " + deltaX + " delta PDR Y: " + deltaY);
+    
+            lastParticlePosition = runParticleFilter(wifiLat, wifiLon, 5, deltaX, deltaY);
+    
+            return lastParticlePosition;
+        } finally {
+            // Always clear the flag when done
+            isParticleUpdating = false;
+        }
+    }
+
+    /**
+     * Runs the particle filter algorithm for a specified number of iterations.
+     * This method performs the predict-update-resample cycle of particle filtering
+     * to refine position estimates based on movement data and reference positions.
+     *
+     * @param startX The x-coordinate of the reference position (usually from WiFi or GNSS)
+     * @param startY The y-coordinate of the reference position
+     * @param numIterations The number of iterations to run the filter
+     * @param deltaX The change in x-coordinate since the last update (from PDR)
+     * @param deltaY The change in y-coordinate since the last update (from PDR)
+     * @return The estimated position after running the particle filter
+     * 
+     * @author Sofea Jazlan Arif
+     */
+    private ParticleAttribute runParticleFilter(float startX, float startY, int numIterations, float deltaX, float deltaY) {
+        particleFilter.setPosition(startX, startY);
+
+        float prevEstX = particleFilter.getEstimatedPosition().lat;
+        float prevEstY = particleFilter.getEstimatedPosition().lon;
+
+        for (int i = 0; i < numIterations; i++) {
+            // Predict the new positions of particles
+            particleFilter.predict(deltaX, deltaY);
+
+            // Update weights using the reference position
+            particleFilter.updateWeights(startX, startY);
+
+            // Resample to refine estimates
+            particleFilter.resample(startX, startY);
+        }
+
+
+
+        // Get the estimated position after 10 iterations
+        return particleFilter.getEstimatedPosition();
+    }
+
+    /// END
+
+
+    /**
+     * Gets the current state of the Extended Kalman Filter as latitude, longitude coordinates
+     * @return A LatLng object of coordinates of the current EKF state
+     * @author Stone Anderson
+     */
+    public LatLng getEKFStateAsLatLng() {
+        if (ekf == null) return null;
+        SimpleMatrix state = ekf.getState();
+        float x = (float) state.get(0, 0);
+        float y = (float) state.get(1, 0);
+        return ekf.getInverseTransformedCoordinate(x, y, 30, true);
+    }
+    
+    /**
+     * Returns the accuracy estimate of the EKF position in meters.
+     * This represents the uncertainty in the position estimate.
+     * 
+     * @return The position accuracy in meters, or NaN if EKF is not initialized
+     * 
+     * @author
+     */
+    public double getEKFPositionAccuracy() {
+        if (ekf == null) return Double.NaN;
+        return ekf.getPositionAccuracy();
+    }
+
+    /**
+     * Converts the Particle Filter estimated position to geographic coordinates.
+     * Takes a ParticleAttribute containing position in the metric coordinate system
+     * and converts it back to latitude and longitude.
+     *
+     * @param estimatedPos The estimated position from the Particle Filter in metric coordinates
+     * @return A LatLng object containing the geographic coordinates of the position,
+     *         or null if the Particle Filter hasn't been initialized
+     * 
+     * @author Sofea Jazlan Arif
+     */
+    public LatLng getParticleStateAsLatLng(ParticleAttribute estimatedPos) {
+        if (particleFilter == null) return null;
+        ParticleAttribute estimatedLoc = estimatedPos;
+        // Convert x,y back to latitude and longitude.
+        // For example, for Scotland, UTM zone 30 in the Northern Hemisphere is typically used.
+        return ekf.getInverseTransformedCoordinate( (float)estimatedLoc.lat,  (float)estimatedLoc.lon, 30, true);
+    }
+    
+    /**
+     * Returns the accuracy estimate of the Particle Filter position in meters.
+     * This is based on the dispersion of particles and represents uncertainty.
+     * 
+     * @return The position accuracy in meters, or NaN if Particle Filter is not initialized
+     * 
+     * @author Sofea Jazlan Arif
+     */
+    public double getParticlePositionAccuracy() {
+        if (particleFilter == null) return Double.NaN;
+        return particleFilter.getPositionAccuracy();
+    }
+
+
+
+
+    /**
+     * Adds a fused position to the trajectory.
+     * Creates a Fused_Pos object with the given location, timestamp, and algorithm information
+     * and adds it to the trajectory being recorded.
+     *
+     * @param fusedLocation The geographic coordinates of the fused position
+     * @param relativeTimestamp The relative timestamp when the position was calculated
+     * @param algorithm The name of the fusion algorithm used (e.g., "EKF", "Particle")
+     * 
+     * @author Semih Vazgecen, Stone Anderson
+     */
+    public void addFusedPosition(LatLng fusedLocation, long relativeTimestamp, String algorithm) {
+        Traj.Fused_Pos fusedPos = Traj.Fused_Pos.newBuilder()
+                .setRelativeTimestamp(relativeTimestamp)
+                .setLatitude((float) fusedLocation.latitude)
+                .setLongitude((float) fusedLocation.longitude)
+                .setAlgorithm(algorithm)
+                .build();
+
+        trajectory.addFusedPos(fusedPos);
+
+        Log.d("SensorFusion", "FUSED LAT: " + fusedLocation.latitude +
+                " FUSED LON: " + fusedLocation.longitude +
+                " ALGORITHM: " + algorithm);
+    }
+
+
+
+
     /**
      * {@inheritDoc}
      *
@@ -468,6 +900,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     @Override
     public void update(Object[] wifiList) {
         // Save newest wifi values to local variable
+        Log.d("SensorFusion", "update(Object[] wifiList) called. Received " + wifiList.length + " items.");
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
         if(this.saveRecording) {
@@ -478,8 +911,29 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                         .setMac(data.getBssid()).setRssi(data.getLevel()));
             }
+
+            // Semih - NEW
+            // Get Wifi Position
+            LatLng wifiPosition = getLatLngWifiPositioning();
+
+            // If the user inside a WiFi positioning-supported building
+            // Write the wifi-positioning data to the trajectory
+            if (wifiPosition == null) {
+                Log.e("SensorFusion", "WiFi Positioning returned null! Skipping position update.");
+            } else {
+                Traj.Position position = Traj.Position.newBuilder()
+                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                        .setLatitude((float) wifiPosition.latitude)
+                        .setLongitude((float) wifiPosition.longitude)
+                        .setFloor(getWifiFloor())
+                        .build();
+
+                wifiData.setPosition(position);
+                Log.d("SensorFusion", "WIFI LAT: " + wifiPosition.latitude + " WIFI LON: " + wifiPosition.longitude + " FLOOR:" + getWifiFloor());
+            }
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
+            // Semih - END
         }
         createWifiPositioningRequest();
     }
@@ -524,12 +978,21 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
+
+                    // Print out the WiFi position using Android logging
+                    Log.d("WiFiPositioning", "Received WiFi location: " + wifiLocation.toString() + ", floor: " + floor);
+                    // Optionally, show a Toast message for quick feedback
+                    Toast.makeText(appContext, "WiFi Location: " + wifiLocation.toString() + " on floor: " + floor, Toast.LENGTH_LONG).show();
                     // Handle the success response
                 }
 
                 @Override
                 public void onError(String message) {
                     // Handle the error response
+
+                    Log.e("WiFiPositioning", "Error retrieving WiFi position: " + message);
+                    Toast.makeText(appContext, "Error retrieving WiFi position: " + message, Toast.LENGTH_LONG).show();
+
                 }
             });
         } catch (JSONException e) {
@@ -643,6 +1106,30 @@ public class SensorFusion implements SensorEventListener, Observer {
         else{
             latLong = startLocation;
         }
+        return latLong;
+    }
+    
+    /**
+     * Gets the latest GNSS coordinates, but specifically excludes tag points.
+     * This method should be used for positioning calculations.
+     * 
+     * @return longitude and latitude data in a float[2].
+     */
+    /**
+     * Gets the latest GNSS coordinates, specifically excluding tag points.
+     * This method should be used for positioning calculations where tag points
+     * should not be considered as actual measurement data.
+     * 
+     * @return A float array containing [latitude, longitude] from the system location service
+     * 
+     * @author
+     */
+    public float[] getRealGNSSLatitude() {
+        // Just return the regular GNSS coordinates which come from the system location service
+        // and are never tag points (which only exist in the trajector's gnssData list)
+        float[] latLong = new float[2];
+        latLong[0] = latitude;
+        latLong[1] = longitude;
         return latLong;
     }
 
@@ -780,6 +1267,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+
+
+
     //endregion
 
     //region Start/Stop
@@ -806,6 +1296,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
         rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, (int) 1e6);
         wifiProcessor.startListening();
+        Log.d("SensorFusion", "wifiProcessor.startListening() called - WiFi scanning started.");
+
         gnssProcessor.startLocationUpdates();
     }
 
@@ -873,7 +1365,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
                 .setLightSensorInfo(createInfoBuilder(lightSensor));
 
-
+        initializeEKF(startLocation);
+        initializeParticle(startLocation);
 
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
@@ -940,6 +1433,104 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setType(sensor.sensorInfo.getType());
     }
 
+
+    /**
+     * Creates and returns a builder for the initial position of the trajectory.
+     * This method is used to set the initial coordinates when starting a recording.
+     *
+     * @param lat The latitude of the initial position
+     * @param longi The longitude of the initial position
+     * @return A builder instance with the specified latitude and longitude set
+     * 
+     * @author Semih Vazgecen
+     */
+    public Traj.Initial_Pos.Builder createInitialPosBuilder(float lat, float longi)
+    {
+        return Traj.Initial_Pos.newBuilder().setInitialLatitude(lat).setInitialLongitude(longi);
+    }
+
+    /**
+     * Adds a tag point to a temporary list, which is then saved to the trajectory's GNSS
+     * data once the recording is complete. This method is used to mark important positions 
+     * during recording.
+     * 
+     * @param latitude The latitude of the tagged position
+     * @param longitude The longitude of the tagged position
+     * @param altitude The altitude of the tagged position
+     * @param relativeTimestamp The relative timestamp of when the tag was created
+     * 
+     * @author Joseph Azrak, Semih Vazgecen
+     */
+    public void addTagToTrajectory(float latitude, float longitude, float altitude, long relativeTimestamp) {
+        if (saveRecording && trajectory != null) {
+            Traj.GNSS_Sample tag = Traj.GNSS_Sample.newBuilder()
+                    .setAccuracy(0) // Not applicable for manually added tag
+                    .setAltitude(altitude)
+                    .setLatitude(latitude)
+                    .setLongitude(longitude)
+                    .setSpeed(0) // Not applicable for manually added tag
+                    .setProvider("fusion")
+                    .setRelativeTimestamp(relativeTimestamp)
+                    .build();
+
+            taggedLocations.add(tag);
+        } else {
+            Log.e("SensorFusion", "Cannot add tag: Not recording or trajectory is null");
+        }
+    }
+    // A function to remove desired tags from the temporary list
+    /**
+     * Removes a tag from the temporary list of tagged locations.
+     * Searches for a tag with the specified timestamp and removes it from the list.
+     *
+     * @param tagTimestamp The timestamp of the tag to be removed
+     * 
+     * @author Semih Vazgecen, Joseph Azrak
+     */
+    public void removeTag(long tagTimestamp) {
+        // Find the tag in the list and remove it
+        for (int i = 0; i < taggedLocations.size(); i++) {
+            Traj.GNSS_Sample tag = taggedLocations.get(i);
+            if (tag.getRelativeTimestamp() == tagTimestamp) {
+                taggedLocations.remove(i);  // Remove the tag from the list
+                Log.d("SensorFusion", "Tag with timestamp " + tagTimestamp + " has been successfully removed");
+                break;
+            }
+        }
+    }
+
+    /**
+     * Checks if a given provider is a user tag.
+     * Used to filter out user tags in sensor fusion algorithms since they
+     * should not be treated as actual sensor measurements.
+     * 
+     * @param provider The provider string to check
+     * @return true if this is a user tag provider, false otherwise
+     * 
+     * @author Semih Vazgecen, Joseph Azrak
+     */
+    private boolean isUserTagProvider(String provider) {
+        return provider != null && "fusion".equals(provider);
+    }
+
+    // Commits the tags in the temporary list to the trajectory's GNSS data array
+    /**
+     * Commits the tags in the temporary list to the trajectory's GNSS data.
+     * This method should be called when finalizing the trajectory, typically
+     * when stopping recording.
+     * 
+     * @author Semih Vazgecen, Joseph Azrak
+     */
+    public void saveTagsToTrajectory() {
+        for (Traj.GNSS_Sample tag : taggedLocations) {
+            trajectory.addGnssData(tag);
+            Log.d("SensorFusion", "Tag with timestamp: " + tag.getRelativeTimestamp() + " has been successfully committed");
+        }
+        taggedLocations.clear(); // Clear after saving
+    }
+
+
+
     /**
      * Timer task to record data with the desired frequency in the trajectory class.
      *
@@ -950,19 +1541,19 @@ public class SensorFusion implements SensorEventListener, Observer {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
             trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
-                    .setAccX(acceleration[0])
-                    .setAccY(acceleration[1])
-                    .setAccZ(acceleration[2])
-                    .setGyrX(angularVelocity[0])
-                    .setGyrY(angularVelocity[1])
-                    .setGyrZ(angularVelocity[2])
-                    .setGyrZ(angularVelocity[2])
-                    .setRotationVectorX(rotation[0])
-                    .setRotationVectorY(rotation[1])
-                    .setRotationVectorZ(rotation[2])
-                    .setRotationVectorW(rotation[3])
-                    .setStepCount(stepCounter))
+                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
+                            .setAccX(acceleration[0])
+                            .setAccY(acceleration[1])
+                            .setAccZ(acceleration[2])
+                            .setGyrX(angularVelocity[0])
+                            .setGyrY(angularVelocity[1])
+                            .setGyrZ(angularVelocity[2])
+                            .setGyrZ(angularVelocity[2])
+                            .setRotationVectorX(rotation[0])
+                            .setRotationVectorY(rotation[1])
+                            .setRotationVectorZ(rotation[2])
+                            .setRotationVectorW(rotation[3])
+                            .setStepCount(stepCounter))
                     .addPositionData(Traj.Position_Sample.newBuilder()
                             .setMagX(magneticField[0])
                             .setMagY(magneticField[1])
@@ -997,10 +1588,17 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setMac(currentWifi.getBssid())
                             .setSsid(currentWifi.getSsid())
                             .setFrequency(currentWifi.getFrequency()));
+                    //Log.d("SensorFusion", "APS_DATA: " + currentWifi.getBssid() + ", " + currentWifi.getSsid() + ", " + currentWifi.getFrequency());
                 }
                 else {
                     secondCounter++;
                 }
+                
+                // Run fusion algorithms in a separate thread to avoid UI lag
+                new Thread(() -> {
+                    updateEKF();
+                    updateParticle();
+                }).start();
             }
             else {
                 counter++;

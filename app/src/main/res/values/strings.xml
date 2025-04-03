@@ -3,7 +3,7 @@
 
     <!-- Buttons -->
     <string name="done">Done</string>
-    <string name="stop">Complete</string>
+    <string name="stop">Finish</string>
     <string name="start">Start</string>
     <string name="measurements">Live data</string>
     <string name="files">History</string>
@@ -63,6 +63,7 @@
     <string name="constants_header">Constants</string>
 
     <!-- Content Descriptions -->
+    <string name="timer_format">%1$s:%2$s</string>
     <string name="recording">Recording in progress</string>
     <string name="distance_travelled">Distance travelled:</string>
     <string name="uploadTitle">Manual upload</string>
@@ -86,6 +87,10 @@
     <string name="manual_steps_summary_on">The app will use the values provided below</string>
     <string name="height_title">User height (cm)</string>
     <string name="step_title">Step length (cm)</string>
+    <!-- Fall Detection Preferences -->
+    <string name="fall_detection_title">Enable fall detection</string>
+    <string name="fall_detection_summary_off">Fall detection is disabled</string>
+    <string name="fall_detection_summary_on">Fall detection is enabled</string>
     <!-- Constants Preferences -->
     <string name="constants_enable_title">Edit the constants used</string>
     <string name="constants_summary_off">The app will use the default constants</string>
@@ -114,8 +119,8 @@
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
     <string name="choose_map">Choose Map</string>
-    <string name="auto_floor">❇️ Auto Floor </string>
-    <string name="gnss_error">GNSS error:</string>
+    <string name="auto_floor">🏢 Auto Floor </string>
+    <string name="gnss_error">GNSS Error:\n</string>
     <string name="satellite">Satellite</string>
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>
@@ -130,11 +135,19 @@
     <string name="correct_your_step">Correct your own avg step length:</string>
     <string name="correct_step_hint">...</string>
     <string name="path_drawing_descritpion">Path drawing</string>
-    <string name="position_me">Position Me</string>
+    <string name="position_me">PositionMe</string>
     <string name="gnss_disabled">GNSS is disabled</string>
     <string name="replay_frag_restart">Restart</string>
     <string name="replay_frag_play">Play</string>
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
-
+    <string name="wifiSwitch">🛜 Show WiFi</string>
+    <string name="wifiError">Wifi Error:\n</string>
+    <string name="pdrSwitch">👟 Show PDR</string>
+    <string name="add_tag">Add Tag</string>
+    <string name="tag_added">Tag added at current position</string>
+    <string name="ekf_accuracy">EKF Accuracy: %.2fm</string>
+    <string name="particle_accuracy">Particle Accuracy: %.2fm</string>
+    <string name="gnss_max_error_title">Maximum allowable GNSS error</string>
+    <string name="gnss_max_error_summary">GNSS readings with error higher than this value (in meters) will be ignored</string>
 </resources>

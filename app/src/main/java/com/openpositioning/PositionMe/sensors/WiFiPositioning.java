@@ -25,7 +25,9 @@ import org.json.JSONObject;
  * When the response to the request is obtained the wifiLocation and floor are updated.
  * Calling the getters for wifiLocation and the floor allows obtaining the WiFi location and floor
  * from the POST request response.
+ *
  * @author Arun Gopalakrishnan
+ * @author Sofea Jazlan Arif
  */
 public class WiFiPositioning {
     // Queue for storing the POST requests made
@@ -53,6 +55,14 @@ public class WiFiPositioning {
 
     // Store current floor of user, default value 0 (ground floor)
     private int floor=0;
+
+    // Sofea
+    // For outliers detection
+    private static final double DISTANCE_MAX = 10.0;
+    private static final int LAT_TO_METER = 111045; // 61 miles between latitude parallels
+    private static final int LON_TO_METER_EQUATOR = 111320; // this is only at equator bc longitude converges
+    private LatLng previousLocation = null; // will be defined in calculations
+
 
 
     /**
@@ -87,8 +97,12 @@ public class WiFiPositioning {
                 // Parses the response to obtain the WiFi location and WiFi floor
                 response -> {
                     try {
-                            wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
-                            floor = response.getInt("floor");
+                        LatLng tempLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
+                        if(!(isOutlier(tempLocation)))
+                        {
+                            wifiLocation = tempLocation;
+                        }
+                        floor = response.getInt("floor");
                     } catch (JSONException e) {
                         // Error log to keep record of errors (for secure programming and maintainability)
                         Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);
@@ -176,6 +190,69 @@ public class WiFiPositioning {
     public interface VolleyCallback {
         void onSuccess(LatLng location, int floor);
         void onError(String message);
+    }
+
+    // Functions to get outlier detection working
+
+    /**
+     * Determines if a new WiFi position is an outlier based on the distance from the previous position.
+     * 
+     * This method compares the given location with the previously recorded location
+     * and checks if the distance between them exceeds a predefined maximum threshold.
+     * If the distance is too large, the location is considered an outlier and should be
+     * filtered out to prevent jumps in the positioning.
+     * 
+     * If this is the first location being checked (previousLocation is null),
+     * the location is accepted and stored as the reference for future comparisons.
+     *
+     * @param newLocation The new location to check for being an outlier
+     * @return boolean True if the location is an outlier, false otherwise
+     * 
+     * @author Sofea Jazlan Arif
+     */
+    private boolean isOutlier(LatLng newLocation) {
+        if(previousLocation == null) {
+            previousLocation = newLocation; // update the location
+        }
+
+        // once previous location available
+        double distance = measureDistance(previousLocation, newLocation);
+
+        // update previous location at each calculation
+        previousLocation = newLocation;
+
+        // true if distance is larger than MAX, false if not
+        return distance > DISTANCE_MAX;
+    }
+
+    /**
+     * Calculates the distance between two geographic coordinates in meters.
+     * 
+     * This method implements a simple distance calculation that approximates the
+     * distance between two points on Earth. It takes into account the fact that
+     * longitude distances vary with latitude due to the Earth's curvature.
+     * 
+     * The calculation uses a flat-Earth approximation that is accurate enough for
+     * small distances. It:
+     * 1. Calculates the latitude difference and converts to meters
+     * 2. Calculates the longitude difference, adjusted for latitude, and converts to meters
+     * 3. Uses the Pythagorean formula to compute the straight-line distance
+     *
+     * @param pos1 The first position (origin point)
+     * @param pos2 The second position (destination point)
+     * @return The distance between the two points in meters
+     * 
+     * @author Sofea Jazlan Arif
+     */
+    private double measureDistance(LatLng pos1, LatLng pos2){
+
+        double deltaLat = (pos2.latitude - pos1.latitude) * LAT_TO_METER;
+
+        double deltaLon = (pos2.longitude - pos1.longitude) *
+                Math.cos(Math.toRadians(pos1.latitude)) * LON_TO_METER_EQUATOR;
+
+        // calculate sum square
+        return Math.sqrt((deltaLat*deltaLat) + (deltaLon*deltaLon));
     }
 
 }

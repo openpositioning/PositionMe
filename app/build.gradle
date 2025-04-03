@@ -92,4 +92,19 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+
+    //STONE-ADD
+    // GeoTools libraries
+    //implementation 'org.geotools:gt-referencing:28.0'
+    //implementation 'org.geotools:gt-geometry:28.0'
+
+    // JTS library for geometry operations
+    implementation 'org.locationtech.proj4j:proj4j:1.1.0'
+    //implementation 'org.apache.commons:commons-math3:3.6.1'
+
+    implementation 'org.ejml:ejml-simple:0.41'
+    //implementation 'org.osgeo:proj4j:1.1.0'
+
+
+
 }

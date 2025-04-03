@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/trajectory_map_root"
     android:layout_width="match_parent"
@@ -12,45 +13,70 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Overlaid controls for map visualization -->
+    <!-- Floating button to toggle the dropdown panel -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/togglePanelButton"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_margin="16dp"
+        app:backgroundTint="@color/md_theme_primary"
+        app:tint="@color/md_theme_onPrimary"
+        android:src="@android:drawable/ic_menu_more"
+        android:contentDescription="Toggle Panel"
+        app:layout_anchor="@id/trajectoryMap"
+        app:layout_anchorGravity="top|start" />
+
+    <!-- Ultra simplified control panel - no animations or fancy attributes -->
     <com.google.android.material.card.MaterialCardView
+        android:id="@+id/controlPanel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="10dp"
-        android:padding="18dp"
+        android:layout_marginTop="72dp"
+        android:layout_marginStart="10dp"
+        android:padding="8dp"
+        android:visibility="gone"
         app:cardBackgroundColor="@color/md_theme_surfaceContainer"
         app:cardElevation="4dp"
-        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+        app:cardCornerRadius="8dp"
         app:layout_anchor="@id/trajectoryMap"
         app:layout_anchorGravity="top|start">
 
         <LinearLayout
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
             android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center">
+            android:padding="8dp">
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/gnssSwitch"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch" />
+                android:text="@string/gnssSwitch"
+                app:trackTint="@color/blue_track"
+                app:thumbTint="@color/blue_thumb"/>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/wifiSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/wifiSwitch"
+                app:trackTint="@color/yellow_track"
+                app:thumbTint="@color/yellow_thumb" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/pdrSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/pdrSwitch"
+                app:trackTint="@color/red_track"
+                app:thumbTint="@color/red_thumb"/>
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/autoFloor"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/auto_floor" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/lineColorButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@color/md_theme_onPrimary"
-                android:text="@string/color"
-                app:elevation="5dp"/>
 
             <Spinner
                 android:id="@+id/mapSwitchSpinner"
@@ -59,9 +85,9 @@
                 android:layout_marginStart="0dp"
                 android:layout_marginTop="8dp"
                 android:background="@android:color/white"
+                android:elevation="5dp"
                 android:spinnerMode="dropdown"
-                app:layout_constraintTop_toTopOf="parent"
-                android:elevation="5dp"/>
+                app:layout_constraintTop_toTopOf="parent" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
@@ -94,6 +120,7 @@
             app:layout_constraintBottom_toTopOf="@id/floorDownButton"
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_up" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

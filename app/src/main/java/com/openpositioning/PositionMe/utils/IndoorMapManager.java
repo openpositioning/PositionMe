@@ -109,6 +109,10 @@ public class IndoorMapManager {
              }
         }
         else if (BuildingPolygon.inLibrary(currentLocation)){
+            if (autoFloor) {
+                // Add bias to correct the floor info from WIFI which is indicated as 1 on the ground floor of the Library
+                newFloor -= 1;
+            }
             // If within bounds and different from floor map currently being shown
             if (newFloor>=0 && newFloor<LIBRARY_MAPS.size() && newFloor!=this.currentFloor) {
                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(LIBRARY_MAPS.get(newFloor)));
