@@ -2,6 +2,30 @@ package com.openpositioning.PositionMe.utils;
 
 import java.util.Arrays;
 
+/**
+ * Implements an exponential smoothing filter for a fixed number of values.
+ *
+ * <p>Exponential smoothing is a time series forecasting method that uses a weighted average of past observations,
+ * with the weights decaying exponentially as the observations get older.  This implementation applies smoothing
+ * independently to each of a fixed number of values.
+ * </p>
+ *
+ * <p>The smoothing factor, alpha (α), controls the weight given to the most recent observation.
+ * A higher alpha value (closer to 1) gives more weight to recent observations, making the smoothed value more responsive
+ * to changes in the data.  A lower alpha value (closer to 0) gives more weight to past observations, resulting in a smoother
+ * output that is less sensitive to short-term fluctuations.</p>
+ *
+ * <p>The filter is initialized with the smoothing factor and the number of values to smooth.  The {@link #applySmoothing(double[])}
+ * method takes an array of new values as input and returns an array of smoothed values.  The first time this method is called,
+ * the smoothed values are initialized with the input values. Subsequent calls update the smoothed values using the
+ * exponential smoothing formula:</p>
+ *
+ * <pre>
+ * smoothed_value[i] = α * new_value[i] + (1 - α) * previous_smoothed_value[i]
+ * </pre>
+ *
+ * <p>The {@link #reset()} method clears the smoothed values, effectively restarting the filter.</p>
+ */
 public class SmoothingFilter {
     private final double alpha;
     private Double[] smoothedValues;

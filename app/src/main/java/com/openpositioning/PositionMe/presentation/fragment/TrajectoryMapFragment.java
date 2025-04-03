@@ -33,20 +33,31 @@ import com.openpositioning.PositionMe.utils.UtilFunctions;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Abstract base class for fragments displaying a map with trajectory data.
+ * This class manages the Google Map, trajectory plotters for different data sources (raw, fusion, WiFi, GNSS),
+ * user interface elements for controlling map behavior and data visibility, and integration with sensor fusion
+ * and indoor mapping functionalities.  It is designed to be extended by specific implementations for recording
+ * and replaying trajectory data.
+ */
 public abstract class TrajectoryMapFragment extends Fragment {
-
+    // GoogleMap instance for displaying the map
     protected GoogleMap gMap;
 
+    // Trajectory plotters for different data sources
     protected TrajectoryPlotter rawTrajectoryPlotter;
     protected TrajectoryPlotter fusionTrajectoryPlotter;
     protected TrajectoryPlotter wifiTrajectoryPlotter;
     protected GnssTrajectoryPlotter gnssTrajectoryPlotter;
 
+    // Flag to track if GNSS is enabled
     protected boolean isGnssOn = false;
 
+    // SensorFusion instance for managing sensor data and fusion
     protected SensorFusion sensorFusion;
     protected IndoorMapManager indoorMapManager;
 
+    // UI elements
     protected MaterialButton gnssButton;
     protected MaterialButton autoFloorButton;
     protected MaterialButton showRawButton;
@@ -61,6 +72,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
     protected LatLng rawCurrentLocation = new LatLng(0,0);
     protected LatLng fusionCurrentLocation = new LatLng(0,0);
 
+    // Markers for indoor map
     protected final List<Marker> emergencyExitMarkers = new ArrayList<>();
     protected final List<Marker> liftMarkers = new ArrayList<>();
     protected final List<Marker> toiletMarkers = new ArrayList<>();
@@ -70,6 +82,7 @@ public abstract class TrajectoryMapFragment extends Fragment {
     protected final List<Marker> medicalRoomMarkers = new ArrayList<>();
     protected boolean lastIndoorMapState = false;
 
+    // Flag to track if the camera is currently tracking the user's location
     protected boolean isCameraTracking = true;
     protected boolean isAutoFloorOn = true;;
 
@@ -188,6 +201,24 @@ public abstract class TrajectoryMapFragment extends Fragment {
         sensorFusion.setTrajectoryMapFragment(this);
     }
 
+    /**
+     * Initializes the recenter button's functionality.
+     *
+     * The recenter button toggles the camera tracking mode, allowing the user to
+     * choose between a locked camera that follows the user's location and a free-moving
+     * camera.  When pressed, it:
+     *
+     * 1. Toggles the `isCameraTracking` boolean, indicating whether the camera should
+     *    follow the user's location.
+     * 2. Updates the button's background color to reflect the current tracking state.
+     *    A pastel blue color indicates tracking is enabled, while gray indicates tracking
+     *    is disabled.
+     * 3. If tracking is enabled and the Google Map instance (`gMap`) is available, it
+     *    immediately centers the camera on the user's current location (`fusionCurrentLocation`)
+     *    with a zoom level of 19.  This provides a smooth transition to the tracking mode.
+     * 4. Calls `updateAllIndoorMarkers()` to ensure that the visibility and position of
+     *    indoor markers are correctly synchronized with the camera's new state and position.
+     */
     protected void initializeRecentreButton() {
         recenterButton.setOnClickListener(v -> {
             isCameraTracking = !isCameraTracking;

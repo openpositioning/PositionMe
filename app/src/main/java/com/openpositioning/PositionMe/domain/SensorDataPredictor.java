@@ -25,6 +25,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ *  This class uses a TensorFlow Lite model to predict the location (latitude and longitude)
+ *  of a device based on sensor data, primarily Wi-Fi RSSI values and BSSIDs.
+ *  It loads the model and related data (BSSID to index mapping) from the assets folder.
+ */
 public class SensorDataPredictor {
     private static final String TAG = "SensorDataPredictor";
     private static final int TOP_N = 20;

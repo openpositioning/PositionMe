@@ -13,8 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Abstract base class that encapsulates plotting of a trajectory on a GoogleMap.
- * It handles creation/updating of a marker and polyline.
+ * Abstract base class that encapsulates plotting a trajectory on a Google Map.
+ * It manages the creation and updating of a marker (representing the current location)
+ * and a polyline (visualizing the path of the trajectory).  Subclasses define the
+ * specific visual representation (color, icon) and behavior for different types of
+ * trajectories (e.g., GNSS, raw sensor data, fused locations).
  */
 public abstract class TrajectoryPlotter {
     private static final String TAG = "TrajectoryPlotter";

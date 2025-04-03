@@ -7,6 +7,14 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
 
+/**
+ *  This class is responsible for plotting building polygons on a Google Map.
+ *  It takes a GoogleMap object in its constructor and provides a method to draw
+ *  predefined building polygons (e.g., Nuclear, NKML, FJB, Faraday) with specific
+ *  styling (stroke color, width, z-index).
+ *
+ * @author Lai Gan
+ */
 public class BuildingPolygonPlotter {
 
     private GoogleMap map;

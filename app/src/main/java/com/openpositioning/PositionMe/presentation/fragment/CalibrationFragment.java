@@ -40,6 +40,9 @@ import java.util.List;
  *  - Counts and displays how many total data records have been stored.
  *  - Compute and display the current and average errors for PDR, GNSS, and WiFi.
  *
+ * @see RecordingFragment that handles the actual recording of sensor data, containing
+ * the logic for the recording process and contains this sub-fragment.
+ *
  * @author Shu Gu
  */
 public class CalibrationFragment extends Fragment {

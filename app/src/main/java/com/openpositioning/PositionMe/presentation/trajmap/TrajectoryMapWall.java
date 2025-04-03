@@ -12,6 +12,11 @@ import java.util.List;
 import java.util.Objects;
 
 
+/**
+ * This class handles drawing and clearing wall polylines on a Google Map for the trajectory visualization.
+ * It allows for displaying building layouts by drawing walls based on the current floor and building context.
+ * Wall data (coordinates) are currently hardcoded and should be updated to use a more dynamic source (e.g., database, file).
+ */
 public class TrajectoryMapWall {
 
     // Save references to all wall lines for easy removal.
