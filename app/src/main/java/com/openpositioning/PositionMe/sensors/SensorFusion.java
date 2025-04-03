@@ -327,28 +327,28 @@ public class SensorFusion implements SensorEventListener, Observer {
             case Sensor.TYPE_PRESSURE:
                 float rawPressure = sensorEvent.values[0];
 
-                // ✅ 1. 判空或非法值
+                // null/empty check
                 if (Float.isNaN(rawPressure) || rawPressure <= 0) {
                     Log.w("PDR", "Invalid pressure reading, skipped.");
                     break;
                 }
 
-                // ✅ 2. 判定范围是否合理（地球大气压力范围大致是 850~1100 hPa）
+                // valid range check
                 if (rawPressure < 850f || rawPressure > 1100f) {
                     Log.w("PDR", "Out-of-range pressure value: " + rawPressure);
                     break;
                 }
 
-                // ✅ 3. 判断突变（与上一帧差值过大）
-                if (Math.abs(rawPressure - pressure) > 10f) {  // 可调阈值，比如超过10 hPa
+                // check anomaly
+                if (Math.abs(rawPressure - pressure) > 10f) {  // adjustable threshold
                     Log.w("PDR", "Sudden jump in pressure value, skipped.");
                     break;
                 }
 
-                // ✅ 4. 平滑气压
+                // smooth pressure
                 pressure = (1 - ALPHA) * pressure + ALPHA * rawPressure;
 
-                // ✅ 5. 更新 elevation
+                // update elevation
                 if (saveRecording) {
                     this.elevation = pdrProcessing.updateElevation(SensorManager.getAltitude(
                             SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure));
@@ -458,12 +458,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                 //Store time of step
                 long stepTime = android.os.SystemClock.uptimeMillis() - bootTime;
 
-                // ✅ 添加判断：如果加速度点太少，就跳过这次步长估计
-                int MIN_ACCEL_SAMPLES = 10;  // 可根据你采样率和步频实际情况调整
+                // perform step detection filtering
+                // if less than 10 acc sample (e.g. shaking the phone continuously) skip this update
+                int MIN_ACCEL_SAMPLES = 10;
                 if (this.accelMagnitude.size() < MIN_ACCEL_SAMPLES) {
-                    // 不调用 updatePdr，跳过位置更新
+                    // skipping...
                     Log.w("PDR", "Skipped step: not enough accel samples (" + accelMagnitude.size() + ")");
-                    this.accelMagnitude.clear(); // 仍要清空缓存，准备下一步
+                    this.accelMagnitude.clear(); // clear the acc list
                     break;
                 }
 
@@ -471,69 +472,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                 //
                 float[] newCords = this.pdrProcessing.updatePdr(stepTime, this.accelMagnitude, this.orientation[0]);
                 Log.e("PDR", "x: " + newCords[0] + ", y: " + newCords[1]);
-//                // *** Particle Filter start ***
-                newCords = applyParticleFilter(newCords);
-//                pf.predict(newCords[0], newCords[1]);
-//                LatLng startLocLatLng = new LatLng(this.startLocation[0], this.startLocation[1]);
-////                if (getLatLngWifiPositioning() != null) {
-////                    LatLng latLng = getLatLngWifiPositioning();
-//                if (lastWifiPos != null && (System.currentTimeMillis()-lastWifiSuccessTime) < 15000) {
-//                    pf.setMeasurementNoise(2.5);
-//
-//                    LatLng latLng = lastWifiPos;
-//                    double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
-//                    Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
-//                    // if wifi is in front of the user orientation, assuming it's providing a similar
-//                    if (isWifiNotBehind(new double[]{newCords[0], newCords[1]}, wifiPos, this.orientation[0])) {
-//                        pf.setWifiRatio(ratio * 1);
-//                        Log.e("Ratio", "wifi in front");
-//                    } else {
-//                        pf.setWifiRatio(ratio * 0.2);
-//                        Log.e("Ratio", "wifi NOT in front");
-//                    }
-//                    Log.e("Ratio", String.valueOf(ratio));
-//                    pf.update(wifiPos[0], wifiPos[1]);
-//                }  else if (lastGnssLocation != null && (System.currentTimeMillis()-lastGnssTime) < 60000) { // only step in when there is no wifi
-//                    double[] gnssPos = new double[]{lastGnssLocation.getLatitude(), lastGnssLocation.getLongitude()};
-//                    LatLng latLng = new LatLng(gnssPos[0], gnssPos[1]);
-//                    gnssPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
-//
-//                    Log.e("GNSS debug", "x: " + gnssPos[0] + ", y: " + gnssPos[1] + ", accuracy: " + lastGnssLocation.getAccuracy());
-//
-//                    pf.setMeasurementNoise(lastGnssLocation.getAccuracy());
-//                    pf.setWifiRatio(1);
-//                    pf.update(gnssPos[0], gnssPos[1]);
-//                }
-//
-//                // 4. 重采样
-//                pf.resample();
-//
-//                // 5. 估计当前状态
-//                FilterUtils.Particle currentState = pf.estimate();
-//                newCords = new float[]{(float) currentState.x, (float) currentState.y};
-//                Log.e("Particle Filter", "x: " + currentState.x + ", y: " + currentState.y);
-//                // *** Particle END ***
 
-                // 6. Batch Optimization
+                // apply dynamically adjusted particle filter
+                newCords = applyParticleFilter(newCords);
+                // apply Sliding-Window Weighted Smoothing Filter
                 newCords = applyBatchOptimization(windowList, newCords);
 
-//                int historyPoints = 3; // 自定义历史点数量
-//
-//                if (windowList.size() >= historyPoints + 1) {
-//                    windowList.remove(0); // 保持窗口长度
-//                }
-//                windowList.add(newCords); // 添加当前点
-//
-//                // 调用优化函数（参考历史 4 点）
-//                newCords = TrajectoryOptimizer.weightedSmoothOptimizedPoint(
-//                        windowList,
-//                        1.0f,     // 平滑项权重
-//                        5.0f,     // 拟合项权重
-//                        historyPoints  // 自定义历史点数量
-//                );
-//
-//                Log.e("Optimized", "x: " + newCords[0] + ", y: " + newCords[1]);
-                // GeoFence
+                // GeoFence Correction
                 LatLng startLocLatLng = new LatLng(this.startLocation[0], this.startLocation[1]);
 
                 if (fenceCounter < 2){
@@ -546,71 +491,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                         fenceCounter = 0;
                     }
                 }
-                // GeoFence end
 
-//                // ***** GeoFence test block START *****
-//                List<float[]> wallPoints = new ArrayList<>();
-//                for (LatLng point : wallPointsLatLng) {
-//                    double[] addPoint = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, point);
-//                    float[] addPointfloat = new float[]{(float) addPoint[0], (float) addPoint[1]};
-//                    wallPoints.add(addPointfloat);
-//                }
-//
-//                for (int i = 0; i < wallPoints.size() - 1; i++) {
-//                    float[] wallA = wallPoints.get(i);
-//                    float[] wallB = wallPoints.get(i + 1);
-//
-//                    float[] intersection = GeoUtils.getLineSegmentIntersection(currentStateCords, newCords, wallA, wallB);
-//
-//                    if (intersection != null) {
-//                        // 主方向：从交点指向起点
-//                        float dx = currentStateCords[0] - intersection[0];
-//                        float dy = currentStateCords[1] - intersection[1];
-//                        float len = (float) Math.sqrt(dx * dx + dy * dy);
-//                        if (len == 0) {
-//                            Log.e("WallCheck", "⚠️ 起点与交点重合，无法偏移");
-//                            break;
-//                        }
-//                        float dirX = dx / len;
-//                        float dirY = dy / len;
-//
-//                        // 墙体方向
-//                        float wx = wallB[0] - wallA[0];
-//                        float wy = wallB[1] - wallA[1];
-//                        float wlen = (float) Math.sqrt(wx * wx + wy * wy);
-//                        if (wlen == 0) {
-//                            Log.e("WallCheck", "⚠️ 墙体端点重合，跳过该段");
-//                            continue;
-//                        }
-//                        float wallDirX = wx / wlen;
-//                        float wallDirY = wy / wlen;
-//
-//                        // 墙体右手法线方向
-//                        float normalX = -wallDirY;
-//                        float normalY = wallDirX;
-//
-//                        // 根据法线方向判断是否朝墙外，必要时反转法线
-//                        float dot = dx * normalX + dy * normalY;
-//                        if (dot < 0) {
-//                            normalX = -normalX;
-//                            normalY = -normalY;
-//                        }
-//
-//                        // 组合偏移
-//                        float offset = 0.25f;
-//                        float slideOffset = 0.1f;
-//                        float[] corrected = new float[]{
-//                                intersection[0] + dirX * offset + normalX * slideOffset,
-//                                intersection[1] + dirY * offset + normalY * slideOffset
-//                        };
-//
-//                        Log.d("WallCheck", "✅ 修正点: " + corrected[0] + ", " + corrected[1]);
-//                        newCords = corrected;
-//                        break;
-//                    }
-//                }
-//                // ***** GeoFence test block END *****
-
+                // save and update
                 if (saveRecording) {
                     // Store the PDR coordinates for plotting the trajectory
                     this.pathView.drawTrajectory(newCords);
