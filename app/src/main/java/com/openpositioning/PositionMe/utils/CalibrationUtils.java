@@ -3,23 +3,24 @@ package com.openpositioning.PositionMe.utils;
 import com.google.android.gms.maps.model.LatLng;
 
 /**
- * CalibrationUtils 提供用于计算位置误差的工具方法，
- * 包括使用 Haversine 公式计算两个经纬度点之间的距离，
- * 以及根据标记点与 GNSS、PDR、WiFi 三个位置计算误差。
+ * CalibrationUtils provides utility methods for calculating positioning errors,
+ * including computing the distance between two latitude/longitude points using
+ * the Haversine formula and calculating errors between a reference marker and
+ * GNSS, PDR, and WiFi locations.
  */
 public class CalibrationUtils {
 
     /**
-     * 计算两个经纬度点之间的距离（单位：米）
-     * 使用 Haversine 公式计算地球表面两点之间的距离
+     * Calculates the distance between two geographic points in meters.
+     * Uses the Haversine formula to compute the surface distance over the Earth.
      *
-     * @param a 第一个位置点
-     * @param b 第二个位置点
-     * @return 两点之间的距离（单位：米），如果任意一个点为 null，则返回 -1
+     * @param a First LatLng point
+     * @param b Second LatLng point
+     * @return Distance between the two points in meters, or -1 if any point is null
      */
     public static double distanceInMeters(LatLng a, LatLng b) {
         if (a == null || b == null) return -1;
-        final double R = 6371000; // 地球半径，单位：米
+        final double R = 6371000; // Earth's radius in meters
         double dLat = Math.toRadians(b.latitude - a.latitude);
         double dLng = Math.toRadians(b.longitude - a.longitude);
         double lat1 = Math.toRadians(a.latitude);
@@ -33,13 +34,13 @@ public class CalibrationUtils {
     }
 
     /**
-     * 根据标记点与 GNSS、PDR、WiFi 位置计算误差
+     * Computes the positioning errors between a marker and GNSS, PDR, and WiFi locations.
      *
-     * @param markerPos 标记点位置
-     * @param gnssPos   GNSS 获取的位置，如果为空则对应误差为 -1
-     * @param pdrPos    PDR 获取的位置，如果为空则对应误差为 -1
-     * @param wifiPos   WiFi 定位获取的位置，如果为空则对应误差为 -1
-     * @return 一个 CalibrationErrors 对象，包含各项误差
+     * @param markerPos The reference marker position
+     * @param gnssPos   GNSS-derived position (null if unavailable)
+     * @param pdrPos    PDR-derived position (null if unavailable)
+     * @param wifiPos   WiFi-derived position (null if unavailable)
+     * @return A CalibrationErrors object containing error distances for each sensor
      */
     public static CalibrationErrors calculateCalibrationErrors(LatLng markerPos, LatLng gnssPos, LatLng pdrPos, LatLng wifiPos) {
         double gnssError = (gnssPos != null) ? distanceInMeters(markerPos, gnssPos) : -1;
@@ -49,7 +50,7 @@ public class CalibrationUtils {
     }
 
     /**
-     * CalibrationErrors 用于封装各传感器与标记点之间的误差数据
+     * A container class that holds error values between marker and each sensor source.
      */
     public static class CalibrationErrors {
         public final double gnssError;
