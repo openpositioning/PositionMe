@@ -4,7 +4,6 @@ import android.content.Context;
 import android.hardware.SensorManager;
 import android.util.Log;
 
-import android.util.Pair;
 import android.widget.Toast;
 
 import com.google.android.gms.maps.model.LatLng;
@@ -13,7 +12,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.processing.SensorFusion;
 import com.openpositioning.PositionMe.processing.WiFiPositioning;
 import com.openpositioning.PositionMe.processing.filters.FilterAdapter;
 import com.openpositioning.PositionMe.processing.filters.KalmanFilterAdapter;
@@ -313,8 +312,9 @@ public class TrajParser {
         if (previousGnssLoc == null || !previousGnssLoc.equals(gnssLocation)) {
           boolean isOutlier = false;
           // New GNSS observation. Run sensor fusion if not an outlier
-//            SimpleMatrix currentGnssCovariance = SensorFusion.GNSS_COVARIANCE.copy();
-//            currentGnssCovariance.set(0, 0, Math.pow(closestGnss.get().accuracy,2));
+            SimpleMatrix currentGnssCovariance = SensorFusion.GNSS_COVARIANCE.copy();
+            currentGnssCovariance.set(0, 0, Math.pow(closestGnss.accuracy,2));
+            currentGnssCovariance.set(1, 1, Math.pow(closestGnss.accuracy,2));
           if (!SensorFusion.isOutlier(coordinateTransformer, fusedLocation, gnssLocation)) {
             fusedLocation = updateFusionData(gnssLocation, coordinateTransformer,
                 startTimestamp, initialPos, SensorFusion.GNSS_COVARIANCE,

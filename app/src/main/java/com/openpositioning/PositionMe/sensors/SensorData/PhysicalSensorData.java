@@ -3,8 +3,28 @@ package com.openpositioning.PositionMe.sensors.SensorData;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 
+/**
+ * Abstract class representing physical sensor data.
+ * <p>
+ * This class extends the SensorData class and provides a method to create specific sensor data objects
+ * from a SensorEvent.
+ * </p>
+ *
+ * @author Philip Heptonstall
+ */
 public abstract class PhysicalSensorData extends SensorData {
 
+  /**
+   * Creates a specific PhysicalSensorData object from a SensorEvent.
+   * <p>
+   * This method uses a switch statement to determine the type of sensor and create the appropriate
+   * sensor data object.
+   * </p>
+   *
+   * @param event SensorEvent containing the sensor data.
+   * @return A specific PhysicalSensorData object corresponding to the sensor type.
+   * @throws IllegalArgumentException if the sensor type is unsupported.
+   */
   public static PhysicalSensorData fromEvent(SensorEvent event) {
     return switch (event.sensor.getType()) {
       case Sensor.TYPE_ACCELEROMETER -> new AccelerometerData(event.values);

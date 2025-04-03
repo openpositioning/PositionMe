@@ -16,15 +16,11 @@ import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.openpositioning.PositionMe.sensors.Observable;
-import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorModule;
 import com.openpositioning.PositionMe.sensors.StreamSensor;
 import com.openpositioning.PositionMe.sensors.Wifi;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -35,22 +31,23 @@ import org.json.JSONObject;
 
 /**
  * The WifiDataProcessor class is the Wi-Fi data gathering and processing class of the application.
+ * It is initialised by SensorHub when any device requests Wi-Fi data.
  * It implements the wifi scanning and broadcasting design to identify a list of nearby Wi-Fis as
  * well as collecting information about the current Wi-Fi connection.
- * <p>
- * The class implements {@link Observable} for informing {@link Observer} classes of updated
- * variables. As such, it implements the {@link WifiDataProcessor#notifyObservers(int idx)} function
- * and the {@link WifiDataProcessor#registerObserver(Observer o)} function to add new users which
- * will be notified of new changes.
- * <p>
  * The class ensures all required permissions are granted before enabling the Wi-Fi. The class will
- * periodically start a wifi scan as determined by {@link SensorFusion}. When a broadcast is
- * received it will collect a list of users and notify users. The
- * {@link WifiDataProcessor#getCurrentWifiData()} function will return information about the current
- * Wi-Fi when called by {@link SensorFusion}.
- *
+ * periodically start a wifi scan with the rate given by constants
+ * SCAN_RATE_WITH or WITHOUT_THROTTLING.
+ * When a broadcast is received it will collect a list of nearby Wi-Fi networks and their
+ * associated signal strength (RSSI). This list is immediately passed to the WiFiPositioning API to
+ * obtain a location estimate. Results are used to construct a WiFiData object which is passed
+ * to SensorHub to coordinate updates.
+ * The {@link WifiDataProcessor#getCurrentWifiData()} function will return information about the
+ * current wifi connection.
+ * Initial Authors:
  * @author Mate Stodulka
  * @author Virginia Cangelosi
+ * Updated by:
+ * @author Philip Heptonstall, to extend the SensorModule class and integrate with SensorHub
  */
 public class WifiDataProcessor extends SensorModule<WiFiData> {
   private static final long SCAN_RATE_WITH_THROTTLING = 5000; // ms
@@ -78,23 +75,16 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
   //List of nearby networks
   private Wifi[] wifiData;
 
-  //List of observers to be notified when changes are detected
-  private ArrayList<Observer> observers;
-
   // Timer object
   private Timer scanWifiDataTimer;
 
+
   /**
-   * Public default constructor of the WifiDataProcessor class. The constructor saves the context,
-   * checks for permissions to use the location services, creates an instance of the shared
-   * preferences to access settings using the context, initialises the wifi manager, and creates a
-   * timer object and list of observers. It checks if wifi is enabled and enables wifi scans every
-   * 5seconds. It also informs the user to disable wifi throttling if the device implements it.
+   * Constructor for WifiDataProcessor. The constructor will check for permissions and start a
+   * timer to scan for wifi data every SCAN_INTERVAL seconds.
    *
    * @param context Application Context to be used for permissions and device accesses.
-   * @author Virginia Cangelosi
-   * @author Mate Stodulka
-   * @see SensorFusion the intended parent class.
+   * @param sensorHub SensorHub instance to register the processor with.
    */
   public WifiDataProcessor(Context context, SensorHub sensorHub) {
     super(sensorHub, StreamSensor.WIFI);
@@ -105,13 +95,6 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
     this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
     this.scanWifiDataTimer = new Timer();
 
-    // Decreapted method after API 29
-    // Turn on wifi if it is currently disabled
-    // TODO - turn it to a notification toward user
-//      //  if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
-//      //      wifiManager.setWifiEnabled(true);
-//      //  }
-
     //Inform the user if wifi throttling is enabled on their device
     checkWifiThrottling();
 
@@ -119,7 +102,6 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
     if (permissionsGranted) {
       this.scanWifiDataTimer.schedule(new ScheduledWifiScan(), 0, scanInterval);
     }
-
   }
 
   /**
@@ -132,6 +114,11 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
     return currentWifiLocation;
   }
 
+  /**
+   * Get the most recent floor estimate from WifiPositioning API
+   *
+   * @return int of current floor level, -1 if there have been no successful readings.
+   */
   public int getCurrentWifiLevel() {
     return currentWifiLevel;
   }
@@ -206,7 +193,6 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
      * then passed to store the Mac Address and strength and observers of the WifiDataProcessor
      * class are notified of the updated wifi list.
      *
-     *
      * @param context           Application Context to be used for permissions and device accesses.
      * @param intent
      */
@@ -236,7 +222,7 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
       }
 
       //Notify observers of change in wifiData variable
-      List<Wifi> newData = Stream.of(wifiData).map(o -> (Wifi) o).collect(Collectors.toList());
+      List<Wifi> newData = Stream.of(wifiData).collect(Collectors.toList());
       createWifiPositionRequestCallback(newData);
     }
   };
@@ -255,7 +241,14 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
       // Creating POST Request
       JSONObject wifiFingerPrint = new JSONObject();
       wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+      // Making a request to the WiFiPositioning API
       this.wifiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+        /**
+         * Callback method to handle a successful response from the WiFiPositioning API
+         *
+         * @param wifiLocation The location obtained from the API
+         * @param floor       The floor level obtained from the API
+         */
         @Override
         public void onSuccess(LatLng wifiLocation, int floor) {
           // Handle the success response
@@ -267,13 +260,18 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
                 currentWifiLevel));
           }
         }
+        /**
+         * Callback method to handle an error response from the WiFiPositioning API
+         *
+         * @param message The error message received from the API
+         */
         @Override
         public void onError(String message) {
           // Handle the error response
-          Log.e("SensorFusion.WifiPositioning", "Wifi Positioning request" +
-              "returned an error! " + message);
-          // TODO: Notify the first time that we are not able to get a location, otherwise stop.
+          Log.e("SensorFusion.WifiPositioning", "Wifi Positioning request"
+              + "returned an error! " + message);
 
+          // In an error, LatLng is set to null and floor level is set to -1.
           WifiDataProcessor.super.notifyListeners(new WiFiData(wifiScanResult, null,
               -1));
         }
@@ -380,7 +378,7 @@ public class WifiDataProcessor extends SensorModule<WiFiData> {
    * Class to schedule wifi scans.
    * <p>
    * Implements default method in {@link TimerTask} class which it implements. It begins to start
-   * calling wifi scans every 5 seconds.
+   * calling wifi scans every SCAN_RATE_WITH/OUT_THROTTLING seconds.
    */
   private class ScheduledWifiScan extends TimerTask {
 

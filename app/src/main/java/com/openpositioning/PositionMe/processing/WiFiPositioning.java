@@ -18,12 +18,9 @@ import java.util.List;
 /**
  * Class for creating and handling POST requests for obtaining the current position using WiFi
  * positioning API from https://openpositioning.org/api/position/fine
- * <p>
  * The class creates POST requests based on WiFi fingerprints and obtains the user's location
- * <p>
  * The request are handled asynchronously, The WiFi position coordinates and floor are updated when
  * the response of the POST request is obtained.
- * <p>
  * One can create a POST request using the function provided in the class (createPostRequest()) with
  * the WiFi fingerprint Its then added to the RequestQueue to be handled asynchronously (not
  * blocking the main thread) When the response to the request is obtained the wifiLocation and floor
@@ -42,7 +39,6 @@ public class WiFiPositioning {
 
   /**
    * Getter for the WiFi positioning coordinates obtained using openpositioning API
-   *
    * @return the user's coordinates based on openpositioning API
    */
   public LatLng getWifiLocation() {
@@ -58,7 +54,6 @@ public class WiFiPositioning {
 
   /**
    * Getter for the  WiFi positioning floor obtained using openpositioning API
-   *
    * @return the user's location based on openpositioning API
    */
   public int getFloor() {
@@ -189,7 +184,7 @@ public class WiFiPositioning {
    * Return a JSONObject of the wifi features in wifiList. The JSON object can be used to request a
    * wifi position.
    *
-   * @param wifiList
+   * @param wifiList List of Wifi objects containing the wifi features
    * @return JSONObject of the wifi features null if error creating the json object
    */
   public static JSONObject createWifiPositioningRequest(List<Wifi> wifiList) {

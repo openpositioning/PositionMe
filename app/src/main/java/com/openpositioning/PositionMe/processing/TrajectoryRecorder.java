@@ -19,7 +19,6 @@ import com.openpositioning.PositionMe.sensors.SensorData.RotationVectorData;
 import com.openpositioning.PositionMe.sensors.SensorData.SensorData;
 import com.openpositioning.PositionMe.sensors.SensorData.StepDetectorData;
 import com.openpositioning.PositionMe.sensors.SensorData.WiFiData;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorHub;
 import com.openpositioning.PositionMe.sensors.SensorListeners.SensorDataListener;
 import com.openpositioning.PositionMe.sensors.StreamSensor;
@@ -27,6 +26,24 @@ import com.openpositioning.PositionMe.sensors.Wifi;
 import java.util.Timer;
 import java.util.TimerTask;
 
+/**
+ * TrajectoryRecorder is a class that records sensor data and sends it to a server.
+ * It implements the SensorDataListener interface to receive sensor data updates from SensorHub.
+ * The class uses a Timer to periodically store sensor data in a Trajectory object.
+ * It implements the Observer interface to receive updates from the PDR processing class, whenever
+ * new PDR steps are available.
+ * The trajectory object is built using the Traj protobuf class, which contains various sensor
+ * information and data samples.
+ * The class also provides methods to start and stop recording, as well as to send the recorded
+ * trajectory to the server.
+ *
+ * @see PdrProcessing for source of observed data.
+ * @see SensorHub for source of sensor data.
+ * @see SensorDataListener for interface to receive sensor data.
+ * @see ServerCommunications for sending data to the server.
+ *
+ * @author Philip Heptonstall
+ **/
 public class TrajectoryRecorder implements SensorDataListener<SensorData>, Observer {
 
   // Data saving timer
@@ -37,20 +54,19 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
   private int counter;
   private int secondCounter;
 
-
   // Server communication class for sending data
-  private ServerCommunications serverCommunications;
+  private final ServerCommunications serverCommunications;
   // Trajectory object containing all data
   private Traj.Trajectory.Builder trajectory;
 
-  private PdrProcessing pdrProcessor;
-
-  private WifiDataProcessor wifiProcessor;
+  private final PdrProcessing pdrProcessor;
 
   // Sensor Variables
   private long startTime;
   private long bootTime;
   private SensorHub sensorHub;
+
+  // List of sensors of interest (int and stream sensors)
   private final int[] INTERESTED_SENSORS = new int[]{
       Sensor.TYPE_PRESSURE, Sensor.TYPE_ACCELEROMETER,
       Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_STEP_DETECTOR,
@@ -64,23 +80,32 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
   private PressureData pressureData;
   private AccelerometerData accelerometerData;
   private RotationVectorData rotationVectorData;
-  private StepDetectorData stepDetectorData;
   private MagneticFieldData magneticFieldData;
   private LightData lightData;
   private GyroscopeData gyroscopeData;
   private WiFiData wifiData;
   private GNSSLocationData gnssData;
 
-
+  /**
+   * Constructor for TrajectoryRecorder.
+   * <p>
+   * Initializes the trajectory object and registers the sensors of interest.
+   *
+   * @param sensorHub The sensor hub to be used to get sensor information.
+   * @param pdrProcessor The PDR processing object to be used for processing PDR data.
+   * @param serverCommunications The server communications object to be used for sending data.
+   * @param startTime The start time of the recording session.
+   * @param bootTime The boot time of the device.
+   **/
   public TrajectoryRecorder(SensorHub sensorHub, PdrProcessing pdrProcessor,
       ServerCommunications serverCommunications, long startTime, long bootTime) {
-    // Register sensors
     this.sensorHub = sensorHub;
 
     this.startTime = startTime;
 
     this.bootTime = bootTime;
 
+    // Register the sensors of interest
     start();
 
     this.pdrProcessor = pdrProcessor;
@@ -98,16 +123,25 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
         .setLightSensorInfo(createInfoBuilder(Sensor.TYPE_LIGHT));
   }
 
+  /**
+   * Updates the trajectory with the PDR data.
+   * This method is called when new PDR data is received.
+   *
+   * @param objList The list of objects containing the PDR data.
+   */
   @Override
   public void update(Object[] objList) {
     // Update the trajectory with the PDR data
     if (objList != null && objList.length > 0) {
-      // Update provides the X,Y float array of the PDR data
+      // Retrieve the PDR data from the object list
       PdrProcessing.PdrData pdrData = (PdrProcessing.PdrData) objList[0];
-      trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
-          .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-          .setX(pdrData.position()[0])
-          .setY(pdrData.position()[1]));
+      if (pdrData.newPosition()) {
+        // Update the trajectory with the PDR data
+        trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+            .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+            .setX(pdrData.position()[0])
+            .setY(pdrData.position()[1]));
+      }
     } else {
       Log.e("SensorFusion", "PDR data is null or empty.");
     }
@@ -115,9 +149,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
 
   /**
    * Timer task to record data with the desired frequency in the trajectory class.
-   * <p>
-   * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
-   * destroyed in {@link SensorFusion#stopRecording()}.
    */
   private class storeDataInTrajectory extends TimerTask {
 
@@ -147,11 +178,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
               .setMagY(magneticFieldData.magneticField[1])
               .setMagZ(magneticFieldData.magneticField[2])
               .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime));
-//                    .addGnssData(Traj.GNSS_Sample.newBuilder()
-//                            .setLatitude(latitude)
-//                            .setLongitude(longitude)
-//                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-
 
       // Divide timer with a counter for storing data every 1 second
       if (counter == 99) {
@@ -171,8 +197,8 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
         if (secondCounter == 4) {
           secondCounter = 0;
           //Current Wifi Object
-          Wifi currentWifi = ((WifiDataProcessor) sensorHub.getSensor(StreamSensor.WIFI)).
-              getCurrentWifiData();
+          Wifi currentWifi = ((WifiDataProcessor) sensorHub.getSensor(StreamSensor.WIFI))
+              .getCurrentWifiData();
           trajectory.addApsData(Traj.AP_Data.newBuilder()
               .setMac(currentWifi.getBssid())
               .setSsid(currentWifi.getSsid())
@@ -195,6 +221,7 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
    * @see Traj            Trajectory object used for communication with the server
    */
   private Traj.Sensor_Info.Builder createInfoBuilder(int sensorType) {
+    // Get the sensor information from the SensorHub
     Sensor sensor = sensorHub.getSensor(sensorType);
     if (sensor == null) {
       return Traj.Sensor_Info.newBuilder()
@@ -216,6 +243,12 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
   }
 
 
+  /**
+   * Called when sensor data is received.
+   * This method is called when new sensor data is received from the SensorHub.
+   *
+   * @param data The sensor data received from the SensorHub.
+   */
   @Override
   public void onSensorDataReceived(SensorData data) {
     if (data instanceof PressureData) {
@@ -225,7 +258,7 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
     } else if (data instanceof RotationVectorData) {
       rotationVectorData = (RotationVectorData) data;
     } else if (data instanceof StepDetectorData) {
-      stepDetectorData = (StepDetectorData) data;
+      // Do nothing
     } else if (data instanceof MagneticFieldData) {
       magneticFieldData = (MagneticFieldData) data;
     } else if (data instanceof LightData) {
@@ -241,30 +274,40 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
     }
   }
 
+  /**
+   * Stops the trajectory recording and unregisters the sensors.
+   * <p>
+   * This method is called when the recording session is stopped.
+   **/
   @Override
   public void stop() {
     // Stop all sensors
-    for (int sensor_idx : INTERESTED_SENSORS) {
-      sensorHub.removeListener(sensor_idx, this);
+    for (int sensorIdx : INTERESTED_SENSORS) {
+      sensorHub.removeListener(sensorIdx, this);
     }
 
-    for (StreamSensor sensor_idx : INTERESTED_STREAM_SENSORS) {
-      sensorHub.removeListener(sensor_idx, this);
+    for (StreamSensor sensorIdx : INTERESTED_STREAM_SENSORS) {
+      sensorHub.removeListener(sensorIdx, this);
     }
 
     // Cancel the timer
     storeTrajectoryTimer.cancel();
   }
 
+  /**
+   * Starts the trajectory recording and registers the sensors.
+   * <p>
+   * This method is called when the recording session is started.
+   **/
   @Override
   public void start() {
     // Start all sensors
-    for (int sensor_idx : INTERESTED_SENSORS) {
-      sensorHub.addListener(sensor_idx, this);
+    for (int sensorIdx : INTERESTED_SENSORS) {
+      sensorHub.addListener(sensorIdx, this);
     }
 
-    for (StreamSensor sensor_idx : INTERESTED_STREAM_SENSORS) {
-      sensorHub.addListener(sensor_idx, this);
+    for (StreamSensor sensorIdx : INTERESTED_STREAM_SENSORS) {
+      sensorHub.addListener(sensorIdx, this);
     }
 
     // Restart the timer
@@ -273,6 +316,12 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
         100, TIME_CONST);
   }
 
+  /**
+   * Saves the WiFi data in the trajectory object.
+   * This method is called when new WiFi data is received.
+   *
+   * @param data The WiFi data received from the SensorHub.
+   */
   private void saveWifiData(WiFiData data) {
     Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
@@ -285,6 +334,11 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
     this.trajectory.addWifiData(wifiData);
   }
 
+  /**
+   * Saves the GNSS data in the trajectory object.
+   * This method is called when new GNSS data is received from SensorHub
+   * @param data The GNSS data received from the SensorHub.
+   */
   private void saveGnssData(GNSSLocationData data) {
     trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
         .setAccuracy(data.accuracy)
@@ -300,7 +354,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
    * Adds a GNSS tag to the trajectory when the user presses "Add Tag". This method captures the
    * current GNSS location, derived from the (latitude, longitude, altitude) fused data, and stores
    * it inside the trajectory's `gnss_data` array.
-   * <p>
    * The tag represents a marked position, which can later be used for debugging, validation, or
    * visualization on a map.
    */
@@ -344,7 +397,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
     // Append the new GNSS sample to the trajectory's `gnss_data` list
     trajectory.addGnssData(tagSample);
 
-    // TODO: Do this elsewhere! Bad to couple trajectory recorder to other things.
     // Get the instance of `TrajectoryMapFragment` using the static method
     TrajectoryMapFragment mapFragment = TrajectoryMapFragment.getInstance();
 
@@ -362,7 +414,6 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
 
   /**
    * Send the trajectory object to servers.
-   *
    * @see ServerCommunications for sending and receiving data via HTTPS.
    */
   public void sendTrajectoryToCloud() {
@@ -371,18 +422,5 @@ public class TrajectoryRecorder implements SensorDataListener<SensorData>, Obser
     // Pass object to communications object
     this.serverCommunications.sendTrajectory(sentTrajectory);
     this.stop();
-  }
-
-  /**
-   * Registers the caller observer to receive updates from the server instance. Necessary when
-   * classes want to act on a trajectory being successfully or unsuccessfully send to the server.
-   * This grants access to observing the {@link ServerCommunications} instance used by the
-   * SensorFusion class.
-   *
-   * @param observer Instance implementing {@link Observer} class who wants to be notified of events
-   *                 relating to sending and receiving trajectories.
-   */
-  public void registerForServerUpdate(Observer observer) {
-    serverCommunications.registerObserver(observer);
   }
 }
