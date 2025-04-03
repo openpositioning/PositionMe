@@ -7,22 +7,30 @@ import java.lang.Math;
 /**
  * A utility class for converting between global coordinates (latitude, longitude)
  * and local 2D Cartesian coordinates (x, y in meters), using a reference origin point.
- * The conversion is based on the WGS84 ellipsoid model.
+ *
+ * The conversion assumes a spherical Earth model based on the WGS84 ellipsoid standard.
+ * This class is essential for performing sensor fusion in a local metric frame.
+ *
+ * @see LatLng global coordinate type used in Google Maps
  */
 public class LocalCoordinateSystem {
 
-    // Earth's radius in meters (WGS84 standard)
-    private static final double EARTH_RADIUS = 6378137.0; // meters (WGS84)
+    /** Earth's radius in meters according to WGS84 */
+    private static final double EARTH_RADIUS = 6378137.0;
 
-    // Reference latitude and longitude (origin for local coordinate system)
-    private Double refLat = null;  // 原点纬度
-    private Double refLon = null;  // 原点经度
+    /** Reference latitude (origin for local coordinates) */
+    private Double refLat = null;
 
-    // Indicates whether the reference has been initialized
+    /** Reference longitude (origin for local coordinates) */
+    private Double refLon = null;
+
+    /** Indicates whether the reference has been initialized */
     private boolean initialized = false;
 
     /**
-     * Returns true if the reference location has been set.
+     * Checks whether the coordinate system has been initialized with a reference origin.
+     *
+     * @return true if initialized, false otherwise
      */
     public boolean isInitialized() {
         return initialized;

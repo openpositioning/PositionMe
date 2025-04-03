@@ -44,45 +44,76 @@ import java.util.Arrays;
 
 
 /**
- * Fragment responsible for displaying real-time location data on a Google Map.
+ * A {@link Fragment} responsible for displaying real-time fused positioning data
+ * (WiFi, GNSS, and PDR) on a Google Map. The fragment supports visualizing
+ * the fused position and trajectory, switching map types, and managing floor levels
+ * when using indoor maps.
+ *
+ * Location information is updated periodically.
+ *
+ * @see PositioningFusion for fusing GNSS, PDR, and WiFi positioning data.
+ * @see IndoorMapManager for indoor floor visualization.
+ * @see TrajectoryDrawer for drawing the location history trail on the map.
  */
 public class DataDisplay extends Fragment implements OnMapReadyCallback {
-    // GoogleMap instance
+    // --- Google Map instance and markers ---
+
+    /** Google Map instance */
     private GoogleMap mMap;
 
-    // Add a field for the marker
+    /** Marker for fused positioning */
     private Marker fusedMarker = null;
+
+    /** Marker for WiFi-only location */
     private Marker wifiMarker = null;
+
+    /** Marker for GNSS-only location */
     private Marker gnssMarker = null;
+
+    /** Marker for PDR-only location */
     private Marker pdrMarker = null;
 
-    // Google Maps fragment
+    /** Optional marker indicating direction of movement */
+    private Marker directionMarker;
+
+    /** SupportMapFragment to load Google Map in the layout */
     private SupportMapFragment mapFragment;
 
-    // Handler for periodic UI updates
+    // --- Positioning and UI helpers ---
+
+    /** Handler to periodically update location data on the UI */
     private final android.os.Handler handler = new android.os.Handler();
-    private final int updateInterval = 1000; // 1 second
 
+    /** Update interval for UI updates (in milliseconds) */
+    private final int updateInterval = 1000;
 
-    // Positioning fusion system (fuses WiFi, GNSS, and PDR)
+    /** Positioning fusion engine (fuses WiFi, GNSS, and PDR) */
     private PositioningFusion positioningFusion = PositioningFusion.getInstance();
 
 
-    // Manages indoor map display and floor info
+    /** Indoor map manager for floor level and indoor rendering */
     private IndoorMapManager indoorMapManager;
 
-
-    // Spinner to select map type
+    /** Dropdown to select Google Map type (Normal, Satellite, Hybrid) */
     private Spinner mapTypeSpinner;
 
+    /** Utility to draw fused trajectory trail on the map */
+    private TrajectoryDrawer trajectoryDrawer;
 
-    // Utility to draw trajectory lines on the map
-    TrajectoryDrawer trajectoryDrawer;
+    /** Text view to show current status information */
+    private TextView statusText;
 
-    private Marker directionMarker;
+    /**
+     * Default empty constructor (required)
+     */
+    public DataDisplay() {
+        // Required empty public constructor
+    }
 
 
-    // Runnable to periodically update WiFi-related location info on screen
+    /**
+     * Runnable task to periodically refresh the fused/WiFi/GNSS/PDR location display.
+     */
     private final Runnable updateWifiLocationRunnable = new Runnable() {
         @Override
         public void run() {
@@ -91,13 +122,6 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         }
     };
 
-
-    // UI text element for status
-    private TextView statusText;
-
-    public DataDisplay() {
-        // Required empty public constructor
-    }
 
     /**
      * Use this factory method to create a new instance of
@@ -117,11 +141,21 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
         return fragment;
     }
 
+
+    /**
+     * {@inheritDoc}
+     * Called when fragment is created. No special logic here.
+     */
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
     }
 
+
+    /**
+     * {@inheritDoc}
+     * Inflates the map display layout and sets the title to "Live Position".
+     */
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
@@ -132,7 +166,9 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
     }
 
     /**
-     * Initializes the view elements once the layout is inflated.
+     * {@inheritDoc}
+     * Called after view inflation; initializes map fragment and UI elements,
+     * sets up map type selection, and starts the positioning fusion engine.
      */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
@@ -161,7 +197,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
 
     /**
-     * Called when the map is ready. Starts drawing and updates.
+     * {@inheritDoc}
+     * Called when Google Map is ready. Initializes map overlays and starts update loop.
      */
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
@@ -189,7 +226,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
 
     /**
-     * Updates the UI with the latest fused, WiFi, GNSS, and PDR locations.
+     * Updates the text and map display with the latest WiFi, GNSS, PDR, and fused location data.
+     * This method is called periodically via a handler.
      */
     private void updateWifiLocationText() {
         Log.d("DataDisplay", String.format("Inilization status: %s", positioningFusion.isInitialized()));
@@ -301,7 +339,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
 
     /**
-     * Sets up the map type selection spinner (hybrid, normal, satellite).
+     * Sets up the map type selector spinner (Normal, Satellite, Hybrid).
+     * Updates map type when user selects an option.
      */
     private void setupMapTypeSpinner() {
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
@@ -338,7 +377,11 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
 
     /**
-     * Converts a vector drawable resource to a BitmapDescriptor for map markers.
+     * Converts a vector drawable into a {@link BitmapDescriptor} for use as a map marker icon.
+     *
+     * @param context the current context
+     * @param vectorResId the drawable resource ID
+     * @return a {@link BitmapDescriptor} created from the vector asset
      */
     private BitmapDescriptor vectorToBitmap(Context context, @DrawableRes int vectorResId) {
         Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
@@ -355,7 +398,8 @@ public class DataDisplay extends Fragment implements OnMapReadyCallback {
 
 
     /**
-     * Called when the fragment's view is destroyed; stops fusion and updates.
+     * {@inheritDoc}
+     * Stops periodic location updates and fusion when view is destroyed.
      */
     @Override
     public void onDestroyView() {

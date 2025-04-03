@@ -18,54 +18,92 @@ import java.util.TimerTask;
 
 import android.content.Context;
 
-
 /**
  * Singleton class responsible for fusing different positioning sources:
  * WiFi, GNSS, and PDR using a Particle Filter-based approach.
+ *
+ * It periodically updates the fused location using available data, handles
+ * coordinate system initialization and conversion, and maintains location history.
+ *
+ * @see SensorFusion for raw data input
+ * @see ParticleFilter for filtering logic
+ * @see LocalCoordinateSystem for coordinate transformations
+ * @see LocationHistory for recording past positions
  */
 public class PositioningFusion implements PositionObserver {
 
-    // Singleton instance
+    /** Singleton instance */
     private static final PositioningFusion instance = new PositioningFusion();
 
-    // Application context for UI feedback (e.g., Toast)
+    /** Application context for UI elements like Toasts */
     private static Context appContext;
 
-    // Particle filter used to fuse position inputs
+    /** Particle filter instance for position fusion */
     private ParticleFilter particleFilter = new ParticleFilter();
-    private List<ParticleFilter.Particle> currentParticles;     // Current set of particles
+    private List<ParticleFilter.Particle> currentParticles;
 
-    // Coordinate transformation system
+    /** Local coordinate system used for conversions */
     private LocalCoordinateSystem coordSystem = new LocalCoordinateSystem();
 
-    // Position data sources
+    // --- Position Sources ---
+
+    /** Most recent WiFi position in global coordinates */
     private LatLng wifiPosition;
 
+    /** Most recent GNSS position in global coordinates */
     private LatLng gnssPosition;
 
-    private float[] lastWifiPosoitonLocal;
+    /** WiFi position in local coordinates */
     private float[] wifiPositionLocal;
-    private float[] lastGnssPositionLocal;
+
+    /** GNSS position in local coordinates */
     private float[] gnssPositionLocal;
+
+    /** Previous WiFi position (for motion computation) */
+    private float[] lastWifiPosoitonLocal;
+
+    /** Most recent PDR position in local coordinates */
+    private float[] pdrPosition;
+
+    /** Last known PDR position */
     private float[] lastPdrPosition;
-    private float[] pdrPosition; // [x, y] in meters
 
-    // Periodic fusion timer
+    // --- Timers and Fusion Loop ---
+
+    /** Periodic fusion task timer */
     private java.util.Timer fusionTimer = new java.util.Timer();
-    private static final long FUSION_INTERVAL_MS = 1000; // 1 second
 
-    // Fused position
+    /** Interval between fusion updates (ms) */
+    private static final long FUSION_INTERVAL_MS = 1000;
+
+    // --- Fusion Output ---
+
+    /** Fused position in local coordinates */
     private float[] fusedPositionLocal;
+
+    /** Fused position in global coordinates */
     private LatLng fusedPosition;
 
+    /** First valid position (used as map center or reference) */
     private LatLng startPosition;
 
+    // --- History Buffers ---
+
+    /** History of fused WiFi positions */
     public LocationHistory wifiLocationHistory;
+
+    /** History of fused GNSS positions */
     public LocationHistory gnssLocationHistory;
+
+    /** History of PDR positions */
     public LocationHistory pdrLocationHistory;
 
 
-    // Private constructor for singleton
+
+    /**
+     * Private constructor for singleton pattern.
+     * Initializes internal states and clears position histories.
+     */
     private PositioningFusion() {
         wifiPosition = null;
         gnssPosition = null;
@@ -81,24 +119,41 @@ public class PositioningFusion implements PositionObserver {
     }
 
 
-    // Singleton accessor
+    /**
+     * Returns the singleton instance of PositioningFusion.
+     */
     public static PositioningFusion getInstance() {
         return instance;
     }
 
+
+    /**
+     * Sets the application context used for showing UI elements (e.g., Toasts).
+     */
     public static void setContext(Context context) {
         appContext = context.getApplicationContext();
     }
 
+
+    /**
+     * Returns the stored application context.
+     */
     public static Context getContext() {
         return appContext;
     }
 
 
+    /**
+     * Checks if the local coordinate system has been initialized.
+     */
     public boolean isInitialized() {
         return coordSystem.isInitialized();
     }
 
+
+    /**
+     * Checks if sufficient data is available to run fusion.
+     */
     private boolean isReadyToFuse() {
 //        Log.d("Fusion", String.format("WiFi: %s, GNSS: %s, PDR: %s", isWifiPositionSet(), isGNSSPositionSet(), isPDRPositionSet()));
 //        Log.d("Fusion", String.format("Initialized: %s", coordSystem.isInitialized()));
@@ -106,7 +161,10 @@ public class PositioningFusion implements PositionObserver {
         return coordSystem.isInitialized() && pdrPosition != null && (wifiPosition != null || gnssPosition != null);
     }
 
-    // origin initialization
+    /**
+     * Initializes the local coordinate system using the current available GNSS or WiFi position.
+     * Resets all internal states and location histories.
+     */
     public void initCoordSystem() {
         wifiPosition = null;
         gnssPosition = null;
@@ -140,6 +198,11 @@ public class PositioningFusion implements PositionObserver {
         }
     }
 
+
+    /**
+     * Starts periodic fusion processing every FUSION_INTERVAL_MS.
+     * Updates fused position and stores historical data.
+     */
     public void startPeriodicFusion() {
         Log.d("Fusion", "startPeriodicFusion");
         fusionTimer.scheduleAtFixedRate(new TimerTask() {
@@ -156,13 +219,17 @@ public class PositioningFusion implements PositionObserver {
         }, 0, FUSION_INTERVAL_MS);
     }
 
+
+    /**
+     * Stops the periodic fusion task and resets the timer.
+     */
     public void stopPeriodicFusion() {
         Log.d("Fusion", "stopPeriodicFusion");
         fusionTimer.cancel();
         fusionTimer = new java.util.Timer(); // reinitializes for future use
     }
 
-    // --- Update Methods ---
+    // --- Position Updates ---
     public void updateFromWiFi(LatLng wifiLocation) {
         this.wifiPosition = wifiLocation;
 
@@ -226,8 +293,11 @@ public class PositioningFusion implements PositionObserver {
         this.pdrPosition = pdrXY;
     }
 
+    // --- Update All Sources ---
+
     /**
-     * Updates all sources from the SensorFusion singleton.
+     * Updates position data from all sources (WiFi, GNSS, PDR)
+     * using the {@link SensorFusion} singleton.
      */
     public void updateAllSourse() {
         updateFromWiFi(SensorFusion.getInstance().getLatLngWifiPositioning());
@@ -338,7 +408,11 @@ public class PositioningFusion implements PositionObserver {
     }
 
 
-    // Called whenever sensor values are updated from SensorFusion
+    /**
+     * {@inheritDoc}
+     * Triggered when sensor values are updated.
+     * Updates data from all sources and performs local conversion if ready.
+     */
     @Override
     public void onSensorFusionUpdate() {
         updateAllSourse();

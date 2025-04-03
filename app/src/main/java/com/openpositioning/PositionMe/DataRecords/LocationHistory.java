@@ -9,27 +9,40 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 /**
- * This class maintains a history of location records and optionally visualizes them on a Google Map.
+ * A class responsible for storing and managing a history of {@link LocationData} entries.
+ * It optionally supports drawing the historical trajectory on a {@link GoogleMap} as a polyline.
+ *
+ * This is primarily used for visualizing the motion path of different positioning sources
+ * (e.g., WiFi, GNSS, PDR) over time.
+ *
+ * @see LocationData for a single location entry.
+ * @see GoogleMap for map visualization.
  */
 public class LocationHistory {
-    // List to store location data records
+    /** Internal list to store recorded locations */
     private final List<LocationData> history;
 
-    // Reference to the currently drawn polyline on the map
+    /** Currently drawn polyline on the map, representing the trajectory */
     private Polyline polyline; // this is the drawable line
 
 
-    // Maximum number of records to store (-1 means unlimited)
+    /** Maximum number of records to store (-1 = unlimited) */
     private int maxSize = -1; // -1 means unlimited
 
 
-    // Default constructor with unlimited history
+    /**
+     * Constructs a {@link LocationHistory} object with unlimited history capacity.
+     */
     public LocationHistory() {
         this.history = new ArrayList<>();
     }
 
 
-    // Constructor with a specified maximum history size
+    /**
+     * Constructs a {@link LocationHistory} with a specified maximum number of entries.
+     *
+     * @param maxSize maximum number of records to retain (-1 for unlimited)
+     */
     public LocationHistory(int maxSize) {
         this.history = new ArrayList<>();
         this.maxSize = maxSize;
@@ -37,8 +50,10 @@ public class LocationHistory {
 
 
     /**
-     * Adds a new location record to the history.
-     * If maxSize is set and exceeded, removes the oldest record.
+     * Adds a new {@link LocationData} record to the history.
+     * If the history exceeds the max size, the oldest entry is removed.
+     *
+     * @param record the location data to add
      */
     public void addRecord(LocationData record) {
         history.add(record);
@@ -49,8 +64,10 @@ public class LocationHistory {
 
 
     /**
-     * Retrieves a location record at the specified index.
-     * Returns null if the index is out of bounds.
+     * Retrieves the {@link LocationData} at a specific index.
+     *
+     * @param index the index to retrieve
+     * @return the location data, or null if index is invalid
      */
     public LocationData getRecord(int index) {
         if (index >= 0 && index < history.size()) {
@@ -61,7 +78,9 @@ public class LocationHistory {
 
 
     /**
-     * Returns an unmodifiable list of all location records.
+     * Returns an unmodifiable list of all stored location records.
+     *
+     * @return a read-only list of {@link LocationData}
      */
     public List<LocationData> getAllRecords() {
         return Collections.unmodifiableList(history);
@@ -98,8 +117,10 @@ public class LocationHistory {
 
 
     /**
-     * Sets the maximum number of records to keep.
-     * If current size exceeds the new limit, removes oldest records.
+     * Sets the maximum number of records to retain in history.
+     * If the new limit is smaller than the current size, oldest entries are removed.
+     *
+     * @param maxSize maximum number of entries (-1 for unlimited)
      */
     public void setMaxSize(int maxSize) {
         this.maxSize = maxSize;
@@ -108,6 +129,12 @@ public class LocationHistory {
         }
     }
 
+
+    /**
+     * Gets the currently configured maximum history size.
+     *
+     * @return max number of records allowed (-1 for unlimited)
+     */
     public int getMaxSize() {
         return maxSize;
     }
@@ -115,7 +142,11 @@ public class LocationHistory {
 
 
     /**
-     * Draws the location history as a connected polyline on the given Google Map with custom color.
+     * Draws the recorded history as a polyline on the provided {@link GoogleMap}.
+     * Points with null locations are skipped. Requires at least 2 valid points.
+     *
+     * @param map the map on which to draw
+     * @param color the color of the polyline
      */
     public void drawOnMap(GoogleMap map, int color) {
         if (history.isEmpty()) return;
@@ -145,7 +176,9 @@ public class LocationHistory {
 
 
     /**
-     * Removes the polyline from the provided map.
+     * Removes the currently drawn polyline from the provided map, if present.
+     *
+     * @param gMap the map to remove the polyline from
      */
     public void remove(GoogleMap gMap) {
         if (polyline != null) {

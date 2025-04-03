@@ -8,15 +8,36 @@ import java.util.List;
 import java.util.Random;
 
 /**
- ** Particle filter localization module, used to fuse WiFi, GNSS, and PDR data for position tracking.**
+ * Particle filter localization module that fuses position data from WiFi,
+ * GNSS, and PDR to estimate user location in a local coordinate system.
+ *
+ * This implementation uses:
+ * <ul>
+ *   <li>Motion prediction (from PDR)</li>
+ *   <li>Measurement update (from WiFi or GNSS)</li>
+ *   <li>Low-variance resampling to maintain particle diversity</li>
+ * </ul>
+ *
+ * @see PositioningFusion uses this class for multi-sensor location fusion.
  */
 public class ParticleFilter {
 
-    /** Particle state class, representing the position (x, y) and the corresponding weight. **/
+    /**
+     * Represents a single particle in the filter, holding its (x, y) position
+     * and the associated importance weight.
+     */
     public static class Particle {
         double x;
         double y;
         double weight;
+
+        /**
+         * Constructs a particle with given position and weight.
+         *
+         * @param x      particle X coordinate
+         * @param y      particle Y coordinate
+         * @param weight importance weight of the particle
+         */
         Particle(double x, double y, double weight) {
             this.x = x;
             this.y = y;
@@ -24,11 +45,22 @@ public class ParticleFilter {
         }
     }
 
-    /** Result class, containing the estimated optimal position and the complete set of particles. */
+    /**
+     * A wrapper class for the result of a particle filter update.
+     * Contains the estimated best position and updated particle set.
+     */
     public static class Result {
         public double bestX;      // X-coordinate of the optimal estimated position.
         public double bestY;      // Y-coordinate of the optimal estimated position.
         public List<Particle> particles;  // Updated set of particles.
+
+        /**
+         * Constructs the result.
+         *
+         * @param bestX     weighted average X of particles
+         * @param bestY     weighted average Y of particles
+         * @param particles updated list of particles
+         */
         Result(double bestX, double bestY, List<Particle> particles) {
             this.bestX = bestX;
             this.bestY = bestY;
@@ -36,6 +68,13 @@ public class ParticleFilter {
         }
     }
 
+    /**
+     * Initializes a new list of particles centered around the initial position.
+     * Each particle is randomly spread in a small area.
+     *
+     * @param initPos optional initial center position (can be null)
+     * @return list of initialized particles with equal weights
+     */
     public static List<Particle> initializeParticles(PointF initPos) {
         List<Particle> particles = new ArrayList<>(NUM_PARTICLES);
         double initX = (initPos != null) ? initPos.x : 0.0;
