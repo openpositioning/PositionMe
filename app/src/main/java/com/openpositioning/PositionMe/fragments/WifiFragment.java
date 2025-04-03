@@ -44,7 +44,7 @@ public class WifiFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_wifi, container, false);
 
-        // initialise RecyclerView
+        // === Initialize RecyclerView for displaying WiFi networks ===
         wifiRecyclerView = view.findViewById(R.id.wifi_recycler_view);
         wifiRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
@@ -52,35 +52,42 @@ public class WifiFragment extends Fragment {
         wifiAdapter = new WifiAdapter(wifiList);
         wifiRecyclerView.setAdapter(wifiAdapter);
 
+        // === Initialize buttons ===
         startButton = view.findViewById(R.id.button_start_wifi);
         stopButton = view.findViewById(R.id.button_stop_wifi);
 
+        // === Initialize WiFiManager ===
         wifiManager = (WifiManager) requireContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
-        // button listeners
+        // === Button click listeners ===
         startButton.setOnClickListener(v -> startWifiScan());
         stopButton.setOnClickListener(v -> stopWifiScan());
 
         return view;
     }
 
-    // Start WiFi scan
+    /**
+     * Starts scanning for nearby WiFi networks.
+     * Requests location permission if not granted, and enables WiFi if it's off.
+     */
     private void startWifiScan() {
         if (!isScanning) {
             isScanning = true;
 
+            // Ensure location permission is granted (required for WiFi scanning)
             if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                     != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
                 return;
             }
 
+            // Enable WiFi if disabled
             if (!wifiManager.isWifiEnabled()) {
                 Toast.makeText(getContext(), "WiFi is disabled. Enabling WiFi...", Toast.LENGTH_SHORT).show();
                 wifiManager.setWifiEnabled(true);
             }
 
-            // create a broadcast receiver to receive the scan results
+            // === Create BroadcastReceiver to handle scan results ===
             wifiReceiver = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
@@ -91,24 +98,31 @@ public class WifiFragment extends Fragment {
                 }
             };
 
+            // Register receiver to listen for scan results
             requireContext().registerReceiver(wifiReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
 
-            // start the scan
+            // Start the WiFi scan
             wifiManager.startScan();
             Toast.makeText(getContext(), "Scanning WiFi...", Toast.LENGTH_SHORT).show();
         }
     }
 
-    // update the RecyclerView with the new WiFi scan results
+    /**
+     * Updates the displayed list of WiFi networks using the scan results.
+     *
+     * @param scanResults List of WiFi scan results
+     */
     private void updateWifiList(List<ScanResult> scanResults) {
         wifiList.clear();
-        for (ScanResult scanResult : scanResults) {
-            wifiList.add(new WifiData(scanResult.SSID, scanResult.BSSID, scanResult.level + " dB"));
+        for (ScanResult result : scanResults) {
+            wifiList.add(new WifiData(result.SSID, result.BSSID, result.level + " dB"));
         }
         wifiAdapter.notifyDataSetChanged();
     }
 
-    // stop the WiFi scan
+    /**
+     * Stops the WiFi scan and unregisters the broadcast receiver.
+     */
     private void stopWifiScan() {
         if (isScanning) {
             isScanning = false;
@@ -120,6 +134,9 @@ public class WifiFragment extends Fragment {
         }
     }
 
+    /**
+     * Ensures the broadcast receiver is unregistered to avoid leaks.
+     */
     @Override
     public void onDestroy() {
         super.onDestroy();

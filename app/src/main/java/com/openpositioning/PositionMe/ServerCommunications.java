@@ -81,53 +81,51 @@ public class ServerCommunications implements Observable {
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
 
-    // 用于存储 userKey 的静态变量（如果你希望 userKey 在多个实例间共享）
-    // Static variable for storing userKey (if you want userKey to be shared between multiple instances)
+    // Static variable for storing userKey (shared across instances if needed)
     private static String userKey;
 
-    // 定义 URL 初始化完成后的回调接口
-    // Define the callback interface after URL initialization is completed
+    // Callback interface to notify when URLs have been initialized
     public interface URLInitializedListener {
         void onURLInitialized();
     }
 
-    // 用来存储注册的回调监听器
-    // Used to store registered callback listeners
+    // Instance-level listener for userKey initialization
     private URLInitializedListener urlInitializedListener;
 
-    // Setter 方法，用于注册回调监听器
-    // Setter method, used to register callback listener
+    /**
+     * Setter method to register a callback that will be triggered when userKey and URLs are ready.
+     *
+     * @param listener callback to notify
+     */
     public void setURLInitializedListener(URLInitializedListener listener) {
         this.urlInitializedListener = listener;
     }
 
-    // 提供一个 getter 以便外部获取 userKey（如果需要）
-    // Provide a getter to obtain userKey externally (if necessary)
+    /**
+     * Optional getter for retrieving the current userKey.
+     *
+     * @return userKey as a String
+     */
     public String getUserKey() {
         return userKey;
     }
 
     /**
-     * Public default constructor of {@link ServerCommunications}. The constructor saves context,
-     * initialises a {@link ConnectivityManager}, {@link Observer} and gets the user preferences.
-     * Boolean variables storing WiFi and Mobile Data connection status are initialised to false.
+     * Default constructor for {@link ServerCommunications}.
+     * Initializes Firebase, fetches the userKey asynchronously,
+     * and prepares the connection manager and observers.
      *
-     * @param context   application context for handling permissions and devices.
+     * @param context the application context, used for system services
      */
     public ServerCommunications(Context context) {
-
         mAuth = FirebaseAuth.getInstance();
         databaseReference = FirebaseDatabase.getInstance().getReference();
 
-        // 开始获取 userKey
-        // Start getting userKey
+        // Start fetching userKey from the Firebase Realtime Database
         Log.e("Start fetching userKey", "Start fetching userKey");
         fetchUserKey();
 
-        // use the default key and URL
-//        uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
-//        downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=30&key=" + masterKey;
-//        infoRequestURL = "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
+        // NOTE: URLs will be initialized later after userKey is retrieved.
 
         this.context = context;
         this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -137,59 +135,74 @@ public class ServerCommunications implements Observable {
         checkNetworkStatus();
 
         this.observers = new ArrayList<>();
-
     }
 
+    /**
+     * Fetches the userKey from Firebase Realtime Database.
+     * Falls back to the default API key if userKey is not available.
+     * Once retrieved, initializes all URLs and invokes the callback listener if registered.
+     */
     private void fetchUserKey() {
         FirebaseUser user = mAuth.getCurrentUser();
+
         if (user != null) {
             String uid = user.getUid();
             Log.d("uid", uid);
+
             FirebaseDatabase database = FirebaseDatabase.getInstance("https://livelink-f37f6-default-rtdb.europe-west1.firebasedatabase.app");
-            DatabaseReference userRef = database.getReference().child("Users").child(uid).child("userKey");
+            DatabaseReference userRef = database.getReference()
+                    .child("Users")
+                    .child(uid)
+                    .child("userKey");
+
             Log.d("userRef", userRef.toString());
 
-            // 使用一次性事件监听器
-            // Using a one-time event listener
+            // Use a one-time listener to get userKey
             userRef.addListenerForSingleValueEvent(new ValueEventListener() {
                 @Override
                 public void onDataChange(DataSnapshot snapshot) {
                     Log.d("ServerCommunications", "onDataChange called, snapshot.exists(): " + snapshot.exists());
+
                     if (snapshot.exists()) {
                         userKey = snapshot.getValue(String.class);
                         Log.d("ServerCommunications", "Fetched userKey: " + userKey);
-                        initializeURLs();
-                        if (urlInitializedListener != null) {
-                            urlInitializedListener.onURLInitialized();
-                        }
                     } else {
                         Log.d("ServerCommunications", "userKey does not exist, using default key.");
                         userKey = BuildConfig.OPENPOSITIONING_API_KEY;
-                        initializeURLs();
-                        if (urlInitializedListener != null) {
-                            urlInitializedListener.onURLInitialized();
-                        }
+                    }
+
+                    initializeURLs();
+
+                    if (urlInitializedListener != null) {
+                        urlInitializedListener.onURLInitialized();
                     }
                 }
 
                 @Override
                 public void onCancelled(DatabaseError error) {
-                    System.err.println("获取 userKey 失败: " + error.getMessage());
+                    System.err.println("Failed to retrieve userKey: " + error.getMessage());
                 }
             });
         } else {
-            System.err.println("用户未登录");
+            System.err.println("User is not logged in.");
         }
     }
 
+    /**
+     * Initializes URLs required for upload/download/info requests
+     * using the fetched or fallback userKey.
+     */
     private static void initializeURLs() {
         if (userKey != null) {
             uploadURL = "https://openpositioning.org/api/live/trajectory/upload/" + userKey + "/?key=" + masterKey;
-            downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=150&key=" + masterKey;
+            // TODO: Now only the specified number of trajs can be downloaded
+            //  --- 'skip=0&limit=150&key=' --> 150 trajs can be downloaded
+            //      A more comprehensive local storage logic could be implemented to avoid downloading all trajs at once every time.
+            downloadURL = "https://openpositioning.org/api/live/trajectory/download/" + userKey + "?skip=0&limit=50&key=" + masterKey;
             infoRequestURL = "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
-            System.out.println("URL 初始化完成");
+            System.out.println("URLs initialized successfully.");
         } else {
-            System.err.println("userKey 为空，URL 无法初始化");
+            System.err.println("userKey is null. Cannot initialize URLs.");
         }
     }
 

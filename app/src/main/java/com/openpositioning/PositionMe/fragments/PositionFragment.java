@@ -125,73 +125,71 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             sensorFusion.startWifiScanOnly();
             Log.d("SensorFusion", "✅ SensorFusion 初始化成功");
         }
-//
-//        if (sensorFusion != null) {
-//            sensorFusion.setContext(getActivity().getApplicationContext());
-//            sensorFusion.resumeListening();  // 注册所有传感器监听器 Register all sensor listeners
-//            Toast.makeText(getContext(), "Recording Started", Toast.LENGTH_SHORT).show();
-//            Log.d("RecordingFragment", "🚀 SensorFusion 录制已启动");
-//            isRecording = true; // 标记正在录制 Mark recording
-//            // 开始更新 UI
-//            // Start updating the UI
-//            refreshDataHandler.post(refreshDataTask);
-//
-//        } else {
-//            Log.e("RecordingFragment", "❌ SensorFusion 未初始化！");
-//        }
 
         // initialize interest zones
         initializeInterestZonesData();
         return view;
     }
 
+    /**
+     * Initializes the coordinates defining interest zones on the map,
+     * including the library and nucleus regions.
+     */
     private void initializeInterestZonesData() {
+        // Define the northeast and southwest corners of the library zone
         library_NE = new LatLng(55.92306692576906, -3.174771893078224);
         library_SW = new LatLng(55.92281045664704, -3.175184089079065);
 
+        // Define the northeast and southwest corners of the nucleus zone
         necleus_NE = new LatLng(55.92332001571212, -3.1738768212979593);
         necleus_SW = new LatLng(55.92282257022002, -3.1745956532857647);
 
-        // Calculate the regin
+        // Calculate the northwest and southeast corners for the library zone
         LatLng library_NW = new LatLng(library_NE.latitude, library_SW.longitude);
         LatLng library_SE = new LatLng(library_SW.latitude, library_NE.longitude);
 
+        // Calculate the northwest and southeast corners for the nucleus zone
         LatLng necleus_NW = new LatLng(necleus_NE.latitude, necleus_SW.longitude);
         LatLng necleus_SE = new LatLng(necleus_SW.latitude, necleus_NE.longitude);
 
+        // Store each zone as a list of LatLng points in clockwise order
         libraryZone = Arrays.asList(library_NW, library_NE, library_SE, library_SW);
         nucleusZone = Arrays.asList(necleus_NW, necleus_NE, necleus_SE, necleus_SW);
 
+        // Log confirmation
         Log.d("InterestZones", "✅ Library Zone Initialized: " + libraryZone.size() + " points");
         Log.d("InterestZones", "✅ Nucleus Zone Initialized: " + nucleusZone.size() + " points");
     }
+
 
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
-        // set map type
+        // Set the map type to satellite view
         mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
 
-        // Default to Edinburgh
+        // Default location: central Edinburgh
         initialPosition = new LatLng(55.953251, -3.188267);
         fixedMarkerPosition = initialPosition;
         currentMarkerPosition = initialPosition;
 
-        // Ensure `locationManager` is initialized
+        // Ensure locationManager is initialized
         if (locationManager == null) {
             Log.e("GNSS", "❌ LocationManager is NULL!");
             locationManager = (LocationManager) requireActivity().getSystemService(Context.LOCATION_SERVICE);
         }
 
-        // ensure permission
-        if (locationManager != null && ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED) {
+        // Check location permission and retrieve last known GNSS location
+        if (locationManager != null &&
+                ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED) {
+
             Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
 
             if (lastKnownLocation != null) {
-                // Gnss position discovered
+                // Use last known GNSS position
                 initialPosition = new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
                 fixedMarkerPosition = initialPosition;
                 currentMarkerPosition = initialPosition;
@@ -202,45 +200,52 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             Log.w("GNSS", "⚠️ LocationManager unavailable or permission not granted.");
         }
 
-        // ******** new wifi initial position ********
+        // ===== Attempt to use WiFi position as initial location if recent =====
         if (sensorFusion != null) {
             Log.e("GNSS", "Sensor Fusion Ready");
-//            if (sensorFusion.getLatLngWifiPositioning() != null) {
-            // if wifi position is out of date (more than 10s ago), use GNSS position
-            if (sensorFusion.getLastWifiPos() != null && (System.currentTimeMillis() - sensorFusion.getLastWifiSuccessTime()) < 10000) {
-//                initialPosition = sensorFusion.getLatLngWifiPositioning();
+
+            if (sensorFusion.getLastWifiPos() != null &&
+                    (System.currentTimeMillis() - sensorFusion.getLastWifiSuccessTime()) < 30000) {
+                // Use recent WiFi position if available and fresh
                 initialPosition = sensorFusion.getLastWifiPos();
             } else {
-                Toast.makeText(getContext(), "Can't resolve wifi position as initial position, please try again later!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(),
+                        "Can't resolve WiFi position as initial position, please try again later!",
+                        Toast.LENGTH_SHORT).show();
             }
         }
-        // ******** END new wifi initial position ********
 
-        // add maker to map
+        // ===== Add draggable marker to map =====
         currentMarker = mMap.addMarker(new MarkerOptions()
                 .position(initialPosition)
                 .draggable(true)
                 .title("Drag me"));
 
-        // set initial position
+        // Center camera on the initial position
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialPosition, 15));
 
-        // initialize interest zones
+        // Initialize interest zones on the map (library, nucleus, etc.)
         initializeInterestZones();
+
+        // Start periodic WiFi-based positioning
         startWiFiCheckLoop();
 
-        // add marker drag listener
+        // Enable user to drag the marker and respond to drag events
         mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
             @Override
-            public void onMarkerDragStart(Marker marker) {}
+            public void onMarkerDragStart(Marker marker) {
+                // TODO: Add visual or state updates on drag start
+            }
 
             @Override
             public void onMarkerDrag(Marker marker) {
+                // Update any live feedback/UI with the new position
                 updateMarkerInfo(marker.getPosition());
             }
 
             @Override
             public void onMarkerDragEnd(Marker marker) {
+                // Set current position and re-check zone
                 currentMarkerPosition = marker.getPosition();
                 updateMarkerInfo(marker.getPosition());
                 checkIfInInterestZone(marker.getPosition());
@@ -288,15 +293,20 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         });
     }
 
+    /**
+     * Starts a loop that periodically checks the WiFi state.
+     * The loop is scheduled using a Handler with a fixed interval defined by WIFI_CHECK_INTERVAL.
+     */
     private void startWiFiCheckLoop() {
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                checkWiFiState();
-                handler.postDelayed(this, WIFI_CHECK_INTERVAL);
+                checkWiFiState(); // Perform WiFi status check
+                handler.postDelayed(this, WIFI_CHECK_INTERVAL); // Schedule the next check
             }
         }, WIFI_CHECK_INTERVAL);
     }
+
     /**
      * This block check the current state of wifi position
      * if updated, updates the time it detects
@@ -326,21 +336,27 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
-    // initialize interest zones
+    /**
+     * Initializes and draws predefined interest zones (e.g., library and nucleus).
+     * Ensures zone data is not null before drawing.
+     */
     private void initializeInterestZones() {
         if (libraryZone == null || nucleusZone == null) {
             Log.e("InterestZones", "❌ Interest zones data is NULL!");
             return;
         }
 
-        // draw interest zones
+        // Draw the library zone in blue and the nucleus zone in green
         drawPolygon(libraryZone, Color.BLUE);
         drawPolygon(nucleusZone, Color.GREEN);
     }
 
-
-
-    // draw polygon for interest zones
+    /**
+     * Draws a polygon on the map to represent an interest zone.
+     *
+     * @param zone  List of LatLng points defining the polygon's vertices.
+     * @param color Stroke color for the polygon (fill is automatically adjusted).
+     */
     private void drawPolygon(List<LatLng> zone, int color) {
         if (mMap == null) {
             Log.e("MapError", "❌ GoogleMap is NULL! Cannot draw polygon.");
@@ -352,14 +368,17 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
+        // Configure polygon visual appearance
         PolygonOptions polygonOptions = new PolygonOptions()
                 .addAll(zone)
-                .strokeColor(color)
-                .fillColor(Color.argb(50, Color.red(color), Color.green(color), Color.blue(color)))
-                .strokeWidth(3);
+                .strokeColor(color) // Border color
+                .fillColor(Color.argb(50, Color.red(color), Color.green(color), Color.blue(color))) // Semi-transparent fill
+                .strokeWidth(3); // Border width
+
         mMap.addPolygon(polygonOptions);
         Log.d("PolygonDraw", "✅ Polygon drawn with " + zone.size() + " points.");
     }
+
 
 
     /**
@@ -634,22 +653,19 @@ public class PositionFragment extends Fragment implements OnMapReadyCallback {
 //            if (sensorFusion.getLatLngWifiPositioning() != null) {
 //                initialPosition = sensorFusion.getLatLngWifiPositioning();
 //            }
-            if (sensorFusion.getLastWifiPos() != null && (System.currentTimeMillis() - sensorFusion.getLastWifiSuccessTime()) < 10000) {
+            if (sensorFusion.getLastWifiPos() != null && (System.currentTimeMillis() - sensorFusion.getLastWifiSuccessTime()) < 30000) {
                 initialPosition = sensorFusion.getLastWifiPos();
             } else {
                 Toast.makeText(
                     getContext(),
                 "Can't resolve wifi position as initial position, please try again later! Using GPS/Default position",
-                    Toast.LENGTH_SHORT
+                    Toast.LENGTH_LONG
                 ).show();
             }
         }
         // set initial position
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialPosition, 15));
     }
-
-
-
 
 }
 

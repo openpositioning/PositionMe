@@ -191,44 +191,49 @@ public class PdrProcessing {
     }
 
     /**
-     * Calculates the relative elevation compared to the start position.
-     * The start elevation is the median of the first three seconds of data to give the sensor time
-     * to settle. The sea level is irrelevant as only values relative to the initial position are
-     * reported.
+     * Calculates the relative elevation compared to the starting position.
      *
-     * @param absoluteElevation absolute elevation in meters compared to sea level.
-     * @return                  current elevation in meters relative to the start position.
+     * - During initialization, the starting elevation is determined as the median value of the
+     *   first N readings (typically over ~3 seconds), to allow the barometer to stabilize.
+     * - The method filters out invalid absolute elevations and computes the floor level when
+     *   changes in elevation exceed a threshold.
+     *
+     * @param absoluteElevation  The raw elevation in meters above sea level.
+     * @return                   Relative elevation in meters compared to the starting point.
      */
     public float updateElevation(float absoluteElevation) {
-        // ✅ 1. 异常值过滤：气压异常时转换出的海拔可能是无效的
+
+        // Step 1: Filter invalid or extreme values (e.g., barometer noise)
         if (Float.isNaN(absoluteElevation) || Math.abs(absoluteElevation) > 10000f) {
-            return this.elevation;  // 保留上次值，不更新
+            return this.elevation;  // Keep last valid elevation
         }
 
-        // ✅ 2. 初始化阶段：构建初始参考海拔（使用中位数）
+        // Step 2: Initialization phase – build reference elevation using median filter
         if (setupIndex < elevation_buffer_size) {
             this.startElevationBuffer[setupIndex] = absoluteElevation;
             setupIndex++;
 
             if (setupIndex == elevation_buffer_size) {
                 Arrays.sort(startElevationBuffer);
-                // 中位数计算（考虑偶数情况）
+
+                // Compute median (handle odd/even cases)
                 if (elevation_buffer_size % 2 == 1) {
                     startElevation = startElevationBuffer[elevation_buffer_size / 2];
                 } else {
                     int mid = elevation_buffer_size / 2;
                     startElevation = (startElevationBuffer[mid - 1] + startElevationBuffer[mid]) / 2f;
                 }
-                currentFloor = 0;  // 初始化楼层
+
+                currentFloor = 0; // Initialize floor
             }
 
-            return 0;  // 初始阶段默认高度为 0
+            return 0;  // During initialization, report elevation as 0
         }
 
-        // ✅ 3. 正常状态下：计算相对高度
+        // Step 3: Normal mode – calculate relative elevation
         this.elevation = absoluteElevation - startElevation;
 
-        // ✅ 4. 更新滑动窗口：用于判断是否上下楼
+        // Step 4: Update sliding buffer for floor-change detection
         this.elevationList.putNewest(absoluteElevation);
 
         if (this.elevationList.isFull()) {
@@ -236,25 +241,26 @@ public class PdrProcessing {
             OptionalDouble currentAvgOpt = elevationMemory.stream().mapToDouble(f -> f).average();
             float currentAvg = currentAvgOpt.isPresent() ? (float) currentAvgOpt.getAsDouble() : startElevation;
 
-            // ✅ 5. 计算与当前楼层参考的高度差
+            // Step 5: Compare current average with elevation baseline to detect floor change
             float delta = currentAvg - startElevation;
-            float floorHeight = this.floorHeight;       // 一层楼的高度阈值（如 3.0 米）
-            float floorMargin = 0.8f;                   // 容忍误差（防止误判）
+            float floorHeight = this.floorHeight;    // Typical floor height in meters
+            float floorMargin = 0.8f;                // Error tolerance to prevent false detection
 
             if (Math.abs(delta) > floorHeight + floorMargin) {
                 int floorChange = Math.round(delta / floorHeight);
                 currentFloor += floorChange;
 
-                // ✅ 6. 更新当前楼层的海拔基准为当前窗口平均值，防止反复触发
+                // Step 6: Update elevation baseline to prevent repeated triggers
                 startElevation = currentAvg;
 
                 Log.i("PDR", "Floor changed: now at floor " + currentFloor);
             }
         }
 
-        // ✅ 7. 返回当前相对海拔（供可视化或记录使用）
+        // Step 7: Return relative elevation (for visualization, logging, etc.)
         return this.elevation;
     }
+
 
     private double medianOf3(double a, double b, double c) {
         return Math.max(Math.min(a, b), Math.min(Math.max(a, b), c));
@@ -281,7 +287,7 @@ public class PdrProcessing {
             return 0f; // Not enough data to be reliable
         }
 
-        // ✅ Step 1: Apply simple median filter (window size = 3)
+        // Step 1: Apply simple median filter (window size = 3)
         List<Double> filteredAccel = new ArrayList<>();
         for (int i = 0; i < validAccel.size(); i++) {
             if (i == 0 || i == validAccel.size() - 1) {
@@ -292,19 +298,19 @@ public class PdrProcessing {
             }
         }
 
-        // ✅ Step 2: Remove top/bottom 5% outliers
+        // Step 2: Remove top/bottom 5% outliers
         int N = filteredAccel.size();
         List<Double> sorted = new ArrayList<>(filteredAccel);
         Collections.sort(sorted);
         int trim = Math.max(1, N / 20);  // trim 5% (at least 1 point)
         List<Double> trimmed = sorted.subList(trim, N - trim); // Keep middle 90%
 
-        // ✅ Step 3: Calculate bounce from trimmed list
+        // Step 3: Calculate bounce from trimmed list
         double maxAccel = Collections.max(trimmed);
         double minAccel = Collections.min(trimmed);
         float bounce = (float) Math.pow((maxAccel - minAccel), 0.25);
 
-        // ✅ Step 4: Preserve original K-setting logic
+        // Step 4: Preserve original K-setting logic
         if (this.settings.getBoolean("overwrite_constants", false)) {
             return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
         }

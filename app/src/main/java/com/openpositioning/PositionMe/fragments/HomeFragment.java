@@ -29,12 +29,10 @@ public class HomeFragment extends Fragment {
         tabLayout = view.findViewById(R.id.tab_layout);
         viewPager = view.findViewById(R.id.view_pager);
 
-        // 设置 ViewPager 适配器
         // Set up the ViewPager adapter
         HomePagerAdapter adapter = new HomePagerAdapter(this);
         viewPager.setAdapter(adapter);
 
-        // 关联 TabLayout 和 ViewPager2
         // Associate TabLayout with ViewPager2
         new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
             if (position == 0) {
@@ -44,7 +42,6 @@ public class HomeFragment extends Fragment {
             }
         }).attach();
 
-        // 设置 Tab 切换监听，改变背景颜色
         // Set up Tab switching monitoring and change the background color
         tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override
@@ -59,7 +56,6 @@ public class HomeFragment extends Fragment {
             public void onTabReselected(TabLayout.Tab tab) {}
         });
 
-        // 初始颜色
         // Initial color
         updateTabColors();
 

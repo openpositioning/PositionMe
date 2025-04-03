@@ -24,7 +24,6 @@ public class SignInActivity extends AppCompatActivity {
     private EditText emailEditText, passwordEditText;
     private Button signInButton;
     private FirebaseAuth mAuth;
-    // 声明 ServerCommunications 对象
     private ServerCommunications serverCommunications;
 
     @Override
@@ -32,7 +31,6 @@ public class SignInActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sign_in);
 
-        // 绑定 UI 组件
         // Bind UI components
         emailEditText = findViewById(R.id.email);
         passwordEditText = findViewById(R.id.password);
@@ -40,16 +38,13 @@ public class SignInActivity extends AppCompatActivity {
         TextView signupText = findViewById(R.id.signup_text);
         TextView forgotPasswordText = findViewById(R.id.forgot_password);
 
-        // 初始化 Firebase Auth
-        // Initialize Firebase Auth
+        // Initialize Firebase Authentication instance
         mAuth = FirebaseAuth.getInstance();
 
-        // 登录按钮点击事件
-        // Login button click event
+        // Set click listener for the Sign In button
         signInButton.setOnClickListener(v -> loginUser());
 
-        // 设置 Sign Up 可点击跳转
-        // Set Sign Up to jump to clickable
+        // Make "Sign Up" text clickable to navigate to the SignUpActivity
         String text = "Don't have an account? Sign Up";
         SpannableString spannableString = new SpannableString(text);
         ClickableSpan clickableSpan = new ClickableSpan() {
@@ -62,15 +57,15 @@ public class SignInActivity extends AppCompatActivity {
             @Override
             public void updateDrawState(@NonNull TextPaint ds) {
                 super.updateDrawState(ds);
-                ds.setColor(Color.BLUE); // 点击后颜色 Click Color
-                ds.setUnderlineText(true); // 添加下划线 Add underline
+                ds.setColor(Color.BLUE);         // Set click color
+                ds.setUnderlineText(true);       // Underline the clickable text
             }
         };
         spannableString.setSpan(clickableSpan, text.indexOf("Sign Up"), text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         signupText.setText(spannableString);
-        signupText.setMovementMethod(LinkMovementMethod.getInstance()); // 让文本可点击 Make text clickable
+        signupText.setMovementMethod(LinkMovementMethod.getInstance()); // Enable link-style text interaction
 
-        // 设置 "Forgot your password?" 可点击跳转 Set "Forgot your password?" to jump to the next page
+        // Make "Forgot your password?" text clickable to navigate to the Reset activity
         String forgotText = "Forgot your password?";
         SpannableString forgotSpannable = new SpannableString(forgotText);
         ClickableSpan forgotClickableSpan = new ClickableSpan() {
@@ -83,46 +78,57 @@ public class SignInActivity extends AppCompatActivity {
             @Override
             public void updateDrawState(@NonNull TextPaint ds) {
                 super.updateDrawState(ds);
-                ds.setColor(Color.BLUE);
-                ds.setUnderlineText(true);
+                ds.setColor(Color.BLUE);         // Set click color
+                ds.setUnderlineText(true);       // Underline the clickable text
             }
         };
         forgotSpannable.setSpan(forgotClickableSpan, 0, forgotText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         forgotPasswordText.setText(forgotSpannable);
-        forgotPasswordText.setMovementMethod(LinkMovementMethod.getInstance());
+        forgotPasswordText.setMovementMethod(LinkMovementMethod.getInstance()); // Enable clickable behavior
     }
 
+
+    /**
+     * Attempts to log in the user using Firebase Authentication.
+     * Validates input fields, handles Firebase login, email verification,
+     * and initializes server communications upon successful login.
+     */
     private void loginUser() {
-        // 获取输入的邮箱和密码
+        // Retrieve the entered email and password
         String email = emailEditText.getText().toString().trim();
         String password = passwordEditText.getText().toString().trim();
 
-        // 检查输入是否为空
+        // Validate that email is not empty
         if (TextUtils.isEmpty(email)) {
             emailEditText.setError("Enter email!");
             return;
         }
+
+        // Validate that password is not empty
         if (TextUtils.isEmpty(password)) {
             passwordEditText.setError("Enter password!");
             return;
         }
 
-        // 调用 Firebase API 登录
+        // Attempt to log in using Firebase Authentication
         mAuth.signInWithEmailAndPassword(email, password)
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
+                            // Check if the user's email is verified
                             if (user.isEmailVerified()) {
-                                // 登录成功后创建 ServerCommunications 实例
+                                // Create an instance of ServerCommunications after successful login
                                 serverCommunications = new ServerCommunications(SignInActivity.this);
-                                // 设置回调，等待 Firebase 获取 userKey 并初始化 URL 完成
+                                // Set a callback listener for when userKey and server URL are initialized
                                 serverCommunications.setURLInitializedListener(new ServerCommunications.URLInitializedListener() {
                                     @Override
                                     public void onURLInitialized() {
-                                        // 当 userKey 获取并初始化完成后，回调被触发
+                                        // This is called after the userKey has been retrieved and URL is ready
                                         runOnUiThread(() -> {
                                             Toast.makeText(SignInActivity.this, "Login Successful!", Toast.LENGTH_SHORT).show();
+
+                                            // Navigate to the main activity and clear login screen from the back stack
                                             Intent intent = new Intent(SignInActivity.this, MainActivity.class);
                                             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                                             startActivity(intent);
@@ -131,12 +137,15 @@ public class SignInActivity extends AppCompatActivity {
                                     }
                                 });
                             } else {
+                                // Notify user to verify their email first
                                 Toast.makeText(SignInActivity.this, "Please verify your email before logging in.", Toast.LENGTH_LONG).show();
                             }
                         }
                     } else {
+                        // Show error message if login fails
                         Toast.makeText(SignInActivity.this, "Login failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
                     }
                 });
     }
+
 }

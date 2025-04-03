@@ -1500,30 +1500,46 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     };
 
+    /**
+     * Applies a particle filter to the current coordinates using available WiFi or GNSS data.
+     *
+     * The filter works by:
+     * 1. Predicting the next state based on movement.
+     * 2. Incorporating WiFi (if recent and valid) or GNSS measurements.
+     * 3. Adjusting noise and weight (ratio) based on measurement quality and geometry.
+     * 4. Resampling particles and estimating the new best position.
+     *
+     * @param newCords Current estimated coordinates (e.g., from PDR).
+     * @return Refined coordinates after particle filtering.
+     */
     private float[] applyParticleFilter(float[] newCords) {
-        // *** Particle Filter start ***
+        // === Step 1: Predict the next state based on motion ===
         pf.predict(newCords[0], newCords[1]);
         LatLng startLocLatLng = new LatLng(this.startLocation[0], this.startLocation[1]);
 
+        // === Step 2: WiFi update (if recent) ===
         if (lastWifiPos != null && (System.currentTimeMillis() - lastWifiSuccessTime) < 15000) {
-            pf.setMeasurementNoise(2.5);
+            pf.setMeasurementNoise(2.5);  // Static noise assumption for WiFi
 
             LatLng latLng = lastWifiPos;
             double[] wifiPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
             Log.e("wifiPos", "x: " + wifiPos[0] + ", y: " + wifiPos[1]);
 
+            // Check if WiFi is in front of the user
             if (isWifiNotBehind(new double[]{newCords[0], newCords[1]}, wifiPos, this.orientation[0])) {
-                pf.setWifiRatio(ratio * 1);
-                Log.e("Ratio", "wifi in front");
+                pf.setWifiRatio(ratio * 1); // full weight
+                Log.e("Ratio", "WiFi in front");
             } else {
-                pf.setWifiRatio(ratio * 0.2);
-                Log.e("Ratio", "wifi NOT in front");
+                pf.setWifiRatio(ratio * 0.2); // reduce influence if WiFi is behind
+                Log.e("Ratio", "WiFi NOT in front");
             }
 
             Log.e("Ratio", String.valueOf(ratio));
             pf.update(wifiPos[0], wifiPos[1]);
+        }
 
-        } else if (lastGnssLocation != null && (System.currentTimeMillis() - lastGnssTime) < 60000) {
+        // === Step 3: GNSS update (if WiFi is unavailable or outdated) ===
+        else if (lastGnssLocation != null && (System.currentTimeMillis() - lastGnssTime) < 60000) {
             double[] gnssPos = new double[]{lastGnssLocation.getLatitude(), lastGnssLocation.getLongitude()};
             LatLng latLng = new LatLng(gnssPos[0], gnssPos[1]);
             gnssPos = UtilFunctions.convertLatLangToNorthingEasting(startLocLatLng, latLng);
@@ -1531,37 +1547,50 @@ public class SensorFusion implements SensorEventListener, Observer {
             Log.e("GNSS debug", "x: " + gnssPos[0] + ", y: " + gnssPos[1] + ", accuracy: " + lastGnssLocation.getAccuracy());
 
             pf.setMeasurementNoise(lastGnssLocation.getAccuracy());
-            pf.setWifiRatio(1);
+            pf.setWifiRatio(1); // Full trust in GNSS
             pf.update(gnssPos[0], gnssPos[1]);
         }
 
-        // 4. 重采样
+        // === Step 4: Resample particles based on updated weights ===
         pf.resample();
 
-        // 5. 估计当前状态
+        // === Step 5: Estimate final position ===
         FilterUtils.Particle currentState = pf.estimate();
         newCords = new float[]{(float) currentState.x, (float) currentState.y};
         Log.e("Particle Filter", "x: " + currentState.x + ", y: " + currentState.y);
-        // *** Particle END ***
 
         return newCords;
     }
 
-    private float[] applyBatchOptimization(List<float[]> windowList, float[] currentPoint) {
-        int historyPoints = 3; // 自定义历史点数量
 
+    /**
+     * Applies a batch trajectory smoothing filter over a sliding window of recent positions.
+     *
+     * It uses a weighted optimization approach to balance between:
+     * - Smoothness (less noise/jitter)
+     * - Fidelity to raw data (no excessive distortion)
+     *
+     * @param windowList     List of recent points (sliding window).
+     * @param currentPoint   The newest point to add.
+     * @return Smoothed output point after optimization.
+     */
+    private float[] applyBatchOptimization(List<float[]> windowList, float[] currentPoint) {
+        int historyPoints = 3; // Number of previous points to use
+
+        // Maintain fixed window length
         if (windowList.size() >= historyPoints + 1) {
-            windowList.remove(0); // 保持窗口长度
+            windowList.remove(0);
         }
-        windowList.add(currentPoint); // 添加当前点
+        windowList.add(currentPoint);
 
         return TrajectoryOptimizer.weightedSmoothOptimizedPoint(
                 windowList,
-                1.0f,     // 平滑项权重
-                5.0f,     // 拟合项权重
+                1.0f,   // Smoothness weight
+                5.0f,   // Fit-to-data weight
                 historyPoints
         );
     }
+
 
 
 

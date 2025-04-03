@@ -34,6 +34,7 @@ public class SignUpActivity extends AppCompatActivity {
     private Button signUpButton;
     private FirebaseAuth mAuth;
     private DatabaseReference databaseReference;
+
     private static final String SIGNUP_URL = "https://openpositioning.org/api/users/signup";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
@@ -42,7 +43,6 @@ public class SignUpActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sign_up);
 
-        // 绑定 UI 组件
         // Bind UI components
         usernameEditText = findViewById(R.id.username);
         emailEditText = findViewById(R.id.email);
@@ -50,23 +50,19 @@ public class SignUpActivity extends AppCompatActivity {
         mobileEditText = findViewById(R.id.phone);
         signUpButton = findViewById(R.id.create);
 
-        // 初始化 Firebase Authentication 和 Database
-        // Initialize Firebase Authentication and Database
+        // Initialize Firebase Authentication and Realtime Database
         mAuth = FirebaseAuth.getInstance();
         databaseReference = FirebaseDatabase.getInstance(
                 "https://livelink-f37f6-default-rtdb.europe-west1.firebasedatabase.app"
         ).getReference("Users");
 
-        // 注册按钮点击事件
         // Register button click event
-        signUpButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                registerUser();
-            }
-        });
+        signUpButton.setOnClickListener(v -> registerUser());
     }
 
+    /**
+     * Validates the input fields and initiates Firebase user creation.
+     */
     private void registerUser() {
         String username = usernameEditText.getText().toString().trim();
         String email = emailEditText.getText().toString().trim();
@@ -94,15 +90,13 @@ public class SignUpActivity extends AppCompatActivity {
             return;
         }
 
-        // **先在 Firebase 认证创建用户**
-        // **Create a user in Firebase authentication first**
+        // Create Firebase authentication account
         mAuth.createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
-                            // 发送 Email 验证邮件
-                            //Send Email verification email
+                            // Send verification email
                             user.sendEmailVerification()
                                     .addOnCompleteListener(emailTask -> {
                                         if (emailTask.isSuccessful()) {
@@ -112,8 +106,7 @@ public class SignUpActivity extends AppCompatActivity {
                                         }
                                     });
 
-                            // **Firebase 账号创建成功后，调用 `signUpUser()` 获取 `userKey`**
-                            // **After the Firebase account is successfully created, call `signUpUser()` to get `userKey`**
+                            // After Firebase account creation, call signUpUser() to fetch userKey
                             signUpUser(user.getUid(), username, email, mobile, password);
                         }
                     } else {
@@ -127,8 +120,7 @@ public class SignUpActivity extends AppCompatActivity {
     }
 
     /**
-     * 发送 `signup` API 请求，并获取 `userKey`
-     * Send a `signup` API request and get `userKey`
+     * Sends a signup API request to the OpenPositioning backend to retrieve a userKey.
      */
     private void signUpUser(String userId, String username, String email, String mobile, String password) {
         OkHttpClient client = new OkHttpClient();
@@ -144,7 +136,6 @@ public class SignUpActivity extends AppCompatActivity {
         }
 
         RequestBody body = RequestBody.create(jsonBody.toString(), JSON);
-
         Request request = new Request.Builder()
                 .url(SIGNUP_URL)
                 .post(body)
@@ -169,9 +160,9 @@ public class SignUpActivity extends AppCompatActivity {
                 String responseBody = response.body().string();
                 try {
                     JSONObject jsonResponse = new JSONObject(responseBody);
-                    String userKey = jsonResponse.getString("api_key");  // 获取 userKey
+                    String userKey = jsonResponse.getString("api_key");
 
-                    // **保存 `userKey` 到 Firebase**
+                    // Save userKey and user info to Firebase
                     saveUserData(userId, username, email, mobile, userKey);
 
                 } catch (JSONException e) {
@@ -182,8 +173,7 @@ public class SignUpActivity extends AppCompatActivity {
     }
 
     /**
-     * 存储完整用户信息 (username, email, mobile, userKey) 到 Firebase
-     * Store complete user information (username, email, mobile, userKey) to Firebase
+     * Saves the user's profile data and userKey to Firebase Realtime Database.
      */
     private void saveUserData(String userId, String username, String email, String mobile, String userKey) {
         if (userKey == null) {
@@ -191,23 +181,19 @@ public class SignUpActivity extends AppCompatActivity {
             userKey = BuildConfig.OPENPOSITIONING_API_KEY;
             return;
         }
-        // 创建 User 对象
-        // Create a User object
+
         User user = new User(username, email, mobile, userKey);
 
-        // 存储数据到 Firebase
-        // Store data in Firebase
         databaseReference.child(userId).setValue(user)
                 .addOnCompleteListener(task -> {
                     if (task.isSuccessful()) {
                         Log.d("SignUpActivity", "User data and userKey saved to Firebase.");
 
-                        // **存储成功后，再跳转 SignInActivity**
-                        // **After successful storage, jump to SignInActivity**
+                        // Navigate to SignInActivity after successful signup
                         Intent intent = new Intent(SignUpActivity.this, SignInActivity.class);
                         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                         startActivity(intent);
-                        finish();  // 关闭当前 Activity Close the current Activity
+                        finish();
                     } else {
                         Log.e("SignUpActivity", "Failed to save user data: " + task.getException().getMessage());
                     }
@@ -215,7 +201,7 @@ public class SignUpActivity extends AppCompatActivity {
     }
 
     /**
-     * 用户数据类
+     * User data class for Firebase storage.
      */
     public static class User {
         public String username, email, mobile, userKey;
@@ -232,3 +218,4 @@ public class SignUpActivity extends AppCompatActivity {
         }
     }
 }
+

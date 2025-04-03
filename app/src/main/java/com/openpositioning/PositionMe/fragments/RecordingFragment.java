@@ -181,18 +181,18 @@ public class RecordingFragment extends Fragment {
         }
 
 
-        // ✅ Make sure SensorFusion is initialized correctly
+        // Make sure SensorFusion is initialized correctly
         this.sensorFusion = SensorFusion.getInstance();
 
         // Set up the application context
         sensorFusion.setContext(getActivity().getApplicationContext());
         if (this.sensorFusion == null) {
             Log.e("SensorFusion", "❌ SensorFusion is NULL! Retrying initialization...");
-            this.sensorFusion = SensorFusion.getInstance(); // 重新获取实例 Re-obtain the instance
+            this.sensorFusion = SensorFusion.getInstance(); // Re-obtain the instance
         }
 
 
-        // ✅ Initialize `Handler` (used to update UI regularly)
+        // Initialize `Handler` (used to update UI regularly)
         this.refreshDataHandler = new Handler();
     }
 
@@ -201,7 +201,7 @@ public class RecordingFragment extends Fragment {
         View rootView = inflater.inflate(R.layout.fragment_recording, container, false);
 
 
-        //✅ **Get the passed data from the Bundle**
+        // **Get the passed data from the Bundle**
         if (getArguments() != null) {
             zoneName = getArguments().getString("zone_name");
             markerLatitude = getArguments().getDouble("marker_latitude", 0.0);
@@ -211,11 +211,11 @@ public class RecordingFragment extends Fragment {
         }
 
 
-        // ✅ Get the initial GNSS position (make sure to include latitude & longitude)
+        // Get the initial GNSS position (make sure to include latitude & longitude)
         if (markerLatitude != 0.0 && markerLongitude != 0.0) {
             start = new LatLng(markerLatitude, markerLongitude);
         } else {
-            start = new LatLng(55.953251, -3.188267); // 💡 默认位置（爱丁堡）Default location (Edinburgh)
+            start = new LatLng(55.953251, -3.188267); // Default location (Edinburgh)
         }
 
         float[] sendStartLocation = new float[2];
@@ -223,29 +223,29 @@ public class RecordingFragment extends Fragment {
         sendStartLocation[1] = (float) start.longitude;
         sensorFusion.setStartGNSSLatitude(sendStartLocation);
 
-        currentLocation = start; // 🔥 确保 currentLocation 也初始化 Make sure currentLocation is also initialized
+        currentLocation = start; // Make sure currentLocation is also initialized
 
         fusedCurrentLocation = start;
-        // ✅ Initialize the map
+        // Initialize the map
         SupportMapFragment supportMapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.map_fragment);
         if (supportMapFragment != null) {
             supportMapFragment.getMapAsync(map -> {
                 gMap = map;
 
-                // ✅ Initialize indoor map (check if needed first)
+                // Initialize indoor map (check if needed first)
                 if (indoorMapManager == null) {
                     indoorMapManager = new com.openpositioning.PositionMe.IndoorMapManager(gMap);
                 }
 
-                // ✅ Configure Google Map UI
+                // Configure Google Map UI
                 map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                 map.getUiSettings().setCompassEnabled(true);
                 map.getUiSettings().setTiltGesturesEnabled(true);
                 map.getUiSettings().setRotateGesturesEnabled(true);
                 map.getUiSettings().setScrollGesturesEnabled(true);
 
-                // ✅ Add a starting point marker (with direction indication)
+                // Add a starting point marker (with direction indication)
                 orientationMarker = map.addMarker(new MarkerOptions()
                         .position(start)
                         .title("Current Position")
@@ -255,7 +255,7 @@ public class RecordingFragment extends Fragment {
                         )));
                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(start, 19f));
 
-                // ✅ Initialize PDR track (Polyline)
+                // Initialize PDR track (Polyline)
 
                 polyline = gMap.addPolyline(new PolylineOptions()
                         .color(Color.parseColor("#FFA500"))
@@ -269,7 +269,7 @@ public class RecordingFragment extends Fragment {
                         .zIndex(6));
 
 
-                // ✅ Set up indoor maps (if applicable)
+                // Set up indoor maps (if applicable)
                 indoorMapManager.setCurrentLocation(fusedCurrentLocation);// fusedCurrentLocation or not?
                 indoorMapManager.setIndicationOfIndoorMap();
                 indoorMapManager.setCurrentFloor(sensorFusion.getLastWifiFloor(), true);
@@ -286,7 +286,7 @@ public class RecordingFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // 🛑 **Delete old Marker to avoid duplication**
+        // **Delete old Marker to avoid duplication**
         if (orientationMarker != null) {
             orientationMarker.remove();
             orientationMarker = null;
@@ -304,7 +304,7 @@ public class RecordingFragment extends Fragment {
             fusedPolyline = null;
         }
 
-        // ✅ Initialize UI components (avoid multiple calls to `getView()`)
+        // Initialize UI components (avoid multiple calls to `getView()`)
         this.elevation = view.findViewById(R.id.tv_elevation);
         this.distanceTravelled = view.findViewById(R.id.tv_distance);
         this.gnssError = view.findViewById(R.id.tv_gnss_error);
@@ -312,13 +312,12 @@ public class RecordingFragment extends Fragment {
         this.stopButton = view.findViewById(R.id.button_stop);
         this.addTagButton = view.findViewById(R.id.AddTagButton);
 
-        // ✅ **Set default UI values**
+        // **Set default UI values**
         this.gnssError.setVisibility(View.GONE);
         this.elevation.setText("Elevation: 0.0 m");
         this.distanceTravelled.setText("Distance: 0.0 m");
 
-        // ✅ **重置轨迹计算变量**
-        //✅ **Reset trajectory calculation variables**
+        // **Reset trajectory calculation variables**
         this.distance = 0f;
         this.previousPosX = 0f;
         this.previousPosY = 0f;
@@ -447,22 +446,22 @@ public class RecordingFragment extends Fragment {
             }
         });
 
-        //✅ **Initialize UI components**
+        // **Initialize UI components**
         this.floorUpButton = view.findViewById(R.id.floorUpButton);
         this.floorDownButton = view.findViewById(R.id.floorDownButton);
         this.autoFloor = view.findViewById(R.id.switch_auto_floor);
 
-        //✅ **Set default state**
+        // **Set default state**
         autoFloor.setChecked(true); // Automatic floor is enabled by default
         setFloorButtonVisibility(View.GONE); // Initially hide the floor switch button
 
-        //✅ **Map type switch**
+        // **Map type switch**
         mapDropdown();
         switchMap();
 
-        //✅ **Floor up button**
+        // **Floor up button**
         this.floorUpButton.setOnClickListener(view1 -> {
-            autoFloor.setChecked(false); // 🚀 关闭 Auto Floor Turn off Auto Floor
+            autoFloor.setChecked(false); //  Turn off Auto Floor
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
                 Log.d("FloorControl", "📈 floor up");
@@ -473,7 +472,7 @@ public class RecordingFragment extends Fragment {
 
         //✅ **Floor down button**
         this.floorDownButton.setOnClickListener(view1 -> {
-            autoFloor.setChecked(false); // 🚀 关闭 Auto Floor Turn off Auto Floor
+            autoFloor.setChecked(false); // Turn off Auto Floor
             if (indoorMapManager != null) {
                 indoorMapManager.decreaseFloor();
                 Log.d("FloorControl", "📉 floor down");
@@ -597,6 +596,7 @@ public class RecordingFragment extends Fragment {
 
 
 //                    // *****Debugging for geofence START*****
+//                    This code put the red small circle on the map according to the wall points
 //                    List<LatLng> wallPointsLatLng = Arrays.asList(
 //                            new LatLng(55.92301090863321, -3.174221045188629),
 //                            new LatLng(55.92301094092557, -3.1742987516650873),
@@ -608,10 +608,10 @@ public class RecordingFragment extends Fragment {
 //                    for (LatLng point : wallPointsLatLng) {
 //                        gMap.addCircle(new CircleOptions()
 //                                .center(point)
-//                                .radius(0.5) // 单位：米，适当调整大小
+//                                .radius(0.5) // meters
 //                                .strokeColor(Color.RED)
-//                                .fillColor(Color.argb(100, 255, 0, 0)) // 半透明红色
-//                                .zIndex(100)); // 确保在 overlay 上方
+//                                .fillColor(Color.argb(100, 255, 0, 0)) // red
+//                                .zIndex(100)); // ensure the circle is on top
 //                    }
 //                    // *****Debugging for geofence END*****
 
@@ -626,7 +626,7 @@ public class RecordingFragment extends Fragment {
                         gnssError.setVisibility(View.VISIBLE);
                         String GnssErrorRound = df.format(distance);
                         gnss.setText("GNSS error: " + GnssErrorRound + " m");
-                        gnssError.setText("GNSS error: " + String.format("%.2f", distance) + " m (位置接近)");
+                        gnssError.setText("GNSS error: " + String.format("%.2f", distance) + " m (close)");
                     } else {
                         // If the distance is greater than the threshold, display a GNSS Marker on the map,
                         // so that the user can compare the distance between the orientationMarker and the GNSS Marker
@@ -668,11 +668,6 @@ public class RecordingFragment extends Fragment {
                 }
 
             } else {
-                // When GNSS is turned off, only orientationMarker is kept and GNSS Marker is removed
-//                if (gnssMarker != null) {
-//                    gnssMarker.remove();
-//                    gnssMarker = null;
-//                }
                 if (gnssMarker != null) {
                     gnssMarker.setVisible(false);
                 }
@@ -683,7 +678,7 @@ public class RecordingFragment extends Fragment {
                     marker.setVisible(false);
                 }
                 gnssError.setVisibility(View.GONE);
-                Log.d("GNSS", "GNSS Marker 已移除，仅保留 orientationMarker");
+                Log.d("GNSS", "GNSS Marker is removed，keep only orientationMarker");
             }
         });
 
@@ -1106,49 +1101,6 @@ public class RecordingFragment extends Fragment {
         }
     }
 
-//    public boolean isInElevator(LatLng currentLocation) {
-//        List<LatLng> elevatorPolygon = Arrays.asList(
-//                new LatLng(55.92307361898947, -3.174281938426994),
-//                new LatLng(55.92307368121945, -3.174432016879645),
-//                new LatLng(55.92302088671354, -3.1744321230471044),
-//                new LatLng(55.92302085467245, -3.1743548100179217),
-//                new LatLng(55.923031413574854, -3.1743547887615846),
-//                new LatLng(55.92303138337408, -3.174282023528208)
-//        );
-//        return PolyUtil.containsLocation(currentLocation, elevatorPolygon, true);
-//    }
-//
-//    public boolean isInFirstStaircase(LatLng currentLocation) {
-//        List<LatLng> staircasePolygon = Arrays.asList(
-//                new LatLng(55.92302153551364, -3.1742210237571133),
-//                new LatLng(55.923021575395175, -3.1743170141360544),
-//                new LatLng(55.92291796333051, -3.1743172228541),
-//                new LatLng(55.922917910116, -3.1741892360311152),
-//                new LatLng(55.92298697722846, -3.174170812777022)
-//        );
-//        return PolyUtil.containsLocation(currentLocation, staircasePolygon, true);
-//    }
-//
-//
-//    public boolean isInSecondFloorStaircase(LatLng currentLocation) {
-//        List<LatLng> secondFloorStaircasePolygon = Arrays.asList(
-//                new LatLng(55.92305776740818, -3.174250135524168),
-//                new LatLng(55.923057723893564, -3.1741455354069608),
-//                new LatLng(55.923144834872836, -3.174145359592135),
-//                new LatLng(55.92314487837232, -3.1742499599514304)
-//        );
-//        return PolyUtil.containsLocation(currentLocation, secondFloorStaircasePolygon, true);
-//    }
-//
-//    public boolean isInBasementStaircase(LatLng currentLocation) {
-//        List<LatLng> basementStaircasePolygon = Arrays.asList(
-//                new LatLng(55.92301092610767, -3.1742902930391566),
-//                new LatLng(55.92301088376152, -3.174188435819902),
-//                new LatLng(55.92312678459982, -3.174188202011103),
-//                new LatLng(55.92312682692639, -3.1742900595440013)
-//        );
-//        return PolyUtil.containsLocation(currentLocation, basementStaircasePolygon, true);
-//    }
 
     /**
      * Calculates and draws the PDR or fused trajectory on the map.

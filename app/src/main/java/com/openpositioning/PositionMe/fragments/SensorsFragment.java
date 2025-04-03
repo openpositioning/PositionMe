@@ -55,26 +55,25 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_sensors, container, false);
 
-        // 初始化 RecyclerView 适配器
-        // Initialize the RecyclerView adapter
+        // === Initialize RecyclerView for displaying sensor data ===
         recyclerView = view.findViewById(R.id.sensor_recycler_view);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         sensorList = new ArrayList<>();
         sensorAdapter = new SensorAdapter(sensorList);
         recyclerView.setAdapter(sensorAdapter);
 
-
+        // === Initialize SensorManager and retrieve all available sensors ===
         sensorManager = (SensorManager) getActivity().getSystemService(Context.SENSOR_SERVICE);
-        List<Sensor> sensorAvaiableList = sensorManager.getSensorList(Sensor.TYPE_ALL);
+        List<Sensor> sensorAvailableList = sensorManager.getSensorList(Sensor.TYPE_ALL);
 
-        for (Sensor sensorAvaiable : sensorAvaiableList) {
-            Log.d("AvailableSensors", "Sensor: " + sensorAvaiable.getName() + " | Type: " + sensorAvaiable.getType());
+        for (Sensor sensor : sensorAvailableList) {
+            Log.d("AvailableSensors", "Sensor: " + sensor.getName() + " | Type: " + sensor.getType());
         }
 
+        // Map to hold sensor data entries in insertion order
         sensorDataMap = new LinkedHashMap<>();
 
-        // 添加所有需要监听的传感器
-        // Add all sensors that need to be monitored
+        // === Register sensors to monitor ===
         registerSensor(Sensor.TYPE_ACCELEROMETER, "Accelerometer");
         registerSensor(Sensor.TYPE_GYROSCOPE, "Gyroscope");
         registerSensor(Sensor.TYPE_MAGNETIC_FIELD, "Magnetic Field");
@@ -83,20 +82,19 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
         registerSensor(Sensor.TYPE_PRESSURE, "Pressure Sensor");
         registerSensor(Sensor.TYPE_PROXIMITY, "Proximity Sensor");
 
-        // 添加新的传感器
-        // Add a new sensor
+        // Additional sensors
         registerSensor(Sensor.TYPE_LINEAR_ACCELERATION, "Linear Acceleration");
         registerSensor(Sensor.TYPE_ROTATION_VECTOR, "Rotation Vector");
         registerSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR, "Geomagnetic Rotation Vector");
 
-        // ✅ 确保 `GNSS` 被正确初始化
-        // ✅ Make sure `GNSS` is initialized correctly
+        // === Initialize GNSS if location permission is granted ===
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            startGNSSListener(); // 🟢 如果已有权限，直接启动 GNSS If you already have permission, start GNSS directly
+            startGNSSListener(); // Start GNSS listener immediately
         } else {
-            requestLocationPermission(); // 🔥 请求权限 Request Permission
+            requestLocationPermission(); // Request location permission from user
         }
 
+        // === Set up Start and Stop buttons for measurement ===
         startButton = view.findViewById(R.id.button_start);
         stopButton = view.findViewById(R.id.button_stop);
 
@@ -106,18 +104,28 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
         return view;
     }
 
+    /**
+     * Registers a sensor if available and adds it to the UI tracking list.
+     *
+     * @param sensorType The type constant from SensorManager (e.g., Sensor.TYPE_ACCELEROMETER)
+     * @param sensorName A friendly name to show in the UI
+     */
     private void registerSensor(int sensorType, String sensorName) {
         Sensor sensor = sensorManager.getDefaultSensor(sensorType);
         if (sensor != null) {
             sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL);
             sensorDataMap.put(sensorName, new SensorData(sensorName, "Waiting..."));
             sensorList.add(sensorDataMap.get(sensorName));
-            Log.d("SensorDebug", "Registered sensor: " + sensorName); // ✅ 记录注册成功 Record successful registration
+            Log.d("SensorDebug", "Registered sensor: " + sensorName); // Record successful registration
         } else {
-            Log.d("SensorDebug", "Sensor not found: " + sensorName); // ❌ 传感器不可用 Sensor not available
+            Log.d("SensorDebug", "Sensor not found: " + sensorName); // Sensor not available
         }
     }
 
+    /**
+     * Starts sensor measurement and updates the UI.
+     * All registered sensors and GNSS will show active values.
+     */
     private void startMeasurement() {
         if (!isMeasuring) {
             isMeasuring = true;
@@ -125,19 +133,21 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
 
             for (String key : sensorDataMap.keySet()) {
                 SensorData data = sensorDataMap.get(key);
-                data.setValue("Measuring..."); // 🔥 GNSS 也变成 Measuring... GNSS has also become a measuring...
+                data.setValue("Measuring...");
                 sensorList.add(data);
             }
 
-            sensorAdapter.notifyDataSetChanged(); // 🔥 刷新 UI Refresh the UI
+            sensorAdapter.notifyDataSetChanged(); // Refresh the UI
             Log.d("SensorDebug", "Sensor List Size after Start: " + sensorList.size());
 
-            // 🔥 重新启动 GNSS 监听
-            // 🔥 Restart GNSS monitoring
+            // Restart GNSS monitoring if applicable
             startGNSSListener();
         }
     }
 
+    /**
+     * Stops sensor measurement and updates the UI accordingly.
+     */
     private void stopMeasurement() {
         if (isMeasuring) {
             isMeasuring = false;
@@ -151,6 +161,10 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
         }
     }
 
+    /**
+     * Called when any registered sensor provides new data.
+     * Updates the corresponding value in the sensor data list and refreshes the UI.
+     */
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (isMeasuring) {
@@ -203,8 +217,7 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
             if (sensorName != null && sensorDataMap.containsKey(sensorName)) {
                 sensorDataMap.get(sensorName).setValue(value);
 
-                // 🔥 确保 UI 按照固定顺序更新
-                // 🔥 Ensure UI updates in a fixed order
+                // Ensure UI updates preserve the original sensor display order
                 List<SensorData> sortedData = new ArrayList<>(sensorDataMap.values());
                 sensorAdapter.updateData(sortedData);
             }
@@ -212,28 +225,40 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
     }
 
 
-    @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // NOT USED in this implementation
+    }
+
+
+    // Permission launcher for requesting fine location access
     private final ActivityResultLauncher<String> requestPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
                 if (isGranted) {
                     Toast.makeText(getContext(), "Location permission granted", Toast.LENGTH_SHORT).show();
-                    startGNSSListener(); // 🟢 用户授予权限后立即启动 GNSS Start GNSS immediately after user grants permission
+                    startGNSSListener(); // Start GNSS immediately after permission is granted
                 } else {
                     Toast.makeText(getContext(), "Location permission denied", Toast.LENGTH_SHORT).show();
                 }
             });
 
+    /**
+     * Requests location permission if not already granted.
+     * If permission is granted, GNSS listener is started.
+     */
     private void requestLocationPermission() {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION);
         } else {
-            startGNSSListener(); // 🟢 如果已经有权限，直接启动 GNSS If you already have permission, start GNSS directly
+            startGNSSListener(); // Already granted — start GNSS directly
         }
     }
 
+    /**
+     * Starts GNSS location updates and binds results to the UI if measurement is active.
+     */
     private void startGNSSListener() {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -241,53 +266,49 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
             return;
         }
 
-        // 🔥 确保 GNSS 传感器已被加入
-        // 🔥 Make sure the GNSS sensor is added
+        // Add GNSS data entry if not already added
         if (!sensorDataMap.containsKey("GNSS")) {
             sensorDataMap.put("GNSS", new SensorData("GNSS", "Waiting..."));
             sensorList.add(sensorDataMap.get("GNSS"));
-            sensorAdapter.notifyDataSetChanged(); // 🔥 立刻刷新 UI Refresh the UI immediately
+            sensorAdapter.notifyDataSetChanged(); // Refresh the UI immediately
         }
 
+        // Initialize location listener if needed
         if (locationListener == null) {
             locationListener = new LocationListener() {
                 @Override
                 public void onLocationChanged(@NonNull Location location) {
-//                    Log.d("GNSS", "📡 Location updated: " + location.getLatitude() + ", " + location.getLongitude());
-
                     if (isMeasuring) {
-                        Log.d("GNSS", "🔥 GNSS isMeasuring == true"); // 🔥 确保 isMeasuring == true
+                        Log.d("GNSS", "GNSS update received during measurement.");
 
                         if (!isAdded()) {
-                            Log.w("SensorsFragment", "⚠️ Fragment is not attached. Skipping location update.");
+                            Log.w("SensorsFragment", "Fragment not attached. Skipping location update.");
                             return;
                         }
 
                         Activity activity = getActivity();
                         if (activity == null) {
-                            Log.w("SensorsFragment", "⚠️ Activity is null. Skipping location update.");
+                            Log.w("SensorsFragment", "Activity is null. Skipping location update.");
                             return;
                         }
 
-                        // ✅ 用 activity 而不是 requireActivity()，避免崩溃
-                        // ✅ Use activity instead of requireActivity() to avoid crashes
+                        // Use activity.runOnUiThread to avoid crashes from detached fragments
                         activity.runOnUiThread(() -> {
                             if (sensorDataMap.containsKey("GNSS")) {
                                 sensorDataMap.get("GNSS").setValue(
                                         String.format("Lat: %.5f  Lon: %.5f  Alt: %.2f",
-                                                location.getLatitude(), location.getLongitude(), location.getAltitude())
+                                                location.getLatitude(),
+                                                location.getLongitude(),
+                                                location.getAltitude())
                                 );
 
-                                // 🔥 触发 UI 更新
-                                // 🔥 Trigger UI update
-                                Log.d("GNSS", "🔥 GNSS UI 更新成功");
+                                // Update the UI with new GNSS data
+                                Log.d("GNSS", "GNSS UI updated.");
                                 sensorAdapter.updateData(new ArrayList<>(sensorDataMap.values()));
                             }
                         });
                     }
                 }
-
-
 
                 @Override
                 public void onStatusChanged(String provider, int status, Bundle extras) {}
@@ -300,19 +321,21 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
             };
         }
 
+        // Request GNSS updates every second or every meter of movement
         LocationManager locationManager = (LocationManager) requireActivity().getSystemService(Context.LOCATION_SERVICE);
         if (locationManager != null) {
             locationManager.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    1000, // **1秒更新一次** Update once every 1 second
-                    1,    // **位移1米更新** **Update with 1 meter displacement**
+                    1000, // Update every 1 second
+                    1,    // Update when moved 1 meter
                     locationListener
             );
-            Log.d("GNSS", "🔥 GNSS Listening started!");
+            Log.d("GNSS", "GNSS listening started.");
         } else {
-            Log.e("GNSS", "❌ LocationManager is null. Cannot start GNSS.");
+            Log.e("GNSS", "LocationManager is null. Cannot start GNSS.");
         }
     }
+
 
 
     @Override
@@ -326,7 +349,7 @@ public class SensorsFragment extends Fragment implements SensorEventListener {
 
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
-            startGNSSListener();  // **🔥 确保 GNSS 在 UI 里** **🔥 Make sure GNSS is in the UI**
+            startGNSSListener();  // Make sure GNSS is in the UI
         } else {
             requestLocationPermission();
         }

@@ -53,94 +53,91 @@ public class UploadFragment extends Fragment {
     private List<File> localTrajectories;
 
     /**
-     * Public default constructor, empty.
+     * Default public constructor (required for Fragment).
      */
     public UploadFragment() {
         // Required empty public constructor
     }
 
-
     /**
-     * {@inheritDoc}
-     * Initialises new Server Communication instance with the context, and finds all the files that
-     * match the trajectory naming scheme in local storage.
+     * Initializes the server communication instance and retrieves all local trajectory files
+     * from the appropriate storage directory based on the Android version.
      */
-
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Get communication class
+
+        // Initialize communication with the server
         serverCommunications = new ServerCommunications(getActivity());
 
-        // Determine the directory to load trajectory files from.
-        File trajectoriesDir = null;
+        // Determine directory to load trajectory files from
+        File trajectoriesDir;
 
-        // for android 13 or higher use dedicated external storage
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // For Android 13 or above, use the external documents directory
             trajectoriesDir = getActivity().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
             if (trajectoriesDir == null) {
-                trajectoriesDir = getActivity().getFilesDir();
+                trajectoriesDir = getActivity().getFilesDir(); // Fallback to internal storage
             }
-        } else { // for android 12 or lower use internal storage
+        } else {
+            // For Android 12 and below, use internal storage
             trajectoriesDir = getActivity().getFilesDir();
         }
 
+        // Load files that match the trajectory naming pattern
         localTrajectories = Stream.of(trajectoriesDir.listFiles((file, name) ->
                         name.contains("trajectory_") && name.endsWith(".txt")))
                 .filter(file -> !file.isDirectory())
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Called when the fragment resumes. Ensures the bottom navigation is visible
+     * and disables the back button override in MainActivity.
+     */
     @Override
     public void onResume() {
         super.onResume();
-        // 获取主界面的 BottomNavigationView，并隐藏它
+
+        // Show BottomNavigationView
         BottomNavigationView bottomNav = getActivity().findViewById(R.id.bottom_navigation);
         if (bottomNav != null) {
             bottomNav.setVisibility(View.VISIBLE);
         }
+
+        // Disable back button override while in this fragment
         MainActivity activity = (MainActivity) getActivity();
         if (activity != null && activity.onBackPressedCallback != null) {
-            activity.onBackPressedCallback.setEnabled(false);  // 禁用返回键拦截
+            activity.onBackPressedCallback.setEnabled(false);
         }
     }
 
+    /**
+     * Re-enables back button interception when the fragment is paused.
+     */
     @Override
     public void onPause() {
         super.onPause();
 
-        // 恢复返回键拦截
         MainActivity activity = (MainActivity) getActivity();
         if (activity != null && activity.onBackPressedCallback != null) {
-            activity.onBackPressedCallback.setEnabled(true);  // 恢复拦截
+            activity.onBackPressedCallback.setEnabled(true);
         }
     }
 
-
     /**
-     * {@inheritDoc}
-     * Sets the title in the action bar to "Upload"
+     * Sets the title of the fragment to "Upload".
      */
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         getActivity().setTitle("Upload");
-        // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_upload, container, false);
     }
 
     /**
-     * {@inheritDoc}
-     * Checks if there are locally saved trajectories. If there are none, it displays a text message
-     * notifying the user. If there are local files, the text is hidden, and instead a Recycler View
-     * is displayed showing all the trajectories.
-     * <p>
-     * A Layout Manager is registered, and the adapter and list of files passed. An onClick listener
-     * is set up to upload the file when clicked and remove it from local storage.
-     *
-     * @see UploadListAdapter list adapter for the recycler view.
-     * @see com.openpositioning.PositionMe.viewitems.UploadViewHolder view holder for the recycler view.
-     * @see com.openpositioning.PositionMe.R.layout#item_upload_card_view xml view for list elements.
+     * Sets up the UI after view creation. If there are no local trajectories,
+     * shows a message. Otherwise, populates the RecyclerView with available files.
      */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
@@ -148,24 +145,26 @@ public class UploadFragment extends Fragment {
 
         this.emptyNotice = view.findViewById(R.id.emptyUpload);
         this.uploadList = view.findViewById(R.id.uploadTrajectories);
-        // Check if there are locally saved trajectories
-        if(localTrajectories.isEmpty()) {
+
+        if (localTrajectories.isEmpty()) {
+            // Show empty state
             uploadList.setVisibility(View.GONE);
             emptyNotice.setVisibility(View.VISIBLE);
-        }
-        else {
+        } else {
+            // Show RecyclerView with trajectory files
             uploadList.setVisibility(View.VISIBLE);
             emptyNotice.setVisibility(View.GONE);
 
-            // Set up RecyclerView
+            // Configure RecyclerView
             LinearLayoutManager manager = new LinearLayoutManager(getActivity());
             uploadList.setLayoutManager(manager);
             uploadList.setHasFixedSize(true);
+
             listAdapter = new UploadListAdapter(getActivity(), localTrajectories, new DownloadClickListener() {
+
                 /**
-                 * {@inheritDoc}
-                 * Upload the trajectory at the clicked position, remove it from the recycler view
-                 * and the local list.
+                 * Uploads the selected file to the server when the upload button is clicked.
+                 * Optionally removes it from the list.
                  */
                 @Override
                 public void onPositionClicked(int position) {
@@ -174,19 +173,19 @@ public class UploadFragment extends Fragment {
 //                    listAdapter.notifyItemRemoved(position);
                 }
 
+                /**
+                 * Handles the replay button click by parsing the trajectory and switching to Replay view.
+                 */
                 @Override
                 public void onReplayClicked(int position) {
-                    // replay button logic
                     File replayFile = localTrajectories.get(position);
 
-//                    String filePath = replayFile.getAbsolutePath();
                     if (replayFile == null) {
                         Toast.makeText(getContext(), "Trajectory file not found, cannot invoke replay!", Toast.LENGTH_SHORT).show();
                         return;
                     }
 
                     Traj.Trajectory trajectory = ReplayDataProcessor.protoDecoder(replayFile);
-
                     if (trajectory == null) {
                         Toast.makeText(getContext(), "Trajectory empty, cannot invoke replay!", Toast.LENGTH_SHORT).show();
                         return;
@@ -194,17 +193,16 @@ public class UploadFragment extends Fragment {
 
                     ReplayDataProcessor.TrajRecorder replayProcessor =
                             ReplayDataProcessor.TrajRecorder.getInstance();
-
                     replayProcessor.setReplayFile(trajectory);
 
-                    // Jump to ReplayTrajFragment
+                    // Navigate to the replay fragment
                     FragmentTransaction transaction = getParentFragmentManager().beginTransaction();
                     transaction.replace(R.id.fragment_container, new ReplayTrajFragment());
                     transaction.addToBackStack(null);
                     transaction.commit();
-
                 }
             });
+
             uploadList.setAdapter(listAdapter);
         }
     }
