@@ -3,16 +3,16 @@
 
     <!-- Buttons -->
     <string name="done">Done</string>
-    <string name="stop">Complete</string>
+    <string name="stop">Stop</string>
     <string name="start">Start</string>
     <string name="measurements">Live data</string>
-    <string name="files">History</string>
+    <string name="files">Files</string>
     <string name="info_description">See sensor hardware information</string>
     <string name="refresh_read">Refresh readings</string>
     <string name="download">Download</string>
     <string name="grant">Grant permissions</string>
     <string name="exit">Exit application</string>
-    <string name="ok">OK</string>
+    <string name="ok">Ok</string>
     <string name="show_storage">Show locally</string>
     <string name="setLocation">Set</string>
     <string name="cancel">Cancel</string>
@@ -43,10 +43,10 @@
     <string name="id">ID</string>
     <string name="datetime">Date&amp;Time</string>
     <string name="elevation">Elevation: %1s</string>
-    <string name="averageStepLgn">Computed Avg. Step Length</string>
-    <string name="correctStepLgn">unit: cm</string>
+    <string name="averageStepLgn">Avg. Step Length</string>
+    <string name="correctStepLgn">Enter corrected length</string>
     <string name="locationInstructions">Long press and drag the marker to your start location</string>
-    <string name="correctionInstructions">Zoom, scroll and rotate the map \n to correct the path</string>
+    <string name="correctionInstructions">Zoom, scroll and rotate the map to correct the path</string>
 
     <!-- Sensor Info -->
     <string name="vendor">Vendor:\t\t\t\t\t\t\t %1$s</string>
@@ -110,31 +110,32 @@
     <string name="building_def_title">Default building assumptions</string>
     <string name="floor_height">Floor height in meters</string>
     <string name="color">Color</string>
-    <string name="gnssSwitch">🛰 Show GNSS </string>
+    <string name="gnssSwitch">GNSS</string>
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
     <string name="choose_map">Choose Map</string>
-    <string name="auto_floor">❇️ Auto Floor </string>
+    <string name="auto_floor">Auto Floor</string>
     <string name="gnss_error">GNSS error:</string>
     <string name="satellite">Satellite</string>
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>
     <string name="delete_button">Delete</string>
-    <string name="home_slogan">\"Coordinates Start with Your First Move\"</string>
-    <string name="info">Sensor Info</string>
-    <string name="fragment_home_slogan">\"Coordinates Start with Your First Move\"</string>
-    <string name="start_recording">Record</string>
-    <string name="floor_up">Floor up button</string>
-    <string name="floor_down">Floor down button</string>
-    <string name="red_dot_description_text">Recording In Progress</string>
-    <string name="correct_your_step">Correct your own avg step length:</string>
-    <string name="correct_step_hint">...</string>
-    <string name="path_drawing_descritpion">Path drawing</string>
-    <string name="position_me">Position Me</string>
-    <string name="gnss_disabled">GNSS is disabled</string>
-    <string name="replay_frag_restart">Restart</string>
-    <string name="replay_frag_play">Play</string>
-    <string name="replay_frag_end">End</string>
-    <string name="replay_frag_exit">Exit</string>
+    <string name="replay_button">REPLAY</string>
+    <string name="replay_button2">REPLAY</string>
+    <string name="position_me">Position me</string>
+    <string name="positionme">position me</string>
+    <string name="fragment_home_slogan">Coordinates Start with Your First Move</string>
+    <string name="gnss_disabled">GNSS_Disabled</string>
+    <string name="start_recording">Start Recording</string>
+    <string name="info">Info</string>
+    <string name="wifiSwitch">Wifi</string>
+    <string name="pdrSwitch">PDR</string>
+
+    <string-array name="map_types">
+        <item>@string/hybrid</item>
+        <item>@string/normal</item>
+        <item>@string/satellite</item>
+    </string-array>
+
 
 </resources>

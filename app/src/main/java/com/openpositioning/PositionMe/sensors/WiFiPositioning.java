@@ -33,6 +33,7 @@ public class WiFiPositioning {
     // URL for WiFi positioning API
     private static final String url="https://openpositioning.org/api/position/fine";
 
+
     /**
      * Getter for the WiFi positioning coordinates obtained using openpositioning API
      * @return the user's coordinates based on openpositioning API
