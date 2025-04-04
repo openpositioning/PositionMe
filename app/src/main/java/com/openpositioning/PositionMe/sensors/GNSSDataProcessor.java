@@ -16,8 +16,9 @@ import androidx.core.app.ActivityCompat;
  * The class is responsibly for handling location data from GNSS and cellular sources using the
  * Android LocationManager class.
  *
- * @author Virginia Cangelosi
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class GNSSDataProcessor {
     // Application context for handling permissions and locationManager instances

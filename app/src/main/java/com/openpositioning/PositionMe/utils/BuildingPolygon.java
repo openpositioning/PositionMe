@@ -10,7 +10,9 @@ import java.util.List;
  * Class used to check for a pre-defined set of coordinates if it is in a Building (Nucleus, Library)
  * (Can be used to add more buildings by adding the coordinates of the buildings and adding methods)
  * @see IndoorMapManager Used by the the IndoorFloorManager class
- * @author Arun Gopalakrishnan
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class BuildingPolygon {
     // Defining the coordinates of the building boundaries (rectangular boundaries based on floor map shape)

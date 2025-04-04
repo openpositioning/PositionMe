@@ -22,8 +22,9 @@ import java.util.Collections;
  * device's screen. The scaling ratio is passed to the {@link CorrectionFragment} for calculating
  * the Google Maps zoom ratio.
  *
- * @author Michal Dvorak
- * @author Virginia Cangelosi
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class PathView extends View {
     // Set up drawing colour
@@ -90,40 +91,43 @@ public class PathView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        //If drawing for first time scale trajectory to fit screen
         if(this.draw){
-            // If there are no coordinates, don't draw anything
             if (xCoords.size() == 0)
                 return;
 
-            //Scale trajectory to fit screen
             scaleTrajectory();
 
-            // Start a new path at the center of the view
+            // Draw a smooth path using Bezier curves
+            path.reset();
             path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
+            
+            if (xCoords.size() > 1) {
+                for (int i = 1; i < xCoords.size(); i++) {
+                    float prevX = xCoords.get(i-1);
+                    float prevY = yCoords.get(i-1);
+                    float currX = xCoords.get(i);
+                    float currY = yCoords.get(i);
+                    
+                    // Calculate control points
+                    float controlX1 = prevX + (currX - prevX) / 3;
+                    float controlY1 = prevY;
+                    float controlX2 = prevX + (currX - prevX) * 2 / 3;
+                    float controlY2 = currY;
+                    
+                    // Using a cubic Bezier curve
+                    path.cubicTo(controlX1, controlY1, controlX2, controlY2, currX, currY);
+                }
             }
 
-            //Draw path
             canvas.drawPath(path, drawPaint);
-
-            //Ensure path not redrawn
             draw = false;
-
         }
-        //If redrawing due to scaling of the average step length
         else if(reDraw){
-            // If there are no coordinates, don't draw anything
             if (xCoords.size() == 0)
                 return;
 
-            //Clear old path
             path.reset();
 
-            // Iterate over all coordinates, shifting to the center and scaling then returning to original location
             for (int i = 0; i < xCoords.size(); i++) {
                 float newXCoord = (xCoords.get(i) - getWidth()/2) * scalingRatio + getWidth()/2;
                 xCoords.set(i, newXCoord);
@@ -131,31 +135,54 @@ public class PathView extends View {
                 yCoords.set(i, newYCoord);
             }
 
-            // Start a new path at the center of the view
+            // Use Bezier curves to redraw smooth paths
             path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
+            
+            if (xCoords.size() > 1) {
+                for (int i = 1; i < xCoords.size(); i++) {
+                    float prevX = xCoords.get(i-1);
+                    float prevY = yCoords.get(i-1);
+                    float currX = xCoords.get(i);
+                    float currY = yCoords.get(i);
+                    
+                    // Calculate control points
+                    float controlX1 = prevX + (currX - prevX) / 3;
+                    float controlY1 = prevY;
+                    float controlX2 = prevX + (currX - prevX) * 2 / 3;
+                    float controlY2 = currY;
+                    
+                    // Using a cubic Bezier curve
+                    path.cubicTo(controlX1, controlY1, controlX2, controlY2, currX, currY);
+                }
             }
 
             canvas.drawPath(path, drawPaint);
-
-            //Ensure path not redrawn when screen is resized
             reDraw = false;
         }
         else{
-
-            // If there are no coordinates, don't draw anything
             if (xCoords.size() == 0)
                 return;
 
-            // Start a new path at the center of the view
+            // Use Bezier curves to redraw smooth paths
+            path.reset();
             path.moveTo(getWidth()/2, getHeight()/2);
-
-            // Draw line between last point and this point
-            for (int i = 1; i < xCoords.size(); i++) {
-                path.lineTo(xCoords.get(i), yCoords.get(i));
+            
+            if (xCoords.size() > 1) {
+                for (int i = 1; i < xCoords.size(); i++) {
+                    float prevX = xCoords.get(i-1);
+                    float prevY = yCoords.get(i-1);
+                    float currX = xCoords.get(i);
+                    float currY = yCoords.get(i);
+                    
+                    // Calculate control points
+                    float controlX1 = prevX + (currX - prevX) / 3;
+                    float controlY1 = prevY;
+                    float controlX2 = prevX + (currX - prevX) * 2 / 3;
+                    float controlY2 = currY;
+                    
+                    // Using a cubic Bezier curve
+                    path.cubicTo(controlX1, controlY1, controlX2, controlY2, currX, currY);
+                }
             }
 
             canvas.drawPath(path, drawPaint);

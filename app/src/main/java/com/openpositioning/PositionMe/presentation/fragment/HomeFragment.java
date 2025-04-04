@@ -41,7 +41,9 @@ import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
  * @see MeasurementsFragment
  * @see SettingsFragment
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class HomeFragment extends Fragment implements OnMapReadyCallback {
 

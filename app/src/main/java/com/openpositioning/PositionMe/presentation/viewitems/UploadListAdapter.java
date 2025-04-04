@@ -22,7 +22,9 @@ import java.util.regex.Pattern;
  * @see UploadViewHolder corresponding View Holder class
  * @see com.openpositioning.PositionMe.R.layout#item_upload_card_view xml layout file
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
 

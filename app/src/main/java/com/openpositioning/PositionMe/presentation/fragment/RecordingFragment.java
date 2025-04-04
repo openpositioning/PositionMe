@@ -29,8 +29,21 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.sensors.Wifi;
+import com.openpositioning.PositionMe.utils.CoordinateTransform;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
+
+
+import android.util.Log;
+
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+
+
 
 
 /**
@@ -53,7 +66,9 @@ import com.google.android.gms.maps.model.LatLng;
  * @see SensorFusion Handles sensor data collection.
  * @see SensorTypes Enumeration of available sensor types.
  *
- * @author Shu Gu
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 
 public class RecordingFragment extends Fragment {
@@ -62,7 +77,7 @@ public class RecordingFragment extends Fragment {
     private MaterialButton completeButton, cancelButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
-    private TextView elevation, distanceTravelled, gnssError;
+    private TextView elevation, distanceTravelled, gnssError, wifiError;
 
     // App settings
     private SharedPreferences settings;
@@ -77,8 +92,16 @@ public class RecordingFragment extends Fragment {
     private float previousPosX = 0f;
     private float previousPosY = 0f;
 
+    private int stepCounter = 0;
+
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
+
+    private boolean gnssEnabled = true;
+    private boolean wifiEnabled = true;
+    private LatLng lastWifiLocation = null;
+    private LatLng lastGnssLocation = null;
+    private LatLng lastPFLocation = null;
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
@@ -134,6 +157,7 @@ public class RecordingFragment extends Fragment {
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
+        wifiError = view.findViewById(R.id.wifiError);
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
@@ -142,6 +166,7 @@ public class RecordingFragment extends Fragment {
 
         // Hide or initialize default values
         gnssError.setVisibility(View.GONE);
+        wifiError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
@@ -218,38 +243,30 @@ public class RecordingFragment extends Fragment {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
-        // Distance
         distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
                 + Math.pow(pdrValues[1] - previousPosY, 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
-        // Elevation
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
+            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation();
             LatLng newLocation = UtilFunctions.calculateNewPos(
                     oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
+                    new float[]{pdrValues[0] - previousPosX, pdrValues[1] - previousPosY}
             );
 
-            // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
+                trajectoryMapFragment.updateUserLocationSafe(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
+        // Update GNSS position
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
                 LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
@@ -265,10 +282,36 @@ public class RecordingFragment extends Fragment {
             }
         }
 
-        // Update previous
+        // Update Wi-Fi position
+        LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+        if (wifiLocation != null && trajectoryMapFragment != null) {
+            if (trajectoryMapFragment.isWifiEnabled()) {
+                LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+                if (currentLoc != null) {
+                    double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, wifiLocation);
+                    wifiError.setVisibility(View.VISIBLE);
+                    wifiError.setText(String.format(getString(R.string.wifi_error) + "%.2fm", errorDist));
+                }
+                trajectoryMapFragment.updateWifi(wifiLocation);
+            } else {
+                wifiError.setVisibility(View.GONE);
+                trajectoryMapFragment.clearWifi();
+            }
+        }
+
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
+
+        double[] state = sensorFusion.getCurrentEKFState();
+        double east = state[1];
+        double north = state[2];
+        double[] latLngAlt = sensorFusion.getGNSSLatLngAlt(true);
+        LatLng ekfLocation = CoordinateTransform.enuToGeodetic(east, north, 0, latLngAlt[0], latLngAlt[1], latLngAlt[2]);
+
+        trajectoryMapFragment.updateUserLocationSafe(ekfLocation,
+                (float) Math.toDegrees(sensorFusion.passOrientation()));
     }
+
 
     /**
      * Start the blinking effect for the recording icon.
@@ -293,6 +336,18 @@ public class RecordingFragment extends Fragment {
         super.onResume();
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
+        }
+    }
+
+    private void clearWifi() {
+        if (trajectoryMapFragment != null) {
+            trajectoryMapFragment.clearWifi();
+        }
+    }
+
+    private void updateWifi(LatLng location) {
+        if (trajectoryMapFragment != null) {
+            trajectoryMapFragment.updateWifi(location);
         }
     }
 }

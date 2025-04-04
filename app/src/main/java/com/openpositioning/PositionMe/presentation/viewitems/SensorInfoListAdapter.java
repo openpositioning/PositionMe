@@ -19,7 +19,9 @@ import java.util.Objects;
  * @see SensorInfoViewHolder corresponding View Holder class
  * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class SensorInfoListAdapter extends RecyclerView.Adapter<SensorInfoViewHolder> {
 

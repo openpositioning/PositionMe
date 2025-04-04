@@ -7,8 +7,9 @@ import androidx.annotation.NonNull;
  *
  * It contains it's name, vendor, resolution, power, version and type, which vary across devices.
  *
- * @author Virginia Cangelosi
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class SensorInfo {
     private final String name;

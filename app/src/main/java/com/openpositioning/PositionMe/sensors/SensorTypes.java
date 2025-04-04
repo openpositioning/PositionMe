@@ -9,7 +9,9 @@ import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment
  * the {@link MeasurementsFragment}. Includes virtual sensors and other
  * data providing devices as well as derived data.
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public enum SensorTypes {
     ACCELEROMETER,

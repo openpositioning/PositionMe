@@ -13,7 +13,9 @@ import android.hardware.SensorManager;
  *
  * @see SensorFusion where instances of this class are intended to be used.
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class MovementSensor {
     // Application context for permissions and hardware access

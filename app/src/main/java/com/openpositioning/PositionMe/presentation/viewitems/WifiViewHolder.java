@@ -14,7 +14,9 @@ import com.openpositioning.PositionMe.R;
  * @see WifiListAdapter the corresponding list adapter.
  * @see com.openpositioning.PositionMe.R.layout#item_wifi_card_view xml layout file
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class WifiViewHolder extends RecyclerView.ViewHolder {
 

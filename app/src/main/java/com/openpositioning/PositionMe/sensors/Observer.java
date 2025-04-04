@@ -6,8 +6,9 @@ package com.openpositioning.PositionMe.sensors;
  * Simplified version of default Observer interface, with only the update method included
  * see {@link java.util.Observer}.
  *
- * @author Virginia Cangelosi
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public interface Observer {
 
@@ -18,4 +19,6 @@ public interface Observer {
      * @param objList   an array of objects that were updated in the <code>Observable</code>
      */
     public void update(Object[] objList);
+
+    void update(Object data);
 }

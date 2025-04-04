@@ -18,7 +18,9 @@ import java.lang.ref.WeakReference;
  * @see TrajDownloadListAdapter the corresponding list adapter.
  * @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view xml layout file
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
 

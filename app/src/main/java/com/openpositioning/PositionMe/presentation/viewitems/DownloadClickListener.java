@@ -3,7 +3,9 @@ package com.openpositioning.PositionMe.presentation.viewitems;
 /**
  * Interface to enable listening for clicks in RecyclerViews.
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public interface DownloadClickListener {
 

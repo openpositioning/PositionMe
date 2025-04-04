@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -19,7 +20,9 @@ import androidx.fragment.app.Fragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.CoordinateTransform;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
+import com.openpositioning.PositionMe.utils.SensorFusionUpdates;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -48,20 +51,21 @@ import java.util.List;
  * @see com.openpositioning.PositionMe.utils.IndoorMapManager Utility for managing indoor map overlays.
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 
-public class TrajectoryMapFragment extends Fragment {
+public class TrajectoryMapFragment extends Fragment implements SensorFusionUpdates {
 
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
-    private Polyline polyline; // Polyline representing user's movement path
+    private Polyline pdrPolyline; // Polyline for PDR path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
 
-    private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
@@ -70,16 +74,27 @@ public class TrajectoryMapFragment extends Fragment {
     private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
 
-
     // UI
     private Spinner switchMapSpinner;
 
     private SwitchMaterial gnssSwitch;
+    private SwitchMaterial wifiSwitch;
     private SwitchMaterial autoFloorSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+
+    private Polyline ekfPolyline;
+    private Polyline pfPolyline;
+    private LatLng lastEKFLocation = null;
+    private LatLng lastPFLocation = null;
+
+    private Marker wifiMarker;
+    private boolean wifiEnabled = false;
+    private LatLng lastWifiLocation = null;
+
+    private Polyline trajectoryPolyline;
 
 
     public TrajectoryMapFragment() {
@@ -103,6 +118,7 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
+        wifiSwitch      = view.findViewById(R.id.wifiSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
@@ -133,8 +149,6 @@ public class TrajectoryMapFragment extends Fragment {
                     drawBuildingPolygon();
 
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
-
-
                 }
             });
         }
@@ -145,22 +159,35 @@ public class TrajectoryMapFragment extends Fragment {
         // GNSS Switch
         gnssSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             isGnssOn = isChecked;
-            if (!isChecked && gnssMarker != null) {
-                gnssMarker.remove();
-                gnssMarker = null;
+            if (!isChecked) {
+                if (gnssMarker != null) {
+                    gnssMarker.remove();
+                    gnssMarker = null;
+                }
+            }
+        });
+
+        // WiFi Switch
+        wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            wifiEnabled = isChecked;
+            if (!isChecked) {
+                if (wifiMarker != null) {
+                    wifiMarker.remove();
+                    wifiMarker = null;
+                }
             }
         });
 
         // Color switch
         switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
+            if (pdrPolyline != null) {
                 if (isRed) {
                     switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
+                    pdrPolyline.setColor(Color.BLACK);
                     isRed = false;
                 } else {
                     switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
+                    pdrPolyline.setColor(Color.RED);
                     isRed = true;
                 }
             }
@@ -203,29 +230,33 @@ public class TrajectoryMapFragment extends Fragment {
      */
 
     private void initMapSettings(GoogleMap map) {
-        // Basic map settings
         map.getUiSettings().setCompassEnabled(true);
         map.getUiSettings().setTiltGesturesEnabled(true);
         map.getUiSettings().setRotateGesturesEnabled(true);
         map.getUiSettings().setScrollGesturesEnabled(true);
         map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
-        // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
 
-        // Initialize an empty polyline
-        polyline = map.addPolyline(new PolylineOptions()
+        // 初始化PDR轨迹线
+        pdrPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
                 .width(5f)
-                .add() // start empty
-        );
+                .zIndex(2)
+                .add());
 
-        // GNSS path in blue
-        gnssPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.BLUE)
+        // 添加 EKF / PF 轨迹线
+        ekfPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.GREEN)
                 .width(5f)
-                .add() // start empty
-        );
+                .zIndex(2)
+                .add());
+
+        pfPolyline = map.addPolyline(new PolylineOptions()
+                .color(Color.MAGENTA)
+                .width(5f)
+                .zIndex(2)
+                .add());
     }
 
 
@@ -285,7 +316,7 @@ public class TrajectoryMapFragment extends Fragment {
      * and append to polyline if the user actually moved.
      *
      * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
+     * @param orientation The user's heading (e.g. from sensor fusion).
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
@@ -313,11 +344,21 @@ public class TrajectoryMapFragment extends Fragment {
             gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
 
-        // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            points.add(newLocation);
-            polyline.setPoints(points);
+        // Update all trajectory lines
+        if (oldLocation != null && !oldLocation.equals(newLocation)) {
+            // Update EKF trajectory
+            if (ekfPolyline != null) {
+                List<LatLng> points = new ArrayList<>(ekfPolyline.getPoints());
+                points.add(newLocation);
+                ekfPolyline.setPoints(points);
+            }
+            
+            // Update PF trajectory
+            if (pfPolyline != null) {
+                List<LatLng> points = new ArrayList<>(pfPolyline.getPoints());
+                points.add(newLocation);
+                pfPolyline.setPoints(points);
+            }
         }
 
         // Update indoor map overlay
@@ -327,6 +368,29 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    /**
+     * Update PDR trajectory line
+     */
+    public void updatePDRTrajectory(@NonNull LatLng pdrLocation) {
+        if (gMap == null || pdrLocation == null) return;
+        
+        // Update PDR trajectory line
+        if (pdrPolyline != null) {
+            List<LatLng> points = new ArrayList<>(pdrPolyline.getPoints());
+            points.add(pdrLocation);
+            pdrPolyline.setPoints(points);
+        }
+    }
+
+    public void updateUserLocationSafe(@NonNull LatLng newLocation, float orientation) {
+        if (gMap == null || newLocation == null) return;
+        if (Double.isNaN(newLocation.latitude) || Double.isNaN(newLocation.longitude) || Float.isNaN(orientation)) {
+            Log.w("TrajectoryMap", "⚠️ Skip location update due to NaN values: "
+                    + newLocation + ", orientation=" + orientation);
+            return;
+        }
+        updateUserLocation(newLocation, orientation);
+    }
 
 
     /**
@@ -377,13 +441,6 @@ public class TrajectoryMapFragment extends Fragment {
         } else {
             // Move existing GNSS marker
             gnssMarker.setPosition(gnssLocation);
-
-            // Add a segment to the blue GNSS line, if this is a new location
-            if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
-                List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
-                gnssPoints.add(gnssLocation);
-                gnssPolyline.setPoints(gnssPoints);
-            }
             lastGnssLocation = gnssLocation;
         }
     }
@@ -413,13 +470,9 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     public void clearMapAndReset() {
-        if (polyline != null) {
-            polyline.remove();
-            polyline = null;
-        }
-        if (gnssPolyline != null) {
-            gnssPolyline.remove();
-            gnssPolyline = null;
+        if (pdrPolyline != null) {
+            pdrPolyline.remove();
+            pdrPolyline = null;
         }
         if (orientationMarker != null) {
             orientationMarker.remove();
@@ -429,18 +482,30 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker.remove();
             gnssMarker = null;
         }
+        if (wifiMarker != null) {
+            wifiMarker.remove();
+            wifiMarker = null;
+        }
         lastGnssLocation = null;
-        currentLocation  = null;
+        lastWifiLocation = null;
+        currentLocation = null;
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions()
+            pdrPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
                     .width(5f)
+                    .zIndex(2)
                     .add());
-            gnssPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.BLUE)
+            ekfPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.GREEN)
                     .width(5f)
+                    .zIndex(2)
+                    .add());
+            pfPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.MAGENTA)
+                    .width(5f)
+                    .zIndex(2)
                     .add());
         }
     }
@@ -536,6 +601,118 @@ public class TrajectoryMapFragment extends Fragment {
         gMap.addPolygon(buildingPolygonOptions4);
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
+    public void updateEKF(@NonNull LatLng ekfLocation) {
+        if (gMap == null || ekfLocation == null) return;
+        if (lastEKFLocation == null || !lastEKFLocation.equals(ekfLocation)) {
+            List<LatLng> ekfPoints = new ArrayList<>(ekfPolyline.getPoints());
+            ekfPoints.add(ekfLocation);
+            ekfPolyline.setPoints(ekfPoints);
+            lastEKFLocation = ekfLocation;
+        }
+    }
+
+    public void updatePF(@NonNull LatLng pfLocation) {
+        if (gMap == null || pfLocation == null) return;
+        if (lastPFLocation == null || !lastPFLocation.equals(pfLocation)) {
+            List<LatLng> pfPoints = new ArrayList<>(pfPolyline.getPoints());
+            pfPoints.add(pfLocation);
+            pfPolyline.setPoints(pfPoints);
+            lastPFLocation = pfLocation;
+        }
+    }
+
+    public boolean isWifiEnabled() {
+        return wifiEnabled;
+    }
+
+    public void setWifiEnabled(boolean wifiEnabled) {
+        this.wifiEnabled = wifiEnabled;
+        if (!wifiEnabled) {
+            clearWifi();
+        }
+    }
+
+    public void updateWifi(LatLng location) {
+        if (gMap == null || !wifiEnabled) return;
+
+        BitmapDescriptor wifiIcon = BitmapDescriptorFactory.fromResource(R.drawable.wifi);
+
+        if (wifiMarker == null) {
+            wifiMarker = gMap.addMarker(new MarkerOptions()
+                    .position(location)
+                    .icon(wifiIcon)
+                    .title("WiFi location"));
+        } else {
+            wifiMarker.setPosition(location);
+        }
+        lastWifiLocation = location;
+    }
 
 
+    public void clearWifi() {
+        if (wifiMarker != null) {
+            wifiMarker.remove();
+            wifiMarker = null;
+        }
+    }
+
+    @Override
+    public void onPDRUpdate() {
+        // Get the latest PDR location
+        float[] pdrValues = SensorFusion.getInstance().getCurrentPDRCalc();
+        if (pdrValues != null) {
+            // Convert to Geographic Coordinates
+            LatLng pdrLocation = CoordinateTransform.enuToGeodetic(
+                pdrValues[0], pdrValues[1], 
+                SensorFusion.getInstance().getElevation(),
+                SensorFusion.getInstance().getGNSSLatLngAlt(true)[0],
+                SensorFusion.getInstance().getGNSSLatLngAlt(true)[1],
+                SensorFusion.getInstance().getEcefRefCoords()
+            );
+            // Update PDR trajectory
+            updatePDRTrajectory(pdrLocation);
+        }
+    }
+
+    @Override
+    public void onOrientationUpdate() {
+        // No need to implement
+    }
+
+    @Override
+    public void onGNSSUpdate() {
+        // No need to implement
+    }
+
+    @Override
+    public void onFusedUpdate(LatLng coordinate) {
+        // Update fusion trajectory
+        if (coordinate != null) {
+            // Select and update the corresponding trajectory line based on the fusion algorithm
+            if (SensorFusion.getInstance().isFusionAlgorithmSelection()) {
+                // Update EKF trajectory
+                if (ekfPolyline != null) {
+                    List<LatLng> points = new ArrayList<>(ekfPolyline.getPoints());
+                    points.add(coordinate);
+                    ekfPolyline.setPoints(points);
+                }
+            } else {
+                // Update PF trajectory
+                if (pfPolyline != null) {
+                    List<LatLng> points = new ArrayList<>(pfPolyline.getPoints());
+                    points.add(coordinate);
+                    pfPolyline.setPoints(points);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onWifiUpdate(LatLng wifi) {
+        // Update WiFi location tags
+        if (wifi != null && wifiEnabled) {
+            updateWifi(wifi);
+        }
+    }
 }
+

@@ -19,7 +19,9 @@ import java.lang.ref.WeakReference;
  * @see UploadListAdapter the corresponding list adapter.
  * @see com.openpositioning.PositionMe.R.layout#item_upload_card_view xml layout file
  *
- * @author Mate Stodulka
+ * @author Yueyan Zhao
+ * @author Zizhen Wang
+ * @author Chen Zhao
  */
 public class UploadViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
 
