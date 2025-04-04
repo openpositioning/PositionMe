@@ -50,7 +50,9 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.UtilFunctions;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.sensors.WiFiPositioning;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -66,8 +68,7 @@ import java.util.List;
  * @see SensorFusion the class containing sensors and recording.
  * @see IndoorMapManager responsible for overlaying the indoor floor maps
  *
- * @author Mate Stodulka
- * @author Arun Gopalakrishnan
+ *
  */
 public class RecordingFragment extends Fragment {
 
@@ -129,6 +130,11 @@ public class RecordingFragment extends Fragment {
     private boolean isRed=true;
     // Switch used to set auto floor
     private Switch autoFloor;
+
+    // (1) WiFi track correlation
+    private Polyline wifiPolyline;           // WiFi track polyline
+    private Marker wifiMarker;               // WiFi Marker
+    private List<LatLng> wifiPoints = new ArrayList<>();
 
     /**
      * Public Constructor for the class.
@@ -209,6 +215,21 @@ public class RecordingFragment extends Fragment {
                         .color(Color.RED)
                         .add(currentLocation);
                 polyline = gMap.addPolyline(polylineOptions);
+
+                PolylineOptions wifiOptions = new PolylineOptions()
+                        .color(Color.GREEN)
+                        .width(10);
+                wifiPolyline = gMap.addPolyline(wifiOptions);
+
+                // WiFi Marker(Initially invisible)
+                wifiMarker = gMap.addMarker(new MarkerOptions()
+                        .position(new LatLng(0, 0))
+                        .title("WiFi Position")
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                if (wifiMarker != null) {
+                    wifiMarker.setVisible(false);
+                }
+
                 // Setting current location to set Ground Overlay for indoor map (if in building)
                 indoorMapManager.setCurrentLocation(currentLocation);
                 //Showing an indication of available indoor maps using PolyLines
@@ -522,7 +543,7 @@ public class RecordingFragment extends Fragment {
             // Auto-floor logic
             if(autoFloor.isChecked()){
                 indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-                ,true);
+                        ,true);
             }
         }else{
             // Hide the buttons and switch used to change floor if indoor map is not visible
@@ -537,6 +558,19 @@ public class RecordingFragment extends Fragment {
         if (orientationMarker!=null) {
             orientationMarker.setRotation((float) Math.toDegrees(sensorFusion.passOrientation()));
         }
+
+        LatLng wifiPos = sensorFusion.getLatLngWifiPositioning();
+        if (wifiPos != null) {
+            //
+            if (wifiMarker != null) {
+                wifiMarker.setVisible(true);
+                wifiMarker.setPosition(wifiPos);
+            }
+            wifiPoints.add(wifiPos);
+            if (wifiPolyline != null) {
+                wifiPolyline.setPoints(wifiPoints);
+            }
+        }
     }
     /**
      * Plots the users location based on movement in Real-time
@@ -546,20 +580,20 @@ public class RecordingFragment extends Fragment {
         if (currentLocation!=null){
             // Calculate new position based on net PDR movement
             nextLocation=UtilFunctions.calculateNewPos(currentLocation,pdrMoved);
-                //Try catch to prevent exceptions from crashing the app
-                try{
-                    // Adds new location to polyline to plot the PDR path of user
-                    List<LatLng> pointsMoved = polyline.getPoints();
-                    pointsMoved.add(nextLocation);
-                    polyline.setPoints(pointsMoved);
-                    // Change current location to new location and zoom there
-                    orientationMarker.setPosition(nextLocation);
-                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
-                }
-                catch (Exception ex){
-                    Log.e("PlottingPDR","Exception: "+ex);
-                }
-                currentLocation=nextLocation;
+            //Try catch to prevent exceptions from crashing the app
+            try{
+                // Adds new location to polyline to plot the PDR path of user
+                List<LatLng> pointsMoved = polyline.getPoints();
+                pointsMoved.add(nextLocation);
+                polyline.setPoints(pointsMoved);
+                // Change current location to new location and zoom there
+                orientationMarker.setPosition(nextLocation);
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(nextLocation, (float) 19f));
+            }
+            catch (Exception ex){
+                Log.e("PlottingPDR","Exception: "+ex);
+            }
+            currentLocation=nextLocation;
         }
         else{
             //Initialise the starting location

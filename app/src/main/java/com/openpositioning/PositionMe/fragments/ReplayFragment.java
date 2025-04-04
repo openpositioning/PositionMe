@@ -35,6 +35,13 @@ import com.openpositioning.PositionMe.IndoorMapManager;
 import com.openpositioning.PositionMe.PdrProcessing;
 import com.openpositioning.PositionMe.BuildingPolygon;
 import com.openpositioning.PositionMe.sensors.WiFiPositioning;
+import com.openpositioning.PositionMe.FusionAlgorithms.ExtendedKalmanFilter;
+import com.openpositioning.PositionMe.FusionAlgorithms.ParticleFilter;
+import com.openpositioning.PositionMe.Method.TurnDetector;
+import com.openpositioning.PositionMe.Method.CoordinateTransform;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -46,86 +53,107 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 /**
- * ReplayFragment: 在地图上回放 GNSS + PDR + Pressure 等轨迹数据。
- * 修复了"并行递增索引导致的时间错位"问题，改为基于相对时间戳 (relative_timestamp) 顺序回放。
+ * ReplayFragment: Implements playback of GNSS, PDR, WiFi, and Fusion (EKF) tracks.
+ *Using a relative_timestamp in Traj as a time interval in Replay mode,
+ *And feed the data to EKF for state fusion. The fusion result is returned to ReplayFragment,
+ *ReplayFragment determines whether it is indoors based on the current location and decides whether to use WiFi or GNSS data correction at the next moment.
+ *Added: On the basis of not changing the original code, add the integration and display of PF (ParticleFilter) tracks.
+ * * PF fusion strategy: PDR and WiFi data are integrated indoors, and PDR and GNSS data are integrated outdoors.
  */
 public class ReplayFragment extends Fragment implements OnMapReadyCallback {
+
+    private static class FusedEvent {
+        long relativeTime;
+        LatLng fusedPosition;
+        public FusedEvent(long relativeTime, LatLng fusedPosition) {
+            this.relativeTime = relativeTime;
+            this.fusedPosition = fusedPosition;
+        }
+    }
+    private List<FusedEvent> fusedEvents = new ArrayList<>();
+
+    // In the ReplayFragment class, add two member variables to PDR to record the x and y of the previous Pdr_Sample
+    private float lastPdrX = 0f;
+    private float lastPdrY = 0f;
+    private boolean firstPdrArrived = false;
+
+    // PF-related member variables
+    private ParticleFilter pf;
+    private Polyline pfPolyline;
+    private Marker pfMarker;
+    private float lastPfPdrX = 0f;
+    private float lastPfPdrY = 0f;
+    private boolean firstPfPdrArrived = false;
 
     private MapView mapView;
     private GoogleMap mMap;
     private Button btnPlayPause, btnRestart, btnGoToEnd, btnExit;
     private SeekBar progressBar;
 
-    // 播放控制
     private boolean isPlaying = false;
     private Handler playbackHandler = new Handler(Looper.getMainLooper());
 
-    // 轨迹数据
+    // Trajectory data
     private Traj.Trajectory trajectory;
     private List<Traj.GNSS_Sample> gnssPositions;
     private List<Traj.Pdr_Sample> pdrPositions;
     private List<Traj.Pressure_Sample> pressureinfos;
     private List<Traj.WiFi_Sample> wifiSamples;
+
     private List<Float> altitudeList;
     private List<Float> relativeAltitudeList;
 
     private Polyline gnssPolyline;
     private Polyline pdrPolyline;
     private Polyline wifiPolyline;
+    private Polyline fusedPolyline;
     private Marker gnssMarker;
     private Marker pdrMarker;
     private Marker wifiMarker;
+    private Marker fusedMarker;
     private PdrProcessing pdrProcessing;
 
-    private IndoorMapManager indoorMapManager;
+    private TurnDetector turnDetector;
 
-    // 当前位置信息（用于更新 indoorMapManager）
+    private IndoorMapManager indoorMapManager;
     private LatLng currentLocation;
 
-    // 楼层切换相关变量（与你原先代码一致）
+    // Floor control parameters
     private int currentMeasuredFloor = 0;
     private final float FLOOR_HEIGHT = 4.2f;
     private final float TOLERANCE = 0.5f;
-    // 注意：为让楼层检测更"敏感"一点，这里把 CONSECUTIVE_THRESHOLD 设为 1
     private final int CONSECUTIVE_THRESHOLD = 1;
     private int upCounter = 0;
     private int downCounter = 0;
 
-    // 手动调整楼层控件
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton;
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorDownButton;
     private Switch autoFloor;
 
-    // 文件路径
     private String filePath;
 
-    // --------------------------
-    //  新增：事件队列 (mergedEvents)
-    // --------------------------
-    // 用于合并 GNSS/PDR/Pressure 并按时间戳回放
+    // Merge event
     private List<Event> mergedEvents = new ArrayList<>();
-    private int currentEventIndex = 0;  // 当前事件播放到哪一个
-    private long startReplayTimestamp;  // 用于"模拟真实间隔"时，记录回放开始的系统时间
+    private int currentEventIndex = 0;
 
-    // WiFi定位服务
     private WiFiPositioning wiFiPositioning;
-    // 存储WiFi样本对应的位置信息
     private Map<Long, LatLng> wifiPositionCache = new HashMap<>();
-    // 标记位置请求是否完成
     private boolean wifiPositionRequestsComplete = false;
 
-    private List<LatLng> wifiTrajectoryPoints = new ArrayList<>();
-
-    // 添加常量以匹配SensorFusion中的键名
     private static final String WIFI_FINGERPRINT = "wf";
 
-    /** 用于统一管理不同类型的轨迹事件 */
+    // EKF 实例
+    private ExtendedKalmanFilter ekf;
+
+    // Record the initial GNSS reference location (lat, lon, alt) in order to transfer PDR, GNSS, WiFi to ENU
+    private double[] refPosition = null;
+    private double[] refEcef = null;
+    private boolean hasInitRef = false;
+
+    // It is used to manage different types of trajectory events in a unified manner
     private static class Event {
-        long relativeTime;  // the relative_timestamp from the GNSS/PDR/Pressures
+        long relativeTime;  // relative_timestamp in Traj
         int eventType;      // 0=GNSS, 1=PDR, 2=Pressure, 3=WiFi
         Traj.GNSS_Sample gnss;
         Traj.Pdr_Sample pdr;
@@ -143,8 +171,6 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         btnGoToEnd = view.findViewById(R.id.btnGoToEnd);
         btnExit = view.findViewById(R.id.btnExit);
         progressBar = view.findViewById(R.id.progressBar);
-
-        // 楼层控制控件
         floorUpButton = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         autoFloor = view.findViewById(R.id.autoFloor);
@@ -158,13 +184,13 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // 初始化 pdrProcessing
         pdrProcessing = new PdrProcessing(getContext());
-        
-        // 初始化 WiFiPositioning
         wiFiPositioning = new WiFiPositioning(getContext());
 
-        // 获取传入的文件路径
+        turnDetector = new TurnDetector();
+        turnDetector.startMonitoring(); // Make sure to start monitoring changes in direction
+
+        // Receive the incoming file path
         if (getArguments() != null) {
             filePath = getArguments().getString("trajectory_file_path");
         }
@@ -173,7 +199,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
-        // 读取轨迹文件
+        // Read the Traj data
         try {
             File file = new File(filePath);
             FileInputStream fis = new FileInputStream(file);
@@ -181,7 +207,6 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             fis.read(data);
             fis.close();
             trajectory = Traj.Trajectory.parseFrom(data);
-
             gnssPositions = trajectory.getGnssDataList();
             pdrPositions = trajectory.getPdrDataList();
             pressureinfos = trajectory.getPressureDataList();
@@ -195,51 +220,108 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                     altitudeList.add(alt);
                 }
             }
-            // 生成相对海拔列表
+            // Generate a list of relative elevations
             for (Float absoluteAlt : altitudeList) {
                 float relativeAlt = pdrProcessing.updateElevation(absoluteAlt);
                 relativeAltitudeList.add(relativeAlt);
             }
-
-            // 预处理WiFi数据，获取位置信息
+            // Preprocessing WiFi data: asynchronous query, caching the results to the wifiPositionCache
             if (wifiSamples != null && !wifiSamples.isEmpty()) {
                 processWifiSamplesForPositioning();
             }
 
-            // -----------------------------
-            // **关键：构建 mergedEvents 列表**
-            // -----------------------------
             buildMergedEvents();
-
         } catch (IOException e) {
             e.printStackTrace();
             Toast.makeText(getContext(), "Failed to load trajectory data", Toast.LENGTH_SHORT).show();
         }
 
-        // 初始化按钮点击事件
+        // Initialize EKF
+        ekf = new ExtendedKalmanFilter();
+
+        // If GNSS data is not empty, the first GNSS is set as the reference point
+        if (gnssPositions != null && !gnssPositions.isEmpty()) {
+            Traj.GNSS_Sample firstGnss = gnssPositions.get(0);
+            refPosition = new double[]{firstGnss.getLatitude(), firstGnss.getLongitude(), firstGnss.getAltitude()};
+            refEcef = CoordinateTransform.geodeticToEcef(
+                    refPosition[0], refPosition[1], refPosition[2]);
+            ekf.setInitialReference(refPosition, refEcef);
+            // Also set the start time of the EKF to a relativeTime for the first event (if present)
+            if (!mergedEvents.isEmpty()) {
+                ekf.setInitialTime(mergedEvents.get(0).relativeTime);
+            }
+            hasInitRef = true;
+        }
+
+        // Initialize PF when there is a reference point
+        if (refPosition != null) {
+            pf = new ParticleFilter(refPosition);
+        }
+
+        // Gets the newly added button
+        Button btnShowEKF = view.findViewById(R.id.btnShowEKF);
+        Button btnShowPF = view.findViewById(R.id.btnShowPF);
+
+        // Initial status can be set to not display (if required)
+        if (fusedPolyline != null) fusedPolyline.setVisible(false);
+        if (fusedMarker != null) fusedMarker.setVisible(false);
+        if (pfPolyline != null) pfPolyline.setVisible(false);
+        if (pfMarker != null) pfMarker.setVisible(false);
+
+        // Set button click event in onViewCreated (modified)
+        btnShowEKF.setOnClickListener(v -> {
+            if (fusedPolyline != null) {
+                boolean currentVisible = fusedPolyline.isVisible();
+                // Toggle fusion trajectory visibility
+                fusedPolyline.setVisible(!currentVisible);
+                // Update marker synchronously (if present)
+                if (fusedMarker != null) {
+                    fusedMarker.setVisible(!currentVisible);
+                }
+                // Update button text
+                btnShowEKF.setText(!currentVisible ? "Hide EKF" : "Show EKF");
+            }
+        });
+
+        btnShowPF.setOnClickListener(v -> {
+            if (pfPolyline != null) {
+                boolean currentVisible = pfPolyline.isVisible();
+                // Switching PF fusion trajectory visibility
+                pfPolyline.setVisible(!currentVisible);
+                // Update marker synchronously (if present)
+                if (pfMarker != null) {
+                    pfMarker.setVisible(!currentVisible);
+                }
+                // Update button text
+                btnShowPF.setText(!currentVisible ? "Hide PF" : "Show PF");
+            }
+        });
+
+        // Button and progress bar initialization
         btnPlayPause.setOnClickListener(v -> {
             if (isPlaying) {
                 pauseReplay();
             } else {
-                startReplay();
+                // If it has started but not finished, continue playing. Otherwise, start from scratch.
+                if (currentEventIndex > 0 && currentEventIndex < mergedEvents.size()) {
+                    resumeReplay();
+                } else {
+                    startReplay();
+                }
             }
         });
         btnRestart.setOnClickListener(v -> restartReplay());
         btnGoToEnd.setOnClickListener(v -> goToEndReplay());
         btnExit.setOnClickListener(v -> exitReplay());
 
-        // 进度条最大值改为 mergedEvents.size()
         if (!mergedEvents.isEmpty()) {
-            progressBar.setMax(mergedEvents.size());
+            progressBar.setMax(mergedEvents.size() - 1);
         }
-
-        // 进度条监听：拖动时跳到对应的 event
         progressBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
                     currentEventIndex = progress;
-                    // 同步到当前 eventIndex 的地图 Marker 位置
                     updateMarkersForEventIndex(currentEventIndex);
                 }
             }
@@ -251,7 +333,6 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        // 手动楼层调整
         floorUpButton.setOnClickListener(v -> {
             autoFloor.setChecked(false);
             if (indoorMapManager != null) {
@@ -264,116 +345,77 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 indoorMapManager.decreaseFloor();
             }
         });
-        // 初始时，显示楼层控制控件
         setFloorButtonVisibility(View.VISIBLE);
+
+
     }
 
     /**
-     * 预处理WiFi样本数据，获取位置信息
-     * 将所有WiFi样本发送到服务器获取位置，并缓存结果
+     * Asynchronously process WiFi samples to fetch (LatLng) and store them in the wifiPositionCache.
      */
     private void processWifiSamplesForPositioning() {
-        // 显示进度提示
         Toast.makeText(getContext(), "Processing WiFi data...", Toast.LENGTH_SHORT).show();
-        
         final int[] completedRequests = {0};
         final int totalRequests = wifiSamples.size();
-        
+
         for (Traj.WiFi_Sample sample : wifiSamples) {
             final long timestamp = sample.getRelativeTimestamp();
-            
-            // 创建WiFi指纹对象
             try {
                 JSONObject wifiAccessPoints = new JSONObject();
                 for (Traj.Mac_Scan scan : sample.getMacScansList()) {
                     wifiAccessPoints.put(String.valueOf(scan.getMac()), scan.getRssi());
                 }
-                
-                // 创建POST请求对象
                 JSONObject wifiFingerPrint = new JSONObject();
                 wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-                
-                // 发送请求到WiFiPositioning服务
+
                 wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                     @Override
                     public void onSuccess(LatLng location, int floor) {
-                        // 缓存位置结果
                         wifiPositionCache.put(timestamp, location);
                         completedRequests[0]++;
-                        
-                        // 当所有请求完成时，更新UI并重建事件列表
                         if (completedRequests[0] >= totalRequests) {
                             wifiPositionRequestsComplete = true;
-                            // 在UI线程更新
                             new Handler(Looper.getMainLooper()).post(() -> {
-                                Toast.makeText(getContext(), "WiFi positioning complete", Toast.LENGTH_SHORT).show();
-
+                                Toast.makeText(getContext(),
+                                        "WiFi positioning complete", Toast.LENGTH_SHORT).show();
                                 if (mMap != null) {
-                                    drawFullWifiTrack();//draw the wifi track on the map
-
+                                    drawFullWifiTrack();
                                 }
                             });
                         }
                     }
-                    
+
                     @Override
                     public void onError(String message) {
-                        // 处理错误情况
                         completedRequests[0]++;
-                        Log.e("WiFiPositioning", "Error: " + message);
-                        
-                        // 即使有错误，当所有请求完成时也标记为完成
                         if (completedRequests[0] >= totalRequests) {
                             wifiPositionRequestsComplete = true;
                             new Handler(Looper.getMainLooper()).post(() -> {
-                                Toast.makeText(getContext(), "WiFi positioning completed with some errors", Toast.LENGTH_SHORT).show();
-
-                                if (mMap != null) {
-
-
-                                }
+                                Toast.makeText(getContext(),
+                                        "WiFi positioning completed with some errors",
+                                        Toast.LENGTH_SHORT).show();
                             });
                         }
                     }
                 });
-                
             } catch (JSONException e) {
-                Log.e("WiFiPositioning", "JSON Error: " + e.getMessage());
                 completedRequests[0]++;
             }
         }
     }
-    
+
     /**
-     * 构建WiFi轨迹点列表
-     * 按时间戳排序并应用平滑处理
+     * Draw the overall WiFi track on the map (optional, easy to view).
      */
     private void drawFullWifiTrack() {
-        if (mMap == null) return;
-        if (!wifiPositionRequestsComplete) return; // 确保 WiFi 坐标已就绪
+        if (mMap == null || !wifiPositionRequestsComplete) return;
 
-        // 如果之前有 wifiPolyline，先移除
         if (wifiPolyline != null) {
             wifiPolyline.remove();
-            wifiPolyline = null;
         }
-
-        // 新建绿色折线
-        PolylineOptions wifiOptions = new PolylineOptions()
-                .width(10)
-                .color(Color.GREEN)
-                .geodesic(true);
-
-        // 按时间戳顺序，依次把 WiFi 坐标点加进来
-        // （如果顺序不敏感也可直接遍历 wifiSamples，但最好先按 relativeTimestamp 排序）
+        PolylineOptions wifiOptions = new PolylineOptions().width(10).color(Color.GREEN).geodesic(true);
         List<Traj.WiFi_Sample> sortedWifiSamples = new ArrayList<>(wifiSamples);
-        Collections.sort(sortedWifiSamples, new Comparator<Traj.WiFi_Sample>() {
-            @Override
-            public int compare(Traj.WiFi_Sample o1, Traj.WiFi_Sample o2) {
-                return Long.compare(o1.getRelativeTimestamp(), o2.getRelativeTimestamp());
-            }
-        });
-
+        Collections.sort(sortedWifiSamples, (o1, o2) -> Long.compare(o1.getRelativeTimestamp(), o2.getRelativeTimestamp()));
         for (Traj.WiFi_Sample sample : sortedWifiSamples) {
             long ts = sample.getRelativeTimestamp();
             LatLng wifiLatLng = wifiPositionCache.get(ts);
@@ -381,11 +423,7 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 wifiOptions.add(wifiLatLng);
             }
         }
-
-        // 最后 addPolyline
         wifiPolyline = mMap.addPolyline(wifiOptions);
-
-        // 还可以给 WiFi 在第一个位置放个初始 Marker，跟 GNSS/PDR 做法一致
         if (wifiMarker != null) {
             wifiMarker.remove();
             wifiMarker = null;
@@ -401,19 +439,11 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
-
-
     /**
-     * 绘制WiFi轨迹
-     * 使用构建好的轨迹点列表绘制连续的轨迹线
+     * Combine GNSS, PDR, Pressure, WiFi events into one List and sort them by relative time.
      */
-
-
-    /** 将 GNSS/PDR/Pressure/WiFi 四类数据合并到一个列表 mergedEvents */
     private void buildMergedEvents() {
         mergedEvents.clear();
-
-        // GNSS
         if (gnssPositions != null) {
             for (Traj.GNSS_Sample g : gnssPositions) {
                 Event e = new Event();
@@ -423,10 +453,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 mergedEvents.add(e);
             }
         }
-        // PDR
         if (pdrPositions != null) {
-            for (int i = 0; i < pdrPositions.size(); i++) {
-                Traj.Pdr_Sample p = pdrPositions.get(i);
+            for (Traj.Pdr_Sample p : pdrPositions) {
                 Event e = new Event();
                 e.relativeTime = p.getRelativeTimestamp();
                 e.eventType = 1;
@@ -434,10 +462,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 mergedEvents.add(e);
             }
         }
-        // Pressure
         if (pressureinfos != null) {
-            for (int i = 0; i < pressureinfos.size(); i++) {
-                Traj.Pressure_Sample pr = pressureinfos.get(i);
+            for (Traj.Pressure_Sample pr : pressureinfos) {
                 Event e = new Event();
                 e.relativeTime = pr.getRelativeTimestamp();
                 e.eventType = 2;
@@ -445,10 +471,8 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 mergedEvents.add(e);
             }
         }
-        // WiFi
         if (wifiSamples != null) {
-            for (int i = 0; i < wifiSamples.size(); i++) {
-                Traj.WiFi_Sample w = wifiSamples.get(i);
+            for (Traj.WiFi_Sample w : wifiSamples) {
                 Event e = new Event();
                 e.relativeTime = w.getRelativeTimestamp();
                 e.eventType = 3;
@@ -456,64 +480,60 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                 mergedEvents.add(e);
             }
         }
-        // 排序：按 relativeTime 升序
-        Collections.sort(mergedEvents, new Comparator<Event>() {
-            @Override
-            public int compare(Event o1, Event o2) {
-                return Long.compare(o1.relativeTime, o2.relativeTime);
-            }
-        });
+        Collections.sort(mergedEvents, (o1, o2) -> Long.compare(o1.relativeTime, o2.relativeTime));
     }
 
-    // 辅助方法：设置楼层按钮及自动楼层开关的可见性
     private void setFloorButtonVisibility(int visibility) {
-        if (floorUpButton != null) {
-            floorUpButton.setVisibility(visibility);
-        }
-        if (floorDownButton != null) {
-            floorDownButton.setVisibility(visibility);
-        }
-        if (autoFloor != null) {
-            autoFloor.setVisibility(visibility);
-        }
+        if (floorUpButton != null) floorUpButton.setVisibility(visibility);
+        if (floorDownButton != null) floorDownButton.setVisibility(visibility);
+        if (autoFloor != null) autoFloor.setVisibility(visibility);
     }
 
     /**
-     * 当手动拖动进度条或播放到某个 eventIndex 时，需要把地图 Marker
-     * 更新到 mergedEvents[0..eventIndex] 的最后状态
+     * Process progress bar Drag: Jump to the eventIndex event and replay.
      */
     private void updateMarkersForEventIndex(int eventIndex) {
-        if (mMap == null || indoorMapManager == null || mergedEvents.isEmpty()) return;
+        if (eventIndex < 0 || eventIndex >= mergedEvents.size()) return;
+        if (mMap == null || indoorMapManager == null) return;
+        if (!hasInitRef) return;
 
-        // 先从头到该 eventIndex，依次处理 event；这样能"模拟"到当前状态
-        // 由于用户可能频繁拖拽，为了简化，这里就直接从0播到eventIndex
-        // 若数据量很大，可以优化为"记住上一次的状态"，这里只求逻辑清晰
+        // Reset some visual markers
+        if (gnssMarker != null) { gnssMarker.remove(); gnssMarker = null; }
+        if (pdrMarker != null) { pdrMarker.remove(); pdrMarker = null; }
+        if (wifiMarker != null) { wifiMarker.remove(); wifiMarker = null; }
+        if (fusedMarker != null) { fusedMarker.remove(); fusedMarker = null; }
+        if (pfMarker != null) { pfMarker.remove(); pfMarker = null; }
 
-        // 重置marker
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
-        }
-        if (pdrMarker != null) {
-            pdrMarker.remove();
-            pdrMarker = null;
-        }
-        if (wifiMarker != null) {
-            wifiMarker.remove();
-            wifiMarker = null;
-        }
-
-        currentLocation = null;  // 每次重头更新
-
-        // 重置楼层检测计数
+        currentLocation = null;
         currentMeasuredFloor = 0;
         upCounter = 0;
         downCounter = 0;
 
-        for (int i = 0; i <= eventIndex && i < mergedEvents.size(); i++) {
-            processEvent(mergedEvents.get(i), false);
+        // Reset EKF
+        ekf.reset();
+
+        // Set the EKF reference again
+        ekf.setInitialReference(refPosition, refEcef);
+        if (!mergedEvents.isEmpty()) {
+            ekf.setInitialTime(mergedEvents.get(0).relativeTime);
         }
-        // 同时更新进度条
+        // Reset the cumulative value of PDR
+        lastPdrX = 0f;
+        lastPdrY = 0f;
+        firstPdrArrived = false;
+
+        // Reset the accumulated PDR status of PF
+        lastPfPdrX = 0f;
+        lastPfPdrY = 0f;
+        firstPfPdrArrived = false;
+
+        // The events of [0... eventIndex] are processed sequentially, with the last state being the one we want
+        for (int i = 0; i <= eventIndex; i++) {
+            processEvent(mergedEvents.get(i), false);
+            //  PF events are processed synchronously
+            processPFEvent(mergedEvents.get(i), false);
+        }
+
         progressBar.setProgress(eventIndex);
     }
 
@@ -526,40 +546,37 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
         mMap.getUiSettings().setRotateGesturesEnabled(true);
         mMap.getUiSettings().setScrollGesturesEnabled(true);
 
-        // 绘制 GNSS 轨迹（蓝色）
+        // Show GNSS trajectory (blue)
         if (gnssPositions != null && !gnssPositions.isEmpty()) {
-            PolylineOptions gnssOptions = new PolylineOptions()
-                .color(Color.BLUE)
-                .width(10);
+            PolylineOptions gnssOptions = new PolylineOptions().color(Color.BLUE).width(10);
             for (Traj.GNSS_Sample sample : gnssPositions) {
                 LatLng latLng = new LatLng(sample.getLatitude(), sample.getLongitude());
                 gnssOptions.add(latLng);
             }
             gnssPolyline = mMap.addPolyline(gnssOptions);
-            LatLng gnssStart = new LatLng(
-                    gnssPositions.get(0).getLatitude(),
-                    gnssPositions.get(0).getLongitude()
-            );
+            LatLng gnssStart = new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude());
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(gnssStart, 18f));
-            gnssMarker = mMap.addMarker(new MarkerOptions()
-                    .position(gnssStart)
+            gnssMarker = mMap.addMarker(new MarkerOptions().position(gnssStart)
                     .title("GNSS Position")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
             currentLocation = gnssStart;
         }
 
-        // 绘制 PDR 轨迹（红色）
+        // Show the PDR trace (red)
         if (pdrPositions != null && !pdrPositions.isEmpty()) {
+            // If GNSS data is available, use GNSS point 1 as the starting point for PDR
             LatLng pdrStart = (gnssPositions != null && !gnssPositions.isEmpty())
                     ? new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude())
                     : new LatLng(0, 0);
-            PolylineOptions pdrOptions = new PolylineOptions()
-                .color(Color.RED)
-                .width(10);
+            PolylineOptions pdrOptions = new PolylineOptions().color(Color.RED).width(10);
+            float sumX = 0f;
+            float sumY = 0f;
             for (Traj.Pdr_Sample sample : pdrPositions) {
-                float[] pdrOffset = new float[]{sample.getX(), sample.getY()};
-                LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
-                pdrOptions.add(latLng);
+                sumX  = sample.getX();
+                sumY = sample.getY();
+                LatLng pdrLatLng = CoordinateTransform.enuToGeodetic(sumX , sumY, 0,
+                        refPosition[0], refPosition[1], refEcef);
+                pdrOptions.add(pdrLatLng);
             }
             pdrPolyline = mMap.addPolyline(pdrOptions);
             if (!pdrOptions.getPoints().isEmpty()) {
@@ -570,54 +587,108 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
             }
         }
 
-
-
-
-
-        // 初始化 IndoorMapManager
         indoorMapManager = new IndoorMapManager(mMap);
+        fusedPolyline = mMap.addPolyline(new PolylineOptions().color(Color.MAGENTA).width(10));
+
+        //  Initialize the PF track display in orange
+        pfPolyline = mMap.addPolyline(new PolylineOptions().color(Color.rgb(255, 165, 0)).width(10));
     }
 
-    /**
-     * 开始回放：基于 mergedEvents（时间戳排序）逐条处理
-     * 不再并行递增索引。
-     */
-    private void startReplay() {
-        if (mergedEvents.isEmpty()) {
-            return;
+    private void resetAltitudeData() {
+        altitudeList = new ArrayList<>();
+        relativeAltitudeList = new ArrayList<>();
+        if (pressureinfos != null && !pressureinfos.isEmpty()) {
+            for (Traj.Pressure_Sample ps : pressureinfos) {
+                float alt = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, ps.getPressure());
+                altitudeList.add(alt);
+            }
+            // Relative elevation is calculated from each absolute elevation
+            for (Float absoluteAlt : altitudeList) {
+                float relativeAlt = pdrProcessing.updateElevation(absoluteAlt);
+                relativeAltitudeList.add(relativeAlt);
+            }
         }
+    }
+
+
+    // Play control
+    private void startReplay() {
+        if (mergedEvents.isEmpty()) return;
         isPlaying = true;
         btnPlayPause.setText("Pause");
-
         currentEventIndex = 0;
-        // 把地图 Marker 同步到第0个事件的状态
+        lastPdrX = 0f;
+        lastPdrY = 0f;
+        firstPdrArrived = false;
+        // Reset the accumulated PF status
+        lastPfPdrX = 0f;
+        lastPfPdrY = 0f;
+        firstPfPdrArrived = false;
         updateMarkersForEventIndex(0);
-
-        // 开始逐条调度
         scheduleNext();
     }
 
-    /** 停止回放 */
     private void pauseReplay() {
         isPlaying = false;
         btnPlayPause.setText("Play");
         playbackHandler.removeCallbacksAndMessages(null);
     }
 
-    /** 重新开始回放 */
+    private void resumeReplay() {
+        if (mergedEvents.isEmpty()) return;
+        isPlaying = true;
+        btnPlayPause.setText("Pause");
+        scheduleNext();
+    }
+
     private void restartReplay() {
         pauseReplay();
         currentEventIndex = 0;
+
+        resetAltitudeData();
+
+        // Reset EKF and PDR status (clear track display)
         updateMarkersForEventIndex(0);
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentFloor(0, true);
         }
 
-        startReplay();
+        // Clear the EKF fusion trace: Clear the points of the fusedPolyline and remove Fusedmarkers
+        if (fusedPolyline != null) {
+            fusedPolyline.setPoints(new ArrayList<>());
+            //fusedPolyline.setVisible(false);
+        }
+        if (fusedMarker != null) {
+            fusedMarker.remove();
+            fusedMarker = null;
+        }
+        // reset the EKF object (call reset()
+        ekf.reset();
+
+        // Reset the PF status: Rebuild the PF and clear the PF trace display
+        if (refPosition != null) {
+            pf = new ParticleFilter(refPosition);
+        }
+        if (pfPolyline != null) {
+            pfPolyline.setPoints(new ArrayList<>());
+            //pfPolyline.setVisible(false);
+        }
+        if (pfMarker != null) {
+            pfMarker.remove();
+            pfMarker = null;
+        }
+
+        // Reset the accumulated PDR status
+        lastPdrX = 0f;
+        lastPdrY = 0f;
+        firstPdrArrived = false;
+        lastPfPdrX = 0f;
+        lastPfPdrY = 0f;
+        firstPfPdrArrived = false;
+
         startReplay();
     }
 
-    /** 跳到末尾（最后一个事件） */
     private void goToEndReplay() {
         pauseReplay();
         if (!mergedEvents.isEmpty()) {
@@ -628,111 +699,155 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
 
     private void exitReplay() {
         pauseReplay();
-        getActivity().onBackPressed();
+        requireActivity().onBackPressed();
     }
 
     /**
-     * 核心：调度下一条事件
-     * 根据相邻事件的时间戳差值，动态计算延迟
+     * Schedule the next event, calculating the latency based on the relative_timestamp difference between adjacent events.
+     *  relativeTime is used to simulate the original timing in Replay mode.
      */
     private void scheduleNext() {
         if (!isPlaying || currentEventIndex >= mergedEvents.size()) {
             pauseReplay();
             return;
         }
-
-        // 当前事件
         final Event current = mergedEvents.get(currentEventIndex);
-        // 下一个事件（如果有）
         final int nextIndex = currentEventIndex + 1;
-        long delayMs = 500; // 默认半秒
+        long delayMs = 500;
         if (nextIndex < mergedEvents.size()) {
             long dt = mergedEvents.get(nextIndex).relativeTime - current.relativeTime;
-            // 你也可以把 dt 直接当延迟，也可做倍速: e.g. dt / 2
-            // 这里简单地用 dt
-            delayMs = dt;
-            if (delayMs < 0) {
-                // 极端情况：如果时间戳没排序好或重复，保证不出现负值
-                delayMs = 0;
-            }
+            delayMs = dt < 0 ? 0 : dt;
         }
-
-        // 立即处理当前事件
         processEvent(current, true);
-
-        // 调度播放下一个事件
+        // PF trajectory is updated synchronously.
+        processPFEvent(current, true);
         currentEventIndex++;
         progressBar.setProgress(currentEventIndex);
-
-        playbackHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                scheduleNext();
-            }
-        }, delayMs);
+        playbackHandler.postDelayed(() -> scheduleNext(), delayMs);
     }
 
     /**
-     * 处理单个 Event：根据 eventType 更新 GNSS / PDR / Pressure（海拔+楼层检测）/ WiFi
-     * @param immediate 是否是自动播放时按节奏触发；如果是 "手动一次性处理" 则 immediate=false
+     * Core: Processes a single Event and feeds it to the EKF.
+     * @param e Corresponding event
+     * @param immediate Whether to update the map camera immediately
      */
     private void processEvent(Event e, boolean immediate) {
+        if (!hasInitRef) return; // ENU transformations cannot be performed without a GNSS starting reference point
+
+        double currentAltitude = 0;
+        //double[] pdrEnu = ekf.getEnuPosition(); // Take out (east, north) of the current EKF estimation state.
+
         switch (e.eventType) {
             case 0: // GNSS
                 if (e.gnss != null) {
                     Traj.GNSS_Sample sample = e.gnss;
-                    LatLng latLng = new LatLng(sample.getLatitude(), sample.getLongitude());
-                    currentLocation = latLng;
+                    double lat = sample.getLatitude();
+                    double lon = sample.getLongitude();
+                    double alt = sample.getAltitude();
+                    currentAltitude = alt;
+
+                    // Update GNSS markers on the map
+                    LatLng gnssLatLng = new LatLng(lat, lon);
                     if (gnssMarker != null) {
-                        gnssMarker.setPosition(latLng);
+                        gnssMarker.setPosition(gnssLatLng);
                     } else {
                         gnssMarker = mMap.addMarker(new MarkerOptions()
-                                .position(latLng)
+                                .position(gnssLatLng)
                                 .title("GNSS Position")
                                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
                     }
-                    if (indoorMapManager != null) {
-                        indoorMapManager.setCurrentLocation(latLng);
+                    if (immediate) {
+                        mMap.animateCamera(CameraUpdateFactory.newLatLng(gnssLatLng));
                     }
+
+                    // Convert GNSS (lat,lon,alt) to ENU
+                    double[] enuGnss = CoordinateTransform.geodeticToEnu(
+                            lat, lon, alt,
+                            refPosition[0], // lat of the GNSS reference point
+                            refPosition[1], // lon of the GNSS reference point
+                            refPosition[2]  // alt of the GNSS reference point
+                    );
+
+                    // Get the current forecast PDR (east, north) from EKF, and merge together later
+                    double[] pdrEnu = ekf.getEnuPosition();
+
+                    // Call EKF's onObservationUpdate() method and use GNSS to fix it
+                    //    这里的 observeEast, observeNorth = enuGnss
+                    //    pdrEast, pdrNorth = pdrEnu
+                    //    penaltyFactor = 1.0
+                    ekf.onObservationUpdate(
+                            enuGnss[0], enuGnss[1],   // GNSS East, North
+                            pdrEnu[0], pdrEnu[1],    // PDR East, North
+                            alt, 1.0);
                 }
                 break;
+
             case 1: // PDR
                 if (e.pdr != null) {
-                    Traj.Pdr_Sample pdrSample = e.pdr;
-                    // PDR 假设相对 (gnss首点) 来计算位置
-                    LatLng pdrStart = (gnssPositions != null && !gnssPositions.isEmpty())
-                            ? new LatLng(gnssPositions.get(0).getLatitude(), gnssPositions.get(0).getLongitude())
-                            : new LatLng(0, 0);
-                    float[] pdrOffset = new float[]{pdrSample.getX(), pdrSample.getY()};
-                    LatLng latLng = UtilFunctions.calculateNewPos(pdrStart, pdrOffset);
+                    float currX = e.pdr.getX();
+                    float currY = e.pdr.getY();
 
-                    if (pdrMarker != null) {
-                        pdrMarker.setPosition(latLng);
+                    float stepX, stepY;
+                    if (!firstPdrArrived) {
+                        // This is the first PDR sample, so we can't do anything different from the last one,
+                        // so we just increment it by 0
+                        stepX = 0f;
+                        stepY = 0f;
+                        firstPdrArrived = true;
                     } else {
-                        pdrMarker = mMap.addMarker(new MarkerOptions()
-                                .position(latLng)
-                                .title("PDR Position")
-                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
+                        // Make the difference with the previous one
+                        stepX = currX - lastPdrX;
+                        stepY = currY - lastPdrY;
                     }
-                    // 如果我们有海拔数据(pressure)已处理，则更新楼层检测
-                    // 不过 PDR 事件本身不带海拔；海拔更新在 pressure event
+
+                    // Record the current cumulative value for next use
+                    lastPdrX = currX;
+                    lastPdrY = currY;
+
+                    // Regard differential stepX and stepY as "ENU displacement of this small step"
+                    double stepLength = Math.hypot(stepX, stepY);
+                    double heading = Math.atan2(stepY, stepX);
+                    // heading: True north is π/2, and due east is 0 or 2π, which is used here only for EKF
+                    // and will be re-wrapped/corrected internally
+
+                    // EKF predict
+                    ekf.predict(heading, stepLength, stepLength, e.relativeTime,
+                            turnDetector.onStepDetected(heading));
+
+                    // Visualization: The absolute cumulative position of the current PDR (currX, currY) is converted into a LatLng display
+                    if (hasInitRef) {
+                        double[] ecefRef = ekf.getEcefRefCoords();
+                        LatLng pdrLatLng = CoordinateTransform.enuToGeodetic(
+                                currX, currY, 0,
+                                refPosition[0], refPosition[1],
+                                refEcef
+                        );
+                        if (pdrMarker == null) {
+                            pdrMarker = mMap.addMarker(new MarkerOptions()
+                                    .position(pdrLatLng)
+                                    .title("PDR Position")
+                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
+                        } else {
+                            pdrMarker.setPosition(pdrLatLng);
+                        }
+                        if (immediate) {
+                            mMap.animateCamera(CameraUpdateFactory.newLatLng(pdrLatLng));
+                        }
+                    }
                 }
                 break;
+
             case 2: // PRESSURE
-                // 在 playback 时，用 relativeAltitudeList 来做海拔
-                // 由于 pressure list 与 mergedEvents 不一定一一对应下标，
-                // 需要找到在 pressureinfos 中的 index
-                Traj.Pressure_Sample pr = e.pressure;
-                if (pr != null && pressureinfos != null && !pressureinfos.isEmpty()) {
-                    // 找到 pr 在 pressureinfos 中的顺序 index
-                    int idx = pressureinfos.indexOf(pr);
+                if (e.pressure != null && pressureinfos != null && !pressureinfos.isEmpty()) {
+                    // Find the index of the current pressure sample in pressureinfos
+                    int idx = pressureinfos.indexOf(e.pressure);
                     if (idx >= 0 && idx < relativeAltitudeList.size()) {
                         float currentRelAlt = relativeAltitudeList.get(idx);
-                        // 如果 pdrMarker 存在，就更新 snippet
+                        // Updated the captions of PDR Marker to show altitude
                         if (pdrMarker != null) {
                             pdrMarker.setSnippet("Altitude: " + String.format("%.1f", currentRelAlt) + " m");
                         }
-                        // 自动楼层检测
+                        // Automatic floor detection: processed only when autoFloor is enabled
                         if (autoFloor != null && autoFloor.isChecked()) {
                             float buildingFloorHeight = FLOOR_HEIGHT;
                             if (currentLocation != null) {
@@ -744,11 +859,9 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                                     buildingFloorHeight = 0;
                                 }
                             }
-
                             if (buildingFloorHeight > 0 && indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
                                 float expectedUp = (currentMeasuredFloor + 1) * buildingFloorHeight;
                                 float expectedDown = (currentMeasuredFloor - 1) * buildingFloorHeight;
-
                                 if (currentRelAlt >= (expectedUp - TOLERANCE) && currentRelAlt <= (expectedUp + TOLERANCE)) {
                                     upCounter++;
                                     downCounter = 0;
@@ -759,7 +872,6 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                                     upCounter = 0;
                                     downCounter = 0;
                                 }
-
                                 if (upCounter >= CONSECUTIVE_THRESHOLD) {
                                     currentMeasuredFloor++;
                                     indoorMapManager.setCurrentFloor(currentMeasuredFloor, true);
@@ -778,88 +890,160 @@ public class ReplayFragment extends Fragment implements OnMapReadyCallback {
                                 }
                             }
                         }
+                        // Here you can update currentAltitude to currentRelAlt (for use if fusion is required)
+                        currentAltitude = currentRelAlt;
                     }
                 }
                 break;
+
             case 3: // WIFI
                 if (e.wifi != null) {
                     Traj.WiFi_Sample wifiSample = e.wifi;
-                    long timestamp = wifiSample.getRelativeTimestamp();
-                    LatLng wifiPosition = wifiPositionCache.get(timestamp);
-                    if (wifiPosition != null) {
-                        // 动态移动 Marker
+                    long ts = wifiSample.getRelativeTimestamp();
+                    LatLng wifiPos = wifiPositionCache.get(ts);
+                    if (wifiPos != null) {
                         if (wifiMarker == null) {
                             wifiMarker = mMap.addMarker(new MarkerOptions()
-                                    .position(wifiPosition)
+                                    .position(wifiPos)
                                     .title("WiFi Position")
                                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
                         } else {
-                            wifiMarker.setPosition(wifiPosition);
+                            wifiMarker.setPosition(wifiPos);
                         }
-
-                        // 也可以更新 Marker 的 snippet
-                        wifiMarker.setSnippet("Networks: " + wifiSample.getMacScansCount());
-                        // 如果想回放时摄像头跟随 WiFi，可以加上
                         if (immediate) {
-                            mMap.animateCamera(CameraUpdateFactory.newLatLng(wifiPosition));
+                            mMap.animateCamera(CameraUpdateFactory.newLatLng(wifiPos));
                         }
+                        // Convert WiFi location (lat, lon) to ENU
+                        double[] enuWiFi = CoordinateTransform.geodeticToEnu(
+                                wifiPos.latitude,
+                                wifiPos.longitude,
+                                0,  // WiFi is generally not with height, temporary transmission 0
+                                refPosition[0],
+                                refPosition[1],
+                                refPosition[2]
+                        );
+
+                        // Observations are updated with the current PDR status
+                        double[] pdrEnu = ekf.getEnuPosition();
+                        ekf.onObservationUpdate(
+                                enuWiFi[0], enuWiFi[1],   // WiFi East, North
+                                pdrEnu[0], pdrEnu[1],     // PDR East, North
+                                0, 1.0);                 // altitude=0, penaltyFactor=1.0
                     }
                 }
                 break;
         }
-    }
 
-    // 查找与给定时间戳最接近的GNSS样本
-    private Traj.GNSS_Sample findClosestGnssSample(long timestamp) {
-        if (gnssPositions == null || gnssPositions.isEmpty()) {
-            return null;
-        }
-        
-        Traj.GNSS_Sample closest = null;
-        long minTimeDiff = Long.MAX_VALUE;
-        
-        for (Traj.GNSS_Sample sample : gnssPositions) {
-            long timeDiff = Math.abs(sample.getRelativeTimestamp() - timestamp);
-            if (timeDiff < minTimeDiff) {
-                minTimeDiff = timeDiff;
-                closest = sample;
+        // Determine indoor/outdoor, using WiFi/GNSS respectively
+        if (indoorMapManager != null && currentLocation != null) {
+            if (BuildingPolygon.inLibrary(currentLocation) || BuildingPolygon.inNucleus(currentLocation)) {
+                ekf.setUsingWifi(true);
+            } else {
+                ekf.setUsingWifi(false);
             }
         }
-        
-        return closest;
+
+        // Update the coordinates after EKF fusion: turn them back to latitude and longitude
+        double fusedAlt = currentAltitude; //
+        LatLng fusedLatLng = ekf.getCurrentLatLng(fusedAlt);
+        if (fusedLatLng != null) {
+            // update fusedPolyline
+            List<LatLng> points = fusedPolyline.getPoints();
+            points.add(fusedLatLng);
+            fusedPolyline.setPoints(points);
+
+            // update fusedMarker
+            if (fusedMarker == null) {
+                fusedMarker = mMap.addMarker(new MarkerOptions()
+                        .position(fusedLatLng)
+                        .title("Fused Position")
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA)));
+            } else {
+                fusedMarker.setPosition(fusedLatLng);
+            }
+
+            currentLocation = fusedLatLng; // As a "current location" on the map
+            if (immediate) {
+                mMap.animateCamera(CameraUpdateFactory.newLatLng(fusedLatLng));
+            }
+            // Notify IndoorMapManager to update the indoor layer
+            indoorMapManager.setCurrentLocation(fusedLatLng);
+        }
     }
 
-    @Override
-    public void onResume() {
-        super.onResume();
-        mapView.onResume();
-    }
+    /**
+     * Process a single Event and update the status of PF.
+     * * Rules:
+     * * - For PDR events: Calculate the step size and orientation, and do motion updates with predictMotion()
+     * * - For GNSS events (outdoor) : Update PF (measurementUpdate) with GNSS measurements
+     * * - For WiFi events (indoors) : Update PF (measurementUpdate) with WiFi measurements
+     */
+    private void processPFEvent(Event e, boolean immediate) {
+        if (pf == null || !hasInitRef) return;
 
-    @Override
-    public void onPause() {
-        super.onPause();
-        mapView.onPause();
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        mapView.onDestroy();
-        // 退出时删除临时文件
-        if (getArguments() != null) {
-            String path = getArguments().getString("trajectory_file_path");
-            if (path != null) {
-                File file = new File(path);
-                if (file.exists()) {
-                    file.delete();
+        switch (e.eventType) {
+            case 1: // PDR event
+                if (e.pdr != null) {
+                    float currX = e.pdr.getX();
+                    float currY = e.pdr.getY();
+                    float stepX, stepY;
+                    if (!firstPfPdrArrived) {
+                        stepX = 0f;
+                        stepY = 0f;
+                        firstPfPdrArrived = true;
+                    } else {
+                        stepX = currX - lastPfPdrX;
+                        stepY = currY - lastPfPdrY;
+                    }
+                    lastPfPdrX = currX;
+                    lastPfPdrY = currY;
+                    double stepLength = Math.hypot(stepX, stepY);
+                    double heading = Math.atan2(stepY, stepX);
+                    pf.predictMotion(stepLength, heading);
                 }
+                break;
+            case 0: // GNSS event (outdoor) : Measurement updates are performed
+                if (e.gnss != null) {
+                    if (currentLocation != null &&
+                            !(BuildingPolygon.inLibrary(currentLocation) || BuildingPolygon.inNucleus(currentLocation))) {
+                        double lat = e.gnss.getLatitude();
+                        double lon = e.gnss.getLongitude();
+                        pf.measurementUpdate(lat, lon);
+                    }
+                }
+                break;
+            case 3: // WiFi event (indoor) : Measurement update
+                if (e.wifi != null) {
+                    long ts = e.wifi.getRelativeTimestamp();
+                    LatLng wifiPos = wifiPositionCache.get(ts);
+                    if (wifiPos != null) {
+                        if (currentLocation != null &&
+                                (BuildingPolygon.inLibrary(currentLocation) || BuildingPolygon.inNucleus(currentLocation))) {
+                            pf.measurementUpdate(wifiPos.latitude, wifiPos.longitude);
+                        }
+                    }
+                }
+                break;
+            // Other event types are not processed
+        }
+
+        // Updated the position display after PF fusion
+        LatLng pfFusedPos = pf.getFusedPosition();
+        if (pfFusedPos != null) {
+            List<LatLng> points = pfPolyline.getPoints();
+            points.add(pfFusedPos);
+            pfPolyline.setPoints(points);
+            if (pfMarker == null) {
+                pfMarker = mMap.addMarker(new MarkerOptions()
+                        .position(pfFusedPos)
+                        .title("PF Position")
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+            } else {
+                pfMarker.setPosition(pfFusedPos);
+            }
+            if (immediate) {
+                mMap.animateCamera(CameraUpdateFactory.newLatLng(pfFusedPos));
             }
         }
-    }
-
-    @Override
-    public void onLowMemory() {
-        super.onLowMemory();
-        mapView.onLowMemory();
     }
 }

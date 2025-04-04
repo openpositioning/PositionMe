@@ -20,6 +20,8 @@ import com.openpositioning.PositionMe.PathView;
 import com.openpositioning.PositionMe.PdrProcessing;
 import com.openpositioning.PositionMe.ServerCommunications;
 import com.openpositioning.PositionMe.Traj;
+import com.openpositioning.PositionMe.FusionAlgorithms.ParticleFilter;
+//import com.openpositioning.PositionMe.sensors.SensorFusionUpdates; //
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -50,9 +52,7 @@ import java.util.stream.Stream;
  * The class provides a number of setters and getters so that other classes can have access to the
  * sensor data and influence the behaviour of data collection.
  *
- * @author Michal Dvorak
- * @author Mate Stodulka
- * @author Virginia Cangelosi
+ *
  */
 public class SensorFusion implements SensorEventListener, Observer {
 
@@ -129,7 +129,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Location values
     private float latitude;
     private float longitude;
+    private float altitude;
     private float[] startLocation;
+    private double[] startRef;
     // Wifi values
     private List<Wifi> wifiList;
 
@@ -144,6 +146,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
+
+
+    // For ParticleFilter fusion
+    private ParticleFilter particleFilter;
+    //private List<SensorFusionUpdates> particleFilterObservers = new ArrayList<>();
+    private LatLng particleFilterFusedPosition;
+
+    //endregion
 
     //region Initialisation
     /**
@@ -177,6 +187,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.R = new float[9];
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
+        // Initializes startRef as a three-element array: [latitude, longitude, altitude]
+        this.startRef = new double[]{0.0, 0.0, 0.0};
+        // Modified: Pass startRef into the ParticleFilter constructor
+        this.particleFilter = new ParticleFilter(this.startRef);
     }
 
 
@@ -366,6 +380,14 @@ public class SensorFusion implements SensorEventListener, Observer {
                 //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
                 latitude = (float) location.getLatitude();
                 longitude = (float) location.getLongitude();
+                altitude = (float) location.getAltitude();
+                // If startRef is not initialized (assuming all initial values are 0), an assignment is performed
+                if(startRef[0] == 0.0 && startRef[1] == 0.0 && startRef[2] == 0.0) {
+                    startRef[0] = latitude;
+                    startRef[1] = longitude;
+                    startRef[2] = altitude;
+                }
+
                 float altitude = (float) location.getAltitude();
                 float accuracy = (float) location.getAccuracy();
                 float speed = (float) location.getSpeed();
@@ -380,6 +402,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setProvider(provider)
                             .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
                 }
+                // Updated ParticleFilter (in real-time mode) :
+                particleFilter.measurementUpdate(location.getLatitude(), location.getLongitude());
+                // Notify registered ParticleFilter updates to observers
+                //notifyParticleFilterUpdate(particleFilter.predict());
             }
         }
     }
@@ -572,6 +598,15 @@ public class SensorFusion implements SensorEventListener, Observer {
         return latLong;
     }
 
+    public double[] getGNSSLatLngAlt(boolean start) {
+        if(!start) {
+            return new double[]{latitude, longitude, altitude};
+        }
+        else {
+            return startRef;
+        }
+    }
+
     /**
      * Setter function for core location data.
      *
@@ -706,6 +741,23 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+  /*  // ParticleFilter Observer correlation
+    public void registerForParticleFilterUpdate(SensorFusionUpdates observer) {
+        if (!particleFilterObservers.contains(observer)) {
+            particleFilterObservers.add(observer);
+        }
+    }
+
+    public void unregisterForParticleFilterUpdate(SensorFusionUpdates observer) {
+        particleFilterObservers.remove(observer);
+    }
+
+    private void notifyParticleFilterUpdate(LatLng fusedPos) {
+        particleFilterFusedPosition = fusedPos;
+        for (SensorFusionUpdates observer : particleFilterObservers) {
+            observer.onFusedUpdate(fusedPos);
+        }
+    }  */
     //endregion
 
     //region Start/Stop
@@ -869,19 +921,19 @@ public class SensorFusion implements SensorEventListener, Observer {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
             trajectory.addImuData(Traj.Motion_Sample.newBuilder()
-                    .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
-                    .setAccX(acceleration[0])
-                    .setAccY(acceleration[1])
-                    .setAccZ(acceleration[2])
-                    .setGyrX(angularVelocity[0])
-                    .setGyrY(angularVelocity[1])
-                    .setGyrZ(angularVelocity[2])
-                    .setGyrZ(angularVelocity[2])
-                    .setRotationVectorX(rotation[0])
-                    .setRotationVectorY(rotation[1])
-                    .setRotationVectorZ(rotation[2])
-                    .setRotationVectorW(rotation[3])
-                    .setStepCount(stepCounter))
+                            .setRelativeTimestamp(android.os.SystemClock.uptimeMillis()-bootTime)
+                            .setAccX(acceleration[0])
+                            .setAccY(acceleration[1])
+                            .setAccZ(acceleration[2])
+                            .setGyrX(angularVelocity[0])
+                            .setGyrY(angularVelocity[1])
+                            .setGyrZ(angularVelocity[2])
+                            .setGyrZ(angularVelocity[2])
+                            .setRotationVectorX(rotation[0])
+                            .setRotationVectorY(rotation[1])
+                            .setRotationVectorZ(rotation[2])
+                            .setRotationVectorW(rotation[3])
+                            .setStepCount(stepCounter))
                     .addPositionData(Traj.Position_Sample.newBuilder()
                             .setMagX(magneticField[0])
                             .setMagY(magneticField[1])

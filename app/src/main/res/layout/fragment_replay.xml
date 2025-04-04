@@ -63,6 +63,30 @@
             android:layout_height="wrap_content" />
     </LinearLayout>
 
+    <!-- 第二部分：轨迹控制按钮区域，放在第一部分的上面且左对齐 -->
+    <LinearLayout
+        android:id="@+id/trajectoryButtonLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_gravity="top|start"
+        android:layout_margin="16dp">
+
+        <Button
+            android:id="@+id/btnShowEKF"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="EKF" />
+
+        <Button
+            android:id="@+id/btnShowPF"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="PF"
+            android:layout_marginStart="16dp"/>
+    </LinearLayout>
+
+
     <!-- 楼层控制卡片：仅在支持室内地图的建筑内显示 -->
     <!-- 使用 CardView 作为容器，放置在右下角 -->
     <androidx.cardview.widget.CardView
