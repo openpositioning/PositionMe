@@ -578,7 +578,7 @@ public final class Traj {
       return Traj.internal_static_Trajectory_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Trajectory_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -1434,7 +1434,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -1450,7 +1450,7 @@ public final class Traj {
         return Traj.internal_static_Trajectory_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Trajectory_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -1463,7 +1463,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -4973,7 +4973,7 @@ public final class Traj {
       return Traj.internal_static_Pdr_Sample_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Pdr_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -5180,7 +5180,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -5196,7 +5196,7 @@ public final class Traj {
         return Traj.internal_static_Pdr_Sample_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Pdr_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -5209,7 +5209,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -5694,7 +5694,7 @@ public final class Traj {
       return Traj.internal_static_Motion_Sample_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Motion_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -6115,7 +6115,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -6131,7 +6131,7 @@ public final class Traj {
         return Traj.internal_static_Motion_Sample_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Motion_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -6144,7 +6144,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -6843,7 +6843,7 @@ public final class Traj {
       return Traj.internal_static_Position_Sample_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Position_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -7067,7 +7067,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -7083,7 +7083,7 @@ public final class Traj {
         return Traj.internal_static_Position_Sample_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Position_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -7096,7 +7096,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -7469,7 +7469,7 @@ public final class Traj {
       return Traj.internal_static_Pressure_Sample_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Pressure_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -7647,7 +7647,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -7663,7 +7663,7 @@ public final class Traj {
         return Traj.internal_static_Pressure_Sample_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Pressure_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -7676,7 +7676,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -7985,7 +7985,7 @@ public final class Traj {
       return Traj.internal_static_Light_Sample_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Light_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -8163,7 +8163,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -8179,7 +8179,7 @@ public final class Traj {
         return Traj.internal_static_Light_Sample_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Light_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -8192,7 +8192,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -8587,7 +8587,7 @@ public final class Traj {
       return Traj.internal_static_GNSS_Sample_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_GNSS_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -8926,7 +8926,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -8942,7 +8942,7 @@ public final class Traj {
         return Traj.internal_static_GNSS_Sample_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_GNSS_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -8955,7 +8955,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -9561,7 +9561,7 @@ public final class Traj {
       return Traj.internal_static_WiFi_Sample_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_WiFi_Sample_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -9761,7 +9761,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -9777,7 +9777,7 @@ public final class Traj {
         return Traj.internal_static_WiFi_Sample_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_WiFi_Sample_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -9790,7 +9790,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -10358,7 +10358,7 @@ public final class Traj {
       return Traj.internal_static_Mac_Scan_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Mac_Scan_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -10560,7 +10560,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -10576,7 +10576,7 @@ public final class Traj {
         return Traj.internal_static_Mac_Scan_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Mac_Scan_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -10589,7 +10589,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -10978,7 +10978,7 @@ public final class Traj {
       return Traj.internal_static_AP_Data_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_AP_Data_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -11211,7 +11211,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -11227,7 +11227,7 @@ public final class Traj {
         return Traj.internal_static_AP_Data_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_AP_Data_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -11240,7 +11240,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
@@ -11712,7 +11712,7 @@ public final class Traj {
       return Traj.internal_static_Sensor_Info_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+    protected FieldAccessorTable
         internalGetFieldAccessorTable() {
       return Traj.internal_static_Sensor_Info_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -12016,7 +12016,7 @@ public final class Traj {
 
     @Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -12032,7 +12032,7 @@ public final class Traj {
         return Traj.internal_static_Sensor_Info_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      protected FieldAccessorTable
           internalGetFieldAccessorTable() {
         return Traj.internal_static_Sensor_Info_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -12045,7 +12045,7 @@ public final class Traj {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+          BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }

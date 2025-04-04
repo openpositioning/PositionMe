@@ -14,7 +14,7 @@ public interface Observable {
      *
      * @param o instance of a class implementing the <code>Observer</code> interface
      */
-    public void registerObserver(com.openpositioning.PositionMe.sensors.Observer o);
+    public void registerObserver(Observer o);
 
     /**
      * Notify observers of changes to relevant data structures. If there are multiple data structures

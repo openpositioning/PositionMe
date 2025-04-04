@@ -1,7 +1,5 @@
 package com.openpositioning.PositionMe.sensors;
 
-import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment;
-
 /**
  * The Wifi object holds the Wifi parameters listed below.
  *
@@ -16,7 +14,7 @@ public class Wifi {
     private String ssid;
     private long bssid;
     private int level;
-    private long frequency;
+    private int frequency;
 
     /**
      * Empty public default constructor of the Wifi object.
@@ -29,7 +27,7 @@ public class Wifi {
     public String getSsid() { return ssid; }
     public long getBssid() { return bssid; }
     public int getLevel() { return level; }
-    public long getFrequency() { return frequency; }
+    public int getFrequency() { return frequency; }
 
     /**
      * Setters for each property
@@ -37,13 +35,13 @@ public class Wifi {
     public void setSsid(String ssid) { this.ssid = ssid; }
     public void setBssid(long bssid) { this.bssid = bssid; }
     public void setLevel(int level) { this.level = level; }
-    public void setFrequency(long frequency) { this.frequency = frequency; }
+    public void setFrequency(int frequency) { this.frequency = frequency; }
 
     /**
      * Generates a string containing mac address and rssi of Wifi.
      *
      * Concatenates mac address and rssi to display in the
-     * {@link MeasurementsFragment} fragment
+     * {@link com.openpositioning.PositionMe.fragments.MeasurementsFragment} fragment
      */
     @Override
     public String toString() {
