@@ -49,7 +49,7 @@ def ekf_fusion(data, Q, R, lat0, lon0, robust_threshold=9.21, inflation_factor=1
                 record[used_field] = True
                 K = P_pred @ np.linalg.inv(S)
             x = x_pred + K @ y_innov
-            P = (np.eye(2) - K @ K.T) @ P_pred
+            P = (np.eye(2) - K) @ P_pred
         else:
             record[used_field] = False
             x = x_pred
