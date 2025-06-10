@@ -19,7 +19,6 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
@@ -30,9 +29,6 @@ import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
  * correct the PDR when it is complete
  *
  * @author Virginia Cangelosi
- * @see HomeFragment the previous fragment in the nav graph.
- * @see RecordingFragment the next fragment in the nav graph.
- * @see SensorFusion the class containing sensors and recording.
  */
 public class StartLocationFragment extends Fragment {
 
@@ -167,17 +163,17 @@ public class StartLocationFragment extends Fragment {
                 float chosenLat = startPosition[0];
                 float chosenLon = startPosition[1];
 
-                // If the Activity is RecordingActivity
-                if (requireActivity() instanceof RecordingActivity) {
-                    // Start sensor recording + set the start location
-                    sensorFusion.startRecording();
-                    sensorFusion.setStartGNSSLatitude(startPosition);
+                // DEDUCTED // // No longer used  // //If the Activity is RecordingActivity
+//                if (requireActivity() instanceof RecordingActivity) {
+//                    // Start sensor recording + set the start location
+//                    sensorFusion.startRecording();
+//                    sensorFusion.setStartGNSSLatitude(startPosition);
 
-                    // Now switch to the recording screen
-                    ((RecordingActivity) requireActivity()).showRecordingScreen();
+//                    // Now switch to the recording screen
+//                    ((RecordingActivity) requireActivity()).showRecordingScreen(); // TODO任然存在初始值问题
 
-                    // If the Activity is ReplayActivity
-                } else if (requireActivity() instanceof ReplayActivity) {
+                // Still using // If the Activity is ReplayActivity
+                if (requireActivity() instanceof ReplayActivity) {
                     // *Do not* cast to RecordingActivity here
                     // Just call the Replay method
                     ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);

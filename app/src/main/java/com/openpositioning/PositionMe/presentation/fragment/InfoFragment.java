@@ -23,11 +23,11 @@ import java.util.List;
  * A simple {@link Fragment} subclass. The info fragment display the available sensors and data
  * collection devices with relevant information about their capabilities.
  *
- * @see HomeFragment the previous fragment in the nav graph.
  * @see com.openpositioning.PositionMe.sensors.SensorFusion the class containing all sensors.
  * @see SensorInfo the class used for each sensor instance's metadata
  *
  * @author Mate Stodulka
+ * @author Shu Gu
  */
 public class InfoFragment extends Fragment {
 

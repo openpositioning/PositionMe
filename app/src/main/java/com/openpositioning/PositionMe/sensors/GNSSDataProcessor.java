@@ -4,8 +4,10 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -114,6 +116,41 @@ public class GNSSDataProcessor {
         }
     }
 
+    public Location getLastKnownLocation() {
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
+            LocationManager locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+
+            // 尝试从 GPS 提供者获取数据
+            Location gpsLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            long currentTime = System.currentTimeMillis();
+            if (gpsLocation != null && (currentTime - gpsLocation.getTime()) <= 10000) {
+                return gpsLocation;
+            }
+
+            // 如果 GPS 数据为空或过旧，尝试网络提供者
+            Location networkLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            if (networkLocation != null && (currentTime - networkLocation.getTime()) <= 15000) {
+                return networkLocation;
+            }
+
+            // 若都没有新数据，则返回已知的最新数据以避免返回 null 导致后续 crash
+            if (gpsLocation != null) {
+                Log.d("GNSSDataProcessor", "Using stale GPS location to avoid crash.");
+                return gpsLocation;
+            } else if (networkLocation != null) {
+                Log.d("GNSSDataProcessor", "Using stale Network location to avoid crash.");
+                return networkLocation;
+            } else {
+                Log.d("GNSSDataProcessor", "No location data available.");
+                return null;
+            }
+        } else {
+            Log.e("GNSSDataProcessor", "Location permissions not granted. Cannot access last known location.");
+            return null;
+        }
+    }
     /**
      * Stops updates to the location listener via the location manager.
      */

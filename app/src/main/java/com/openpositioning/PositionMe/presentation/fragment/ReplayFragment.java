@@ -124,7 +124,7 @@ public class ReplayFragment extends Fragment {
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.replayMapFragmentContainer);
         if (trajectoryMapFragment == null) {
-            trajectoryMapFragment = new TrajectoryMapFragment();
+            trajectoryMapFragment = new TrajectoryMapFragment.ReplayTrajectoryMapFragment();
             getChildFragmentManager()
                     .beginTransaction()
                     .replace(R.id.replayMapFragmentContainer, trajectoryMapFragment)

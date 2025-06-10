@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -36,7 +37,6 @@ import java.util.Map;
  * A simple {@link Fragment} subclass. The files fragments displays a list of trajectories already
  * uploaded with some metadata, and enabled re-downloading them to the device's local storage.
  *
- * @see HomeFragment the connected fragment in the nav graph.
  * @see UploadFragment sub-menu for uploading recordings that failed during recording.
  * @see com.openpositioning.PositionMe.Traj the data structure sent and received.
  * @see ServerCommunications the class handling communication with the server.
@@ -87,6 +87,17 @@ public class FilesFragment extends Fragment implements Observer {
 
     /**
      * {@inheritDoc}
+     * Unregisters the observer from the server communications class.
+     */
+    @Override
+    public void onAttach(@NonNull Context context) {
+        super.onAttach(context);
+        serverCommunications = new ServerCommunications(context);
+        serverCommunications.registerObserver(this);
+    }
+
+    /**
+     * {@inheritDoc}
      * Initialises UI elements, including a navigation card to the {@link UploadFragment} and a
      * RecyclerView displaying online trajectories.
      *
@@ -97,9 +108,8 @@ public class FilesFragment extends Fragment implements Observer {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        // Get recyclerview
+
         filesList = view.findViewById(R.id.filesList);
-        // Get clickable card view
         uploadCard = view.findViewById(R.id.uploadCard);
         uploadCard.setOnClickListener(new View.OnClickListener() {
             /**
@@ -112,7 +122,6 @@ public class FilesFragment extends Fragment implements Observer {
                 Navigation.findNavController(view).navigate(action);
             }
         });
-        // Request list of uploaded trajectories from the server.
         serverCommunications.sendInfoRequest();
         // Force RecyclerView refresh to ensure icon states are correct
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
@@ -192,30 +201,16 @@ public class FilesFragment extends Fragment implements Observer {
      *                  trajectories (ID, owner ID, date).
      */
     private void updateView(List<Map<String, String>> entryList) {
-        // Initialise RecyclerView with Manager and Adapter
-        LinearLayoutManager manager = new LinearLayoutManager(getActivity());
-        filesList.setLayoutManager(manager);
-        filesList.setHasFixedSize(true);
-        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
-            Map<String, String> selectedItem = entryList.get(position);
-            String id = selectedItem.get("id");
-            String dateSubmitted = selectedItem.get("date_submitted");
-
-            // Pass ID and date_submitted
-            serverCommunications.downloadTrajectory(position, id, dateSubmitted);
-
-//            new AlertDialog.Builder(getContext())
-//                    .setTitle("File downloaded")
-//                    .setMessage("Trajectory downloaded to local storage")
-//                    .setPositiveButton(R.string.ok, null)
-//                    .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
-//                        startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-//                    })
-//                    .setIcon(R.drawable.ic_baseline_download_24)
-//                    .show();
-        });
-        filesList.setAdapter(listAdapter);
-        // Force refresh RecyclerView to ensure downloadRecords changes are detected
-        listAdapter.notifyDataSetChanged();
+        if (isAdded()) {
+            LinearLayoutManager manager = new LinearLayoutManager(requireContext());
+            filesList.setLayoutManager(manager);
+            filesList.setHasFixedSize(true);
+            listAdapter = new TrajDownloadListAdapter(requireContext(), entryList, position -> {
+                Map<String, String> selectedItem = entryList.get(position);
+                serverCommunications.downloadTrajectory(position, selectedItem.get("id"), selectedItem.get("date_submitted"));
+            });
+            filesList.setAdapter(listAdapter);
+            listAdapter.notifyDataSetChanged();
+        }
     }
 }

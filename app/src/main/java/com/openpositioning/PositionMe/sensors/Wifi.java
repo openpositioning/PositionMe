@@ -1,7 +1,5 @@
 package com.openpositioning.PositionMe.sensors;
 
-import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment;
-
 /**
  * The Wifi object holds the Wifi parameters listed below.
  *
