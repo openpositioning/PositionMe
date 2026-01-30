@@ -17,6 +17,7 @@ public class Wifi {
     private long bssid;
     private int level;
     private long frequency;
+    private boolean rtt;
 
     /**
      * Empty public default constructor of the Wifi object.
@@ -30,6 +31,7 @@ public class Wifi {
     public long getBssid() { return bssid; }
     public int getLevel() { return level; }
     public long getFrequency() { return frequency; }
+    public boolean isRtt() { return rtt; }
 
     /**
      * Setters for each property
@@ -38,6 +40,7 @@ public class Wifi {
     public void setBssid(long bssid) { this.bssid = bssid; }
     public void setLevel(int level) { this.level = level; }
     public void setFrequency(long frequency) { this.frequency = frequency; }
+    public void setRtt(boolean rtt) { this.rtt = rtt; }
 
     /**
      * Generates a string containing mac address and rssi of Wifi.
