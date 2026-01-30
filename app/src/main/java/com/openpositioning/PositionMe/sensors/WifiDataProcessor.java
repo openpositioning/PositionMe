@@ -47,6 +47,7 @@ public class WifiDataProcessor implements Observable {
     private final Context context;
     // Locations manager to enable access to Wifi data via the android system
     private final WifiManager wifiManager;
+    private long lastScanTime = 0; // Assignment 1: To track repeated scans
 
     //List of nearby networks
     private Wifi[] wifiData;
@@ -77,6 +78,16 @@ public class WifiDataProcessor implements Observable {
         // Check for permissions
         boolean permissionsGranted = checkWifiPermissions();
         this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+
+        // --- Assignment 1 Task: Check for Wi-Fi Throttling ---
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            if (this.wifiManager.isScanThrottleEnabled()) {
+                android.util.Log.w("Assignment1", "⚠️ 警告: Wi-Fi Throttling 处于开启状态！这会影响作业数据的采集频率，请在手机开发者选项中关闭它。");
+            } else {
+                android.util.Log.i("Assignment1", "✅ 完美: Wi-Fi Throttling 已关闭。");
+            }
+        }
+        // ----------------------------------------------------
         this.scanWifiDataTimer = new Timer();
         this.observers = new ArrayList<>();
 
@@ -123,6 +134,22 @@ public class WifiDataProcessor implements Observable {
 
             //Collect the list of nearby wifis
             List<ScanResult> wifiScanList = wifiManager.getScanResults();
+
+            // --- Assignment 1 Task: Filter Repeated Fingerprints ---
+            if (wifiScanList.isEmpty()) {
+                context.unregisterReceiver(this);
+                return;
+            }
+            // Check timestamp of the first result to see if it's the same as the last one
+            long currentScanTime = wifiScanList.get(0).timestamp;
+            if (currentScanTime == lastScanTime) {
+                // Duplicate scan detected, ignore it
+                android.util.Log.d("Assignment1", "⚠️ Ignored repeated Wi-Fi scan (Throttling detected)");
+                context.unregisterReceiver(this);
+                return;
+            }
+            lastScanTime = currentScanTime;
+            // -------------------------------------------------------
             //Stop receiver as scan is complete
             context.unregisterReceiver(this);
 
@@ -136,6 +163,14 @@ public class WifiDataProcessor implements Observable {
                 //store mac address and rssi of wifi
                 wifiData[i].setBssid(intMacAddress);
                 wifiData[i].setLevel(wifiScanList.get(i).level);
+
+                // --- Assignment 1 Task: Add RTT Flag ---
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    boolean isRttSupported = wifiScanList.get(i).is80211mcResponder();
+                    // 下面这行如果变红（报错），说明我们需要先去修改 Wifi 定义，暂时先注释掉也没关系
+                    wifiData[i].setRtt(isRttSupported); 
+                }
+                // ---------------------------------------
             }
 
             //Notify observers of change in wifiData variable
