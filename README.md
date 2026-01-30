@@ -1,3 +1,8 @@
+# Embedded Mobile and Wireless Systems (EWireless) 5 2025/25
+## Coursework 1 - Group 13
+
+[![Build Status](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android.yml/badge.svg)](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android.yml)
+
 **PositionMe** is an indoor positioning data collection application initially developed for the University of Edinburgh's Embedded Wireless course. The application now includes enhanced features, including **trajectory playback**, improved UI design, and comprehensive location tracking.
 
 ## Features
