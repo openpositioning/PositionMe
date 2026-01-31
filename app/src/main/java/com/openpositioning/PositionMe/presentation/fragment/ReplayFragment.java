@@ -1,5 +1,8 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -13,15 +16,30 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.GroundOverlay;
+import com.google.android.gms.maps.model.GroundOverlayOptions;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.Polygon;
+import com.google.android.gms.maps.model.PolygonOptions;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.data.local.TrajParser;
+import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
+import com.openpositioning.PositionMe.viewmodels.MapViewModel;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+
 
 /**
  * Sub fragment of Replay Activity. Fragment that replays trajectory data on a map.
@@ -64,6 +82,11 @@ public class ReplayFragment extends Fragment {
     private List<TrajParser.ReplayPoint> replayData = new ArrayList<>();
     private int currentIndex = 0;
     private boolean isPlaying = false;
+
+    // NEW FEATURE: Variables for indoor map display functionality.
+    private MapViewModel mapViewModel;
+    private List<Polygon> venuePolygons = new ArrayList<>();
+    private GroundOverlay floorplanOverlay;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -115,12 +138,29 @@ public class ReplayFragment extends Fragment {
         return inflater.inflate(R.layout.fragment_replay, container, false);
     }
 
+    // In ReplayFragment.java
+
     @Override
-    public void onViewCreated(@NonNull View view,
-                              @Nullable Bundle savedInstanceState) {
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Initialize map fragment
+        // 1. Initialize MapViewModel (as we planned)
+        mapViewModel = new ViewModelProvider(this).get(MapViewModel.class);
+
+        // 2. Observe LiveData for API responses (as we planned)
+        mapViewModel.getFloorplanResponse().observe(getViewLifecycleOwner(), response -> {
+            // This part remains the same. When data comes back, it will be drawn.
+            if (response != null && trajectoryMapFragment.getMap() != null) {
+                // The logic to draw outlines is now inside TrajectoryMapFragment,
+                // so we don't call drawVenueOutlines() from here anymore.
+                // The observer in TrajectoryMapFragment will handle it.
+                Log.d(TAG, "Floorplan response received and observed by child fragment.");
+            } else {
+                Log.d(TAG, "Failed to fetch floorplans or no floorplans nearby.");
+            }
+        });
+
+        // 3. Initialize the map fragment
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.replayMapFragmentContainer);
         if (trajectoryMapFragment == null) {
@@ -131,21 +171,30 @@ public class ReplayFragment extends Fragment {
                     .commit();
         }
 
+        // 4. CRITICAL STEP: Use getMapAsync to connect everything when the map is ready.
+        trajectoryMapFragment.getMapAsync(googleMap -> {
+            // This code block is guaranteed to run ONLY when the map is fully loaded.
 
+            // a. Set the polygon click listener on the now-ready map.
+            googleMap.setOnPolygonClickListener(polygon -> {
+                // The selectVenue() method is now inside TrajectoryMapFragment,
+                // so we don't need to do anything here. The child fragment handles its own clicks.
+            });
 
-        // 1) Check if the file contains any GNSS data
-        boolean gnssExists = hasAnyGnssData(replayData);
-
-        if (gnssExists) {
-            showGnssChoiceDialog();
-        } else {
-            // No GNSS data -> automatically use param lat/lon
-            if (initialLat != 0f || initialLon != 0f) {
-                LatLng startPoint = new LatLng(initialLat, initialLon);
-                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-                trajectoryMapFragment.setInitialCameraPosition(startPoint);
+            // b. Run the original logic to determine the starting position.
+            boolean gnssExists = hasAnyGnssData(replayData);
+            if (gnssExists) {
+                showGnssChoiceDialog();
+            } else {
+                if (initialLat != 0f || initialLon != 0f) {
+                    // This call will now trigger the API request inside TrajectoryMapFragment.
+                    setupInitialMapPosition(initialLat, initialLon);
+                }
             }
-        }
+        });
+
+
+        // --- The rest of your original UI setup code remains unchanged ---
 
         // Initialize UI controls
         playPauseButton = view.findViewById(R.id.playPauseButton);
@@ -159,7 +208,7 @@ public class ReplayFragment extends Fragment {
             playbackSeekBar.setMax(replayData.size() - 1);
         }
 
-        // Button Listeners
+        // Button Listeners (No changes needed here)
         playPauseButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) {
                 Log.w(TAG, "Play/Pause button pressed but replayData is empty.");
@@ -180,7 +229,6 @@ public class ReplayFragment extends Fragment {
             }
         });
 
-        // Restart button listener
         restartButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = 0;
@@ -189,7 +237,6 @@ public class ReplayFragment extends Fragment {
             updateMapForIndex(0);
         });
 
-        // Go to End button listener
         goEndButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = replayData.size() - 1;
@@ -200,17 +247,18 @@ public class ReplayFragment extends Fragment {
             playPauseButton.setText("Play");
         });
 
-        // Exit button listener
         exitButton.setOnClickListener(v -> {
             Log.i(TAG, "Exit button pressed. Exiting replay.");
             if (getActivity() instanceof ReplayActivity) {
                 ((ReplayActivity) getActivity()).finishFlow();
             } else {
-                requireActivity().onBackPressed();
+                // NEW: Use the OnBackPressedDispatcher to handle the back press.
+                // This is the modern, recommended way.
+                requireActivity().getOnBackPressedDispatcher().onBackPressed();
             }
         });
 
-        // SeekBar listener
+        // SeekBar listener (No changes needed here)
         playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -271,10 +319,15 @@ public class ReplayFragment extends Fragment {
                 .show();
     }
 
+    // NEW FEATURE: Modified this method to also trigger the API call.
     private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
+        LatLng startPoint = new LatLng(latitude, longitude);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
+
+        // NEW FEATURE: When the map position is set, trigger a fetch for nearby floorplans.
+        Log.d(TAG, "Triggering fetch for nearby floorplans at " + latitude + ", " + longitude);
+        mapViewModel.fetchNearbyFloorplans(latitude, longitude);
     }
 
     /**
@@ -283,7 +336,8 @@ public class ReplayFragment extends Fragment {
     private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
         for (TrajParser.ReplayPoint point : data) {
             if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+                // BUG FIX: Was using replayData.get(0), should use the current point.
+                return new LatLng(point.gnssLocation.latitude, point.gnssLocation.longitude);
             }
         }
         return null; // None found
@@ -361,5 +415,106 @@ public class ReplayFragment extends Fragment {
     public void onDestroyView() {
         super.onDestroyView();
         playbackHandler.removeCallbacks(playbackRunnable);
+    }
+
+    // --- NEW FEATURE: All methods below are added for the indoor map display functionality. ---
+
+    /**
+     * Draws venue outlines on the map based on the API response.
+     * @param apiResponse The JSON object received from the floorplan API.
+     */
+    private void drawVenueOutlines(JsonObject apiResponse) {
+        // Clear any previously drawn polygons before adding new ones.
+        for (Polygon p : venuePolygons) {
+            p.remove();
+        }
+        venuePolygons.clear();
+
+        JsonArray venues = apiResponse.getAsJsonArray("venues");
+        if (venues == null || trajectoryMapFragment.getMap() == null) return;
+
+        for (JsonElement venueElement : venues) {
+            JsonObject venue = venueElement.getAsJsonObject();
+            // The API returns coordinates in a nested array: [[lng, lat], [lng, lat], ...]
+            JsonArray outlineCoords = venue.getAsJsonObject("outline").getAsJsonArray("coordinates").get(0).getAsJsonArray();
+
+            PolygonOptions polygonOptions = new PolygonOptions()
+                    .strokeColor(Color.BLUE)
+                    .strokeWidth(5)
+                    .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue
+                    .clickable(true);
+
+            for (JsonElement coordElement : outlineCoords) {
+                JsonArray lngLat = coordElement.getAsJsonArray();
+                // Note: API returns [longitude, latitude], Google Maps LatLng is (latitude, longitude).
+                polygonOptions.add(new LatLng(lngLat.get(1).getAsDouble(), lngLat.get(0).getAsDouble()));
+            }
+
+            Polygon polygon = trajectoryMapFragment.getMap().addPolygon(polygonOptions);
+            polygon.setTag(venue); // Attach the full venue data to the polygon for later use on click.
+            venuePolygons.add(polygon);
+        }
+    }
+
+    /**
+     * Handles the event when a user clicks on a venue polygon on the map.
+     * @param venueData The JSON data of the selected venue, retrieved from the polygon's tag.
+     */
+    private void selectVenue(JsonObject venueData) {
+        String venueId = venueData.get("id").getAsString();
+        Log.d(TAG, "Venue selected: " + venueId);
+
+        // Update the ViewModel with the selected venue ID. This makes it available to other parts
+        // of the app, like the data recording service.
+        mapViewModel.setSelectedVenueId(venueId);
+
+        // TODO: Implement a UI element (e.g., a dropdown menu) to allow the user to select a floor.
+
+        // For now, automatically display the first floorplan available for the selected venue.
+        JsonArray floorplans = venueData.getAsJsonArray("floorplans");
+        if (floorplans != null && floorplans.size() > 0) {
+            JsonObject firstFloor = floorplans.get(0).getAsJsonObject();
+            displayFloorplan(firstFloor);
+        }
+    }
+
+    /**
+     * Displays a specific floorplan image as a GroundOverlay on the map.
+     * @param floorplan The JSON object for a single floor, containing URL and bounding box.
+     */
+    private void displayFloorplan(JsonObject floorplan) {
+        // Remove the previous floorplan overlay if it exists.
+        if (floorplanOverlay != null) {
+            floorplanOverlay.remove();
+        }
+
+        String imageUrl = floorplan.get("url").getAsString();
+        // The bounding box is defined as [minLng, minLat, maxLng, maxLat].
+        JsonArray bbox = floorplan.getAsJsonArray("bbox");
+        LatLngBounds bounds = new LatLngBounds(
+                new LatLng(bbox.get(1).getAsDouble(), bbox.get(0).getAsDouble()), // Southwest corner
+                new LatLng(bbox.get(3).getAsDouble(), bbox.get(2).getAsDouble())  // Northeast corner
+        );
+
+        // Use Glide to asynchronously load the image from the URL. This prevents blocking the main thread.
+        Glide.with(this)
+                .asBitmap()
+                .load(imageUrl)
+                .into(new CustomTarget<Bitmap>() {
+                    @Override
+                    public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
+                        if (trajectoryMapFragment.getMap() != null) {
+                            GroundOverlayOptions options = new GroundOverlayOptions()
+                                    .image(BitmapDescriptorFactory.fromBitmap(resource))
+                                    .positionFromBounds(bounds);
+                            floorplanOverlay = trajectoryMapFragment.getMap().addGroundOverlay(options);
+                        }
+                    }
+
+                    @Override
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
+                        // This is called when the resource is no longer needed.
+                    }
+                });
     }
 }
