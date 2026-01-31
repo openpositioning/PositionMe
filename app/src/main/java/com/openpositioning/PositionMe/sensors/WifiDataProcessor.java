@@ -10,16 +10,13 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
-import android.os.SystemClock;
 import android.provider.Settings;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 /**
@@ -53,10 +50,6 @@ public class WifiDataProcessor implements Observable {
 
     //List of nearby networks
     private Wifi[] wifiData;
-
-    // Cache for deduplication and RTT capability transfer
-    private Set<String> lastAcceptedBssids = new HashSet<>();
-    private long lastAcceptedTimestampMs = -1L;
 
     //List of observers to be notified when changes are detected
     private ArrayList<Observer> observers;
@@ -133,20 +126,6 @@ public class WifiDataProcessor implements Observable {
             //Stop receiver as scan is complete
             context.unregisterReceiver(this);
 
-            // De-duplication: drop scan if same BSSID set within 3 seconds
-            Set<String> currentBssids = new HashSet<>();
-            for (ScanResult sr : wifiScanList) {
-                currentBssids.add(sr.BSSID);
-            }
-            long now = SystemClock.elapsedRealtime();
-            if (lastAcceptedTimestampMs >= 0
-                    && currentBssids.equals(lastAcceptedBssids)
-                    && (now - lastAcceptedTimestampMs) < 3000) {
-                return;
-            }
-            lastAcceptedTimestampMs = now;
-            lastAcceptedBssids = new HashSet<>(currentBssids);
-
             //Loop though each item in wifi list
             wifiData = new Wifi[wifiScanList.size()];
             for(int i = 0; i < wifiScanList.size(); i++) {
@@ -157,14 +136,6 @@ public class WifiDataProcessor implements Observable {
                 //store mac address and rssi of wifi
                 wifiData[i].setBssid(intMacAddress);
                 wifiData[i].setLevel(wifiScanList.get(i).level);
-                wifiData[i].setSsid(wifiScanList.get(i).SSID);
-                wifiData[i].setFrequency(wifiScanList.get(i).frequency);
-
-                boolean rttCapable = false;
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                    rttCapable = wifiScanList.get(i).is80211mcResponder();
-                }
-                wifiData[i].setRttSupported(rttCapable);
             }
 
             //Notify observers of change in wifiData variable
@@ -358,5 +329,4 @@ public class WifiDataProcessor implements Observable {
         }
         return currentWifi;
     }
-
 }
