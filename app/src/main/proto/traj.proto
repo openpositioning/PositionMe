@@ -22,13 +22,13 @@ message Trajectory {
   repeated WiFiAPData aps_data = 12;
   repeated WiFiRTTReading wifi_rtt_data = 13;
   repeated Fingerprint ble_fingerprints = 14;
-  //repeated BleData ble_data = 15;
-  
+  repeated BleData ble_data = 15;
+
   // UNIX timestamp (in milliseconds) recorded from the start of this
   // trajectory data collection event. All future
   // timestamps in sub classes are to be RELATIVE timestamps
   // (in milliseconds) to this start time.
-  // E.g. 
+  // E.g.
   // start_timestamp = 1674819807315 (UTC 27 Jan 2023 in the morning)
   // relative_timestamp = 3000 (3s)
   int64 start_timestamp = 16;
@@ -44,6 +44,7 @@ message Trajectory {
   SensorInfo proximity_info = 25;
 
   repeated GNSSPosition test_points = 26;
+
 }
 
 message RelativePosition {
@@ -128,9 +129,7 @@ message GNSSReading {
 
 message Fingerprint {
   int64 relative_timestamp = 1;
-  // unique ID for this WiFi scan (fingerprint)
-  string uuid = 2;
-  repeated RFScan rf_scans = 3;
+  repeated RFScan rf_scans = 2;
 
 }
 
@@ -147,9 +146,6 @@ message RFScan {
 
   // returned position
   optional GNSSPosition position = 4;
-
-  // true if AP supports WiFi RTT (802.11mc)
-  bool rtt_supported = 5;
 }
 
 message WiFiRTTReading {
@@ -181,20 +177,6 @@ message WiFiAPData {
   
   // Flag to indicate if the AP supports RTT measurements
   bool rtt_enabled = 4;
-}
-
-message BleFingerprint {
-  // Window start time (ms from start_timestamp)
-  int64 relative_timestamp = 1;
-
-  // Fixed window length in ms (e.g., 2000)
-  int32 window_length_ms = 2;
-
-  // unique ID for this BLE window
-  string uuid = 3;
-
-  // aggregated observations for devices seen in this window
-  repeated BleScan ble_scans = 4;
 }
 
 message BleData {
@@ -230,3 +212,4 @@ message SensorInfo {
   float max_range = 7;
   float frequency = 8;
 }
+

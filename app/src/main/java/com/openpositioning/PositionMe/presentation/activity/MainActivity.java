@@ -123,14 +123,17 @@ public class MainActivity extends AppCompatActivity implements Observer {
                 result -> {
                     boolean locationGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
                     boolean activityGranted = result.getOrDefault(Manifest.permission.ACTIVITY_RECOGNITION, false);
-
-                    if (locationGranted && activityGranted) {
+                    boolean bleGranted = true;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        bleGranted = result.getOrDefault(Manifest.permission.BLUETOOTH_SCAN, false) && result.getOrDefault(Manifest.permission.BLUETOOTH_CONNECT, false);
+                    }
+                    if (locationGranted && activityGranted && bleGranted) {
                         // Both permissions granted
                         allPermissionsObtained();
                     } else {
                         // Permission denied
                         Toast.makeText(this,
-                                "Location or Physical Activity permission denied. Some features may not work.",
+                                "Location or Physical Activity or Bluetooth permission denied. Some features may not work.",
                                 Toast.LENGTH_LONG).show();
                     }
                 }
@@ -184,7 +187,19 @@ public class MainActivity extends AppCompatActivity implements Observer {
                         this, Manifest.permission.ACTIVITY_RECOGNITION
                 ) == PackageManager.PERMISSION_GRANTED;
 
-                if (!locationGranted || !activityGranted) {
+                boolean bleGranted = true;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    bleGranted =
+                            ContextCompat.checkSelfPermission(this,
+                                    Manifest.permission.BLUETOOTH_SCAN)
+                                    == PackageManager.PERMISSION_GRANTED
+                                    &&
+                                    ContextCompat.checkSelfPermission(this,
+                                            Manifest.permission.BLUETOOTH_CONNECT)
+                                            == PackageManager.PERMISSION_GRANTED;
+                }
+
+                if (!locationGranted || !activityGranted || !bleGranted ) {
                     // Request both permissions using ActivityResultLauncher
                     multiplePermissionsLauncher.launch(new String[]{
                             Manifest.permission.ACCESS_FINE_LOCATION
@@ -192,6 +207,13 @@ public class MainActivity extends AppCompatActivity implements Observer {
                     multiplePermissionsLauncher.launch(new String[]{
                             Manifest.permission.ACTIVITY_RECOGNITION
                     });
+                    multiplePermissionsLauncher.launch(new String[]{
+                            Manifest.permission.BLUETOOTH_SCAN
+                    });
+                    multiplePermissionsLauncher.launch(new String[]{
+                            Manifest.permission.BLUETOOTH_CONNECT
+                    });
+
                 } else {
                     // Both permissions are already granted
                     allPermissionsObtained();

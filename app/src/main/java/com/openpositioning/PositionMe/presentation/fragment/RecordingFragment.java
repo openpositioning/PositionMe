@@ -4,10 +4,12 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Environment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,6 +21,7 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 import com.google.android.material.button.MaterialButton;
 import android.util.Log;
 import androidx.annotation.NonNull;
@@ -27,13 +30,27 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.Traj;
+import com.google.protobuf.util.JsonFormat;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+import android.util.Log;
 
 /**
  * Fragment responsible for managing the recording process of trajectory data.
@@ -167,12 +184,30 @@ public class RecordingFragment extends Fragment {
 
         // Buttons
         completeButton.setOnClickListener(v -> {
-            if (autoStop != null) autoStop.cancel();
-            refreshDataHandler.removeCallbacks(refreshDataTask);
-
-            sensorFusion.stopRecording();
-            ((RecordingActivity) requireActivity()).showCorrectionScreen();
-        });
+                    // Stop recording & go to correction
+                    if (autoStop != null) autoStop.cancel();
+                    refreshDataHandler.removeCallbacks(refreshDataTask);
+                    sensorFusion.stopRecording();
+                    new AlertDialog.Builder(requireActivity())
+                            .setTitle("Save trajectory?")
+                            .setMessage("Do you want to save trajectory into JSON locally?")
+                            .setPositiveButton("Save", (dialog, which) ->
+                            {
+                                Traj.Trajectory trajectory = sensorFusion.getBuiltTrajectory();
+                                if (trajectory != null) {
+                                    // save trajectory into a JSON file locally
+                                    saveTrajectoryLocally(trajectory);
+                                }
+                                // Show Correction screen
+                                ((RecordingActivity) requireActivity()).showCorrectionScreen();
+                            })
+                            .setNegativeButton("Don't save", (dialog, which) -> {
+                                // Show Correction screen
+                                ((RecordingActivity) requireActivity()).showCorrectionScreen();
+                            }).setCancelable(false)
+                            .show();
+                }
+        );
 
         // Cancel button with confirmation dialog
         cancelButton.setOnClickListener(v -> {
@@ -251,6 +286,54 @@ public class RecordingFragment extends Fragment {
             }.start();
         } else {
             refreshDataHandler.post(refreshDataTask);
+        }
+    }
+    private void saveTrajectoryLocally(Traj.Trajectory trajectory) {
+        // Decide where to store the file
+        File directory;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // App-specific external Documents directory (no permission needed)
+            directory = requireActivity()
+                    .getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+
+            // Fallback to internal storage if external is unavailable
+            if (directory == null) {
+                directory = requireActivity().getFilesDir();
+            }
+        } else {
+            // Older Android versions: internal storage
+            directory = requireActivity().getFilesDir();
+        }
+
+        // Create a unique filename using timestamp
+        String timestamp = new SimpleDateFormat(
+                "dd-MM-yy-HH-mm-ss",
+                Locale.US
+        ).format(new Date());
+
+        File file = new File(directory, "trajectory_" + timestamp + ".json");
+
+        try {
+            // Convert protobuf object to JSON
+            String json = JsonFormat.printer()
+                    .includingDefaultValueFields()
+                    .print(trajectory);
+
+            // Write JSON to file using UTF-8
+            try (Writer writer = new OutputStreamWriter(
+                    new FileOutputStream(file),
+                    StandardCharsets.UTF_8
+            )) {
+                writer.write(json);
+            }
+
+            // Log success
+            Log.d("SaveTag", "Trajectory saved to: " + file.getAbsolutePath());
+            Toast.makeText(this.getContext(), "Saved to " + file, Toast.LENGTH_SHORT).show(); // show error message to users
+
+        } catch (IOException e) {
+            // Log error with stack trace
+            Log.e("SaveTag", "Failed to save trajectory", e);
         }
     }
 

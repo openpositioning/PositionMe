@@ -6,6 +6,9 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Switch;
+import android.widget.ImageView;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -20,6 +23,8 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.presentation.viewitems.WifiListAdapter;
+import com.openpositioning.PositionMe.sensors.Ble;
+import com.openpositioning.PositionMe.presentation.viewitems.BleListAdapter;
 
 import java.util.List;
 import java.util.Map;
@@ -47,6 +52,7 @@ public class MeasurementsFragment extends Fragment {
     // UI elements
     private ConstraintLayout sensorMeasurementList;
     private RecyclerView wifiListView;
+    private RecyclerView bleListView;
     // List of string resource IDs
     private int[] prefaces;
     private int[] gnssPrefaces;
@@ -124,7 +130,29 @@ public class MeasurementsFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         sensorMeasurementList = (ConstraintLayout) getView().findViewById(R.id.sensorMeasurementList);
         wifiListView = (RecyclerView) getView().findViewById(R.id.wifiList);
+        bleListView = view.findViewById(R.id.bleList);
         wifiListView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        bleListView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        Switch networkSwitch = view.findViewById(R.id.networkSwitch);
+        TextView title = view.findViewById(R.id.wifiTitle);
+        ImageView imageView = view.findViewById(R.id.imageView);
+
+        networkSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+           if (isChecked) {
+              // BLE selected
+              wifiListView.setVisibility(View.GONE);
+              bleListView.setVisibility(View.VISIBLE);
+              title.setText("BLE");
+              imageView.setImageResource(R.drawable.ic_baseline_bluetooth_searching_24);
+
+           } else {
+              // WiFi selected
+              bleListView.setVisibility(View.GONE);
+              wifiListView.setVisibility(View.VISIBLE);
+              title.setText("WiFi");
+              imageView.setImageResource(R.drawable.ic_baseline_wifi_24);
+           }
+       });
     }
 
     /**
@@ -169,6 +197,16 @@ public class MeasurementsFragment extends Fragment {
             // If there are WiFi networks visible, update the recycler view with the data.
             if(wifiObjects != null) {
                 wifiListView.setAdapter(new WifiListAdapter(getActivity(), wifiObjects));
+            }
+            List<Ble> bleObjects = sensorFusion.getBleList();
+            if (bleObjects != null) {
+                Log.d("BLE_DEBUG", "BLE count = " + bleObjects.size());
+                bleListView.setAdapter(new BleListAdapter(getActivity(), bleObjects));
+            } else {
+                Log.d("BLE_DEBUG", "BLE list is NULL");
+            }
+            if (bleObjects != null) {
+                bleListView.setAdapter(new BleListAdapter(getActivity(), bleObjects));
             }
             // Restart the data updater task in REFRESH_TIME milliseconds.
             refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);

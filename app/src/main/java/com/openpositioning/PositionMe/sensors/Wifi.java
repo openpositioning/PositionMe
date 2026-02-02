@@ -21,6 +21,12 @@ public class Wifi {
     private boolean rttCapable;
 
 
+    // Whether this AP supports WiFi RTT (802.11mc)
+    private boolean isRttCapable;
+  
+    // Uuid
+    private String uuid;
+
     /**
      * Empty public default constructor of the Wifi object.
      */
@@ -33,9 +39,9 @@ public class Wifi {
     public long getBssid() { return bssid; }
     public int getLevel() { return level; }
     public long getFrequency() { return frequency; }
-    public String getUuid() { return uuid; }
-    public boolean isRttCapable(){ return rttCapable;}
-
+    public boolean isRttCapable(){ return isRttCapable; }
+    public String getUuid(){ return uuid; }
+    
     /**
      * Setters for each property
      */
@@ -43,9 +49,13 @@ public class Wifi {
     public void setBssid(long bssid) { this.bssid = bssid; }
     public void setLevel(int level) { this.level = level; }
     public void setFrequency(long frequency) { this.frequency = frequency; }
-    public void setUuid(String uuid) { this.uuid = uuid; }
-    public void setIsRttCapable(boolean rttCapable) { this.rttCapable = rttCapable; }
-
+    public void setUuid(String uuid){
+        this.uuid = uuid;
+    }
+    public void setIsRttCapable(boolean isRttCapable){
+        this.isRttCapable = isRttCapable;
+    }
+        
     /**
      * Generates a string containing mac address and rssi of Wifi.
      *

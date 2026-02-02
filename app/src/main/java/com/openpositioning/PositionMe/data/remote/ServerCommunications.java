@@ -527,14 +527,25 @@ public class ServerCommunications implements Observable {
     }
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+        Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
+        Log.i("ServerCommunications", "Magnetometer Data size: " + trajectory.getMagnetometerDataCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
+        Log.i("ServerCommunications", "Proximity Data size: " + trajectory.getProximityDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+        Log.i("ServerCommunications", "WiFi Fingerprints size: " + trajectory.getWifiFingerprintsCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
-        Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
+
+
+    /**
+     * {@inheritDoc}
+     *
+     * Implement default method from Observable Interface to add new observers to the list of
+     * registered observers.
+     *
+     * @param o Classes which implement the Observer interface to receive updates from the class.
+     */
     @Override
     public void registerObserver(Observer o) {
         this.observers.add(o);

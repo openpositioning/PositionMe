@@ -1,4 +1,5 @@
 package com.openpositioning.PositionMe.sensors;
+import com.openpositioning.PositionMe.Traj;
 
 import android.Manifest;
 import android.content.BroadcastReceiver;
@@ -13,12 +14,29 @@ import android.net.wifi.WifiManager;
 import android.provider.Settings;
 import android.widget.Toast;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.net.wifi.rtt.WifiRttManager;
+import android.net.wifi.rtt.RangingRequest;
+import android.net.wifi.rtt.RangingResult;
+import android.net.wifi.rtt.RangingResultCallback;
+import android.net.Uri;
+import android.os.Build;
+import android.os.PowerManager;
+import android.util.Log;
+import androidx.annotation.RequiresApi;
+import androidx.core.app.NotificationCompat;
 import androidx.core.app.ActivityCompat;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.function.Consumer;
+
 /**
  * The WifiDataProcessor class is the Wi-Fi data gathering and processing class of the application.
  * It implements the wifi scanning and broadcasting design to identify a list of nearby Wi-Fis as
@@ -57,6 +75,12 @@ public class WifiDataProcessor implements Observable {
     // Timer object
     private Timer scanWifiDataTimer;
 
+    private static final String CHANNEL_ID = "wifi_scan_channel";
+
+    private final WifiRttManager rttManager;
+    private final Executor executor;
+
+
     /**
      * Public default constructor of the WifiDataProcessor class.
      * The constructor saves the context, checks for permissions to use the location services,
@@ -65,12 +89,10 @@ public class WifiDataProcessor implements Observable {
      * wifi is enabled and enables wifi scans every 5seconds. It also informs the user to disable
      * wifi throttling if the device implements it.
      *
-     * @param context           Application Context to be used for permissions and device accesses.
-     *
-     * @see SensorFusion the intended parent class.
-     *
+     * @param context Application Context to be used for permissions and device accesses.
      * @author Virginia Cangelosi
      * @author Mate Stodulka
+     * @see SensorFusion the intended parent class.
      */
     public WifiDataProcessor(Context context) {
         this.context = context;
@@ -79,6 +101,8 @@ public class WifiDataProcessor implements Observable {
         this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
         this.scanWifiDataTimer = new Timer();
         this.observers = new ArrayList<>();
+        this.rttManager = (WifiRttManager) context.getSystemService(Context.WIFI_RTT_RANGING_SERVICE);
+        this.executor = context.getMainExecutor();
 
         // Decreapted method after API 29
         // Turn on wifi if it is currently disabled
@@ -88,12 +112,19 @@ public class WifiDataProcessor implements Observable {
 //      //  }
 
         // Start wifi scan and return results via broadcast
-        if(permissionsGranted) {
+        if (permissionsGranted) {
             this.scanWifiDataTimer.schedule(new scheduledWifiScan(), 0, scanInterval);
         }
 
         //Inform the user if wifi throttling is enabled on their device
         checkWifiThrottling();
+
+        // Request battery optimization exemption
+        requestIgnoreBatteryOptimizations();
+
+        // Start Wi-Fi scans periodically
+        startForegroundScan();
+
     }
 
     /**
@@ -120,7 +151,6 @@ public class WifiDataProcessor implements Observable {
                 stopListening();
                 return;
             }
-
             //Collect the list of nearby wifis
             List<ScanResult> wifiScanList = wifiManager.getScanResults();
             //Stop receiver as scan is complete
@@ -128,14 +158,16 @@ public class WifiDataProcessor implements Observable {
 
             //Loop though each item in wifi list
             wifiData = new Wifi[wifiScanList.size()];
-            for(int i = 0; i < wifiScanList.size(); i++) {
+            for (int i = 0; i < wifiScanList.size(); i++) {
                 wifiData[i] = new Wifi();
-                //Convert String mac address to an integer
+                // Convert String mac address to an integer
                 String wifiMacAddress = wifiScanList.get(i).BSSID;
                 long intMacAddress = convertBssidToLong(wifiMacAddress);
-                //store mac address and rssi of wifi
+                //store the mac address, rssi level, uuid and rtt flag for each scan
                 wifiData[i].setBssid(intMacAddress);
                 wifiData[i].setLevel(wifiScanList.get(i).level);
+                wifiData[i].setUuid(UUID.randomUUID().toString());
+                wifiData[i].setIsRttCapable(wifiScanList.get(i).is80211mcResponder());
             }
 
             //Notify observers of change in wifiData variable
@@ -147,33 +179,30 @@ public class WifiDataProcessor implements Observable {
      * Converts mac address from string to integer.
      * Removes semicolons from mac address and converts each hex byte to a hex integer.
      *
-     *
-     * @param wifiMacAddress        String Mac Address received from WifiManager containing colons
-     *
-     * @return                      Long variable with decimal conversion of the mac address
+     * @param wifiMacAddress String Mac Address received from WifiManager containing colons
+     * @return Long variable with decimal conversion of the mac address
      */
-    private long convertBssidToLong(String wifiMacAddress){
-        long intMacAddress =0;
-        int colonCount =5;
+    private long convertBssidToLong(String wifiMacAddress) {
+        long intMacAddress = 0;
+        int colonCount = 5;
         //Loop through each character
-        for(int j =0; j<17; j++){
+        for (int j = 0; j < 17; j++) {
             //Identify character
             char macByte = wifiMacAddress.charAt(j);
             //convert string hex mac address with colons to decimal long integer
-            if(macByte != ':'){
+            if (macByte != ':') {
                 //For characters 0-9 subtract 48 from ASCII code and multiply by 16^position
-                if((int) macByte >= 48 && (int) macByte <= 57){
-                    intMacAddress = intMacAddress + (((int)macByte-48)*((long)Math.pow(16,16-j-colonCount)));
+                if ((int) macByte >= 48 && (int) macByte <= 57) {
+                    intMacAddress = intMacAddress + (((int) macByte - 48) * ((long) Math.pow(16, 16 - j - colonCount)));
                 }
 
                 //For characters a-f subtract 87 (=97-10) from ASCII code and multiply by 16^index
-                else if ((int) macByte >= 97 && (int) macByte <= 102){
-                    intMacAddress = intMacAddress + (((int)macByte-87)*((long)Math.pow(16,16-j-colonCount)));
+                else if ((int) macByte >= 97 && (int) macByte <= 102) {
+                    intMacAddress = intMacAddress + (((int) macByte - 87) * ((long) Math.pow(16, 16 - j - colonCount)));
                 }
-            }
-            else
+            } else
                 //coloncount is used to obtain the index of each character
-                colonCount --;
+                colonCount--;
         }
 
         return intMacAddress;
@@ -184,7 +213,7 @@ public class WifiDataProcessor implements Observable {
      * Explicit user permissions must be granted for android sdk version 23 and above. This
      * function checks which permissions are granted, and returns their conjunction.
      *
-     * @return  boolean true if all permissions are granted for wifi access, false otherwise.
+     * @return boolean true if all permissions are granted for wifi access, false otherwise.
      */
     private boolean checkWifiPermissions() {
         int wifiAccessPermission = ActivityCompat.checkSelfPermission(this.context,
@@ -210,7 +239,7 @@ public class WifiDataProcessor implements Observable {
      */
     private void startWifiScan() {
         //Check settings for wifi permissions
-        if(checkWifiPermissions()) {
+        if (checkWifiPermissions()) {
             //if(sharedPreferences.getBoolean("wifi", false)) {
             //Register broadcast receiver for wifi scans
             context.registerReceiver(wifiScanReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
@@ -235,20 +264,24 @@ public class WifiDataProcessor implements Observable {
      * timer so that new scans are not initiated.
      */
     public void stopListening() {
-        context.unregisterReceiver(wifiScanReceiver);
+        try {
+            context.unregisterReceiver(wifiScanReceiver);
+        } catch (IllegalArgumentException ignored) {
+        }
         this.scanWifiDataTimer.cancel();
     }
+
 
     /**
      * Inform user if throttling is resent on their device.
      * If the device supports wifi throttling check if it is enabled and instruct the user to
      * disable it.
      */
-    public void checkWifiThrottling(){
-        if(checkWifiPermissions()) {
+    public void checkWifiThrottling() {
+        if (checkWifiPermissions()) {
             //If the device does not support wifi throttling an exception is thrown
             try {
-                if(Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled")==1) {
+                if (Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled") == 1) {
                     //Inform user to disable wifi throttling
                     Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
                 }
@@ -259,9 +292,64 @@ public class WifiDataProcessor implements Observable {
     }
 
     /**
+     * Requests the user to allow ignoring battery optimizations.
+     */
+    private void requestIgnoreBatteryOptimizations() {
+        PowerManager pm = (PowerManager) context.getSystemService(PowerManager.class);
+        if (pm != null && !pm.isIgnoringBatteryOptimizations(context.getPackageName())) {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + context.getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        }
+    }
+
+    /**
+     * Starts a “foreground-like” service using a notification to reduce Android killing the app.
+     */
+    private void startForegroundScan() {
+        // Create notification channel for Android O+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            createNotificationChannel();
+        }
+
+        // Build notification
+        Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID)
+                .setContentTitle("PositionMe")
+                .setContentText("Scanning Wi-Fi networks in background")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build();
+
+        // Use startForegroundService from Activity (cannot directly call in non-service class)
+        // But we can simulate by showing a persistent notification
+        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) {
+            manager.notify(1, notification);
+        }
+
+        // Start periodic Wi-Fi scans
+        scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, scanInterval);
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private void createNotificationChannel() {
+        NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                "Wi-Fi Scanning",
+                NotificationManager.IMPORTANCE_LOW
+        );
+        channel.setDescription("Foreground notification for continuous Wi-Fi scanning");
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.createNotificationChannel(channel);
+        }
+    }
+
+    /**
      * Implement default method from Observable Interface to add new observers to the class.
      *
-     * @param o     Classes which implement the Observer interface to receive updates from the class.
+     * @param o Classes which implement the Observer interface to receive updates from the class.
      */
     @Override
     public void registerObserver(Observer o) {
@@ -271,18 +359,19 @@ public class WifiDataProcessor implements Observable {
     /**
      * Implement default method from Observable Interface to add notify observers to the class.
      * Changes to the wifiData variable are passed to observers of the class.
-     * @param idx     Unused.
+     *
+     * @param idx Unused.
      */
     @Override
     public void notifyObservers(int idx) {
-        for(Observer o : observers) {
+        for (Observer o : observers) {
             o.update(wifiData);
         }
     }
 
     /**
      * Class to schedule wifi scans.
-     *
+     * <p>
      * Implements default method in {@link TimerTask} class which it implements. It begins to start
      * calling wifi scans every 5 seconds.
      */
@@ -296,14 +385,14 @@ public class WifiDataProcessor implements Observable {
 
     /**
      * Obtains required information about wifi in which the device is currently connected.
-     *
+     * <p>
      * A connectivity manager is used to obtain information about the current network. If the device
      * is connected to a network its ssid, mac address and frequency is stored to a Wifi object so
      * that it can be accessed by the caller of the method
      *
      * @return wifi object containing the currently connected wifi's ssid, mac address and frequency
      */
-    public Wifi getCurrentWifiData(){
+    public Wifi getCurrentWifiData() {
         //Set up a connectivity manager to get information about the wifi
         ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService
                 (Context.CONNECTIVITY_SERVICE);
@@ -313,20 +402,97 @@ public class WifiDataProcessor implements Observable {
         //Only obtain wifi data if the device is connected
         //Wifi in which the device is currently connected to
         Wifi currentWifi = new Wifi();
-        if(networkInfo.isConnected()) {
+        if (networkInfo.isConnected()) {
             //Store the ssid, mac address and frequency of the current wifi
             currentWifi.setSsid(wifiManager.getConnectionInfo().getSSID());
             String wifiMacAddress = wifiManager.getConnectionInfo().getBSSID();
             long intMacAddress = convertBssidToLong(wifiMacAddress);
             currentWifi.setBssid(intMacAddress);
             currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
-        }
-        else{
+        } else {
             //Store standard information if not connected
             currentWifi.setSsid("Not connected");
             currentWifi.setBssid(0);
             currentWifi.setFrequency(0);
         }
+        Log.d("WifiProcessor", "get current wifi");
         return currentWifi;
+    }
+    public void collectWifiRtt(Consumer<Traj.WiFiRTTReading.Builder> callback) {
+        // Check Android version (RTT requires Android 9+)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            Log.d("WifiRTT", "RTT not supported: Android < 9");
+            return;
+        }
+
+        // Check device capability
+        PackageManager pm = context.getPackageManager();
+        if (!pm.hasSystemFeature(PackageManager.FEATURE_WIFI_RTT)) {
+            Log.d("WifiRTT", "RTT not supported by hardware");
+            return;
+        }
+
+        // Runtime availability check
+        if (rttManager == null || !rttManager.isAvailable()) {
+            Log.d("WifiProcessor", "rtt not available");
+            return;
+        }
+
+        // Get the list of nearby Wi-Fi networks
+        List<ScanResult> scanResults = wifiManager.getScanResults();
+        if (scanResults == null || scanResults.isEmpty()) {
+            Log.d("WifiProcessor", "scan results not available");
+            return;
+        }
+
+        // Filter for RTT-capable APs
+        List<ScanResult> rttAps = new ArrayList<>();
+        for (ScanResult sr : scanResults) {
+            if (sr != null && sr.is80211mcResponder()) {
+                rttAps.add(sr);
+            }
+        }
+
+        // If no RTT APs found, exit
+        if (rttAps.isEmpty()) {
+            Log.w("WifiProcessor", "No RTT-capable APs found.");
+            return;
+        }
+
+        // Build a RangingRequest with all RTT-capable APs
+        RangingRequest request = new RangingRequest.Builder()
+                .addAccessPoints(rttAps)
+                .build();
+
+        // Start asynchronous RTT measurement
+        rttManager.startRanging(request, executor, new RangingResultCallback() {
+
+            // Called when results are ready
+            @Override
+            public void onRangingResults(List<RangingResult> results) {
+                for (RangingResult r : results) {
+                    // Skip failed measurements
+                    if (r.getStatus() != RangingResult.STATUS_SUCCESS) continue;
+
+                    // Convert AP MAC address to long
+                    long macLong = convertBssidToLong(r.getMacAddress().toString());
+
+                    // Build a protobuf Builder object for this RTT reading
+                    Traj.WiFiRTTReading.Builder builder = Traj.WiFiRTTReading.newBuilder()
+                            .setMac(macLong)                     // AP MAC
+                            .setDistance(r.getDistanceMm())      // distance in mm
+                            .setDistanceStd(r.getDistanceStdDevMm())  // standard deviation
+                            .setRssi(r.getRssi());               // signal strength
+
+                    // Pass Builder to callback; external code can finish building (e.g., set timestamp)
+                    callback.accept(builder);
+                }
+            }
+            // Called if the whole RTT request fails
+            @Override
+            public void onRangingFailure(int code) {
+                Log.w("WifiProcessor", "WiFi RTT failed with code: " + code);
+            }
+        });
     }
 }
