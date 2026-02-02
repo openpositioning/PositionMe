@@ -9,6 +9,10 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -83,6 +87,39 @@ public class TrajectoryMapFragment extends Fragment {
             }
         } catch (Exception ignore) {
         }
+
+    private GoogleMap gMap; // Google Maps instance
+    private LatLng currentLocation; // Stores the user's current location
+    private Marker orientationMarker; // Marker representing user's heading
+    private Marker gnssMarker; // GNSS position marker
+    private final List<Marker> testPointMarkers = new ArrayList<>(); //Test point markers
+    private Polyline polyline; // Polyline representing user's movement path
+    private boolean isRed = true; // Tracks whether the polyline color is red
+    private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
+
+    private Polyline gnssPolyline; // Polyline for GNSS path
+    private LatLng lastGnssLocation = null; // Stores the last GNSS location
+
+    private LatLng pendingCameraPosition = null; // Stores pending camera movement
+    private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
+
+    private IndoorMapManager indoorMapManager; // Manages indoor mapping
+    private SensorFusion sensorFusion;
+
+
+    // UI
+    private Spinner switchMapSpinner;
+
+    private SwitchMaterial gnssSwitch;
+    private SwitchMaterial autoFloorSwitch;
+
+    private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
+    private Button switchColorButton;
+    private Polygon buildingPolygon;
+
+
+    public TrajectoryMapFragment() {
+        // Required empty public constructor
     }
     private void cdbg(@NonNull String msg) {
         if (CDBG_ENABLED) Log.d(CDBG, msg);
@@ -285,6 +322,8 @@ public class TrajectoryMapFragment extends Fragment {
                     initMapSettings(gMap);
                     initCameraPickListeners(gMap);
                     indoorMapOverlay = new IndoorMapFragment(gMap, 8);
+
+                    // If a pending camera move, apply it now
                     if (hasPendingCameraMove && pendingCameraPosition != null) {
                         gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, 19f));
                         hasPendingCameraMove = false;
@@ -385,6 +424,22 @@ public class TrajectoryMapFragment extends Fragment {
             if (gMap != null) pickedCenter = gMap.getCameraPosition().target;
         });
     }
+
+    /**
+     * Initialize the map type spinner with the available map types.
+     * <p>
+     *     The spinner allows the user to switch between different map types
+     *     (e.g. Hybrid, Normal, Satellite) to customize their map view.
+     *     The spinner is populated with the available map types and listens
+     *     for user selection to update the map accordingly.
+     *     The map type is updated directly on the GoogleMap instance.
+     *     <p>
+     *         Note: The spinner is initialized with the default map type (Hybrid).
+     *         The map type is updated on user selection.
+     *     </p>
+     * </p>
+     *     @see com.google.android.gms.maps.GoogleMap The GoogleMap instance to update map type.
+     */
     private void initMapTypeSpinner() {
         if (switchMapSpinner == null) return;
         String[] maps = new String[]{
@@ -437,6 +492,17 @@ public class TrajectoryMapFragment extends Fragment {
             polyline.setPoints(points);
         }
     }
+
+    /**
+     * Set the initial camera position for the map.
+     * <p>
+     *     The method sets the initial camera position for the map when it is first loaded.
+     *     If the map is already ready, the camera is moved immediately.
+     *     If the map is not ready, the camera position is stored until the map is ready.
+     *     The method also tracks if there is a pending camera move.
+     * </p>
+     * @param startLocation The initial camera position to set.
+     */
     public void setInitialCameraPosition(@NonNull LatLng startLocation) {
         if (gMap != null) {
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLocation, 19f));
@@ -446,6 +512,18 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
     public LatLng getCurrentLocation() { return currentLocation; }
+
+    /**
+     * Get the current user location on the map.
+     * @return The current user location as a LatLng object.
+     */
+    public LatLng getCurrentLocation() {
+        return currentLocation;
+    }
+
+    /**
+     * Called when we want to set or update the GNSS marker position
+     */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null || !isGnssOn) return;
         if (gnssMarker == null) {
@@ -453,6 +531,10 @@ public class TrajectoryMapFragment extends Fragment {
                     .position(gnssLocation)
                     .title("GNSS Position")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
+                    .alpha(0.6f)   // 0.0 = invisible, 1.0 = fully opaque
+            );
+
             lastGnssLocation = gnssLocation;
         } else {
             gnssMarker.setPosition(gnssLocation);
@@ -464,6 +546,10 @@ public class TrajectoryMapFragment extends Fragment {
             lastGnssLocation = gnssLocation;
         }
     }
+
+    /**
+     * Remove GNSS marker if user toggles it off
+     */
     public void clearGNSS() {
         if (gnssMarker != null) {
             gnssMarker.remove();
@@ -471,6 +557,15 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
     public boolean isGnssEnabled() { return isGnssOn; }
+
+    /**
+     * Whether user is currently showing GNSS or not
+     */
+    public boolean isGnssEnabled() {
+        return isGnssOn;
+    }
+    public boolean isMapReady() { return gMap != null; }
+
     private void setFloorControlsVisibility(int visibility) {
         floorUpButton.setVisibility(visibility);
         floorDownButton.setVisibility(visibility);
@@ -480,6 +575,112 @@ public class TrajectoryMapFragment extends Fragment {
         LatLng center = (pickedCenter != null) ? pickedCenter : currentLocation;
         if (center == null) {
             Toast.makeText(requireContext(), "No location yet. Move map or wait for GNSS.", Toast.LENGTH_SHORT).show();
+
+    public void clearMapAndReset() {
+        if (polyline != null) {
+            polyline.remove();
+            polyline = null;
+        }
+        if (gnssPolyline != null) {
+            gnssPolyline.remove();
+            gnssPolyline = null;
+        }
+        if (orientationMarker != null) {
+            orientationMarker.remove();
+            orientationMarker = null;
+        }
+        if (gnssMarker != null) {
+            gnssMarker.remove();
+            gnssMarker = null;
+        }
+        lastGnssLocation = null;
+        currentLocation  = null;
+
+        // Re-create empty polylines with your chosen colors
+        if (gMap != null) {
+            polyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.RED)
+                    .width(5f)
+                    .add());
+            gnssPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(Color.BLUE)
+                    .width(5f)
+                    .add());
+        }
+        //Clear test point markers
+        for (Marker m: testPointMarkers){
+            if(m != null) m.remove();
+        }
+        testPointMarkers.clear();
+    }
+
+    /**
+     * Creates a small bitmap icon that looks like a colored circular marker with a number in the middle.
+     * This is used for “Add marker” / test-point markers so each one is visibly indexed (#1, #2, …).
+     *
+     * @param number the index to render inside the marker icon (e.g., 1, 2, 3...)
+     * @return a Bitmap that can be wrapped with BitmapDescriptorFactory.fromBitmap(...)
+     *         and used as a Google Maps marker icon.
+     */
+    private Bitmap makeNumberedMarkerIcon(int number) {
+        int size = 96;
+        Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bmp);
+
+        Paint circle = new Paint(Paint.ANTI_ALIAS_FLAG);
+        circle.setColor(Color.argb(140, 120, 190, 255)); // translucent light blue
+        canvas.drawCircle(size / 2f, size / 2f, size / 2.2f, circle);
+
+        Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
+        text.setColor(Color.WHITE);
+        text.setTextAlign(Paint.Align.CENTER);
+        text.setTextSize(40f);
+        text.setFakeBoldText(true);
+
+        Rect bounds = new Rect();
+        String s = String.valueOf(number);
+        text.getTextBounds(s, 0, s.length(), bounds);
+        float y = size / 2f - bounds.centerY();
+
+        canvas.drawText(s, size / 2f, y, text);
+        return bmp;
+    }
+
+    public void addTestPointMarker(@NonNull LatLng position, int index) {
+        if (gMap == null) return;
+
+        Marker marker = gMap.addMarker(new MarkerOptions()
+                .position(position)
+                .icon(BitmapDescriptorFactory.fromBitmap(makeNumberedMarkerIcon(index)))
+                .alpha(0.7f)
+        );
+
+        if (marker != null) {
+            marker.showInfoWindow();
+            testPointMarkers.add(marker);
+        }
+    }
+
+    /**
+     * Draw the building polygon on the map
+     * <p>
+     *     The method draws a polygon representing the building on the map.
+     *     The polygon is drawn with specific vertices and colors to represent
+     *     different buildings or areas on the map.
+     *     The method removes the old polygon if it exists and adds the new polygon
+     *     to the map with the specified options.
+     *     The method logs the number of vertices in the polygon for debugging.
+     *     <p>
+     *
+     *    Note: The method uses hard-coded vertices for the building polygon.
+     *
+     *    </p>
+     *
+     *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
+     */
+    private void drawBuildingPolygon() {
+        if (gMap == null) {
+            Log.e("TrajectoryMapFragment", "GoogleMap is not ready");
             return;
         }
         lastRequestCenter = center;
@@ -1798,4 +1999,5 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
     }
+}
 }

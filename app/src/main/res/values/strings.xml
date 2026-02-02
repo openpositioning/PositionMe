@@ -16,6 +16,8 @@
     <string name="show_storage">Show locally</string>
     <string name="setLocation">Set</string>
     <string name="cancel">Cancel</string>
+    <string name="add_marker">Add marker</string>
+    <string name="return_location_now">Return location now</string>
 
     <!-- Sensors -->
     <string name="accelerometer">Accelerometer</string>
@@ -136,5 +138,16 @@
     <string name="replay_frag_play">Play</string>
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
+
+    <!-- Array -->
+    <string-array name="campaign_entries">
+        <item>Murchison House</item>
+        <item>Nucleus Building</item>
+    </string-array>
+
+    <string-array name="campaign_values">
+        <item>murchison_house</item>
+        <item>nucleus_building</item>
+    </string-array>
 
 </resources>

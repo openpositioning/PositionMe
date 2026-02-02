@@ -2,13 +2,14 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- 🔹 TOP SECTION: Status Display -->
+    <!-- TOP SECTION: Status Display -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/currentPositionCard"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_margin="8dp"
         app:cardBackgroundColor="@color/md_theme_surfaceContainer"
@@ -27,16 +28,14 @@
             android:padding="12dp"
             android:gravity="center_vertical">
 
-            <!-- Red Dot -->
             <ImageView
                 android:id="@+id/redDot"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
+                android:layout_marginEnd="8dp"
                 android:contentDescription="@string/red_dot_description_text"
-                android:src="@drawable/ic_baseline_red_dot_24"
-                android:layout_marginEnd="8dp" />
+                android:src="@drawable/ic_baseline_red_dot_24" />
 
-            <!-- Distance Traveled -->
             <TextView
                 android:id="@+id/currentDistanceTraveled"
                 android:layout_width="wrap_content"
@@ -46,100 +45,127 @@
                 android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 android:textStyle="bold" />
 
-            <!-- Elevation -->
             <TextView
                 android:id="@+id/currentElevation"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
                 android:text="@string/elevation"
                 android:textColor="@color/md_theme_secondary"
                 android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textStyle="bold"
-                android:layout_marginStart="16dp"
-                android:layout_marginEnd="16dp" />
+                android:textStyle="bold" />
 
-
-            <!-- GNSS Error -->
             <TextView
                 android:id="@+id/gnssError"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
                 android:text="@string/gnss_error"
                 android:textColor="@color/md_theme_error"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                android:layout_marginStart="16dp" />
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- 🔹 MIDDLE SECTION: Map Display -->
+    <!-- MIDDLE SECTION: Map Display -->
     <FrameLayout
         android:id="@+id/trajectoryMapFragmentContainer"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp"
         app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
-        app:layout_constraintBottom_toTopOf="@id/controlLayout" />
+        app:layout_constraintBottom_toTopOf="@id/controlLayout"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- 🔹 BOTTOM SECTION: Controls (Progress Bar & Buttons) -->
+    <!-- BOTTOM SECTION: Controls -->
     <LinearLayout
         android:id="@+id/controlLayout"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:padding="12dp"
-        android:gravity="center"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Progress Bar -->
         <com.google.android.material.progressindicator.LinearProgressIndicator
             android:id="@+id/timeRemainingBar"
             style="@style/Widget.Material3.LinearProgressIndicator"
             android:layout_width="match_parent"
-            android:layout_height="20dp"
+            android:layout_height="8dp"
+            android:layout_marginBottom="12dp"
             android:max="1800"
-            android:progress="0"
-            android:layout_marginBottom="12dp" />
+            android:progress="0" />
 
         <!-- Buttons Container -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/buttonsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
 
-            <!-- Cancel Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/cancelButton"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
-                android:layout_height="56dp"
-                android:layout_marginEnd="16dp"
-                app:icon="@drawable/ic_unavailable"
-                android:text="@string/cancel"
-                android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onError"
-                app:backgroundTint="@color/md_theme_error"
-                app:cornerRadius="16dp" />
-
-            <!-- Stop Button -->
+            <!-- COMPLETE (top-left) -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/stopButton"
                 style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
-                android:layout_height="56dp"
-                app:icon="@drawable/ic_baseline_assignment_turned_in_24"
+                android:layout_width="169dp"
+                android:layout_height="58dp"
                 android:text="@string/stop"
                 android:textSize="16sp"
-                app:iconSize="24dp"
+                app:backgroundTint="#8BC34A"
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_baseline_assignment_turned_in_24"
                 app:iconGravity="textStart"
+                app:iconSize="24dp"
                 app:iconTint="@color/md_theme_onPrimary"
-                app:backgroundTint="@color/md_theme_primary"
-                app:cornerRadius="16dp" />
-        </LinearLayout>
+                app:layout_constraintEnd_toStartOf="@id/testPointButton"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintWidth_percent="0.58" />
+
+            <!-- CANCEL (bottom-left) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/cancelButton"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="176dp"
+                android:layout_height="56dp"
+                android:layout_marginTop="10dp"
+                android:text="@string/cancel"
+                android:textSize="16sp"
+                app:backgroundTint="#E91E63"
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_unavailable"
+                app:iconGravity="textStart"
+                app:iconSize="24dp"
+                app:iconTint="@color/md_theme_onError"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/testPointButton"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/stopButton"
+                app:layout_constraintWidth_percent="0.58" />
+
+            <!-- ADD MARKER (right) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/testPointButton"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="145dp"
+                android:layout_height="68dp"
+                android:text="@string/add_marker"
+                android:textSize="16sp"
+                app:backgroundTint="#9C27B0"
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_baseline_add_location_24"
+                app:iconGravity="textStart"
+                app:iconSize="24dp"
+                app:iconTint="@color/md_theme_onSecondary"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@id/stopButton"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintWidth_percent="0.38" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
     </LinearLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>
