@@ -136,6 +136,9 @@ public class WifiDataProcessor implements Observable {
                 //store mac address and rssi of wifi
                 wifiData[i].setBssid(intMacAddress);
                 wifiData[i].setLevel(wifiScanList.get(i).level);
+                wifiData[i].setSsid(wifiScanList.get(i).SSID);
+                wifiData[i].setFrequency(wifiScanList.get(i).frequency);
+                wifiData[i].setRttEnabled(wifiScanList.get(i).is80211mcResponder());
             }
 
             //Notify observers of change in wifiData variable

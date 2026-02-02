@@ -121,4 +121,19 @@ public class GNSSDataProcessor {
         locationManager.removeUpdates(locationListener);
     }
 
+    /**
+     * Get the last known location from the location manager.
+     * @return Last known location, or null if unavailable
+     */
+    @SuppressLint("MissingPermission")
+    public android.location.Location getLastLocation() {
+        if (checkLocationPermissions()) {
+            android.location.Location gpsLoc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (gpsLoc != null)
+                return gpsLoc;
+            else
+                return locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+        }
+        return null;
+    }
 }

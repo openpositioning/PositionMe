@@ -49,7 +49,9 @@ public class MovementSensor {
                     sensor.getResolution(),
                     sensor.getPower(),
                     sensor.getVersion(),
-                    sensor.getType()
+                    sensor.getType(),
+                    sensor.getMaximumRange(),
+                    0.0f  // frequency set later
             );
             System.err.println(sensorInfo);
         } else {
@@ -59,7 +61,9 @@ public class MovementSensor {
                     -1.0f,
                     0.0f,
                     0,
-                    0
+                    0,
+                    0.0f,
+                    0.0f
             );
 
         }
