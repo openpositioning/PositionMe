@@ -11,7 +11,9 @@ import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.SystemClock;
 import android.provider.Settings;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -42,7 +44,15 @@ import java.util.TimerTask;
 public class WifiDataProcessor implements Observable {
 
     //Time over which a new scan will be initiated
-    private static final long scanInterval = 5000;
+    private static final long SCAN_INTERVAL_MS = 5000;
+    private static final long TOAST_DEBOUNCE_MS = 8000;
+    private static final String WIFI_CHECK_TAG = "WifiCheck";
+    private static boolean sThrottleSettingWarned = false;
+
+    private long lastScanElapsedMs = 0L;
+    private String lastToastMsg = "";
+    private long lastToastTimeMs = 0L;
+    private boolean isWifiReceiverRegistered = false;
 
     // Application context for handling permissions and WifiManager instances
     private final Context context;
@@ -90,7 +100,7 @@ public class WifiDataProcessor implements Observable {
 
         // Start wifi scan and return results via broadcast
         if(permissionsGranted) {
-            this.scanWifiDataTimer.schedule(new scheduledWifiScan(), 0, scanInterval);
+            this.scanWifiDataTimer.schedule(new scheduledWifiScan(), 0, SCAN_INTERVAL_MS);
         }
 
         //Inform the user if wifi throttling is enabled on their device
@@ -124,8 +134,6 @@ public class WifiDataProcessor implements Observable {
 
             //Collect the list of nearby wifis
             List<ScanResult> wifiScanList = wifiManager.getScanResults();
-            //Stop receiver as scan is complete
-            context.unregisterReceiver(this);
 
             //Loop though each item in wifi list
             wifiData = new Wifi[wifiScanList.size()];
@@ -234,9 +242,18 @@ public class WifiDataProcessor implements Observable {
     private void startWifiScan() {
         //Check settings for wifi permissions
         if(checkWifiPermissions()) {
+            long now = SystemClock.elapsedRealtime();
+            if (now - lastScanElapsedMs < SCAN_INTERVAL_MS) {
+                return;
+            }
+            lastScanElapsedMs = now;
+
             //if(sharedPreferences.getBoolean("wifi", false)) {
             //Register broadcast receiver for wifi scans
-            context.registerReceiver(wifiScanReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+            if (!isWifiReceiverRegistered) {
+                context.registerReceiver(wifiScanReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+                isWifiReceiverRegistered = true;
+            }
             wifiManager.startScan();
 
             //}
@@ -249,7 +266,7 @@ public class WifiDataProcessor implements Observable {
      */
     public void startListening() {
         this.scanWifiDataTimer = new Timer();
-        this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, scanInterval);
+        this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, SCAN_INTERVAL_MS);
     }
 
     /**
@@ -258,7 +275,14 @@ public class WifiDataProcessor implements Observable {
      * timer so that new scans are not initiated.
      */
     public void stopListening() {
-        context.unregisterReceiver(wifiScanReceiver);
+        if (isWifiReceiverRegistered) {
+            try {
+                context.unregisterReceiver(wifiScanReceiver);
+            } catch (IllegalArgumentException ignored) {
+                // Already unregistered or not registered; ignore.
+            }
+            isWifiReceiverRegistered = false;
+        }
         this.scanWifiDataTimer.cancel();
     }
 
@@ -267,18 +291,37 @@ public class WifiDataProcessor implements Observable {
      * If the device supports wifi throttling check if it is enabled and instruct the user to
      * disable it.
      */
-    public void checkWifiThrottling(){
+    public int checkWifiThrottling(){
         if(checkWifiPermissions()) {
             //If the device does not support wifi throttling an exception is thrown
             try {
-                if(Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled")==1) {
+                int throttleSetting = Settings.Global.getInt(
+                        context.getContentResolver(),
+                        "wifi_scan_throttle_enabled");
+                if (throttleSetting == 1) {
                     //Inform user to disable wifi throttling
-                    Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
+                    showDebouncedToast("Disable Wi-Fi Throttling", Toast.LENGTH_SHORT);
                 }
-            } catch (Settings.SettingNotFoundException e) {
-                e.printStackTrace();
+                return throttleSetting;
+            } catch (Settings.SettingNotFoundException | SecurityException e) {
+                if (!sThrottleSettingWarned) {
+                    Log.i(WIFI_CHECK_TAG, "wifi_scan_throttle_enabled not readable; status unknown.");
+                    sThrottleSettingWarned = true;
+                }
+                return -1;
             }
         }
+        return -1;
+    }
+
+    private void showDebouncedToast(String message, int duration) {
+        long now = SystemClock.elapsedRealtime();
+        if (message.equals(lastToastMsg) && now - lastToastTimeMs <= TOAST_DEBOUNCE_MS) {
+            return;
+        }
+        lastToastMsg = message;
+        lastToastTimeMs = now;
+        Toast.makeText(context, message, duration).show();
     }
 
     /**

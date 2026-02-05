@@ -6,6 +6,12 @@ plugins {
     id 'com.google.protobuf' version '0.9.4'
 }
 
+def secretsProperties = new Properties()
+def secretsFile = rootProject.file("secrets.properties")
+if (secretsFile.exists()) {
+    secretsProperties.load(new FileInputStream(secretsFile))
+}
+
 protobuf {
     protoc {
         artifact = "com.google.protobuf:protoc:3.25.3"
@@ -17,13 +23,6 @@ protobuf {
             }
         }
     }
-}
-
-// (Optional) load local secrets file:
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('secrets.properties')
-if (localPropertiesFile.exists()) {
-    localProperties.load(new FileInputStream(localPropertiesFile))
 }
 
 android {
@@ -39,13 +38,15 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
+        resValue "string", "google_maps_key", (secretsProperties.getProperty("MAPS_API_KEY") ?: "")
+
         // Example of referencing secrets (if you use secrets.properties):
         buildConfigField "String", "MAPS_API_KEY",
-                "\"${localProperties['MAPS_API_KEY'] ?: ''}\""
+                "\"${secretsProperties.getProperty('MAPS_API_KEY') ?: ''}\""
         buildConfigField "String", "OPENPOSITIONING_API_KEY",
-                "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
+                "\"${secretsProperties.getProperty('OPENPOSITIONING_API_KEY') ?: ''}\""
         buildConfigField "String", "OPENPOSITIONING_MASTER_KEY",
-                "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
+                "\"${secretsProperties.getProperty('OPENPOSITIONING_MASTER_KEY') ?: ''}\""
     }
 
     buildFeatures {

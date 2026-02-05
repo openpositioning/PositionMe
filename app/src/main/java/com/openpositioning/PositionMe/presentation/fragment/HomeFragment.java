@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -123,6 +124,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         mapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.mapFragmentContainer);
         if (mapFragment != null) {
+            Log.d("MapsKey", "google_maps_key length=" + getString(R.string.google_maps_key).length());
             // Asynchronously initialize the map
             mapFragment.getMapAsync(this);
         }
@@ -134,6 +136,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
+        Log.d("MapsKey", "google_maps_key length=" + getString(R.string.google_maps_key).length());
         checkAndUpdatePermissions();
     }
 

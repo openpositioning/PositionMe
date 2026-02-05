@@ -218,9 +218,8 @@ public class MainActivity extends AppCompatActivity implements Observer {
      */
     @Override
     protected void onDestroy() {
-        if (sensorFusion != null) {
-//            sensorFusion.stopListening(); // suspended due to the need to record data with
-//                                             a locked screen or cross activity
+        if (sensorFusion != null && isFinishing()) {
+            sensorFusion.stopListening();
         }
         super.onDestroy();
     }

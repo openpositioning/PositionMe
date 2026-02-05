@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.SystemClock;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -26,6 +27,10 @@ public class GNSSDataProcessor {
     private LocationManager locationManager;
     // Location listener to receive the location data broadcast by the system
     private LocationListener locationListener;
+
+    private static final long TOAST_DEBOUNCE_MS = 8000;
+    private String lastToastMsg = "";
+    private long lastToastTimeMs = 0L;
 
 
     /**
@@ -56,10 +61,10 @@ public class GNSSDataProcessor {
 
         // Turn on gps if it is currently disabled
         if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            Toast.makeText(context, "Open GPS", Toast.LENGTH_SHORT).show();
+            showDebouncedToast("Open GPS", Toast.LENGTH_SHORT);
         }
         if (!locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-            Toast.makeText(context, "Enable Cellular", Toast.LENGTH_SHORT).show();
+            showDebouncedToast("Enable Cellular", Toast.LENGTH_SHORT);
         }
         // Start location updates
         if (permissionsGranted) {
@@ -107,10 +112,10 @@ public class GNSSDataProcessor {
             locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
         }
         else if(permissionGranted && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){
-            Toast.makeText(context, "Open GPS", Toast.LENGTH_LONG).show();
+            showDebouncedToast("Open GPS", Toast.LENGTH_LONG);
         }
         else if(permissionGranted && !locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){
-            Toast.makeText(context, "Turn on WiFi", Toast.LENGTH_LONG).show();
+            showDebouncedToast("Turn on WiFi", Toast.LENGTH_LONG);
         }
     }
 
@@ -119,6 +124,16 @@ public class GNSSDataProcessor {
      */
     public void stopUpdating() {
         locationManager.removeUpdates(locationListener);
+    }
+
+    private void showDebouncedToast(String message, int duration) {
+        long now = SystemClock.elapsedRealtime();
+        if (message.equals(lastToastMsg) && now - lastToastTimeMs <= TOAST_DEBOUNCE_MS) {
+            return;
+        }
+        lastToastMsg = message;
+        lastToastTimeMs = now;
+        Toast.makeText(context, message, duration).show();
     }
 
 }

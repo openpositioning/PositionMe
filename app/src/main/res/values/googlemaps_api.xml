@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-        <string name="google_maps_key" translatable="false" templateMergeStrategy="preserve">
-        AIzaSyAGqo26Wz1SUnGYP3TDDxLSDNK-EvHHtNc
-    </string>
+    <!-- google_maps_key is injected via resValue in app/build.gradle -->
 </resources>

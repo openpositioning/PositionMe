@@ -11,6 +11,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 
 /**
@@ -40,10 +41,13 @@ import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
 
 public class RecordingActivity extends AppCompatActivity {
 
+    private SensorFusion sensorFusion;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_recording);
+        this.sensorFusion = SensorFusion.getInstance();
 
         if (savedInstanceState == null) {
             showStartLocationScreen(); // Start with the user selecting the start location
@@ -88,5 +92,13 @@ public class RecordingActivity extends AppCompatActivity {
     public void finishFlow() {
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         finish();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (sensorFusion != null && isFinishing()) {
+            sensorFusion.stopListening();
+        }
+        super.onDestroy();
     }
 }

@@ -150,6 +150,7 @@ public class RecordingFragment extends Fragment {
             // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
+            sensorFusion.stopListening();
             // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
         });
@@ -163,6 +164,7 @@ public class RecordingFragment extends Fragment {
                     .setNegativeButton("Yes", (dialogInterface, which) -> {
                         // User confirmed cancellation
                         sensorFusion.stopRecording();
+                        sensorFusion.stopListening();
                         if (autoStop != null) autoStop.cancel();
                         requireActivity().onBackPressed();
                     })
@@ -202,6 +204,7 @@ public class RecordingFragment extends Fragment {
                 @Override
                 public void onFinish() {
                     sensorFusion.stopRecording();
+                    sensorFusion.stopListening();
                     ((RecordingActivity) requireActivity()).showCorrectionScreen();
                 }
             }.start();
@@ -293,6 +296,15 @@ public class RecordingFragment extends Fragment {
         super.onResume();
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        boolean isFinishing = getActivity() != null && getActivity().isFinishing();
+        if (isRemoving() || isFinishing) {
+            sensorFusion.stopListening();
         }
     }
 }
