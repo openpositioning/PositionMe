@@ -1,35 +1,41 @@
 package com.openpositioning.PositionMe.utils;
 
-
 import com.google.android.gms.maps.model.LatLng;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Class used to check for a pre-defined set of coordinates if it is in a Building (Nucleus, Library)
- * (Can be used to add more buildings by adding the coordinates of the buildings and adding methods)
+ * Class used to check for a pre-defined set of coordinates
+ * if it is in a building
+ *
  * @see IndoorMapManager Used by the the IndoorFloorManager class
  * @author Arun Gopalakrishnan
  */
 public class BuildingPolygon {
-    // Defining the coordinates of the building boundaries (rectangular boundaries based on floor map shape)
+    // Defining the coordinates of the building boundaries
+    // (rectangular boundaries based on floor map shape)
+
     // North-East and South-West Coordinates for the Nucleus Building
-    public static final LatLng NUCLEUS_NE=new LatLng(55.92332001571212, -3.1738768212979593);
-    public static final LatLng NUCLEUS_SW=new LatLng(55.92282257022002, -3.1745956532857647);
+    public static final LatLng NUCLEUS_NE =
+        new LatLng(55.92332001571212, -3.1738768212979593);
+    public static final LatLng NUCLEUS_SW =
+        new LatLng(55.92282257022002, -3.1745956532857647);
     // North-East and South-West Coordinates for the Kenneth and Murray Library Building
-    public static final LatLng LIBRARY_NE=new LatLng(55.92306692576906, -3.174771893078224);
-    public static final LatLng LIBRARY_SW=new LatLng(55.92281045664704, -3.175184089079065);
+    public static final LatLng LIBRARY_NE =
+        new LatLng(55.92306692576906, -3.174771893078224);
+    public static final LatLng LIBRARY_SW =
+        new LatLng(55.92281045664704, -3.175184089079065);
     // Boundary coordinates of the Nucleus building (clockwise)
 
-    public static final List<LatLng> NUCLEUS_POLYGON = new ArrayList<LatLng>() {{
+    public static final List<LatLng> NUCLEUS_POLYGON = new ArrayList<>() {{
         add(BuildingPolygon.NUCLEUS_NE);
         add(new LatLng(BuildingPolygon.NUCLEUS_SW.latitude, BuildingPolygon.NUCLEUS_NE.longitude)); // South-East
         add(BuildingPolygon.NUCLEUS_SW);
         add(new LatLng(BuildingPolygon.NUCLEUS_NE.latitude, BuildingPolygon.NUCLEUS_SW.longitude)); // North-West
     }};
     //Boundary coordinates of the Library building (clockwise)
-    public static final List<LatLng> LIBRARY_POLYGON = new ArrayList<LatLng>() {{
+    public static final List<LatLng> LIBRARY_POLYGON = new ArrayList<>() {{
         add(BuildingPolygon.LIBRARY_NE);
         add(new LatLng(BuildingPolygon.LIBRARY_SW.latitude,BuildingPolygon.LIBRARY_NE.longitude));//(South-East)
         add(BuildingPolygon.LIBRARY_SW);
@@ -64,7 +70,7 @@ public class BuildingPolygon {
      */
     private static boolean pointInPolygon(LatLng point, List<LatLng> polygon) {
         int numCrossings = 0;
-        List<LatLng> path=polygon;
+        List<LatLng> path = polygon;
         // For each edge
         for (int i=0; i < path.size(); i++) {
             LatLng a = path.get(i);
@@ -79,7 +85,7 @@ public class BuildingPolygon {
             }
         }
 
-        //if odd number of numCrossings return true (point is in polygon)
+        // If odd number of numCrossings, return true (point is in polygon)
         return (numCrossings % 2 == 1);
     }
 
@@ -95,11 +101,11 @@ public class BuildingPolygon {
      */
     private static boolean crossingSegment(LatLng point, LatLng a,LatLng b) {
         double pointLng = point.longitude,
-                pointLat = point.latitude,
-                aLng = a.longitude,
-                aLat = a.latitude,
-                bLng = b.longitude,
-                bLat = b.latitude;
+            pointLat = point.latitude,
+            aLng = a.longitude,
+            aLat = a.latitude,
+            bLng = b.longitude,
+            bLat = b.latitude;
         if (aLat > bLat) {
             aLng = b.longitude;
             aLat = b.latitude;

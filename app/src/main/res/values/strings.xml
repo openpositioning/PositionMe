@@ -109,7 +109,7 @@
     <!-- Building defaults -->
     <string name="building_def_title">Default building assumptions</string>
     <string name="floor_height">Floor height in meters</string>
-    <string name="color">Color</string>
+    <string name="color">Colour</string>
     <string name="gnssSwitch">🛰 Show GNSS </string>
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
@@ -136,5 +136,7 @@
     <string name="replay_frag_play">Play</string>
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
+    <string name="button_indoorPositioning">Indoor Positioning (Coming Soon)</string>
+    <string name="text_map_type">Map Type</string>
 
 </resources>

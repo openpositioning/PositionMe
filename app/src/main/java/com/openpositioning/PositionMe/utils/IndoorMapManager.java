@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.utils;
 
-import android.graphics.Color;
+import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_BUILDING_WITH_FLOOR_MAPS;
+
 import android.util.Log;
 
 import com.google.android.gms.maps.GoogleMap;
@@ -64,12 +65,13 @@ public class IndoorMapManager {
     }
 
     /**
-     * Function to update the current location of user and display the indoor map
-     * if user in building with indoor map available
-     * @param currentLocation new location of user
+     * Function to update the current location of user
+     * and display the indoor map if user in building
+     * with indoor map available
+     * @param currentLocation Location of user
      */
     public void setCurrentLocation(LatLng currentLocation){
-        this.currentLocation=currentLocation;
+        this.currentLocation = currentLocation;
         setBuildingOverlay();
     }
 
@@ -156,15 +158,15 @@ public class IndoorMapManager {
                             .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
                             .positionFromBounds(LIBRARY));
                     isIndoorMapSet = true;
-                    currentFloor=0;
-                    floorHeight=LIBRARY_FLOOR_HEIGHT;
+                    currentFloor = 0;
+                    floorHeight = LIBRARY_FLOOR_HEIGHT;
             }
             // Removing overlay if user no longer in area with indoor maps available
             else if (!BuildingPolygon.inLibrary(currentLocation) &&
                     !BuildingPolygon.inNucleus(currentLocation)&& isIndoorMapSet){
                 groundOverlay.remove();
                 isIndoorMapSet = false;
-                currentFloor=0;
+                currentFloor = 0;
             }   
         } catch (Exception ex) {
             Log.e("Error with overlay, Exception:", ex.toString());
@@ -172,22 +174,24 @@ public class IndoorMapManager {
     }
 
     /**
-     * Function used to set the indication of available floor maps for building using green Polylines
-     * along the building's boundaries.
+     * Function used to set the indication of available floor maps
+     * for building using green Polylines along the building's boundaries.
      */
     public void setIndicationOfIndoorMap(){
-        //Indicator for Nucleus Building
-        List<LatLng> points=BuildingPolygon.NUCLEUS_POLYGON;
+        // Indicator for Nucleus Building
+        List<LatLng> points = BuildingPolygon.NUCLEUS_POLYGON;
         // Closing Boundary
         points.add(BuildingPolygon.NUCLEUS_POLYGON.get(0));
-        gMap.addPolyline(new PolylineOptions().color(Color.GREEN)
-                .addAll(points));
+        gMap.addPolyline(new PolylineOptions()
+            .color(COLOUR_BUILDING_WITH_FLOOR_MAPS)
+            .addAll(points));
 
         // Indicator for the Library Building
-        points=BuildingPolygon.LIBRARY_POLYGON;
+        points = BuildingPolygon.LIBRARY_POLYGON;
         // Closing Boundary
         points.add(BuildingPolygon.LIBRARY_POLYGON.get(0));
-        gMap.addPolyline(new PolylineOptions().color(Color.GREEN)
-                .addAll(points));
+        gMap.addPolyline(new PolylineOptions()
+            .color(COLOUR_BUILDING_WITH_FLOOR_MAPS)
+            .addAll(points));
     }
 }

@@ -53,13 +53,12 @@ public class PermissionManager {
         this.callback = callback;
 
         // Populate required permissions
+        // For API < 29, also request broad storage permissions
+        // For API >= 29, also request ACTIVITY_RECOGNITION
         requiredPermissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
         requiredPermissions.add(Manifest.permission.ACCESS_COARSE_LOCATION);
         requiredPermissions.add(Manifest.permission.ACCESS_WIFI_STATE);
         requiredPermissions.add(Manifest.permission.CHANGE_WIFI_STATE);
-        // For API < 29, also request broad storage permissions
-        // For API >= 29, also request ACTIVITY_RECOGNITION
-        // (We can do the check here or just always add them; the OS will skip as needed.)
         requiredPermissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         requiredPermissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
         requiredPermissions.add(Manifest.permission.ACTIVITY_RECOGNITION);
@@ -71,9 +70,9 @@ public class PermissionManager {
     public void checkAndRequestPermissions() {
         if (!hasAllPermissions()) {
             ActivityCompat.requestPermissions(
-                    activity,
-                    requiredPermissions.toArray(new String[0]),
-                    ALL_PERMISSIONS_REQUEST
+                activity,
+                requiredPermissions.toArray(new String[0]),
+                ALL_PERMISSIONS_REQUEST
             );
         } else {
             // Already granted
@@ -90,9 +89,11 @@ public class PermissionManager {
      *       permissionManager.handleRequestPermissionsResult(requestCode, permissions, grantResults);
      *   }
      */
-    public void handleRequestPermissionsResult(int requestCode,
-                                               String[] permissions,
-                                               int[] grantResults) {
+    public void handleRequestPermissionsResult(
+        int requestCode,
+        String[] permissions,
+        int[] grantResults
+    ) {
         if (requestCode == ALL_PERMISSIONS_REQUEST) {
             boolean allGranted = true;
             List<String> deniedPermissions = new ArrayList<>();
@@ -144,13 +145,13 @@ public class PermissionManager {
     private void showFirstDenialDialog() {
         if (!activity.isFinishing()) {
             new AlertDialog.Builder(activity)
-                    .setTitle("Permissions Denied")
-                    .setMessage("Certain permissions are essential for this app to function.\n" +
-                            "Tap GRANT to try again or EXIT to close the app.")
-                    .setCancelable(false)
-                    .setPositiveButton("Grant", (dialog, which) -> checkAndRequestPermissions())
-                    .setNegativeButton("Exit", (dialog, which) -> activity.finish())
-                    .show();
+                .setTitle("Permissions Denied")
+                .setMessage("Certain permissions are essential for this app to function.\n" +
+                    "Tap GRANT to try again or EXIT to close the app.")
+                .setCancelable(false)
+                .setPositiveButton("Grant", (dialog, which) -> checkAndRequestPermissions())
+                .setNegativeButton("Exit", (dialog, which) -> activity.finish())
+                .show();
         }
     }
 
@@ -160,18 +161,18 @@ public class PermissionManager {
     private void showPermanentDenialDialog() {
         if (!activity.isFinishing()) {
             new AlertDialog.Builder(activity)
-                    .setTitle("Permission Permanently Denied")
-                    .setMessage("Some permissions have been permanently denied. " +
-                            "Please go to Settings to enable them manually.")
-                    .setCancelable(false)
-                    .setPositiveButton("Settings", (dialog, which) -> {
-                        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                        Uri uri = Uri.fromParts("package", activity.getPackageName(), null);
-                        intent.setData(uri);
-                        activity.startActivity(intent);
-                    })
-                    .setNegativeButton("Exit", (dialog, which) -> activity.finish())
-                    .show();
+                .setTitle("Permission Permanently Denied")
+                .setMessage("Some permissions have been permanently denied. " +
+                    "Please go to Settings to enable them manually.")
+                .setCancelable(false)
+                .setPositiveButton("Settings", (dialog, which) -> {
+                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    Uri uri = Uri.fromParts("package", activity.getPackageName(), null);
+                    intent.setData(uri);
+                    activity.startActivity(intent);
+                })
+                .setNegativeButton("Exit", (dialog, which) -> activity.finish())
+                .show();
         }
     }
 

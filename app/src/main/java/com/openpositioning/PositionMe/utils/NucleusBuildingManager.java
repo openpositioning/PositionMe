@@ -32,14 +32,34 @@ public class NucleusBuildingManager {
         buildingPolygon.add(new LatLng(N2, -W1)); // Northwest corner
 
         // Initialize the indoor map of each layer
-        indoorMapFragment.addFloor(0, R.drawable.floor_lg, new LatLngBounds(buildingPolygon.get(0), buildingPolygon.get(2)));
-        indoorMapFragment.addFloor(1, R.drawable.floor_ug, new LatLngBounds(buildingPolygon.get(0), buildingPolygon.get(2)));
-        indoorMapFragment.addFloor(2, R.drawable.floor_1, new LatLngBounds(buildingPolygon.get(0), buildingPolygon.get(2)));
-        indoorMapFragment.addFloor(3, R.drawable.floor_2, new LatLngBounds(buildingPolygon.get(0), buildingPolygon.get(2)));
-        indoorMapFragment.addFloor(4, R.drawable.floor_3, new LatLngBounds(buildingPolygon.get(0), buildingPolygon.get(2)));
+        indoorMapFragment.addFloor(
+            0,
+            R.drawable.floor_lg,
+            new LatLngBounds(buildingPolygon.get(0),buildingPolygon.get(2))
+        );
+        indoorMapFragment.addFloor(
+            1,
+            R.drawable.floor_ug,
+            new LatLngBounds(buildingPolygon.get(0), buildingPolygon.get(2))
+        );
+        indoorMapFragment.addFloor(
+            2,
+            R.drawable.floor_1,
+            new LatLngBounds(buildingPolygon.get(0), buildingPolygon.get(2))
+        );
+        indoorMapFragment.addFloor(
+            3,
+            R.drawable.floor_2,
+            new LatLngBounds(buildingPolygon.get(0), buildingPolygon.get(2))
+        );
+        indoorMapFragment.addFloor(
+            4,
+            R.drawable.floor_3,
+            new LatLngBounds(buildingPolygon.get(0), buildingPolygon.get(2))
+        );
     }
 
-    public IndoorMapFragment getIndoorMapManager() {
+    public IndoorMapFragment getIndoorMapFragment() {
         return indoorMapFragment;
     }
 
@@ -72,7 +92,11 @@ public class NucleusBuildingManager {
      * @param vertB the second vertex of the edge
      * @return true if the ray intersects with the edge, false otherwise
      */
-    private boolean rayCastIntersect(LatLng point, LatLng vertA, LatLng vertB) {
+    private boolean rayCastIntersect(
+        LatLng point,
+        LatLng vertA,
+        LatLng vertB
+    ) {
         double aY = vertA.latitude;
         double bY = vertB.latitude;
         double aX = vertA.longitude;

@@ -1,6 +1,9 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.utils.UtilConstants.ZOOM_LEVEL_DEFAULT;
+
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -45,7 +48,7 @@ public class StartLocationFragment extends Fragment {
     // Start position of the user to be stored
     private float[] startPosition = new float[2];
     // Zoom level for the Google map
-    private float zoom = 19f;
+    private float zoom = ZOOM_LEVEL_DEFAULT;
     // Instance for managing indoor building overlays (if any)
     private NucleusBuildingManager nucleusBuildingManager;
     // Dummy variable for floor index
@@ -64,21 +67,30 @@ public class StartLocationFragment extends Fragment {
      * The map is loaded and configured so that it displays a draggable marker for the start location
      */
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(
+        @NonNull LayoutInflater inflater,
+        ViewGroup container,
+        Bundle savedInstanceState
+    ) {
         AppCompatActivity activity = (AppCompatActivity) getActivity();
         if (activity != null && activity.getSupportActionBar() != null) {
             activity.getSupportActionBar().hide();
         }
-        View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
+        View rootView = inflater.inflate(
+            R.layout.fragment_startlocation,
+            container,
+            false
+        );
 
         // Obtain the start position from the GPS data from the SensorFusion class
+        // TODO - Why set start=false if we want the start position?
+        // Is this a badly named argument?
         startPosition = sensorFusion.getGNSSLatitude(false);
         // If no location found, zoom the map out
         if (startPosition[0] == 0 && startPosition[1] == 0) {
             zoom = 1f;
         } else {
-            zoom = 19f;
+            zoom = ZOOM_LEVEL_DEFAULT;
         }
 
         // Initialize map fragment
@@ -88,10 +100,12 @@ public class StartLocationFragment extends Fragment {
         supportMapFragment.getMapAsync(new OnMapReadyCallback() {
             /**
              * {@inheritDoc}
-             * Controls to allow scrolling, tilting, rotating and a compass view of the
-             * map are enabled. A marker is added to the map with the start position and a marker
-             * drag listener is generated to detect when the marker has moved to obtain the new
-             * location.
+             * Controls to allow scrolling, tilting, rotating and
+             * a compass view of the map are enabled.
+             * <p>
+             * A marker is added to the map with the start position, and
+             * a marker drag listener is generated to detect
+             * when the marker has moved to obtain the new location.
              */
             @Override
             public void onMapReady(GoogleMap mMap) {
@@ -107,9 +121,10 @@ public class StartLocationFragment extends Fragment {
 
                 // Create NucleusBuildingManager instance (if needed)
                 nucleusBuildingManager = new NucleusBuildingManager(mMap);
-                nucleusBuildingManager.getIndoorMapManager().hideMap();
+                nucleusBuildingManager.getIndoorMapFragment().setMapVisibility(false);
 
                 // Add a marker at the current GPS location and move the camera
+                // TODO - What does startMarker do?
                 position = new LatLng(startPosition[0], startPosition[1]);
                 Marker startMarker = mMap.addMarker(new MarkerOptions()
                         .position(position)
@@ -149,7 +164,8 @@ public class StartLocationFragment extends Fragment {
 
     /**
      * {@inheritDoc}
-     * Button onClick listener enabled to detect when to go to next fragment and start PDR recording.
+     * Button onClick listener enabled to detect when to go
+     * to next fragment and start PDR recording.
      */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
@@ -185,7 +201,7 @@ public class StartLocationFragment extends Fragment {
                     // Otherwise (unexpected host)
                 } else {
                     // Optional: log or handle error
-                    // Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
+                    Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
                 }
             }
         });
@@ -200,7 +216,7 @@ public class StartLocationFragment extends Fragment {
         FloorNK = floorIndex; // Set the current floor index
         if (nucleusBuildingManager != null) {
             // Call the switchFloor method of the IndoorMapManager to switch to the specified floor
-            nucleusBuildingManager.getIndoorMapManager().switchFloor(floorIndex);
+            nucleusBuildingManager.getIndoorMapFragment().switchFloor(floorIndex);
         }
     }
 }

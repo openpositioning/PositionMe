@@ -11,6 +11,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -22,6 +23,8 @@ import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -50,6 +53,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private Button start;
     private Button measurements;
     private Button files;
+    private Button indoorPositioning;
     private TextView gnssStatusTextView;
 
     // For the map
@@ -114,6 +118,13 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         files.setOnClickListener(v -> {
             NavDirections action = HomeFragmentDirections.actionHomeFragmentToFilesFragment();
             Navigation.findNavController(v).navigate(action);
+        });
+
+        // Indoor Positioning button
+        // TODO - Implement new view and functionality
+        indoorPositioning = view.findViewById(R.id.indoorButton);
+        indoorPositioning.setOnClickListener(v -> {
+            Toast.makeText(getContext(), "Coming soon!", Toast.LENGTH_SHORT).show();
         });
 
         // TextView to display GNSS disabled message
@@ -182,21 +193,19 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             gnssStatusTextView.setVisibility(View.GONE);
 
             // Check runtime permissions for location
-            if (ActivityCompat.checkSelfPermission(
-                    requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED ||
-                    ActivityCompat.checkSelfPermission(
-                            requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
-                            == PackageManager.PERMISSION_GRANTED) {
+            boolean permissionGrantedLocationFine = ActivityCompat.checkSelfPermission(
+                requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED;
 
+            boolean permissionGrantedLocationCoarse = ActivityCompat.checkSelfPermission(
+                    requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED;
+
+            if (permissionGrantedLocationFine || permissionGrantedLocationCoarse) {
                 // Enable the MyLocation layer of Google Map
                 mMap.setMyLocationEnabled(true);
 
-                // Optionally move the camera to last known or default location:
-                //   (You could retrieve it from FusedLocationProvider or similar).
-                // Here, just leaving it on default.
-                // If you want to center on the user as soon as it loads, do something like:
-                /*
+                // Zoom to the user upon map load
                 FusedLocationProviderClient fusedLocationClient =
                     LocationServices.getFusedLocationProviderClient(requireContext());
                 fusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
@@ -205,7 +214,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f));
                     }
                 });
-                */
             } else {
                 // If no permission, simply show a default location or prompt for permissions
                 showEdinburghAndMessage("Permission not granted. Please enable in settings.");

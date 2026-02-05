@@ -1,4 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
+
+import static com.openpositioning.PositionMe.utils.UtilConstants.URL_API;
+
 import android.content.Context;
 import android.util.Log;
 
@@ -31,7 +34,7 @@ public class WiFiPositioning {
     // Queue for storing the POST requests made
     private RequestQueue requestQueue;
     // URL for WiFi positioning API
-    private static final String url="https://openpositioning.org/api/position/fine";
+    private static final String url = URL_API + "/position/fine";
 
     /**
      * Getter for the WiFi positioning coordinates obtained using openpositioning API

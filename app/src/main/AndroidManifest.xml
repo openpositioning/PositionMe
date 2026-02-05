@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.openpositioning.PositionMe">
 
     <!--
@@ -39,14 +40,7 @@
     <!-- Internet -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- Storage - Deprecated in Android 10+ (use scoped storage instead)
-         If you plan to adopt scoped storage fully and store only within your app-specific directories
-         (or MediaStore for shared media), consider removing READ/WRITE_EXTERNAL_STORAGE eventually.
-         If you still need broad file access (for example, to migrate existing user data), keep them
-         short-term but note that starting with Android 11 (API 30), they don’t allow the same broad file access.
-    -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <!-- Storage -->
     <!-- Required if your app needs to access images or photos that other apps created. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
@@ -56,6 +50,8 @@
     <!-- Required if your app needs to access audio files that other apps created. -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
+    <!-- For Android 14 and up -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <!--
          3. requestLegacyExternalStorage:
@@ -63,6 +59,8 @@
             - This flag is ignored on Android 11 (API 30) and higher for new app installs,
               but it does help in migration scenarios (e.g. for existing user upgrades).
     -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
 
     <application
         android:allowBackup="true"
@@ -90,7 +88,8 @@
         android:name="com.openpositioning.PositionMe.presentation.activity.MainActivity"
         android:exported="true"
         android:configChanges="orientation"
-        android:screenOrientation="portrait">
+        android:screenOrientation="portrait"
+        tools:ignore="LockedOrientationActivity">
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

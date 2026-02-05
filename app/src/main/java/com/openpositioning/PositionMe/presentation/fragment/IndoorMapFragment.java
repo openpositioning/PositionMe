@@ -36,11 +36,8 @@ public class IndoorMapFragment {
             return; // Prevent index out of bounds
         }
         // Hide all floors
-        for (GroundOverlay overlay : groundOverlays) {
-            if (overlay != null) {
-                overlay.setVisible(false);
-            }
-        }
+        setMapVisibility(false);
+
         // Show selected floor
         GroundOverlay selectedOverlay = groundOverlays[floorIndex];
         if (selectedOverlay != null) {
@@ -49,12 +46,15 @@ public class IndoorMapFragment {
         currentFloor = floorIndex;
     }
 
-    // Hide all floors
-    public void hideMap() {
-        //Hide all floors
+    /**
+     * Show or hide all floors
+     *
+     * @param visibility Set true to show maps; set false to hide maps
+     */
+    public void setMapVisibility(boolean visibility) {
         for (GroundOverlay overlay : groundOverlays) {
             if (overlay != null) {
-                overlay.setVisible(false);
+                overlay.setVisible(visibility);
             }
         }
     }

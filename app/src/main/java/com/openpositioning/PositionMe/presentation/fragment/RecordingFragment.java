@@ -7,31 +7,32 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
-
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.LinearInterpolator;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.material.button.MaterialButton;
+
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
+import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
-import com.google.android.gms.maps.model.LatLng;
-
 
 /**
  * Fragment responsible for managing the recording process of trajectory data.
@@ -52,11 +53,12 @@ import com.google.android.gms.maps.model.LatLng;
  * @see RecordingActivity The activity managing the recording workflow.
  * @see SensorFusion Handles sensor data collection.
  * @see SensorTypes Enumeration of available sensor types.
+ * @see Observer Interface for handling server responses
  *
  * @author Shu Gu
  */
 
-public class RecordingFragment extends Fragment {
+public class RecordingFragment extends Fragment implements Observer {
 
     // UI elements
     private MaterialButton completeButton, cancelButton;
@@ -97,6 +99,7 @@ public class RecordingFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         this.sensorFusion = SensorFusion.getInstance();
+        this.sensorFusion.registerForServerUpdate(this);
         Context context = requireActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.refreshDataHandler = new Handler();
@@ -119,15 +122,15 @@ public class RecordingFragment extends Fragment {
         // Child Fragment: the container in fragment_recording.xml
         // where TrajectoryMapFragment is placed
         trajectoryMapFragment = (TrajectoryMapFragment)
-                getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
+            getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
 
         // If not present, create it
         if (trajectoryMapFragment == null) {
             trajectoryMapFragment = new TrajectoryMapFragment();
             getChildFragmentManager()
-                    .beginTransaction()
-                    .replace(R.id.trajectoryMapFragmentContainer, trajectoryMapFragment)
-                    .commit();
+                .beginTransaction()
+                .replace(R.id.trajectoryMapFragmentContainer, trajectoryMapFragment)
+                .commit();
         }
 
         // Initialize UI references
@@ -154,23 +157,22 @@ public class RecordingFragment extends Fragment {
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
         });
 
-
         // Cancel button with confirmation dialog
         cancelButton.setOnClickListener(v -> {
             AlertDialog dialog = new AlertDialog.Builder(requireActivity())
-                    .setTitle("Confirm Cancel")
-                    .setMessage("Are you sure you want to cancel the recording? Your progress will be lost permanently!")
-                    .setNegativeButton("Yes", (dialogInterface, which) -> {
-                        // User confirmed cancellation
-                        sensorFusion.stopRecording();
-                        if (autoStop != null) autoStop.cancel();
-                        requireActivity().onBackPressed();
-                    })
-                    .setPositiveButton("No", (dialogInterface, which) -> {
-                        // User cancelled the dialog. Do nothing.
-                        dialogInterface.dismiss();
-                    })
-                    .create(); // Create the dialog but do not show it yet
+                .setTitle("Confirm Cancel")
+                .setMessage("Are you sure you want to cancel the recording? Your progress will be lost permanently!")
+                .setNegativeButton("Yes", (dialogInterface, which) -> {
+                    // User confirmed cancellation
+                    sensorFusion.stopRecording();
+                    if (autoStop != null) autoStop.cancel();
+                    requireActivity().onBackPressed();
+                })
+                .setPositiveButton("No", (dialogInterface, which) -> {
+                    // User cancelled the dialog. Do nothing.
+                    dialogInterface.dismiss();
+                })
+                .create(); // Create the dialog but do not show it yet
 
             // Show the dialog and change the button color
             dialog.setOnShowListener(dialogInterface -> {
@@ -219,8 +221,8 @@ public class RecordingFragment extends Fragment {
         if (pdrValues == null) return;
 
         // Distance
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
-                + Math.pow(pdrValues[1] - previousPosY, 2));
+        distance += (float) Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
+            + Math.pow(pdrValues[1] - previousPosY, 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
         // Elevation
@@ -235,14 +237,16 @@ public class RecordingFragment extends Fragment {
         if (latLngArray != null) {
             LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
             LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
+                oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
+                new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
 
             // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+                trajectoryMapFragment.updateUserLocation(
+                    newLocation,
+                    (float) Math.toDegrees(sensorFusion.passOrientation())
+                );
             }
         }
 
@@ -294,5 +298,17 @@ public class RecordingFragment extends Fragment {
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     * Called by {@link ServerCommunications} when the response to the HTTP info request is received.
+     *
+     * @param singletonStringList   a single string wrapped in an object array containing the http
+     *                              response from the server.
+     */
+    @Override
+    public void update(Object[] singletonStringList) {
+        // TODO - Implement
     }
 }

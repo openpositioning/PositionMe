@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.utils.UtilConstants.URL_GET_USER_TRAJECTORIES;
+
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -113,7 +115,7 @@ public class FilesFragment extends Fragment implements Observer {
             }
         });
         // Request list of uploaded trajectories from the server.
-        serverCommunications.sendInfoRequest();
+        serverCommunications.sendInfoRequest(URL_GET_USER_TRAJECTORIES);
         // Force RecyclerView refresh to ensure icon states are correct
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             if (filesList.getAdapter() != null) {

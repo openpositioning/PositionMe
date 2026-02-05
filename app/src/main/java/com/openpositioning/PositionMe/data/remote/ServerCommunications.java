@@ -1,16 +1,12 @@
 package com.openpositioning.PositionMe.data.remote;
-import android.util.Log;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import org.json.JSONObject;
 
-import android.os.Environment;
-
-import java.io.FileInputStream;
-import java.io.OutputStream;
+import static com.openpositioning.PositionMe.utils.UtilConstants.API_KEY_MASTER;
+import static com.openpositioning.PositionMe.utils.UtilConstants.API_KEY_USER;
+import static com.openpositioning.PositionMe.utils.UtilConstants.API_POST_TRAJECTORIES;
+import static com.openpositioning.PositionMe.utils.UtilConstants.PROTOCOL_APP_JSON;
+import static com.openpositioning.PositionMe.utils.UtilConstants.PROTOCOL_MULTIPART;
+import static com.openpositioning.PositionMe.utils.UtilConstants.URL_API;
+import static com.openpositioning.PositionMe.utils.UtilConstants.URL_GET_TRAJECTORIES;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -20,31 +16,37 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.protobuf.util.JsonFormat;
-import com.openpositioning.PositionMe.BuildConfig;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Locale;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -58,6 +60,8 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+
+import org.json.JSONObject;
 
 /**
  * This class handles communications with the server through HTTPs. The class uses an
@@ -73,6 +77,11 @@ import okhttp3.ResponseBody;
 public class ServerCommunications implements Observable {
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();
     // Application context for handling permissions and devices
+
+    private static final int OBSERVER_INDEX_FILES = 0;
+    private static final int OBSERVER_INDEX_MAIN = 1;
+    private static final int OBSERVER_INDEX_RECORDING = 2;
+
     private final Context context;
 
     // Network status checking
@@ -84,23 +93,6 @@ public class ServerCommunications implements Observable {
     private String infoResponse;
     private boolean success;
     private List<Observer> observers;
-
-    // Static constants necessary for communications
-    private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
-    private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
-    private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
-                    + "/?key=" + masterKey;
-    private static final String downloadURL =
-            "https://openpositioning.org/api/live/trajectory/download/" + userKey
-                    + "?skip=0&limit=30&key=" + masterKey;
-    private static final String infoRequestURL =
-            "https://openpositioning.org/api/live/users/trajectories/" + userKey
-                    + "?key=" + masterKey;
-    private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
-    private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
-
-
 
     /**
      * Public default constructor of {@link ServerCommunications}. The constructor saves context,
@@ -134,20 +126,20 @@ public class ServerCommunications implements Observable {
         byte[] binaryTrajectory = trajectory.toByteArray();
 
         File path = null;
-        // for android 13 or higher use dedicated external storage
+        // For android 13 or higher use dedicated external storage
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
             if (path == null) {
                 path = context.getFilesDir();
             }
-        } else { // for android 12 or lower use internal storage
+        } else { // For android 12 or lower, use internal storage
             path = context.getFilesDir();
         }
 
         System.out.println(path.toString());
 
         // Format the file name according to date
-        SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss", Locale.UK);
         Date date = new Date();
         File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
 
@@ -157,9 +149,9 @@ public class ServerCommunications implements Observable {
             stream.write(binaryTrajectory);
             stream.close();
             System.out.println("Recorded binary trajectory for debugging stored in: " + path);
-        } catch (IOException ee) {
+        } catch (IOException e) {
             // Catch and print if writing to the file fails
-            System.err.println("Storing of recorded binary trajectory failed: " + ee.getMessage());
+            System.err.println("Storing of recorded binary trajectory failed: " + e.getMessage());
         }
 
         // Check connections available before sending data
@@ -173,28 +165,29 @@ public class ServerCommunications implements Observable {
             // Instantiate client for HTTP requests
             OkHttpClient client = new OkHttpClient();
 
-            // Creaet a equest body with a file to upload in multipart/form-data format
+            // Create a request body with a file to upload in multipart/form-data format
             RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", file.getName(),
                             RequestBody.create(MediaType.parse("text/plain"), file))
                     .build();
 
             // Create a POST request with the required headers
-            Request request = new Request.Builder().url(uploadURL).post(requestBody)
-                    .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
-                    .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
+            String uploadURL = createUploadURL();
+            Request request = new Request.Builder()
+                .url(uploadURL)
+                .post(requestBody)
+                .addHeader("accept", PROTOCOL_APP_JSON)
+                .addHeader("Content-Type", PROTOCOL_MULTIPART)
+                .build();
 
             // Enqueue the request to be executed asynchronously and handle the response
             client.newCall(request).enqueue(new Callback() {
 
                 // Handle failure to get response from the server
                 @Override public void onFailure(Call call, IOException e) {
-                    e.printStackTrace();
-                    System.err.println("Failure to get response");
-                    // Delete the local file and set success to false
-                    //file.delete();
+                    System.err.println("Failure to get response: " + e.getMessage());
                     success = false;
-                    notifyObservers(1);
+                    notifyObservers(OBSERVER_INDEX_MAIN);
                 }
 
                 private void copyFile(File src, File dst) throws IOException {
@@ -211,27 +204,28 @@ public class ServerCommunications implements Observable {
                 // Process the server's response
                 @Override public void onResponse(Call call, Response response) throws IOException {
                     try (ResponseBody responseBody = response.body()) {
-                        // If the response is unsuccessful, delete the local file and throw an
-                        // exception
+                        // If the response is unsuccessful, throw an exception
                         if (!response.isSuccessful()) {
-                            //file.delete();
-//                            System.err.println("POST error response: " + responseBody.string());
-
+                            // Show error message to users
                             String errorBody = responseBody.string();
                             infoResponse = "Upload failed: " + errorBody;
                             new Handler(Looper.getMainLooper()).post(() ->
-                                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
+                                Toast.makeText(
+                                    context, infoResponse, Toast.LENGTH_SHORT).show()
+                            );
 
                             System.err.println("POST error response: " + errorBody);
                             success = false;
-                            notifyObservers(1);
+                            notifyObservers(OBSERVER_INDEX_MAIN);
                             throw new IOException("Unexpected code " + response);
                         }
 
                         // Print the response headers
                         Headers responseHeaders = response.headers();
                         for (int i = 0, size = responseHeaders.size(); i < size; i++) {
-                            System.out.println(responseHeaders.name(i) + ": " + responseHeaders.value(i));
+                            System.out.println(
+                                responseHeaders.name(i) + ": " + responseHeaders.value(i)
+                            );
                         }
                         // Print a confirmation of a successful POST to API
                         System.out.println("Successful post response: " + responseBody.string());
@@ -241,29 +235,34 @@ public class ServerCommunications implements Observable {
                         System.out.println("Original trajectory file saved at: " + originalPath);
 
                         // Copy the file to the Downloads folder
-                        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                        File downloadsDir = Environment.getExternalStoragePublicDirectory(
+                            Environment.DIRECTORY_DOWNLOADS
+                        );
                         File downloadFile = new File(downloadsDir, file.getName());
                         try {
                             copyFile(file, downloadFile);
-                            System.out.println("Trajectory file copied to Downloads: " + downloadFile.getAbsolutePath());
+                            System.out.println("Trajectory file copied to Downloads: "
+                                + downloadFile.getAbsolutePath()
+                            );
                         } catch (IOException e) {
-                            e.printStackTrace();
-                            System.err.println("Failed to copy file to Downloads: " + e.getMessage());
+                            System.err.println(
+                                "Failed to copy file to Downloads: " + e.getMessage()
+                            );
                         }
 
                         // Delete local file and set success to true
                         success = file.delete();
-                        notifyObservers(1);
+                        notifyObservers(OBSERVER_INDEX_MAIN);
                     }
                 }
             });
         }
         else {
-            // If the device is not connected to network or allowed to send, do not send trajectory
-            // and notify observers and user
+            // If the device is not connected to network or allowed to send,
+            // do not send trajectory and notify observers and user
             System.err.println("No uploading allowed right now!");
             success = false;
-            notifyObservers(1);
+            notifyObservers(OBSERVER_INDEX_MAIN);
         }
     }
 
@@ -285,7 +284,7 @@ public class ServerCommunications implements Observable {
                 byte[] fileBytes = Files.readAllBytes(localTrajectory.toPath());
                 fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), fileBytes);
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("Error: " + e.getMessage());
                 // if failed, use File object to construct RequestBody
                 fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), localTrajectory);
             }
@@ -299,23 +298,26 @@ public class ServerCommunications implements Observable {
                 .build();
 
         // Create a POST request with the required headers
+        String uploadURL = createUploadURL();
         okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
-                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
-                .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
+                .addHeader("accept", PROTOCOL_APP_JSON)
+                .addHeader("Content-Type", PROTOCOL_MULTIPART).build();
 
         // Enqueue the request to be executed asynchronously and handle the response
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                // Print error message, set success to false and notify observers
-                e.printStackTrace();
-//                localTrajectory.delete();
+                // Set success to false and notify observers
                 success = false;
-                System.err.println("UPLOAD: Failure to get response");
-                notifyObservers(1);
+                System.err.println(
+                    "[" + e.getClass() + "] UPLOAD: Failure to get response"
+                );
+                notifyObservers(OBSERVER_INDEX_MAIN);
+
+                // Show error message to users
                 infoResponse = "Upload failed: " + e.getMessage(); // Store error message
                 new Handler(Looper.getMainLooper()).post(() ->
-                        Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
+                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
             }
 
             @Override
@@ -325,7 +327,7 @@ public class ServerCommunications implements Observable {
                         // Print error message, set success to false and throw an exception
                         success = false;
 //                        System.err.println("UPLOAD unsuccessful: " + responseBody.string());
-                        notifyObservers(1);
+                        notifyObservers(OBSERVER_INDEX_MAIN);
 //                        localTrajectory.delete();
                         assert responseBody != null;
                         String errorBody = responseBody.string();
@@ -348,7 +350,7 @@ public class ServerCommunications implements Observable {
 
                     // Delete local file, set success to true and notify observers
                     success = localTrajectory.delete();
-                    notifyObservers(1);
+                    notifyObservers(OBSERVER_INDEX_MAIN);
                 }
             }
         });
@@ -379,15 +381,16 @@ public class ServerCommunications implements Observable {
                         String id = record.getString("id");
                         downloadRecords.put(id, record);
                     } catch (Exception e) {
-                        System.err.println("Error loading record with key: " + key);
-                        e.printStackTrace();
+                        System.err.println(
+                            "[" + e.getClass() + "] Error loading record with key: " + key
+                        );
                     }
                 }
 
                 System.out.println("Loaded downloadRecords: " + downloadRecords);
 
             } catch (Exception e) {
-                e.printStackTrace();
+                System.err.println("Error: " + e.getMessage());
             }
         } else {
             System.out.println("Download_records.json not found in app-specific directory.");
@@ -456,7 +459,6 @@ public class ServerCommunications implements Observable {
             System.out.println("Download record saved successfully at: " + recordsFile.getAbsolutePath());
 
         } catch (Exception e) {
-            e.printStackTrace();
             System.err.println("Error saving download record: " + e.getMessage());
         }
     }
@@ -479,8 +481,8 @@ public class ServerCommunications implements Observable {
 
         // Create GET request with required header
         okhttp3.Request request = new okhttp3.Request.Builder()
-                .url(downloadURL)
-                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+                .url(URL_GET_TRAJECTORIES)
+                .addHeader("accept", PROTOCOL_APP_JSON)
                 .get()
                 .build();
 
@@ -488,7 +490,7 @@ public class ServerCommunications implements Observable {
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
+                System.err.println("Error: " + e.getMessage());
             }
 
             @Override
@@ -568,21 +570,21 @@ public class ServerCommunications implements Observable {
      * the {@link ServerCommunications#infoResponse} field is updated and observes notified.
      *
      */
-    public void sendInfoRequest() {
+    public void sendInfoRequest(String requestURL) {
         // Create a new OkHttpclient
         OkHttpClient client = new OkHttpClient();
 
         // Create GET info request with appropriate URL and header
         okhttp3.Request request = new okhttp3.Request.Builder()
-                .url(infoRequestURL)
-                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+                .url(requestURL)
+                .addHeader("accept", PROTOCOL_APP_JSON)
                 .get()
                 .build();
 
         // Enqueue the GET request for asynchronous execution
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
+                System.err.println("Error: " + e.getMessage());
             }
 
             @Override public void onResponse(Call call, Response response) throws IOException {
@@ -596,7 +598,7 @@ public class ServerCommunications implements Observable {
                     infoResponse =  responseBody.string();
                     // Print a message in the console and notify observers
                     System.out.println("Response received");
-                    notifyObservers(0);
+                    notifyObservers(OBSERVER_INDEX_FILES);
                 }
             }
         });
@@ -620,6 +622,19 @@ public class ServerCommunications implements Observable {
         }
     }
 
+    // TODO - Implement true campaign support
+    private String createUploadURL(String campaign){
+        return URL_API + API_POST_TRAJECTORIES + "/"
+            + campaign + "/" + API_KEY_USER
+            + "/?key=" + API_KEY_MASTER;
+    }
+
+    // TODO - Remove this temporary copy once campaigns have been implemented
+    private String createUploadURL(){
+        return URL_API + API_POST_TRAJECTORIES + "/"
+            + "nucleus_building" + "/" + API_KEY_USER
+            + "/?key=" + API_KEY_MASTER;
+    }
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
@@ -656,10 +671,10 @@ public class ServerCommunications implements Observable {
     @Override
     public void notifyObservers(int index) {
         for(Observer o : observers) {
-            if(index == 0 && o instanceof FilesFragment) {
+            if(index == OBSERVER_INDEX_FILES && o instanceof FilesFragment) {
                 o.update(new String[] {infoResponse});
             }
-            else if (index == 1 && o instanceof MainActivity) {
+            else if (index == OBSERVER_INDEX_MAIN && o instanceof MainActivity) {
                 o.update(new Boolean[] {success});
             }
         }
