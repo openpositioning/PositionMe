@@ -1,4 +1,4 @@
-# Embedded Mobile and Wireless Systems (EWireless) 5 2025/25
+# Embedded Mobile and Wireless Systems (EWireless) 5 2025/26
 ## Coursework 1 - Group 13
 
 [![Build Status](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android.yml/badge.svg)](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android.yml)
