@@ -1,5 +1,13 @@
 syntax = "proto3";
 
+/*
+ * Configuration for Java Code Generation
+ * These options direct the Protobuf compiler to generate the 'Traj.java' file
+ * inside the specific package structure required by the Android project.
+ */
+option java_package = "com.openpositioning.PositionMe";
+option java_outer_classname = "Traj";
+
 message Trajectory {
 string android_version = 1;
 repeated Motion_Sample imu_data = 2;
@@ -27,6 +35,13 @@ Sensor_Info rotation_vector_info = 14;
 Sensor_Info magnetometer_info = 15;
 Sensor_Info barometer_info = 16;
 Sensor_Info light_sensor_info = 17;
+
+/*
+     * [Assignment Feature: Timestamped Markers]
+     * Stores the list of manual markers added by the user during recording.
+     * This field implements the data storage requirement for Objective c.
+     */
+repeated KeyPoint key_points = 18;
 
 }
 
@@ -146,4 +161,13 @@ message Sensor_Info {
     float power = 4;
     int32 version = 5;
     int32 type = 6;
+}
+
+/*
+ * [New Message] KeyPoint
+ * Represents a specific point of interest marked by the user.
+ * Contains the timestamp relative to the start of the recording.
+ */
+message KeyPoint {
+  int64 relative_timestamp = 1;
 }

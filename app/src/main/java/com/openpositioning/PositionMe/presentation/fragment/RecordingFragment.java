@@ -32,6 +32,8 @@ import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import android.widget.Toast;
 
 /**
  * Fragment responsible for managing the recording process of trajectory data.
@@ -60,6 +62,8 @@ public class RecordingFragment extends Fragment {
 
     // UI elements
     private MaterialButton completeButton, cancelButton;
+    // UI Components
+    private FloatingActionButton markButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -137,6 +141,10 @@ public class RecordingFragment extends Fragment {
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
+
+        // Initialize the Floating Action Button from the layout
+        markButton = view.findViewById(R.id.markButton);
+
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
@@ -179,6 +187,20 @@ public class RecordingFragment extends Fragment {
             });
 
             dialog.show(); // Finally, show the dialog
+        });
+
+/**
+ * Sets up the click listener for the manual marker button.
+ * When clicked, it triggers two actions:
+ * 1. Visual feedback for the user (Toast).
+ * 2. Logic execution to save the timestamp (SensorFusion).
+ */
+        markButton.setOnClickListener(v -> {
+            //User Feedback: Show a brief message on screen
+            Toast.makeText(requireContext(), "Marker added!", Toast.LENGTH_SHORT).show();
+
+            // SensorFusion record time
+             sensorFusion.addMarker();
         });
 
         // The blinking effect for recIcon

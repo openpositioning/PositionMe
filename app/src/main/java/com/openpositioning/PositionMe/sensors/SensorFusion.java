@@ -1011,4 +1011,30 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     //endregion
 
+    /**
+     * Adds a manual marker/keypoint to the trajectory.
+     * Triggered by the Floating Action Button during recording.
+     */
+    public void addMarker() {
+        // Safe check: ensure recording is active and trajectory exists
+        if (!saveRecording || trajectory == null) {
+            return;
+        }
+
+        // Calculate the timestamp relative to the recording start time
+        long timestamp = SystemClock.uptimeMillis() - bootTime;
+
+        // Log for debugging purposes
+        Log.d("SensorFusion", "Adding Marker at time: " + timestamp);
+
+        try {
+            // Build the KeyPoint object and add it to the trajectory
+            trajectory.addKeyPoints(Traj.KeyPoint.newBuilder()
+                    .setRelativeTimestamp(timestamp) // Use the calculated timestamp
+                    .build());
+        } catch (Exception e) {
+            Log.e("SensorFusion", "Error adding marker: " + e.getMessage());
+        }
+    }
+
 }
