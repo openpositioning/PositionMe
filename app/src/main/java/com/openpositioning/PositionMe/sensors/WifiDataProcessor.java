@@ -10,6 +10,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.provider.Settings;
 import android.widget.Toast;
 
@@ -130,12 +131,34 @@ public class WifiDataProcessor implements Observable {
             wifiData = new Wifi[wifiScanList.size()];
             for(int i = 0; i < wifiScanList.size(); i++) {
                 wifiData[i] = new Wifi();
+                ScanResult result = wifiScanList.get(i);
                 //Convert String mac address to an integer
-                String wifiMacAddress = wifiScanList.get(i).BSSID;
+                String wifiMacAddress = result.BSSID;
                 long intMacAddress = convertBssidToLong(wifiMacAddress);
                 //store mac address and rssi of wifi
                 wifiData[i].setBssid(intMacAddress);
-                wifiData[i].setLevel(wifiScanList.get(i).level);
+                wifiData[i].setLevel(result.level);
+                // Store additional scan data required by the latest protobuf
+                String ssid = result.SSID;
+                if (ssid == null || ssid.isEmpty() || "<unknown ssid>".equalsIgnoreCase(ssid)) {
+                    ssid = "hidden";
+                } else if (ssid.length() >= 2 && ssid.startsWith("\"") && ssid.endsWith("\"")) {
+                    ssid = ssid.substring(1, ssid.length() - 1);
+                    if (ssid.isEmpty()) {
+                        ssid = "hidden";
+                    }
+                }
+                long frequency = result.frequency;
+                if (frequency <= 0) {
+                    frequency = 0; // unknown
+                }
+                boolean rttSupported = false;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    rttSupported = result.is80211mcResponder();
+                }
+                wifiData[i].setSsid(ssid);
+                wifiData[i].setFrequency(frequency);
+                wifiData[i].setRttSupported(rttSupported);
             }
 
             //Notify observers of change in wifiData variable
@@ -315,11 +338,39 @@ public class WifiDataProcessor implements Observable {
         Wifi currentWifi = new Wifi();
         if(networkInfo.isConnected()) {
             //Store the ssid, mac address and frequency of the current wifi
-            currentWifi.setSsid(wifiManager.getConnectionInfo().getSSID());
+            String ssid = wifiManager.getConnectionInfo().getSSID();
+            if (ssid == null || ssid.isEmpty() || "<unknown ssid>".equalsIgnoreCase(ssid)) {
+                ssid = "hidden";
+            } else if (ssid.length() >= 2 && ssid.startsWith("\"") && ssid.endsWith("\"")) {
+                ssid = ssid.substring(1, ssid.length() - 1);
+                if (ssid.isEmpty()) {
+                    ssid = "hidden";
+                }
+            }
+            currentWifi.setSsid(ssid);
             String wifiMacAddress = wifiManager.getConnectionInfo().getBSSID();
             long intMacAddress = convertBssidToLong(wifiMacAddress);
             currentWifi.setBssid(intMacAddress);
-            currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
+            long frequency = wifiManager.getConnectionInfo().getFrequency();
+            if (frequency <= 0) {
+                frequency = 0; // unknown
+            }
+            currentWifi.setFrequency(frequency);
+            boolean rttSupported = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                try {
+                    List<ScanResult> scanResults = wifiManager.getScanResults();
+                    for (ScanResult result : scanResults) {
+                        if (result.BSSID != null && result.BSSID.equals(wifiMacAddress)) {
+                            rttSupported = result.is80211mcResponder();
+                            break;
+                        }
+                    }
+                } catch (SecurityException ignored) {
+                    // Permissions might be revoked; fall back to default false.
+                }
+            }
+            currentWifi.setRttSupported(rttSupported);
         }
         else{
             //Store standard information if not connected

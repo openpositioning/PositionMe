@@ -150,6 +150,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Wifi values
     private List<Wifi> wifiList;
     private Set<Long> recordedApMacs = new HashSet<>();
+    private String lastFingerprintSignature;
 
 
     // Over time accelerometer magnitude values since last step
@@ -485,29 +486,68 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
         if(this.saveRecording) {
+            List<Wifi> sortedWifi = new ArrayList<>(this.wifiList);
+            sortedWifi.sort((a, b) -> Long.compare(a.getBssid(), b.getBssid()));
+            StringBuilder signatureBuilder = new StringBuilder();
+            for (Wifi data : sortedWifi) {
+                signatureBuilder.append(data.getBssid())
+                        .append(':')
+                        .append(data.getLevel())
+                        .append(';');
+            }
+            String fingerprintSignature = signatureBuilder.toString();
+            boolean isDuplicateFingerprint = fingerprintSignature.equals(lastFingerprintSignature);
+            if (isDuplicateFingerprint) {
+                Log.d("SensorFusion", "Skipping duplicate WiFi fingerprint: " + fingerprintSignature);
+            }
+
             long sampleTimestamp = SystemClock.uptimeMillis() - bootTime;
             Traj.Fingerprint.Builder fingerprint = Traj.Fingerprint.newBuilder()
                     .setRelativeTimestamp(sampleTimestamp);
 
-            for (Wifi data : this.wifiList) {
-                fingerprint.addRfScans(Traj.RFScan.newBuilder()
-                        .setRelativeTimestamp(sampleTimestamp)
-                        .setMac(data.getBssid())
-                        .setRssi(data.getLevel()));
-
-                if (!recordedApMacs.contains(data.getBssid())) {
-                    boolean rttCapable = data.isRttSupported();
-                    Traj.WiFiAPData.Builder apData = Traj.WiFiAPData.newBuilder()
+            if (!isDuplicateFingerprint) {
+                for (Wifi data : this.wifiList) {
+                    fingerprint.addRfScans(Traj.RFScan.newBuilder()
+                            .setRelativeTimestamp(sampleTimestamp)
                             .setMac(data.getBssid())
-                            .setSsid(data.getSsid() == null ? "" : data.getSsid())
-                            .setFrequency(data.getFrequency())
-                            .setRttEnabled(rttCapable);
-                    trajectory.addApsData(apData);
-                    recordedApMacs.add(data.getBssid());
+                            .setRssi(data.getLevel()));
+
+                    if (!recordedApMacs.contains(data.getBssid())) {
+                        boolean rttCapable = data.isRttSupported();
+                        String ssid = data.getSsid();
+                        if (ssid == null || ssid.isEmpty() || "<unknown ssid>".equalsIgnoreCase(ssid)) {
+                            ssid = "hidden";
+                        } else if (ssid.length() >= 2 && ssid.startsWith("\"") && ssid.endsWith("\"")) {
+                            ssid = ssid.substring(1, ssid.length() - 1);
+                            if (ssid.isEmpty()) {
+                                ssid = "hidden";
+                            }
+                        }
+                        long frequency = data.getFrequency();
+                        if (frequency <= 0) {
+                            frequency = 0; // unknown
+                        }
+                        Traj.WiFiAPData.Builder apData = Traj.WiFiAPData.newBuilder()
+                                .setMac(data.getBssid())
+                                .setSsid(ssid)
+                                .setFrequency(frequency)
+                                .setRttEnabled(rttCapable);
+                        trajectory.addApsData(apData);
+                        recordedApMacs.add(data.getBssid());
+                        String freqLabel = (frequency == 0) ? "0(unknown)" : String.valueOf(frequency);
+                        Log.d("SensorFusion", "AP data added: bssid=" + data.getBssid()
+                                + " ssid=" + ssid
+                                + " freq=" + freqLabel
+                                + " rtt=" + rttCapable);
+                    }
                 }
+                // Adding WiFi fingerprint data to Trajectory
+                this.trajectory.addWifiFingerprints(fingerprint);
+                Log.d("SensorFusion", "WiFi fingerprint added: count="
+                        + this.trajectory.getWifiFingerprintsCount()
+                        + " apCount=" + fingerprint.getRfScansCount());
+                lastFingerprintSignature = fingerprintSignature;
             }
-            // Adding WiFi fingerprint data to Trajectory
-            this.trajectory.addWifiFingerprints(fingerprint);
         }
         createWifiPositioningRequest();
     }
@@ -904,6 +944,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setLightSensorInfo(createInfoBuilder(lightSensor));
 
         this.recordedApMacs = new HashSet<>();
+        this.lastFingerprintSignature = null;
 
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
