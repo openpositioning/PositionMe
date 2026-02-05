@@ -17,12 +17,10 @@ import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.protobuf.util.JsonFormat;
@@ -44,7 +42,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -125,7 +122,7 @@ public class ServerCommunications implements Observable {
      * trajectory is passed to the method. It is processed into the right format for sending
      * to the API server.
      *
-     * @param trajectory    Traj object matching all the timing and formal restrictions.
+     * @param trajectory    com.openpositioning.PositionMe.Traj object matching all the timing and formal restrictions.
      */
     public void sendTrajectory(Traj.Trajectory trajectory){
         logDataSize(trajectory);
@@ -623,11 +620,11 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+        Log.i("ServerCommunications", "Magnetometer Data size: " + trajectory.getMagnetometerDataCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+        Log.i("ServerCommunications", "WiFi Fingerprints size: " + trajectory.getWifiFingerprintsCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
