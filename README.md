@@ -22,8 +22,16 @@
 
 1. **Clone the repository.**
 2. **Open the project in Android Studio**.
-3. Add your own API key for Google Maps in AndroidManifest.xml
-4. Set the website where you want to send your data. The application was built for use with [openpositioning.org](http://openpositioning.org/).
+3. Create a `secrets.properties` file in the base directory of this repo
+4. Add your own Google and Open Positioning API keys to the `secrets.properties` file:
+
+```bash
+# Modify the variables to set your keys
+MAPS_API_KEY=<your Google maps API key>
+OPENPOSITIONING_API_KEY=<your openpositioning user API key>
+OPENPOSITIONING_MASTER_KEY=<The openpositioning master key>
+```
+
 5. **Build and run the project on your Android device**.
 
 ## Usage
