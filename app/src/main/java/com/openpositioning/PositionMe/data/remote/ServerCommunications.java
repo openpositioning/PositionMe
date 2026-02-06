@@ -25,7 +25,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
-import com.google.protobuf.util.JsonFormat;
+//import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.BuildConfig;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
@@ -146,10 +146,30 @@ public class ServerCommunications implements Observable {
 
         System.out.println(path.toString());
 
-        // Format the file name according to date
+        // (EE HUNG)Format the file name according to date
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
         Date date = new Date();
-        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
+        String dateString = dateFormat.format(date);
+
+// 1. Get the custom name
+        String customName = com.openpositioning.PositionMe.sensors.SensorFusion.getInstance().getTrajectoryId();
+
+// 2. BUILD THE FILENAME
+// We MUST start with "trajectory_" and the date so the List Reader can find it.
+// We add your custom name at the end.
+        String finalFileName;
+
+        if (customName != null && !customName.isEmpty()) {
+            // Result: trajectory_04-02-26-21-30_LibraryWalk.txt
+            // EE HUNG (Sanitize the name to remove spaces so it doesn't break)
+            String safeName = customName.replaceAll("[^a-zA-Z0-9 ]", "");
+            finalFileName = "trajectory_" + dateString + "_ " + safeName + ".txt";
+        } else {
+            // Result: trajectory_04-02-26-21-30.txt
+            finalFileName = "trajectory_" + dateString + ".txt";
+        }
+
+        File file = new File(path, finalFileName);
 
         try {
             // Write the binary data to the file
@@ -540,8 +560,8 @@ public class ServerCommunications implements Observable {
 
                     File file = new File(appSpecificDownloads, fileName);
                     try (FileWriter fileWriter = new FileWriter(file)) {
-                        String receivedTrajectoryString = JsonFormat.printer().print(receivedTrajectory);
-                        fileWriter.write(receivedTrajectoryString);
+// REPLACE WITH THIS:
+                        String receivedTrajectoryString = receivedTrajectory.toString();                        fileWriter.write(receivedTrajectoryString);
                         fileWriter.flush();
                         System.err.println("Received trajectory stored in: " + file.getAbsolutePath());
                     } catch (IOException ee) {
@@ -623,13 +643,10 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
-        Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
+        Log.i("ServerCommunications", "Position Data size: " + trajectory.getMagnetometerDataCount());        Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
-        Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
-        Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
+        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiFingerprintsCount());        Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
 
     /**
