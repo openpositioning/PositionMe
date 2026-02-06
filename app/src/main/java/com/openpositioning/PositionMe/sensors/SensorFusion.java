@@ -27,10 +27,13 @@ import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
@@ -931,9 +934,14 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
+        String venueOrBuilding = "traj";
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(new Date());
+        String shortUuid = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String trajectoryId = venueOrBuilding + "_" + timestamp + "_" + shortUuid;
+
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
-                .setTrajectoryId(UUID.randomUUID().toString())
+                .setTrajectoryId(trajectoryId)
                 .setTrajectoryVersion(2.0f)
                 .setAndroidVersion(Build.VERSION.RELEASE)
                 .setStartTimestamp(absoluteStartTime)
