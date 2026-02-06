@@ -6,7 +6,11 @@ import java.util.Iterator;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import org.json.JSONObject;
+//琛
+import okhttp3.MediaType;
+import okhttp3.RequestBody;
 
+//end
 import android.os.Environment;
 
 import java.io.FileInputStream;
@@ -97,6 +101,11 @@ public class ServerCommunications implements Observable {
     private static final String infoRequestURL =
             "https://openpositioning.org/api/live/users/trajectories/" + userKey
                     + "?key=" + masterKey;
+    //琛
+    private static final String url = "https://openpositioning.org/api/live/floorplan/request/" + userKey;
+
+
+    //end
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
 
@@ -623,11 +632,24 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+        Log.i("ServerCommunications",
+                "PDR data size: " + trajectory.getPdrDataCount());
+
+        Log.i("ServerCommunications",
+                "Corrected positions size: " + trajectory.getCorrectedPositionsCount());
+
+        Log.i("ServerCommunications",
+                "Magnetometer data size: " + trajectory.getMagnetometerDataCount());
+
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+        Log.i("ServerCommunications",
+                "WiFi fingerprints count: " + trajectory.getWifiFingerprintsCount());
+
+        Log.i("ServerCommunications",
+                "WiFi AP data count: " + trajectory.getApsDataCount());
+
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
@@ -664,4 +686,142 @@ public class ServerCommunications implements Observable {
             }
         }
     }
+
+    //琛
+    public interface FloorplanCallback {
+        void onSuccess(JSONObject response);
+        void onError(String error);
+    }
+
+
+    public void requestFloorplans(double lat, double lon, List<com.openpositioning.PositionMe.sensors.Wifi> wifiList,
+                                  FloorplanCallback cb) {
+
+        OkHttpClient client = new OkHttpClient();
+
+        JSONObject body = new JSONObject();
+        try {
+            body.put("lat", lat);
+            body.put("lon", lon);
+
+//
+            //琛
+            org.json.JSONArray macs = new org.json.JSONArray();
+            if (wifiList != null) {
+                for (com.openpositioning.PositionMe.sensors.Wifi w : wifiList) {
+                    if (w == null) continue;
+
+                    // doc 需要的是 mac 字符串。推荐用标准格式：AA:BB:CC:DD:EE:FF
+                    String mac = formatBssidToMac(w.getBssid());
+                    macs.put(mac);
+                }
+            }
+            body.put("macs", macs);
+
+            // ===== DEBUG: print request body (macs) =====
+            try {
+                Log.e("Floorplan", "BODY lat=" + lat + " lon=" + lon);
+
+                if (macs == null) {
+                    Log.e("Floorplan", "BODY macs=null");
+                } else {
+                    Log.e("Floorplan", "BODY macs size=" + macs.length());
+                    for (int i = 0; i < macs.length(); i++) {
+                        Log.e("Floorplan", "BODY mac[" + i + "]=" + macs.optString(i));
+                    }
+                }
+            } catch (Exception e) {
+                Log.e("Floorplan", "BODY log error: " + e.getMessage());
+            }
+// ===== END DEBUG =====
+
+
+            //end
+
+        } catch (Exception e) {
+            if (cb != null) cb.onError("JSON build error: " + e.getMessage());
+            return;
+        }
+
+//        okhttp3.MediaType JSON = okhttp3.MediaType.parse("application/json; charset=utf-8");
+//        RequestBody requestBody = RequestBody.create(JSON, body.toString());
+//
+//        Request request = new Request.Builder()
+//                .url(floorplanRequestURL)
+//                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+//                .post(requestBody)
+//                .build();
+        // 用 GET：把参数放到 query string 里
+
+// （可选）先不带 wifis，确保接口能返回；后面我们再加
+        String url = "https://openpositioning.org/api/live/floorplan/request/" + userKey + "?key=" +masterKey;
+        Log.e("Floorplan", "POST " + url);
+
+        MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+        RequestBody requestBody = RequestBody.create(JSON, body.toString());
+
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
+                .post(requestBody)
+                .build();
+
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                if (cb == null) return;
+                new Handler(Looper.getMainLooper()).post(() ->
+                        cb.onError("Network failure: " + e.getMessage()));
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (cb == null) return;
+
+                String respStr = "";
+                try (ResponseBody rb = response.body()) {
+                    respStr = (rb != null) ? rb.string() : "";
+                } catch (Exception ignored) {}
+
+                if (!response.isSuccessful()) {
+                    String err = "HTTP " + response.code() + ": " + respStr;
+                    new Handler(Looper.getMainLooper()).post(() -> cb.onError(err));
+                    return;
+                }
+
+//                try {
+//                    JSONObject json = new JSONObject(respStr);
+//                    new Handler(Looper.getMainLooper()).post(() -> cb.onSuccess(json));
+//                } catch (Exception e) {
+//                    String err = "Parse JSON error: " + e.getMessage() + " raw=" + respStr;
+//                    new Handler(Looper.getMainLooper()).post(() -> cb.onError(err));
+//                }
+                //琛
+                try {
+                    // 成功返回是数组：[ {name, outline, map_shapes}, ... ]
+                    org.json.JSONArray arr = new org.json.JSONArray(respStr);
+
+                    // 为了不改你现有 callback 签名（JSONObject），我们包一层
+                    JSONObject wrapper = new JSONObject();
+                    wrapper.put("results", arr);
+
+                    new Handler(Looper.getMainLooper()).post(() -> cb.onSuccess(wrapper));
+                } catch (Exception e) {
+                    String err = "Parse JSON error: " + e.getMessage() + " raw=" + respStr;
+                    new Handler(Looper.getMainLooper()).post(() -> cb.onError(err));
+                }
+
+                //end
+            }
+        });
+    }
+
+    private static String formatBssidToMac(long bssid) {
+        String hex = String.format(java.util.Locale.US, "%012X", bssid);
+        // AA:BB:CC:DD:EE:FF
+        return hex.replaceAll("(.{2})(?!$)", "$1:");
+    }
+
+    //end
 }

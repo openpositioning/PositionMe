@@ -1,8 +1,10 @@
+
 plugins {
     id 'com.android.application'
     id 'com.google.gms.google-services'
     id 'androidx.navigation.safeargs'
     id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
+    id 'com.google.protobuf' version '0.9.4'
 }
 
 // (Optional) load local secrets file:
@@ -15,6 +17,14 @@ if (localPropertiesFile.exists()) {
 android {
     namespace "com.openpositioning.PositionMe"
     compileSdk 34
+
+    sourceSets {
+        main {
+            proto {
+                srcDir 'src/main/proto'
+            }
+        }
+    }
 
     defaultConfig {
         applicationId "com.openpositioning.PositionMe"
@@ -92,4 +102,24 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+
+    implementation 'com.google.protobuf:protobuf-java:3.25.3'
+    implementation 'com.google.protobuf:protobuf-java-util:3.25.3'
+
 }
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.25.3'
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java {
+
+                }
+            }
+        }
+    }
+}
+
