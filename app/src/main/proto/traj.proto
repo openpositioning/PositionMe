@@ -44,7 +44,7 @@ message Trajectory {
   SensorInfo proximity_info = 25;
 
   repeated GNSSPosition test_points = 26;
-
+  repeated TestPoint labeled_test_points = 33;
 }
 
 message RelativePosition {
@@ -222,3 +222,9 @@ message SensorInfo {
   float frequency = 8;
 }
 
+message TestPoint {
+  int64 relative_timestamp = 1;
+  double latitude = 2;
+  double longitude = 3;
+  int32 index = 4;
+}

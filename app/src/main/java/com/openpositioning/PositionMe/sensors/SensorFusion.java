@@ -1124,4 +1124,28 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         return null;
     }
+
+    public void addTestPoint(double lat, double lon, int index) {
+        // Safety check: Don't save if we aren't recording
+        if (!saveRecording || trajectory == null) return;
+
+        // Calculate time since boot (matching your other sensors)
+        long relativeTs = SystemClock.uptimeMillis() - this.bootTime;
+
+        // SAVE: Note the name change here!
+        // If your proto says "labeled_test_points", this must be "addLabeledTestPoints"
+        trajectory.addLabeledTestPoints(
+                Traj.TestPoint.newBuilder()
+                        .setRelativeTimestamp(relativeTs)
+                        .setLatitude(lat)
+                        .setLongitude(lon)
+                        .setIndex(index)
+                        .build() // Don't forget .build()!
+        );
+
+        Log.d("SensorFusion", "Added Test Point #" + index + " at " + lat + "," + lon);
+    }
+
+
+
 }
