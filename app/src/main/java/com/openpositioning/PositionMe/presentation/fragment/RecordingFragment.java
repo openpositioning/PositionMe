@@ -32,7 +32,8 @@ import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 
-
+import android.widget.Toast;
+import android.util.Log;
 /**
  * Fragment responsible for managing the recording process of trajectory data.
  * <p>
@@ -60,6 +61,10 @@ public class RecordingFragment extends Fragment {
 
     // UI elements
     private MaterialButton completeButton, cancelButton;
+
+    private MaterialButton testPointButton;
+
+
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -137,6 +142,10 @@ public class RecordingFragment extends Fragment {
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
+
+        testPointButton = view.findViewById(R.id.testPointButton);
+        testPointButton.setOnClickListener(v -> onTestPointClicked());
+
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
@@ -294,5 +303,38 @@ public class RecordingFragment extends Fragment {
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
+    }
+
+    private int testPointCount = 0;
+
+    //
+    private void onTestPointClicked() {
+        if (trajectoryMapFragment == null) {
+            Toast.makeText(requireContext(), "Map not ready", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        LatLng pos = trajectoryMapFragment.getCurrentLocation();
+        if (pos == null) {
+            Toast.makeText(requireContext(), "Position not ready yet", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        long timestampMs = System.currentTimeMillis();
+        testPointCount++;
+
+        // 在地图上画 marker
+        trajectoryMapFragment.addTestPointMarker(pos, testPointCount);
+
+        // 现在只是打印，下一步写进 Trajectory proto
+        Log.d("TestPoint",
+                "TP " + testPointCount +
+                        " ts=" + timestampMs +
+                        " lat=" + pos.latitude +
+                        " lon=" + pos.longitude);
+
+        Toast.makeText(requireContext(),
+                "Test Point " + testPointCount + " saved",
+                Toast.LENGTH_SHORT).show();
     }
 }
