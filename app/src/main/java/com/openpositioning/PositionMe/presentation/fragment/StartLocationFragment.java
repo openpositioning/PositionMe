@@ -8,6 +8,7 @@ import android.widget.Button;
 import android.widget.EditText; //EE HUNG added
 import android.widget.Toast; // EE HUNG added
 
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -50,6 +51,7 @@ public class StartLocationFragment extends Fragment {
     private float zoom = 19f;
     // Instance for managing indoor building overlays (if any)
     private NucleusBuildingManager nucleusBuildingManager;
+
     // Dummy variable for floor index
     private int FloorNK;
 
@@ -73,6 +75,7 @@ public class StartLocationFragment extends Fragment {
             activity.getSupportActionBar().hide();
         }
         View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
+
 
         // Obtain the start position from the GPS data from the SensorFusion class
         startPosition = sensorFusion.getGNSSLatitude(false);
@@ -119,6 +122,9 @@ public class StartLocationFragment extends Fragment {
                         .draggable(true));
                 mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
 
+
+
+
                 // Drag listener for the marker to update the start position when dragged
                 mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
                     /**
@@ -149,6 +155,9 @@ public class StartLocationFragment extends Fragment {
         return rootView;
     }
 
+
+
+
     /**
      * {@inheritDoc}
      * Button onClick listener enabled to detect when to go to next fragment and start PDR recording.
@@ -156,6 +165,7 @@ public class StartLocationFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
 
         this.button = view.findViewById(R.id.startLocationDone);
         this.button.setOnClickListener(new View.OnClickListener() {

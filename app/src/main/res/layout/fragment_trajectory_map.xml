@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/trajectory_map_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -51,6 +52,7 @@
                 android:textColor="@color/md_theme_onPrimary"
                 android:text="@string/color"
                 app:elevation="5dp"/>
+            <!--                            琛                          -->
 
             <Spinner
                 android:id="@+id/mapSwitchSpinner"
@@ -94,6 +96,23 @@
             app:layout_constraintBottom_toTopOf="@id/floorDownButton"
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_up" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/exitIndoorButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:layout_marginEnd="24dp"
+            android:contentDescription="back"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            app:backgroundTint="@color/md_theme_primary"
+            app:layout_constraintBottom_toTopOf="@+id/floorUpButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="1.0"
+            app:tint="@color/md_theme_onPrimary" />
+
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

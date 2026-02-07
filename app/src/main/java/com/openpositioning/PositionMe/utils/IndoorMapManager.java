@@ -23,6 +23,15 @@ import java.util.List;
  * @author Arun Gopalakrishnan
  */
 public class IndoorMapManager {
+    //琛
+    private boolean manualMode = false;
+
+    private enum ActiveBuilding { NONE, NUCLEUS, LIBRARY }
+    private ActiveBuilding activeBuilding = ActiveBuilding.NONE;
+
+
+    //end
+
     // To store the map instance
     private GoogleMap gMap;
     //Stores the overlay of the indoor maps
@@ -95,29 +104,58 @@ public class IndoorMapManager {
      * @param newFloor the floor the user is at
      * @param autoFloor flag if function called by auto-floor feature
      */
-    public void setCurrentFloor(int newFloor, boolean autoFloor) {
-        if (BuildingPolygon.inNucleus(currentLocation)){
-            //Special case for nucleus when auto-floor is being used
-            if (autoFloor) {
-                // If nucleus add bias floor as lower-ground floor referred to as floor 0
-                newFloor += 1;
-            }
-            // If within bounds and different from floor map currently being shown
-             if (newFloor>=0 && newFloor<NUCLEUS_MAPS.size() && newFloor!=this.currentFloor) {
-                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
-                 this.currentFloor=newFloor;
-             }
-        }
-        else if (BuildingPolygon.inLibrary(currentLocation)){
-            // If within bounds and different from floor map currently being shown
-            if (newFloor>=0 && newFloor<LIBRARY_MAPS.size() && newFloor!=this.currentFloor) {
-                groundOverlay.setImage(BitmapDescriptorFactory.fromResource(LIBRARY_MAPS.get(newFloor)));
-                this.currentFloor=newFloor;
-            }
-        }
+//    public void setCurrentFloor(int newFloor, boolean autoFloor) {
+//        if (BuildingPolygon.inNucleus(currentLocation)){
+//            //Special case for nucleus when auto-floor is being used
+//            if (autoFloor) {
+//                // If nucleus add bias floor as lower-ground floor referred to as floor 0
+//                newFloor += 1;
+//            }
+//            // If within bounds and different from floor map currently being shown
+//             if (newFloor>=0 && newFloor<NUCLEUS_MAPS.size() && newFloor!=this.currentFloor) {
+//                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
+//                 this.currentFloor=newFloor;
+//             }
+//        }
+//        else if (BuildingPolygon.inLibrary(currentLocation)){
+//            // If within bounds and different from floor map currently being shown
+//            if (newFloor>=0 && newFloor<LIBRARY_MAPS.size() && newFloor!=this.currentFloor) {
+//                groundOverlay.setImage(BitmapDescriptorFactory.fromResource(LIBRARY_MAPS.get(newFloor)));
+//                this.currentFloor=newFloor;
+//            }
+//        }
+//
+//    }
 
+
+    //琛
+    public void setCurrentFloor(int newFloor, boolean autoFloor) {
+        // 没 overlay 就别切，避免 NPE
+        if (groundOverlay == null) return;
+
+        boolean inNucleus = (manualMode && activeBuilding == ActiveBuilding.NUCLEUS)
+                || (currentLocation != null && BuildingPolygon.inNucleus(currentLocation));
+
+        boolean inLibrary = (manualMode && activeBuilding == ActiveBuilding.LIBRARY)
+                || (currentLocation != null && BuildingPolygon.inLibrary(currentLocation));
+
+        if (inNucleus) {
+            // nucleus auto-floor 的偏移逻辑保留
+            if (autoFloor) newFloor += 1;
+
+            if (newFloor >= 0 && newFloor < NUCLEUS_MAPS.size() && newFloor != this.currentFloor) {
+                groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
+                this.currentFloor = newFloor;
+            }
+        } else if (inLibrary) {
+            if (newFloor >= 0 && newFloor < LIBRARY_MAPS.size() && newFloor != this.currentFloor) {
+                groundOverlay.setImage(BitmapDescriptorFactory.fromResource(LIBRARY_MAPS.get(newFloor)));
+                this.currentFloor = newFloor;
+            }
+        }
     }
 
+    //end
     /**
      * Increments the Current Floor and changes to higher floor's map (if a higher floor exists)
      */
@@ -160,12 +198,24 @@ public class IndoorMapManager {
                     floorHeight=LIBRARY_FLOOR_HEIGHT;
             }
             // Removing overlay if user no longer in area with indoor maps available
-            else if (!BuildingPolygon.inLibrary(currentLocation) &&
-                    !BuildingPolygon.inNucleus(currentLocation)&& isIndoorMapSet){
+//            else if (!BuildingPolygon.inLibrary(currentLocation) &&
+//                    !BuildingPolygon.inNucleus(currentLocation)&& isIndoorMapSet){
+//                groundOverlay.remove();
+//                isIndoorMapSet = false;
+//                currentFloor=0;
+//            }
+            //琛
+            else if (!manualMode &&
+                    currentLocation != null &&
+                    !BuildingPolygon.inLibrary(currentLocation) &&
+                    !BuildingPolygon.inNucleus(currentLocation) && isIndoorMapSet) {
                 groundOverlay.remove();
                 isIndoorMapSet = false;
-                currentFloor=0;
-            }   
+                currentFloor = 0;
+            }
+
+
+            //end
         } catch (Exception ex) {
             Log.e("Error with overlay, Exception:", ex.toString());
         }
@@ -190,4 +240,83 @@ public class IndoorMapManager {
         gMap.addPolyline(new PolylineOptions().color(Color.GREEN)
                 .addAll(points));
     }
+
+    //琛
+//    public void forceShowNucleus() {
+//        manualMode = true;
+//
+//        if (groundOverlay != null) groundOverlay.remove();
+//
+//        groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
+//                .image(BitmapDescriptorFactory.fromResource(R.drawable.nucleusg))
+//                .positionFromBounds(NUCLEUS));
+//
+//        isIndoorMapSet = true;
+//        currentFloor = 1; // nucleus g 在 index 1
+//        floorHeight = NUCLEUS_FLOOR_HEIGHT;
+//    }
+//
+//    public void forceShowLibrary() {
+//        manualMode = true;
+//
+//        if (groundOverlay != null) groundOverlay.remove();
+//
+//        groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
+//                .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
+//                .positionFromBounds(LIBRARY));
+//
+//        isIndoorMapSet = true;
+//        currentFloor = 0;
+//        floorHeight = LIBRARY_FLOOR_HEIGHT;
+//    }
+
+    public void forceShowNucleus() {
+        manualMode = true;
+        activeBuilding = ActiveBuilding.NUCLEUS;
+
+        if (groundOverlay != null) groundOverlay.remove();
+
+        groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
+                .image(BitmapDescriptorFactory.fromResource(R.drawable.nucleusg))
+                .positionFromBounds(NUCLEUS));
+
+        isIndoorMapSet = true;
+        currentFloor = 1; // nucleusg 对应 index 1（你原逻辑也是这样）
+        floorHeight = NUCLEUS_FLOOR_HEIGHT;
+    }
+
+    public void forceShowLibrary() {
+        manualMode = true;
+        activeBuilding = ActiveBuilding.LIBRARY;
+
+        if (groundOverlay != null) groundOverlay.remove();
+
+        groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
+                .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
+                .positionFromBounds(LIBRARY));
+
+        isIndoorMapSet = true;
+        currentFloor = 0;
+        floorHeight = LIBRARY_FLOOR_HEIGHT;
+    }
+
+    public void clearManualMode() {
+        manualMode = false;
+    }
+
+    public void clearManualModeAndRemoveOverlay() {
+        manualMode = false;
+        activeBuilding = ActiveBuilding.NONE;
+
+        if (groundOverlay != null) {
+            groundOverlay.remove();
+            groundOverlay = null;
+        }
+
+        isIndoorMapSet = false;
+        currentFloor = 0;
+    }
+
+
+    //end
 }

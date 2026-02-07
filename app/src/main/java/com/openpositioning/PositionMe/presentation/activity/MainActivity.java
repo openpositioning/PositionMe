@@ -77,6 +77,9 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private static final int PERMISSION_REQUEST_CODE = 100;
 
     //endregion
+    //琛
+
+    //end
 
     //region Activity Lifecycle
 
@@ -89,6 +92,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         //EE HUNG (keep app always on)
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -365,4 +369,11 @@ public class MainActivity extends AppCompatActivity implements Observer {
     };
 
     //endregion
+
+    //琛
+    public SensorFusion getSensorFusion() {
+        return sensorFusion;
+    }
+
+    //end
 }

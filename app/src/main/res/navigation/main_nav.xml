@@ -32,7 +32,20 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
+        <!-- 琛 -->
+        <action
+            android:id="@+id/action_homeFragment_to_trajectoryMapFragment"
+            app:destination="@id/trajectoryMapFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
     </fragment>
+    <fragment
+        android:id="@+id/trajectoryMapFragment"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment"
+        android:label="Trajectory Map"
+        tools:layout="@layout/fragment_trajectory_map" />
 
     <fragment
         android:id="@+id/settingsFragment"

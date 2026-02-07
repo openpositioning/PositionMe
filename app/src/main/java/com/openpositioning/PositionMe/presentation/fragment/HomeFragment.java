@@ -75,7 +75,17 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         ((AppCompatActivity) getActivity()).getSupportActionBar().show();
         View rootView = inflater.inflate(R.layout.fragment_home, container, false);
         getActivity().setTitle("Home");
+
+        //琛
+        MaterialButton indoorButton = rootView.findViewById(R.id.indoorButton);
+        indoorButton.setOnClickListener(v -> {
+            Navigation.findNavController(v)
+                    .navigate(R.id.trajectoryMapFragment);
+        });
+
+        //end
         return rootView;
+
     }
 
     /**

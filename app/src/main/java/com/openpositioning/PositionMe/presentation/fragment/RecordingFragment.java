@@ -10,6 +10,7 @@ import android.os.Handler;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.util.Log;//琛
 
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
@@ -250,8 +251,11 @@ public class RecordingFragment extends Fragment {
 
             // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
+                Log.e("Floorplan", "RecordingFragment got newLocation=" + newLocation);
                 trajectoryMapFragment.updateUserLocation(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
+//                trajectoryMapFragment.requestFloorplansIfNeeded(newLocation); //琛
+
             }
         }
 

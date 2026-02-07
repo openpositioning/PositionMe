@@ -23,12 +23,12 @@ message Trajectory {
   repeated Fingerprint ble_fingerprints = 14;
   repeated BleData ble_data = 15;
   string trajectory_name = 50;
-  
+
   // UNIX timestamp (in milliseconds) recorded from the start of this
   // trajectory data collection event. All future
   // timestamps in sub classes are to be RELATIVE timestamps
   // (in milliseconds) to this start time.
-  // E.g. 
+  // E.g.
   // start_timestamp = 1674819807315 (UTC 27 Jan 2023 in the morning)
   // relative_timestamp = 3000 (3s)
   int64 start_timestamp = 16;
@@ -63,24 +63,24 @@ message IMUReading {
   int64 relative_timestamp = 1;
   // Accelerometer [m/s^2]
   Vector3 acc = 2;
-  
+
   // Gyroscope [radians/s]
   Vector3 gyr = 3;
-  
+
   // Orientation [unitless], 4 components should square sum to ~1
   Quaternion rotation_vector = 4;
-  
+
   // Number of steps so far
   int32 step_count = 5;
 }
-  
+
 message MagnetometerReading {
   int64 relative_timestamp = 1;
 
   // Magnetometer [uT]
   Vector3 mag = 2;
 }
-  
+
 message BarometerReading {
   int64 relative_timestamp = 1;
 
@@ -122,7 +122,7 @@ message GNSSReading {
   float speed = 3;
   // degrees
   float bearing = 4;
-  
+
   // e.g 'gps' or 'network'
   string provider = 5;
 }
@@ -140,7 +140,7 @@ message RFScan {
   // e.g. 207394925843984
   int64 mac = 2;
 
-  // rssi integer in dBm. 
+  // rssi integer in dBm.
   // typically between -120 and -10
   int32 rssi = 3;
 
@@ -168,7 +168,7 @@ message WiFiRTTReading {
   float distance = 3;
   // in mm
   float distance_std = 4;
-  // rssi integer in dBm. 
+  // rssi integer in dBm.
   // typically between -120 and -10
   int32 rssi = 5;
 }
@@ -183,7 +183,7 @@ message WiFiAPData {
 
   // Typically 2.4GHz or 5GHz
   int64 frequency = 3;
-  
+
   // Flag to indicate if the AP supports RTT measurements
   bool rtt_enabled = 4;
 }
