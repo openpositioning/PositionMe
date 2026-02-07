@@ -569,8 +569,7 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
-        int wifiCount = (sensorFusion.getWifiList() == null) ? 0 : sensorFusion.getWifiList().size();
-        Log.d("Floorplan", "sending floorplan request lat=" + currentLocation.latitude
+        int wifiCount = (sensorFusion != null && sensorFusion.getWifiList() != null) ? sensorFusion.getWifiList().size() : 0;        Log.d("Floorplan", "sending floorplan request lat=" + currentLocation.latitude
                 + " lon=" + currentLocation.longitude
                 + " wifiCount=" + wifiCount);
 
