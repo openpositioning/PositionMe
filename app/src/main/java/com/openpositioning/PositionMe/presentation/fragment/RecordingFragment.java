@@ -116,6 +116,9 @@ public class RecordingFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        // 录制界面保持屏幕常亮，防止录制被系统息屏打断
+        view.setKeepScreenOn(true);
+
         // Child Fragment: the container in fragment_recording.xml
         // where TrajectoryMapFragment is placed
         trajectoryMapFragment = (TrajectoryMapFragment)
@@ -305,6 +308,11 @@ public class RecordingFragment extends Fragment {
         boolean isFinishing = getActivity() != null && getActivity().isFinishing();
         if (isRemoving() || isFinishing) {
             sensorFusion.stopListening();
+        }
+        // 离开录制界面后恢复屏幕常亮标志
+        View root = getView();
+        if (root != null) {
+            root.setKeepScreenOn(false);
         }
     }
 }

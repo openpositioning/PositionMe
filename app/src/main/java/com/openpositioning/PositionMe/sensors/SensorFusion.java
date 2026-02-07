@@ -6,12 +6,16 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.app.ActivityManager;
+import android.content.Intent;
 import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -928,7 +932,13 @@ public class SensorFusion implements SensorEventListener, Observer {
             PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
         }
-        wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
+        // 确保录制期间 CPU 常驻，避免重复 acquire
+        if (wakeLock != null && !wakeLock.isHeld()) {
+            wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
+        }
+
+        // 录制前校验电池优化/后台限制状态，并提示用户
+        verifyAlwaysOnReadiness();
 
         this.saveRecording = true;
         this.stepCounter = 0;
@@ -961,6 +971,46 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
             this.filter_coefficient = FILTER_COEFFICIENT;
+        }
+    }
+
+    /**
+     * 校验“始终运行”相关系统状态：电池优化、后台限制、省电模式。
+     * 仅提示用户，不强制跳转。
+     */
+    private void verifyAlwaysOnReadiness() {
+        String pkg = appContext.getPackageName();
+        PowerManager pm = (PowerManager) appContext.getSystemService(Context.POWER_SERVICE);
+        ActivityManager am = (ActivityManager) appContext.getSystemService(Context.ACTIVITY_SERVICE);
+
+        boolean ignoringOpt = false;
+        boolean powerSave = false;
+        boolean bgRestricted = false;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ignoringOpt = pm != null && pm.isIgnoringBatteryOptimizations(pkg);
+            }
+            powerSave = pm != null && pm.isPowerSaveMode();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                bgRestricted = am != null && am.isBackgroundRestricted();
+            }
+        } catch (Exception e) {
+            Log.w("SensorFusion", "电池/后台状态检查失败: " + e.getMessage());
+            Toast.makeText(appContext, "电池优化状态未知，请手动确认", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        if (!ignoringOpt || powerSave || bgRestricted) {
+            StringBuilder warn = new StringBuilder("检测到可能的后台限制：");
+            if (!ignoringOpt) warn.append("电池优化未豁免; ");
+            if (powerSave) warn.append("省电模式开启; ");
+            if (bgRestricted) warn.append("后台限制开启; ");
+            Log.w("SensorFusion", warn.toString());
+            Toast.makeText(appContext,
+                    "请在设置中关闭电池优化/省电/后台限制，确保录制不中断",
+                    Toast.LENGTH_LONG).show();
+        } else {
+            Log.i("SensorFusion", "电池优化/后台限制检查通过：已豁免优化且未开启省电/后台限制。");
         }
     }
 
