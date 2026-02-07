@@ -694,5 +694,20 @@ public class TrajectoryMapFragment extends Fragment {
                         // This is called when the resource is no longer needed.
                     }
                 });
+
+
+    }
+
+    /**
+     * NEW: Public method to handle polygon clicks, called from the parent fragment.
+     * @param polygon The polygon that was clicked.
+     */
+    public void handlePolygonClick(Polygon polygon) {
+        JsonObject venueData = (JsonObject) polygon.getTag();
+        if (venueData != null) {
+            selectVenue(venueData);
+        } else {
+            Log.w("TrajectoryMapFragment", "Clicked a polygon with no venue data attached.");
+        }
     }
 }

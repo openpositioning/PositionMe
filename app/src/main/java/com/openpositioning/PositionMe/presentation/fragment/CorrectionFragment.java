@@ -27,6 +27,9 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import androidx.lifecycle.ViewModelProvider;
+import com.openpositioning.PositionMe.viewmodels.MapViewModel;
+
 /**
  * A simple {@link Fragment} subclass. Corrections Fragment is displayed after a recording session
  * is finished to enable manual adjustments to the PDR. The adjustments are not saved as of now.
@@ -48,6 +51,7 @@ public class CorrectionFragment extends Fragment {
     private static float scalingRatio = 0f;
     private static LatLng start;
     private PathView pathView;
+    private MapViewModel mapViewModel;
 
     public CorrectionFragment() {
         // Required empty public constructor
@@ -62,8 +66,24 @@ public class CorrectionFragment extends Fragment {
         }
         View rootView = inflater.inflate(R.layout.fragment_correction, container, false);
 
+        // A. Initialize ViewModel to access shared data
+        // Use requireActivity() to ensure that we get the instance shared with the Activity.
+        mapViewModel = new ViewModelProvider(requireActivity()).get(MapViewModel.class);
+
+        // B. Obtain the venueId from the ViewModel
+        String selectedVenueId = mapViewModel.getSelectedVenueId().getValue();
+
+        // C. Security checks and default values provided.
+        if (selectedVenueId == null) {
+            selectedVenueId = ""; // Use an empty string as the default value.
+        }
+
+        // D. Call the new method we created in SensorFusion, passing in the venueId.
+        sensorFusion.setVenueIdForTrajectory(selectedVenueId);
+
         // Send trajectory data to the cloud
         sensorFusion.sendTrajectoryToCloud();
+
 
         //Obtain start position
         float[] startPosition = sensorFusion.getGNSSLatitude(true);

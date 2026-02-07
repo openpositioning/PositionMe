@@ -905,6 +905,23 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
+    /**
+     * NEW METHOD: Sets the Venue ID for the current trajectory recording.
+     * This should be called before sendTrajectoryToCloud().
+     * @param venueId The ID of the venue selected by the user.
+     */
+    public void setVenueIdForTrajectory(String venueId) {
+        // Check if a recording is in progress and the trajectory builder exists
+        if (this.saveRecording && this.trajectory != null) {
+            // Use the Protobuf builder to set the venue ID
+            this.trajectory.setVenueId(venueId);
+            Log.i("SensorFusion", "Venue ID '" + venueId + "' has been set for the current trajectory.");
+        } else {
+            Log.w("SensorFusion", "Could not set Venue ID. Is a recording in progress?");
+        }
+    }
+
+
     //endregion
 
     //region Trajectory object
