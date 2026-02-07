@@ -1,6 +1,8 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -15,8 +17,15 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
@@ -25,6 +34,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
+import com.openpositioning.PositionMe.viewmodels.MapViewModel;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +91,12 @@ public class TrajectoryMapFragment extends Fragment {
     private Button switchColorButton;
     private Polygon buildingPolygon;
 
+    // NEW FEATURE: Variables for indoor map display functionality.
+    private MapViewModel mapViewModel;
+    private List<Polygon> venuePolygons = new ArrayList<>();
+    private GroundOverlay floorplanOverlay;
+    private OnMapReadyCallback mapReadyCallback; // To communicate with parent fragment.
+
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -99,6 +115,21 @@ public class TrajectoryMapFragment extends Fragment {
     public void onViewCreated(@NonNull View view,
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
+        // NEW FEATURE: Initialize the MapViewModel.
+        // We get it from the parent fragment to ensure a shared instance.
+        mapViewModel = new ViewModelProvider(requireParentFragment()).get(MapViewModel.class);
+
+        // NEW FEATURE: Observe the LiveData from the ViewModel for API responses.
+        mapViewModel.getFloorplanResponse().observe(getViewLifecycleOwner(), response -> {
+            if (response != null && gMap != null) {
+                // When data is received, draw the venue outlines on the map.
+                drawVenueOutlines(response);
+            } else {
+                Log.d("TrajectoryMapFragment", "Failed to fetch floorplans or map not ready.");
+            }
+        });
+
 
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
@@ -130,11 +161,16 @@ public class TrajectoryMapFragment extends Fragment {
                         pendingCameraPosition = null;
                     }
 
-                    drawBuildingPolygon();
+                    // NEW FEATURE: Remove the hardcoded building polygons.
+                    // The new feature will draw them dynamically from the API.
+                    // drawBuildingPolygon(); // This line is now commented out.
 
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
 
-
+                    // NEW FEATURE: If a callback is set by the parent, notify it that the map is ready.
+                    if (mapReadyCallback != null) {
+                        mapReadyCallback.onMapReady(gMap);
+                    }
                 }
             });
         }
@@ -506,7 +542,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .add(nkml1, nkml2, nkml3, nkml4, nkml1)
                 .strokeColor(Color.BLUE)    // Blue border
                 .strokeWidth(10f)           // Border width
-               // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
+                // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
                 .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
 
         PolygonOptions buildingPolygonOptions3 = new PolygonOptions()
@@ -537,5 +573,126 @@ public class TrajectoryMapFragment extends Fragment {
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
 
+    // --- NEW FEATURE: All methods below are added for the indoor map display functionality. ---
 
+    /**
+     * NEW FEATURE: Provides a way for the parent fragment (ReplayFragment) to know when the map is ready.
+     * @param callback The callback to be invoked when the map is ready.
+     */
+    public void getMapAsync(OnMapReadyCallback callback) {
+        if (gMap != null) {
+            // If map is already ready, invoke callback immediately.
+            callback.onMapReady(gMap);
+        } else {
+            // Otherwise, store the callback to be invoked later in onMapReady.
+            this.mapReadyCallback = callback;
+        }
+    }
+
+    /**
+     * NEW FEATURE: Public getter for the GoogleMap instance.
+     * @return The GoogleMap object, or null if it's not ready.
+     */
+    public GoogleMap getMap() {
+        return gMap;
+    }
+
+    /**
+     * NEW FEATURE: Draws venue outlines on the map based on the API response.
+     * @param apiResponse The JSON object received from the floorplan API.
+     */
+    private void drawVenueOutlines(JsonObject apiResponse) {
+        // Clear any previously drawn polygons before adding new ones.
+        for (Polygon p : venuePolygons) {
+            p.remove();
+        }
+        venuePolygons.clear();
+
+        JsonArray venues = apiResponse.getAsJsonArray("venues");
+        if (venues == null || gMap == null) return;
+
+        for (JsonElement venueElement : venues) {
+            JsonObject venue = venueElement.getAsJsonObject();
+            // The API returns coordinates in a nested array: [[lng, lat], [lng, lat], ...]
+            JsonArray outlineCoords = venue.getAsJsonObject("outline").getAsJsonArray("coordinates").get(0).getAsJsonArray();
+
+            PolygonOptions polygonOptions = new PolygonOptions()
+                    .strokeColor(Color.BLUE)
+                    .strokeWidth(5)
+                    .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue
+                    .clickable(true);
+
+            for (JsonElement coordElement : outlineCoords) {
+                JsonArray lngLat = coordElement.getAsJsonArray();
+                // Note: API returns [longitude, latitude], Google Maps LatLng is (latitude, longitude).
+                polygonOptions.add(new LatLng(lngLat.get(1).getAsDouble(), lngLat.get(0).getAsDouble()));
+            }
+
+            Polygon polygon = gMap.addPolygon(polygonOptions);
+            polygon.setTag(venue); // Attach the full venue data to the polygon for later use on click.
+            venuePolygons.add(polygon);
+        }
+    }
+
+    /**
+     * NEW FEATURE: Handles the event when a user clicks on a venue polygon on the map.
+     * @param venueData The JSON data of the selected venue, retrieved from the polygon's tag.
+     */
+    private void selectVenue(JsonObject venueData) {
+        String venueId = venueData.get("id").getAsString();
+        Log.d("TrajectoryMapFragment", "Venue selected: " + venueId);
+
+        // Update the ViewModel with the selected venue ID. This makes it available to other parts
+        // of the app, like the data recording service.
+        mapViewModel.setSelectedVenueId(venueId);
+
+        // TODO: Implement a UI element (e.g., a dropdown menu) to allow the user to select a floor.
+
+        // For now, automatically display the first floorplan available for the selected venue.
+        JsonArray floorplans = venueData.getAsJsonArray("floorplans");
+        if (floorplans != null && floorplans.size() > 0) {
+            JsonObject firstFloor = floorplans.get(0).getAsJsonObject();
+            displayFloorplan(firstFloor);
+        }
+    }
+
+    /**
+     * NEW FEATURE: Displays a specific floorplan image as a GroundOverlay on the map.
+     * @param floorplan The JSON object for a single floor, containing URL and bounding box.
+     */
+    private void displayFloorplan(JsonObject floorplan) {
+        // Remove the previous floorplan overlay if it exists.
+        if (floorplanOverlay != null) {
+            floorplanOverlay.remove();
+        }
+
+        String imageUrl = floorplan.get("url").getAsString();
+        // The bounding box is defined as [minLng, minLat, maxLng, maxLat].
+        JsonArray bbox = floorplan.getAsJsonArray("bbox");
+        LatLngBounds bounds = new LatLngBounds(
+                new LatLng(bbox.get(1).getAsDouble(), bbox.get(0).getAsDouble()), // Southwest corner
+                new LatLng(bbox.get(3).getAsDouble(), bbox.get(2).getAsDouble())  // Northeast corner
+        );
+
+        // Use Glide to asynchronously load the image from the URL. This prevents blocking the main thread.
+        Glide.with(this)
+                .asBitmap()
+                .load(imageUrl)
+                .into(new CustomTarget<Bitmap>() {
+                    @Override
+                    public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
+                        if (gMap != null) {
+                            GroundOverlayOptions options = new GroundOverlayOptions()
+                                    .image(BitmapDescriptorFactory.fromBitmap(resource))
+                                    .positionFromBounds(bounds);
+                            floorplanOverlay = gMap.addGroundOverlay(options);
+                        }
+                    }
+
+                    @Override
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
+                        // This is called when the resource is no longer needed.
+                    }
+                });
+    }
 }
