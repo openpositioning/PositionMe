@@ -34,7 +34,7 @@ android {
                 "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
 
         // Add reference to maps API key for manifest file
-        resValue 'string', 'google_maps_key', (localProperties['MAPS_API_KEY'] ?: '')
+        manifestPlaceholders = [MAPS_API_KEY:localProperties['MAPS_API_KEY']?:""]
     }
 
     buildFeatures {
