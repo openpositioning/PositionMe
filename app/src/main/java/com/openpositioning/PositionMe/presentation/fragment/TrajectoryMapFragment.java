@@ -732,6 +732,17 @@ public class TrajectoryMapFragment extends Fragment {
         return currentLocation;
     }
 
+    // ===== Test Point marker (Part C) =====
+    public void addTestPointMarker(@NonNull LatLng pos, int index) {
+        if (gMap == null) return;
+
+        gMap.addMarker(new MarkerOptions()
+                .position(pos)
+                .title("TP " + index)
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+        );
+    }
+
     /**
      * Called when we want to set or update the GNSS marker position
      */

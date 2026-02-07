@@ -47,6 +47,22 @@
                     android:textAlignment="center"/>
             </com.google.android.material.card.MaterialCardView>
 
+            <EditText
+                android:id="@+id/trajectoryNameInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="16dp"
+                android:background="@android:drawable/editbox_background"
+                android:elevation="10dp"
+                android:hint="Enter Trajectory Name"
+                android:inputType="text"
+                android:minHeight="48dp"
+                android:padding="12dp"
+                android:textColor="@android:color/black"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/cardView" />
+
             <Button
                 android:id="@+id/startLocationDone"
                 android:layout_width="150dp"

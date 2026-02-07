@@ -5,7 +5,6 @@
     android:layout_height="wrap_content"
     android:padding="4dp">
 
-    <!-- Material Card -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -15,7 +14,7 @@
         android:layout_marginBottom="2dp"
         app:cardBackgroundColor="@color/md_theme_surfaceContainer"
         app:cardCornerRadius="12dp"
-        app:cardElevation="4dp"
+        app:cardElevation="2dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -23,38 +22,72 @@
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:padding="12dp">
 
-            <!-- WiFi Name -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/wifiNameItem"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
-                android:text="@string/mac"
+                android:text="Network Name"
                 android:textColor="@color/md_theme_onSurface"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 android:textStyle="bold"
-                app:layout_constraintBottom_toBottomOf="parent"
+                android:ellipsize="end"
+                android:maxLines="1"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/wifiLevelItem"
+                android:layout_marginEnd="8dp"/>
 
-            <!-- WiFi Signal Level -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/wifiLevelItem"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/db"
-                android:textColor="@color/md_theme_onSurface"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:text="-55 dB"
+                android:textColor="@color/md_theme_primary"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                 android:textStyle="bold"
-                app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="@+id/wifiNameItem"/>
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/wifiMacItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00:00:00:00:00"
+                android:textColor="@color/md_theme_onSurfaceVariant"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:layout_marginTop="4dp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/wifiNameItem"/>
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/wifiFreqItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2412 MHz"
+                android:textColor="@color/md_theme_onSurfaceVariant"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:layout_marginStart="12dp"
+                android:layout_marginTop="4dp"
+                app:layout_constraintStart_toEndOf="@+id/wifiMacItem"
+                app:layout_constraintTop_toBottomOf="@+id/wifiNameItem"/>
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/wifiRttItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="RTT"
+                android:textColor="@android:color/holo_green_dark"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textStyle="bold"
+                android:layout_marginStart="12dp"
+                android:layout_marginTop="4dp"
+                app:layout_constraintStart_toEndOf="@+id/wifiFreqItem"
+                app:layout_constraintTop_toBottomOf="@+id/wifiNameItem"/>
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </com.google.android.material.card.MaterialCardView>
-
 </androidx.constraintlayout.widget.ConstraintLayout>

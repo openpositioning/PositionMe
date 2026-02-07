@@ -5,6 +5,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText; //EE HUNG added
+import android.widget.Toast; // EE HUNG added
 
 
 import androidx.annotation.NonNull;
@@ -174,13 +176,25 @@ public class StartLocationFragment extends Fragment {
              */
             @Override
             public void onClick(View view) {
+                //EE HUNG added
+                // 1. Find the input field from the XML
+                EditText nameInput = getView().findViewById(R.id.trajectoryNameInput);
+                String trajName = nameInput.getText().toString().trim();
+
+                // 2. Validate: Stop if the name is empty
+                if (trajName.isEmpty()) {
+                    Toast.makeText(getContext(), "Please enter a trajectory name!", Toast.LENGTH_SHORT).show();
+                    return; // Stop here, do not start recording
+                }
+
+
                 float chosenLat = startPosition[0];
                 float chosenLon = startPosition[1];
 
                 // If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
                     // Start sensor recording + set the start location
-                    sensorFusion.startRecording();
+                    sensorFusion.startRecording(trajName); //EE HUNG added
                     sensorFusion.setStartGNSSLatitude(startPosition);
 
                     // Now switch to the recording screen
