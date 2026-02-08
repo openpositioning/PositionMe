@@ -18,6 +18,8 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
@@ -31,6 +33,9 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
 /**
@@ -186,11 +191,25 @@ public class RecordingFragment extends Fragment {
             dialog.show(); // Finally, show the dialog
         });
 
+        // Add marker button
         btnTestPoint.setOnClickListener(v -> {
+            // Increment marker count on press
             markerCount++;
 
+            // Get current location from TrajectoryMapFragment
             LatLng currentPosition = trajectoryMapFragment.getCurrentLocation();
 
+            // Obtain recording timestamp and create new Testpoint object
+            long relativeTimeStamp = sensorFusion.getRelativeTimeStamp();
+            TestPoint tp = new TestPoint(currentPosition, relativeTimeStamp, markerCount);
+            TestPoints.add(tp);
+
+            // Display confirmation to screen showing marker number and time in seconds.
+            Toast.makeText(requireContext(),
+                    "Test Point " + markerCount + " at " + relativeTimeStamp/1000 + "s",
+                    Toast.LENGTH_SHORT).show();
+
+            // Add a test point marker to the map
             trajectoryMapFragment.addTestPointMarker(currentPosition, markerCount);
         });
 
@@ -308,4 +327,18 @@ public class RecordingFragment extends Fragment {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
     }
+
+    private static class TestPoint {
+        final int markerCount;
+        final LatLng currentPosition;
+        final long relativeTimeStamp;
+
+        TestPoint(LatLng currentPosition, long relativeTimestamp, int markerCount) {
+            this.currentPosition = currentPosition;
+            this.relativeTimeStamp = relativeTimestamp;
+            this.markerCount = markerCount;
+        }
+    }
+
+    private final List<TestPoint> TestPoints = new ArrayList<>();
 }

@@ -1011,4 +1011,12 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     //endregion
 
+    /**
+     * Returns current recording time in milliseconds, relative
+     * to the start of the trajectory recording session.
+     */
+    public long getRelativeTimeStamp() {
+        return SystemClock.uptimeMillis() - bootTime;
+    }
+
 }
