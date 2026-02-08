@@ -82,9 +82,7 @@ public class StartLocationFragment extends Fragment {
             false
         );
 
-        // Obtain the start position from the GPS data from the SensorFusion class
-        // TODO - Why set start=false if we want the start position?
-        // Is this a badly named argument?
+        // Get current GPS location to display as default marker position
         startPosition = sensorFusion.getGNSSLatitude(false);
         // If no location found, zoom the map out
         if (startPosition[0] == 0 && startPosition[1] == 0) {
@@ -186,8 +184,8 @@ public class StartLocationFragment extends Fragment {
                 // If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
                     // Start sensor recording + set the start location
-                    sensorFusion.startRecording();
                     sensorFusion.setStartGNSSLatitude(startPosition);
+                    sensorFusion.startRecording();
 
                     // Now switch to the recording screen
                     ((RecordingActivity) requireActivity()).showRecordingScreen();

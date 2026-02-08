@@ -248,16 +248,25 @@ public class WifiDataProcessor implements Observable {
      * disable it.
      */
     public void checkWifiThrottling(){
-        if(checkWifiPermissions()) {
-            //If the device does not support wifi throttling an exception is thrown
-            try {
-                if(Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled")==1) {
-                    //Inform user to disable wifi throttling
-                    Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
-                }
-            } catch (Settings.SettingNotFoundException e) {
-                e.printStackTrace();
+        if (!checkWifiPermissions()) {
+            return;
+        }
+        //If the device does not support wifi throttling an exception is thrown
+        try {
+            boolean isThrottled = false;
+            // For Android 11+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                isThrottled = wifiManager.isScanThrottleEnabled();
+            } else {
+                isThrottled = Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled") == 1;
             }
+
+            if (isThrottled) {
+                //Inform user to disable wifi throttling
+                Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
+            }
+        } catch (Settings.SettingNotFoundException e) {
+            e.printStackTrace();
         }
     }
 

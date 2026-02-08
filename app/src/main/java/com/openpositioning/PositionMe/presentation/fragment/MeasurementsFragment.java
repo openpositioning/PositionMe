@@ -16,10 +16,12 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.sensors.BleDevice;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
 import com.openpositioning.PositionMe.presentation.viewitems.WifiListAdapter;
+import com.openpositioning.PositionMe.presentation.viewitems.BleListAdapter;
 
 import java.util.List;
 import java.util.Map;
@@ -47,9 +49,12 @@ public class MeasurementsFragment extends Fragment {
     // UI elements
     private ConstraintLayout sensorMeasurementList;
     private RecyclerView wifiListView;
+    private RecyclerView bleListView;
     // List of string resource IDs
     private int[] prefaces;
     private int[] gnssPrefaces;
+    private WifiListAdapter wifiAdapter;
+    private BleListAdapter bleAdapter;
 
 
     /**
@@ -125,6 +130,44 @@ public class MeasurementsFragment extends Fragment {
         sensorMeasurementList = (ConstraintLayout) getView().findViewById(R.id.sensorMeasurementList);
         wifiListView = (RecyclerView) getView().findViewById(R.id.wifiList);
         wifiListView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        wifiAdapter = new WifiListAdapter(getActivity(), new java.util.ArrayList<>());
+        wifiListView.setAdapter(wifiAdapter);
+
+        bleListView = (RecyclerView) getView().findViewById(R.id.bleList);
+        bleListView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        bleAdapter = new BleListAdapter(getActivity(), new java.util.ArrayList<>());
+        bleListView.setAdapter(bleAdapter);
+
+        CardView wifiTitleCard = getView().findViewById(R.id.dividerLine);
+        TextView wifiTitleText = getView().findViewById(R.id.wifiTitle);
+
+        CardView bleTitleCard = getView().findViewById(R.id.bleTitle);
+        TextView bleTitleText = getView().findViewById(R.id.bleTitleText);
+
+        // Initially hide both lists
+        wifiListView.setVisibility(View.GONE);
+        bleListView.setVisibility(View.GONE);
+
+        wifiTitleCard.setOnClickListener(v -> {
+            if (wifiListView.getVisibility() == View.VISIBLE) {
+                wifiListView.setVisibility(View.GONE);
+            } else {
+                wifiListView.setVisibility(View.VISIBLE);
+                bleListView.setVisibility(View.GONE);
+            }
+        });
+
+        bleTitleCard.setOnClickListener(v -> {
+            if (bleListView.getVisibility() == View.VISIBLE) {
+                bleListView.setVisibility(View.GONE);
+            } else {
+                bleListView.setVisibility(View.VISIBLE);
+                wifiListView.setVisibility(View.GONE);
+            }
+        });
+
+        wifiTitleText.setOnClickListener(v -> wifiTitleCard.performClick());
+        bleTitleText.setOnClickListener(v -> bleTitleCard.performClick());
     }
 
     /**
@@ -168,7 +211,13 @@ public class MeasurementsFragment extends Fragment {
             List<Wifi> wifiObjects = sensorFusion.getWifiList();
             // If there are WiFi networks visible, update the recycler view with the data.
             if(wifiObjects != null) {
-                wifiListView.setAdapter(new WifiListAdapter(getActivity(), wifiObjects));
+                wifiAdapter.updateData(wifiObjects);
+            }
+            // Get all Bluetooth values - convert to list of strings
+            List<BleDevice> bleObjects = sensorFusion.getBleList();
+            // If there are Bluetooth devices visible, update the recycler view with the data.
+            if(bleObjects != null && !bleObjects.isEmpty()) {
+                bleAdapter.updateData(bleObjects);
             }
             // Restart the data updater task in REFRESH_TIME milliseconds.
             refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);

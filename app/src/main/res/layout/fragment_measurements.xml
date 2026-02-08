@@ -14,10 +14,10 @@
             android:id="@+id/sensorMeasurementList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toTopOf="@id/dividerLine">
+            app:layout_constraintTop_toTopOf="parent">
 
             <androidx.cardview.widget.CardView
                 android:id="@+id/accelerometerView"
@@ -557,7 +557,6 @@
             app:cardBackgroundColor="?attr/colorPrimary"
             app:cardCornerRadius="10dp"
             app:cardElevation="8dp"
-            app:layout_constraintBottom_toTopOf="@id/wifiList"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/sensorMeasurementList">
@@ -570,6 +569,8 @@
                     android:id="@+id/wifiTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
                     android:text="@string/wifi"
                     android:textColor="@color/white"
                     android:textSize="24sp"
@@ -599,14 +600,81 @@
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/wifiList"
             android:layout_width="match_parent"
-            android:layout_height="300sp"
+            android:layout_height="0dp"
+            android:visibility="gone"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="4dp"
+            app:layout_constraintBottom_toTopOf="@id/bleTitle"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/dividerLine" />
+
+        <!-- BLE Title Card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/bleTitle"
+            android:layout_width="match_parent"
+            android:layout_height="34sp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="2dp"
+            app:cardBackgroundColor="?attr/colorPrimary"
+            app:cardCornerRadius="10dp"
+            app:cardElevation="8dp"
+            app:layout_constraintBottom_toTopOf="@id/bleList"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/wifiList"
+            android:clickable="true"
+            android:background="?attr/selectableItemBackground">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <TextView
+                    android:id="@+id/bleTitleText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/bluetooth"
+                    android:textColor="@color/white"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <ImageView
+                    android:id="@+id/bleImageView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:contentDescription="Bluetooth icon"
+                    android:src="@drawable/ic_baseline_bt_24"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toStartOf="@+id/bleTitleText"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:tint="@color/white" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- BLE List RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/bleList"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:visibility="gone"
             android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp"
             android:layout_marginBottom="8dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/dividerLine" />
+            app:layout_constraintTop_toBottomOf="@id/bleTitle"/>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 

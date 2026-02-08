@@ -74,4 +74,9 @@ public class WifiListAdapter extends RecyclerView.Adapter<WifiViewHolder> {
     public int getItemCount() {
         return items.size();
     }
+
+    public void updateData(List<Wifi> newItems) {
+        this.items = newItems;
+        notifyDataSetChanged();
+    }
 }

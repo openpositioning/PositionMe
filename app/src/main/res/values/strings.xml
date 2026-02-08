@@ -30,6 +30,7 @@
     <string name="pdr_pos">PDR Position</string>
     <string name="pdr">Pedestrian Dead Reckoning</string>
     <string name="wifi">WiFi Networks</string>
+    <string name="bluetooth">Bluetooth Devices</string>
 
 
     <!-- Misc -->
@@ -54,6 +55,7 @@
     <string name="power">Power:\t\t\t\t\t\t\t\t %1$s</string>
     <string name="version">Version:\t\t\t\t\t\t %1$s</string>
     <string name="mac">MAC: %1$s</string>
+    <string name="name">Name: %1$s</string>
 
     <!-- Preference Titles -->
     <string name="settings_title">Settings</string>
