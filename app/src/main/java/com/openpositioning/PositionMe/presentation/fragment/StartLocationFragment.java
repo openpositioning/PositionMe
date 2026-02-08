@@ -101,13 +101,77 @@ public class StartLocationFragment extends Fragment {
                 mMap.getUiSettings().setTiltGesturesEnabled(true);
                 mMap.getUiSettings().setRotateGesturesEnabled(true);
                 mMap.getUiSettings().setScrollGesturesEnabled(true);
-
+                //indoor mode
+                mMap.setIndoorEnabled(true);
                 // *** FIX: Clear any existing markers so the start marker isn’t duplicated ***
                 mMap.clear();
 
                 // Create NucleusBuildingManager instance (if needed)
                 nucleusBuildingManager = new NucleusBuildingManager(mMap);
-                nucleusBuildingManager.getIndoorMapManager().hideMap();
+                //nucleusBuildingManager.getIndoorMapManager().hideMap();
+
+                if (nucleusBuildingManager.getIndoorMapManager() != null) {
+                    nucleusBuildingManager.getIndoorMapManager().switchFloor(0);
+                }
+                // -----------------------------------------------------------------------------------------
+                // [Assignment Feature: Objective d] Indoor Map Floor Switching Implementation
+                // -----------------------------------------------------------------------------------------
+
+                // Initialize floor buttons from the layout to control the indoor map levels.
+                // These buttons allow the user to switch between Ground, 1st, and 2nd floors.
+                Button btnF2 = rootView.findViewById(R.id.btn_floor_2);
+                Button btnF1 = rootView.findViewById(R.id.btn_floor_1);
+                Button btnF0 = rootView.findViewById(R.id.btn_floor_0);
+
+                // Listener for the 2nd Floor button
+                if (btnF2 != null) {
+                    btnF2.setOnClickListener(new View.OnClickListener() {
+                        /**
+                         * {@inheritDoc}
+                         * Switches the indoor map overlay to the 2nd floor using the NucleusBuildingManager.
+                         */
+                        @Override
+                        public void onClick(View v) {
+                            // Check if manager is initialized before calling
+                            if (nucleusBuildingManager != null) {
+                                nucleusBuildingManager.getIndoorMapManager().switchFloor(2);
+                            }
+                        }
+                    });
+                }
+
+                // Listener for the 1st Floor button
+                if (btnF1 != null) {
+                    btnF1.setOnClickListener(new View.OnClickListener() {
+                        /**
+                         * {@inheritDoc}
+                         * Switches the indoor map overlay to the 1st floor using the NucleusBuildingManager.
+                         */
+                        @Override
+                        public void onClick(View v) {
+                            if (nucleusBuildingManager != null) {
+                                nucleusBuildingManager.getIndoorMapManager().switchFloor(1);
+                            }
+                        }
+                    });
+                }
+
+                // Listener for the Ground Floor (Floor 0) button
+                if (btnF0 != null) {
+                    btnF0.setOnClickListener(new View.OnClickListener() {
+                        /**
+                         * {@inheritDoc}
+                         * Switches the indoor map overlay to the Ground floor (Index 0).
+                         */
+                        @Override
+                        public void onClick(View v) {
+                            if (nucleusBuildingManager != null) {
+                                nucleusBuildingManager.getIndoorMapManager().switchFloor(0);
+                            }
+                        }
+                    });
+                }
+
 
                 // Add a marker at the current GPS location and move the camera
                 position = new LatLng(startPosition[0], startPosition[1]);
@@ -189,6 +253,63 @@ public class StartLocationFragment extends Fragment {
                 }
             }
         });
+
+        // [Assignment Feature: Objective d] Indoor Map Floor Switching Implementation
+
+        // Initialize floor buttons from the layout to control the indoor map levels.
+        // These buttons allow the user to switch between Ground, 1st, and 2nd floors.
+        Button btnF2 = view.findViewById(R.id.btn_floor_2);
+        Button btnF1 = view.findViewById(R.id.btn_floor_1);
+        Button btnF0 = view.findViewById(R.id.btn_floor_0);
+
+        // Listener for the 2nd Floor button
+        if (btnF2 != null) {
+            btnF2.setOnClickListener(new View.OnClickListener() {
+                /**
+                 * {@inheritDoc}
+                 * Switches the indoor map overlay to the 2nd floor using the NucleusBuildingManager.
+                 */
+                @Override
+                public void onClick(View v) {
+                    // Check if manager is initialized before calling
+                    if (nucleusBuildingManager != null) {
+                        nucleusBuildingManager.getIndoorMapManager().switchFloor(2);
+                    }
+                }
+            });
+        }
+
+        // Listener for the 1st Floor button
+        if (btnF1 != null) {
+            btnF1.setOnClickListener(new View.OnClickListener() {
+                /**
+                 * {@inheritDoc}
+                 * Switches the indoor map overlay to the 1st floor using the NucleusBuildingManager.
+                 */
+                @Override
+                public void onClick(View v) {
+                    if (nucleusBuildingManager != null) {
+                        nucleusBuildingManager.getIndoorMapManager().switchFloor(1);
+                    }
+                }
+            });
+        }
+
+        // Listener for the Ground Floor (Floor 0) button
+        if (btnF0 != null) {
+            btnF0.setOnClickListener(new View.OnClickListener() {
+                /**
+                 * {@inheritDoc}
+                 * Switches the indoor map overlay to the Ground floor (Index 0).
+                 */
+                @Override
+                public void onClick(View v) {
+                    if (nucleusBuildingManager != null) {
+                        nucleusBuildingManager.getIndoorMapManager().switchFloor(0);
+                    }
+                }
+            });
+        }
     }
 
     /**
