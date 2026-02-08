@@ -158,6 +158,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private List<Wifi> wifiList;
     private Set<Long> recordedApMacs = new HashSet<>();
     private String lastFingerprintSignature;
+    // 当前录制会话的轨迹标识，用于上报 Wi-Fi 指纹
+    private String trajectoryId;
 
 
     // Over time accelerometer magnitude values since last step
@@ -497,6 +499,10 @@ public class SensorFusion implements SensorEventListener, Observer {
             sortedWifi.sort((a, b) -> Long.compare(a.getBssid(), b.getBssid()));
             StringBuilder signatureBuilder = new StringBuilder();
             for (Wifi data : sortedWifi) {
+                if (data.getBssid() == 0) {
+                    // BSSID=0 代表未知/解析失败，跳过避免与真实 AP 去重冲突
+                    continue;
+                }
                 signatureBuilder.append(data.getBssid())
                         .append(':')
                         .append(data.getLevel())
@@ -514,6 +520,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
             if (!isDuplicateFingerprint) {
                 for (Wifi data : this.wifiList) {
+                    if (data.getBssid() == 0) {
+                        // 无有效 BSSID 时不记录指纹/元数据，防止 0 被当成唯一键
+                        continue;
+                    }
                     fingerprint.addRfScans(Traj.RFScan.newBuilder()
                             .setRelativeTimestamp(sampleTimestamp)
                             .setMac(data.getBssid())
@@ -521,19 +531,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     if (!recordedApMacs.contains(data.getBssid())) {
                         boolean rttCapable = data.isRttSupported();
-                        String ssid = data.getSsid();
-                        if (ssid == null || ssid.isEmpty() || "<unknown ssid>".equalsIgnoreCase(ssid)) {
-                            ssid = "hidden";
-                        } else if (ssid.length() >= 2 && ssid.startsWith("\"") && ssid.endsWith("\"")) {
-                            ssid = ssid.substring(1, ssid.length() - 1);
-                            if (ssid.isEmpty()) {
-                                ssid = "hidden";
-                            }
-                        }
-                        long frequency = data.getFrequency();
-                        if (frequency <= 0) {
-                            frequency = 0; // unknown
-                        }
+                        // 复用统一规范化逻辑，避免分支重复
+                        String ssid = WifiDataProcessor.normalizeSsid(data.getSsid());
+                        long frequency = WifiDataProcessor.normalizeFrequency(data.getFrequency());
                         Traj.WiFiAPData.Builder apData = Traj.WiFiAPData.newBuilder()
                                 .setMac(data.getBssid())
                                 .setSsid(ssid)
@@ -569,11 +569,19 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Creating a JSON object to store the WiFi access points
             JSONObject wifiAccessPoints=new JSONObject();
             for (Wifi data : this.wifiList){
+                if (data.getBssid() == 0) {
+                    // 0 代表未知 BSSID，过滤避免服务器误解析或键冲突
+                    continue;
+                }
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+            // 绑定当前轨迹 ID；未在录制时为空则不写入，保持行为最小化
+            if (trajectoryId != null && !trajectoryId.isEmpty()) {
+                wifiFingerPrint.put("trajectory_id", trajectoryId);
+            }
             this.wiFiPositioning.request(wifiFingerPrint);
         } catch (JSONException e) {
             // Catching error while making JSON object, to prevent crashes
@@ -947,7 +955,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         String venueOrBuilding = "traj";
         String timestamp = new SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(new Date());
         String shortUuid = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-        String trajectoryId = venueOrBuilding + "_" + timestamp + "_" + shortUuid;
+        this.trajectoryId = venueOrBuilding + "_" + timestamp + "_" + shortUuid;
 
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()

@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -305,8 +306,13 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        boolean isFinishing = getActivity() != null && getActivity().isFinishing();
-        if (isRemoving() || isFinishing) {
+        Activity activity = getActivity();
+        boolean isFinishing = activity != null && activity.isFinishing();
+        boolean isChangingConfig = activity != null && activity.isChangingConfigurations();
+        // 旋转等配置变化会销毁 view，但不应停止录制/扫描；仅在真正退出时收尾
+        if (!isChangingConfig && (isRemoving() || isFinishing)) {
+            // 先停止录制再停止监听，防止定时器残留
+            sensorFusion.stopRecording();
             sensorFusion.stopListening();
         }
         // 离开录制界面后恢复屏幕常亮标志
