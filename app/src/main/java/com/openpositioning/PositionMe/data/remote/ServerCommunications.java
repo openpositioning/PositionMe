@@ -20,6 +20,7 @@ import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import org.json.JSONObject;
 
@@ -138,9 +139,18 @@ public class ServerCommunications implements Observable {
                                long start, String id){
 
         Traj.Trajectory.Builder trajectoryBuilder = Traj.Trajectory.newBuilder();
-        trajectoryBuilder.setStartTimestamp(start);
+        // Set trajectory start timestamp (UNIX ms) for relative timestamps.
+        trajectoryBuilder.setStartTimestamp(SensorFusion.getInstance().getStartTimestampMs());
+        //  Attach Add-Tag test points to protobuf
+        trajectoryBuilder.addAllTestPoints(SensorFusion.getInstance().getTestPoints());
         trajectoryBuilder.setTrajectoryId(id);
         trajectoryBuilder.setAndroidVersion(String.valueOf(Build.VERSION.SDK_INT));
+        trajectoryBuilder.setStartTimestamp(SensorFusion.getInstance().getStartTimestampMs());
+        trajectoryBuilder.addAllTestPoints(SensorFusion.getInstance().getTestPoints());
+        // Debug log to verify test_points are attached
+        android.util.Log.d("TestPoints", "Attached test_points count = " + trajectoryBuilder.getTestPointsCount());
+
+
 
         if(sensorBuf.get(0) != null) {
             for(Object sample : sensorBuf.get(0).values()) {

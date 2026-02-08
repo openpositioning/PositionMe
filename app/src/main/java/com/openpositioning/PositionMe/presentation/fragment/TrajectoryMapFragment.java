@@ -25,6 +25,14 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import androidx.core.content.ContextCompat;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.MarkerOptions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -80,6 +88,48 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+    // Number Marker
+    private BitmapDescriptor createNumberedMarkerIcon(int number) {
+        final int size = 56;
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        // Circular background
+        Paint circlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        circlePaint.setStyle(Paint.Style.FILL);
+        circlePaint.setColor(0xFF2196F3);
+
+        float cx = size / 2f;
+        float cy = size / 2f;
+        float r = size / 2f;
+        canvas.drawCircle(cx, cy, r, circlePaint);
+
+        // White outline
+        Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        strokePaint.setStyle(Paint.Style.STROKE);
+        strokePaint.setStrokeWidth(3f);
+        strokePaint.setColor(0xFFFFFFFF);
+        canvas.drawCircle(cx, cy, r - 3f, strokePaint);
+
+        // number
+        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setColor(0xFFFFFFFF);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setFakeBoldText(true);
+        textPaint.setTextSize(25f);
+
+        String text = String.valueOf(number);
+
+        // Make text vertically centered
+        Rect textBounds = new Rect();
+        textPaint.getTextBounds(text, 0, text.length(), textBounds);
+        float textY = cy + textBounds.height() / 2f;
+
+        canvas.drawText(text, cx, textY, textPaint);
+
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
+
 
 
     public TrajectoryMapFragment() {
@@ -325,6 +375,16 @@ public class TrajectoryMapFragment extends Fragment {
             indoorMapManager.setCurrentLocation(newLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
+    }
+
+    // Add numbered label points on the map
+    public void addTagPoint(@NonNull LatLng latLng, int index) {
+        if (gMap == null) return;
+
+        gMap.addMarker(new MarkerOptions()
+                .position(latLng)
+                .anchor(0.5f, 0.5f)
+                .icon(createNumberedMarkerIcon(index)));
     }
 
 

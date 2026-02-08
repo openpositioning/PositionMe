@@ -58,7 +58,6 @@
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp" />
 
-
             <!-- GNSS Error -->
             <TextView
                 android:id="@+id/gnssError"
@@ -73,13 +72,38 @@
 
     <!-- 🔹 MIDDLE SECTION: Map Display -->
     <FrameLayout
-        android:id="@+id/trajectoryMapFragmentContainer"
+        android:id="@+id/mapOverlayContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginStart="8dp"
         android:layout_marginEnd="8dp"
         app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
-        app:layout_constraintBottom_toTopOf="@id/controlLayout" />
+        app:layout_constraintBottom_toTopOf="@id/controlLayout">
+
+        <FrameLayout
+            android:id="@+id/trajectoryMapFragmentContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" >
+
+            <!-- Add Tag button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/addTagButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="16dp"
+                android:text="Add Tag"
+                android:textAllCaps="false"
+                android:textSize="14sp"
+                app:backgroundTint="@color/md_theme_light_primary"
+                app:cornerRadius="16dp"
+                app:iconTint="@color/md_theme_onSecondary"
+                android:elevation="12dp"
+                android:translationZ="12dp" />
+        </FrameLayout>
+
+
+    </FrameLayout>
 
     <!-- 🔹 BOTTOM SECTION: Controls (Progress Bar & Buttons) -->
     <LinearLayout
@@ -142,4 +166,5 @@
                 app:cornerRadius="16dp" />
         </LinearLayout>
     </LinearLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

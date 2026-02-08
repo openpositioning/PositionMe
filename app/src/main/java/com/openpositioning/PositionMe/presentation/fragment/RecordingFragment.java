@@ -59,7 +59,7 @@ import com.google.android.gms.maps.model.LatLng;
 public class RecordingFragment extends Fragment {
 
     // UI elements
-    private MaterialButton completeButton, cancelButton;
+    private MaterialButton completeButton, cancelButton,addTagButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -79,6 +79,15 @@ public class RecordingFragment extends Fragment {
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
+
+    // Add Tag counter
+    private int tagCount = 0;
+
+    // Save the test point of the user pressing "Add Tag"
+    private final java.util.ArrayList<com.openpositioning.PositionMe.Traj.GNSSPosition> testPoints =
+            new java.util.ArrayList<>();
+    // Timestamp
+    private long startTimestampMs = 0L;
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
@@ -116,6 +125,15 @@ public class RecordingFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        // Reset test-point state at the beginning of a new recording session
+        testPoints.clear();        // clear local list
+        tagCount = 0;              // reset label counter
+        startTimestampMs = System.currentTimeMillis();  // reset start time
+
+        // Also reset SensorFusion copies
+        sensorFusion.setTestPoints(testPoints);
+        sensorFusion.setStartTimestampMs(startTimestampMs);
+
         // Child Fragment: the container in fragment_recording.xml
         // where TrajectoryMapFragment is placed
         trajectoryMapFragment = (TrajectoryMapFragment)
@@ -137,6 +155,9 @@ public class RecordingFragment extends Fragment {
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
+        addTagButton = view.findViewById(R.id.addTagButton);
+        addTagButton.bringToFront();
+        addTagButton.setElevation(20f);
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
@@ -147,6 +168,14 @@ public class RecordingFragment extends Fragment {
 
         // Buttons
         completeButton.setOnClickListener(v -> {
+            // Pass the start time and testPoints to SensorFusion
+            sensorFusion.setStartTimestampMs(startTimestampMs);
+            sensorFusion.setTestPoints(testPoints);
+
+            //Debug - verify test points are passed into SensorFusion before stopRecording().
+            android.util.Log.d("TestPoints", "Before stop: local testPoints size = " + testPoints.size());
+            android.util.Log.d("TestPoints", "Before stop: sensorFusion testPoints size = " + sensorFusion.getTestPoints().size());
+
             // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
@@ -179,6 +208,43 @@ public class RecordingFragment extends Fragment {
             });
 
             dialog.show(); // Finally, show the dialog
+        });
+
+        // Button Click Listener
+        addTagButton.setOnClickListener(v -> {
+            tagCount++;
+
+            LatLng current = null;
+            if (trajectoryMapFragment != null) {
+                current = trajectoryMapFragment.getCurrentLocation();
+            }
+
+            if (current != null && trajectoryMapFragment != null) {
+                // 1) Map displaying numbered points
+                trajectoryMapFragment.addTagPoint(current, tagCount);
+
+                // 2) Calculate relative timestamp (ms)
+                long relativeTs = System.currentTimeMillis() - startTimestampMs;
+
+                // 3) Assemble a protobuf 'GNSSPosition'(the element type of `test_points`)
+                com.openpositioning.PositionMe.Traj.GNSSPosition p =
+                        com.openpositioning.PositionMe.Traj.GNSSPosition.newBuilder()
+                                .setRelativeTimestamp(relativeTs)
+                                .setLatitude(current.latitude)
+                                .setLongitude(current.longitude)
+                                .setAltitude((double) sensorFusion.getElevation())
+                                .build();
+
+                testPoints.add(p);
+
+                android.util.Log.d("TestPoints",
+                        "Saved test point #" + tagCount +
+                                " ts=" + relativeTs +
+                                " lat=" + current.latitude +
+                                " lon=" + current.longitude);
+            } else {
+                android.util.Log.d("TestPoints", "Add Tag clicked but current location is null");
+            }
         });
 
         // The blinking effect for recIcon

@@ -159,6 +159,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
     private Timer timer;
+    // Record test points (Add Tag)
+    private final java.util.ArrayList<com.openpositioning.PositionMe.Traj.GNSSPosition> testPoints =
+            new java.util.ArrayList<>();
+    // Record recording start time (ms)
+    private long startTimestampMs = 0L;
 
 
     //region Initialisation
@@ -631,6 +636,23 @@ public class SensorFusion implements SensorEventListener, Observer {
     //endregion
 
     //region Getters/Setters
+    public void setStartTimestampMs(long ts) {
+        this.startTimestampMs = ts;
+    }
+
+    public long getStartTimestampMs() {
+        return this.startTimestampMs;
+    }
+
+    public void setTestPoints(java.util.List<com.openpositioning.PositionMe.Traj.GNSSPosition> points) {
+        this.testPoints.clear();
+        if (points != null) this.testPoints.addAll(points);
+    }
+
+    public java.util.List<com.openpositioning.PositionMe.Traj.GNSSPosition> getTestPoints() {
+        return new java.util.ArrayList<>(this.testPoints);
+    }
+
     /**
      * Getter function for core location data.
      *
@@ -880,6 +902,11 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // Initialize Traj Builder
         this.trajectory = Traj.Trajectory.newBuilder();
+        // Attach Add-Tag test points to protobuf
+        this.trajectory.addAllTestPoints(getTestPoints());
+        // Debug log to verify test_points are attached.
+        android.util.Log.d("TestPoints", "SensorFusion builder test_points count = " + this.trajectory.getTestPointsCount());
+
         // Set Metadata
         String currentTrajectoryIdtrajectoryId = "Traj_" + absoluteStartTime;
         this.trajectory.setTrajectoryId(currentTrajectoryIdtrajectoryId);
