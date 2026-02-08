@@ -80,6 +80,9 @@
     <activity
         android:name=".presentation.activity.RecordingActivity"
         android:exported="false" />
+    <activity
+        android:name=".presentation.activity.HealthActivity"
+        android:exported="true" />
 
     <!-- Google Maps API key metadata -->
     <meta-data

@@ -29,6 +29,7 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.presentation.activity.HealthActivity;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 
 /**
@@ -50,6 +51,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private Button start;
     private Button measurements;
     private Button files;
+    private MaterialButton wellbeingButton;
     private TextView gnssStatusTextView;
 
     // For the map
@@ -114,6 +116,13 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         files.setOnClickListener(v -> {
             NavDirections action = HomeFragmentDirections.actionHomeFragmentToFilesFragment();
             Navigation.findNavController(v).navigate(action);
+        });
+
+        // Wellbeing button
+        wellbeingButton = view.findViewById(R.id.wellbeingButton);
+        wellbeingButton.setOnClickListener(v -> {
+            Intent intent = new Intent(requireContext(), HealthActivity.class);
+            startActivity(intent);
         });
 
         // TextView to display GNSS disabled message

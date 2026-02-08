@@ -77,7 +77,7 @@
             android:minHeight="80dp"
             android:layout_marginTop="24dp"
             app:columnCount="2"
-            app:rowCount="2"
+            app:rowCount="3"
             app:layout_constraintTop_toBottomOf="@id/mapFragmentContainer"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
@@ -150,6 +150,24 @@
                 app:iconSize="30dp"
                 app:layout_columnWeight="1"
                 app:layout_rowWeight="1" />
+
+            <!-- Wellbeing Score Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/wellbeingButton"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_margin="8dp"
+                android:backgroundTint="@color/md_theme_secondary"
+                android:text="Wellbeing"
+                android:textColor="@color/md_theme_onSecondary"
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_baseline_favorite_24"
+                app:iconGravity="textTop"
+                app:iconSize="30dp"
+                app:layout_columnWeight="1"
+                app:layout_rowWeight="1" />
+
         </androidx.gridlayout.widget.GridLayout>
 
         <!-- Grey button for indoor positioning, anchored to the bottom. -->
