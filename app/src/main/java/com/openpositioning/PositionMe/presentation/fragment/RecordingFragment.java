@@ -80,6 +80,8 @@ public class RecordingFragment extends Fragment {
     private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
+    // Marker counter for Objective c
+    private int markerCounter = 1;
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
@@ -197,10 +199,21 @@ public class RecordingFragment extends Fragment {
  */
         markButton.setOnClickListener(v -> {
             //User Feedback: Show a brief message on screen
-            Toast.makeText(requireContext(), "Marker added!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), "Marker " + markerCounter + " added!", Toast.LENGTH_SHORT).show();
 
             // SensorFusion record time
              sensorFusion.addMarker();
+            // 3. Add Marker to Map (Frontend) - [Objective c Requirement]
+            if (trajectoryMapFragment != null) {
+                // get location
+                LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+
+                if (currentLoc != null) {
+                    trajectoryMapFragment.addMapMarker(currentLoc, markerCounter);
+
+                    markerCounter++;
+                }
+            }
         });
 
         // The blinking effect for recIcon
