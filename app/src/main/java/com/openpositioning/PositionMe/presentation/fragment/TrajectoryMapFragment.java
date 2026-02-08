@@ -28,7 +28,8 @@ import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
 import java.util.List;
-
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 
 /**
  * A fragment responsible for displaying a trajectory map using Google Maps.
@@ -536,6 +537,39 @@ public class TrajectoryMapFragment extends Fragment {
         gMap.addPolygon(buildingPolygonOptions4);
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
+    //label
+    private com.google.android.gms.maps.model.BitmapDescriptor createNumberedMarkerBitmap(int number) {
 
+        android.graphics.Bitmap conf = android.graphics.Bitmap.createBitmap(80, 80, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas canvas = new android.graphics.Canvas(conf);
+
+        // background(blue circle)
+        android.graphics.Paint paint = new android.graphics.Paint();
+        paint.setColor(android.graphics.Color.BLUE);
+        canvas.drawCircle(40, 40, 40, paint);
+
+        // number
+        paint.setColor(android.graphics.Color.WHITE);
+        paint.setTextSize(40);
+        paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+        // make number center
+        canvas.drawText(String.valueOf(number), 40, 55, paint);
+
+        return com.google.android.gms.maps.model.BitmapDescriptorFactory.fromBitmap(conf);
+    }
+    /**
+     * [Objective c] Adds a numbered marker to the map at the given location.
+     * @param position The LatLng position to place the marker.
+     * @param number The number to display in the title.
+     */
+    public void addMapMarker(LatLng position, int number) {
+        if (gMap != null) {
+            gMap.addMarker(new MarkerOptions()
+                    .position(position)
+                    .title("Marker " + number)
+                    .icon(createNumberedMarkerBitmap(number))
+                    .anchor(0.5f, 0.5f));
+        }
+    }
 
 }
