@@ -1,5 +1,8 @@
 syntax = "proto3";
 
+option java_package = "com.openpositioning.PositionMe";
+option java_outer_classname = "Traj";
+
 message Trajectory {
   string android_version = 1;
   // version 2.0
@@ -40,7 +43,14 @@ message Trajectory {
   SensorInfo proximity_info = 25;
 
   repeated GNSSPosition test_points = 26;
+}
 
+// One test-point marker (timestamp + number for display)
+message TestPoint_Marker {
+  // milliseconds from start_timestamp (when the user pressed the button)
+  int64 relative_timestamp = 1;
+  // 1-based index for "marker 1", "marker 2", etc. on the map
+  int32 marker_index = 2;
 }
 
 message RelativePosition {

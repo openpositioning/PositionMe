@@ -17,12 +17,10 @@ import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.protobuf.util.JsonFormat;
@@ -32,6 +30,7 @@ import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.utils.SelectedVenueStore;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -44,7 +43,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -88,8 +86,9 @@ public class ServerCommunications implements Observable {
     // Static constants necessary for communications
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
+    private static final String defualtCampaign = "murchison_house";
     private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
+            "https://openpositioning.org/api/live/trajectory/upload/" + defualtCampaign + "/" + userKey
                     + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
@@ -125,7 +124,7 @@ public class ServerCommunications implements Observable {
      * trajectory is passed to the method. It is processed into the right format for sending
      * to the API server.
      *
-     * @param trajectory    Traj object matching all the timing and formal restrictions.
+     * @param trajectory    com.openpositioning.PositionMe.Traj object matching all the timing and formal restrictions.
      */
     public void sendTrajectory(Traj.Trajectory trajectory){
         logDataSize(trajectory);
@@ -174,10 +173,17 @@ public class ServerCommunications implements Observable {
             OkHttpClient client = new OkHttpClient();
 
             // Creaet a equest body with a file to upload in multipart/form-data format
-            RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
+                MultipartBody.Builder formBuilder = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", file.getName(),
-                            RequestBody.create(MediaType.parse("text/plain"), file))
-                    .build();
+                        RequestBody.create(MediaType.parse("text/plain"), file));
+
+                String venueName = SelectedVenueStore.getInstance().getVenueName();
+                if (venueName != null && !venueName.isEmpty()) {
+                formBuilder.addFormDataPart("venue", venueName);
+                formBuilder.addFormDataPart("venue_floor", String.valueOf(SelectedVenueStore.getInstance().getFloorIndex()));
+                }
+
+                RequestBody requestBody = formBuilder.build();
 
             // Create a POST request with the required headers
             Request request = new Request.Builder().url(uploadURL).post(requestBody)
@@ -217,15 +223,18 @@ public class ServerCommunications implements Observable {
                             //file.delete();
 //                            System.err.println("POST error response: " + responseBody.string());
 
-                            String errorBody = responseBody.string();
-                            infoResponse = "Upload failed: " + errorBody;
+                            String errorBody = responseBody != null ? responseBody.string() : "No response body";
+                            String errorMessage = "HTTP " + response.code() + " - " + errorBody;
+                            infoResponse = "Upload failed: " + errorMessage;
                             new Handler(Looper.getMainLooper()).post(() ->
                                     Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
 
-                            System.err.println("POST error response: " + errorBody);
+                            System.err.println("POST error response code: " + response.code());
+                            System.err.println("POST error response headers: " + response.headers().toString());
+                            System.err.println("POST error response body: " + errorBody);
                             success = false;
                             notifyObservers(1);
-                            throw new IOException("Unexpected code " + response);
+                            throw new IOException("Unexpected code " + response.code());
                         }
 
                         // Print the response headers
@@ -294,9 +303,16 @@ public class ServerCommunications implements Observable {
         }
 
         // Create request body with a file to upload in multipart/form-data format
-        RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("file", localTrajectory.getName(), fileRequestBody)
-                .build();
+        MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("file", localTrajectory.getName(), fileRequestBody);
+
+        String venueName = SelectedVenueStore.getInstance().getVenueName();
+        if (venueName != null && !venueName.isEmpty()) {
+            builder.addFormDataPart("venue", venueName);
+            builder.addFormDataPart("venue_floor", String.valueOf(SelectedVenueStore.getInstance().getFloorIndex()));
+        }
+
+        RequestBody requestBody = builder.build();
 
         // Create a POST request with the required headers
         okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
@@ -623,11 +639,11 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+        Log.i("ServerCommunications", "Magnetometer Data size: " + trajectory.getMagnetometerDataCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+        Log.i("ServerCommunications", "WiFi Fingerprints size: " + trajectory.getWifiFingerprintsCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
