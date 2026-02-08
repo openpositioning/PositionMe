@@ -81,6 +81,9 @@ public class RecordingFragment extends Fragment {
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
+    // Test point tracking
+    private int markerCount = 0;
+
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
@@ -181,6 +184,14 @@ public class RecordingFragment extends Fragment {
             });
 
             dialog.show(); // Finally, show the dialog
+        });
+
+        btnTestPoint.setOnClickListener(v -> {
+            markerCount++;
+
+            LatLng currentPosition = trajectoryMapFragment.getCurrentLocation();
+
+            trajectoryMapFragment.addTestPointMarker(currentPosition, markerCount);
         });
 
         // The blinking effect for recIcon

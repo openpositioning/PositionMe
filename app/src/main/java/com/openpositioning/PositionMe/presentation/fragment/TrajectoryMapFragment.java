@@ -537,5 +537,13 @@ public class TrajectoryMapFragment extends Fragment {
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
 
+    public void addTestPointMarker(@NonNull LatLng currentPosition, int markerCount) {
+      if (gMap == null) return;
+
+      gMap.addMarker(new MarkerOptions()
+              .position(currentPosition)
+              .title("Test Point " + markerCount));
+    }
+
 
 }
