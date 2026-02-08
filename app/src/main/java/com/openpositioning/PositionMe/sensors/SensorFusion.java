@@ -85,6 +85,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final long TIME_CONST = 10;
     // Coefficient for fusing gyro-based and magnetometer-based orientation
     public static final float FILTER_COEFFICIENT = 0.96f;
+    // Toggle for heading debug logs across modules
+    public static final boolean DEBUG_HEADING = false;
     //Tuning value for low pass filter
     private static final float ALPHA = 0.8f;
     // String for creating WiFi fingerprint JSO N object
@@ -146,6 +148,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float light;
     private float proximity;
     private float[] R;
+    // Throttling timestamp for heading debug logs (rotation vector)
+    private long headingDbgRotvecLastLogMs = 0;
     private int stepCounter ;
     // Derived values
     private float elevation;
@@ -383,6 +387,14 @@ public class SensorFusion implements SensorEventListener, Observer {
                 float[] rotationVectorDCM = new float[9];
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM, this.rotation);
                 SensorManager.getOrientation(rotationVectorDCM, this.orientation);
+
+                if (DEBUG_HEADING) {
+                    long now = SystemClock.elapsedRealtime();
+                    if (now - headingDbgRotvecLastLogMs >= 1000) {
+                        Log.d("HeadingDbg", "rotvec azimuth(rad)=" + orientation[0]);
+                        headingDbgRotvecLastLogMs = now;
+                    }
+                }
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
@@ -498,6 +510,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             List<Wifi> sortedWifi = new ArrayList<>(this.wifiList);
             sortedWifi.sort((a, b) -> Long.compare(a.getBssid(), b.getBssid()));
             StringBuilder signatureBuilder = new StringBuilder();
+            int apCount = 0;
             for (Wifi data : sortedWifi) {
                 if (data.getBssid() == 0) {
                     // BSSID=0 代表未知/解析失败，跳过避免与真实 AP 去重冲突
@@ -507,18 +520,18 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .append(':')
                         .append(data.getLevel())
                         .append(';');
+                apCount++;
             }
             String fingerprintSignature = signatureBuilder.toString();
             boolean isDuplicateFingerprint = fingerprintSignature.equals(lastFingerprintSignature);
             if (isDuplicateFingerprint) {
+                Log.d("WifiDedup", "Skipping duplicate fingerprint: " + fingerprintSignature + " apCount=" + apCount);
                 Log.d("SensorFusion", "Skipping duplicate WiFi fingerprint: " + fingerprintSignature);
-            }
+            } else {
+                long sampleTimestamp = SystemClock.uptimeMillis() - bootTime;
+                Traj.Fingerprint.Builder fingerprint = Traj.Fingerprint.newBuilder()
+                        .setRelativeTimestamp(sampleTimestamp);
 
-            long sampleTimestamp = SystemClock.uptimeMillis() - bootTime;
-            Traj.Fingerprint.Builder fingerprint = Traj.Fingerprint.newBuilder()
-                    .setRelativeTimestamp(sampleTimestamp);
-
-            if (!isDuplicateFingerprint) {
                 for (Wifi data : this.wifiList) {
                     if (data.getBssid() == 0) {
                         // 无有效 BSSID 时不记录指纹/元数据，防止 0 被当成唯一键
@@ -548,6 +561,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 + " rtt=" + rttCapable);
                     }
                 }
+                int rfCount = fingerprint.getRfScansCount();
+                Log.d("WifiDedup", "Accepted fingerprint: " + fingerprintSignature + " apCount=" + rfCount);
                 // Adding WiFi fingerprint data to Trajectory
                 this.trajectory.addWifiFingerprints(fingerprint);
                 Log.d("SensorFusion", "WiFi fingerprint added: count="

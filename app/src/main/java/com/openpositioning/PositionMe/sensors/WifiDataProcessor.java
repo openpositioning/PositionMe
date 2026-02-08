@@ -311,6 +311,7 @@ public class WifiDataProcessor implements Observable {
             } catch (Settings.SettingNotFoundException | SecurityException e) {
                 if (!sThrottleSettingWarned) {
                     Log.i(WIFI_CHECK_TAG, "wifi_scan_throttle_enabled not readable; status unknown.");
+                    showDebouncedToast("Wi-Fi throttling status unknown; please confirm in Developer options", Toast.LENGTH_LONG);
                     sThrottleSettingWarned = true;
                 }
                 return -1;

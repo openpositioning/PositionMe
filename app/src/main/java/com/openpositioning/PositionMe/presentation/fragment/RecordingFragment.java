@@ -8,6 +8,8 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.os.SystemClock;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -72,6 +74,7 @@ public class RecordingFragment extends Fragment {
     private SensorFusion sensorFusion;
     private Handler refreshDataHandler;
     private CountDownTimer autoStop;
+    private long headingDbgUiLastLogMs = 0;
 
     // Distance tracking
     private float distance = 0f;
@@ -246,10 +249,19 @@ public class RecordingFragment extends Fragment {
                     new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
 
+            double orientationDeg = Math.toDegrees(sensorFusion.passOrientation());
+            if (SensorFusion.DEBUG_HEADING) {
+                long now = SystemClock.elapsedRealtime();
+                if (now - headingDbgUiLastLogMs >= 1000) {
+                    Log.d("HeadingDbg", "UI tick orientation(deg)=" + orientationDeg);
+                    headingDbgUiLastLogMs = now;
+                }
+            }
+
             // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
                 trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+                        (float) orientationDeg);
             }
         }
 

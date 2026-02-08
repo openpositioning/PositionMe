@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -69,6 +70,7 @@ public class TrajectoryMapFragment extends Fragment {
 
     private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
+    private long headingDbgMapLastLogMs = 0;
 
 
     // UI
@@ -308,6 +310,13 @@ public class TrajectoryMapFragment extends Fragment {
         } else {
             // Update marker position + orientation
             orientationMarker.setPosition(newLocation);
+            if (SensorFusion.DEBUG_HEADING) {
+                long now = SystemClock.elapsedRealtime();
+                if (now - headingDbgMapLastLogMs >= 1000) {
+                    Log.d("HeadingDbg", "map rotate=" + orientation);
+                    headingDbgMapLastLogMs = now;
+                }
+            }
             orientationMarker.setRotation(orientation);
             // Move camera a bit
             gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
