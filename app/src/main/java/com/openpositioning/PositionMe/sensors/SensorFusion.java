@@ -86,6 +86,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
     private Context appContext;
+    private String currentVenue = "";
 
     // Settings
     private SharedPreferences settings;
@@ -870,7 +871,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
-        String trajName = settings.getString("trajectory_name", "Traj_" + absoluteStartTime);
+        String defaultName = "Traj_" + absoluteStartTime;
+        if (!currentVenue.isEmpty()) {
+            defaultName += "_" + currentVenue;
+        }
+        String trajName = settings.getString("trajectory_name", defaultName);
         Traj.Initial_Position initialPos = Traj.Initial_Position.newBuilder()
                 .setLatitude(startLocation[0])
                 .setLongitude(startLocation[1])
@@ -1053,6 +1058,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         } catch (Exception e) {
             Log.e("SensorFusion", "Error adding marker: " + e.getMessage());
         }
+    }
+    public void setVenueName(String name) {
+        this.currentVenue = name;
+        Log.d("SensorFusion", "Venue set to: " + name);
     }
 
 }
