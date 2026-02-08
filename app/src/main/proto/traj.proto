@@ -41,6 +41,11 @@ message Trajectory {
 
   repeated GNSSPosition test_points = 26;
 
+
+
+  // STRING added
+  string trajectory_name = 27;
+
 }
 
 message RelativePosition {

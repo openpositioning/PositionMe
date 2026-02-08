@@ -49,6 +49,8 @@ public class CorrectionFragment extends Fragment {
     private static LatLng start;
     private PathView pathView;
 
+    private EditText trajNameInput; // adding to the class
+
     public CorrectionFragment() {
         // Required empty public constructor
     }
@@ -103,6 +105,7 @@ public class CorrectionFragment extends Fragment {
         this.averageStepLengthText = view.findViewById(R.id.averageStepView);
         this.stepLengthInput = view.findViewById(R.id.inputStepLength);
         this.pathView = view.findViewById(R.id.pathView1);
+        this.trajNameInput = view.findViewById(R.id.trajname); //initialize 
 
         averageStepLength = sensorFusion.passAverageStepLength();
         averageStepLengthText.setText(getString(R.string.averageStepLgn) + ": "
