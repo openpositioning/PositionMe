@@ -57,6 +57,9 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
+    // 保存 test point markers，便于录制结束时清理
+    private final List<Marker> testPointMarkers = new ArrayList<>();
+
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
@@ -314,11 +317,26 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         // Extend polyline if movement occurred
-        if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
+        /*if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
             points.add(newLocation);
             polyline.setPoints(points);
+        }*/
+        // Extend polyline
+        if (polyline != null) {
+            List<LatLng> points = new ArrayList<>(polyline.getPoints());
+
+            // 第一次定位：把第一个点加进去
+            if (oldLocation == null) {
+                points.add(newLocation);
+                polyline.setPoints(points);
+            } else if (!oldLocation.equals(newLocation)) {
+                // 后续移动：追加点
+                points.add(newLocation);
+                polyline.setPoints(points);
+            }
         }
+
 
         // Update indoor map overlay
         if (indoorMapManager != null) {
@@ -358,6 +376,22 @@ public class TrajectoryMapFragment extends Fragment {
     public LatLng getCurrentLocation() {
         return currentLocation;
     }
+
+    /**
+     * Add a numbered test point marker on the map.
+     * Called by RecordingFragment when user presses the "Test Point" button.
+     */
+    public void addTestPointMarker(int index, long timestampMs, @NonNull LatLng position) {
+        if (gMap == null) return;
+
+        Marker m = gMap.addMarker(new MarkerOptions()
+                .position(position)
+                .title("TP " + index)
+                .snippet("t=" + timestampMs));
+
+        if (m != null) testPointMarkers.add(m);
+    }
+
 
     /**
      * Called when we want to set or update the GNSS marker position
@@ -431,6 +465,13 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastGnssLocation = null;
         currentLocation  = null;
+
+        // Clear test point markers
+        for (Marker m : testPointMarkers) {
+            m.remove();
+        }
+        testPointMarkers.clear();
+
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {

@@ -17,17 +17,14 @@ import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.BuildConfig;
-import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.sensors.Observable;
@@ -44,7 +41,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -58,6 +54,9 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+
+import com.openpositioning.PositionMe.Traj;
+
 
 /**
  * This class handles communications with the server through HTTPs. The class uses an
@@ -128,6 +127,11 @@ public class ServerCommunications implements Observable {
      * @param trajectory    Traj object matching all the timing and formal restrictions.
      */
     public void sendTrajectory(Traj.Trajectory trajectory){
+
+        Log.e("UPLOAD", "uploadURL=" + uploadURL);
+        Log.e("UPLOAD", "userKeyLen=" + (userKey == null ? -1 : userKey.length()));
+        Log.e("UPLOAD", "masterKeyLen=" + (masterKey == null ? -1 : masterKey.length()));
+
         logDataSize(trajectory);
 
         // Convert the trajectory to byte array
@@ -255,6 +259,16 @@ public class ServerCommunications implements Observable {
                         success = file.delete();
                         notifyObservers(1);
                     }
+                    Log.e("UPLOAD", "code=" + response.code());
+                    Log.e("UPLOAD", "finalMethod=" + response.request().method());
+                    Log.e("UPLOAD", "finalUrl=" + response.request().url());
+
+                    Response pr = response.priorResponse();
+                    while (pr != null) {
+                        Log.e("UPLOAD", "redirect: " + pr.code() + " -> " + pr.header("Location"));
+                        pr = pr.priorResponse();
+                    }
+
                 }
             });
         }
@@ -623,13 +637,22 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+        //Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+        //Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
+        Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
+        Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
+        Log.i("ServerCommunications", "Mag Data size: " + trajectory.getMagnetometerDataCount());
+        Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
+        Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
+        Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
+        Log.i("ServerCommunications", "WiFi fingerprints size: " + trajectory.getWifiFingerprintsCount());
+        Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
+
     }
 
     /**
