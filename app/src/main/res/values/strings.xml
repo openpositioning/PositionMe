@@ -136,5 +136,8 @@
     <string name="replay_frag_play">Play</string>
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
+    <!-- Markers during recording -->
+    <string name="test_point_button">Mark test point</string>
+    <string name="test_point_marker_title">Test point %1$d</string>
 
 </resources>

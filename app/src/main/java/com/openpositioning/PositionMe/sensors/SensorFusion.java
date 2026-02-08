@@ -125,6 +125,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Counters for dividing timer to record data every 1 second/ every 5 seconds
     private int counter;
     private int secondCounter;
+    // 1-based index for test-point markers during recording
+    private int testPointMarkerCount;
 
     // Sensor values
     private float[] acceleration;
@@ -886,6 +888,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         this.saveRecording = true;
         this.stepCounter = 0;
+        this.testPointMarkerCount = 0;
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
         // Protobuf trajectory class for sending sensor data to restful API
@@ -931,6 +934,24 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         // Reset initial position flag for next recording
         initialPositionSet = false;
+    }
+
+    /**
+     * adds test-point marker to the current trajectory (timestamp + 1-based index)
+     * called when the user presses the "mark test point" button during recording
+     *  returns 0 if not recording
+     */
+    public int addTestPointMarker() {
+        if (!saveRecording || trajectory == null) {
+            return 0;
+        }
+        testPointMarkerCount++;
+        long relativeTimestampMs = SystemClock.uptimeMillis() - bootTime;
+        trajectory.addTestPointMarkers(Traj.TestPoint_Marker.newBuilder()
+                .setRelativeTimestamp(relativeTimestampMs)
+                .setMarkerIndex(testPointMarkerCount)
+                .build());
+        return testPointMarkerCount;
     }
 
     //endregion

@@ -1,6 +1,9 @@
 package com.openpositioning.PositionMe.presentation.activity;
 import android.Manifest;
 import android.content.SharedPreferences;
+import android.content.Intent;
+import android.net.Uri;
+import android.provider.Settings;
 
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -60,6 +63,8 @@ import java.util.Objects;
  * @author Mate Stodulka
  * @author Virginia Cangelosi
  */
+
+//defines update(Object[] objList) method that reacts to events
 public class MainActivity extends AppCompatActivity implements Observer {
 
 
@@ -187,9 +192,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
                 if (!locationGranted || !activityGranted) {
                     // Request both permissions using ActivityResultLauncher
                     multiplePermissionsLauncher.launch(new String[]{
-                            Manifest.permission.ACCESS_FINE_LOCATION
-                    });
-                    multiplePermissionsLauncher.launch(new String[]{
+                            Manifest.permission.ACCESS_FINE_LOCATION,
                             Manifest.permission.ACTIVITY_RECOGNITION
                     });
                 } else {
@@ -252,6 +255,23 @@ public class MainActivity extends AppCompatActivity implements Observer {
     }
 
 
+    private void showPermissionDeniedDialog() {
+            new AlertDialog.Builder(this)
+                    .setTitle("Permissions needed")
+                    .setMessage("Location and Physical activity permissions are required for recording and showing your position on the map. Grant them in Settings?")
+                    .setPositiveButton("Open Settings", (dialog, which) -> {
+                        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        intent.setData(Uri.parse("package:" + getPackageName()));
+                        startActivity(intent);
+                    })
+                    .setNegativeButton("Not now", (dialog, which) -> {
+                        Toast.makeText(this,
+                                "Location or Physical Activity permission denied. Some features may not work.",
+                                Toast.LENGTH_SHORT).show();
+                    })
+                    .setCancelable(true)
+                    .show();
+    }
 
 
     //endregion

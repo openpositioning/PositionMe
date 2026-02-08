@@ -32,7 +32,7 @@ message Trajectory {
   // relative_timestamp = 3000 (3s)
   int64 start_timestamp = 16;
   GNSSPosition initial_position = 17;
-  repeated GNSSPosition corrected_positions = 18;
+  // repeated GNSSPosition corrected_positions = 18;
 
   SensorInfo accelerometer_info = 19;
   SensorInfo gyroscope_info = 20;
@@ -44,6 +44,16 @@ message Trajectory {
 
   repeated GNSSPosition test_points = 26;
 
+  // part c: button for recording
+  repeated TestPoint_Marker test_point_markers = 18;
+}
+
+// One test-point marker (timestamp + number for display)
+message TestPoint_Marker {
+  // milliseconds from start_timestamp (when the user pressed the button)
+  int64 relative_timestamp = 1;
+  // 1-based index for "marker 1", "marker 2", etc. on the map
+  int32 marker_index = 2;
 }
 
 message RelativePosition {

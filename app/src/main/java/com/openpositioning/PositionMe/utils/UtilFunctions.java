@@ -3,6 +3,9 @@ package com.openpositioning.PositionMe.utils;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+import android.graphics.Path;
 import android.graphics.drawable.Drawable;
 
 import androidx.core.content.ContextCompat;
@@ -95,4 +98,65 @@ public class UtilFunctions {
         return bitmap;
     }
 
+    /** part c
+     * creates bitmap for numbered test-point marker (
+     * draws numbered red map-pin
+     * marker indexed with q
+     *bitmap can be used with BitmapDescriptorFactory.fromBitmap().
+     */
+    public static Bitmap createNumberedMarkerBitmap(Context context, int number) {
+        float density = context.getResources().getDisplayMetrics().density;
+        int widthPx = (int) (34 * density);
+        int heightPx = (int) (52 * density);
+        Bitmap bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        float centerX = widthPx / 2f;
+        float circleRadius = widthPx / 2f - 3;
+        float circleCenterY = circleRadius + 3;
+        float pointY = heightPx - 3;
+
+
+        Path pinPath = new Path();
+        pinPath.moveTo(centerX - circleRadius, circleCenterY);
+        pinPath.arcTo(centerX - circleRadius, circleCenterY - circleRadius,
+                centerX + circleRadius, circleCenterY + circleRadius,
+                180, 180, false);
+        pinPath.lineTo(centerX, pointY);
+        pinPath.close();
+
+        Paint pinPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        pinPaint.setColor(0xFFE53935);
+        pinPaint.setStyle(Paint.Style.FILL);
+        canvas.drawPath(pinPath, pinPaint);
+
+        Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        strokePaint.setColor(0xFFB71C1C);
+        strokePaint.setStyle(Paint.Style.STROKE);
+        strokePaint.setStrokeWidth(2);
+        canvas.drawPath(pinPath, strokePaint);
+
+        // number in pin
+        String label = String.valueOf(number);
+        float textSizePx = 14 * density;
+
+        Paint outlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        outlinePaint.setColor(0xFF000000);
+        outlinePaint.setTextSize(textSizePx);
+        outlinePaint.setTextAlign(Paint.Align.CENTER);
+        outlinePaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        outlinePaint.setStyle(Paint.Style.STROKE);
+        outlinePaint.setStrokeWidth(2);
+        float textY = circleCenterY - (outlinePaint.descent() + outlinePaint.ascent()) / 2f;
+        canvas.drawText(label, centerX, textY, outlinePaint);
+
+        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setColor(0xFFFFFFFF);
+        textPaint.setTextSize(textSizePx);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        canvas.drawText(label, centerX, textY, textPaint);
+
+        return bitmap;
+    }
 }

@@ -28,6 +28,7 @@ import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 
 /**
@@ -63,6 +64,8 @@ public class TrajectoryMapFragment extends Fragment {
 
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
+
+    private final List<Marker> testPointMarkers = new ArrayList<>();
 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
@@ -360,6 +363,25 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
+     * adds numbered test-point marker on the trajectory at the current location
+     * called when user presses "Mark test point" during recording.
+     */
+    public void addNumberedTestPointMarker(int markerIndex) {
+        if (gMap == null || currentLocation == null) return;
+        String title = getString(R.string.test_point_marker_title, markerIndex);
+        android.graphics.Bitmap numberedIcon = UtilFunctions.createNumberedMarkerBitmap(requireContext(), markerIndex);
+        Marker marker = gMap.addMarker(new MarkerOptions()
+                .position(currentLocation)
+                .title(title)
+                .snippet(String.format(Locale.getDefault(), "%d", markerIndex))
+                .anchor(0.5f, 1.0f)
+                .icon(BitmapDescriptorFactory.fromBitmap(numberedIcon)));
+        if (marker != null) {
+            testPointMarkers.add(marker);
+        }
+    }
+
+    /**
      * Called when we want to set or update the GNSS marker position
      */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
@@ -429,6 +451,10 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker.remove();
             gnssMarker = null;
         }
+        for (Marker m : testPointMarkers) {
+            m.remove();
+        }
+        testPointMarkers.clear();
         lastGnssLocation = null;
         currentLocation  = null;
 
