@@ -14,6 +14,14 @@ import com.openpositioning.PositionMe.R;
 
 import java.util.Arrays;
 import java.util.List;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import org.json.JSONObject;
+import android.os.Handler;
+import android.os.Looper;
 
 /**
  * Class used to manage indoor floor map overlays
@@ -25,6 +33,8 @@ import java.util.List;
 public class IndoorMapManager {
     // To store the map instance
     private GoogleMap gMap;
+    // Stores the name of the currently selected building (e.g., "Nucleus", "Library")
+    private String selectedBuildingName = "";
     //Stores the overlay of the indoor maps
     private GroundOverlay groundOverlay;
     // Stores the current Location of user
@@ -70,9 +80,80 @@ public class IndoorMapManager {
      */
     public void setCurrentLocation(LatLng currentLocation){
         this.currentLocation=currentLocation;
-        setBuildingOverlay();
+        //setBuildingOverlay();
     }
 
+    /**
+     * [Objective d] Manually select a building to display its indoor map.
+     * This is called when the user clicks on a building polygon.
+     * @param buildingName The name of the building (Tag from the polygon).
+     * @return true if the map was successfully loaded, false otherwise.
+     */
+    public boolean selectBuilding(String buildingName) {
+        if (gMap == null) return false;
+
+        if (isIndoorMapSet && selectedBuildingName.equals(buildingName)) {
+            return true;
+        }
+
+        // remove old Overlay
+        if (groundOverlay != null) {
+            groundOverlay.remove();
+            groundOverlay = null;
+        }
+        isIndoorMapSet = false;
+        selectedBuildingName = buildingName;
+
+        try {
+            if ("Nucleus".equals(buildingName)) {
+                //  Nucleus G floor (default)
+                groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
+                        .image(BitmapDescriptorFactory.fromResource(R.drawable.nucleusg))
+                        .positionFromBounds(NUCLEUS)
+                        .zIndex(1));
+                isIndoorMapSet = true;
+                currentFloor = 1; // G floor index in list
+                floorHeight = NUCLEUS_FLOOR_HEIGHT;
+                return true;
+            }
+            else if ("Library".equals(buildingName)) {
+                //  Library G floor
+                groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
+                        .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
+                        .positionFromBounds(LIBRARY)
+                        .zIndex(1));
+                isIndoorMapSet = true;
+                currentFloor = 0; // G floor index
+                floorHeight = LIBRARY_FLOOR_HEIGHT;
+                return true;
+            }
+            // Murchison and FJB
+            else {
+                Log.d("IndoorMapManager", "No indoor map available for: " + buildingName);
+                return false;
+            }
+        } catch (Exception e) {
+            Log.e("IndoorMapManager", "Error loading map for " + buildingName, e);
+            return false;
+        }
+    }
+
+    /**
+     * [Objective d] Clear the current building overlay and reset selection.
+     */
+    public void deselectBuilding() {
+        if (groundOverlay != null) {
+            groundOverlay.remove();
+            groundOverlay = null;
+        }
+        isIndoorMapSet = false;
+        selectedBuildingName = "";
+        currentFloor = 0;
+    }
+
+    public String getSelectedBuilding() {
+        return selectedBuildingName;
+    }
     /**
      * Function to obtain the current building's floor height
      * @return the floor height of the current building the user is in
@@ -96,7 +177,7 @@ public class IndoorMapManager {
      * @param autoFloor flag if function called by auto-floor feature
      */
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
-        if (BuildingPolygon.inNucleus(currentLocation)){
+        if ("Nucleus".equals(selectedBuildingName)){
             //Special case for nucleus when auto-floor is being used
             if (autoFloor) {
                 // If nucleus add bias floor as lower-ground floor referred to as floor 0
@@ -108,7 +189,7 @@ public class IndoorMapManager {
                  this.currentFloor=newFloor;
              }
         }
-        else if (BuildingPolygon.inLibrary(currentLocation)){
+        else if ("Library".equals(selectedBuildingName)){
             // If within bounds and different from floor map currently being shown
             if (newFloor>=0 && newFloor<LIBRARY_MAPS.size() && newFloor!=this.currentFloor) {
                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(LIBRARY_MAPS.get(newFloor)));
@@ -133,45 +214,6 @@ public class IndoorMapManager {
     }
 
     /**
-     * Sets the map overlay for the building if user's current
-     * location is in building and is not already set
-     * Removes the overlay if user no longer in building
-     */
-    private void setBuildingOverlay() {
-        // Try catch block to prevent fatal crashes
-        try {
-            // Setting overlay if in Nucleus and not already set
-            if (BuildingPolygon.inNucleus(currentLocation) && !isIndoorMapSet) {
-                    groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
-                            .image(BitmapDescriptorFactory.fromResource(R.drawable.nucleusg))
-                            .positionFromBounds(NUCLEUS));
-                    isIndoorMapSet = true;
-                    // Nucleus has an LG floor so G floor is at index 1
-                    currentFloor=1;
-                    floorHeight=NUCLEUS_FLOOR_HEIGHT;
-            }
-            // Setting overlay if in Library and not already set
-            else if (BuildingPolygon.inLibrary(currentLocation) && !isIndoorMapSet) {
-                    groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
-                            .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
-                            .positionFromBounds(LIBRARY));
-                    isIndoorMapSet = true;
-                    currentFloor=0;
-                    floorHeight=LIBRARY_FLOOR_HEIGHT;
-            }
-            // Removing overlay if user no longer in area with indoor maps available
-            else if (!BuildingPolygon.inLibrary(currentLocation) &&
-                    !BuildingPolygon.inNucleus(currentLocation)&& isIndoorMapSet){
-                groundOverlay.remove();
-                isIndoorMapSet = false;
-                currentFloor=0;
-            }   
-        } catch (Exception ex) {
-            Log.e("Error with overlay, Exception:", ex.toString());
-        }
-    }
-
-    /**
      * Function used to set the indication of available floor maps for building using green Polylines
      * along the building's boundaries.
      */
@@ -189,5 +231,71 @@ public class IndoorMapManager {
         points.add(BuildingPolygon.LIBRARY_POLYGON.get(0));
         gMap.addPolyline(new PolylineOptions().color(Color.GREEN)
                 .addAll(points));
+    }
+    /**
+     * [Objective d] Try to download floorplan from API.
+     * API Endpoint: https://openpositioning.org/api/live/floorplan/request
+     */
+    public void fetchFloorPlanFromApi(LatLng location) {
+        // internet asking
+        new Thread(() -> {
+            try {
+                String urlString = "https://openpositioning.org/api/live/floorplan/request" +
+                        "?latitude=" + location.latitude +
+                        "&longitude=" + location.longitude;
+
+                URL url = new URL(urlString);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+                conn.setRequestMethod("GET");
+
+                conn.setRequestProperty("Accept", "application/json");
+                // API Key
+                conn.setRequestProperty("x-api-key", "tkZ4QoAApy-6CBM6fKYwYA");
+
+                conn.setDoOutput(false);
+                conn.setDoInput(true);
+
+                Log.d("IndoorMapAPI", "Sending GET request to: " + urlString);
+
+                //response
+                int responseCode = conn.getResponseCode();
+                Log.d("IndoorMapAPI", "Response Code: " + responseCode);
+
+                if (responseCode == 200) {
+                    BufferedReader br = new BufferedReader(
+                            new InputStreamReader(conn.getInputStream(), "utf-8"));
+                    StringBuilder response = new StringBuilder();
+                    String responseLine;
+                    while ((responseLine = br.readLine()) != null) {
+                        response.append(responseLine.trim());
+                    }
+
+                    String jsonResponse = response.toString();
+                    Log.d("IndoorMapAPI", "Response Data: " + jsonResponse);
+
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        parseAndHandleApiResponse(jsonResponse);
+                    });
+                } else {
+                    Log.e("IndoorMapAPI", "Failed to fetch map. Code: " + responseCode);
+                }
+
+                conn.disconnect();
+
+            } catch (Exception e) {
+                Log.e("IndoorMapAPI", "Error fetching map", e);
+            }
+        }).start();
+    }
+    private void parseAndHandleApiResponse(String jsonResponse) {
+        try {
+            JSONObject json = new JSONObject(jsonResponse);
+
+            Log.d("IndoorMapAPI", "Parsing JSON: " + jsonResponse);
+
+        } catch (Exception e) {
+            Log.e("IndoorMapAPI", "Error parsing response", e);
+        }
     }
 }

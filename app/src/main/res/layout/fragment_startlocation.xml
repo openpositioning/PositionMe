@@ -47,48 +47,6 @@
                     android:textAlignment="center"/>
             </com.google.android.material.card.MaterialCardView>
 
-            <LinearLayout
-                android:id="@+id/floor_buttons_layout"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                app:layout_constraintBottom_toTopOf="@+id/startLocationDone"
-                app:layout_constraintEnd_toEndOf="parent"
-                android:layout_marginBottom="24dp"
-                android:layout_marginEnd="16dp">
-
-                <Button
-                    android:id="@+id/btn_floor_2"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
-                    android:text="2"
-                    android:padding="0dp"
-                    android:gravity="center"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:layout_marginBottom="8dp"/>
-
-                <Button
-                    android:id="@+id/btn_floor_1"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
-                    android:text="1"
-                    android:padding="0dp"
-                    android:gravity="center"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:layout_marginBottom="8dp"/>
-
-                <Button
-                    android:id="@+id/btn_floor_0"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
-                    android:text="G"
-                    android:padding="0dp"
-                    android:gravity="center"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"/>
-            </LinearLayout>
 
             <Button
                 android:id="@+id/startLocationDone"

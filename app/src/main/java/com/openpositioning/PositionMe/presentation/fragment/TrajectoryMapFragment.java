@@ -149,13 +149,36 @@ public class TrajectoryMapFragment extends Fragment {
 
                             // (Update data submission)
                             SensorFusion.getInstance().setVenueName(buildingName);
-
                             // e.g., if(buildingName.equals("Nucleus")) indoorMapManager.setFloor...
+
+                            if (indoorMapManager != null) {
+                                boolean hasMap = indoorMapManager.selectBuilding(buildingName);
+                                //ask for API
+                                if (!hasMap) {
+
+                                    // Case 1: Murchison House
+                                    if ("Murchison".equals(buildingName)) {
+                                        android.widget.Toast.makeText(requireContext(),
+                                                "Requesting API for " + buildingName + " map...",
+                                                android.widget.Toast.LENGTH_SHORT).show();
+                                        // Murchison location
+                                        indoorMapManager.fetchFloorPlanFromApi(new LatLng(55.924550, -3.179700));
+                                    }
+
+                                    // Case 2: Fleeming Jenkin Building (FJB)
+                                    else if ("Fleeming Jenkin".equals(buildingName)) {
+                                        android.widget.Toast.makeText(requireContext(),
+                                                "Requesting API for " + buildingName + " map...",
+                                                android.widget.Toast.LENGTH_SHORT).show();
+                                        indoorMapManager.fetchFloorPlanFromApi(new LatLng(55.922692, -3.172956));
+                                    }
+                                }
+                                int visibility = hasMap ? View.VISIBLE : View.GONE;
+                                setFloorControlsVisibility(visibility);
+                            }
                         }
                     });
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready and listeners set!");
-
-
                 }
             });
         }
@@ -576,7 +599,7 @@ public class TrajectoryMapFragment extends Fragment {
         Polygon nkmlPoly = gMap.addPolygon(nkmlOptions);
         nkmlPoly.setTag("Library");
         Polygon fjbPoly = gMap.addPolygon(fjbOptions);
-        fjbPoly.setTag("FJB");
+        fjbPoly.setTag("Fleeming Jenkin");
         Log.d("TrajectoryMapFragment", "Polygons added: Murchison(Red), Nucleus/Lib(Amber), FJB(Blue)");
     }
     //label
