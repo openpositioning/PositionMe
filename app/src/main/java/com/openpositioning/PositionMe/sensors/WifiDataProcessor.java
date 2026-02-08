@@ -16,9 +16,13 @@ import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.UUID;
+
 /**
  * The WifiDataProcessor class is the Wi-Fi data gathering and processing class of the application.
  * It implements the wifi scanning and broadcasting design to identify a list of nearby Wi-Fis as
@@ -101,48 +105,67 @@ public class WifiDataProcessor implements Observable {
      * Receives updates when a wifi scan is complete. Observers are notified when the broadcast is
      * received to update the list of wifis
      */
+
     BroadcastReceiver wifiScanReceiver = new BroadcastReceiver() {
-        /**
-         * Updates the list of nearby wifis when the broadcast is received.
-         * Ensures wifi scans are not enabled if permissions are not granted. The list of wifis is
-         * then passed to store the Mac Address and strength and observers of the WifiDataProcessor
-         * class are notified of the updated wifi list.
-         *
-         *
-         * @param context           Application Context to be used for permissions and device accesses.
-         * @param intent            ???.
-         */
         @Override
         public void onReceive(Context context, Intent intent) {
 
             if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                // Unregister this listener
-                stopListening();
                 return;
             }
 
-            //Collect the list of nearby wifis
-            List<ScanResult> wifiScanList = wifiManager.getScanResults();
-            //Stop receiver as scan is complete
-            context.unregisterReceiver(this);
+            boolean success = intent.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false);
+            if (success) {
+                List<ScanResult> wifiScanList = wifiManager.getScanResults();
 
-            //Loop though each item in wifi list
-            wifiData = new Wifi[wifiScanList.size()];
-            for(int i = 0; i < wifiScanList.size(); i++) {
-                wifiData[i] = new Wifi();
-                //Convert String mac address to an integer
-                String wifiMacAddress = wifiScanList.get(i).BSSID;
-                long intMacAddress = convertBssidToLong(wifiMacAddress);
-                //store mac address and rssi of wifi
-                wifiData[i].setBssid(intMacAddress);
-                wifiData[i].setLevel(wifiScanList.get(i).level);
+                Map<Long, Wifi> uniqueWifiMap = new HashMap<>();
+
+                for (ScanResult result : wifiScanList) {
+                    long bssidLong = convertBssidToLong(result.BSSID);
+
+                    if (!uniqueWifiMap.containsKey(bssidLong)) {
+                        Wifi wifi = new Wifi();
+                        wifi.setSsid(result.SSID);
+                        wifi.setBssid(bssidLong);
+                        wifi.setLevel(result.level);
+                        wifi.setFrequency(result.frequency);
+
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                            wifi.setRttFlag(result.is80211mcResponder());
+                        } else {
+                            wifi.setRttFlag(false);
+                        }
+                        wifi.setUuid(UUID.randomUUID().toString());
+
+                        uniqueWifiMap.put(bssidLong, wifi);
+                    }
+                }
+
+                Wifi currentConnectedWifi = getCurrentWifiData();
+                if (currentConnectedWifi.getBssid() != 0) {
+                    long currentBssid = currentConnectedWifi.getBssid();
+
+                    if (!uniqueWifiMap.containsKey(currentBssid)) {
+                        if (currentConnectedWifi.getUuid() == null) {
+                            currentConnectedWifi.setUuid(UUID.randomUUID().toString());
+                        }
+
+                        uniqueWifiMap.put(currentBssid, currentConnectedWifi);
+                    }
+                }
+
+
+                wifiData = uniqueWifiMap.values().toArray(new Wifi[0]);
+                notifyObservers(0);
             }
 
-            //Notify observers of change in wifiData variable
-            notifyObservers(0);
+            try {
+                context.unregisterReceiver(this);
+            } catch (IllegalArgumentException e) {
+                // Ignore
+            }
         }
     };
-
     /**
      * Converts mac address from string to integer.
      * Removes semicolons from mac address and converts each hex byte to a hex integer.
@@ -153,30 +176,13 @@ public class WifiDataProcessor implements Observable {
      * @return                      Long variable with decimal conversion of the mac address
      */
     private long convertBssidToLong(String wifiMacAddress){
-        long intMacAddress =0;
-        int colonCount =5;
-        //Loop through each character
-        for(int j =0; j<17; j++){
-            //Identify character
-            char macByte = wifiMacAddress.charAt(j);
-            //convert string hex mac address with colons to decimal long integer
-            if(macByte != ':'){
-                //For characters 0-9 subtract 48 from ASCII code and multiply by 16^position
-                if((int) macByte >= 48 && (int) macByte <= 57){
-                    intMacAddress = intMacAddress + (((int)macByte-48)*((long)Math.pow(16,16-j-colonCount)));
-                }
-
-                //For characters a-f subtract 87 (=97-10) from ASCII code and multiply by 16^index
-                else if ((int) macByte >= 97 && (int) macByte <= 102){
-                    intMacAddress = intMacAddress + (((int)macByte-87)*((long)Math.pow(16,16-j-colonCount)));
-                }
-            }
-            else
-                //coloncount is used to obtain the index of each character
-                colonCount --;
+        if (wifiMacAddress == null || wifiMacAddress.isEmpty()) return 0;
+        try {
+            String hex = wifiMacAddress.replace(":", "");
+            return Long.parseLong(hex, 16);
+        } catch (NumberFormatException e) {
+            return 0;
         }
-
-        return intMacAddress;
     }
 
     /**
@@ -313,13 +319,16 @@ public class WifiDataProcessor implements Observable {
         //Only obtain wifi data if the device is connected
         //Wifi in which the device is currently connected to
         Wifi currentWifi = new Wifi();
-        if(networkInfo.isConnected()) {
+        if(networkInfo != null && networkInfo.isConnected()) {
             //Store the ssid, mac address and frequency of the current wifi
             currentWifi.setSsid(wifiManager.getConnectionInfo().getSSID());
             String wifiMacAddress = wifiManager.getConnectionInfo().getBSSID();
+
             long intMacAddress = convertBssidToLong(wifiMacAddress);
+
             currentWifi.setBssid(intMacAddress);
             currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
+
         }
         else{
             //Store standard information if not connected
