@@ -244,4 +244,24 @@ public class PathView extends View {
         reDraw = true;
     }
 
+
+    public void clearTrajectory() {
+
+        if (path != null) {
+            path.reset();
+        }
+
+
+        if (xCoords != null) {
+            xCoords.clear();
+        }
+        if (yCoords != null) {
+            yCoords.clear();
+        }
+
+
+        invalidate();
+    }
+
+
 }

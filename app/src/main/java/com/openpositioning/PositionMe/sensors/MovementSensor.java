@@ -24,7 +24,7 @@ public class MovementSensor {
     protected Sensor sensor;
     // Information about the sensor stored in a SensorInfo object
     protected SensorInfo sensorInfo;
-
+    public float[] values;
 
     /**
      * Public default constructor for the Movement Sensor class.

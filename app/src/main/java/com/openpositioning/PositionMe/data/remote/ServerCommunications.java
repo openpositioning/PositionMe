@@ -1,16 +1,4 @@
 package com.openpositioning.PositionMe.data.remote;
-import android.util.Log;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import org.json.JSONObject;
-
-import android.os.Environment;
-
-import java.io.FileInputStream;
-import java.io.OutputStream;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -20,31 +8,39 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.BuildConfig;
 import com.openpositioning.PositionMe.Traj;
-import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
 
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
-import java.util.zip.ZipEntry;
+import java.util.Map;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
@@ -74,7 +70,7 @@ public class ServerCommunications implements Observable {
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();
     // Application context for handling permissions and devices
     private final Context context;
-
+    private Traj.Trajectory trajectory;
     // Network status checking
     private ConnectivityManager connMgr;
     private boolean isWifiConn;
@@ -113,24 +109,94 @@ public class ServerCommunications implements Observable {
         this.context = context;
         this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
-        this.isWifiConn = false;
-        this.isMobileConn = false;
-        checkNetworkStatus();
-
         this.observers = new ArrayList<>();
+
+    }
+    public void sendInfo(Traj.Trajectory trajectory) {
+        this.trajectory = trajectory;
+
+        Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
+        Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
+        Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
+
+
+        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiFingerprintsCount());
+
+        Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
+        Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
+
+
+        Log.i("ServerCommunications", "Mag Data size: " + trajectory.getMagnetometerDataCount());
     }
 
-    /**
-     * Outgoing communication request with a {@link Traj trajectory} object. The recorded
-     * trajectory is passed to the method. It is processed into the right format for sending
-     * to the API server.
-     *
-     * @param trajectory    Traj object matching all the timing and formal restrictions.
-     */
-    public void sendTrajectory(Traj.Trajectory trajectory){
-        logDataSize(trajectory);
 
-        // Convert the trajectory to byte array
+    public void sendTrajectory(Map<Integer, Map<Long, ?>> sensorBuf,
+                               Map<Long, ?> wifiBuf,
+                               Map<Long, ?> gnssBuf,
+                               Map<Long, ?> pdrBuf,
+                               Map<Long, ?> apsBuf,
+                               long start, String id){
+
+        Traj.Trajectory.Builder trajectoryBuilder = Traj.Trajectory.newBuilder();
+        trajectoryBuilder.setStartTimestamp(start);
+        trajectoryBuilder.setTrajectoryId(id);
+        trajectoryBuilder.setAndroidVersion(String.valueOf(Build.VERSION.SDK_INT));
+
+        if(sensorBuf.get(0) != null) {
+            for(Object sample : sensorBuf.get(0).values()) {
+                trajectoryBuilder.addImuData((Traj.IMUReading) sample);
+            }
+        }
+
+        if(sensorBuf.get(1) != null) {
+            for(Object sample : sensorBuf.get(1).values()) {
+                trajectoryBuilder.addMagnetometerData((Traj.MagnetometerReading) sample);
+            }
+        }
+
+        if(sensorBuf.get(2) != null) {
+            for(Object sample : sensorBuf.get(2).values()) {
+                trajectoryBuilder.addPressureData((Traj.BarometerReading) sample);
+            }
+        }
+
+        if(sensorBuf.get(3) != null) {
+            for(Object sample : sensorBuf.get(3).values()) {
+                trajectoryBuilder.addLightData((Traj.LightReading) sample);
+            }
+        }
+
+        // PDR Data
+        if(pdrBuf != null) {
+            for(Object sample : pdrBuf.values()) {
+                trajectoryBuilder.addPdrData((Traj.RelativePosition) sample);
+            }
+        }
+
+        // GNSS Data
+        if(gnssBuf != null) {
+            for(Object sample : gnssBuf.values()) {
+                trajectoryBuilder.addGnssData((Traj.GNSSReading) sample);
+            }
+        }
+
+        // WiFi Data
+        if(wifiBuf != null) {
+            for(Object sample : wifiBuf.values()) {
+                trajectoryBuilder.addWifiFingerprints((Traj.Fingerprint) sample);
+            }
+        }
+
+        // APs Data
+        if(apsBuf != null) {
+            for(Object sample : apsBuf.values()) {
+                trajectoryBuilder.addApsData((Traj.WiFiAPData) sample);
+            }
+        }
+
+        this.trajectory = trajectoryBuilder.build();
+        System.out.println("Trajectory created with ID: " + trajectory.getTrajectoryId());
+
         byte[] binaryTrajectory = trajectory.toByteArray();
 
         File path = null;
@@ -523,6 +589,7 @@ public class ServerCommunications implements Observable {
 
                     // Convert the byte array to protobuf
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
+
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
 
                     // Inspect the size of the received trajectory
@@ -559,6 +626,8 @@ public class ServerCommunications implements Observable {
                     loadDownloadRecords();
                 }
             }
+
+
         });
 
     }
@@ -623,11 +692,13 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+
+        Log.i("ServerCommunications", "Magnetometer Data size: " + trajectory.getMagnetometerDataCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+
+        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiFingerprintsCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
@@ -663,5 +734,9 @@ public class ServerCommunications implements Observable {
                 o.update(new Boolean[] {success});
             }
         }
+    }
+
+
+    public void sendTrajectory(Traj.Trajectory sentTrajectory) {
     }
 }
