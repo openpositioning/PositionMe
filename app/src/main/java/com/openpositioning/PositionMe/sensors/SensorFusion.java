@@ -35,6 +35,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.UUID;
 
 
 /**
@@ -474,9 +475,21 @@ public class SensorFusion implements SensorEventListener, Observer {
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
             for (Wifi data : this.wifiList) {
-                wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
+                //wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
+                        Traj.Mac_Scan.Builder scanBuilder = Traj.Mac_Scan.newBuilder()
                         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                        .setMac(data.getBssid()).setRssi(data.getLevel()));
+                        .setMac(data.getBssid())
+                        .setRssi(data.getLevel());
+                // [Assignment Feature: Objective b] Add new fields
+                // 1. set RTT Flag
+                scanBuilder.setRttFlag(false);
+
+                // 2. set UUID
+                String uuidStr = (data.getSsid() != null) ? data.getSsid() : "";
+                scanBuilder.setUuid(uuidStr);
+
+                wifiData.addMacScans(scanBuilder.build());
+
             }
             // Adding WiFi data to Trajectory
             this.trajectory.addWifiData(wifiData);
@@ -864,14 +877,23 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
         // Protobuf trajectory class for sending sensor data to restful API
+        // [Assignment Feature: Objective b] Added Name, Initial Position, and UUID
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
                 .setStartTimestamp(absoluteStartTime)
+                .setDataIdentifier(UUID.randomUUID().toString())
                 .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
                 .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
-                .setLightSensorInfo(createInfoBuilder(lightSensor));
+                .setLightSensorInfo(createInfoBuilder(lightSensor))
+                .setTrajectoryName("Traj_" + absoluteStartTime)
+                .setInitialPosition(Traj.Initial_Position.newBuilder()
+                        .setLatitude(0)
+                        .setLongitude(0)
+                        .setOrientation(0)
+                        .build());
+
 
 
 

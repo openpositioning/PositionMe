@@ -43,6 +43,21 @@ Sensor_Info light_sensor_info = 17;
      */
 repeated KeyPoint key_points = 18;
 
+/*
+     * [Assignment Feature: Sensor Data - Objective b]
+     * Added trajectory name and initial position/orientation.
+     */
+    string trajectory_name = 19; // Add trajectory name
+    Initial_Position initial_position = 20; // Add initial position/orientation
+
+}
+
+// [New Message for Objective b]
+// record initial position and orientation
+message Initial_Position {
+    float latitude = 1;
+    float longitude = 2;
+    float orientation = 3;
 }
 
 message Pdr_Sample {
@@ -140,6 +155,12 @@ message Mac_Scan {
     // rssi integer in dBm.
     // typically between -120 and -10
     int32 rssi = 3;
+    /*
+         * [Assignment Feature: Sensor Data - Objective b]
+         * Added new data to the scans (WiFi RTT flag, uuid)
+         */
+        bool rtt_flag = 4; // Add WiFi RTT flag
+        string uuid = 5;   // Add uuid
 }
 
 message AP_Data {
