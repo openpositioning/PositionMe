@@ -17,11 +17,11 @@ import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
-import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 
 import org.json.JSONException;
@@ -29,6 +29,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
@@ -110,6 +111,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private ServerCommunications serverCommunications;
     // Trajectory object containing all data
     private Traj.Trajectory.Builder trajectory;
+    private boolean initialPositionSet = false;  // Track if initial position has been set
 
     // Settings
     private boolean saveRecording;
@@ -406,7 +408,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (saveRecording) {
                         this.pathView.drawTrajectory(newCords);
                         stepCounter++;
-                        trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+                        trajectory.addPdrData(Traj.RelativePosition.newBuilder()
                                 .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                 .setX(newCords[0])
                                 .setY(newCords[1]));
@@ -446,14 +448,26 @@ public class SensorFusion implements SensorEventListener, Observer {
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
             if(saveRecording) {
-                trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
+                trajectory.addGnssData(Traj.GNSSReading.newBuilder()
+                        .setPosition(Traj.GNSSPosition.newBuilder()
+                                .setLatitude(latitude)
+                                .setLongitude(longitude)
+                                .setAltitude(altitude)
+                                .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime)
+                                .build())
                         .setAccuracy(accuracy)
-                        .setAltitude(altitude)
-                        .setLatitude(latitude)
-                        .setLongitude(longitude)
                         .setSpeed(speed)
-                        .setProvider(provider)
-                        .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
+                        .setProvider(provider));
+                
+                // Set initial position from first GNSS reading
+                if (!initialPositionSet) {
+                    trajectory.setInitialPosition(Traj.GNSSPosition.newBuilder()
+                            .setLatitude(latitude)
+                            .setLongitude(longitude)
+                            .setAltitude(altitude)
+                            .build());
+                    initialPositionSet = true;
+                }
             }
         }
     }
@@ -471,15 +485,26 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
         if(this.saveRecording) {
-            Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
+            Traj.Fingerprint.Builder wifiData = Traj.Fingerprint.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
+            
+            // Track unique MAC addresses to avoid duplicates
+            HashSet<Long> uniqueMacs = new HashSet<>();
+            
             for (Wifi data : this.wifiList) {
-                wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
-                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                        .setMac(data.getBssid()).setRssi(data.getLevel()));
+                long mac = data.getBssid();
+                // Only add if not seen before (deduplication)
+                if (uniqueMacs.add(mac)) {
+                    wifiData.addRfScans(Traj.RFScan.newBuilder()
+                            .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                            .setMac(mac)
+                            .setRssi(data.getLevel()));
+                }
             }
             // Adding WiFi data to Trajectory
-            this.trajectory.addWifiData(wifiData);
+            if (wifiData.getRfScansCount() > 0) {
+                this.trajectory.addWifiFingerprints(wifiData);
+            }
         }
         createWifiPositioningRequest();
     }
@@ -866,6 +891,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
+                .setTrajectoryId("trajectory_" + System.currentTimeMillis())
                 .setStartTimestamp(absoluteStartTime)
                 .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
@@ -903,6 +929,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         if(wakeLock.isHeld()) {
             this.wakeLock.release();
         }
+        // Reset initial position flag for next recording
+        initialPositionSet = false;
     }
 
     //endregion
@@ -922,16 +950,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
-     * Creates a {@link Traj.Sensor_Info} objects from the specified sensor's data.
+     * Creates a {@link Traj.SensorInfo} objects from the specified sensor's data.
      *
      * @param sensor    MovementSensor objects with populated sensorInfo fields
-     * @return          Traj.SensorInfo object to be used in building the trajectory
+     * @return          com.openpositioning.PositionMe.Traj.SensorInfo object to be used in building the trajectory
      *
      * @see Traj            Trajectory object used for communication with the server
      * @see MovementSensor  class abstracting SensorManager based sensors
      */
-    private Traj.Sensor_Info.Builder createInfoBuilder(MovementSensor sensor) {
-        return Traj.Sensor_Info.newBuilder()
+    private Traj.SensorInfo.Builder createInfoBuilder(MovementSensor sensor) {
+        return Traj.SensorInfo.newBuilder()
                 .setName(sensor.sensorInfo.getName())
                 .setVendor(sensor.sensorInfo.getVendor())
                 .setResolution(sensor.sensorInfo.getResolution())
@@ -948,27 +976,36 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     private class storeDataInTrajectory extends TimerTask {
         public void run() {
-            // Store IMU and magnetometer data in Trajectory class
-            trajectory.addImuData(Traj.Motion_Sample.newBuilder()
+            // Store IMU data in Trajectory class
+            trajectory.addImuData(Traj.IMUReading.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
-                    .setAccX(acceleration[0])
-                    .setAccY(acceleration[1])
-                    .setAccZ(acceleration[2])
-                    .setGyrX(angularVelocity[0])
-                    .setGyrY(angularVelocity[1])
-                    .setGyrZ(angularVelocity[2])
-                    .setGyrZ(angularVelocity[2])
-                    .setRotationVectorX(rotation[0])
-                    .setRotationVectorY(rotation[1])
-                    .setRotationVectorZ(rotation[2])
-                    .setRotationVectorW(rotation[3])
-                    .setStepCount(stepCounter))
-                    .addPositionData(Traj.Position_Sample.newBuilder()
-                            .setMagX(magneticField[0])
-                            .setMagY(magneticField[1])
-                            .setMagZ(magneticField[2])
-                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-//                    .addGnssData(Traj.GNSS_Sample.newBuilder()
+                    .setAcc(Traj.Vector3.newBuilder()
+                            .setX(filteredAcc[0])
+                            .setY(filteredAcc[1])
+                            .setZ(filteredAcc[2])
+                            .build())
+                    .setGyr(Traj.Vector3.newBuilder()
+                            .setX(angularVelocity[0])
+                            .setY(angularVelocity[1])
+                            .setZ(angularVelocity[2])
+                            .build())
+                    .setRotationVector(Traj.Quaternion.newBuilder()
+                            .setX(rotation[0])
+                            .setY(rotation[1])
+                            .setZ(rotation[2])
+                            .setW(rotation[3])
+                            .build())
+                    .setStepCount(stepCounter));
+            
+            // Store magnetometer data separately
+            trajectory.addMagnetometerData(Traj.MagnetometerReading.newBuilder()
+                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
+                    .setMag(Traj.Vector3.newBuilder()
+                            .setX(magneticField[0])
+                            .setY(magneticField[1])
+                            .setZ(magneticField[2])
+                            .build()));
+//                    .addGnssData(com.openpositioning.PositionMe.Traj.GNSS_Sample.newBuilder()
 //                            .setLatitude(latitude)
 //                            .setLongitude(longitude)
 //                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
@@ -979,10 +1016,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                 counter = 0;
                 // Store pressure and light data
                 if (barometerSensor.sensor != null) {
-                    trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
+                    trajectory.addPressureData(Traj.BarometerReading.newBuilder()
                                     .setPressure(pressure)
-                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
-                            .addLightData(Traj.Light_Sample.newBuilder()
+                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                                    .build());
+                    trajectory.addLightData(Traj.LightReading.newBuilder()
                                     .setLight(light)
                                     .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                     .build());
@@ -993,10 +1031,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                     secondCounter = 0;
                     //Current Wifi Object
                     Wifi currentWifi = wifiProcessor.getCurrentWifiData();
-                    trajectory.addApsData(Traj.AP_Data.newBuilder()
+                    trajectory.addApsData(Traj.WiFiAPData.newBuilder()
                             .setMac(currentWifi.getBssid())
                             .setSsid(currentWifi.getSsid())
-                            .setFrequency(currentWifi.getFrequency()));
+                            .setFrequency(currentWifi.getFrequency())
+                            .setRttEnabled(false)  // TODO: Detect RTT capability dynamically
+                            .build());
                 }
                 else {
                     secondCounter++;
