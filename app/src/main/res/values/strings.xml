@@ -136,5 +136,8 @@
     <string name="replay_frag_play">Play</string>
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
+    <string name="venue_not_selected">Venue: not selected</string>
+    <string name="venue_selected_no_floor">Venue: %1$s</string>
+    <string name="venue_selected_format">Venue: %1$s (floor %2$d/%3$d)</string>
 
 </resources>
