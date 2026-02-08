@@ -85,8 +85,9 @@ public class ServerCommunications implements Observable {
     // Static constants necessary for communications
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
+    private static final String defualtCampaign = "murchison_house";
     private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
+            "https://openpositioning.org/api/live/trajectory/upload/" + defualtCampaign + "/" + userKey
                     + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
@@ -214,15 +215,18 @@ public class ServerCommunications implements Observable {
                             //file.delete();
 //                            System.err.println("POST error response: " + responseBody.string());
 
-                            String errorBody = responseBody.string();
-                            infoResponse = "Upload failed: " + errorBody;
+                            String errorBody = responseBody != null ? responseBody.string() : "No response body";
+                            String errorMessage = "HTTP " + response.code() + " - " + errorBody;
+                            infoResponse = "Upload failed: " + errorMessage;
                             new Handler(Looper.getMainLooper()).post(() ->
                                     Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
 
-                            System.err.println("POST error response: " + errorBody);
+                            System.err.println("POST error response code: " + response.code());
+                            System.err.println("POST error response headers: " + response.headers().toString());
+                            System.err.println("POST error response body: " + errorBody);
                             success = false;
                             notifyObservers(1);
-                            throw new IOException("Unexpected code " + response);
+                            throw new IOException("Unexpected code " + response.code());
                         }
 
                         // Print the response headers

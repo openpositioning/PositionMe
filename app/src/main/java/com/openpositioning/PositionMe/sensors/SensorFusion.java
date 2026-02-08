@@ -29,6 +29,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
@@ -110,6 +111,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private ServerCommunications serverCommunications;
     // Trajectory object containing all data
     private Traj.Trajectory.Builder trajectory;
+    private boolean initialPositionSet = false;  // Track if initial position has been set
 
     // Settings
     private boolean saveRecording;
@@ -456,6 +458,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .setAccuracy(accuracy)
                         .setSpeed(speed)
                         .setProvider(provider));
+                
+                // Set initial position from first GNSS reading
+                if (!initialPositionSet) {
+                    trajectory.setInitialPosition(Traj.GNSSPosition.newBuilder()
+                            .setLatitude(latitude)
+                            .setLongitude(longitude)
+                            .setAltitude(altitude)
+                            .build());
+                    initialPositionSet = true;
+                }
             }
         }
     }
@@ -475,14 +487,24 @@ public class SensorFusion implements SensorEventListener, Observer {
         if(this.saveRecording) {
             Traj.Fingerprint.Builder wifiData = Traj.Fingerprint.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
+            
+            // Track unique MAC addresses to avoid duplicates
+            HashSet<Long> uniqueMacs = new HashSet<>();
+            
             for (Wifi data : this.wifiList) {
-                wifiData.addRfScans(Traj.RFScan.newBuilder()
-                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                        .setMac(data.getBssid())
-                        .setRssi(data.getLevel()));
+                long mac = data.getBssid();
+                // Only add if not seen before (deduplication)
+                if (uniqueMacs.add(mac)) {
+                    wifiData.addRfScans(Traj.RFScan.newBuilder()
+                            .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                            .setMac(mac)
+                            .setRssi(data.getLevel()));
+                }
             }
             // Adding WiFi data to Trajectory
-            this.trajectory.addWifiFingerprints(wifiData);
+            if (wifiData.getRfScansCount() > 0) {
+                this.trajectory.addWifiFingerprints(wifiData);
+            }
         }
         createWifiPositioningRequest();
     }
@@ -869,6 +891,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
+                .setTrajectoryId("trajectory_" + System.currentTimeMillis())
                 .setStartTimestamp(absoluteStartTime)
                 .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
@@ -906,6 +929,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         if(wakeLock.isHeld()) {
             this.wakeLock.release();
         }
+        // Reset initial position flag for next recording
+        initialPositionSet = false;
     }
 
     //endregion
@@ -955,9 +980,9 @@ public class SensorFusion implements SensorEventListener, Observer {
             trajectory.addImuData(Traj.IMUReading.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
                     .setAcc(Traj.Vector3.newBuilder()
-                            .setX(acceleration[0])
-                            .setY(acceleration[1])
-                            .setZ(acceleration[2])
+                            .setX(filteredAcc[0])
+                            .setY(filteredAcc[1])
+                            .setZ(filteredAcc[2])
                             .build())
                     .setGyr(Traj.Vector3.newBuilder()
                             .setX(angularVelocity[0])
@@ -1009,7 +1034,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                     trajectory.addApsData(Traj.WiFiAPData.newBuilder()
                             .setMac(currentWifi.getBssid())
                             .setSsid(currentWifi.getSsid())
-                            .setFrequency(currentWifi.getFrequency()));
+                            .setFrequency(currentWifi.getFrequency())
+                            .setRttEnabled(false)  // TODO: Detect RTT capability dynamically
+                            .build());
                 }
                 else {
                     secondCounter++;
