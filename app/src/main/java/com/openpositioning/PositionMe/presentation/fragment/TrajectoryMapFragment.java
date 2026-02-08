@@ -538,11 +538,13 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     public void addTestPointMarker(@NonNull LatLng currentPosition, int markerCount) {
-      if (gMap == null) return;
+        if (gMap == null) return;
 
-      gMap.addMarker(new MarkerOptions()
+        // Place marker at user's current position with numbered label.
+        gMap.addMarker(new MarkerOptions()
               .position(currentPosition)
-              .title("Test Point " + markerCount));
+              .title("Test Point " + markerCount)
+        );
     }
 
 
