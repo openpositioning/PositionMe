@@ -129,13 +129,28 @@ public class WifiDataProcessor implements Observable {
             //Loop though each item in wifi list
             wifiData = new Wifi[wifiScanList.size()];
             for(int i = 0; i < wifiScanList.size(); i++) {
-                wifiData[i] = new Wifi();
-                //Convert String mac address to an integer
-                String wifiMacAddress = wifiScanList.get(i).BSSID;
+                ScanResult result = wifiScanList.get(i); // scan
+
+                String wifiMacAddress = result.BSSID;
                 long intMacAddress = convertBssidToLong(wifiMacAddress);
-                //store mac address and rssi of wifi
+
+                // 2. [Objective b] get RTT information
+                boolean isRttSupported = false;
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    isRttSupported = result.is80211mcResponder();
+                }
+
+                // 3. [Objective b] get UUID
+                String uuidStr = String.valueOf(result.SSID);
+
+                wifiData[i] = new Wifi();
                 wifiData[i].setBssid(intMacAddress);
-                wifiData[i].setLevel(wifiScanList.get(i).level);
+                wifiData[i].setLevel(result.level);
+                wifiData[i].setSsid(result.SSID);
+                wifiData[i].setFrequency(result.frequency);
+
+                wifiData[i].setUuid(uuidStr);
+                wifiData[i].setRtt(isRttSupported);
             }
 
             //Notify observers of change in wifiData variable
@@ -320,6 +335,9 @@ public class WifiDataProcessor implements Observable {
             long intMacAddress = convertBssidToLong(wifiMacAddress);
             currentWifi.setBssid(intMacAddress);
             currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
+            // [Objective b] Set default values for connected wifi
+            currentWifi.setUuid(wifiManager.getConnectionInfo().getSSID());
+            currentWifi.setRtt(false);
         }
         else{
             //Store standard information if not connected

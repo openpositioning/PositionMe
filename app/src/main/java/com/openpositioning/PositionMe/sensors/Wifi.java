@@ -17,12 +17,25 @@ public class Wifi {
     private long bssid;
     private int level;
     private long frequency;
+    // [Objective b] New fields
+    private String uuid;
+    private boolean isRtt;
 
     /**
      * Empty public default constructor of the Wifi object.
      */
     public Wifi(){}
-
+    /**
+     * [Objective b] Full constructor including new fields.
+     */
+    public Wifi(long bssid, int level, String ssid, long frequency, String uuid, boolean isRtt) {
+        this.bssid = bssid;
+        this.level = level;
+        this.ssid = ssid;
+        this.frequency = frequency;
+        this.uuid = uuid;
+        this.isRtt = isRtt;
+    }
     /**
      * Getters for each property
      */
@@ -30,6 +43,9 @@ public class Wifi {
     public long getBssid() { return bssid; }
     public int getLevel() { return level; }
     public long getFrequency() { return frequency; }
+    // [Objective b] New Getters
+    public String getUuid() { return uuid; }
+    public boolean isRtt() { return isRtt; }
 
     /**
      * Setters for each property
@@ -38,6 +54,9 @@ public class Wifi {
     public void setBssid(long bssid) { this.bssid = bssid; }
     public void setLevel(int level) { this.level = level; }
     public void setFrequency(long frequency) { this.frequency = frequency; }
+    // [Objective b] New Setters
+    public void setUuid(String uuid) { this.uuid = uuid; }
+    public void setRtt(boolean isRtt) { this.isRtt = isRtt; }
 
     /**
      * Generates a string containing mac address and rssi of Wifi.
