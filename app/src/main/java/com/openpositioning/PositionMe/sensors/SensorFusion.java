@@ -947,9 +947,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         testPointMarkerCount++;
         long relativeTimestampMs = SystemClock.uptimeMillis() - bootTime;
-        trajectory.addTestPointMarkers(Traj.TestPoint_Marker.newBuilder()
+        trajectory.addTestPoints(Traj.GNSSPosition.newBuilder()
                 .setRelativeTimestamp(relativeTimestampMs)
-                .setMarkerIndex(testPointMarkerCount)
+                .setLatitude(this.latitude)
+                .setLongitude(this.longitude)
+                .setAltitude(this.elevation)
                 .build());
         return testPointMarkerCount;
     }
