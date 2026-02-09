@@ -22,6 +22,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.SelectedVenueStore;
 
 /**
  * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory

@@ -94,7 +94,6 @@ public class TrajectoryMapFragment extends Fragment {
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
     private final List<Polyline> venueShapeLines = new ArrayList<>();
     private List<FloorplanService.Venue.FloorShape> currentFloorShapes;
-    private int currentFloorIndex = 0;
 
 
     public TrajectoryMapFragment() {
@@ -316,12 +315,6 @@ public class TrajectoryMapFragment extends Fragment {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
             points.add(newLocation);
             polyline.setPoints(points);
-        }
-
-        // Trigger venue fetch once when we have a position and map
-        if (!venuesRequested && floorplanService != null) {
-            venuesRequested = true;
-            requestNearbyVenues(newLocation);
         }
 
         // Trigger venue fetch once when we have a position and map
@@ -582,6 +575,7 @@ public class TrajectoryMapFragment extends Fragment {
                 if (getActivity() == null) return;
                 requireActivity().runOnUiThread(() ->
                         Toast.makeText(requireContext(), "Indoor map fetch failed: " + msg, Toast.LENGTH_SHORT).show());
+                        SelectedVenueStore.getInstance().reset(); // Reset location as no venues/maps found
             }
         });
     }
@@ -590,6 +584,11 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap == null || venues == null) return;
         clearVenueGraphics();
         gMap.setOnPolygonClickListener(this::onVenuePolygonClicked);
+        if (venues.size() <= 0) {
+            SelectedVenueStore.getInstance().reset(); // Reset location as no venues/maps found
+        } else {
+            SelectedVenueStore.getInstance().setVenueName(venues.get(0).name); // Set the default venue
+        }
         for (FloorplanService.Venue v : venues) {
             List<LatLng> outline = v.parseOutline();
             if (outline == null || outline.size() < 3) continue;
@@ -611,11 +610,11 @@ public class TrajectoryMapFragment extends Fragment {
         selectedVenue = (FloorplanService.Venue) tag;
 
         highlightSelection(polygon);
-        SelectedVenueStore.getInstance().setSelection(selectedVenue.name, 0);
+        SelectedVenueStore.getInstance().setVenueName(selectedVenue.name); // Set venue based on clicked polygon
 
         // Parse floor-separated shapes if available
         currentFloorShapes = selectedVenue.parseFloorShapes();
-        currentFloorIndex = 0;
+        SelectedVenueStore.getInstance().setFloorIndex(0);
         if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
             renderCurrentFloorShapes();
             setFloorControlsVisibility(currentFloorShapes.size() > 1 ? View.VISIBLE : View.GONE);
@@ -636,6 +635,7 @@ public class TrajectoryMapFragment extends Fragment {
 
     private void renderCurrentFloorShapes() {
         clearVenueShapeLines();
+        final int currentFloorIndex = SelectedVenueStore.getInstance().getFloorIndex();
         if (currentFloorShapes == null || currentFloorShapes.isEmpty() || gMap == null) return;
         if (currentFloorIndex < 0 || currentFloorIndex >= currentFloorShapes.size()) return;
         FloorplanService.Venue.FloorShape fs = currentFloorShapes.get(currentFloorIndex);
@@ -675,10 +675,11 @@ public class TrajectoryMapFragment extends Fragment {
 
     private void stepFloor(int delta) {
         if (currentFloorShapes == null || currentFloorShapes.isEmpty()) return;
+        final int currentFloorIndex = SelectedVenueStore.getInstance().getFloorIndex();
         int newIndex = currentFloorIndex + delta;
         newIndex = Math.max(0, Math.min(newIndex, currentFloorShapes.size() - 1));
         if (newIndex != currentFloorIndex) {
-            currentFloorIndex = newIndex;
+            SelectedVenueStore.getInstance().setFloorIndex(newIndex);
             renderCurrentFloorShapes();
         }
     }
@@ -690,7 +691,7 @@ public class TrajectoryMapFragment extends Fragment {
         venuePolygons.clear();
         clearVenueShapeLines();
         currentFloorShapes = null;
-        currentFloorIndex = 0;
+        SelectedVenueStore.getInstance().setFloorIndex(0);
         setFloorControlsVisibility(View.GONE);
         selectedVenue = null;
     }
