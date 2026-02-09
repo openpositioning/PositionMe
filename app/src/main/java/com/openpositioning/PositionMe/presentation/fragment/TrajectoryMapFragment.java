@@ -32,56 +32,46 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 
 /**
- * A fragment responsible for displaying a trajectory map using Google Maps.
- * <p>
- * The TrajectoryMapFragment provides a map interface for visualizing movement trajectories,
- * GNSS tracking, and indoor mapping. It manages map settings, user interactions, and real-time
- * updates to user location and GNSS markers.
+ * Fragment for displaying the Google Map, user trajectory, and indoor building maps.
  * <p>
  * Key Features:
- * - Displays a Google Map with support for different map types (Hybrid, Normal, Satellite).
- * - Tracks and visualizes user movement using polylines.
- * - Supports GNSS position updates and visual representation.
- * - Includes indoor mapping with floor selection and auto-floor adjustments.
- * - Allows user interaction through map controls and UI elements.
+ * - Map types: Hybrid, Normal, Satellite.
+ * - Visualizes user movement (PDR) and GNSS path.
+ * - Manages indoor floor plans (local assets or API fetch).
+ * - Handles building selection for context-aware recording.
  *
- * @see com.openpositioning.PositionMe.presentation.activity.RecordingActivity The activity hosting this fragment.
- * @see com.openpositioning.PositionMe.utils.IndoorMapManager Utility for managing indoor map overlays.
- * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
- *
- * @author Mate Stodulka
+ * @see com.openpositioning.PositionMe.presentation.activity.RecordingActivity
+ * @see com.openpositioning.PositionMe.utils.IndoorMapManager
  */
-
 public class TrajectoryMapFragment extends Fragment {
 
-    private GoogleMap gMap; // Google Maps instance
-    private LatLng currentLocation; // Stores the user's current location
-    private Marker orientationMarker; // Marker representing user's heading
-    private Marker gnssMarker; // GNSS position marker
-    private Polyline polyline; // Polyline representing user's movement path
-    private boolean isRed = true; // Tracks whether the polyline color is red
-    private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
+    private GoogleMap gMap;
+    private LatLng currentLocation;
+    private Marker orientationMarker;
+    private Marker gnssMarker;
+    private Polyline polyline;
+    private boolean isRed = true;
+    private boolean isGnssOn = false;
 
-    private Polyline gnssPolyline; // Polyline for GNSS path
-    private LatLng lastGnssLocation = null; // Stores the last GNSS location
+    private Polyline gnssPolyline;
+    private LatLng lastGnssLocation = null;
 
-    private LatLng pendingCameraPosition = null; // Stores pending camera movement
-    private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
+    private LatLng pendingCameraPosition = null;
+    private boolean hasPendingCameraMove = false;
 
-    private IndoorMapManager indoorMapManager; // Manages indoor mapping
+    private IndoorMapManager indoorMapManager;
     private SensorFusion sensorFusion;
 
+    // Tracks active building polygons for easy removal/redrawing
+    private List<Polygon> activePolygons = new ArrayList<>();
 
-    // UI
+    // UI Elements
     private Spinner switchMapSpinner;
-
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
-
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
-
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -92,7 +82,6 @@ public class TrajectoryMapFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        // Inflate the separate layout containing map + map-related UI
         return inflater.inflate(R.layout.fragment_trajectory_map, container, false);
     }
 
@@ -101,7 +90,7 @@ public class TrajectoryMapFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Grab references to UI controls
+        // UI Initialization
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
@@ -109,22 +98,19 @@ public class TrajectoryMapFragment extends Fragment {
         floorDownButton = view.findViewById(R.id.floorDownButton);
         switchColorButton = view.findViewById(R.id.lineColorButton);
 
-        // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
 
-        // Initialize the map asynchronously
+        // Initialize Map
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.trajectoryMap);
         if (mapFragment != null) {
             mapFragment.getMapAsync(new OnMapReadyCallback() {
                 @Override
                 public void onMapReady(@NonNull GoogleMap googleMap) {
-                    // Assign the provided googleMap to your field variable
                     gMap = googleMap;
-                    // Initialize map settings with the now non-null gMap
                     initMapSettings(gMap);
 
-                    // If we had a pending camera move, apply it now
+                    // Move camera if position was pending
                     if (hasPendingCameraMove && pendingCameraPosition != null) {
                         gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, 19f));
                         hasPendingCameraMove = false;
@@ -134,58 +120,79 @@ public class TrajectoryMapFragment extends Fragment {
                     drawBuildingPolygon();
 
                     // -----------------------------------------------------------------
-                    // [Objective d] Polygon Click Listener (交互逻辑)
+                    // [Objective d] Handle Building Clicks (Context & Indoor Maps)
                     // -----------------------------------------------------------------
                     gMap.setOnPolygonClickListener(polygon -> {
                         Object tag = polygon.getTag();
-
                         if (tag != null) {
                             String buildingName = tag.toString();
 
-                            // (Update data submission)
-                            SensorFusion.getInstance().setVenueName(buildingName);
-                            // e.g., if(buildingName.equals("Nucleus")) indoorMapManager.setFloor...
-                            // feedback
-                            android.widget.Toast.makeText(requireContext(),
-                                    "Selected Venue: " + buildingName,
-                                    android.widget.Toast.LENGTH_SHORT).show();
+                            // 1. Set filename context (formatted as lower_case)
+                            String safeNameForFile = buildingName.toLowerCase().replace(" ", "_");
+                            SensorFusion.getInstance().setVenueName(safeNameForFile);
 
+                            // 2. Handle Indoor Map loading
                             if (indoorMapManager != null) {
-                                boolean hasMap = indoorMapManager.selectBuilding(buildingName);
-                                //ask for API
-                                if (!hasMap) {
+                                // Try loading local map (Nucleus/Library)
+                                boolean hasLocalMap = indoorMapManager.selectBuilding(buildingName);
 
-                                    // Case 1: Murchison House
-                                    if ("Murchison".equals(buildingName)) {
+                                if (hasLocalMap) {
+                                    setFloorControlsVisibility(View.VISIBLE);
+                                    android.widget.Toast.makeText(requireContext(),
+                                            "Switched to " + buildingName + " Map",
+                                            android.widget.Toast.LENGTH_SHORT).show();
+                                } else {
+                                    // Check for API-based maps (Murchison/FJB)
+                                    if (buildingName.equals("Murchison")) {
                                         android.widget.Toast.makeText(requireContext(),
-                                                "Requesting API for " + buildingName + " map...",
+                                                "Fetching API for " + buildingName + "...",
                                                 android.widget.Toast.LENGTH_SHORT).show();
-                                        // Murchison location
-                                        indoorMapManager.fetchFloorPlanFromApi(new LatLng(55.924550, -3.179700));
-                                    }
 
-                                    // Case 2: Fleeming Jenkin Building (FJB)
-                                    else if ("Fleeming Jenkin".equals(buildingName)) {
+                                        // Fetch map via API
+                                        indoorMapManager.fetchFloorPlanFromApi(new LatLng(55.924550, -3.179700));
+
+                                        // Force show buttons while loading to prevent flickering
+                                        setFloorControlsVisibility(View.VISIBLE);
+
+                                    } else if (buildingName.equals("Fleeming Jenkin")) {
                                         android.widget.Toast.makeText(requireContext(),
-                                                "Requesting API for " + buildingName + " map...",
+                                                "Fetching API for " + buildingName + "...",
                                                 android.widget.Toast.LENGTH_SHORT).show();
                                         indoorMapManager.fetchFloorPlanFromApi(new LatLng(55.922692, -3.172956));
+                                        setFloorControlsVisibility(View.VISIBLE);
+
+                                    } else {
+                                        // No map available
+                                        setFloorControlsVisibility(View.GONE);
                                     }
                                 }
-                                int visibility = hasMap ? View.VISIBLE : View.GONE;
-                                setFloorControlsVisibility(visibility);
                             }
                         }
                     });
-                    Log.d("TrajectoryMapFragment", "onMapReady: Map is ready and listeners set!");
+
+                    // -----------------------------------------------------------------
+                    // Handle Map Background Clicks (Deselect)
+                    // -----------------------------------------------------------------
+                    gMap.setOnMapClickListener(latLng -> {
+                        if (indoorMapManager != null) {
+                            // Clear overlays and state
+                            indoorMapManager.deselectBuilding();
+                            setFloorControlsVisibility(View.GONE);
+
+                            android.widget.Toast.makeText(requireContext(),
+                                    "Map Deselected",
+                                    android.widget.Toast.LENGTH_SHORT).show();
+                        }
+                    });
+
+                    Log.d("TrajectoryMapFragment", "onMapReady: Map ready.");
                 }
             });
         }
 
-        // Map type spinner setup
         initMapTypeSpinner();
 
-        // GNSS Switch
+        // GNSS Toggle
         gnssSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             isGnssOn = isChecked;
             if (!isChecked && gnssMarker != null) {
@@ -194,7 +201,7 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // Color switch
+        // Path Color Toggle
         switchColorButton.setOnClickListener(v -> {
             if (polyline != null) {
                 if (isRed) {
@@ -209,83 +216,49 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // Floor up/down logic
+        // Floor Control Logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-
-            //TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
-//            float elevationVal = sensorFusion.getElevation();
-//            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-//                    ,true);
+            // TODO: Fix SensorFusion elevation method for auto-floor logic.
         });
 
         floorUpButton.setOnClickListener(v -> {
-            // If user manually changes floor, turn off auto floor
             autoFloorSwitch.setChecked(false);
-            if (indoorMapManager != null) {
-                indoorMapManager.increaseFloor();
-            }
+            if (indoorMapManager != null) indoorMapManager.increaseFloor();
         });
 
         floorDownButton.setOnClickListener(v -> {
             autoFloorSwitch.setChecked(false);
-            if (indoorMapManager != null) {
-                indoorMapManager.decreaseFloor();
-            }
+            if (indoorMapManager != null) indoorMapManager.decreaseFloor();
         });
     }
 
     /**
-     * Initialize the map settings with the provided GoogleMap instance.
-     * <p>
-     *     The method sets basic map settings, initializes the indoor map manager,
-     *     and creates an empty polyline for user movement tracking.
-     *     The method also initializes the GNSS polyline for tracking GNSS path.
-     *     The method sets the map type to Hybrid and initializes the map with these settings.
-     *
-     * @param map
+     * Initializes basic map settings, indoor manager, and trajectory polylines.
      */
-
     private void initMapSettings(GoogleMap map) {
-        // Basic map settings
         map.getUiSettings().setCompassEnabled(true);
         map.getUiSettings().setTiltGesturesEnabled(true);
         map.getUiSettings().setRotateGesturesEnabled(true);
         map.getUiSettings().setScrollGesturesEnabled(true);
         map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
-        // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
 
-        // Initialize an empty polyline
+        // PDR Path (Red)
         polyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
                 .width(5f)
-                .add() // start empty
-        );
+                .add());
 
-        // GNSS path in blue
+        // GNSS Path (Blue)
         gnssPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.BLUE)
                 .width(5f)
-                .add() // start empty
-        );
+                .add());
     }
 
-
     /**
-     * Initialize the map type spinner with the available map types.
-     * <p>
-     *     The spinner allows the user to switch between different map types
-     *     (e.g. Hybrid, Normal, Satellite) to customize their map view.
-     *     The spinner is populated with the available map types and listens
-     *     for user selection to update the map accordingly.
-     *     The map type is updated directly on the GoogleMap instance.
-     *     <p>
-     *         Note: The spinner is initialized with the default map type (Hybrid).
-     *         The map type is updated on user selection.
-     *     </p>
-     * </p>
-     *     @see com.google.android.gms.maps.GoogleMap The GoogleMap instance to update map type.
+     * Sets up the Spinner for switching map types (Hybrid, Normal, Satellite).
      */
     private void initMapTypeSpinner() {
         if (switchMapSpinner == null) return;
@@ -303,19 +276,12 @@ public class TrajectoryMapFragment extends Fragment {
 
         switchMapSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
-            public void onItemSelected(AdapterView<?> parent, View view,
-                                       int position, long id) {
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 if (gMap == null) return;
                 switch (position){
-                    case 0:
-                        gMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-                        break;
-                    case 1:
-                        gMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
-                        break;
-                    case 2:
-                        gMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
-                        break;
+                    case 0: gMap.setMapType(GoogleMap.MAP_TYPE_HYBRID); break;
+                    case 1: gMap.setMapType(GoogleMap.MAP_TYPE_NORMAL); break;
+                    case 2: gMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE); break;
                 }
             }
             @Override
@@ -324,20 +290,15 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Update the user's current location on the map, create or move orientation marker,
-     * and append to polyline if the user actually moved.
-     *
-     * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
+     * Updates user location, orientation marker, and PDR polyline.
+     * Also updates the indoor map overlay position.
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
 
-        // Keep track of current location
         LatLng oldLocation = this.currentLocation;
         this.currentLocation = newLocation;
 
-        // If no marker, create it
         if (orientationMarker == null) {
             orientationMarker = gMap.addMarker(new MarkerOptions()
                     .position(newLocation)
@@ -349,79 +310,55 @@ public class TrajectoryMapFragment extends Fragment {
             );
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
         } else {
-            // Update marker position + orientation
             orientationMarker.setPosition(newLocation);
             orientationMarker.setRotation(orientation);
-            // Move camera a bit
             gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
 
-        // Extend polyline if movement occurred
+        // Extend PDR polyline
         if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
             points.add(newLocation);
             polyline.setPoints(points);
         }
 
-        // Update indoor map overlay
+        // Update Indoor Map center
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+            // Visibility logic handled in building selection/API callback
         }
     }
 
-
-
     /**
-     * Set the initial camera position for the map.
-     * <p>
-     *     The method sets the initial camera position for the map when it is first loaded.
-     *     If the map is already ready, the camera is moved immediately.
-     *     If the map is not ready, the camera position is stored until the map is ready.
-     *     The method also tracks if there is a pending camera move.
-     * </p>
-     * @param startLocation The initial camera position to set.
+     * Sets initial camera position. Stores it if map is not ready yet.
      */
     public void setInitialCameraPosition(@NonNull LatLng startLocation) {
-        // If the map is already ready, move camera immediately
         if (gMap != null) {
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLocation, 19f));
         } else {
-            // Otherwise, store it until onMapReady
             pendingCameraPosition = startLocation;
             hasPendingCameraMove = true;
         }
     }
 
-
-    /**
-     * Get the current user location on the map.
-     * @return The current user location as a LatLng object.
-     */
     public LatLng getCurrentLocation() {
         return currentLocation;
     }
 
     /**
-     * Called when we want to set or update the GNSS marker position
+     * Updates GNSS marker and extends the blue GNSS polyline.
      */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
-        if (gMap == null) return;
-        if (!isGnssOn) return;
+        if (gMap == null || !isGnssOn) return;
 
         if (gnssMarker == null) {
-            // Create the GNSS marker for the first time
             gnssMarker = gMap.addMarker(new MarkerOptions()
                     .position(gnssLocation)
                     .title("GNSS Position")
-                    .icon(BitmapDescriptorFactory
-                            .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
             lastGnssLocation = gnssLocation;
         } else {
-            // Move existing GNSS marker
             gnssMarker.setPosition(gnssLocation);
-
-            // Add a segment to the blue GNSS line, if this is a new location
             if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
                 List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
                 gnssPoints.add(gnssLocation);
@@ -431,10 +368,6 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-
-    /**
-     * Remove GNSS marker if user toggles it off
-     */
     public void clearGNSS() {
         if (gnssMarker != null) {
             gnssMarker.remove();
@@ -442,9 +375,6 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-    /**
-     * Whether user is currently showing GNSS or not
-     */
     public boolean isGnssEnabled() {
         return isGnssOn;
     }
@@ -475,39 +405,17 @@ public class TrajectoryMapFragment extends Fragment {
         lastGnssLocation = null;
         currentLocation  = null;
 
-        // Re-create empty polylines with your chosen colors
         if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.RED)
-                    .width(5f)
-                    .add());
-            gnssPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.BLUE)
-                    .width(5f)
-                    .add());
+            polyline = gMap.addPolyline(new PolylineOptions().color(Color.RED).width(5f).add());
+            gnssPolyline = gMap.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).add());
         }
     }
 
     /**
-     * Draw the building polygon on the map
+     * Draws building polygons on the map using specific colors.
      * <p>
-     *     The method draws a polygon representing the building on the map.
-     *     The polygon is drawn with specific vertices and colors to represent
-     *     different buildings or areas on the map.
-     *     The method removes the old polygon if it exists and adds the new polygon
-     *     to the map with the specified options.
-     *     The method logs the number of vertices in the polygon for debugging.
-     *     <p>
-     *
-     *    Note: The method uses hard-coded vertices for the building polygon.
-     *
-     *    </p>
-     *
-     *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
-     */
-    /**
-     * [Objective d] Draw building polygons with specific color coding.
-     * Murchison (Red), Nucleus & Library (Amber), Fleeming Jenkin (Blue).
+     * Colors: Murchison (Red), Nucleus/Library (Amber), FJB (Blue).
+     * Tags are used by IndoorMapManager to identify buildings.
      */
     private void drawBuildingPolygon() {
         if (gMap == null) {
@@ -515,116 +423,96 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
-        //  (Amber)
-        int amberColor = Color.parseColor("#FFBF00");
-
-        // ---------------------------------------------------------
-        // 1. Murchison House -> Red (Objective e Location)
-        // ---------------------------------------------------------
-        // Murchison House
-        LatLng murch1 = new LatLng(55.924550, -3.179700);
-        LatLng murch2 = new LatLng(55.924550, -3.178600);
-        LatLng murch3 = new LatLng(55.923750, -3.178600);
-        LatLng murch4 = new LatLng(55.923750, -3.179700);
-
-        PolygonOptions murchisonOptions = new PolygonOptions()
-                .add(murch1, murch2, murch3, murch4, murch1)
-                .strokeColor(Color.RED)
-                .strokeWidth(10f)
-                .fillColor(Color.TRANSPARENT)
-                .clickable(true)
-                .zIndex(2);
-
-        // ---------------------------------------------------------
-        // 2. The Nucleus Building -> Amber
-        // ---------------------------------------------------------
-        LatLng nucleus1 = new LatLng(55.922795, -3.174612);
-        LatLng nucleus2 = new LatLng(55.922781, -3.174107);
-        LatLng nucleus3 = new LatLng(55.922884, -3.173843);
-        LatLng nucleus4 = new LatLng(55.923317, -3.173832);
-        LatLng nucleus5 = new LatLng(55.923337, -3.174628);
-
-        PolygonOptions nucleusOptions = new PolygonOptions()
-                .add(nucleus1, nucleus2, nucleus3, nucleus4, nucleus5, nucleus1)
-                .strokeColor(amberColor)
-                .strokeWidth(10f)
-                .fillColor(Color.TRANSPARENT)
-                .clickable(true)
-                .zIndex(2);
-
-        // ---------------------------------------------------------
-        // 3. Library (NKML) -> Amber (Same as Nucleus)
-        // ---------------------------------------------------------
-        LatLng nkml1 = new LatLng(55.923034, -3.175184);
-        LatLng nkml2 = new LatLng(55.923032, -3.174777);
-        LatLng nkml3 = new LatLng(55.922793, -3.174795);
-        LatLng nkml4 = new LatLng(55.922801, -3.175195);
-
-        PolygonOptions nkmlOptions = new PolygonOptions()
-                .add(nkml1, nkml2, nkml3, nkml4, nkml1)
-                .strokeColor(amberColor)
-                .strokeWidth(10f)
-                .fillColor(Color.TRANSPARENT)
-                .clickable(true)
-                .zIndex(2);
-
-        // ---------------------------------------------------------
-        // 4. Fleeming Jenkin Building (FJB) -> Blue
-        // ---------------------------------------------------------
-        LatLng fjb1 = new LatLng(55.922692, -3.172956);
-        LatLng fjb2 = new LatLng(55.922822, -3.172594);
-        LatLng fjb3 = new LatLng(55.922235, -3.171921);
-        LatLng fjb4 = new LatLng(55.922107, -3.172281);
-
-        PolygonOptions fjbOptions = new PolygonOptions()
-                .add(fjb1, fjb2, fjb3, fjb4, fjb1)
-                .strokeColor(Color.BLUE)
-                .strokeWidth(10f)
-                .fillColor(Color.TRANSPARENT)
-                .clickable(true)
-                .zIndex(2);
-
-        // ---------------------------------------------------------
-        // Add all to map
-        // ---------------------------------------------------------
-        if (buildingPolygon != null) {
-            buildingPolygon.remove();
+        // Clear existing polygons
+        for (Polygon p : activePolygons) {
+            p.remove();
         }
+        activePolygons.clear();
 
-        buildingPolygon = gMap.addPolygon(nucleusOptions);
-        buildingPolygon.setTag("Nucleus");
-        Polygon murchPoly = gMap.addPolygon(murchisonOptions);
-        murchPoly.setTag("Murchison");
-        Polygon nkmlPoly = gMap.addPolygon(nkmlOptions);
-        nkmlPoly.setTag("Library");
-        Polygon fjbPoly = gMap.addPolygon(fjbOptions);
-        fjbPoly.setTag("Fleeming Jenkin");
-        Log.d("TrajectoryMapFragment", "Polygons added: Murchison(Red), Nucleus/Lib(Amber), FJB(Blue)");
+        int redColor = Color.RED;
+        int amberColor = Color.parseColor("#FFBF00");
+        int blueColor = Color.BLUE;
+        int transparent = Color.TRANSPARENT;
+
+        // 1. Murchison House (Red)
+        PolygonOptions murchisonOptions = new PolygonOptions()
+                .add(new LatLng(55.924550, -3.179700),
+                        new LatLng(55.924550, -3.178600),
+                        new LatLng(55.923750, -3.178600),
+                        new LatLng(55.923750, -3.179700))
+                .strokeColor(redColor)
+                .strokeWidth(10f)
+                .fillColor(transparent)
+                .clickable(true)
+                .zIndex(2);
+
+        // 2. Nucleus (Amber)
+        PolygonOptions nucleusOptions = new PolygonOptions()
+                .add(new LatLng(55.922795, -3.174612),
+                        new LatLng(55.922781, -3.174107),
+                        new LatLng(55.922884, -3.173843),
+                        new LatLng(55.923317, -3.173832),
+                        new LatLng(55.923337, -3.174628))
+                .strokeColor(amberColor)
+                .strokeWidth(10f)
+                .fillColor(transparent)
+                .clickable(true)
+                .zIndex(2);
+
+        // 3. Library (Amber)
+        PolygonOptions libraryOptions = new PolygonOptions()
+                .add(new LatLng(55.923034, -3.175184),
+                        new LatLng(55.923032, -3.174777),
+                        new LatLng(55.922793, -3.174795),
+                        new LatLng(55.922801, -3.175195))
+                .strokeColor(amberColor)
+                .strokeWidth(10f)
+                .fillColor(transparent)
+                .clickable(true)
+                .zIndex(2);
+
+        // 4. Fleeming Jenkin (Blue)
+        PolygonOptions fjbOptions = new PolygonOptions()
+                .add(new LatLng(55.922692, -3.172956),
+                        new LatLng(55.922822, -3.172594),
+                        new LatLng(55.922235, -3.171921),
+                        new LatLng(55.922107, -3.172281))
+                .strokeColor(blueColor)
+                .strokeWidth(10f)
+                .fillColor(transparent)
+                .clickable(true)
+                .zIndex(2);
+
+        // Add polygons and tag them for recognition
+        Polygon p1 = gMap.addPolygon(murchisonOptions); p1.setTag("Murchison");
+        Polygon p2 = gMap.addPolygon(nucleusOptions);   p2.setTag("Nucleus");
+        Polygon p3 = gMap.addPolygon(libraryOptions);   p3.setTag("Library");
+        Polygon p4 = gMap.addPolygon(fjbOptions);       p4.setTag("Fleeming Jenkin");
+
+        activePolygons.add(p1);
+        activePolygons.add(p2);
+        activePolygons.add(p3);
+        activePolygons.add(p4);
     }
-    //label
-    private com.google.android.gms.maps.model.BitmapDescriptor createNumberedMarkerBitmap(int number) {
 
+    private com.google.android.gms.maps.model.BitmapDescriptor createNumberedMarkerBitmap(int number) {
         android.graphics.Bitmap conf = android.graphics.Bitmap.createBitmap(80, 80, android.graphics.Bitmap.Config.ARGB_8888);
         android.graphics.Canvas canvas = new android.graphics.Canvas(conf);
 
-        // background(blue circle)
         android.graphics.Paint paint = new android.graphics.Paint();
         paint.setColor(android.graphics.Color.BLUE);
         canvas.drawCircle(40, 40, 40, paint);
 
-        // number
         paint.setColor(android.graphics.Color.WHITE);
         paint.setTextSize(40);
         paint.setTextAlign(android.graphics.Paint.Align.CENTER);
-        // make number center
         canvas.drawText(String.valueOf(number), 40, 55, paint);
 
         return com.google.android.gms.maps.model.BitmapDescriptorFactory.fromBitmap(conf);
     }
+
     /**
-     * [Objective c] Adds a numbered marker to the map at the given location.
-     * @param position The LatLng position to place the marker.
-     * @param number The number to display in the title.
+     * [Objective c] Adds a numbered custom marker to the map.
      */
     public void addMapMarker(LatLng position, int number) {
         if (gMap != null) {
@@ -635,5 +523,4 @@ public class TrajectoryMapFragment extends Fragment {
                     .anchor(0.5f, 0.5f));
         }
     }
-
 }
