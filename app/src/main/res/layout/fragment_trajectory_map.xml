@@ -71,8 +71,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-<!-- 【与原版不同：新增】下面一段代码相对原始作业代码有改动，用于C任务功能实现。 -->
-        <!-- Crosshair for "picked" location (camera center) -->
         <ImageView
             android:id="@+id/crosshairView"
             android:layout_width="36dp"
@@ -166,7 +164,6 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintBottom_toBottomOf="parent" />
 
-<!-- 【与原版不同：修改】下面一段代码相对原始作业代码有改动，用于C任务功能实现。 -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton"
             android:layout_width="wrap_content"
@@ -180,7 +177,6 @@
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_down" />
 
-<!-- 【与原版不同：修改】下面一段代码相对原始作业代码有改动，用于C任务功能实现。 -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
@@ -193,6 +189,7 @@
             app:layout_constraintTop_toTopOf="@id/indoorControlsCard"
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_up" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

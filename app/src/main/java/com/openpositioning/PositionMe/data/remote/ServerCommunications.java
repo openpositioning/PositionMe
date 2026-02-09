@@ -1,4 +1,5 @@
 package com.openpositioning.PositionMe.data.remote;
+
 import android.util.Log;
 import java.util.Map;
 import java.util.HashMap;
@@ -14,7 +15,6 @@ import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
@@ -39,7 +39,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -52,22 +51,10 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-/**
- * This class handles communications with the server through HTTPs. The class uses an
- * {@link OkHttpClient} for making requests to the server. The class includes methods for sending
- * a recorded trajectory, uploading locally-stored trajectories, downloading trajectories from the
- * server and requesting information about the uploaded trajectories.
- *
- * Keys and URLs are hardcoded strings, given the simple and academic nature of the project.
- *
- * @author Michal Dvorak
- * @author Mate Stodulka
- */
+
 public class ServerCommunications implements Observable {
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();
-    // Application context for handling permissions and devices
     private final Context context;
-    // Network status checking
     private ConnectivityManager connMgr;
     private boolean isWifiConn;
     private boolean isMobileConn;
@@ -75,11 +62,9 @@ public class ServerCommunications implements Observable {
     private String infoResponse;
     private boolean success;
     private List<Observer> observers;
-    // Static constants necessary for communications
+
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
-    // Upload endpoint changed: it now supports (and expects) the venue/campaign in the path.
-    // Example: /trajectory/upload/{campaign}/{userKey}/?key=masterKey
     private static final String uploadBaseURL =
             "https://openpositioning.org/api/live/trajectory/upload/";
     private static final String downloadURL =
@@ -90,16 +75,9 @@ public class ServerCommunications implements Observable {
                     + "?key=" + masterKey;
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
-    // SharedPreferences keys written by TrajectoryMapFragment (C feature).
     private static final String PREF_SELECTED_VENUE_ID = "pref_selected_venue_id";
     private static final String PREF_SELECTED_VENUE_NAME = "pref_selected_venue_name";
-    /**
-     * Public default constructor of {@link ServerCommunications}. The constructor saves context,
-     * initialises a {@link ConnectivityManager}, {@link Observer} and gets the user preferences.
-     * Boolean variables storing WiFi and Mobile Data connection status are initialised to false.
-     *
-     * @param context   application context for handling permissions and devices.
-     */
+
     public ServerCommunications(Context context) {
         this.context = context;
         this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -109,15 +87,6 @@ public class ServerCommunications implements Observable {
         checkNetworkStatus();
         this.observers = new ArrayList<>();
     }
-    /**
-     * Resolve the "campaign" (venue/building identifier) required by the upload endpoint.
-     *
-     * For coursework, the server uses snake_case venue names such as:
-     * - murchison_house
-     * - nucleus_building
-     *
-     * We derive it from the venue selection stored by TrajectoryMapFragment.
-     */
     @Nullable
     private String resolveCampaignFromPrefs() {
         try {
@@ -138,7 +107,6 @@ public class ServerCommunications implements Observable {
         }
         return null;
     }
-    /** Build upload URL using the newer endpoint format that includes campaign in the path. */
     @Nullable
     private String buildUploadUrlOrNull() {
         String campaign = resolveCampaignFromPrefs();
@@ -157,13 +125,6 @@ public class ServerCommunications implements Observable {
         } catch (Exception ignore) {
         }
     }
-    /**
-     * Outgoing communication request with a {@link Traj trajectory} object. The recorded
-     * trajectory is passed to the method. It is processed into the right format for sending
-     * to the API server.
-     *
-     * @param trajectory    Traj object matching all the timing and formal restrictions.
-     */
     public void sendTrajectory(Traj.Trajectory trajectory){
         logDataSize(trajectory);
         // Convert the trajectory to byte array
@@ -290,12 +251,6 @@ public class ServerCommunications implements Observable {
             notifyObservers(1);
         }
     }
-    /**
-     * Uploads a local trajectory file to the API server in the specified format.
-     * {@link OkHttp} library is used for the asynchronous POST request.
-     *
-     * @param localTrajectory the File object of the local trajectory to be uploaded
-     */
     public void uploadLocalTrajectory(File localTrajectory) {
         String uploadUrl = buildUploadUrlOrNull();
         if (uploadUrl == null) {
@@ -373,10 +328,6 @@ public class ServerCommunications implements Observable {
             }
         });
     }
-    /**
-     * Loads download records from a JSON file and updates the downloadRecords map.
-     * If the file exists, it reads the JSON content and populates the map.
-     */
     private void loadDownloadRecords() {
         // Point to the app-specific Downloads folder
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
@@ -408,15 +359,6 @@ public class ServerCommunications implements Observable {
             System.out.println("Download_records.json not found in app-specific directory.");
         }
     }
-    /**
-     * Saves a download record to a JSON file.
-     * The method creates or updates the JSON file with the provided details.
-     *
-     * @param startTimestamp the start timestamp of the trajectory
-     * @param fileName the name of the file
-     * @param id the ID of the trajectory
-     * @param dateSubmitted the date the trajectory was submitted
-     */
     private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File recordsFile = new File(recordsDir, "download_records.json");
@@ -467,16 +409,6 @@ public class ServerCommunications implements Observable {
             System.err.println("Error saving download record: " + e.getMessage());
         }
     }
-    /**
-     * Perform API request for downloading a Trajectory uploaded to the server. The trajectory is
-     * retrieved from a zip file, with the method accepting a position argument specifying the
-     * trajectory to be downloaded. The trajectory is then converted to a protobuf object and
-     * then to a JSON string to be downloaded to the device's Downloads folder.
-     *
-     * @param position the position of the trajectory in the zip file to retrieve
-     * @param id the ID of the trajectory
-     * @param dateSubmitted the date the trajectory was submitted
-     */
     public void downloadTrajectory(int position, String id, String dateSubmitted) {
         loadDownloadRecords();  // Load existing records from app-specific directory
         // Initialise OkHttp client
@@ -552,11 +484,6 @@ public class ServerCommunications implements Observable {
             }
         });
     }
-    /**
-     * API request for information about submitted trajectories. If the response is successful,
-     * the {@link ServerCommunications#infoResponse} field is updated and observes notified.
-     *
-     */
     public void sendInfoRequest() {
         // Create a new OkHttpclient
         OkHttpClient client = new OkHttpClient();
@@ -586,10 +513,6 @@ public class ServerCommunications implements Observable {
             }
         });
     }
-    /**
-     * This method checks the device's connection status. It sets boolean variables depending on
-     * the type of active network connection.
-     */
     private void checkNetworkStatus() {
         // Get active network information
         NetworkInfo activeInfo = connMgr.getActiveNetworkInfo();
@@ -612,26 +535,10 @@ public class ServerCommunications implements Observable {
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
-    /**
-     * {@inheritDoc}
-     *
-     * Implement default method from Observable Interface to add new observers to the list of
-     * registered observers.
-     *
-     * @param o Classes which implement the Observer interface to receive updates from the class.
-     */
     @Override
     public void registerObserver(Observer o) {
         this.observers.add(o);
     }
-    /**
-     * {@inheritDoc}
-     *
-     * Method for notifying all registered observers. The observer is notified based on the index
-     * passed to the method.
-     *
-     * @param index Index for identifying the observer to be notified.
-     */
     @Override
     public void notifyObservers(int index) {
         for(Observer o : observers) {

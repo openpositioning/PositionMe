@@ -42,7 +42,6 @@ public class IndoorMapFragment {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     @Nullable private FloorplanModels.Venue selectedVenue = null;
     @Nullable private FloorplanModels.Floor selectedFloor = null;
-
     private int overlayGeneration = 0;
     @NonNull private final List<Polygon> remoteWallPolygons = new ArrayList<>();
     @NonNull private final List<Polyline> remoteWallLines = new ArrayList<>();
@@ -78,7 +77,6 @@ public class IndoorMapFragment {
     public void hideMap() {
         setIndoorVisible(false);
     }
-
     public void setIndoorVisible(boolean visible) {
         for (int i = 0; i < groundOverlays.length; i++) {
             GroundOverlay overlay = groundOverlays[i];
@@ -98,15 +96,10 @@ public class IndoorMapFragment {
         this.selectedVenue = venue;
         this.selectedFloor = null;
     }
-
-
-
     public void showFloor(@Nullable FloorplanModels.Floor floor) {
         if (floor == null || mMap == null) return;
         this.selectedFloor = floor;
-
         final int gen = ++overlayGeneration;
-
         try {
             Log.d(TAG, "showFloor(gen=" + gen + ") venue=" +
                     (selectedVenue != null ? selectedVenue.venueName : "null") +
@@ -114,7 +107,6 @@ public class IndoorMapFragment {
                     " hasGeom=" + floor.hasGeometry() +
                     " hasImg=" + (floor.imageUrl != null && !floor.imageUrl.trim().isEmpty()));
         } catch (Exception ignore) {}
-
         for (GroundOverlay o : groundOverlays) {
             if (o != null) o.setVisible(false);
         }
@@ -250,8 +242,6 @@ public class IndoorMapFragment {
         LatLng ne = new LatLng(center.latitude + dLat, center.longitude + dLng);
         return new LatLngBounds(sw, ne);
     }
-
-
     @Nullable
     private static LatLng centroid(@Nullable List<LatLng> pts) {
         if (pts == null || pts.isEmpty()) return null;
@@ -266,7 +256,6 @@ public class IndoorMapFragment {
         if (n == 0) return null;
         return new LatLng(lat / n, lng / n);
     }
-
     private static boolean pointInPolygon(@NonNull LatLng p, @NonNull List<LatLng> poly) {
         boolean inside = false;
         double x = p.longitude;
@@ -284,7 +273,6 @@ public class IndoorMapFragment {
         }
         return inside;
     }
-
     @Nullable
     private static LatLngBounds boundsOf(@Nullable List<LatLng> pts) {
         if (pts == null || pts.size() < 2) return null;
@@ -304,7 +292,6 @@ public class IndoorMapFragment {
             return null;
         }
     }
-
     private static boolean inBounds(@Nullable LatLng p, @Nullable LatLngBounds b) {
         if (p == null || b == null) return true;
         try {
@@ -330,7 +317,6 @@ public class IndoorMapFragment {
             Log.d(TAG, "clearRemoteWallsOnly: removed polys=" + prevPolys + " lines=" + prevLines);
         }
     }
-
     private void drawVectorWalls(@NonNull FloorplanModels.Floor floor) {
         if (mMap == null) return;
 

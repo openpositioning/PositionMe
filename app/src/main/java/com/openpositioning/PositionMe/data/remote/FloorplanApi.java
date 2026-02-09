@@ -23,18 +23,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
-/**
- * Floorplan API client for Goal 5C.
- *
- * Endpoint pattern (as observed from your logs):
- *   POST https://openpositioning.org/api/live/floorplan/request/{userKey}?key={masterKey}
- * Body:
- *   { "lat": ..., "lon": ..., "macs": ["aa:bb:..", ...] }
- *
- * Response:
- *   - can be an array: [] or [ {venue...}, ...]
- *   - or an object containing an array: { "venues": [...] }
- */
+
 public class FloorplanApi {
     public interface VenuesCallback {
         void onSuccess(@NonNull List<FloorplanModels.Venue> venues);
@@ -56,10 +45,6 @@ public class FloorplanApi {
                                     @NonNull VenuesCallback cb) {
         requestNearbyVenues(center, macs, null, cb);
     }
-    /**
-     * Same as requestNearbyVenues but with an optional request id for debugging.
-     * Pass something like "#3.1" to correlate multi-probe requests.
-     */
     public void requestNearbyVenues(@NonNull LatLng center,
                                     @NonNull List<String> macs,
                                     @Nullable String reqId,
@@ -108,7 +93,6 @@ public class FloorplanApi {
             }
         });
     }
-    /** Cancel in-flight requests (best-effort). */
     public void cancelAll() {
         try {
             client.dispatcher().cancelAll();
@@ -354,11 +338,6 @@ public class FloorplanApi {
         }
         return venues;
     }
-    /**
-     * Normalize image URLs returned by the floorplan API.
-     * The backend may return relative paths (e.g. /media/..), schemeless URLs (//..),
-     * or already-absolute http/https URLs.
-     */
     private static String normalizeImageUrl(String url) {
         if (url == null) return null;
         url = url.trim();
@@ -414,16 +393,6 @@ public class FloorplanApi {
         }
         return fallback;
     }
-    /**
-     * Parse bounds from a variety of common API formats.
-     *
-     * Supported examples:
-     * - {"bounds": {"sw": {"lat":..,"lng":..}, "ne": {...}}}
-     * - {"sw": {...}, "ne": {...}}
-     * - {"bounds": [[lat,lon],[lat,lon]]} or [[lon,lat],[lon,lat]]
-     * - {"bbox": [west,south,east,north]} (GeoJSON)
-     * - {"min_lat":..,"min_lng":..,"max_lat":..,"max_lng":..} (and similar key variants)
-     */
     private static LatLngBounds parseBounds(JSONObject obj) {
         if (obj == null) return null;
         // 1) bounds object
@@ -463,10 +432,6 @@ public class FloorplanApi {
         }
         return null;
     }
-    // -------------------- map_shapes helpers --------------------
-    // Some coursework server builds return floorplans only via a "map_shapes" field (often as a JSON string)
-    // instead of an explicit "floors" array. We convert that payload into synthetic Floor entries
-    // that carry vector wall geometry so the UI can render them.
     private static int floorIndexFromLabel(@Nullable String label, int fallback) {
         if (label == null) return fallback;
         String s = label.trim();
@@ -572,12 +537,6 @@ public class FloorplanApi {
         // Other types: ignore
         return out;
     }
-// ======================= Floor plan geometry (vector walls) =======================
-    // Newer coursework versions return floor plans as vector walls (GeoJSON) rather than PNGs.
-    // - Murchison House: walls as polygons
-    // - Nucleus Building: walls as lines
-    //
-    // We parse both and store them on FloorplanModels.Floor so the map can render them.
     private static final class FloorGeometry {
         @NonNull final List<List<LatLng>> wallPolygons = new ArrayList<>();
         @NonNull final List<List<LatLng>> wallLines = new ArrayList<>();
@@ -643,14 +602,6 @@ public class FloorplanApi {
         }
         return out;
     }
-    /**
-     * Collect geometries from a GeoJSON-like structure.
-     *
-     * @param node          JSONObject/JSONArray/String containing GeoJSON or nested coordinate arrays
-     * @param polysOut      append parsed polygons here (nullable)
-     * @param linesOut      append parsed lines here (nullable)
-     * @param strictGeoJson if true, assume [lon,lat] ordering for coordinate pairs unless obviously swapped
-     */
     private static void collectGeometries(@Nullable Object node,
                                           @Nullable List<List<LatLng>> polysOut,
                                           @Nullable List<List<LatLng>> linesOut,
@@ -753,7 +704,6 @@ public class FloorplanApi {
         // Unknown type: fall back to untyped parsing
         collectUntypedCoordinateArray(a, polysOut, linesOut, preferLonLat);
     }
-    /** Parse an array of coordinate pairs into a path. */
     private static @NonNull List<LatLng> parsePath(@NonNull JSONArray pairs, boolean preferLonLat) {
         List<LatLng> out = new ArrayList<>();
         for (int i = 0; i < pairs.length(); i++) {
@@ -787,7 +737,6 @@ public class FloorplanApi {
         double a = pair.optDouble(0, Double.NaN);
         double b = pair.optDouble(1, Double.NaN);
         if (!Double.isFinite(a) || !Double.isFinite(b)) return null;
-        // Heuristic: if one value looks like lat and the other like lon, respect that.
         boolean aLooksLat = Math.abs(a) <= 90.0;
         boolean bLooksLat = Math.abs(b) <= 90.0;
         if (aLooksLat && !bLooksLat) {
@@ -803,14 +752,6 @@ public class FloorplanApi {
             return new LatLng(a, b);
         }
     }
-    /**
-     * Untyped coordinate arrays come in many nestings:
-     * - [ [x,y], [x,y], ... ]                      => a single path
-     * - [ [ [x,y],... ], [ [x,y],... ], ... ]      => multiple paths
-     * - [ [ [ [x,y],... ] , ... ], ... ]          => multipolygons/collections
-     *
-     * We parse recursively and classify by whether the path is closed.
-     */
     private static void collectUntypedCoordinateArray(@NonNull JSONArray arr,
                                                       @Nullable List<List<LatLng>> polysOut,
                                                       @Nullable List<List<LatLng>> linesOut,
@@ -904,15 +845,6 @@ public class FloorplanApi {
         if (Double.isNaN(lat) || Double.isNaN(lng)) return null;
         return new LatLng(lat, lng);
     }
-    /**
-     * Parse venue outline/polygon in a robust way.
-     *
-     * Common formats seen in practice:
-     * - outline: [{lat,lng}, ...]
-     * - outline: [[lat,lng], ...] or [[lng,lat], ...]
-     * - boundary/geometry (GeoJSON): {"type":"Polygon","coordinates":[[[lng,lat],...]]}
-     * - coordinates: [[[lng,lat],...]] (nested rings)
-     */
     private static List<LatLng> parseOutline(JSONObject venueObj) {
         List<LatLng> outline = new ArrayList<>();
         if (venueObj == null) return outline;
@@ -1022,11 +954,9 @@ public class FloorplanApi {
         }
         return outline;
     }
-    /** Recursively extract coordinate pairs from nested JSON structures. */
     private static void extractLatLngs(@Nullable Object node, @NonNull List<LatLng> out) {
         extractLatLngs(node, out, false);
     }
-    /** Recursively extract coordinate pairs; when preferLonLat is true, interpret [x,y] as [lon,lat]. */
     private static void extractLatLngs(@Nullable Object node, @NonNull List<LatLng> out, boolean preferLonLat) {
         if (node == null) return;
         if (node instanceof LatLng) {
@@ -1107,7 +1037,6 @@ public class FloorplanApi {
             }
         }
     }
-    /** If node is a JSON string (escaped or raw), parse it into JSONObject/JSONArray. */
     private static @Nullable Object unwrapJsonString(@Nullable Object node) {
         if (!(node instanceof String)) return node;
         String s = ((String) node).trim();
