@@ -17,6 +17,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.openpositioning.PositionMe.BuildConfig;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
@@ -1152,14 +1153,14 @@ public class TrajectoryMapFragment extends Fragment {
         try {
             JSONArray radiomap = new JSONArray(radiomapPoints);
             JSONObject body = new JSONObject();
-            body.put("api_key", "MShXCzrAnhyDauNeeP_O8g");
+            body.put("api_key", BuildConfig.OPENPOSITIONING_API_KEY);
             body.put("label", "murchison_house");
             body.put("radiomap", radiomap);
 
             final String jsonBody = body.toString();
             Log.d("Radiomap", "Upload body: " + jsonBody.substring(0, Math.min(500, jsonBody.length())));
 
-            String url = "https://openpositioning.org/api/radiomap/upload/?key=ewireless";
+            String url = "https://openpositioning.org/api/radiomap/upload/?key=" + BuildConfig.OPENPOSITIONING_MASTER_KEY;
             final int pointCount = radiomapPoints.size();
 
             RequestQueue queue = Volley.newRequestQueue(requireContext());

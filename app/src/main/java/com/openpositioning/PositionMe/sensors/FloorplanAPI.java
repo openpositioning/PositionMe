@@ -16,6 +16,8 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.openpositioning.PositionMe.BuildConfig;
+
 /**
  * FloorplanAPI - Requests nearby indoor map data from the OpenPositioning API.
  * API endpoint: POST /api/live/floorplan/request/{api_key}?key={master_key}
@@ -26,8 +28,8 @@ public class FloorplanAPI {
 
     private static final String TAG = "FloorplanAPI";
 
-    private static final String userKey = "MShXCzrAnhyDauNeeP_O8g";
-    private static final String masterKey = "ewireless";
+    private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
+    private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
     private static final String API_URL =
             "https://openpositioning.org/api/live/floorplan/request/" + userKey + "?key=" + masterKey;
 
