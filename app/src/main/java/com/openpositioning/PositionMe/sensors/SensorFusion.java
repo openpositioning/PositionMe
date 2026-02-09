@@ -1119,5 +1119,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         // 48-bit value fits in signed long; parse as unsigned to avoid sign issues.
         return Long.parseUnsignedLong(hex, 16);
     }
+
+    /**
+     * Returns current recording time in milliseconds, relative
+     * to the start of the trajectory recording session.
+     */
+    public long getRelativeTimeStamp() {
+        return SystemClock.uptimeMillis() - bootTime;
+    }
 }
 
