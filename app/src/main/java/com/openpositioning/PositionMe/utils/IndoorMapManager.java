@@ -22,72 +22,135 @@ import java.net.URL;
 import org.json.JSONObject;
 import android.os.Handler;
 import android.os.Looper;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.sensors.Wifi;
+import org.json.JSONArray;
+import java.nio.charset.StandardCharsets;
 
 /**
- * Class used to manage indoor floor map overlays
- * Currently used by RecordingFragment
- * @see BuildingPolygon Describes the bounds of buildings and the methods to check if point is
- * in the building
+ * Manages indoor floor map overlays and vector drawings.
+ * Handles both local image resources (Nucleus, Library) and API-fetched vector maps (Murchison).
+ *
  * @author Arun Gopalakrishnan
+ * @author Mate Stodulka
  */
 public class IndoorMapManager {
-    // To store the map instance
+
     private GoogleMap gMap;
-    // Stores the name of the currently selected building (e.g., "Nucleus", "Library")
+    // Name of the currently selected building
     private String selectedBuildingName = "";
-    //Stores the overlay of the indoor maps
+    // Image overlay for Nucleus/Library
     private GroundOverlay groundOverlay;
-    // Stores the current Location of user
     private LatLng currentLocation;
-    // Stores if indoor map overlay is currently set
-    private boolean isIndoorMapSet=false;
-    //Stores the current floor in building
+    // Flag indicating if any map is currently visible
+    private boolean isIndoorMapSet = false;
     private int currentFloor;
-    // Floor height of current building
+
+    // Stores API response data for Murchison floor plans
+    private JSONObject murchisonFloorData;
+    // Stores active vector polygons drawn on the map
+    private List<com.google.android.gms.maps.model.Polygon> drawnPolygons = new java.util.ArrayList<>();
+
     private float floorHeight;
-    //Images of the Nucleus Building and Library indoor floor maps
-    private final List<Integer> NUCLEUS_MAPS =Arrays.asList(
+
+    // Local resources for Nucleus and Library
+    private final List<Integer> NUCLEUS_MAPS = Arrays.asList(
             R.drawable.nucleuslg, R.drawable.nucleusg, R.drawable.nucleus1,
-            R.drawable.nucleus2,R.drawable.nucleus3);
-    private final List<Integer> LIBRARY_MAPS =Arrays.asList(
+            R.drawable.nucleus2, R.drawable.nucleus3);
+    private final List<Integer> LIBRARY_MAPS = Arrays.asList(
             R.drawable.libraryg, R.drawable.library1, R.drawable.library2,
             R.drawable.library3);
-    // South-west and north east Bounds of Nucleus building and library to set the Overlay
-    LatLngBounds NUCLEUS=new LatLngBounds(
+
+    // Geographic bounds for local overlays
+    LatLngBounds NUCLEUS = new LatLngBounds(
             BuildingPolygon.NUCLEUS_SW,
             BuildingPolygon.NUCLEUS_NE
     );
-    LatLngBounds LIBRARY=new LatLngBounds(
+    LatLngBounds LIBRARY = new LatLngBounds(
             BuildingPolygon.LIBRARY_SW,
             BuildingPolygon.LIBRARY_NE
     );
-    //Average Floor Heights of the Buildings
-    public static final float NUCLEUS_FLOOR_HEIGHT=4.2F;
-    public static final float LIBRARY_FLOOR_HEIGHT=3.6F;
 
-    /**
-     * Constructor to set the map instance
-     * @param map The map on which the indoor floor map overlays are set
-     */
-    public IndoorMapManager(GoogleMap map){
-        this.gMap=map;
+    public static final float NUCLEUS_FLOOR_HEIGHT = 4.2F;
+    public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
+
+    public IndoorMapManager(GoogleMap map) {
+        this.gMap = map;
     }
 
     /**
-     * Function to update the current location of user and display the indoor map
-     * if user in building with indoor map available
-     * @param currentLocation new location of user
+     * Parses and draws vector polygons for a specific floor (Murchison only).
+     * @param floorName The key for the floor in the JSON (e.g., "GF", "F1").
      */
-    public void setCurrentLocation(LatLng currentLocation){
-        this.currentLocation=currentLocation;
-        //setBuildingOverlay();
+    private void drawFloor(String floorName) {
+        if (gMap == null || murchisonFloorData == null) return;
+
+        // Clear existing polygons from the map
+        for (com.google.android.gms.maps.model.Polygon p : drawnPolygons) {
+            p.remove();
+        }
+        drawnPolygons.clear();
+
+        try {
+            if (!murchisonFloorData.has(floorName)) {
+                Log.e("IndoorMapAPI", "Floor not found: " + floorName);
+                return;
+            }
+
+            JSONObject floorGeoJson = murchisonFloorData.getJSONObject(floorName);
+            org.json.JSONArray features = floorGeoJson.getJSONArray("features");
+
+            // Iterate through GeoJSON features
+            for (int i = 0; i < features.length(); i++) {
+                JSONObject feature = features.getJSONObject(i);
+                JSONObject geometry = feature.getJSONObject("geometry");
+
+                if (geometry.getString("type").equals("MultiPolygon")) {
+                    org.json.JSONArray coordinates = geometry.getJSONArray("coordinates");
+
+                    // Parse MultiPolygon coordinates
+                    for (int j = 0; j < coordinates.length(); j++) {
+                        org.json.JSONArray polygonCoords = coordinates.getJSONArray(j);
+                        org.json.JSONArray ring = polygonCoords.getJSONArray(0); // Outer ring
+
+                        List<LatLng> latLngs = new java.util.ArrayList<>();
+                        for (int k = 0; k < ring.length(); k++) {
+                            org.json.JSONArray point = ring.getJSONArray(k);
+                            double lon = point.getDouble(0);
+                            double lat = point.getDouble(1);
+                            latLngs.add(new LatLng(lat, lon));
+                        }
+
+                        // Draw polygons with semi-transparent black fill
+                        com.google.android.gms.maps.model.PolygonOptions polyOptions =
+                                new com.google.android.gms.maps.model.PolygonOptions()
+                                        .addAll(latLngs)
+                                        .strokeColor(Color.BLACK)
+                                        .strokeWidth(2)
+                                        .fillColor(Color.argb(50, 0, 0, 0))
+                                        .zIndex(3);
+
+                        drawnPolygons.add(gMap.addPolygon(polyOptions));
+                    }
+                }
+            }
+            Log.d("IndoorMapAPI", "Drawn floor: " + floorName);
+
+        } catch (Exception e) {
+            Log.e("IndoorMapAPI", "Error drawing floor " + floorName, e);
+        }
+    }
+
+    public void setCurrentLocation(LatLng currentLocation) {
+        this.currentLocation = currentLocation;
     }
 
     /**
-     * [Objective d] Manually select a building to display its indoor map.
-     * This is called when the user clicks on a building polygon.
-     * @param buildingName The name of the building (Tag from the polygon).
-     * @return true if the map was successfully loaded, false otherwise.
+     * Selects a building and displays its indoor map.
+     * Clears any existing maps before loading the new one.
+     *
+     * @param buildingName The name of the building to select.
+     * @return true if a local map was loaded, false otherwise (or if API fetch is needed).
      */
     public boolean selectBuilding(String buildingName) {
         if (gMap == null) return false;
@@ -96,52 +159,34 @@ public class IndoorMapManager {
             return true;
         }
 
-        // remove old Overlay
-        if (groundOverlay != null) {
-            groundOverlay.remove();
-            groundOverlay = null;
-        }
-        isIndoorMapSet = false;
+        // Clean up previous map overlays/polygons
+        deselectBuilding();
+
         selectedBuildingName = buildingName;
 
         try {
             if ("Nucleus".equals(buildingName)) {
-                //  Nucleus G floor (default)
                 groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
                         .image(BitmapDescriptorFactory.fromResource(R.drawable.nucleusg))
                         .positionFromBounds(NUCLEUS)
                         .zIndex(1));
                 isIndoorMapSet = true;
-                currentFloor = 1; // G floor index in list
+                currentFloor = 1;
                 floorHeight = NUCLEUS_FLOOR_HEIGHT;
                 return true;
-            }
-            else if ("Library".equals(buildingName)) {
-                //  Library G floor
+            } else if ("Library".equals(buildingName)) {
                 groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
                         .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
                         .positionFromBounds(LIBRARY)
                         .zIndex(1));
                 isIndoorMapSet = true;
-                currentFloor = 0; // G floor index
+                currentFloor = 0;
                 floorHeight = LIBRARY_FLOOR_HEIGHT;
                 return true;
-            }
-            // Murchison and FJB
-            else if ("Murchison House".equals(buildingName)) {
-                Log.d("IndoorMapManager", "Fetching Murchison map from API...");
-
-                // 这里我们手动指定 Murchison 的中心坐标，确保能匹配到地图
-                // 这就是你在 Swagger 上测试成功的那个坐标
-                LatLng murchisonCenter = new LatLng(55.924200, -3.179200);
-
-                // 调用你写好的 API 方法！
-                fetchFloorPlanFromApi(murchisonCenter);
-
-                return true;
-            }
-            else {
-                Log.d("IndoorMapManager", "No indoor map available for: " + buildingName);
+            } else if ("Murchison".equals(buildingName)) {
+                // Return false to trigger API fetch in Fragment
+                return false;
+            } else {
                 return false;
             }
         } catch (Exception e) {
@@ -151,13 +196,23 @@ public class IndoorMapManager {
     }
 
     /**
-     * [Objective d] Clear the current building overlay and reset selection.
+     * Clears all indoor map overlays (images and vectors) and resets state.
      */
     public void deselectBuilding() {
+        // Remove image overlays
         if (groundOverlay != null) {
             groundOverlay.remove();
             groundOverlay = null;
         }
+
+        // Remove vector polygons
+        if (drawnPolygons != null) {
+            for (com.google.android.gms.maps.model.Polygon p : drawnPolygons) {
+                p.remove();
+            }
+            drawnPolygons.clear();
+        }
+
         isIndoorMapSet = false;
         selectedBuildingName = "";
         currentFloor = 0;
@@ -166,135 +221,126 @@ public class IndoorMapManager {
     public String getSelectedBuilding() {
         return selectedBuildingName;
     }
-    /**
-     * Function to obtain the current building's floor height
-     * @return the floor height of the current building the user is in
-     */
+
     public float getFloorHeight() {
         return floorHeight;
     }
 
-    /**
-     * Getter to obtain if currently an indoor floor map is being displayed
-     * @return true if an indoor map is visible to the user, false otherwise
-     */
-    public boolean getIsIndoorMapSet(){
+    public boolean getIsIndoorMapSet() {
         return isIndoorMapSet;
     }
 
     /**
-     * Setting the new floor of a user and displaying the indoor floor map accordingly
-     * (if floor exists in building)
-     * @param newFloor the floor the user is at
-     * @param autoFloor flag if function called by auto-floor feature
+     * Updates the displayed floor map based on the user's selection or auto-floor logic.
+     * Handles switching for Nucleus, Library (Image) and Murchison (Vector).
      */
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
-        if ("Nucleus".equals(selectedBuildingName)){
-            //Special case for nucleus when auto-floor is being used
+        if ("Nucleus".equals(selectedBuildingName)) {
             if (autoFloor) {
-                // If nucleus add bias floor as lower-ground floor referred to as floor 0
-                newFloor += 1;
+                newFloor += 1; // Bias for Nucleus G floor
             }
-            // If within bounds and different from floor map currently being shown
-             if (newFloor>=0 && newFloor<NUCLEUS_MAPS.size() && newFloor!=this.currentFloor) {
-                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
-                 this.currentFloor=newFloor;
-             }
-        }
-        else if ("Library".equals(selectedBuildingName)){
-            // If within bounds and different from floor map currently being shown
-            if (newFloor>=0 && newFloor<LIBRARY_MAPS.size() && newFloor!=this.currentFloor) {
+            if (newFloor >= 0 && newFloor < NUCLEUS_MAPS.size() && newFloor != this.currentFloor) {
+                groundOverlay.setImage(BitmapDescriptorFactory.fromResource(NUCLEUS_MAPS.get(newFloor)));
+                this.currentFloor = newFloor;
+            }
+        } else if ("Library".equals(selectedBuildingName)) {
+            if (newFloor >= 0 && newFloor < LIBRARY_MAPS.size() && newFloor != this.currentFloor) {
                 groundOverlay.setImage(BitmapDescriptorFactory.fromResource(LIBRARY_MAPS.get(newFloor)));
-                this.currentFloor=newFloor;
+                this.currentFloor = newFloor;
             }
         }
 
+        // Handle Murchison floor switching
+        if ("Murchison".equals(selectedBuildingName) && murchisonFloorData != null) {
+            String floorKey = "";
+            switch (newFloor) {
+                case -1: floorKey = "B1"; break;
+                case 0: floorKey = "GF"; break;
+                case 1: floorKey = "F1"; break;
+                case 2: floorKey = "F2"; break;
+                default: return;
+            }
+            drawFloor(floorKey);
+            this.currentFloor = newFloor;
+        }
+    }
+
+    public void increaseFloor() {
+        this.setCurrentFloor(currentFloor + 1, false);
+    }
+
+    public void decreaseFloor() {
+        this.setCurrentFloor(currentFloor - 1, false);
     }
 
     /**
-     * Increments the Current Floor and changes to higher floor's map (if a higher floor exists)
+     * Draws green polylines indicating the boundaries of buildings with available indoor maps.
      */
-    public void increaseFloor(){
-        this.setCurrentFloor(currentFloor+1,false);
+    public void setIndicationOfIndoorMap() {
+        List<LatLng> points = BuildingPolygon.NUCLEUS_POLYGON;
+        points.add(BuildingPolygon.NUCLEUS_POLYGON.get(0)); // Close loop
+        gMap.addPolyline(new PolylineOptions().color(Color.GREEN).addAll(points));
+
+        points = BuildingPolygon.LIBRARY_POLYGON;
+        points.add(BuildingPolygon.LIBRARY_POLYGON.get(0)); // Close loop
+        gMap.addPolyline(new PolylineOptions().color(Color.GREEN).addAll(points));
     }
 
     /**
-     * Decrements the Current Floor and changes to the lower floor's map (if a lower floor exists)
-     */
-    public void decreaseFloor(){
-        this.setCurrentFloor(currentFloor-1,false);
-    }
-
-    /**
-     * Function used to set the indication of available floor maps for building using green Polylines
-     * along the building's boundaries.
-     */
-    public void setIndicationOfIndoorMap(){
-        //Indicator for Nucleus Building
-        List<LatLng> points=BuildingPolygon.NUCLEUS_POLYGON;
-        // Closing Boundary
-        points.add(BuildingPolygon.NUCLEUS_POLYGON.get(0));
-        gMap.addPolyline(new PolylineOptions().color(Color.GREEN)
-                .addAll(points));
-
-        // Indicator for the Library Building
-        points=BuildingPolygon.LIBRARY_POLYGON;
-        // Closing Boundary
-        points.add(BuildingPolygon.LIBRARY_POLYGON.get(0));
-        gMap.addPolyline(new PolylineOptions().color(Color.GREEN)
-                .addAll(points));
-    }
-    /**
-     * [Objective d] Try to download floorplan from API.
-     * API Endpoint: https://openpositioning.org/api/live/floorplan/request
+     * Fetches floor plan data via POST request to OpenPositioning API.
+     * Uses Master Key in URL and sends WiFi MAC addresses in body.
      */
     public void fetchFloorPlanFromApi(LatLng location) {
-        // internet asking
         new Thread(() -> {
             try {
-                String urlString = "https://openpositioning.org/api/live/floorplan/request/tkZ4QoAApy-6CBM6fKYwYA?key=ewireless";
-//                String urlString = "https://openpositioning.org/api/live/floorplan/request" +
-//                        "?latitude=" + location.latitude +
-//                        "&longitude=" + location.longitude;
+                // 1. Prepare Keys
+                String masterKey = "tkZ4QoAApy-6CBM6fKYwYA";
+                String userKey = "ewireless";
 
-                URL url = new URL(urlString);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                // 2. Construct URL
+                String urlString = "https://openpositioning.org/api/live/floorplan/request/"
+                        + masterKey + "?key=" + userKey;
 
-//                conn.setRequestMethod("GET");
-//
-//                conn.setRequestProperty("Accept", "application/json");
-//                // API Key
-//                conn.setRequestProperty("x-api-key", "tkZ4QoAApy-6CBM6fKYwYA");
-//
-//                conn.setDoOutput(false);
-//                conn.setDoInput(true);
-                // [修改 2] 必须是 POST 方法
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json; utf-8");
-                conn.setRequestProperty("Accept", "application/json");
-                conn.setDoOutput(true);
+                Log.d("IndoorMapAPI", "Target URL: " + urlString);
 
-                // [修改 3] 构建 JSON 参数 {"lat":..., "lon":..., "macs":[]}
+                // 3. Prepare JSON Body
                 JSONObject jsonBody = new JSONObject();
                 jsonBody.put("lat", location.latitude);
                 jsonBody.put("lon", location.longitude);
-                jsonBody.put("macs", new JSONArray()); // 空数组
 
-//                Log.d("IndoorMapAPI", "Sending GET request to: " + urlString);
-                Log.d("IndoorMapAPI", "Sending POST request to: " + urlString);
-                // 发送数据
+                JSONArray macsArray = new JSONArray();
+                List<Wifi> wifiList = SensorFusion.getInstance().getWifiList();
+                if (wifiList != null) {
+                    for (Wifi wifi : wifiList) {
+                        macsArray.put(String.valueOf(wifi.getBssid()));
+                    }
+                }
+                jsonBody.put("macs", macsArray);
+
+                String requestBody = jsonBody.toString();
+                Log.d("IndoorMapAPI", "Request Body: " + requestBody);
+
+                // 4. Execute POST Request
+                URL url = new URL(urlString);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setDoOutput(true);
+                conn.setDoInput(true);
+
                 try (OutputStream os = conn.getOutputStream()) {
-                    byte[] input = jsonBody.toString().getBytes("utf-8");
+                    byte[] input = requestBody.getBytes(StandardCharsets.UTF_8);
                     os.write(input, 0, input.length);
                 }
 
-                //response
                 int responseCode = conn.getResponseCode();
                 Log.d("IndoorMapAPI", "Response Code: " + responseCode);
 
-                if (responseCode == 200) {
+                if (responseCode == 200 || responseCode == 201) {
                     BufferedReader br = new BufferedReader(
-                            new InputStreamReader(conn.getInputStream(), "utf-8"));
+                            new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
                     StringBuilder response = new StringBuilder();
                     String responseLine;
                     while ((responseLine = br.readLine()) != null) {
@@ -302,13 +348,24 @@ public class IndoorMapManager {
                     }
 
                     String jsonResponse = response.toString();
-                    Log.d("IndoorMapAPI", "Response Data: " + jsonResponse);
+                    Log.d("IndoorMapAPI", "API Success Response: " + jsonResponse);
+
+                    // Prevent UI flickering
+                    this.isIndoorMapSet = true;
 
                     new Handler(Looper.getMainLooper()).post(() -> {
-                        parseAndHandleApiResponse(response.toString());
+                        parseAndHandleApiResponse(jsonResponse);
                     });
                 } else {
-                    Log.e("IndoorMapAPI", "Failed to fetch map. Code: " + responseCode);
+                    // Log error details
+                    BufferedReader br = new BufferedReader(
+                            new InputStreamReader(conn.getErrorStream(), StandardCharsets.UTF_8));
+                    StringBuilder errorResponse = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        errorResponse.append(line);
+                    }
+                    Log.e("IndoorMapAPI", "Failed. Code: " + responseCode + ", Error: " + errorResponse.toString());
                 }
 
                 conn.disconnect();
@@ -318,42 +375,33 @@ public class IndoorMapManager {
             }
         }).start();
     }
+
+    /**
+     * Parses the API response and triggers the drawing of the map.
+     * Expects a JSON array containing map shapes for Murchison.
+     */
     private void parseAndHandleApiResponse(String jsonResponse) {
         try {
-            JSONObject json = new JSONObject(jsonResponse);
-            // 1. 解码图片：把 Base64 字符串变成 Bitmap 图片
-            String base64Image = json.getString("floorplan");
-            byte[] imageBytes = Base64.decode(base64Image, Base64.DEFAULT);
-            Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+            org.json.JSONArray rootArray = new org.json.JSONArray(jsonResponse);
+            if (rootArray.length() == 0) return;
 
-            // 2. 解析坐标：获取图片的左下角和右上角
-            JSONArray bottomLeft = json.getJSONArray("bottom_left");
-            JSONArray topRight = json.getJSONArray("top_right");
+            JSONObject buildingData = rootArray.getJSONObject(0);
 
-            LatLng southWest = new LatLng(bottomLeft.getDouble(0), bottomLeft.getDouble(1));
-            LatLng northEast = new LatLng(topRight.getDouble(0), topRight.getDouble(1));
-            LatLngBounds bounds = new LatLngBounds(southWest, northEast);
+            // Parse nested map_shapes string
+            String mapShapesStr = buildingData.getString("map_shapes");
+            JSONObject mapShapes = new JSONObject(mapShapesStr);
 
-            // 3. 贴图：把图片贴到地图上
-            if (gMap != null) {
-                // 先移除旧的（如果有）
-                if (groundOverlay != null) groundOverlay.remove();
+            Log.d("IndoorMapAPI", "Map Shapes Keys: " + mapShapes.keys().toString());
 
-                GroundOverlayOptions options = new GroundOverlayOptions()
-                        .image(BitmapDescriptorFactory.fromBitmap(bitmap))
-                        .positionFromBounds(bounds)
-                        .transparency(0.2f) // 稍微透明一点
-                        .zIndex(10);        // 放在最上层
+            // Cache data and draw initial floor (GF)
+            this.murchisonFloorData = mapShapes;
+            drawFloor("GF");
 
-                groundOverlay = gMap.addGroundOverlay(options);
-                isIndoorMapSet = true;
-            }
-
-            Log.d("IndoorMapAPI", "Parsing JSON: " + jsonResponse);
+            this.isIndoorMapSet = true;
+            this.selectedBuildingName = "Murchison";
 
         } catch (Exception e) {
             Log.e("IndoorMapAPI", "Error parsing response", e);
         }
     }
-
 }
