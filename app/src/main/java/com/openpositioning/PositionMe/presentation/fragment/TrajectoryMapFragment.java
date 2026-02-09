@@ -22,7 +22,6 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.FloorplanService;
-import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.SelectedVenueStore;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -52,7 +51,6 @@ import java.util.concurrent.Executors;
  * - Allows user interaction through map controls and UI elements.
  *
  * @see com.openpositioning.PositionMe.presentation.activity.RecordingActivity The activity hosting this fragment.
- * @see com.openpositioning.PositionMe.utils.IndoorMapManager Utility for managing indoor map overlays.
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
  * @author Mate Stodulka
@@ -76,7 +74,6 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
 
-    private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
     private FloorplanService floorplanService;
 
@@ -188,10 +185,9 @@ public class TrajectoryMapFragment extends Fragment {
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
 
-            //TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
-//            float elevationVal = sensorFusion.getElevation();
-//            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-//                    ,true);
+            //TODO: fix the sensor fusion method to get the elevation (cannot get it from the current method)
+           float elevationVal = sensorFusion.getElevation();
+           // TODO: Add floor switch method
         });
 
         floorUpButton.setOnClickListener(v -> {
@@ -225,9 +221,7 @@ public class TrajectoryMapFragment extends Fragment {
         map.getUiSettings().setScrollGesturesEnabled(true);
         map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
-        // Initialize indoor manager
-        indoorMapManager = new IndoorMapManager(map);
-        floorplanService = new FloorplanService();
+        // Initialise Indoor Map Outlines
         floorplanService = new FloorplanService();
 
         // Initialize an empty polyline
@@ -335,11 +329,6 @@ public class TrajectoryMapFragment extends Fragment {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
             points.add(newLocation);
             polyline.setPoints(points);
-        }
-
-        // Update legacy static overlays (Nucleus/Library only)
-        if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
         }
 
         // Trigger venue fetch once when we have a position and map
