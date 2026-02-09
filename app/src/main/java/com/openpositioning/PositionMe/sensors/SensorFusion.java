@@ -931,9 +931,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .build())
                 .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
+                .setRotationVectorInfo(createInfoBuilder(rotationSensor))
                 .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
-                .setLightSensorInfo(createInfoBuilder(lightSensor));
+                .setLightSensorInfo(createInfoBuilder(lightSensor))
+                .setProximityInfo(createInfoBuilder(proximitySensor));
 
         // Add the initial orientation as the first IMU reading
         this.trajectory.addImuData(Traj.IMUReading.newBuilder()
