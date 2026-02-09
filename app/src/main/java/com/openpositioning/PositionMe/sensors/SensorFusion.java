@@ -111,6 +111,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Trajectory object containing all data
     private Traj.Trajectory.Builder trajectory;
 
+    // Optional user-provided trajectory name (used for file naming)
+    private String trajectoryName = "";
+
     // Settings
     private boolean saveRecording;
     private float filter_coefficient;
@@ -686,6 +689,21 @@ public class SensorFusion implements SensorEventListener, Observer {
     //endregion
 
     //region Getters/Setters
+
+    /**
+     * Set an optional user-provided name for the trajectory.
+     * If null is provided, it is treated as an empty name.
+     */
+    public void setTrajectoryName(String name) {
+        this.trajectoryName = (name == null) ? "" : name;
+    }
+
+    /**
+     * Get the user-provided name for the trajectory (may be empty).
+     */
+    public String getTrajectoryName() {
+        return trajectoryName;
+    }
     /**
      * Getter function for core location data.
      *
