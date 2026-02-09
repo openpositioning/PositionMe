@@ -153,6 +153,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float initialLongitude = 0.0f;
     private float initialAltitude = 0.0f;
 
+    // Initial orientation data (rotation vector - quaternion)
+    private float[] initialRotation = new float[4];
 
     private float[] startLocation;
     // Wifi values
@@ -882,9 +884,18 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.initialLongitude = lon;
         this.initialAltitude = this.altitude;
 
+        // Save initial orientation (rotation vector)
+        this.initialRotation[0] = this.rotation[0];
+        this.initialRotation[1] = this.rotation[1];
+        this.initialRotation[2] = this.rotation[2];
+        this.initialRotation[3] = this.rotation[3];
+
         android.util.Log.i("SensorFusion", String.format(
                 "Initial position set: lat=%.6f, lon=%.6f, alt=%.2fm",
                 initialLatitude, initialLongitude, initialAltitude));
+        android.util.Log.i("SensorFusion", String.format(
+                "Initial orientation set: quat[%.3f, %.3f, %.3f, %.3f]",
+                initialRotation[0], initialRotation[1], initialRotation[2], initialRotation[3]));
     }
 
     /**
@@ -924,7 +935,23 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
                 .setLightSensorInfo(createInfoBuilder(lightSensor));
 
-
+        // Add the initial orientation as the first IMU reading
+        this.trajectory.addImuData(Traj.IMUReading.newBuilder()
+                .setRelativeTimestamp(0)  // 时间戳为0（起始点）
+                .setAcc(Traj.Vector3.newBuilder()
+                        .setX(0).setY(0).setZ(0)  // 初始加速度设为0
+                        .build())
+                .setGyr(Traj.Vector3.newBuilder()
+                        .setX(0).setY(0).setZ(0)  // 初始陀螺仪设为0
+                        .build())
+                .setRotationVector(Traj.Quaternion.newBuilder()
+                        .setX(initialRotation[0])
+                        .setY(initialRotation[1])
+                        .setZ(initialRotation[2])
+                        .setW(initialRotation[3])
+                        .build())
+                .setStepCount(0)
+                .build());
 
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
