@@ -78,7 +78,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     //Tuning value for low pass filter
     private static final float ALPHA = 0.8f;
     // String for creating WiFi fingerprint JSO N object
-    private static final String WIFI_FINGERPRINT= "wf";
+    private static final String WIFI_FINGERPRINT = "wf";
     //endregion
 
     //region Instance variables
@@ -136,7 +136,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float light;
     private float proximity;
     private float[] R;
-    private int stepCounter ;
+    private int stepCounter;
     // Derived values
     private float elevation;
     private boolean elevator;
@@ -164,13 +164,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     private boolean initialOrientationSet = false;
 
     //region Initialisation
+
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
      * Initialises empty arrays and new objects that do not depends on outside information.
      */
     private SensorFusion() {
         // Location listener to be used by the GNSS class
-        this.locationListener= new myLocationListener();
+        this.locationListener = new myLocationListener();
         // Timer to store sensor values in the trajectory object
         this.storeTrajectoryTimer = new Timer();
         // Counters to track elements with slower frequency
@@ -201,7 +202,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     /**
      * Static function to access singleton instance of SensorFusion.
      *
-     * @return  singleton instance of SensorFusion class.
+     * @return singleton instance of SensorFusion class.
      */
     public static SensorFusion getInstance() {
         return sensorFusion;
@@ -209,13 +210,12 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * Initialisation function for the SensorFusion instance.
-     *
+     * <p>
      * Initialise all Movement sensor instances from context and predetermined types. Creates a
      * server communication instance for sending trajectories. Saves current absolute and relative
      * time, and initialises saving the recording to false.
      *
-     * @param context   application context for permissions and device access.
-     *
+     * @param context application context for permissions and device access.
      * @see MovementSensor handling all SensorManager based data collection devices.
      * @see ServerCommunications handling communication with the server.
      * @see GNSSDataProcessor for location data processing.
@@ -254,7 +254,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.pathView = new PathView(context, null);
         this.wiFiPositioning = new WiFiPositioning(context);
 
-        if(settings.getBoolean("overwrite_constants", false)) {
+        if (settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
             this.filter_coefficient = FILTER_COEFFICIENT;
@@ -268,14 +268,15 @@ public class SensorFusion implements SensorEventListener, Observer {
     //endregion
 
     //region Sensor processing
+
     /**
      * {@inheritDoc}
-     *
+     * <p>
      * Called every time a Sensor value is updated.
-     *
+     * <p>
      * Checks originating sensor type, if the data is meaningful save it to a local variable.
      *
-     * @param sensorEvent   SensorEvent of sensor with values changed, includes types and values.
+     * @param sensorEvent SensorEvent of sensor with values changed, includes types and values.
      */
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
@@ -298,7 +299,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Update timestamp and frequency counter for this sensor
         lastEventTimestamps.put(sensorType, currentTime);
         eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
-
 
 
         switch (sensorType) {
@@ -383,9 +383,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     Log.e("SensorFusion", "Ignoring step event, too soon after last step event:" + (currentTime - lastStepTime) + " ms");
                     // Ignore rapid successive step events
                     break;
-                }
-
-                else {
+                } else {
                     lastStepTime = currentTime;
                     // Log if accelMagnitude is empty
                     if (accelMagnitude.isEmpty()) {
@@ -433,13 +431,13 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * {@inheritDoc}
-     *
+     * <p>
      * Location listener class to receive updates from the location manager.
-     *
+     * <p>
      * Passed to the {@link GNSSDataProcessor} to receive the location data in this class. Save the
      * values in instance variables.
      */
-    class myLocationListener implements LocationListener{
+    class myLocationListener implements LocationListener {
         @Override
         public void onLocationChanged(@NonNull Location location) {
             // Keep the latest GNSS fix in the instance fields so getters (e.g. getGNSSLatitude(false)) work.
@@ -456,7 +454,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             double alt = location.getAltitude();
 
             String provider = location.getProvider();
-            if(saveRecording) {
+            if (saveRecording) {
 
                 // Record initial position at start of recording
                 if (!initialPositionSet) {
@@ -475,7 +473,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 }
 
                 Traj.GNSSPosition position = Traj.GNSSPosition.newBuilder()
-                        .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime)
+                        .setRelativeTimestamp(System.currentTimeMillis() - absoluteStartTime)
                         .setAltitude(alt)
                         .setLatitude(lat)
                         .setLongitude(lon)
@@ -494,7 +492,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * {@inheritDoc}
-     *
+     * <p>
      * Receives updates from {@link WifiDataProcessor}.
      *
      * @see WifiDataProcessor object for wifi scanning.
@@ -504,7 +502,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Save newest wifi values to local variable (defensive against null)
         if (wifiList == null) {
             this.wifiList = new ArrayList<>();
-            return;}
+            return;
+        }
 
         this.wifiList = Stream.of(wifiList)
                 .filter(o -> o instanceof Wifi)
@@ -544,14 +543,13 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
-     *
      */
-    private void createWifiPositioningRequest(){
+    private void createWifiPositioningRequest() {
         // Try catch block to catch any errors and prevent app crashing
         try {
             // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
-            for (Wifi data : this.wifiList){
+            JSONObject wifiAccessPoints = new JSONObject();
+            for (Wifi data : this.wifiList) {
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
             // Creating POST Request
@@ -561,19 +559,20 @@ public class SensorFusion implements SensorEventListener, Observer {
         } catch (JSONException e) {
             // Catching error while making JSON object, to prevent crashes
             // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors","Error creating json object"+e.toString());
+            Log.e("jsonErrors", "Error creating json object" + e.toString());
         }
     }
     // Callback Example Function
+
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      * using Volley Callback
      */
-    private void createWifiPositionRequestCallback(){
+    private void createWifiPositionRequestCallback() {
         try {
             // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
-            for (Wifi data : this.wifiList){
+            JSONObject wifiAccessPoints = new JSONObject();
+            for (Wifi data : this.wifiList) {
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
             // Creating POST Request
@@ -593,7 +592,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         } catch (JSONException e) {
             // Catching error while making JSON object, to prevent crashes
             // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors","Error creating json object"+e.toString());
+            Log.e("jsonErrors", "Error creating json object" + e.toString());
         }
 
     }
@@ -603,14 +602,17 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return {@link LatLng} corresponding to user's position.
      */
-    public LatLng getLatLngWifiPositioning(){return this.wiFiPositioning.getWifiLocation();}
+    public LatLng getLatLngWifiPositioning() {
+        return this.wiFiPositioning.getWifiLocation();
+    }
 
     /**
      * Method to get current floor the user is at, obtained using WiFiPositioning
-     * @see WiFiPositioning for WiFi positioning
+     *
      * @return Current floor user is at using WiFiPositioning
+     * @see WiFiPositioning for WiFi positioning
      */
-    public int getWifiFloor(){
+    public int getWifiFloor() {
         return this.wiFiPositioning.getFloor();
     }
 
@@ -625,27 +627,45 @@ public class SensorFusion implements SensorEventListener, Observer {
         float[] yM = new float[9];
         float[] zM = new float[9];
 
-        float sinX = (float)Math.sin(o[1]);
-        float cosX = (float)Math.cos(o[1]);
-        float sinY = (float)Math.sin(o[2]);
-        float cosY = (float)Math.cos(o[2]);
-        float sinZ = (float)Math.sin(o[0]);
-        float cosZ = (float)Math.cos(o[0]);
+        float sinX = (float) Math.sin(o[1]);
+        float cosX = (float) Math.cos(o[1]);
+        float sinY = (float) Math.sin(o[2]);
+        float cosY = (float) Math.cos(o[2]);
+        float sinZ = (float) Math.sin(o[0]);
+        float cosZ = (float) Math.cos(o[0]);
 
         // rotation about x-axis (pitch)
-        xM[0] = 1.0f; xM[1] = 0.0f; xM[2] = 0.0f;
-        xM[3] = 0.0f; xM[4] = cosX; xM[5] = sinX;
-        xM[6] = 0.0f; xM[7] = -sinX; xM[8] = cosX;
+        xM[0] = 1.0f;
+        xM[1] = 0.0f;
+        xM[2] = 0.0f;
+        xM[3] = 0.0f;
+        xM[4] = cosX;
+        xM[5] = sinX;
+        xM[6] = 0.0f;
+        xM[7] = -sinX;
+        xM[8] = cosX;
 
         // rotation about y-axis (roll)
-        yM[0] = cosY; yM[1] = 0.0f; yM[2] = sinY;
-        yM[3] = 0.0f; yM[4] = 1.0f; yM[5] = 0.0f;
-        yM[6] = -sinY; yM[7] = 0.0f; yM[8] = cosY;
+        yM[0] = cosY;
+        yM[1] = 0.0f;
+        yM[2] = sinY;
+        yM[3] = 0.0f;
+        yM[4] = 1.0f;
+        yM[5] = 0.0f;
+        yM[6] = -sinY;
+        yM[7] = 0.0f;
+        yM[8] = cosY;
 
         // rotation about z-axis (azimuth)
-        zM[0] = cosZ; zM[1] = sinZ; zM[2] = 0.0f;
-        zM[3] = -sinZ; zM[4] = cosZ; zM[5] = 0.0f;
-        zM[6] = 0.0f; zM[7] = 0.0f; zM[8] = 1.0f;
+        zM[0] = cosZ;
+        zM[1] = sinZ;
+        zM[2] = 0.0f;
+        zM[3] = -sinZ;
+        zM[4] = cosZ;
+        zM[5] = 0.0f;
+        zM[6] = 0.0f;
+        zM[7] = 0.0f;
+        zM[8] = 1.0f;
 
         // rotation order is y, x, z (roll, pitch, azimuth)
         float[] resultMatrix = matrixMultiplication(xM, yM);
@@ -682,10 +702,12 @@ public class SensorFusion implements SensorEventListener, Observer {
      * {@inheritDoc}
      */
     @Override
-    public void onAccuracyChanged(Sensor sensor, int i) {}
+    public void onAccuracyChanged(Sensor sensor, int i) {
+    }
     //endregion
 
     //region Getters/Setters
+
     /**
      * Getter function for core location data.
      *
@@ -693,12 +715,11 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return longitude and latitude data in a float[2].
      */
     public float[] getGNSSLatitude(boolean start) {
-        float [] latLong = new float[2];
-        if(!start) {
+        float[] latLong = new float[2];
+        if (!start) {
             latLong[0] = latitude;
             latLong[1] = longitude;
-        }
-        else{
+        } else {
             latLong = startLocation;
         }
         return latLong;
@@ -709,7 +730,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @param startPosition contains the initial location set by the user
      */
-    public void setStartGNSSLatitude(float[] startPosition){
+    public void setStartGNSSLatitude(float[] startPosition) {
         startLocation = startPosition;
     }
 
@@ -719,7 +740,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @param scalingRatio new size of path due to updated step length
      */
-    public void redrawPath(float scalingRatio){
+    public void redrawPath(float scalingRatio) {
         pathView.redraw(scalingRatio);
     }
 
@@ -729,7 +750,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return average step count of total PDR.
      */
-    public float passAverageStepLength(){
+    public float passAverageStepLength() {
         return pdrProcessing.getAverageStepLength();
     }
 
@@ -739,17 +760,17 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return orientation of device.
      */
-    public float passOrientation(){
+    public float passOrientation() {
         return orientation[0];
     }
 
     /**
      * Return most recent sensor readings.
-     *
+     * <p>
      * Collects all most recent readings from movement and location sensors, packages them in a map
      * that is indexed by {@link SensorTypes} and makes it accessible for other classes.
      *
-     * @return  Map of <code>SensorTypes</code> to float array of most recent values.
+     * @return Map of <code>SensorTypes</code> to float array of most recent values.
      */
     public Map<SensorTypes, float[]> getSensorValueMap() {
         Map<SensorTypes, float[]> sensorValueMap = new HashMap<>();
@@ -769,7 +790,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Return the most recent list of WiFi names and levels.
      * Each Wifi object contains a BSSID and a level value.
      *
-     * @return  list of Wifi objects.
+     * @return list of Wifi objects.
      */
     public List<Wifi> getWifiList() {
         return this.wifiList;
@@ -778,7 +799,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     /**
      * Get information about all the sensors registered in SensorFusion.
      *
-     * @return  List of SensorInfo objects containing name, resolution, power, etc.
+     * @return List of SensorInfo objects containing name, resolution, power, etc.
      */
     public List<SensorInfo> getSensorInfos() {
         List<SensorInfo> sensorInfoList = new ArrayList<>();
@@ -797,8 +818,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      * to the server. This grants access to observing the {@link ServerCommunications} instance
      * used by the SensorFusion class.
      *
-     * @param observer  Instance implementing {@link Observer} class who wants to be notified of
-     *                  events relating to sending and receiving trajectories.
+     * @param observer Instance implementing {@link Observer} class who wants to be notified of
+     *                 events relating to sending and receiving trajectories.
      */
     public void registerForServerUpdate(Observer observer) {
         serverCommunications.registerObserver(observer);
@@ -808,7 +829,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Get the estimated elevation value in meters calculated by the PDR class.
      * Elevation is relative to the starting position.
      *
-     * @return  float of the estimated elevation in meters.
+     * @return float of the estimated elevation in meters.
      */
     public float getElevation() {
         return this.elevation;
@@ -817,7 +838,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     /**
      * Get an estimate by the PDR class whether it estimates the user is currently taking an elevator.
      *
-     * @return  true if the PDR estimates the user is in an elevator, false otherwise.
+     * @return true if the PDR estimates the user is in an elevator, false otherwise.
      */
     public boolean getElevator() {
         return this.elevator;
@@ -828,12 +849,11 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return int 1 if the phone is by the ear, int 0 otherwise.
      */
-    public int getHoldMode(){
+    public int getHoldMode() {
         int proximityThreshold = 1, lightThreshold = 100; //holdMode: by ear=1, not by ear =0
-        if(proximity<proximityThreshold && light>lightThreshold) { //unit cm
+        if (proximity < proximityThreshold && light > lightThreshold) { //unit cm
             return 1;
-        }
-        else{
+        } else {
             return 0;
         }
     }
@@ -844,7 +864,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * Registers all device listeners and enables updates with the specified sampling rate.
-     *
+     * <p>
      * Should be called from {@link MainActivity} when resuming the application. Sampling rate is in
      * microseconds, IMU needs 100Hz, rest 1Hz
      *
@@ -869,7 +889,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * Un-registers all device listeners and pauses data collection.
-     *
+     * <p>
      * Should be called from {@link MainActivity} when pausing the application.
      *
      * @see MovementSensor handles SensorManager based devices.
@@ -877,7 +897,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see GNSSDataProcessor handles location data.
      */
     public void stopListening() {
-        if(!saveRecording) {
+        if (!saveRecording) {
             // Unregister sensor-manager based devices
             accelerometerSensor.sensorManager.unregisterListener(this);
             barometerSensor.sensorManager.unregisterListener(this);
@@ -903,7 +923,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * Enables saving sensor values to the trajectory object.
-     *
+     * <p>
      * Sets save recording to true, resets the absolute start time and create new timer object for
      * periodically writing data to trajectory.
      *
@@ -934,11 +954,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setLightSensorInfo(createInfoBuilder(lightSensor));
 
 
-
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
         this.pdrProcessing.resetPDR();
-        if(settings.getBoolean("overwrite_constants", false)) {
+        if (settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
             this.filter_coefficient = FILTER_COEFFICIENT;
@@ -947,7 +966,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * Disables saving sensor values to the trajectory object.
-     *
+     * <p>
      * Check if a recording is in progress. If it is, it sets save recording to false, and cancels
      * the timer objects.
      *
@@ -956,11 +975,11 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public void stopRecording() {
         // Only cancel if we are running
-        if(this.saveRecording) {
+        if (this.saveRecording) {
             this.saveRecording = false;
             storeTrajectoryTimer.cancel();
         }
-        if(wakeLock.isHeld()) {
+        if (wakeLock.isHeld()) {
             this.wakeLock.release();
         }
     }
@@ -984,9 +1003,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     /**
      * Creates a {@link Traj.SensorInfo} objects from the specified sensor's data.
      *
-     * @param sensor    MovementSensor objects with populated sensorInfo fields
-     * @return          Traj.SensorInfo object to be used in building the trajectory
-     *
+     * @param sensor MovementSensor objects with populated sensorInfo fields
+     * @return Traj.SensorInfo object to be used in building the trajectory
      * @see Traj            Trajectory object used for communication with the server
      * @see MovementSensor  class abstracting SensorManager based sensors
      */
@@ -1010,7 +1028,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * Timer task to record data with the desired frequency in the trajectory class.
-     *
+     * <p>
      * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
      * destroyed in {@link SensorFusion#stopRecording()}.
      */
@@ -1039,7 +1057,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     .setZ(magneticField[2]);
 
             if (saveRecording) {
-                if(!initialOrientationSet) {
+                if (!initialOrientationSet) {
                     initialOrientationSet = true;
 
                     Traj.Quaternion q = rotBuilder.build();
@@ -1090,12 +1108,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setMac(currentWifi.getBssid())
                             .setSsid(currentWifi.getSsid())
                             .setFrequency(currentWifi.getFrequency()));
-                }
-                else {
+                } else {
                     secondCounter++;
                 }
-            }
-            else {
+            } else {
                 counter++;
             }
         }
@@ -1105,6 +1121,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     //endregion
 
     /**
+     * <<<<<<< HEAD
      * Convert a colon-separated MAC address (BSSID) like "aa:bb:cc:dd:ee:ff" into the
      * int64 encoding expected by traj.proto (hex interpreted as an unsigned 48-bit integer).
      */
