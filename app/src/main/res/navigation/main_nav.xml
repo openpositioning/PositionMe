@@ -32,7 +32,7 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
-        <!-- 琛 -->
+        <!-- Chen  -->
         <action
             android:id="@+id/action_homeFragment_to_trajectoryMapFragment"
             app:destination="@id/trajectoryMapFragment"

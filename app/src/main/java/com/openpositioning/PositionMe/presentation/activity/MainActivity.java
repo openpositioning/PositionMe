@@ -77,9 +77,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private static final int PERMISSION_REQUEST_CODE = 100;
 
     //endregion
-    //琛
-
-    //end
 
     //region Activity Lifecycle
 
@@ -370,7 +367,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
     //endregion
 
-    //琛
+    //Chen:Expose the SensorFusion instance for accessing fused location and orientation data.
     public SensorFusion getSensorFusion() {
         return sensorFusion;
     }

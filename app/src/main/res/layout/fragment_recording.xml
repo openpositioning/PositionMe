@@ -72,14 +72,34 @@
     </com.google.android.material.card.MaterialCardView>
 
     <!-- 🔹 MIDDLE SECTION: Map Display -->
+
     <FrameLayout
         android:id="@+id/trajectoryMapFragmentContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp"
-        app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
-        app:layout_constraintBottom_toTopOf="@id/controlLayout" />
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        app:layout_constraintBottom_toTopOf="@id/controlLayout"
+        app:layout_constraintTop_toBottomOf="@id/currentPositionCard">
+
+        <!-- 🟡 Test Point FAB -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/testPointButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_marginStart="6dp"
+            android:layout_marginBottom="48dp"
+            android:contentDescription="Add test point"
+            app:backgroundTint="#FFD54F"
+            app:fabSize="normal"
+            app:maxImageSize="28dp"
+            app:iconTint="@android:color/black"
+            app:srcCompat="@drawable/ic_baseline_red_dot_24" />
+    </FrameLayout>
+
+
+
 
     <!-- 🔹 BOTTOM SECTION: Controls (Progress Bar & Buttons) -->
     <LinearLayout
@@ -114,47 +134,36 @@
 
             <!-- Cancel Button -->
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/testPointButton"
-                style="@style/Widget.Material3.Button"
-                android:layout_width="40dp"
-                android:layout_height="56dp"
-                android:layout_marginEnd="16dp"
-                android:text="T"
-                android:textSize="16sp"
-                app:backgroundTint="@color/md_theme_secondary"
-                app:cornerRadius="16dp"
-                app:iconGravity="textStart" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/cancelButton"
                 style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
+                android:layout_width="176dp"
                 android:layout_height="56dp"
                 android:layout_marginEnd="16dp"
-                app:icon="@drawable/ic_unavailable"
                 android:text="@string/cancel"
                 android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onError"
                 app:backgroundTint="@color/md_theme_error"
-                app:cornerRadius="16dp" />
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_unavailable"
+                app:iconGravity="textStart"
+                app:iconSize="24dp"
+                app:iconTint="@color/md_theme_onError" />
 
             <!-- Stop Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/stopButton"
                 style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
+                android:layout_width="176dp"
                 android:layout_height="56dp"
-                app:icon="@drawable/ic_baseline_assignment_turned_in_24"
                 android:text="@string/stop"
                 android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onPrimary"
                 app:backgroundTint="@color/md_theme_primary"
-                app:cornerRadius="16dp" />
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_baseline_assignment_turned_in_24"
+                app:iconGravity="textStart"
+                app:iconSize="24dp"
+                app:iconTint="@color/md_theme_onPrimary" />
         </LinearLayout>
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

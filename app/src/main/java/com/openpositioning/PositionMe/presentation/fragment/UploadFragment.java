@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import android.os.Environment;
 import android.os.Build;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -19,6 +20,7 @@ import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.viewitems.UploadViewHolder;
 import com.openpositioning.PositionMe.presentation.viewitems.DownloadClickListener;
 import com.openpositioning.PositionMe.presentation.viewitems.UploadListAdapter;
+import com.openpositioning.PositionMe.utils.CampaignStore;
 
 import java.io.File;
 import java.util.List;
@@ -137,7 +139,19 @@ public class UploadFragment extends Fragment {
                  */
                 @Override
                 public void onPositionClicked(int position) {
-                    serverCommunications.uploadLocalTrajectory(localTrajectories.get(position));
+//                    serverCommunications.uploadLocalTrajectory(localTrajectories.get(position));
+                    //Chen :adjust the upload
+                    String campaign = CampaignStore.get(requireContext());
+                    if (campaign == null || campaign.isEmpty()) {
+                        Toast.makeText(requireContext(),
+                                "No campaign found. Please select a building / request floorplan first.",
+                                Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
+                    serverCommunications.uploadLocalTrajectory(campaign, localTrajectories.get(position));
+
+                    //end
 //                    localTrajectories.remove(position);
 //                    listAdapter.notifyItemRemoved(position);
                 }

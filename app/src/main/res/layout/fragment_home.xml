@@ -152,8 +152,8 @@
                 app:layout_rowWeight="1" />
         </androidx.gridlayout.widget.GridLayout>
 
-        <!-- Grey button for indoor positioning, anchored to the bottom. 琛-->
-        <!--                    change by 琛                               -->
+        <!-- Grey button for indoor positioning, anchored to the bottom. -->
+        <!--                    change by Chen                               -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/indoorButton"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"

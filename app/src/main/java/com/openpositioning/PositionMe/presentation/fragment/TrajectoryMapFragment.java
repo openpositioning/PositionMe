@@ -12,16 +12,13 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
-//琛
+
 import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.model.LatLngBounds;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import android.os.Handler;
-import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 import android.content.Context;
-import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import org.json.JSONObject;
 import org.json.JSONArray;
@@ -31,17 +28,7 @@ import java.util.ArrayList;
 
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
-
-import android.view.View;
-
-
-
-
-
-//end
-
 import com.google.android.material.switchmaterial.SwitchMaterial;
-
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -51,24 +38,13 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
-import com.openpositioning.PositionMe.utils.UtilFunctions;
-import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
 
-import java.util.ArrayList;
-import java.util.List;
-//琛
-import java.util.Arrays;
 import android.widget.Toast;
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
-//end
 
 
 /**
@@ -119,12 +95,32 @@ public class TrajectoryMapFragment extends Fragment {
     private SwitchMaterial autoFloorSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
-    //琛
     private com.google.android.material.floatingactionbutton.FloatingActionButton exitIndoorButton;
     private ServerCommunications serverCommunications;
 
+    private com.google.android.material.floatingactionbutton.FloatingActionButton recenterButton;
+
+    // just focus one time when entry this fragment auto
+    private boolean pendingInitialRecenter = true;
+
+    private boolean followMyLocation = false;
+
     private final Handler indoorHandler = new Handler();
     private Runnable indoorTask;
+
+    private boolean autoFloorEnabled = false;
+    private final android.os.Handler autoFloorHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable autoFloorRunnable;
+
+    private Float autoFloorBaseElevation = null;
+    private long lastAutoFloorSwitchMs = 0L;
+    private static final long AUTO_FLOOR_INTERVAL_MS = 800;
+    private static final long AUTO_FLOOR_DEBOUNCE_MS = 1500;
+    private static final float DEFAULT_FLOOR_HEIGHT_M = 3.2f;
+
+    private com.google.android.material.chip.Chip floorLabelChip;
+    private int currentFloorIndex = 0;
+
 
     private float indoorPrevPosX = 0f;
     private float indoorPrevPosY = 0f;
@@ -134,14 +130,13 @@ public class TrajectoryMapFragment extends Fragment {
     private boolean hasReceivedFloorplan = false;
     private long lastFloorplanRequestTime = 0L;
 
-    // 间隔（毫秒）
-    private static final long FLOORPLAN_FAST_INTERVAL_MS = 5_000;   // 5 秒
-    private static final long FLOORPLAN_SLOW_INTERVAL_MS = 30_000;  // 30 秒
+    private static final long FLOORPLAN_FAST_INTERVAL_MS = 5_000;
+    private static final long FLOORPLAN_SLOW_INTERVAL_MS = 30_000;
 
     //end
     private Button switchColorButton;
     private Polygon buildingPolygon;
-    //琛
+    //Chen :Check the venue nearby
     // ===== Remote floorplan drawing state =====
     private static class NearbyVenue {
         final String name;
@@ -173,13 +168,11 @@ public class TrajectoryMapFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        //琛
         android.util.Log.e("Floorplan", "TrajectoryMapFragment onCreateView");
-        //end
         // Inflate the separate layout containing map + map-related UI
         return inflater.inflate(R.layout.fragment_trajectory_map, container, false);
     }
-    //琛
+ //Bind UI controls and set their initial visibility (floor buttons/exit buttons, etc.)
     @Override
     public void onCreate(@androidx.annotation.Nullable android.os.Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -190,13 +183,16 @@ public class TrajectoryMapFragment extends Fragment {
     public void onViewCreated(@NonNull View view,
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        //琛
+
         int fine = androidx.core.content.ContextCompat.checkSelfPermission(
                 requireContext(), android.Manifest.permission.ACCESS_FINE_LOCATION);
         Log.e("IndoorDebug", "fine permission=" + fine);
 
         android.util.Log.e("Floorplan", "TrajectoryMapFragment onViewCreated");
-        //end
+
+        floorLabelChip = view.findViewById(R.id.floorLabelChip);
+        floorLabelChip.setText("Floor: -");
+        floorLabelChip.setVisibility(View.GONE);
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
@@ -208,11 +204,16 @@ public class TrajectoryMapFragment extends Fragment {
         setFloorControlsVisibility(View.GONE);
         Log.e("INDOOR", "HIDE floor controls called, selectedVenue=start" );
 
-        //琛
+        //set exit Button
         exitIndoorButton = view.findViewById(R.id.exitIndoorButton);
         exitIndoorButton.setVisibility(View.GONE);
+        //set recenter Button
+        recenterButton = view.findViewById(R.id.recenterButton);
+        recenterButton.setVisibility(View.VISIBLE);
+        recenterButton.setOnClickListener(v -> {
+            recenterToCurrentLocation(true);
+        });
 
-        //end
         // Initialize the map asynchronously
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.trajectoryMap);
@@ -222,6 +223,7 @@ public class TrajectoryMapFragment extends Fragment {
                 public void onMapReady(@NonNull GoogleMap googleMap) {
                     // Assign the provided googleMap to your field variable
                     gMap = googleMap;
+
                     // Initialize map settings with the now non-null gMap
                     initMapSettings(gMap);
 
@@ -231,22 +233,10 @@ public class TrajectoryMapFragment extends Fragment {
                         hasPendingCameraMove = false;
                         pendingCameraPosition = null;
                     }
-
+                    //set polycon and available of click
                     drawBuildingPolygon();
-
-                    //琛
                     setupBuildingPolygonClicks();
-                    //end
-
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
-
-
-                    //琛
-//                    drawFakeVenueOutline();
-                    //end
-
-
-
                 }
             });
         }
@@ -278,52 +268,94 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // Floor up/down logic
-        autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
+        // Floor up/down logic (include autofloor)
+        autoFloorSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+            autoFloorEnabled = isChecked;
 
-            //TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
-//            float elevationVal = sensorFusion.getElevation();
-//            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-//                    ,true);
-        });
-
-//        floorUpButton.setOnClickListener(v -> {
-//            // If user manually changes floor, turn off auto floor
-//            autoFloorSwitch.setChecked(false);
-//            if (indoorMapManager != null) {
-//                indoorMapManager.increaseFloor();
-//            }
-//        });
-        //琛
-        floorUpButton.setOnClickListener(v -> {
-            autoFloorSwitch.setChecked(false);
-
-            // ✅ 优先：如果正在看 API venue 的室内 shapes，就切 map_shapes 楼层
-            if (selectedVenue != null && !availableFloors.isEmpty()) {
-                currentFloorIdx = Math.min(currentFloorIdx + 1, availableFloors.size() - 1);
-                drawIndoorShapesForFloor(selectedVenue, availableFloors.get(currentFloorIdx));
+            if (!isChecked) {
+                autoFloorHandler.removeCallbacksAndMessages(null);
+                autoFloorBaseElevation = null;
                 return;
             }
 
-            // ⬇️ 否则走你原来的本地 overlay indoor（可保留）
+            if (selectedVenue == null || availableFloors.isEmpty()) {
+                Toast.makeText(requireContext(),
+                        "Select a building with indoor floors first",
+                        Toast.LENGTH_SHORT).show();
+                autoFloorSwitch.setChecked(false);
+                autoFloorEnabled = false;
+                return;
+            }
+
+            if (sensorFusion == null) {
+                Toast.makeText(requireContext(),
+                        "SensorFusion unavailable",
+                        Toast.LENGTH_SHORT).show();
+                autoFloorSwitch.setChecked(false);
+                autoFloorEnabled = false;
+                return;
+            }
+
+            autoFloorBaseElevation = sensorFusion.getElevation();
+            lastAutoFloorSwitchMs = 0L;
+
+            if (autoFloorRunnable == null) {
+                autoFloorRunnable = () -> {
+                    if (!autoFloorEnabled) return;
+
+                    if (selectedVenue == null || availableFloors.isEmpty() || sensorFusion == null) {
+                        autoFloorEnabled = false;
+                        autoFloorSwitch.setChecked(false);
+                        return;
+                    }
+
+                    float elev = sensorFusion.getElevation();
+                    Log.e("AUTO_FLOOR", "elev=" + elev + " base=" + autoFloorBaseElevation + " curIdx=" + currentFloorIdx);
+
+                    if (autoFloorBaseElevation == null) autoFloorBaseElevation = elev;
+
+                    float floorHeight = DEFAULT_FLOOR_HEIGHT_M;
+
+                    int targetIdx = elevationToFloorIndex(elev, autoFloorBaseElevation, floorHeight);
+
+                    targetIdx = Math.max(0, Math.min(targetIdx, availableFloors.size() - 1));
+
+                    long now = android.os.SystemClock.uptimeMillis();
+                    if (targetIdx != currentFloorIdx && (now - lastAutoFloorSwitchMs) > AUTO_FLOOR_DEBOUNCE_MS) {
+                        lastAutoFloorSwitchMs = now;
+                        currentFloorIdx = targetIdx;
+                        drawIndoorShapesForFloor(selectedVenue, availableFloors.get(currentFloorIdx));
+                        updateFloorLabelChip();
+                    }
+
+                    autoFloorHandler.postDelayed(autoFloorRunnable, AUTO_FLOOR_INTERVAL_MS);
+                };
+            }
+            autoFloorHandler.post(autoFloorRunnable);
+        });
+
+        floorUpButton.setOnClickListener(v -> {
+            autoFloorSwitch.setChecked(false);
+
+            if (selectedVenue != null && !availableFloors.isEmpty()) {
+                currentFloorIdx = Math.min(currentFloorIdx + 1, availableFloors.size() - 1);
+                drawIndoorShapesForFloor(selectedVenue, availableFloors.get(currentFloorIdx));
+                updateFloorLabelChip();
+                return;
+            }
+
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
             }
         });
 
-
-//        floorDownButton.setOnClickListener(v -> {
-//            autoFloorSwitch.setChecked(false);
-//            if (indoorMapManager != null) {
-//                indoorMapManager.decreaseFloor();
-//            }
-//        });
         floorDownButton.setOnClickListener(v -> {
             autoFloorSwitch.setChecked(false);
 
             if (selectedVenue != null && !availableFloors.isEmpty()) {
                 currentFloorIdx = Math.max(currentFloorIdx - 1, 0);
                 drawIndoorShapesForFloor(selectedVenue, availableFloors.get(currentFloorIdx));
+                updateFloorLabelChip();
                 return;
             }
 
@@ -334,69 +366,21 @@ public class TrajectoryMapFragment extends Fragment {
 
         exitIndoorButton.setOnClickListener(v -> {
             autoFloorSwitch.setChecked(false);
-
-            // ✅ 退出 API indoor（清掉 shapes）
             selectedVenue = null;
-
             availableFloors.clear();
             currentFloorIdx = 0;
             clearIndoorShapes();
 
-            // （可选）如果你希望退出时也清掉本地 overlay indoor，就保留这段
             if (indoorMapManager != null) {
                 indoorMapManager.clearManualModeAndRemoveOverlay();
             }
 
-            // 隐藏按钮（按你原来的 UI 方法）
-            if (selectedVenue == null /* && 你的旧逻辑条件 */) {
+            if (selectedVenue == null ) {
                 setFloorControlsVisibility(View.GONE);
                 exitIndoorButton.setVisibility(View.GONE);
             }
-
             Log.e("INDOOR", "HIDE floor controls called, selectedVenue=" + (selectedVenue == null ? "null" : selectedVenue.name));
-
-
         });
-
-        //end
-        //琛
-//        exitIndoorButton.setOnClickListener(v -> {
-//            autoFloorSwitch.setChecked(false);
-//
-//            if (indoorMapManager != null) {
-//                indoorMapManager.clearManualModeAndRemoveOverlay(); // 下面我告诉你这个方法怎么加
-//            }
-//
-//            setFloorControlsVisibility(View.GONE);
-//            exitIndoorButton.setVisibility(View.GONE);
-//        });
-//        android.util.Log.e("Floorplan", "🚨 HIT in onViewCreated (test)");
-//        exitIndoorButton.setOnClickListener(v -> {
-//            autoFloorSwitch.setChecked(false);
-//
-//            // 退出 API indoor
-//            selectedVenue = null;
-//            availableFloors.clear();
-//            currentFloorIdx = 0;
-//            clearIndoorShapes(); // 你第5/6步里写的清线函数
-//
-//            // 如果你还希望同时退出本地 overlay indoor（保留也行）
-//            if (indoorMapManager != null) {
-//                indoorMapManager.clearManualModeAndRemoveOverlay();
-//            }
-//
-//            // UI 隐藏（按你项目原来的方法）
-//            setFloorControlsVisibility(View.GONE);
-//            Log.e("INDOOR", "HIDE floor controls called, selectedVenue=" + (selectedVenue == null ? "null" : selectedVenue.name));
-//
-//            exitIndoorButton.setVisibility(View.GONE);
-//        });
-
-
-//        requestFloorplanOnceWhenLocationReady();
-
-
-        //end
     }
 
     /**
@@ -410,65 +394,10 @@ public class TrajectoryMapFragment extends Fragment {
      * @param map
      */
 
-    //琛
-//    private Polygon fakeVenuePolygon;
-//
-//    private void drawFakeVenueOutline() {
-//        if (gMap == null) return;
-//
-//        // 1) 定义一个假的 venue 轮廓（你可以换成你测试地点附近的坐标）
-//        List<LatLng> pts = Arrays.asList(
-//                new LatLng(55.9440, -3.1880),
-//                new LatLng(55.9440, -3.1875),
-//                new LatLng(55.9436, -3.1875),
-//                new LatLng(55.9436, -3.1880)
-//        );
-//
-//        // 2) 画 polygon（记得 clickable）
-//        PolygonOptions opts = new PolygonOptions()
-//                .addAll(pts)
-//                .clickable(true)
-//                .strokeWidth(6f);
-//
-//        // 如果你重复进入/重复调用，先清理旧的
-//        if (fakeVenuePolygon != null) {
-//            fakeVenuePolygon.remove();
-//        }
-//
-//        fakeVenuePolygon = gMap.addPolygon(opts);
-//        fakeVenuePolygon.setTag("FAKE_VENUE_001");
-//
-//        // 3) 设置点击事件（Toast）
-//        gMap.setOnPolygonClickListener(polygon -> {
-//            Object tag = polygon.getTag();
-//            Toast.makeText(requireContext(),
-//                    "Selected venue: " + (tag == null ? "unknown" : tag.toString()),
-//                    Toast.LENGTH_SHORT).show();
-//        });
-//
-//        // 4) 自动对焦 + 放大（推荐：根据范围自动缩放，永远能看到）
-//        LatLngBounds.Builder builder = new LatLngBounds.Builder();
-//        for (LatLng p : pts) {
-//            builder.include(p);
-//        }
-//        LatLngBounds bounds = builder.build();
-//
-//        // padding：边缘留白（像素），数值越大越“松”
-//        int paddingPx = 120;
-//
-//        // 用 post 是为了确保地图 view 已经布局完成，避免 newLatLngBounds 抛异常
-//        requireView().post(() -> gMap.animateCamera(
-//                CameraUpdateFactory.newLatLngBounds(bounds, paddingPx)
-//        ));
-//    }
-
-
-    //end
-
-
-
     private void initMapSettings(GoogleMap map) {
         // Basic map settings
+        map.getUiSettings().setZoomGesturesEnabled(true);
+
         map.getUiSettings().setCompassEnabled(true);
         map.getUiSettings().setTiltGesturesEnabled(true);
         map.getUiSettings().setRotateGesturesEnabled(true);
@@ -556,14 +485,13 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap == null) {
             Log.e("Floorplan", "updateUserLocation entered but gMap==null, returning");
             return;
-        }   //琛
-        Log.e("Floorplan", "updateUserLocation CALLED newLocation=" + newLocation);//琛
+        }
+        Log.e("Floorplan", "updateUserLocation CALLED newLocation=" + newLocation);
 
         // Keep track of current location
         LatLng oldLocation = this.currentLocation;
         this.currentLocation = newLocation;
 
-        //琛
         if (serverCommunications == null) {
             Log.e("Floorplan", "serverCommunications is null");
             return;
@@ -575,25 +503,6 @@ public class TrajectoryMapFragment extends Fragment {
 
         Log.e("Floorplan", "🚨 HIT FLOORPLAN CALL SITE");
 
-//        serverCommunications.requestFloorplans(
-//                currentLocation.latitude,
-//                currentLocation.longitude,
-//                sensorFusion.getWifiList(),
-//                new ServerCommunications.FloorplanCallback() {
-//                    @Override
-//                    public void onSuccess(org.json.JSONObject response) {
-//                        Log.d("Floorplan", "✅ success! keys=" + response.names());
-//                        Log.d("Floorplan", "response=" + response.toString());
-//                    }
-//
-//                    @Override
-//                    public void onError(String error) {
-//                        Log.e("Floorplan", "❌ error=" + error);
-//
-//                    }
-//                }
-//        );
-        //end
 
         // If no marker, create it
         if (orientationMarker == null) {
@@ -605,13 +514,22 @@ public class TrajectoryMapFragment extends Fragment {
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+            if (pendingInitialRecenter) {
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+                pendingInitialRecenter = false;
+            }
         } else {
             // Update marker position + orientation
             orientationMarker.setPosition(newLocation);
             orientationMarker.setRotation(orientation);
             // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+            if (followMyLocation) {
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+            }
+            if (pendingInitialRecenter) {
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+                pendingInitialRecenter = false;
+            }
         }
 
         // Extend polyline if movement occurred
@@ -624,8 +542,8 @@ public class TrajectoryMapFragment extends Fragment {
         // Update indoor map overlay
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
-            boolean apiIndoorActive = (selectedVenue != null && !availableFloors.isEmpty());  // 你点 polygon 后会满足
-            boolean overlayIndoorActive = indoorMapManager.getIsIndoorMapSet();               // 旧 overlay 模式
+            boolean apiIndoorActive = (selectedVenue != null && !availableFloors.isEmpty());
+            boolean overlayIndoorActive = indoorMapManager.getIsIndoorMapSet();
 
             setFloorControlsVisibility((apiIndoorActive || overlayIndoorActive) ? View.VISIBLE : View.GONE);
             if (exitIndoorButton != null) {
@@ -635,11 +553,9 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-//琛
+//Chen
     private long lastFloorplanRequestMs = 0L;
     private boolean floorplanInFlight = false;
-    private static final long FLOORPLAN_MIN_GAP_MS = 15_000; // 15s
-
     public void requestFloorplansIfNeeded(@NonNull LatLng location) {
         Log.e("Floorplan", "TrajectoryMapFragment.requestFloorplansIfNeeded called");
 
@@ -654,17 +570,12 @@ public class TrajectoryMapFragment extends Fragment {
 
         long now = System.currentTimeMillis();
 
-        // 节流：15秒内不重复请求
-        // ① 有请求在飞就不发
         if (floorplanInFlight) return;
 
-// ② 根据是否已经成功过，决定间隔：未成功 5s；成功后 30s
         long requiredIntervalMs = hasReceivedFloorplan ? 30_000L : 5_000L;
 
-// ③ 时间未到不发
         if (now - lastFloorplanRequestMs < requiredIntervalMs) return;
 
-// ④ 通过检查，准备发请求（先锁住，避免并发）
         lastFloorplanRequestMs = now;
         floorplanInFlight = true;
 
@@ -681,12 +592,12 @@ public class TrajectoryMapFragment extends Fragment {
                     @Override
                     public void onSuccess(org.json.JSONObject response) {
                         floorplanInFlight = false;
-                        hasReceivedFloorplan = true; // ✅ 成功一次，切到 30 秒刷新模式
+                        hasReceivedFloorplan = true;
 
                         Log.d("Floorplan", "Floorplan success, switch to slow refresh");
                         Log.e("Floorplan", "✅ SUCCESS keys=" + response.names());
                         Log.e("Floorplan", "response=" + response.toString());
-                        // 下一步：在这里解析 venues 并画 polygon
+
                         renderNearbyFloorplans(response);
 
                     }
@@ -694,12 +605,11 @@ public class TrajectoryMapFragment extends Fragment {
                     @Override
                     public void onError(String error) {
                         floorplanInFlight = false;
-                        Log.e("Floorplan", "❌ ERROR " + error);
+                        Log.e("Floorplan", "ERROR " + error);
                     }
                 }
         );
     }
-    //end
 
     /**
      * Set the initial camera position for the map.
@@ -793,6 +703,7 @@ public class TrajectoryMapFragment extends Fragment {
         floorUpButton.setVisibility(visibility);
         floorDownButton.setVisibility(visibility);
         autoFloorSwitch.setVisibility(visibility);
+        if (floorLabelChip != null) floorLabelChip.setVisibility(visibility);
     }
 
     public void clearMapAndReset() {
@@ -850,7 +761,7 @@ public class TrajectoryMapFragment extends Fragment {
             Log.e("TrajectoryMapFragment", "GoogleMap is not ready");
             return;
         }
-
+        //murchision
         // nuclear building polygon vertices
         LatLng nucleus1 = new LatLng(55.92279538827796, -3.174612147506538);
         LatLng nucleus2 = new LatLng(55.92278121423647, -3.174107900816096);
@@ -912,38 +823,15 @@ public class TrajectoryMapFragment extends Fragment {
             buildingPolygon.remove();
         }
 
-        // Add the polygon to the map
-//        buildingPolygon = gMap.addPolygon(buildingPolygonOptions);
-//        gMap.addPolygon(buildingPolygonOptions2);
-//        gMap.addPolygon(buildingPolygonOptions3);
-//        gMap.addPolygon(buildingPolygonOptions4);
-
-
-
-        //琛
         // Nucleus
         buildingPolygon = gMap.addPolygon(buildingPolygonOptions);
         buildingPolygon.setClickable(true);
         buildingPolygon.setTag("NUCLEUS");
-        focusCameraOnPolygon(buildingPolygonOptions.getPoints(), 120);
-
-// NKML（目前没室内图，就先不 clickable 或不加 tag）
-        Polygon nkmlPolygon = gMap.addPolygon(buildingPolygonOptions2);
-// nkmlPolygon.setClickable(true); nkmlPolygon.setTag("NKML");
-
-// FJB（同上）
-        Polygon fjbPolygon = gMap.addPolygon(buildingPolygonOptions3);
-
-// Faraday（同上）
-        Polygon faradayPolygon = gMap.addPolygon(buildingPolygonOptions4);
-
-        //end
-
 
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
 
-    //琛
+    //Chen: Set polygon click listener; resolve the clicked venue by tag and trigger indoor selection / floor flow.
     private void setupBuildingPolygonClicks() {
         if (gMap == null) return;
 
@@ -958,39 +846,18 @@ public class TrajectoryMapFragment extends Fragment {
             Log.e("POLY", "clicked polygon but tag is not NearbyVenue: " + tagObj);
             String tag = tagObj == null ? "" : tagObj.toString();
             if ("NUCLEUS".equals(tag)) {
-                indoorMapManager.forceShowNucleus();
-                setFloorControlsVisibility(View.VISIBLE);
-                exitIndoorButton.setVisibility(View.VISIBLE);
+                Log.e("POLY", "NUCLEUS clicked: local overlay disabled");
+                return;
             }
         });
     }
 
-
-    private void focusCameraOnPolygon(List<LatLng> points, int paddingPx) {
-        if (gMap == null || points == null || points.isEmpty()) return;
-
-        LatLngBounds.Builder builder = new LatLngBounds.Builder();
-        for (LatLng p : points) {
-            builder.include(p);
-        }
-        LatLngBounds bounds = builder.build();
-
-        // 避免地图还没 layout 完导致 newLatLngBounds 抛异常
-        requireView().post(() -> {
-            try {
-                gMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, paddingPx));
-            } catch (Exception e) {
-                // 兜底：如果 bounds 动画失败，就用中心点 + zoom
-                LatLng center = bounds.getCenter();
-                gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(center, 19f));
-            }
-        });
-    }
-
+    //Chen :Check whether this fragment is hosted under RecordingFragment (to switch behaviors by context).
     private boolean isInsideRecordingFragment() {
         return getParentFragment() instanceof RecordingFragment;
     }
 
+    //Chen :Indoor-positioning tick loop: read SensorFusion pose/elevation, infer floor, refresh indoor rendering and UI.
     private void tickIndoorPositioning() {
         Log.e("IndoorDebug", "tickIndoorPositioning called");
 
@@ -999,7 +866,6 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
-        // 只用 GNSS
         float[] latLngArray = sensorFusion.getGNSSLatitude(false);
         if (latLngArray == null) {
             Log.e("IndoorDebug", "latLngArray == null (GNSS not ready)");
@@ -1009,7 +875,6 @@ public class TrajectoryMapFragment extends Fragment {
         double lat = latLngArray[0];
         double lon = latLngArray[1];
 
-        // 防止 0,0 假定位
         if (Math.abs(lat) < 1e-6 && Math.abs(lon) < 1e-6) {
             Log.e("IndoorDebug", "GNSS is (0,0), waiting emulator location...");
             return;
@@ -1017,7 +882,6 @@ public class TrajectoryMapFragment extends Fragment {
 
         LatLng newLocation = new LatLng(lat, lon);
 
-        // orientation 你可以先随便给 0 或继续用 sensorFusion 的方向
         float orientation = 0f;
         try {
             orientation = (float) Math.toDegrees(sensorFusion.passOrientation());
@@ -1025,10 +889,7 @@ public class TrajectoryMapFragment extends Fragment {
 
         Log.e("IndoorDebug", "GNSS newLocation=" + newLocation.latitude + "," + newLocation.longitude);
 
-        // 更新地图
         updateUserLocation(newLocation, orientation);
-
-        // 触发 floorplan request（你之前加过节流的）
         requestFloorplansIfNeeded(newLocation);
     }
 
@@ -1037,8 +898,10 @@ public class TrajectoryMapFragment extends Fragment {
     public void onResume() {
         super.onResume();
 
-        // 如果是 RecordingFragment 的子地图，就不要在这里启动（避免重复）
         if (isInsideRecordingFragment()) return;
+
+        pendingInitialRecenter = true;
+        followMyLocation = false;
 
         indoorRunning = true;
 
@@ -1062,6 +925,7 @@ public class TrajectoryMapFragment extends Fragment {
         indoorRunning = false;
         indoorHandler.removeCallbacksAndMessages(null);
     }
+
     @Override
     public void onAttach(@NonNull Context context) {
         super.onAttach(context);
@@ -1085,12 +949,18 @@ public class TrajectoryMapFragment extends Fragment {
         } else {
             Log.e("IndoorDebug", "TrajectoryMapFragment: host activity is not MainActivity");
         }
+
+        if (sensorFusion == null) {
+            sensorFusion = SensorFusion.getInstance();
+            Log.e("IndoorDebug", "TrajectoryMapFragment fallback SensorFusion.getInstance()=" + sensorFusion);
+        }
+
     }
 
+    //Chen :Parse floorplan results, clear old polygons, draw new venue outlines, and build clickable venue list.
     private void renderNearbyFloorplans(@NonNull org.json.JSONObject wrapper) {
         if (gMap == null) return;
 
-        // 1) 清掉旧的 venues polygon（避免越画越多）
         clearNearbyVenuePolygons();
 
         try {
@@ -1099,6 +969,16 @@ public class TrajectoryMapFragment extends Fragment {
                 Log.e("Floorplan", "results empty");
                 return;
             }
+            try {
+                String existing = com.openpositioning.PositionMe.utils.CampaignStore.get(requireContext());
+                if (existing == null || existing.isEmpty()) {
+                    String firstName = results.getJSONObject(0).optString("name", "");
+                    if (firstName != null && !firstName.isEmpty()) {
+                        com.openpositioning.PositionMe.utils.CampaignStore.set(requireContext(), firstName);
+                        Log.e("CAMPAIGN", "Saved default campaign from results[0]: " + firstName);
+                    }
+                }
+            } catch (Exception ignored) {}
 
             for (int i = 0; i < results.length(); i++) {
                 org.json.JSONObject item = results.getJSONObject(i);
@@ -1113,7 +993,6 @@ public class TrajectoryMapFragment extends Fragment {
 
                 NearbyVenue v = new NearbyVenue(name, outline, mapShapes);
 
-                // 2) 画 outline（MultiPolygon）
                 List<Polygon> polys = drawOutlineMultiPolygon(v);
                 nearbyVenuePolygons.addAll(polys);
             }
@@ -1124,6 +1003,7 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    //Chen :Draw outline polygons from venue GeoJSON (FeatureCollection/MultiPolygon, etc.) and return polygon handles.
     private List<Polygon> drawOutlineMultiPolygon(@NonNull NearbyVenue venue) throws Exception {
         List<Polygon> out = new ArrayList<>();
 
@@ -1143,31 +1023,30 @@ public class TrajectoryMapFragment extends Fragment {
                 org.json.JSONArray polygon = multiPoly.getJSONArray(p);
                 if (polygon.length() == 0) continue;
 
-                // 只取 exterior ring（polygon[0]）
                 org.json.JSONArray ring = polygon.getJSONArray(0);
 
                 PolygonOptions po = new PolygonOptions()
                         .clickable(true)
                         .strokeWidth(10f)
-                        .strokeColor(0xFFFF0000)   // 红色描边 ARGB
-                        .fillColor(0x33FF0000);    // 半透明红色填充（0x33 透明度）
+                        .strokeColor(0xFFFF0000)   // red
+                        .fillColor(0x3300AEEF);    // blue
 
                 for (int pt = 0; pt < ring.length(); pt++) {
                     org.json.JSONArray xy = ring.getJSONArray(pt);
                     double lon = xy.getDouble(0);
                     double lat = xy.getDouble(1);
-                    po.add(new LatLng(lat, lon)); // 注意：GeoJSON 是 lon,lat
+                    po.add(new LatLng(lat, lon));
                 }
 
                 Polygon poly = gMap.addPolygon(po);
-                poly.setTag(venue); // ✅ 关键：点击 polygon 就能拿到 venue
+                poly.setTag(venue);
                 out.add(poly);
             }
         }
-
         return out;
     }
 
+    //Chen :Remove and clear currently drawn nearby-venue polygons to avoid stacking and leaks.
     private void clearNearbyVenuePolygons() {
         for (Polygon p : nearbyVenuePolygons) {
             try { p.remove(); } catch (Exception ignored) {}
@@ -1175,13 +1054,15 @@ public class TrajectoryMapFragment extends Fragment {
         nearbyVenuePolygons.clear();
     }
 
+    //Chen :Handle venue selection: persist campaign, prepare floor list, set current floor, draw indoor shapes and update controls.
     private void onVenueSelected(@NonNull NearbyVenue v) {
         selectedVenue = v;
 
-        // 清掉旧 indoor 线条
+        com.openpositioning.PositionMe.utils.CampaignStore.set(requireContext(), v.name);
+        Log.e("CAMPAIGN", "Saved campaign from selected venue: " + v.name);
+
         clearIndoorShapes();
 
-        // 解析可用楼层 keys
         availableFloors.clear();
         try {
             JSONObject mapShapes = new JSONObject(v.mapShapesJson);
@@ -1194,24 +1075,25 @@ public class TrajectoryMapFragment extends Fragment {
         }
         Log.e("INDOOR", "availableFloors=" + availableFloors);
 
-        // ✅ 只排序，不解析
         sortFloorKeys(availableFloors);
 
-        // 默认 GF 优先，否则 0
         currentFloorIdx = availableFloors.indexOf("GF") >= 0
                 ? availableFloors.indexOf("GF")
                 : 0;
 
-        // 显示楼层按钮 + 退出按钮（你原来的方法/变量）
         setFloorControlsVisibility(View.VISIBLE);
+        updateFloorLabelChip();
+
         if (exitIndoorButton != null) exitIndoorButton.setVisibility(View.VISIBLE);
 
-        // 画当前楼层
         if (selectedVenue != null && !availableFloors.isEmpty()) {
             drawIndoorShapesForFloor(selectedVenue, availableFloors.get(currentFloorIdx));
+            updateFloorLabelChip();
+
         }
     }
 
+    //Chen :Remove and clear current indoor shape polylines when switching floors or exiting indoor mode.
     private void clearIndoorShapes() {
         for (Polyline l : indoorShapeLines) {
             try { l.remove(); } catch (Exception ignored) {}
@@ -1219,7 +1101,7 @@ public class TrajectoryMapFragment extends Fragment {
         indoorShapeLines.clear();
     }
 
-
+    //Chen :For a given floorKey, parse that floor’s GeoJSON shapes and render them as polylines on the map.
     private void drawIndoorShapesForFloor(@NonNull NearbyVenue v, @NonNull String floorKey) {
         clearIndoorShapes();
 
@@ -1256,7 +1138,6 @@ public class TrajectoryMapFragment extends Fragment {
                         break;
 
                     case "Polygon":
-                        // 可选：如果你也想画 polygon 的面/轮廓
                         added += drawPolygonAsLines(geom.getJSONArray("coordinates"));
                         break;
 
@@ -1265,7 +1146,6 @@ public class TrajectoryMapFragment extends Fragment {
                         break;
 
                     default:
-                        // 先忽略其他类型，但会在 log 里看到
                         break;
                 }
             }
@@ -1277,6 +1157,7 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    //Chen :Render a single LineString coordinate array as a polyline and store it in indoorShapeLines.
     private int drawLineString(@NonNull JSONArray coords) throws Exception {
         PolylineOptions plo = new PolylineOptions()
                 .width(8f)
@@ -1293,6 +1174,7 @@ public class TrajectoryMapFragment extends Fragment {
         return 1;
     }
 
+    //Chen :Render a MultiLineString by drawing each line and returning the total count.
     private int drawMultiLineString(@NonNull JSONArray lines) throws Exception {
         int count = 0;
         for (int li = 0; li < lines.length(); li++) {
@@ -1302,6 +1184,7 @@ public class TrajectoryMapFragment extends Fragment {
         return count;
     }
 
+    //Chen :Render Polygon rings as lines (each ring as a polyline) for indoor shape visualization.
     // Polygon coordinates: [ ring1, ring2(hole)... ], ring: [ [lon,lat], ... ]
     private int drawPolygonAsLines(@NonNull JSONArray polygonCoords) throws Exception {
         int count = 0;
@@ -1312,6 +1195,7 @@ public class TrajectoryMapFragment extends Fragment {
         return count;
     }
 
+    //Render a MultiPolygon by drawing each polygon’s rings as lines and summing the counts.
     // MultiPolygon coordinates: [ polygon1, polygon2... ], polygon: [ ring1, ring2... ]
     private int drawMultiPolygonAsLines(@NonNull JSONArray multiPoly) throws Exception {
         int count = 0;
@@ -1322,75 +1206,73 @@ public class TrajectoryMapFragment extends Fragment {
         return count;
     }
 
-
+    //Chen :Sort floor keys (B2/B1/1/2/G/L, etc.) into a human-friendly order for UI switching.
     private void sortFloorKeys(@NonNull List<String> floors) {
         floors.sort((a, b) -> Integer.compare(floorOrder(a), floorOrder(b)));
     }
 
+    //Chen :Map a floor key to a comparable order value (basements first, then above-ground, unknown last).
     private int floorOrder(String key) {
         if (key == null) return 999;
         key = key.trim().toUpperCase();
 
-        // 地下层：B2,B1...
         if (key.startsWith("B")) {
             try { return -100 + Integer.parseInt(key.substring(1)); }
             catch (Exception ignored) { return -50; }
         }
 
-        // 地面层
         if (key.equals("LG")) return -1;
         if (key.equals("GF") || key.equals("G")) return 0;
 
-        // 数字楼层
         try { return Integer.parseInt(key); }
         catch (Exception ignored) { }
 
         return 500;
     }
 
-//    private void requestFloorplanOnceWhenLocationReady() {
-//        android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
-//
-//        final Runnable[] r = new Runnable[1];
-//        r[0] = () -> {
-//            if (currentLocation == null) {
-//                int fine = androidx.core.content.ContextCompat.checkSelfPermission(
-//                        requireContext(), android.Manifest.permission.ACCESS_FINE_LOCATION);
-//                int coarse = androidx.core.content.ContextCompat.checkSelfPermission(
-//                        requireContext(), android.Manifest.permission.ACCESS_COARSE_LOCATION);
-//                android.util.Log.e("Floorplan", "waiting location... currentLocation=null fine=" + fine + " coarse=" + coarse);
-//                h.postDelayed(r[0], 1000); // 1秒后再试
-//                return;
-//            }
-//
-//            android.util.Log.e("Floorplan", "✅ location ready, sending floorplan request lat="
-//                    + currentLocation.latitude + " lon=" + currentLocation.longitude);
-//
-//            int wifiCount = (sensorFusion.getWifiList() == null) ? 0 : sensorFusion.getWifiList().size();
-//            android.util.Log.e("Floorplan", "wifiCount=" + wifiCount);
-//
-//            serverCommunications.requestFloorplans(
-//                    currentLocation.latitude,
-//                    currentLocation.longitude,
-//                    sensorFusion.getWifiList(),
-//                    new ServerCommunications.FloorplanCallback() {
-//                        @Override
-//                        public void onSuccess(org.json.JSONObject response) {
-//                            android.util.Log.e("Floorplan", "✅ SUCCESS keys=" + response.names());
-//                            android.util.Log.e("Floorplan", "response=" + response.toString());
-//                        }
-//
-//                        @Override
-//                        public void onError(String error) {
-//                            android.util.Log.e("Floorplan", "❌ ERROR " + error);
-//                        }
-//                    }
-//            );
-//        };
-//
-//        h.post(r[0]);
-//    }
+    //Chen :Recenter the map to current location (or orientation marker) using animated or immediate camera move.
+    private void recenterToCurrentLocation(boolean animate) {
+        if (gMap == null) return;
 
-//end
+        LatLng target = currentLocation;
+        if (target == null && orientationMarker != null) {
+            target = orientationMarker.getPosition();
+        }
+        if (target == null) return;
 
+        if (animate) {
+            gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(target, 19f));
+        } else {
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(target, 19f));
+        }
+    }
+
+    //Chen :Update the floor label chip text (e.g., “B1 / 1 / 2 / G”) in sync with currentFloorIdx/availableFloors.
+    private void updateFloorLabelChip() {
+        if (floorLabelChip == null) return;
+
+        if (availableFloors != null
+                && !availableFloors.isEmpty()
+                && currentFloorIdx >= 0
+                && currentFloorIdx < availableFloors.size()) {
+
+            String floorKey = availableFloors.get(currentFloorIdx);
+            floorLabelChip.setText("Floor: " + floorKey);
+        } else {
+            floorLabelChip.setText("Floor: -");
+        }
+    }
+
+    //Chen :Request the date to positioning
+    public void requestFloorplansNow(@NonNull LatLng location) {
+        lastFloorplanRequestMs = 0L;
+        hasReceivedFloorplan = false;
+        requestFloorplansIfNeeded(location);
+    }
+
+    //Chen :Convert elevation relative to baseElevation into a floor index using floorHeightM (round to nearest floor).
+    private int elevationToFloorIndex(float elevation, float baseElevation, float floorHeightM) {
+        float delta = elevation - baseElevation;
+        return (int) Math.floor(delta / floorHeightM + 0.5f);
+    }
 }

@@ -1,4 +1,5 @@
 package com.openpositioning.PositionMe.presentation.fragment;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import android.app.AlertDialog;
 import android.content.Context;
@@ -10,7 +11,7 @@ import android.os.Handler;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.util.Log;//琛
+import android.util.Log;
 
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
@@ -63,7 +64,7 @@ public class RecordingFragment extends Fragment {
     // UI elements
     private MaterialButton completeButton, cancelButton;
 
-    private MaterialButton testPointButton;
+    private FloatingActionButton testPointButton;
 
 
     private ImageView recIcon;
@@ -77,6 +78,10 @@ public class RecordingFragment extends Fragment {
     private SensorFusion sensorFusion;
     private Handler refreshDataHandler;
     private CountDownTimer autoStop;
+    //Chen
+    private boolean requestedFloorplanInRecording = false;
+
+    //end
 
     // Distance tracking
     private float distance = 0f;
@@ -159,6 +164,15 @@ public class RecordingFragment extends Fragment {
         completeButton.setOnClickListener(v -> {
             // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
+            //Chen :If current location is available, proactively trigger a floorplan request to refresh nearby indoor venues.
+            if (trajectoryMapFragment != null) {
+                LatLng loc = trajectoryMapFragment.getCurrentLocation();
+                if (loc != null) {
+                    trajectoryMapFragment.requestFloorplansNow(loc);
+                }
+            }
+
+            //end
             sensorFusion.stopRecording();
             // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
@@ -248,15 +262,19 @@ public class RecordingFragment extends Fragment {
                     oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
                     new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
-
+            //Chen :Sync real-time location and orientation to the map, and trigger a floorplan request only once during recording to avoid duplicates.
             // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
-                Log.e("Floorplan", "RecordingFragment got newLocation=" + newLocation);
                 trajectoryMapFragment.updateUserLocation(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
-//                trajectoryMapFragment.requestFloorplansIfNeeded(newLocation); //琛
 
+                if (!requestedFloorplanInRecording) {
+                    requestedFloorplanInRecording = true;
+                    trajectoryMapFragment.requestFloorplansIfNeeded(newLocation);
+                }
             }
+            //END
+
         }
 
         // GNSS logic if you want to show GNSS error, etc.
@@ -327,10 +345,8 @@ public class RecordingFragment extends Fragment {
         long timestampMs = System.currentTimeMillis();
         testPointCount++;
 
-        // 在地图上画 marker
         trajectoryMapFragment.addTestPointMarker(pos, testPointCount);
 
-        // 现在只是打印，下一步写进 Trajectory proto
         Log.d("TestPoint",
                 "TP " + testPointCount +
                         " ts=" + timestampMs +

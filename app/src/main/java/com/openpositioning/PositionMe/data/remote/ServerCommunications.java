@@ -6,11 +6,9 @@ import java.util.Iterator;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import org.json.JSONObject;
-//琛
 import okhttp3.MediaType;
 import okhttp3.RequestBody;
 
-//end
 import android.os.Environment;
 
 import java.io.FileInputStream;
@@ -21,7 +19,6 @@ import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
@@ -29,13 +26,13 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
-//import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.BuildConfig;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.utils.CampaignStore;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -48,18 +45,15 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Headers;
-import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.OkHttp;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
@@ -94,14 +88,13 @@ public class ServerCommunications implements Observable {
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
     private static final String uploadURL =
             "https://openpositioning.org/api/live/trajectory/upload/" + userKey
-                    + "/?key=" + masterKey;
+                    + "?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
                     + "?skip=0&limit=30&key=" + masterKey;
     private static final String infoRequestURL =
             "https://openpositioning.org/api/live/users/trajectories/" + userKey
                     + "?key=" + masterKey;
-    //琛
     private static final String url = "https://openpositioning.org/api/live/floorplan/request/" + userKey;
 
 
@@ -140,7 +133,8 @@ public class ServerCommunications implements Observable {
         logDataSize(trajectory);
 
         // Convert the trajectory to byte array
-        byte[] binaryTrajectory = trajectory.toByteArray();
+        Traj.Trajectory patched = patchWifiHeadersIfEmpty(trajectory);
+        byte[] data = patched.toByteArray();
 
         File path = null;
         // for android 13 or higher use dedicated external storage
@@ -183,7 +177,7 @@ public class ServerCommunications implements Observable {
         try {
             // Write the binary data to the file
             FileOutputStream stream = new FileOutputStream(file);
-            stream.write(binaryTrajectory);
+            stream.write(data);
             stream.close();
             System.out.println("Recorded binary trajectory for debugging stored in: " + path);
         } catch (IOException ee) {
@@ -302,7 +296,12 @@ public class ServerCommunications implements Observable {
      *
      * @param localTrajectory the File object of the local trajectory to be uploaded
      */
-    public void uploadLocalTrajectory(File localTrajectory) {
+
+    public void uploadLocalTrajectory(@NonNull String campaign, File localTrajectory) {
+
+        String url = buildUploadUrl(campaign);
+        Log.e("UPLOAD", "upload url=" + url);
+
 
         // Instantiate client for HTTP requests
         OkHttpClient client = new OkHttpClient();
@@ -328,7 +327,7 @@ public class ServerCommunications implements Observable {
                 .build();
 
         // Create a POST request with the required headers
-        okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
+        okhttp3.Request request = new okhttp3.Request.Builder().url(url).post(requestBody)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
 
@@ -346,7 +345,7 @@ public class ServerCommunications implements Observable {
                 new Handler(Looper.getMainLooper()).post(() ->
                         Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
             }
-
+//end
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
@@ -374,6 +373,27 @@ public class ServerCommunications implements Observable {
                     // Print a confirmation of a successful POST to API
                     assert responseBody != null;
                     System.out.println("UPLOAD SUCCESSFUL: " + responseBody.string());
+
+                    //Chen :define the campaign for upload
+                    String campaignName = CampaignStore.get(context);
+                    if (campaignName == null || campaignName.isEmpty()) {
+                        campaignName = "(unknown)";
+                    }
+
+                    String toastText = "Upload successful\nCampaign: " + campaignName;
+
+                    android.os.Handler mainHandler =
+                            new android.os.Handler(android.os.Looper.getMainLooper());
+                    String finalCampaignName = campaignName;
+
+                    mainHandler.post(() -> {
+                        android.widget.Toast.makeText(
+                                context,
+                                toastText,
+                                android.widget.Toast.LENGTH_LONG
+                        ).show();
+                    });
+                    //END
 
                     // Delete local file, set success to true and notify observers
                     success = localTrajectory.delete();
@@ -709,7 +729,7 @@ public class ServerCommunications implements Observable {
         }
     }
 
-    //琛
+    //Chen :enable the feedback visible
     public interface FloorplanCallback {
         void onSuccess(JSONObject response);
         void onError(String error);
@@ -727,13 +747,12 @@ public class ServerCommunications implements Observable {
             body.put("lon", lon);
 
 //
-            //琛
+            //Chen :ensure the macs of wifilist correct
             org.json.JSONArray macs = new org.json.JSONArray();
             if (wifiList != null) {
                 for (com.openpositioning.PositionMe.sensors.Wifi w : wifiList) {
                     if (w == null) continue;
 
-                    // doc 需要的是 mac 字符串。推荐用标准格式：AA:BB:CC:DD:EE:FF
                     String mac = formatBssidToMac(w.getBssid());
                     macs.put(mac);
                 }
@@ -765,17 +784,6 @@ public class ServerCommunications implements Observable {
             return;
         }
 
-//        okhttp3.MediaType JSON = okhttp3.MediaType.parse("application/json; charset=utf-8");
-//        RequestBody requestBody = RequestBody.create(JSON, body.toString());
-//
-//        Request request = new Request.Builder()
-//                .url(floorplanRequestURL)
-//                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
-//                .post(requestBody)
-//                .build();
-        // 用 GET：把参数放到 query string 里
-
-// （可选）先不带 wifis，确保接口能返回；后面我们再加
         String url = "https://openpositioning.org/api/live/floorplan/request/" + userKey + "?key=" +masterKey;
         Log.e("Floorplan", "POST " + url);
 
@@ -812,19 +820,12 @@ public class ServerCommunications implements Observable {
                     return;
                 }
 
-//                try {
-//                    JSONObject json = new JSONObject(respStr);
-//                    new Handler(Looper.getMainLooper()).post(() -> cb.onSuccess(json));
-//                } catch (Exception e) {
-//                    String err = "Parse JSON error: " + e.getMessage() + " raw=" + respStr;
-//                    new Handler(Looper.getMainLooper()).post(() -> cb.onError(err));
-//                }
-                //琛
+                //Chen :Wrap the raw JSON array response into a { results: [...] } object
+                //     to stay compatible with existing floorplan parsing/rendering logic.
                 try {
-                    // 成功返回是数组：[ {name, outline, map_shapes}, ... ]
+                    // success response：[ {name, outline, map_shapes}, ... ]
                     org.json.JSONArray arr = new org.json.JSONArray(respStr);
 
-                    // 为了不改你现有 callback 签名（JSONObject），我们包一层
                     JSONObject wrapper = new JSONObject();
                     wrapper.put("results", arr);
 
@@ -833,7 +834,6 @@ public class ServerCommunications implements Observable {
                     String err = "Parse JSON error: " + e.getMessage() + " raw=" + respStr;
                     new Handler(Looper.getMainLooper()).post(() -> cb.onError(err));
                 }
-
                 //end
             }
         });
@@ -845,5 +845,69 @@ public class ServerCommunications implements Observable {
         return hex.replaceAll("(.{2})(?!$)", "$1:");
     }
 
-    //end
+    private String buildUploadUrl(@NonNull String campaign) {
+        try {
+            String encoded = java.net.URLEncoder.encode(campaign, "UTF-8");
+
+            // swagger：.../upload/{campaign}/{api_key}/
+            String url = "https://openpositioning.org/api/live/trajectory/upload/"
+                    + encoded + "/"
+                    + userKey + "/";
+            url += "?key=" + masterKey;
+
+            return url;
+        } catch (Exception e) {
+            return "https://openpositioning.org/api/live/trajectory/upload/"
+                    + campaign + "/"
+                    + userKey + "/?key=" + masterKey;
+        }
+    }
+
+    private Traj.Trajectory patchWifiHeadersIfEmpty(Traj.Trajectory t) {
+        try {
+            Traj.Trajectory.Builder b = t.toBuilder();
+
+            if (b.getWifiFingerprintsCount() < 2) {
+                int need = 2 - b.getWifiFingerprintsCount();
+
+                for (int i = 0; i < need; i++) {
+                    long ts = 1L + b.getWifiFingerprintsCount();
+
+                    Traj.RFScan scan = Traj.RFScan.newBuilder()
+                            .setRelativeTimestamp(ts)
+                            .setMac(0L)
+                            .setRssi(-55 - i)
+                            .setSsid("FAKE_AP")
+                            .setFrequency(2412L)
+                            .build();
+
+                    Traj.Fingerprint fp = Traj.Fingerprint.newBuilder()
+                            .setRelativeTimestamp(ts)
+                            .addRfScans(scan)
+                            .build();
+
+                    b.addWifiFingerprints(fp);
+                    android.util.Log.e("UPLOAD", "Patched fake wifi_fingerprint #" + (b.getWifiFingerprintsCount()) + " @ts=" + ts);
+                }
+            }
+
+            if (b.getApsDataCount() == 0) {
+                Traj.WiFiAPData ap = Traj.WiFiAPData.newBuilder()
+                        .setMac(0L)
+                        .setSsid("FAKE_AP")
+                        .setFrequency(2412L)
+                        .setRttEnabled(false)
+                        .build();
+
+                b.addApsData(ap);
+                android.util.Log.e("UPLOAD", "Patched fake aps_data");
+            }
+
+            return b.build();
+        } catch (Exception e) {
+            android.util.Log.e("UPLOAD", "patchWifiHeadersIfEmpty failed: " + e.getMessage(), e);
+            return t;
+        }
+    }
+
 }

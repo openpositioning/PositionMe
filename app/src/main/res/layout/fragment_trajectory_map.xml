@@ -52,7 +52,7 @@
                 android:textColor="@color/md_theme_onPrimary"
                 android:text="@string/color"
                 app:elevation="5dp"/>
-            <!--                            琛                          -->
+            <!--                            Chen                          -->
 
             <Spinner
                 android:id="@+id/mapSwitchSpinner"
@@ -69,33 +69,16 @@
     </com.google.android.material.card.MaterialCardView>
 
     <!-- Floating action buttons for floor control, properly spaced -->
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
+    <LinearLayout
+        android:id="@+id/indoor_controls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:orientation="vertical"
+        android:gravity="end"
+        app:layout_anchor="@id/trajectoryMap"
+        app:layout_anchorGravity="bottom|end">
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/floorDownButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:src="@android:drawable/arrow_down_float"
-            app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:contentDescription="@string/floor_down" />
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/floorUpButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:src="@android:drawable/arrow_up_float"
-            app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
-            app:layout_constraintBottom_toTopOf="@id/floorDownButton"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:contentDescription="@string/floor_up" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/exitIndoorButton"
@@ -113,6 +96,54 @@
             app:tint="@color/md_theme_onPrimary" />
 
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorUpButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:src="@android:drawable/arrow_up_float"
+            app:backgroundTint="@color/md_theme_primary"
+            app:tint="@color/md_theme_onPrimary"
+            app:layout_constraintBottom_toTopOf="@id/floorDownButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:contentDescription="@string/floor_up" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/floorLabelChip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Floor"
+            app:chipIconVisible="false"
+            app:closeIconVisible="false" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorDownButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:src="@android:drawable/arrow_down_float"
+            app:backgroundTint="@color/md_theme_primary"
+            app:tint="@color/md_theme_onPrimary"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:contentDescription="@string/floor_down" />
+
+        <!--                            Chen   recenterbutton                       -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/recenterButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:contentDescription="recenter"
+            android:src="@android:drawable/ic_menu_mylocation"
+            app:backgroundTint="@color/md_theme_primary"
+            app:tint="@color/md_theme_onPrimary"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/exitIndoorButton" />
+
+
+
+    </LinearLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

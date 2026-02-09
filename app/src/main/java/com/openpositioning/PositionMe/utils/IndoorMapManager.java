@@ -23,7 +23,7 @@ import java.util.List;
  * @author Arun Gopalakrishnan
  */
 public class IndoorMapManager {
-    //琛
+    //Chen :Indoor-map state flags: manualMode toggles auto vs manual behavior, and activeBuilding tracks the currently active building.
     private boolean manualMode = false;
 
     private enum ActiveBuilding { NONE, NUCLEUS, LIBRARY }
@@ -128,9 +128,8 @@ public class IndoorMapManager {
 //    }
 
 
-    //琛
+    //Chen :Switch the indoor floor overlay based on current location or manual building selection, with optional auto floor index adjustment.
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
-        // 没 overlay 就别切，避免 NPE
         if (groundOverlay == null) return;
 
         boolean inNucleus = (manualMode && activeBuilding == ActiveBuilding.NUCLEUS)
@@ -140,7 +139,6 @@ public class IndoorMapManager {
                 || (currentLocation != null && BuildingPolygon.inLibrary(currentLocation));
 
         if (inNucleus) {
-            // nucleus auto-floor 的偏移逻辑保留
             if (autoFloor) newFloor += 1;
 
             if (newFloor >= 0 && newFloor < NUCLEUS_MAPS.size() && newFloor != this.currentFloor) {
@@ -197,14 +195,8 @@ public class IndoorMapManager {
                     currentFloor=0;
                     floorHeight=LIBRARY_FLOOR_HEIGHT;
             }
-            // Removing overlay if user no longer in area with indoor maps available
-//            else if (!BuildingPolygon.inLibrary(currentLocation) &&
-//                    !BuildingPolygon.inNucleus(currentLocation)&& isIndoorMapSet){
-//                groundOverlay.remove();
-//                isIndoorMapSet = false;
-//                currentFloor=0;
-//            }
-            //琛
+
+            //Chen In auto mode, remove the indoor overlay and reset floor state when the user leaves all indoor building areas.
             else if (!manualMode &&
                     currentLocation != null &&
                     !BuildingPolygon.inLibrary(currentLocation) &&
@@ -241,69 +233,11 @@ public class IndoorMapManager {
                 .addAll(points));
     }
 
-    //琛
-//    public void forceShowNucleus() {
-//        manualMode = true;
-//
-//        if (groundOverlay != null) groundOverlay.remove();
-//
-//        groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
-//                .image(BitmapDescriptorFactory.fromResource(R.drawable.nucleusg))
-//                .positionFromBounds(NUCLEUS));
-//
-//        isIndoorMapSet = true;
-//        currentFloor = 1; // nucleus g 在 index 1
-//        floorHeight = NUCLEUS_FLOOR_HEIGHT;
-//    }
-//
-//    public void forceShowLibrary() {
-//        manualMode = true;
-//
-//        if (groundOverlay != null) groundOverlay.remove();
-//
-//        groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
-//                .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
-//                .positionFromBounds(LIBRARY));
-//
-//        isIndoorMapSet = true;
-//        currentFloor = 0;
-//        floorHeight = LIBRARY_FLOOR_HEIGHT;
-//    }
-
-    public void forceShowNucleus() {
-        manualMode = true;
-        activeBuilding = ActiveBuilding.NUCLEUS;
-
-        if (groundOverlay != null) groundOverlay.remove();
-
-        groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
-                .image(BitmapDescriptorFactory.fromResource(R.drawable.nucleusg))
-                .positionFromBounds(NUCLEUS));
-
-        isIndoorMapSet = true;
-        currentFloor = 1; // nucleusg 对应 index 1（你原逻辑也是这样）
-        floorHeight = NUCLEUS_FLOOR_HEIGHT;
-    }
-
-    public void forceShowLibrary() {
-        manualMode = true;
-        activeBuilding = ActiveBuilding.LIBRARY;
-
-        if (groundOverlay != null) groundOverlay.remove();
-
-        groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
-                .image(BitmapDescriptorFactory.fromResource(R.drawable.libraryg))
-                .positionFromBounds(LIBRARY));
-
-        isIndoorMapSet = true;
-        currentFloor = 0;
-        floorHeight = LIBRARY_FLOOR_HEIGHT;
-    }
-
     public void clearManualMode() {
         manualMode = false;
     }
 
+    //Chen :Exit manual indoor mode, remove the indoor overlay, and reset building and floor state.
     public void clearManualModeAndRemoveOverlay() {
         manualMode = false;
         activeBuilding = ActiveBuilding.NONE;
