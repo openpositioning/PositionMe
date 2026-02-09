@@ -12,6 +12,7 @@
 /captures
 .externalNativeBuild
 .cxx
+secrets.properties
 local.properties
 /.idea/
 # Android Studio / Gradle
