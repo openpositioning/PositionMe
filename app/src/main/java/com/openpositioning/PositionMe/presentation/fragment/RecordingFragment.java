@@ -299,6 +299,7 @@ public class RecordingFragment extends Fragment {
         }
     }
 
+
     @Override
     public void onDestroyView() {
         super.onDestroyView();
@@ -308,3 +309,4 @@ public class RecordingFragment extends Fragment {
         }
     }
 }
+
