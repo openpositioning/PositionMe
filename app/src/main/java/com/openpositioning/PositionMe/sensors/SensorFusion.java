@@ -438,23 +438,26 @@ public class SensorFusion implements SensorEventListener, Observer {
     class myLocationListener implements LocationListener{
         @Override
         public void onLocationChanged(@NonNull Location location) {
-            //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
-            // latitude = (float) location.getLatitude();
-            // longitude = (float) location.getLongitude();
-            // float altitude = (float) location.getAltitude();
+            // Keep the latest GNSS fix in the instance fields so getters (e.g. getGNSSLatitude(false)) work.
+            SensorFusion.this.latitude = (float) location.getLatitude();
+            SensorFusion.this.longitude = (float) location.getLongitude();
+
             float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
             float bearing = (float) location.getBearing();
-            double latitude = (double) location.getLatitude();
-            double longitude = (double) location.getLongitude();
-            double altitude = (double) location.getAltitude();
+
+            // Use doubles for the protobuf payload (better precision), but don't shadow the instance fields.
+            double lat = location.getLatitude();
+            double lon = location.getLongitude();
+            double alt = location.getAltitude();
+
             String provider = location.getProvider();
             if(saveRecording) {
                 Traj.GNSSPosition position = Traj.GNSSPosition.newBuilder()
                         .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime)
-                        .setAltitude(altitude)
-                        .setLatitude(latitude)
-                        .setLongitude(longitude)
+                        .setAltitude(alt)
+                        .setLatitude(lat)
+                        .setLongitude(lon)
                         .build();
 
                 trajectory.addGnssData(Traj.GNSSReading.newBuilder()
