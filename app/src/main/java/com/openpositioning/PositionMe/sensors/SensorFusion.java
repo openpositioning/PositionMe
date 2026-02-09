@@ -484,6 +484,12 @@ public class SensorFusion implements SensorEventListener, Observer {
         createWifiPositioningRequest();
     }
 
+
+    private String trajname = "";
+    public void setTrajName(String name) {
+        this.trajname = name;
+    }
+    
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      *

@@ -64,8 +64,6 @@ public class CorrectionFragment extends Fragment {
         }
         View rootView = inflater.inflate(R.layout.fragment_correction, container, false);
 
-        // Send trajectory data to the cloud
-        sensorFusion.sendTrajectoryToCloud();
 
         //Obtain start position
         float[] startPosition = sensorFusion.getGNSSLatitude(true);
@@ -108,6 +106,7 @@ public class CorrectionFragment extends Fragment {
         this.trajNameInput = view.findViewById(R.id.trajname); //initialize 
 
         averageStepLength = sensorFusion.passAverageStepLength();
+
         averageStepLengthText.setText(getString(R.string.averageStepLgn) + ": "
                 + String.format("%.2f", averageStepLength));
 
@@ -129,6 +128,17 @@ public class CorrectionFragment extends Fragment {
             }
             return false;
         });
+
+        this.trajNameInput.setOnKeyListener((v, keyCode, event) -> {
+            if (keyCode == KeyEvent.KEYCODE_ENTER) { //when user presses enter 
+                String trajName = trajNameInput.getText().toString();
+                sensorFusion.setTrajName(trajName); //send it 
+            }
+            return false;
+        });
+
+
+
 
         this.stepLengthInput.addTextChangedListener(new TextWatcher() {
             @Override
@@ -153,6 +163,15 @@ public class CorrectionFragment extends Fragment {
                 //   ((AppCompatActivity)getActivity()).getSupportActionBar().show();
 
                 // Now, simply tell the Activity we are done:
+
+                String trajName = trajNameInput.getText().toString();
+                sensorFusion.setTrajName(trajName); //send it 
+
+                        // Send trajectory data to the cloud
+                // Send trajectory data to the cloud
+                sensorFusion.sendTrajectoryToCloud();
+
+
                 ((RecordingActivity) requireActivity()).finishFlow();
             }
         });
