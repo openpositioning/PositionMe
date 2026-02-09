@@ -7,37 +7,21 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-/*
- * Minimal models for the OpenPositioning Floorplan API.
- *
- * Goal 5C uses:
- * - Venue outline / bounds for drawing clickable building polygons
- * - Floor imageUrl + bounds for placing a GroundOverlay
- */
+
 public final class FloorplanModels {
-    private FloorplanModels() {}
     public static final class Floor {
         public final int floorIndex;
         @Nullable public final String floorName;
-        /**
-         * Optional floorplan image overlay (legacy/server-provided). May be null.
-         * Note: newer coursework versions return vector walls (GeoJSON) instead of PNGs.
-         */
         @Nullable public final String imageUrl;
-        /** Bounds to place an image overlay / to help camera fit. May be null. */
         @Nullable public final LatLngBounds bounds;
-        /** Vector walls as polygons (closed rings). Each entry is one polygon ring. */
         @NonNull public final List<List<LatLng>> wallPolygons;
-        /** Vector walls as line strings. Each entry is one line string. */
         @NonNull public final List<List<LatLng>> wallLines;
-        /** Backward-compatible constructor (image only). */
         public Floor(int floorIndex,
                      @Nullable String floorName,
                      @Nullable String imageUrl,
                      @Nullable LatLngBounds bounds) {
             this(floorIndex, floorName, imageUrl, bounds, new ArrayList<>(), new ArrayList<>());
         }
-        /** Full constructor (image + vector walls). */
         public Floor(int floorIndex,
                      @Nullable String floorName,
                      @Nullable String imageUrl,
@@ -51,7 +35,6 @@ public final class FloorplanModels {
             this.wallPolygons = wallPolygons != null ? wallPolygons : new ArrayList<>();
             this.wallLines = wallLines != null ? wallLines : new ArrayList<>();
         }
-        /** True if this floor contains any vector geometry (walls). */
         public boolean hasGeometry() {
             return (wallPolygons != null && !wallPolygons.isEmpty())
                     || (wallLines != null && !wallLines.isEmpty());
@@ -80,7 +63,6 @@ public final class FloorplanModels {
             this.bounds = bounds;
             this.floors = floors != null ? floors : new ArrayList<>();
         }
-        /** Floors sorted by floorIndex ascending (useful for spinner). */
         @NonNull
         public List<Floor> floorsSorted() {
             if (floors.isEmpty()) return floors;
