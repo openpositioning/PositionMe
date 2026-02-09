@@ -132,21 +132,6 @@ public class ReplayFragment extends Fragment {
         }
 
 
-
-        // 1) Check if the file contains any GNSS data
-        boolean gnssExists = hasAnyGnssData(replayData);
-
-        if (gnssExists) {
-            showGnssChoiceDialog();
-        } else {
-            // No GNSS data -> automatically use param lat/lon
-            if (initialLat != 0f || initialLon != 0f) {
-                LatLng startPoint = new LatLng(initialLat, initialLon);
-                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-                trajectoryMapFragment.setInitialCameraPosition(startPoint);
-            }
-        }
-
         // Initialize UI controls
         playPauseButton = view.findViewById(R.id.playPauseButton);
         restartButton   = view.findViewById(R.id.restartButton);
@@ -154,9 +139,18 @@ public class ReplayFragment extends Fragment {
         goEndButton     = view.findViewById(R.id.goEndButton);
         playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
 
-        // Set SeekBar max value based on replay data
-        if (!replayData.isEmpty()) {
-            playbackSeekBar.setMax(replayData.size() - 1);
+        // 1) Check if the file contains any GNSS data
+        boolean gnssExists = hasAnyGnssData(replayData);
+
+        if (gnssExists) {
+            showGnssChoiceDialog();
+        } else {
+            // Setup map
+            setupInitialMapPosition(initialLat, initialLon);
+            if (!replayData.isEmpty()) {
+                playbackSeekBar.setMax(replayData.size() - 1);
+                updateMapForIndex(0);
+            }
         }
 
         // Button Listeners
@@ -250,21 +244,32 @@ public class ReplayFragment extends Fragment {
      * 2) Lat/Lon from ReplayActivity arguments
      */
     private void showGnssChoiceDialog() {
+        LatLng firstGnss = getFirstGnssLocation(replayData);
+
         new AlertDialog.Builder(requireContext())
                 .setTitle("Choose Starting Location")
-                .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or the one you manually picked?")
+                .setMessage("GNSS data found. Use file's GNSS or your manual position?")
                 .setPositiveButton("Use File's GNSS", (dialog, which) -> {
-                    LatLng firstGnss = getFirstGnssLocation(replayData);
                     if (firstGnss != null) {
+                        // Re-parse with file's GNSS coords
+                        replayData = TrajParser.parseTrajectoryData(filePath, requireContext(),
+                                firstGnss.latitude, firstGnss.longitude);
                         setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
                     } else {
                         // Fallback if no valid GNSS found
                         setupInitialMapPosition(initialLat, initialLon);
                     }
+                    playbackSeekBar.setMax(replayData.size() - 1);
+                    updateMapForIndex(0);
                     dialog.dismiss();
                 })
                 .setNegativeButton("Use Manual Set", (dialog, which) -> {
+                    // Re-parse with manual coords (or just use existing)
+                    replayData = TrajParser.parseTrajectoryData(filePath, requireContext(),
+                            initialLat, initialLon);
                     setupInitialMapPosition(initialLat, initialLon);
+                    playbackSeekBar.setMax(replayData.size() - 1);
+                    updateMapForIndex(0);
                     dialog.dismiss();
                 })
                 .setCancelable(false)
@@ -272,7 +277,7 @@ public class ReplayFragment extends Fragment {
     }
 
     private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
+        LatLng startPoint = new LatLng(latitude, longitude);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
     }

@@ -1031,7 +1031,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setTrajectoryVersion(2.0f)
                 .setTrajectoryId(generateTrajectoryId());
 
-
         // Set initial position from user-selected start location
         if (startLocation != null && (startLocation[0] != 0 || startLocation[1] != 0)) {
             trajectory.setInitialPosition(Traj.GNSSPosition.newBuilder()

@@ -223,10 +223,34 @@ private static List<PdrRecord> parsePdrData(JsonArray pdrArray) {
 private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
     List<GnssRecord> gnssList = new ArrayList<>();
     if (gnssArray == null) return gnssList;
-    Gson gson = new Gson();
+
     for (int i = 0; i < gnssArray.size(); i++) {
-        GnssRecord record = gson.fromJson(gnssArray.get(i), GnssRecord.class);
-        gnssList.add(record);
+        try {
+            JsonObject gnssObj = gnssArray.get(i).getAsJsonObject();
+            GnssRecord record = new GnssRecord();
+
+            // Check if position object exists (nested structure)
+            if (gnssObj.has("position")) {
+                JsonObject position = gnssObj.getAsJsonObject("position");
+                record.relativeTimestamp = position.has("relativeTimestamp")
+                        ? position.get("relativeTimestamp").getAsLong() : 0;
+                record.latitude = position.has("latitude")
+                        ? position.get("latitude").getAsDouble() : 0.0;
+                record.longitude = position.has("longitude")
+                        ? position.get("longitude").getAsDouble() : 0.0;
+            } else {
+                // Flat structure (fallback)
+                record.relativeTimestamp = gnssObj.has("relativeTimestamp")
+                        ? gnssObj.get("relativeTimestamp").getAsLong() : 0;
+                record.latitude = gnssObj.has("latitude")
+                        ? gnssObj.get("latitude").getAsDouble() : 0.0;
+                record.longitude = gnssObj.has("longitude")
+                        ? gnssObj.get("longitude").getAsDouble() : 0.0;
+            }
+            gnssList.add(record);
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing GNSS record: " + e.getMessage());
+        }
     }
     return gnssList;
 }/** Finds the closest IMU record to the given timestamp. */
