@@ -623,11 +623,14 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+        // There is no `position_data` field in the current traj.proto.
+        // Use corrected_positions as the closest equivalent to "position" samples.
+        Log.i("ServerCommunications", "Corrected Positions size: " + trajectory.getCorrectedPositionsCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+        // traj.proto uses `wifi_fingerprints` (repeated Fingerprint) instead of `wifi_data`.
+        Log.i("ServerCommunications", "WiFi Fingerprints size: " + trajectory.getWifiFingerprintsCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }

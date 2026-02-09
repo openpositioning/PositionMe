@@ -439,21 +439,31 @@ public class SensorFusion implements SensorEventListener, Observer {
         @Override
         public void onLocationChanged(@NonNull Location location) {
             //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
-            latitude = (float) location.getLatitude();
-            longitude = (float) location.getLongitude();
-            float altitude = (float) location.getAltitude();
+            // latitude = (float) location.getLatitude();
+            // longitude = (float) location.getLongitude();
+            // float altitude = (float) location.getAltitude();
             float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
+            float bearing = (float) location.getBearing();
+            double latitude = (double) location.getLatitude();
+            double longitude = (double) location.getLongitude();
+            double altitude = (double) location.getAltitude();
             String provider = location.getProvider();
             if(saveRecording) {
-                trajectory.addGnssData(Traj.GNSSReading.newBuilder()
-                        .setAccuracy(accuracy)
+                Traj.GNSSPosition position = Traj.GNSSPosition.newBuilder()
+                        .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime)
                         .setAltitude(altitude)
                         .setLatitude(latitude)
                         .setLongitude(longitude)
+                        .build();
+
+                trajectory.addGnssData(Traj.GNSSReading.newBuilder()
+                        .setAccuracy(accuracy)
                         .setSpeed(speed)
                         .setProvider(provider)
-                        .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
+                        .setBearing(bearing)
+                        .setPosition(position));
+
             }
         }
     }
@@ -467,19 +477,43 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     @Override
     public void update(Object[] wifiList) {
-        // Save newest wifi values to local variable
-        this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
+        // Save newest wifi values to local variable (defensive against null)
+        if (wifiList == null) {
+            this.wifiList = new ArrayList<>();
+            return;}
 
-        if(this.saveRecording) {
-            Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
+        this.wifiList = Stream.of(wifiList)
+                .filter(o -> o instanceof Wifi)
+                .map(o -> (Wifi) o)
+                .collect(Collectors.toList());
+
+        if (this.saveRecording) {
+            // traj.proto: repeated Fingerprint wifi_fingerprints = 11;
+            Traj.Fingerprint.Builder fp = Traj.Fingerprint.newBuilder()
+                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
+
             for (Wifi data : this.wifiList) {
-                wifiData.addMacScans(Traj.RFScan.newBuilder()
+                if (data == null) continue;
+
+                String bssid = String.valueOf(data.getBssid());
+                if (bssid == null || bssid.isEmpty()) continue;
+
+                long macAsInt64;
+                try {
+                    macAsInt64 = macToInt64(bssid);
+                } catch (IllegalArgumentException e) {
+                    Log.w("SensorFusion", "Skipping WiFi scan with invalid BSSID: " + bssid, e);
+                    continue;
+                }
+
+                fp.addRfScans(Traj.RFScan.newBuilder()
                         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                        .setMac(data.getBssid()).setRssi(data.getLevel()));
+                        .setMac(macAsInt64)
+                        .setRssi((int) data.getLevel()));
             }
-            // Adding WiFi data to Trajectory
-            this.trajectory.addWifiData(wifiData);
+
+            // Add the fingerprint to the trajectory
+            this.trajectory.addWifiFingerprints(fp);
         }
         createWifiPositioningRequest();
     }
@@ -922,7 +956,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
-     * Creates a {@link Traj.Sensor_Info} objects from the specified sensor's data.
+     * Creates a {@link Traj.SensorInfo} objects from the specified sensor's data.
      *
      * @param sensor    MovementSensor objects with populated sensorInfo fields
      * @return          Traj.SensorInfo object to be used in building the trajectory
@@ -930,8 +964,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see Traj            Trajectory object used for communication with the server
      * @see MovementSensor  class abstracting SensorManager based sensors
      */
-    private Traj.Sensor_Info.Builder createInfoBuilder(MovementSensor sensor) {
-        return Traj.Sensor_Info.newBuilder()
+    private Traj.SensorInfo.Builder createInfoBuilder(MovementSensor sensor) {
+        return Traj.SensorInfo.newBuilder()
                 .setName(sensor.sensorInfo.getName())
                 .setVendor(sensor.sensorInfo.getVendor())
                 .setResolution(sensor.sensorInfo.getResolution())
@@ -946,35 +980,50 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
      * destroyed in {@link SensorFusion#stopRecording()}.
      */
+
+
+    /**
+     * Timer task to record data with the desired frequency in the trajectory class.
+     *
+     * Inherently threaded, runnables are created in {@link SensorFusion#startRecording()} and
+     * destroyed in {@link SensorFusion#stopRecording()}.
+     */
     private class storeDataInTrajectory extends TimerTask {
         public void run() {
-            // Store IMU and magnetometer data in Trajectory class
-            trajectory.addImuData(Traj.IMUReading.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
-                    .setAccX(acceleration[0])
-                    .setAccY(acceleration[1])
-                    .setAccZ(acceleration[2])
-                    .setGyrX(angularVelocity[0])
-                    .setGyrY(angularVelocity[1])
-                    .setGyrZ(angularVelocity[2])
-                    .setGyrZ(angularVelocity[2])
-                    .setRotationVectorX(rotation[0])
-                    .setRotationVectorY(rotation[1])
-                    .setRotationVectorZ(rotation[2])
-                    .setRotationVectorW(rotation[3])
-                    .setStepCount(stepCounter))
-                    .addPositionData(Traj.MagnetometerReading.newBuilder()
-                            .setMagX(magneticField[0])
-                            .setMagY(magneticField[1])
-                            .setMagZ(magneticField[2])
-                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-//                    .addGnssData(Traj.GNSS_Sample.newBuilder()
-//                            .setLatitude(latitude)
-//                            .setLongitude(longitude)
-//                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
-            ;
+            // Create builders for the nested Vector3 and Quaternion messages
+            Traj.Vector3.Builder accBuilder = Traj.Vector3.newBuilder()
+                    .setX(acceleration[0])
+                    .setY(acceleration[1])
+                    .setZ(acceleration[2]);
 
-            // Divide timer with a counter for storing data every 1 second
+            Traj.Vector3.Builder gyrBuilder = Traj.Vector3.newBuilder()
+                    .setX(angularVelocity[0])
+                    .setY(angularVelocity[1])
+                    .setZ(angularVelocity[2]);
+
+            Traj.Quaternion.Builder rotBuilder = Traj.Quaternion.newBuilder()
+                    .setX(rotation[0])
+                    .setY(rotation[1])
+                    .setZ(rotation[2])
+                    .setW(rotation[3]);
+
+            Traj.Vector3.Builder magBuilder = Traj.Vector3.newBuilder()
+                    .setX(magneticField[0])
+                    .setY(magneticField[1])
+                    .setZ(magneticField[2]);
+
+            // Store IMU and magnetometer data in the Trajectory object using the correct structure
+            trajectory.addImuData(Traj.IMUReading.newBuilder()
+                            .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                            .setAcc(accBuilder)
+                            .setGyr(gyrBuilder)
+                            .setRotationVector(rotBuilder)
+                            .setStepCount(stepCounter))
+                    .addMagnetometerData(Traj.MagnetometerReading.newBuilder()
+                            .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                            .setMag(magBuilder));
+
+            // Logic for other sensors
             if (counter == 99) {
                 counter = 0;
                 // Store pressure and light data
@@ -1005,10 +1054,26 @@ public class SensorFusion implements SensorEventListener, Observer {
             else {
                 counter++;
             }
-
         }
     }
 
+
     //endregion
 
+    /**
+     * Convert a colon-separated MAC address (BSSID) like "aa:bb:cc:dd:ee:ff" into the
+     * int64 encoding expected by traj.proto (hex interpreted as an unsigned 48-bit integer).
+     */
+    private static long macToInt64(String bssid) {
+        if (bssid == null) {
+            throw new IllegalArgumentException("BSSID is null");
+        }
+        String hex = bssid.replace(":", "").replace("-", "").trim();
+        if (hex.length() != 12) {
+            throw new IllegalArgumentException("Invalid MAC length: " + bssid);
+        }
+        // 48-bit value fits in signed long; parse as unsigned to avoid sign issues.
+        return Long.parseUnsignedLong(hex, 16);
+    }
 }
+
