@@ -223,6 +223,9 @@ public class StartLocationFragment extends Fragment {
             // Set trajectory name in SensorFusion
             sensorFusion.setTrajectoryName(trajectoryName);
 
+            // Set initial position
+            sensorFusion.setInitialPositionData(chosenLat, chosenLon);
+
             // Start sensor recording + set the start location
             sensorFusion.startRecording();
             sensorFusion.setStartGNSSLatitude(startPosition);

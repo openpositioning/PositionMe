@@ -86,9 +86,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PowerManager.WakeLock wakeLock;
     private Context appContext;
 
-    //add trajectoryName
-    private String trajectoryName = "";
-
     // Settings
     private SharedPreferences settings;
 
@@ -146,6 +143,17 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Location values
     private float latitude;
     private float longitude;
+    private float altitude = 0.0f;
+
+    //add trajectoryName
+    private String trajectoryName = "";
+
+    // Initial position data
+    private float initialLatitude = 0.0f;
+    private float initialLongitude = 0.0f;
+    private float initialAltitude = 0.0f;
+
+
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
@@ -445,7 +453,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             //Toast.makeText(context, "Location Changed", Toast.LENGTH_SHORT).show();
             latitude = (float) location.getLatitude();
             longitude = (float) location.getLongitude();
-            float altitude = (float) location.getAltitude();
+            altitude = (float) location.getAltitude();
             float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
@@ -867,6 +875,19 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
+     * Set initial position data before recording starts
+     */
+    public void setInitialPositionData(float lat, float lon) {
+        this.initialLatitude = lat;
+        this.initialLongitude = lon;
+        this.initialAltitude = this.altitude;
+
+        android.util.Log.i("SensorFusion", String.format(
+                "Initial position set: lat=%.6f, lon=%.6f, alt=%.2fm",
+                initialLatitude, initialLongitude, initialAltitude));
+    }
+
+    /**
      * Enables saving sensor values to the trajectory object.
      *
      * Sets save recording to true, resets the absolute start time and create new timer object for
@@ -891,6 +912,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setAndroidVersion(Build.VERSION.RELEASE)
                 .setStartTimestamp(absoluteStartTime)
                 .setTrajectoryId(trajectoryName)
+                .setInitialPosition(Traj.GNSSPosition.newBuilder()    // ← 添加这4行！
+                        .setLatitude(initialLatitude)
+                        .setLongitude(initialLongitude)
+                        .setAltitude(initialAltitude)
+                        .setRelativeTimestamp(0)
+                        .build())
                 .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
                 .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
