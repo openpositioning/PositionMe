@@ -18,7 +18,8 @@ import com.openpositioning.PositionMe.R;
  */
 public class WifiViewHolder extends RecyclerView.ViewHolder {
 
-    TextView bssid;
+    TextView mac;
+    TextView ssid;
     TextView level;
 
     /**
@@ -29,7 +30,8 @@ public class WifiViewHolder extends RecyclerView.ViewHolder {
      */
     public WifiViewHolder(@NonNull View itemView) {
         super(itemView);
-        bssid = itemView.findViewById(R.id.wifiNameItem);
+        mac = itemView.findViewById(R.id.wifiMacItem);
+        ssid = itemView.findViewById(R.id.wifiSsidItem);
         level = itemView.findViewById(R.id.wifiLevelItem);
     }
 }

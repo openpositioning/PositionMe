@@ -56,6 +56,7 @@
     <string name="version">Version:\t\t\t\t\t\t %1$s</string>
     <string name="mac">MAC: %1$s</string>
     <string name="name">Name: %1$s</string>
+    <string name="unknown">Unknown</string>
 
     <!-- Preference Titles -->
     <string name="settings_title">Settings</string>

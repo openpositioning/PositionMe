@@ -6,6 +6,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -56,6 +57,8 @@ public class MeasurementsFragment extends Fragment {
     private WifiListAdapter wifiAdapter;
     private BleListAdapter bleAdapter;
 
+    private ImageView wifiExpandIcon;
+    private ImageView bleExpandIcon;
 
     /**
      * Public default constructor, empty.
@@ -140,9 +143,11 @@ public class MeasurementsFragment extends Fragment {
 
         CardView wifiTitleCard = getView().findViewById(R.id.dividerLine);
         TextView wifiTitleText = getView().findViewById(R.id.wifiTitle);
+        wifiExpandIcon = getView().findViewById(R.id.wifiExpandIcon);
 
         CardView bleTitleCard = getView().findViewById(R.id.bleTitle);
         TextView bleTitleText = getView().findViewById(R.id.bleTitleText);
+        bleExpandIcon = getView().findViewById(R.id.bleExpandIcon);
 
         // Initially hide both lists
         wifiListView.setVisibility(View.GONE);
@@ -151,18 +156,24 @@ public class MeasurementsFragment extends Fragment {
         wifiTitleCard.setOnClickListener(v -> {
             if (wifiListView.getVisibility() == View.VISIBLE) {
                 wifiListView.setVisibility(View.GONE);
+                wifiExpandIcon.setRotation(0);
             } else {
                 wifiListView.setVisibility(View.VISIBLE);
                 bleListView.setVisibility(View.GONE);
+                wifiExpandIcon.setRotation(180);
+                bleExpandIcon.setRotation(0);
             }
         });
 
         bleTitleCard.setOnClickListener(v -> {
             if (bleListView.getVisibility() == View.VISIBLE) {
                 bleListView.setVisibility(View.GONE);
+                bleExpandIcon.setRotation(0);
             } else {
                 bleListView.setVisibility(View.VISIBLE);
                 wifiListView.setVisibility(View.GONE);
+                bleExpandIcon.setRotation(180);
+                wifiExpandIcon.setRotation(0);
             }
         });
 

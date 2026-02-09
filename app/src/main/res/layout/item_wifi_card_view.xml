@@ -26,19 +26,38 @@
             android:layout_height="match_parent"
             android:padding="12dp">
 
-            <!-- WiFi Name -->
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/wifiNameItem"
-                android:layout_width="wrap_content"
+            <!-- WiFi MAC and SSID -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/wifiInfoLayout"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
-                android:text="@string/mac"
-                android:textColor="@color/md_theme_onSurface"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                android:textStyle="bold"
+                android:layout_marginEnd="8dp"
+                android:orientation="vertical"
                 app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/wifiLevelItem"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent">
+
+                <!-- WiFi BSSID / MAC -->
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/wifiMacItem"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mac"
+                    android:textColor="@color/md_theme_onSurface"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                    android:textStyle="bold" />
+
+                <!-- WiFi SSID / Name -->
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/wifiSsidItem"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/name"
+                    android:textColor="@color/md_theme_onSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
 
             <!-- WiFi Signal Level -->
             <com.google.android.material.textview.MaterialTextView

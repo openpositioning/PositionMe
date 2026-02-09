@@ -61,8 +61,18 @@ public class BleListAdapter extends RecyclerView.Adapter<BleViewHolder> {
         BleDevice device = items.get(position);
         String macString = context.getString(R.string.mac, device.getMacAddress());
         holder.macAddress.setText(macString);
-        String nameString = context.getString(R.string.name, device.getName());
+
+        // BLE Name
+        String rawName = device.getName();
+        String nameToShow;
+        if (rawName == null || rawName.trim().isEmpty()) {
+            nameToShow = context.getString(R.string.unknown);
+        } else {
+            nameToShow = rawName;
+        }
+        String nameString = context.getString(R.string.name, nameToShow);
         holder.name.setText(nameString);
+
         String levelString = context.getString(R.string.db, Integer.toString(device.getRssi()));
         holder.rssi.setText(levelString);
     }

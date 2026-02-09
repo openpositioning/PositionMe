@@ -58,10 +58,23 @@ public class WifiListAdapter extends RecyclerView.Adapter<WifiViewHolder> {
      */
     @Override
     public void onBindViewHolder(@NonNull WifiViewHolder holder, int position) {
-        String macString = context.getString(R.string.mac, Long.toString(items.get(position).getBssid()));
-        holder.bssid.setText(macString);
-        String levelString = context.getString(R.string.db, Long.toString(items.get(position).getLevel()));
+        Wifi wifi = items.get(position);
+
+        String macString = context.getString(R.string.mac, Long.toString(wifi.getBssid()));
+        holder.mac.setText(macString);
+        String levelString = context.getString(R.string.db, Long.toString(wifi.getLevel()));
         holder.level.setText(levelString);
+
+        // Show SSID (name)
+        String rawSsid = wifi.getSsid();
+        String ssidToShow;
+        if (rawSsid == null || rawSsid.trim().isEmpty()) {
+            ssidToShow = context.getString(R.string.unknown);
+        } else {
+            ssidToShow = rawSsid;
+        }
+        String nameString = context.getString(R.string.name, ssidToShow);
+        holder.ssid.setText(nameString);
     }
 
     /**

@@ -203,10 +203,44 @@ public class TrajParser {
 private static List<ImuRecord> parseImuData(JsonArray imuArray) {
     List<ImuRecord> imuList = new ArrayList<>();
     if (imuArray == null) return imuList;
-    Gson gson = new Gson();
+
     for (int i = 0; i < imuArray.size(); i++) {
-        ImuRecord record = gson.fromJson(imuArray.get(i), ImuRecord.class);
-        imuList.add(record);
+        try {
+            JsonObject imuObj = imuArray.get(i).getAsJsonObject();
+            ImuRecord record = new ImuRecord();
+
+            record.relativeTimestamp = imuObj.has("relativeTimestamp")
+                    ? imuObj.get("relativeTimestamp").getAsLong() : 0;
+
+            // Parse acc (nested)
+            if (imuObj.has("acc")) {
+                JsonObject acc = imuObj.getAsJsonObject("acc");
+                record.accX = acc.has("x") ? acc.get("x").getAsFloat() : 0f;
+                record.accY = acc.has("y") ? acc.get("y").getAsFloat() : 0f;
+                record.accZ = acc.has("z") ? acc.get("z").getAsFloat() : 0f;
+            }
+
+            // Parse gyr (nested)
+            if (imuObj.has("gyr")) {
+                JsonObject gyr = imuObj.getAsJsonObject("gyr");
+                record.gyrX = gyr.has("x") ? gyr.get("x").getAsFloat() : 0f;
+                record.gyrY = gyr.has("y") ? gyr.get("y").getAsFloat() : 0f;
+                record.gyrZ = gyr.has("z") ? gyr.get("z").getAsFloat() : 0f;
+            }
+
+            // Parse rotationVector (nested)
+            if (imuObj.has("rotationVector")) {
+                JsonObject rot = imuObj.getAsJsonObject("rotationVector");
+                record.rotationVectorX = rot.has("x") ? rot.get("x").getAsFloat() : 0f;
+                record.rotationVectorY = rot.has("y") ? rot.get("y").getAsFloat() : 0f;
+                record.rotationVectorZ = rot.has("z") ? rot.get("z").getAsFloat() : 0f;
+                record.rotationVectorW = rot.has("w") ? rot.get("w").getAsFloat() : 1f;
+            }
+
+            imuList.add(record);
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing IMU record: " + e.getMessage());
+        }
     }
     return imuList;
 }/** Parses PDR data from JSON. */

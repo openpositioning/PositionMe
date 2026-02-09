@@ -312,7 +312,7 @@ public class TrajectoryMapFragment extends Fragment {
                     .icon(BitmapDescriptorFactory.fromBitmap(
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
-            );
+                    .rotation(orientation));
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
         } else {
             // Update marker position + orientation

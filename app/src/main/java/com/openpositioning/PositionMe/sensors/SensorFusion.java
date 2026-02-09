@@ -1038,6 +1038,24 @@ public class SensorFusion implements SensorEventListener, Observer {
                     .setLatitude(startLocation[0])
                     .setLongitude(startLocation[1])
                     .setAltitude(0));
+
+            // Save initial orientation
+            trajectory.addImuData(Traj.IMUReading.newBuilder()
+                    .setRelativeTimestamp(0)
+                    .setAcc(Traj.Vector3.newBuilder()
+                            .setX(acceleration[0])
+                            .setY(acceleration[1])
+                            .setZ(acceleration[2]))
+                    .setGyr(Traj.Vector3.newBuilder()
+                            .setX(angularVelocity[0])
+                            .setY(angularVelocity[1])
+                            .setZ(angularVelocity[2]))
+                    .setRotationVector(Traj.Quaternion.newBuilder()
+                            .setX(rotation[0])
+                            .setY(rotation[1])
+                            .setZ(rotation[2])
+                            .setW(rotation[3]))
+                    .setStepCount(0));
         }
 
         this.storeTrajectoryTimer = new Timer();

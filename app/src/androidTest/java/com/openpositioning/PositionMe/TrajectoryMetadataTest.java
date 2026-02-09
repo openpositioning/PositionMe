@@ -12,6 +12,8 @@ public class TrajectoryMetadataTest {
         assertNotNull("Trajectory ID should not be null", trajectoryId);
         assertTrue("Trajectory ID should start with 'android_'",
                 trajectoryId.startsWith("android_"));
+        assertTrue("Trajectory ID should contain device model",
+                trajectoryId.contains(android.os.Build.MODEL.replaceAll("\\s+", "_")));
         assertTrue("Trajectory ID should contain timestamp",
                 trajectoryId.length() > 20);
     }
@@ -26,6 +28,16 @@ public class TrajectoryMetadataTest {
 
         assertEquals("Trajectory version should be 2.0",
                 2.0f, trajectory.getTrajectoryVersion(), 0.001f);
+    }
+
+    @Test
+    public void testTrajectoryIdUniqueness() {
+        String id1 = generateTrajectoryId();
+        // Small delay to ensure different timestamp
+        try { Thread.sleep(10); } catch (InterruptedException e) {}
+        String id2 = generateTrajectoryId();
+
+        assertNotEquals("Two trajectory IDs should be different", id1, id2);
     }
 
     private String generateTrajectoryId() {

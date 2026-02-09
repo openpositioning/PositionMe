@@ -280,6 +280,13 @@ public class ReplayFragment extends Fragment {
         LatLng startPoint = new LatLng(latitude, longitude);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
+
+        // Set initial orientation if data exists
+        if (!replayData.isEmpty()) {
+            float initialOrientation = replayData.get(0).orientation;
+            trajectoryMapFragment.updateUserLocation(startPoint, initialOrientation);
+            Log.i(TAG, "Setting initial orientation: " + initialOrientation);
+        }
     }
 
     /**
