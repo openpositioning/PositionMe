@@ -159,6 +159,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
+    // Initial position/orientation flags
+    private boolean initialPositionSet = false;
+    private boolean initialOrientationSet = false;
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -453,6 +457,23 @@ public class SensorFusion implements SensorEventListener, Observer {
 
             String provider = location.getProvider();
             if(saveRecording) {
+
+                // Record initial position at start of recording
+                if (!initialPositionSet) {
+                    initialPositionSet = true;
+
+                    trajectory.setInitialPosition(Traj.GNSSPosition.newBuilder()
+                            .setRelativeTimestamp(0)
+                            .setAltitude(alt)
+                            .setLatitude(lat)
+                            .setLongitude(lon)
+                            .build()
+                    );
+
+                    //Validate initial position capture
+                    Log.d("INIT_POS", "InitialPosition set: lat=" + lat + ", lon=" + lon + ", alt=" + alt);
+                }
+
                 Traj.GNSSPosition position = Traj.GNSSPosition.newBuilder()
                         .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime)
                         .setAltitude(alt)
@@ -898,6 +919,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         this.saveRecording = true;
         this.stepCounter = 0;
+        this.initialPositionSet = false;
+        this.initialOrientationSet = false;
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
         // Protobuf trajectory class for sending sensor data to restful API
@@ -1014,6 +1037,24 @@ public class SensorFusion implements SensorEventListener, Observer {
                     .setX(magneticField[0])
                     .setY(magneticField[1])
                     .setZ(magneticField[2]);
+
+            if (saveRecording) {
+                if(!initialOrientationSet) {
+                    initialOrientationSet = true;
+
+                    Traj.Quaternion q = rotBuilder.build();
+                    Log.d("INIT_ORI", "Initial orientation: "
+                            + q.getX() + ", " + q.getY() + ", "
+                            + q.getZ() + ", " + q.getW());
+
+                    trajectory.addImuData(Traj.IMUReading.newBuilder()
+                            .setRelativeTimestamp(0)
+                            .setAcc(accBuilder)
+                            .setGyr(gyrBuilder)
+                            .setRotationVector(rotBuilder)
+                            .setStepCount(stepCounter));
+                }
+            }
 
             // Store IMU and magnetometer data in the Trajectory object using the correct structure
             trajectory.addImuData(Traj.IMUReading.newBuilder()
