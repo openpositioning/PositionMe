@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?> <!-- 【与原版不同：修改】下面一段代码相对原始作业代码有改动，用于C任务功能实现。 -->
+<manifest xmlns:tools="http://schemas.android.com/tools" xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.openpositioning.PositionMe">
 
     <!--
@@ -35,6 +35,8 @@
     <!-- Location -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<!-- 【与原版不同：新增】下面一段代码相对原始作业代码有改动，用于C任务功能实现。 -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" tools:targetApi="33" />
 
     <!-- Internet -->
     <uses-permission android:name="android.permission.INTERNET"/>

@@ -71,27 +71,126 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+<!-- 【与原版不同：新增】下面一段代码相对原始作业代码有改动，用于C任务功能实现。 -->
+        <!-- Crosshair for "picked" location (camera center) -->
+        <ImageView
+            android:id="@+id/crosshairView"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@android:drawable/ic_menu_mylocation"
+            android:alpha="0.85"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:contentDescription="@string/gnssSwitch" />
+
+        <!-- Bottom control card for indoor maps selection (cleaner UI) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/indoorControlsCard"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="10dp"
+            app:cardBackgroundColor="@color/md_theme_surfaceContainer"
+            app:cardElevation="6dp"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/requestIndoorButton">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:id="@+id/selectedVenueText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Tap &quot;Find indoor maps&quot; to show nearby buildings"
+                    android:textSize="13sp"
+                    android:textColor="@color/md_theme_onSurface"
+                    android:maxLines="2" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <!-- Manual venue picker (fallback if outlines are hard to tap / not available) -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/selectVenueButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:enabled="false"
+                        android:text="Select building" />
+
+                    <!-- Floor selector (visible after selecting a venue) -->
+                    <Spinner
+                        android:id="@+id/floorSpinner"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:background="@android:color/white"
+                        android:elevation="2dp"
+                        android:spinnerMode="dropdown" />
+
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Loading indicator for indoor map search -->
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/indoorLoadingIndicator"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/requestIndoorButton"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Find indoor maps (Goal 5C) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/requestIndoorButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:text="Find indoor maps"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+<!-- 【与原版不同：修改】下面一段代码相对原始作业代码有改动，用于C任务功能实现。 -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
             android:src="@android:drawable/arrow_down_float"
             app:backgroundTint="@color/md_theme_primary"
             app:tint="@color/md_theme_onPrimary"
-            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/floorUpButton"
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_down" />
 
+<!-- 【与原版不同：修改】下面一段代码相对原始作业代码有改动，用于C任务功能实现。 -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
             android:src="@android:drawable/arrow_up_float"
             app:backgroundTint="@color/md_theme_primary"
             app:tint="@color/md_theme_onPrimary"
-            app:layout_constraintBottom_toTopOf="@id/floorDownButton"
+            app:layout_constraintTop_toTopOf="@id/indoorControlsCard"
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_up" />
     </androidx.constraintlayout.widget.ConstraintLayout>
