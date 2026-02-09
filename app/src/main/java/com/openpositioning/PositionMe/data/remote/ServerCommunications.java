@@ -89,7 +89,7 @@ public class ServerCommunications implements Observable {
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
     private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
+            "https://openpositioning.org/api/live/trajectory/upload/" + masterKey+ "/"+ userKey
                     + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
@@ -129,7 +129,6 @@ public class ServerCommunications implements Observable {
      */
     public void sendTrajectory(Traj.Trajectory trajectory){
         logDataSize(trajectory);
-
         // Convert the trajectory to byte array
         byte[] binaryTrajectory = trajectory.toByteArray();
 
@@ -311,7 +310,13 @@ public class ServerCommunications implements Observable {
         } else {
             fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), localTrajectory);
         }
+// [新增日志] 打印出最终的 URL 看看对不对
+        Log.e("UPLOAD_DEBUG", "Uploading to URL: " + uploadURL);
 
+        // Check if API Key is missing
+        if (userKey == null || userKey.isEmpty() || userKey.equals("null")) {
+            Log.e("UPLOAD_DEBUG", "❌ API KEY IS MISSING! Check local.properties");
+        }
         // Create request body with a file to upload in multipart/form-data format
         RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
                 .addFormDataPart("file", localTrajectory.getName(), fileRequestBody)
