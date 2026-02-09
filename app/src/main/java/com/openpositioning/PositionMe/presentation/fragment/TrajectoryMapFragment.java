@@ -153,9 +153,9 @@ public class TrajectoryMapFragment extends Fragment {
     private static final int MAX_WIFI_MACS = 200;          // keep more APs so "between buildings" still works
     private static final int MIN_MACS_FOR_API = 6;        // below this we ask for manual input on emulator
     private static final double PROBE_RADIUS_METERS = 50.0;
-    private static final boolean ENABLE_LOCAL_LIBRARY_FALLBACK = true // hard-coded fallback outlines (Library + Fleeming Jenkin) // hard-coded Library polygon
+    private static final boolean ENABLE_LOCAL_LIBRARY_FALLBACK = false; // hard-coded fallback outlines (Library + Fleeming Jenkin) // hard-coded Library polygon
     private static final boolean USE_LOCAL_FLOORPLAN_FALLBACK = false;  // use bundled drawable floor PNGs
-    private static final boolean ENABLE_LOCAL_FJB_FALLBACK = true;     // hard-coded Fleeming Jenkin polygon
+    private static final boolean ENABLE_LOCAL_FJB_FALLBACK = false;     // hard-coded Fleeming Jenkin polygon
     private final java.util.concurrent.atomic.AtomicInteger indoorReqSeq = new java.util.concurrent.atomic.AtomicInteger(0);
     private GoogleMap gMap;
     private LatLng currentLocation;
