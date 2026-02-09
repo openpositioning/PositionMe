@@ -142,14 +142,13 @@ public class TrajectoryMapFragment extends Fragment {
                         if (tag != null) {
                             String buildingName = tag.toString();
 
+                            // (Update data submission)
+                            SensorFusion.getInstance().setVenueName(buildingName);
+                            // e.g., if(buildingName.equals("Nucleus")) indoorMapManager.setFloor...
                             // feedback
                             android.widget.Toast.makeText(requireContext(),
                                     "Selected Venue: " + buildingName,
                                     android.widget.Toast.LENGTH_SHORT).show();
-
-                            // (Update data submission)
-                            SensorFusion.getInstance().setVenueName(buildingName);
-                            // e.g., if(buildingName.equals("Nucleus")) indoorMapManager.setFloor...
 
                             if (indoorMapManager != null) {
                                 boolean hasMap = indoorMapManager.selectBuilding(buildingName);

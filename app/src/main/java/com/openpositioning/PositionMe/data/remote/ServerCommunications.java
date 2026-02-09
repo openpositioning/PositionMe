@@ -146,11 +146,30 @@ public class ServerCommunications implements Observable {
 
         System.out.println(path.toString());
 
-        // Format the file name according to date
-        SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
-        Date date = new Date();
-        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
+//        // Format the file name according to date
+//        SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
+//        Date date = new Date();
+//        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
+        String rawName = trajectory.getTrajectoryName();
+        String fileName;
 
+        if (rawName == null || rawName.isEmpty()) {
+            SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
+            fileName = "trajectory_" + dateFormat.format(new Date());
+        } else {
+
+            if (!rawName.startsWith("trajectory_")) {
+                fileName = "trajectory_" + rawName;
+            } else {
+                fileName = rawName;
+            }
+        }
+
+        if (!fileName.endsWith(".txt")) {
+            fileName += ".txt";
+        }
+
+        File file = new File(path, fileName);
         try {
             // Write the binary data to the file
             FileOutputStream stream = new FileOutputStream(file);

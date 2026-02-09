@@ -871,11 +871,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
-        String defaultName = "Traj_" + absoluteStartTime;
-        if (!currentVenue.isEmpty()) {
-            defaultName += "_" + currentVenue;
-        }
-        String trajName = settings.getString("trajectory_name", defaultName);
+
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.getDefault());
+        String readableTime = sdf.format(new java.util.Date(this.absoluteStartTime));
+        String baseName = "Traj_" + readableTime;
+
+        settings.edit().putString("trajectory_name", baseName).apply();
+
         Traj.Initial_Position initialPos = Traj.Initial_Position.newBuilder()
                 .setLatitude(startLocation[0])
                 .setLongitude(startLocation[1])
@@ -887,7 +889,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
                 .setStartTimestamp(absoluteStartTime)
-                .setTrajectoryName(trajName)
+                .setTrajectoryName(baseName)
                 .setInitialPosition(initialPos)
                 .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
@@ -1062,6 +1064,17 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void setVenueName(String name) {
         this.currentVenue = name;
         Log.d("SensorFusion", "Venue set to: " + name);
+        if (this.saveRecording && this.trajectory != null) {
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.getDefault());
+            String readableTime = sdf.format(new java.util.Date(this.absoluteStartTime));
+            String newName = "Traj_" + readableTime + "_" + name;
+
+            this.trajectory.setTrajectoryName(newName);
+
+            settings.edit().putString("trajectory_name", newName).apply();
+
+            Log.d("SensorFusion", "Filename dynamically updated to: " + newName);
+        }
     }
 
 }

@@ -45,13 +45,19 @@
             <!-- Time stamp TextView -->
             <TextView
                 android:id="@+id/trajectoryDateItem"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:text="1998-05-19 05:28:42"
+                android:layout_marginEnd="8dp"
+                android:text="trajectory_Traj_2026...Murchison.txt"
                 android:textColor="@color/md_theme_onSurface"
                 android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+
+                android:maxLines="2"
+                android:ellipsize="end"
+
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
+                app:layout_constraintEnd_toStartOf="@id/deletebutton"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent" />
 
