@@ -63,6 +63,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
     private HashMap<Integer, Integer> eventCounts = new HashMap<>();
 
+    //Save the last WiFi fingerprint for deduplication.
+    private Traj.Fingerprint lastWifiFingerprint = null;
+
     long maxReportLatencyNs = 0;  // Disable batching to deliver events immediately
 
     // Define a threshold for large time gaps (in milliseconds)
@@ -489,18 +492,107 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
         if(this.saveRecording) {
+            // Building a new WiFi fingerprint
             Traj.Fingerprint.Builder wifiData = Traj.Fingerprint.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
             for (Wifi data : this.wifiList) {
                 wifiData.addRfScans(Traj.RFScan.newBuilder()
                         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                        .setMac(data.getBssid()).setRssi(data.getLevel()));
+                        .setMac(data.getBssid())
+                        .setRssi(data.getLevel())
+                        .build());
             }
-            // Adding WiFi data to Trajectory
-            this.trajectory.addWifiFingerprints(wifiData);
+
+            Traj.Fingerprint newFingerprint = wifiData.build();
+
+            if (!isSameFingerprintAs(newFingerprint, lastWifiFingerprint)) {
+                // Only add when the fingerprint changes
+                this.trajectory.addWifiFingerprints(newFingerprint);
+                lastWifiFingerprint = newFingerprint;  // save this fingerprint for comparison
+                android.util.Log.i("SensorFusion", "New WiFi fingerprint added (" +
+                        newFingerprint.getRfScansCount() + " APs)");
+            } else {
+                android.util.Log.d("SensorFusion", "Duplicate WiFi fingerprint skipped");
+            }
         }
         createWifiPositioningRequest();
     }
+
+
+    /**
+     * Check if two WiFi fingerprints are similar enough to be considered duplicates
+     * Uses overlap ratio instead of exact match to handle unstable WiFi signals
+     */
+    private boolean isSameFingerprintAs(Traj.Fingerprint newFingerprint, Traj.Fingerprint oldFingerprint) {
+        if (oldFingerprint == null) {
+            return false;  // The first scan will definitely not be repeated.
+        }
+
+        // If the number of Wi-Fi networks detected in both scans is very low (<3), record each instance.
+        if (newFingerprint.getRfScansCount() < 3 || oldFingerprint.getRfScansCount() < 3) {
+            return false;
+        }
+
+        // Create a set of MAC addresses for old fingerprints
+        java.util.Set<Long> oldMacs = new java.util.HashSet<>();
+        for (Traj.RFScan scan : oldFingerprint.getRfScansList()) {
+            oldMacs.add(scan.getMac());
+        }
+
+        // Count how many MACs in the new fingerprint appeared in the old fingerprint.
+        int commonCount = 0;
+        for (Traj.RFScan newScan : newFingerprint.getRfScansList()) {
+            if (oldMacs.contains(newScan.getMac())) {
+                commonCount++;
+            }
+        }
+
+        // Calculate the overlap rate (using the smaller quantity from the two scans as the baseline)
+        int minCount = Math.min(newFingerprint.getRfScansCount(), oldFingerprint.getRfScansCount());
+        float overlapRatio = (float) commonCount / minCount;
+
+        // If the overlap rate is 80% or higher, it is considered a duplicate fingerprint.
+        boolean isDuplicate = overlapRatio >= 0.90f;
+
+        if (isDuplicate) {
+            android.util.Log.d("SensorFusion", String.format(
+                    "Duplicate fingerprint: overlap %.0f%% (%d/%d common MACs)",
+                    overlapRatio * 100, commonCount, minCount));
+        }
+
+        return isDuplicate;
+    }
+
+//    /**
+//     * Check if two WiFi fingerprints are identical (same MACs and RSSIs)
+//     * Used to avoid recording duplicate fingerprints when user is stationary
+//     */
+//    private boolean isSameFingerprintAs(Traj.Fingerprint newFingerprint, Traj.Fingerprint oldFingerprint) {
+//        if (oldFingerprint == null) {
+//            return false;  // The first scan will definitely not be repeated.
+//        }
+//
+//        // Check if the number of WiFi signals scanned is the same
+//        if (newFingerprint.getRfScansCount() != oldFingerprint.getRfScansCount()) {
+//            return false;  // The different numbers indicate a change.
+//        }
+//
+//        // The Set created for MAC addresses is used for quick comparison.
+//        java.util.Set<Long> oldMacs = new java.util.HashSet<>();
+//        for (Traj.RFScan scan : oldFingerprint.getRfScansList()) {
+//            oldMacs.add(scan.getMac());
+//        }
+//
+//        // Check whether each MAC in the new fingerprint is present in the old fingerprint.
+//        for (Traj.RFScan newScan : newFingerprint.getRfScansList()) {
+//            if (!oldMacs.contains(newScan.getMac())) {
+//                return false;  // A new WiFi has been scanned.
+//            }
+//        }
+//
+//        // If the MAC addresses are the same, they are considered as duplicate fingerprints.
+//        return true;
+//    }
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
@@ -914,6 +1006,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
 
+        this.lastWifiFingerprint = null;
         this.saveRecording = true;
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();
