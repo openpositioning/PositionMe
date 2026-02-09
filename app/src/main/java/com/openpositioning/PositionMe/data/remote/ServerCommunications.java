@@ -30,6 +30,7 @@ import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.utils.SelectedVenueStore;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -172,10 +173,17 @@ public class ServerCommunications implements Observable {
             OkHttpClient client = new OkHttpClient();
 
             // Creaet a equest body with a file to upload in multipart/form-data format
-            RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
+                MultipartBody.Builder formBuilder = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", file.getName(),
-                            RequestBody.create(MediaType.parse("text/plain"), file))
-                    .build();
+                        RequestBody.create(MediaType.parse("text/plain"), file));
+
+                String venueName = SelectedVenueStore.getInstance().getVenueName();
+                if (venueName != null && !venueName.isEmpty()) {
+                formBuilder.addFormDataPart("venue", venueName);
+                formBuilder.addFormDataPart("venue_floor", String.valueOf(SelectedVenueStore.getInstance().getFloorIndex()));
+                }
+
+                RequestBody requestBody = formBuilder.build();
 
             // Create a POST request with the required headers
             Request request = new Request.Builder().url(uploadURL).post(requestBody)
@@ -295,9 +303,16 @@ public class ServerCommunications implements Observable {
         }
 
         // Create request body with a file to upload in multipart/form-data format
-        RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("file", localTrajectory.getName(), fileRequestBody)
-                .build();
+        MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("file", localTrajectory.getName(), fileRequestBody);
+
+        String venueName = SelectedVenueStore.getInstance().getVenueName();
+        if (venueName != null && !venueName.isEmpty()) {
+            builder.addFormDataPart("venue", venueName);
+            builder.addFormDataPart("venue_floor", String.valueOf(SelectedVenueStore.getInstance().getFloorIndex()));
+        }
+
+        RequestBody requestBody = builder.build();
 
         // Create a POST request with the required headers
         okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)

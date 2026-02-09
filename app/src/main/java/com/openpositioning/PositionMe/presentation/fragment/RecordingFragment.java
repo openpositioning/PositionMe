@@ -140,7 +140,7 @@ public class RecordingFragment extends Fragment {
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
-        com.google.android.material.button.MaterialButton testPointButton = view.findViewById(R.id.testPointButton);
+        MaterialButton testPointButton = view.findViewById(R.id.testPointButton);
         testPointButton.setOnClickListener(v -> {
             int index = sensorFusion.addTestPointMarker();
             if (index > 0 && trajectoryMapFragment != null) {

@@ -1,11 +1,13 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -19,7 +21,8 @@ import androidx.fragment.app.Fragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
-import com.openpositioning.PositionMe.utils.IndoorMapManager;
+import com.openpositioning.PositionMe.utils.FloorplanService;
+import com.openpositioning.PositionMe.utils.SelectedVenueStore;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -29,6 +32,8 @@ import com.google.android.gms.maps.model.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 /**
@@ -46,7 +51,6 @@ import java.util.Locale;
  * - Allows user interaction through map controls and UI elements.
  *
  * @see com.openpositioning.PositionMe.presentation.activity.RecordingActivity The activity hosting this fragment.
- * @see com.openpositioning.PositionMe.utils.IndoorMapManager Utility for managing indoor map overlays.
  * @see com.openpositioning.PositionMe.utils.UtilFunctions Utility functions for UI and graphics handling.
  *
  * @author Mate Stodulka
@@ -70,19 +74,27 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
 
-    private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
+    private FloorplanService floorplanService;
 
 
     // UI
     private Spinner switchMapSpinner;
 
     private SwitchMaterial gnssSwitch;
-    private SwitchMaterial autoFloorSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+
+    // Minimal indoor map fetch/display
+    private boolean venuesRequested = false;
+    private final List<Polygon> venuePolygons = new ArrayList<>();
+    private FloorplanService.Venue selectedVenue;
+    private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
+    private final List<Polyline> venueShapeLines = new ArrayList<>();
+    private List<FloorplanService.Venue.FloorShape> currentFloorShapes;
+    private int currentFloorIndex = 0;
 
 
     public TrajectoryMapFragment() {
@@ -106,7 +118,6 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
-        autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         switchColorButton = view.findViewById(R.id.lineColorButton);
@@ -169,28 +180,12 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // Floor up/down logic
-        autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-
-            //TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
-//            float elevationVal = sensorFusion.getElevation();
-//            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-//                    ,true);
-        });
-
         floorUpButton.setOnClickListener(v -> {
-            // If user manually changes floor, turn off auto floor
-            autoFloorSwitch.setChecked(false);
-            if (indoorMapManager != null) {
-                indoorMapManager.increaseFloor();
-            }
+            stepFloor(1);
         });
 
         floorDownButton.setOnClickListener(v -> {
-            autoFloorSwitch.setChecked(false);
-            if (indoorMapManager != null) {
-                indoorMapManager.decreaseFloor();
-            }
+            stepFloor(-1);
         });
     }
 
@@ -213,8 +208,8 @@ public class TrajectoryMapFragment extends Fragment {
         map.getUiSettings().setScrollGesturesEnabled(true);
         map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
-        // Initialize indoor manager
-        indoorMapManager = new IndoorMapManager(map);
+        // Initialise Indoor Map Outlines
+        floorplanService = new FloorplanService();
 
         // Initialize an empty polyline
         polyline = map.addPolyline(new PolylineOptions()
@@ -323,10 +318,16 @@ public class TrajectoryMapFragment extends Fragment {
             polyline.setPoints(points);
         }
 
-        // Update indoor map overlay
-        if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+        // Trigger venue fetch once when we have a position and map
+        if (!venuesRequested && floorplanService != null) {
+            venuesRequested = true;
+            requestNearbyVenues(newLocation);
+        }
+
+        // Trigger venue fetch once when we have a position and map
+        if (!venuesRequested && floorplanService != null) {
+            venuesRequested = true;
+            requestNearbyVenues(newLocation);
         }
     }
 
@@ -431,7 +432,6 @@ public class TrajectoryMapFragment extends Fragment {
     private void setFloorControlsVisibility(int visibility) {
         floorUpButton.setVisibility(visibility);
         floorDownButton.setVisibility(visibility);
-        autoFloorSwitch.setVisibility(visibility);
     }
 
     public void clearMapAndReset() {
@@ -563,5 +563,135 @@ public class TrajectoryMapFragment extends Fragment {
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
 
+    /**
+     * Request nearby indoor venues and draw simple outlines.
+     */
+    private void requestNearbyVenues(LatLng pos) {
+        floorplanService.requestVenues(pos.latitude, pos.longitude, new FloorplanService.FloorplanCallback() {
+            @Override
+            public void onSuccess(List<FloorplanService.Venue> venues) {
+                if (getActivity() == null) return;
+                requireActivity().runOnUiThread(() -> {
+                    drawVenueOutlines(venues);
+                    Toast.makeText(requireContext(), "Indoor venues: " + venues.size(), Toast.LENGTH_SHORT).show();
+                });
+            }
 
+            @Override
+            public void onError(String msg) {
+                if (getActivity() == null) return;
+                requireActivity().runOnUiThread(() ->
+                        Toast.makeText(requireContext(), "Indoor map fetch failed: " + msg, Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private void drawVenueOutlines(List<FloorplanService.Venue> venues) {
+        if (gMap == null || venues == null) return;
+        clearVenueGraphics();
+        gMap.setOnPolygonClickListener(this::onVenuePolygonClicked);
+        for (FloorplanService.Venue v : venues) {
+            List<LatLng> outline = v.parseOutline();
+            if (outline == null || outline.size() < 3) continue;
+            PolygonOptions opts = new PolygonOptions()
+                    .addAll(outline)
+                    .strokeColor(Color.MAGENTA)
+                    .strokeWidth(6f)
+                    .clickable(true)
+                    .zIndex(2);
+            Polygon poly = gMap.addPolygon(opts);
+            poly.setTag(v);
+            venuePolygons.add(poly);
+        }
+    }
+
+    private void onVenuePolygonClicked(Polygon polygon) {
+        Object tag = polygon.getTag();
+        if (!(tag instanceof FloorplanService.Venue)) return;
+        selectedVenue = (FloorplanService.Venue) tag;
+
+        highlightSelection(polygon);
+        SelectedVenueStore.getInstance().setSelection(selectedVenue.name, 0);
+
+        // Parse floor-separated shapes if available
+        currentFloorShapes = selectedVenue.parseFloorShapes();
+        currentFloorIndex = 0;
+        if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
+            renderCurrentFloorShapes();
+            setFloorControlsVisibility(currentFloorShapes.size() > 1 ? View.VISIBLE : View.GONE);
+        } else {
+            // Fallback: aggregate shapes
+            drawVenueShapes(selectedVenue);
+            setFloorControlsVisibility(View.GONE);
+        }
+    }
+
+    // Overlay rendering from bitmap is skipped because map_shapes is GeoJSON; keep floor controls hidden for single-floor.
+
+    private void highlightSelection(Polygon selected) {
+        for (Polygon p : venuePolygons) {
+            p.setStrokeColor(p == selected ? Color.YELLOW : Color.MAGENTA);
+        }
+    }
+
+    private void renderCurrentFloorShapes() {
+        clearVenueShapeLines();
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty() || gMap == null) return;
+        if (currentFloorIndex < 0 || currentFloorIndex >= currentFloorShapes.size()) return;
+        FloorplanService.Venue.FloorShape fs = currentFloorShapes.get(currentFloorIndex);
+        if (fs.lines == null) return;
+        for (List<LatLng> line : fs.lines) {
+            Polyline pl = gMap.addPolyline(new PolylineOptions()
+                    .addAll(line)
+                    .width(4f)
+                    .color(Color.CYAN)
+                    .zIndex(4));
+            venueShapeLines.add(pl);
+        }
+        Toast.makeText(requireContext(), "Floor: " + fs.name, Toast.LENGTH_SHORT).show();
+    }
+
+    private void drawVenueShapes(FloorplanService.Venue venue) {
+        clearVenueShapeLines();
+        if (venue == null || gMap == null) return;
+        List<List<LatLng>> shapes = venue.parseMapShapes();
+        if (shapes == null) return;
+        for (List<LatLng> line : shapes) {
+            Polyline pl = gMap.addPolyline(new PolylineOptions()
+                    .addAll(line)
+                    .width(4f)
+                    .color(Color.CYAN)
+                    .zIndex(4));
+            venueShapeLines.add(pl);
+        }
+    }
+
+    private void clearVenueShapeLines() {
+        for (Polyline pl : venueShapeLines) {
+            pl.remove();
+        }
+        venueShapeLines.clear();
+    }
+
+    private void stepFloor(int delta) {
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) return;
+        int newIndex = currentFloorIndex + delta;
+        newIndex = Math.max(0, Math.min(newIndex, currentFloorShapes.size() - 1));
+        if (newIndex != currentFloorIndex) {
+            currentFloorIndex = newIndex;
+            renderCurrentFloorShapes();
+        }
+    }
+
+    private void clearVenueGraphics() {
+        for (Polygon p : venuePolygons) {
+            p.remove();
+        }
+        venuePolygons.clear();
+        clearVenueShapeLines();
+        currentFloorShapes = null;
+        currentFloorIndex = 0;
+        setFloorControlsVisibility(View.GONE);
+        selectedVenue = null;
+    }
 }
