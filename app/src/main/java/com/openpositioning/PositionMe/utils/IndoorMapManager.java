@@ -128,6 +128,18 @@ public class IndoorMapManager {
                 return true;
             }
             // Murchison and FJB
+            else if ("Murchison House".equals(buildingName)) {
+                Log.d("IndoorMapManager", "Fetching Murchison map from API...");
+
+                // 这里我们手动指定 Murchison 的中心坐标，确保能匹配到地图
+                // 这就是你在 Swagger 上测试成功的那个坐标
+                LatLng murchisonCenter = new LatLng(55.924200, -3.179200);
+
+                // 调用你写好的 API 方法！
+                fetchFloorPlanFromApi(murchisonCenter);
+
+                return true;
+            }
             else {
                 Log.d("IndoorMapManager", "No indoor map available for: " + buildingName);
                 return false;
@@ -240,23 +252,41 @@ public class IndoorMapManager {
         // internet asking
         new Thread(() -> {
             try {
-                String urlString = "https://openpositioning.org/api/live/floorplan/request" +
-                        "?latitude=" + location.latitude +
-                        "&longitude=" + location.longitude;
+                String urlString = "https://openpositioning.org/api/live/floorplan/request/tkZ4QoAApy-6CBM6fKYwYA?key=ewireless";
+//                String urlString = "https://openpositioning.org/api/live/floorplan/request" +
+//                        "?latitude=" + location.latitude +
+//                        "&longitude=" + location.longitude;
 
                 URL url = new URL(urlString);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
-                conn.setRequestMethod("GET");
-
+//                conn.setRequestMethod("GET");
+//
+//                conn.setRequestProperty("Accept", "application/json");
+//                // API Key
+//                conn.setRequestProperty("x-api-key", "tkZ4QoAApy-6CBM6fKYwYA");
+//
+//                conn.setDoOutput(false);
+//                conn.setDoInput(true);
+                // [修改 2] 必须是 POST 方法
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json; utf-8");
                 conn.setRequestProperty("Accept", "application/json");
-                // API Key
-                conn.setRequestProperty("x-api-key", "tkZ4QoAApy-6CBM6fKYwYA");
+                conn.setDoOutput(true);
 
-                conn.setDoOutput(false);
-                conn.setDoInput(true);
+                // [修改 3] 构建 JSON 参数 {"lat":..., "lon":..., "macs":[]}
+                JSONObject jsonBody = new JSONObject();
+                jsonBody.put("lat", location.latitude);
+                jsonBody.put("lon", location.longitude);
+                jsonBody.put("macs", new JSONArray()); // 空数组
 
-                Log.d("IndoorMapAPI", "Sending GET request to: " + urlString);
+//                Log.d("IndoorMapAPI", "Sending GET request to: " + urlString);
+                Log.d("IndoorMapAPI", "Sending POST request to: " + urlString);
+                // 发送数据
+                try (OutputStream os = conn.getOutputStream()) {
+                    byte[] input = jsonBody.toString().getBytes("utf-8");
+                    os.write(input, 0, input.length);
+                }
 
                 //response
                 int responseCode = conn.getResponseCode();
@@ -275,7 +305,7 @@ public class IndoorMapManager {
                     Log.d("IndoorMapAPI", "Response Data: " + jsonResponse);
 
                     new Handler(Looper.getMainLooper()).post(() -> {
-                        parseAndHandleApiResponse(jsonResponse);
+                        parseAndHandleApiResponse(response.toString());
                     });
                 } else {
                     Log.e("IndoorMapAPI", "Failed to fetch map. Code: " + responseCode);
@@ -291,6 +321,33 @@ public class IndoorMapManager {
     private void parseAndHandleApiResponse(String jsonResponse) {
         try {
             JSONObject json = new JSONObject(jsonResponse);
+            // 1. 解码图片：把 Base64 字符串变成 Bitmap 图片
+            String base64Image = json.getString("floorplan");
+            byte[] imageBytes = Base64.decode(base64Image, Base64.DEFAULT);
+            Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+
+            // 2. 解析坐标：获取图片的左下角和右上角
+            JSONArray bottomLeft = json.getJSONArray("bottom_left");
+            JSONArray topRight = json.getJSONArray("top_right");
+
+            LatLng southWest = new LatLng(bottomLeft.getDouble(0), bottomLeft.getDouble(1));
+            LatLng northEast = new LatLng(topRight.getDouble(0), topRight.getDouble(1));
+            LatLngBounds bounds = new LatLngBounds(southWest, northEast);
+
+            // 3. 贴图：把图片贴到地图上
+            if (gMap != null) {
+                // 先移除旧的（如果有）
+                if (groundOverlay != null) groundOverlay.remove();
+
+                GroundOverlayOptions options = new GroundOverlayOptions()
+                        .image(BitmapDescriptorFactory.fromBitmap(bitmap))
+                        .positionFromBounds(bounds)
+                        .transparency(0.2f) // 稍微透明一点
+                        .zIndex(10);        // 放在最上层
+
+                groundOverlay = gMap.addGroundOverlay(options);
+                isIndoorMapSet = true;
+            }
 
             Log.d("IndoorMapAPI", "Parsing JSON: " + jsonResponse);
 
@@ -298,4 +355,5 @@ public class IndoorMapManager {
             Log.e("IndoorMapAPI", "Error parsing response", e);
         }
     }
+
 }
