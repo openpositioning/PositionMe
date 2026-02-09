@@ -6,12 +6,16 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.app.ActivityManager;
+import android.content.Intent;
 import android.location.Location;
 import android.location.LocationListener;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -81,6 +85,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final long TIME_CONST = 10;
     // Coefficient for fusing gyro-based and magnetometer-based orientation
     public static final float FILTER_COEFFICIENT = 0.96f;
+    // Toggle for heading debug logs across modules
+    public static final boolean DEBUG_HEADING = false;
     //Tuning value for low pass filter
     private static final float ALPHA = 0.8f;
     // String for creating WiFi fingerprint JSO N object
@@ -142,6 +148,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float light;
     private float proximity;
     private float[] R;
+    // Throttling timestamp for heading debug logs (rotation vector)
+    private long headingDbgRotvecLastLogMs = 0;
     private int stepCounter ;
     // Derived values
     private float elevation;
@@ -154,6 +162,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private List<Wifi> wifiList;
     private Set<Long> recordedApMacs = new HashSet<>();
     private String lastFingerprintSignature;
+    // 当前录制会话的轨迹标识，用于上报 Wi-Fi 指纹
+    private String trajectoryId;
 
 
     // Over time accelerometer magnitude values since last step
@@ -377,6 +387,14 @@ public class SensorFusion implements SensorEventListener, Observer {
                 float[] rotationVectorDCM = new float[9];
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM, this.rotation);
                 SensorManager.getOrientation(rotationVectorDCM, this.orientation);
+
+                if (DEBUG_HEADING) {
+                    long now = SystemClock.elapsedRealtime();
+                    if (now - headingDbgRotvecLastLogMs >= 1000) {
+                        Log.d("HeadingDbg", "rotvec azimuth(rad)=" + orientation[0]);
+                        headingDbgRotvecLastLogMs = now;
+                    }
+                }
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
@@ -492,24 +510,33 @@ public class SensorFusion implements SensorEventListener, Observer {
             List<Wifi> sortedWifi = new ArrayList<>(this.wifiList);
             sortedWifi.sort((a, b) -> Long.compare(a.getBssid(), b.getBssid()));
             StringBuilder signatureBuilder = new StringBuilder();
+            int apCount = 0;
             for (Wifi data : sortedWifi) {
+                if (data.getBssid() == 0) {
+                    // BSSID=0 代表未知/解析失败，跳过避免与真实 AP 去重冲突
+                    continue;
+                }
                 signatureBuilder.append(data.getBssid())
                         .append(':')
                         .append(data.getLevel())
                         .append(';');
+                apCount++;
             }
             String fingerprintSignature = signatureBuilder.toString();
             boolean isDuplicateFingerprint = fingerprintSignature.equals(lastFingerprintSignature);
             if (isDuplicateFingerprint) {
+                Log.d("WifiDedup", "Skipping duplicate fingerprint: " + fingerprintSignature + " apCount=" + apCount);
                 Log.d("SensorFusion", "Skipping duplicate WiFi fingerprint: " + fingerprintSignature);
-            }
+            } else {
+                long sampleTimestamp = SystemClock.uptimeMillis() - bootTime;
+                Traj.Fingerprint.Builder fingerprint = Traj.Fingerprint.newBuilder()
+                        .setRelativeTimestamp(sampleTimestamp);
 
-            long sampleTimestamp = SystemClock.uptimeMillis() - bootTime;
-            Traj.Fingerprint.Builder fingerprint = Traj.Fingerprint.newBuilder()
-                    .setRelativeTimestamp(sampleTimestamp);
-
-            if (!isDuplicateFingerprint) {
                 for (Wifi data : this.wifiList) {
+                    if (data.getBssid() == 0) {
+                        // 无有效 BSSID 时不记录指纹/元数据，防止 0 被当成唯一键
+                        continue;
+                    }
                     fingerprint.addRfScans(Traj.RFScan.newBuilder()
                             .setRelativeTimestamp(sampleTimestamp)
                             .setMac(data.getBssid())
@@ -517,19 +544,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     if (!recordedApMacs.contains(data.getBssid())) {
                         boolean rttCapable = data.isRttSupported();
-                        String ssid = data.getSsid();
-                        if (ssid == null || ssid.isEmpty() || "<unknown ssid>".equalsIgnoreCase(ssid)) {
-                            ssid = "hidden";
-                        } else if (ssid.length() >= 2 && ssid.startsWith("\"") && ssid.endsWith("\"")) {
-                            ssid = ssid.substring(1, ssid.length() - 1);
-                            if (ssid.isEmpty()) {
-                                ssid = "hidden";
-                            }
-                        }
-                        long frequency = data.getFrequency();
-                        if (frequency <= 0) {
-                            frequency = 0; // unknown
-                        }
+                        // 复用统一规范化逻辑，避免分支重复
+                        String ssid = WifiDataProcessor.normalizeSsid(data.getSsid());
+                        long frequency = WifiDataProcessor.normalizeFrequency(data.getFrequency());
                         Traj.WiFiAPData.Builder apData = Traj.WiFiAPData.newBuilder()
                                 .setMac(data.getBssid())
                                 .setSsid(ssid)
@@ -544,6 +561,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 + " rtt=" + rttCapable);
                     }
                 }
+                int rfCount = fingerprint.getRfScansCount();
+                Log.d("WifiDedup", "Accepted fingerprint: " + fingerprintSignature + " apCount=" + rfCount);
                 // Adding WiFi fingerprint data to Trajectory
                 this.trajectory.addWifiFingerprints(fingerprint);
                 Log.d("SensorFusion", "WiFi fingerprint added: count="
@@ -565,11 +584,19 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Creating a JSON object to store the WiFi access points
             JSONObject wifiAccessPoints=new JSONObject();
             for (Wifi data : this.wifiList){
+                if (data.getBssid() == 0) {
+                    // 0 代表未知 BSSID，过滤避免服务器误解析或键冲突
+                    continue;
+                }
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+            // 绑定当前轨迹 ID；未在录制时为空则不写入，保持行为最小化
+            if (trajectoryId != null && !trajectoryId.isEmpty()) {
+                wifiFingerPrint.put("trajectory_id", trajectoryId);
+            }
             this.wiFiPositioning.request(wifiFingerPrint);
         } catch (JSONException e) {
             // Catching error while making JSON object, to prevent crashes
@@ -928,7 +955,13 @@ public class SensorFusion implements SensorEventListener, Observer {
             PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
         }
-        wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
+        // 确保录制期间 CPU 常驻，避免重复 acquire
+        if (wakeLock != null && !wakeLock.isHeld()) {
+            wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
+        }
+
+        // 录制前校验电池优化/后台限制状态，并提示用户
+        verifyAlwaysOnReadiness();
 
         this.saveRecording = true;
         this.stepCounter = 0;
@@ -937,7 +970,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         String venueOrBuilding = "traj";
         String timestamp = new SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(new Date());
         String shortUuid = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-        String trajectoryId = venueOrBuilding + "_" + timestamp + "_" + shortUuid;
+        this.trajectoryId = venueOrBuilding + "_" + timestamp + "_" + shortUuid;
 
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
@@ -961,6 +994,46 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
             this.filter_coefficient = FILTER_COEFFICIENT;
+        }
+    }
+
+    /**
+     * 校验“始终运行”相关系统状态：电池优化、后台限制、省电模式。
+     * 仅提示用户，不强制跳转。
+     */
+    private void verifyAlwaysOnReadiness() {
+        String pkg = appContext.getPackageName();
+        PowerManager pm = (PowerManager) appContext.getSystemService(Context.POWER_SERVICE);
+        ActivityManager am = (ActivityManager) appContext.getSystemService(Context.ACTIVITY_SERVICE);
+
+        boolean ignoringOpt = false;
+        boolean powerSave = false;
+        boolean bgRestricted = false;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ignoringOpt = pm != null && pm.isIgnoringBatteryOptimizations(pkg);
+            }
+            powerSave = pm != null && pm.isPowerSaveMode();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                bgRestricted = am != null && am.isBackgroundRestricted();
+            }
+        } catch (Exception e) {
+            Log.w("SensorFusion", "电池/后台状态检查失败: " + e.getMessage());
+            Toast.makeText(appContext, "电池优化状态未知，请手动确认", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        if (!ignoringOpt || powerSave || bgRestricted) {
+            StringBuilder warn = new StringBuilder("检测到可能的后台限制：");
+            if (!ignoringOpt) warn.append("电池优化未豁免; ");
+            if (powerSave) warn.append("省电模式开启; ");
+            if (bgRestricted) warn.append("后台限制开启; ");
+            Log.w("SensorFusion", warn.toString());
+            Toast.makeText(appContext,
+                    "请在设置中关闭电池优化/省电/后台限制，确保录制不中断",
+                    Toast.LENGTH_LONG).show();
+        } else {
+            Log.i("SensorFusion", "电池优化/后台限制检查通过：已豁免优化且未开启省电/后台限制。");
         }
     }
 

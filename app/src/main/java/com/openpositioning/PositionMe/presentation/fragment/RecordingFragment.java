@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -7,6 +8,8 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.os.SystemClock;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -71,6 +74,7 @@ public class RecordingFragment extends Fragment {
     private SensorFusion sensorFusion;
     private Handler refreshDataHandler;
     private CountDownTimer autoStop;
+    private long headingDbgUiLastLogMs = 0;
 
     // Distance tracking
     private float distance = 0f;
@@ -115,6 +119,9 @@ public class RecordingFragment extends Fragment {
     public void onViewCreated(@NonNull View view,
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
+        // 录制界面保持屏幕常亮，防止录制被系统息屏打断
+        view.setKeepScreenOn(true);
 
         // Child Fragment: the container in fragment_recording.xml
         // where TrajectoryMapFragment is placed
@@ -242,10 +249,19 @@ public class RecordingFragment extends Fragment {
                     new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
 
+            double orientationDeg = Math.toDegrees(sensorFusion.passOrientation());
+            if (SensorFusion.DEBUG_HEADING) {
+                long now = SystemClock.elapsedRealtime();
+                if (now - headingDbgUiLastLogMs >= 1000) {
+                    Log.d("HeadingDbg", "UI tick orientation(deg)=" + orientationDeg);
+                    headingDbgUiLastLogMs = now;
+                }
+            }
+
             // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
                 trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+                        (float) orientationDeg);
             }
         }
 
@@ -303,9 +319,19 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        boolean isFinishing = getActivity() != null && getActivity().isFinishing();
-        if (isRemoving() || isFinishing) {
+        Activity activity = getActivity();
+        boolean isFinishing = activity != null && activity.isFinishing();
+        boolean isChangingConfig = activity != null && activity.isChangingConfigurations();
+        // 旋转等配置变化会销毁 view，但不应停止录制/扫描；仅在真正退出时收尾
+        if (!isChangingConfig && (isRemoving() || isFinishing)) {
+            // 先停止录制再停止监听，防止定时器残留
+            sensorFusion.stopRecording();
             sensorFusion.stopListening();
+        }
+        // 离开录制界面后恢复屏幕常亮标志
+        View root = getView();
+        if (root != null) {
+            root.setKeepScreenOn(false);
         }
     }
 }

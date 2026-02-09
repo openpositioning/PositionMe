@@ -20,6 +20,7 @@ import androidx.core.app.ActivityCompat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 /**
@@ -143,23 +144,12 @@ public class WifiDataProcessor implements Observable {
                 //Convert String mac address to an integer
                 String wifiMacAddress = result.BSSID;
                 long intMacAddress = convertBssidToLong(wifiMacAddress);
-                //store mac address and rssi of wifi
+                // 存储 MAC 地址与信号强度
                 wifiData[i].setBssid(intMacAddress);
                 wifiData[i].setLevel(result.level);
-                // Store additional scan data required by the latest protobuf
-                String ssid = result.SSID;
-                if (ssid == null || ssid.isEmpty() || "<unknown ssid>".equalsIgnoreCase(ssid)) {
-                    ssid = "hidden";
-                } else if (ssid.length() >= 2 && ssid.startsWith("\"") && ssid.endsWith("\"")) {
-                    ssid = ssid.substring(1, ssid.length() - 1);
-                    if (ssid.isEmpty()) {
-                        ssid = "hidden";
-                    }
-                }
-                long frequency = result.frequency;
-                if (frequency <= 0) {
-                    frequency = 0; // unknown
-                }
+                // 统一 SSID / 频点字段，避免下游重复处理
+                String ssid = normalizeSsid(result.SSID);
+                long frequency = normalizeFrequency(result.frequency);
                 boolean rttSupported = false;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     rttSupported = result.is80211mcResponder();
@@ -175,39 +165,47 @@ public class WifiDataProcessor implements Observable {
     };
 
     /**
-     * Converts mac address from string to integer.
-     * Removes semicolons from mac address and converts each hex byte to a hex integer.
+     * 将带冒号的 MAC 地址转换为整数表示。
+     * 解析失败或空输入返回 0（代表未知），避免异常冒泡。
      *
-     *
-     * @param wifiMacAddress        String Mac Address received from WifiManager containing colons
-     *
-     * @return                      Long variable with decimal conversion of the mac address
+     * @param wifiMacAddress WiFiManager 返回的带冒号 BSSID
+     * @return 十六进制字符串对应的 long 值；无法解析时返回 0
      */
-    private long convertBssidToLong(String wifiMacAddress){
-        long intMacAddress =0;
-        int colonCount =5;
-        //Loop through each character
-        for(int j =0; j<17; j++){
-            //Identify character
-            char macByte = wifiMacAddress.charAt(j);
-            //convert string hex mac address with colons to decimal long integer
-            if(macByte != ':'){
-                //For characters 0-9 subtract 48 from ASCII code and multiply by 16^position
-                if((int) macByte >= 48 && (int) macByte <= 57){
-                    intMacAddress = intMacAddress + (((int)macByte-48)*((long)Math.pow(16,16-j-colonCount)));
-                }
-
-                //For characters a-f subtract 87 (=97-10) from ASCII code and multiply by 16^index
-                else if ((int) macByte >= 97 && (int) macByte <= 102){
-                    intMacAddress = intMacAddress + (((int)macByte-87)*((long)Math.pow(16,16-j-colonCount)));
-                }
-            }
-            else
-                //coloncount is used to obtain the index of each character
-                colonCount --;
+    static long convertBssidToLong(String wifiMacAddress){
+        // 允许空或异常输入直接返回 0，防止解析异常导致崩溃
+        if (wifiMacAddress == null) {
+            return 0L;
         }
+        String normalized = wifiMacAddress.replace(":", "").toLowerCase(Locale.US);
+        if (normalized.length() != 12) {
+            return 0L;
+        }
+        try {
+            return Long.parseLong(normalized, 16);
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
+    }
 
-        return intMacAddress;
+    /**
+     * 标准化 SSID，统一隐藏/空/带引号的场景，避免三处重复代码。
+     */
+    static String normalizeSsid(String ssid) {
+        if (ssid == null || ssid.isEmpty() || "<unknown ssid>".equalsIgnoreCase(ssid)) {
+            return "hidden";
+        }
+        if (ssid.length() >= 2 && ssid.startsWith("\"") && ssid.endsWith("\"")) {
+            String trimmed = ssid.substring(1, ssid.length() - 1);
+            return trimmed.isEmpty() ? "hidden" : trimmed;
+        }
+        return ssid;
+    }
+
+    /**
+     * 标准化频率字段，负值或缺失时返回 0 以保持下游协议一致。
+     */
+    static long normalizeFrequency(long frequency) {
+        return frequency <= 0 ? 0 : frequency;
     }
 
     /**
@@ -265,6 +263,10 @@ public class WifiDataProcessor implements Observable {
      * The method declares a new timer instance to schedule a scan for nearby wifis every 5 seconds.
      */
     public void startListening() {
+        if (this.scanWifiDataTimer != null) {
+            // 避免重复创建计时器导致扫描频率翻倍
+            this.scanWifiDataTimer.cancel();
+        }
         this.scanWifiDataTimer = new Timer();
         this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, SCAN_INTERVAL_MS);
     }
@@ -283,7 +285,10 @@ public class WifiDataProcessor implements Observable {
             }
             isWifiReceiverRegistered = false;
         }
-        this.scanWifiDataTimer.cancel();
+        if (this.scanWifiDataTimer != null) {
+            this.scanWifiDataTimer.cancel();
+            this.scanWifiDataTimer = null;
+        }
     }
 
     /**
@@ -306,6 +311,7 @@ public class WifiDataProcessor implements Observable {
             } catch (Settings.SettingNotFoundException | SecurityException e) {
                 if (!sThrottleSettingWarned) {
                     Log.i(WIFI_CHECK_TAG, "wifi_scan_throttle_enabled not readable; status unknown.");
+                    showDebouncedToast("Wi-Fi throttling status unknown; please confirm in Developer options", Toast.LENGTH_LONG);
                     sThrottleSettingWarned = true;
                 }
                 return -1;
@@ -379,26 +385,15 @@ public class WifiDataProcessor implements Observable {
         //Only obtain wifi data if the device is connected
         //Wifi in which the device is currently connected to
         Wifi currentWifi = new Wifi();
-        if(networkInfo.isConnected()) {
+        if(networkInfo != null && networkInfo.isConnected()) {
             //Store the ssid, mac address and frequency of the current wifi
             String ssid = wifiManager.getConnectionInfo().getSSID();
-            if (ssid == null || ssid.isEmpty() || "<unknown ssid>".equalsIgnoreCase(ssid)) {
-                ssid = "hidden";
-            } else if (ssid.length() >= 2 && ssid.startsWith("\"") && ssid.endsWith("\"")) {
-                ssid = ssid.substring(1, ssid.length() - 1);
-                if (ssid.isEmpty()) {
-                    ssid = "hidden";
-                }
-            }
-            currentWifi.setSsid(ssid);
+            currentWifi.setSsid(normalizeSsid(ssid));
             String wifiMacAddress = wifiManager.getConnectionInfo().getBSSID();
             long intMacAddress = convertBssidToLong(wifiMacAddress);
             currentWifi.setBssid(intMacAddress);
             long frequency = wifiManager.getConnectionInfo().getFrequency();
-            if (frequency <= 0) {
-                frequency = 0; // unknown
-            }
-            currentWifi.setFrequency(frequency);
+            currentWifi.setFrequency(normalizeFrequency(frequency));
             boolean rttSupported = false;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 try {

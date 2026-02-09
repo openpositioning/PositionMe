@@ -14,3 +14,6 @@
 .cxx
 local.properties
 /.idea/
+
+# local-only docs
+_local_docs/
