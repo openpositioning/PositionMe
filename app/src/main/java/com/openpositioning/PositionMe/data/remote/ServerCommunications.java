@@ -72,6 +72,7 @@ public class ServerCommunications implements Observable {
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();
     // Application context for handling permissions and devices
     private final Context context;
+    private final String LogTag = "ServerCommunications";
 
     // Network status checking
     private ConnectivityManager connMgr;
@@ -87,9 +88,6 @@ public class ServerCommunications implements Observable {
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
     private static final String defualtCampaign = "murchison_house";
-    private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + defualtCampaign + "/" + userKey
-                    + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
                     + "?skip=0&limit=30&key=" + masterKey;
@@ -118,6 +116,23 @@ public class ServerCommunications implements Observable {
 
         this.observers = new ArrayList<>();
     }
+
+    /**
+    * Create upload URL from current venue
+    *
+    *
+    * */
+    private String formUploadURL() {
+        String URL = null;
+        if (null != SelectedVenueStore.getInstance().getVenueName()) {
+            URL =
+                    "https://openpositioning.org/api/live/trajectory/upload/" + SelectedVenueStore.getInstance().getVenueName() + "/" + userKey
+                            + "/?key=" + masterKey;
+            Log.i(LogTag , "URL is: " + URL);
+        }
+        return URL;
+    }
+
 
     /**
      * Outgoing communication request with a {@link Traj trajectory} object. The recorded
@@ -186,6 +201,10 @@ public class ServerCommunications implements Observable {
                 RequestBody requestBody = formBuilder.build();
 
             // Create a POST request with the required headers
+            String uploadURL = formUploadURL();
+            if (null == uploadURL) {
+                return; // TODO: ERROR
+            }
             Request request = new Request.Builder().url(uploadURL).post(requestBody)
                     .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                     .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
@@ -314,7 +333,11 @@ public class ServerCommunications implements Observable {
 
         RequestBody requestBody = builder.build();
 
+        String uploadURL = formUploadURL();
         // Create a POST request with the required headers
+        if (null == uploadURL) {
+            return; // TODO: ERROR
+        }
         okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
@@ -642,6 +665,7 @@ public class ServerCommunications implements Observable {
         Log.i("ServerCommunications", "Magnetometer Data size: " + trajectory.getMagnetometerDataCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
+        Log.i("ServerCommunications", "Proximity Data size: " + trajectory.getProximityDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
         Log.i("ServerCommunications", "WiFi Fingerprints size: " + trajectory.getWifiFingerprintsCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
