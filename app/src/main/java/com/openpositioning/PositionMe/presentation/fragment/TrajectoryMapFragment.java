@@ -82,7 +82,6 @@ public class TrajectoryMapFragment extends Fragment {
     private Spinner switchMapSpinner;
 
     private SwitchMaterial gnssSwitch;
-    private SwitchMaterial autoFloorSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
@@ -119,7 +118,6 @@ public class TrajectoryMapFragment extends Fragment {
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
-        autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         switchColorButton = view.findViewById(R.id.lineColorButton);
@@ -182,22 +180,11 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // Floor up/down logic
-        autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-
-            //TODO: fix the sensor fusion method to get the elevation (cannot get it from the current method)
-           float elevationVal = sensorFusion.getElevation();
-           // TODO: Add floor switch method
-        });
-
         floorUpButton.setOnClickListener(v -> {
-            // If user manually changes floor, turn off auto floor
-            autoFloorSwitch.setChecked(false);
             stepFloor(1);
         });
 
         floorDownButton.setOnClickListener(v -> {
-            autoFloorSwitch.setChecked(false);
             stepFloor(-1);
         });
     }
@@ -445,7 +432,6 @@ public class TrajectoryMapFragment extends Fragment {
     private void setFloorControlsVisibility(int visibility) {
         floorUpButton.setVisibility(visibility);
         floorDownButton.setVisibility(visibility);
-        autoFloorSwitch.setVisibility(visibility);
     }
 
     public void clearMapAndReset() {
