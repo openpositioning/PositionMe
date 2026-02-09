@@ -258,7 +258,15 @@ public class RecordingFragment extends Fragment {
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
             LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
-            trajectoryMapFragment.updateFloorplanProbeLocation(gnssLocation);
+
+            //TODO UNCOMMENT WHEN SUBMITTING
+//            trajectoryMapFragment.updateFloorplanProbeLocation(gnssLocation);
+
+            LatLng probe = trajectoryMapFragment.getCurrentLocation();
+            if (probe != null) {
+                trajectoryMapFragment.updateFloorplanProbeLocation(probe);
+            }
+
 
             // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
