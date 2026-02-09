@@ -11,6 +11,7 @@ import android.location.LocationListener;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -32,6 +33,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.stream.Collectors;
@@ -104,6 +106,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Other data recording
     private WifiDataProcessor wifiProcessor;
     private GNSSDataProcessor gnssProcessor;
+    private Bluetooth bleScanner;
     // Data listener
     private final LocationListener locationListener;
 
@@ -239,6 +242,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(this);
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
+        this.bleScanner = new Bluetooth(context);
         // Create object handling HTTPS communication
         this.serverCommunications = new ServerCommunications(context);
         // Save absolute and relative start time
@@ -900,13 +904,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
                 .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
-                .setLightSensorInfo(createInfoBuilder(lightSensor));
-
-
+                .setLightSensorInfo(createInfoBuilder(lightSensor))
+                .setProximityInfo(createInfoBuilder(proximitySensor));
 
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
         this.pdrProcessing.resetPDR();
+        // Start BLE scanning to collect fingerprints
+        if (bleScanner != null) {
+            bleScanner.startScan();
+        }
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
@@ -931,6 +938,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         if(wakeLock.isHeld()) {
             this.wakeLock.release();
+        }
+        // Stop BLE scanning
+        if (bleScanner != null) {
+            bleScanner.stopScan();
         }
         // Reset initial position flag for next recording
         initialPositionSet = false;
@@ -1048,6 +1059,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                                     .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                     .build());
                 }
+                if (proximitySensor.sensor != null) {
+                    trajectory.addProximityData(Traj.ProximityReading.newBuilder()
+                            .setDistance(proximity)
+                            .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                            .build());
+                }
 
                 // Divide the timer for storing AP data every 5 seconds
                 if (secondCounter == 4) {
@@ -1060,6 +1077,44 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setFrequency(currentWifi.getFrequency())
                             .setRttEnabled(false)  // TODO: Detect RTT capability dynamically
                             .build());
+                    
+                    // Collect and add BLE fingerprints every 5 seconds
+                    if (bleScanner != null) {
+                        List<Bluetooth.BleDevice> bleDevices = bleScanner.getDiscoveredDevices();
+                        if (!bleDevices.isEmpty()) {
+                            Traj.Fingerprint.Builder bleFingerprint = Traj.Fingerprint.newBuilder()
+                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
+                            
+                            for (Bluetooth.BleDevice device : bleDevices) {
+                                // Log each BT device detected
+                                Log.d("BLE_FINGERPRINT", "MAC=" + device.macAddress + 
+                                        ", Name=" + device.name + 
+                                        ", TxPower=" + device.txPowerLevel + 
+                                        ", Flags=" + device.advertiseFlags);
+                                
+                                // Convert MAC address string to long (same format as WiFi)
+                                long macLong = convertMacAddressToLong(device.macAddress);
+                                
+                                // Add to BLE fingerprint with TX power as signal strength proxy
+                                bleFingerprint.addRfScans(Traj.RFScan.newBuilder()
+                                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                                        .setMac(macLong)
+                                        .setRssi(device.txPowerLevel)  // Use TX power as signal strength
+                                        .build());
+                                
+                                // Also add detailed BLE data
+                                trajectory.addBleData(Traj.BleData.newBuilder()
+                                        .setMacAddress(device.macAddress)
+                                        .setName(device.name)
+                                        .setTxPowerLevel(device.txPowerLevel)
+                                        .setAdvertiseFlags(device.advertiseFlags)
+                                        .build());
+                            }
+                            
+                            // Add the BLE fingerprint to trajectory
+                            trajectory.addBleFingerprints(bleFingerprint);
+                        }
+                    }
                 }
                 else {
                     secondCounter++;
@@ -1070,6 +1125,22 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
 
         }
+    }
+
+    /**
+     * Convert MAC address string (AA:BB:CC:DD:EE:FF) to long format.
+     * Used for BLE and WiFi fingerprint encoding.
+     *
+     * @param macAddress MAC address string in format AA:BB:CC:DD:EE:FF
+     * @return Long representation of MAC address (integer encoding)
+     */
+    private long convertMacAddressToLong(String macAddress) {
+        String[] parts = macAddress.split(":");
+        long result = 0;
+        for (String part : parts) {
+            result = (result << 8) | (Long.parseLong(part, 16) & 0xFF);
+        }
+        return result;
     }
 
     //endregion

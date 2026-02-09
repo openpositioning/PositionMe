@@ -39,6 +39,8 @@ import com.openpositioning.PositionMe.utils.PermissionManager;
 
 
 import java.util.Objects;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The Main Activity of the application, handling setup, permissions and starting all other fragments
@@ -128,14 +130,22 @@ public class MainActivity extends AppCompatActivity implements Observer {
                 result -> {
                     boolean locationGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
                     boolean activityGranted = result.getOrDefault(Manifest.permission.ACTIVITY_RECOGNITION, false);
+                    
+                    // Check Bluetooth permissions only on Android 12+
+                    boolean bluetoothGranted = true;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        boolean bluetoothScanGranted = result.getOrDefault(Manifest.permission.BLUETOOTH_SCAN, false);
+                        boolean bluetoothConnectGranted = result.getOrDefault(Manifest.permission.BLUETOOTH_CONNECT, false);
+                        bluetoothGranted = bluetoothScanGranted && bluetoothConnectGranted;
+                    }
 
-                    if (locationGranted && activityGranted) {
-                        // Both permissions granted
+                    if (locationGranted && activityGranted && bluetoothGranted) {
+                        // All permissions granted
                         allPermissionsObtained();
                     } else {
                         // Permission denied
                         Toast.makeText(this,
-                                "Location or Physical Activity permission denied. Some features may not work.",
+                                "Location, Physical Activity or Bluetooth permission denied. Some features may not work.",
                                 Toast.LENGTH_LONG).show();
                     }
                 }
@@ -189,14 +199,30 @@ public class MainActivity extends AppCompatActivity implements Observer {
                         this, Manifest.permission.ACTIVITY_RECOGNITION
                 ) == PackageManager.PERMISSION_GRANTED;
 
-                if (!locationGranted || !activityGranted) {
-                    // Request both permissions using ActivityResultLauncher
-                    multiplePermissionsLauncher.launch(new String[]{
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACTIVITY_RECOGNITION
-                    });
+                // Check Bluetooth permissions for Android 12+
+                boolean bluetoothScanGranted = true;
+                boolean bluetoothConnectGranted = true;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    bluetoothScanGranted = ContextCompat.checkSelfPermission(
+                            this, Manifest.permission.BLUETOOTH_SCAN
+                    ) == PackageManager.PERMISSION_GRANTED;
+                    bluetoothConnectGranted = ContextCompat.checkSelfPermission(
+                            this, Manifest.permission.BLUETOOTH_CONNECT
+                    ) == PackageManager.PERMISSION_GRANTED;
+                }
+
+                if (!locationGranted || !activityGranted || !bluetoothScanGranted || !bluetoothConnectGranted) {
+                    // Request all permissions using ActivityResultLauncher
+                    List<String> permissionsToRequest = new ArrayList<>();
+                    if (!locationGranted) permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION);
+                    if (!activityGranted) permissionsToRequest.add(Manifest.permission.ACTIVITY_RECOGNITION);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        if (!bluetoothScanGranted) permissionsToRequest.add(Manifest.permission.BLUETOOTH_SCAN);
+                        if (!bluetoothConnectGranted) permissionsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT);
+                    }
+                    multiplePermissionsLauncher.launch(permissionsToRequest.toArray(new String[0]));
                 } else {
-                    // Both permissions are already granted
+                    // All permissions are already granted
                     allPermissionsObtained();
                 }
             }

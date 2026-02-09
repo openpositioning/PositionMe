@@ -57,6 +57,10 @@ public class PermissionManager {
         requiredPermissions.add(Manifest.permission.ACCESS_COARSE_LOCATION);
         requiredPermissions.add(Manifest.permission.ACCESS_WIFI_STATE);
         requiredPermissions.add(Manifest.permission.CHANGE_WIFI_STATE);
+        requiredPermissions.add(Manifest.permission.BLUETOOTH_CONNECT);
+        requiredPermissions.add(Manifest.permission.BLUETOOTH);
+        requiredPermissions.add(Manifest.permission.BLUETOOTH_SCAN);
+        requiredPermissions.add(Manifest.permission.BLUETOOTH_ADMIN);
         // For API < 29, also request broad storage permissions
         // For API >= 29, also request ACTIVITY_RECOGNITION
         // (We can do the check here or just always add them; the OS will skip as needed.)
