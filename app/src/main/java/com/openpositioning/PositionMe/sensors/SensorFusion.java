@@ -86,6 +86,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PowerManager.WakeLock wakeLock;
     private Context appContext;
 
+    //add trajectoryName
+    private String trajectoryName = "";
+
     // Settings
     private SharedPreferences settings;
 
@@ -158,6 +161,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
+
 
     //region Initialisation
     /**
@@ -848,6 +852,21 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
+     * Set trajectory name before recording starts
+     */
+    public void setTrajectoryName(String name) {
+        this.trajectoryName = name;
+        android.util.Log.i("SensorFusion", "Trajectory name set: " + name);
+    }
+
+    /**
+     * Get trajectory name
+     */
+    public String getTrajectoryName() {
+        return this.trajectoryName;
+    }
+
+    /**
      * Enables saving sensor values to the trajectory object.
      *
      * Sets save recording to true, resets the absolute start time and create new timer object for
@@ -871,6 +890,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
                 .setStartTimestamp(absoluteStartTime)
+                .setTrajectoryId(trajectoryName)
                 .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
                 .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
                 .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
@@ -898,6 +918,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see Traj object for storing data.
      * @see SettingsFragment navigation that might cancel recording.
      */
+
     public void stopRecording() {
         // Only cancel if we are running
         if(this.saveRecording) {
