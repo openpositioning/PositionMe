@@ -406,7 +406,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (saveRecording) {
                         this.pathView.drawTrajectory(newCords);
                         stepCounter++;
-                        trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
+                        trajectory.addPdrData(Traj.RelativePosition.newBuilder()
                                 .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                 .setX(newCords[0])
                                 .setY(newCords[1]));
@@ -446,7 +446,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
             if(saveRecording) {
-                trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
+                trajectory.addGnssData(Traj.GNSSReading.newBuilder()
                         .setAccuracy(accuracy)
                         .setAltitude(altitude)
                         .setLatitude(latitude)
@@ -474,7 +474,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             Traj.WiFi_Sample.Builder wifiData = Traj.WiFi_Sample.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
             for (Wifi data : this.wifiList) {
-                wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
+                wifiData.addMacScans(Traj.RFScan.newBuilder()
                         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                         .setMac(data.getBssid()).setRssi(data.getLevel()));
             }
@@ -949,7 +949,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private class storeDataInTrajectory extends TimerTask {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
-            trajectory.addImuData(Traj.Motion_Sample.newBuilder()
+            trajectory.addImuData(Traj.IMUReading.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
                     .setAccX(acceleration[0])
                     .setAccY(acceleration[1])
@@ -963,7 +963,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     .setRotationVectorZ(rotation[2])
                     .setRotationVectorW(rotation[3])
                     .setStepCount(stepCounter))
-                    .addPositionData(Traj.Position_Sample.newBuilder()
+                    .addPositionData(Traj.MagnetometerReading.newBuilder()
                             .setMagX(magneticField[0])
                             .setMagY(magneticField[1])
                             .setMagZ(magneticField[2])
@@ -979,10 +979,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 counter = 0;
                 // Store pressure and light data
                 if (barometerSensor.sensor != null) {
-                    trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
+                    trajectory.addPressureData(Traj.BarometerReading.newBuilder()
                                     .setPressure(pressure)
                                     .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
-                            .addLightData(Traj.Light_Sample.newBuilder()
+                            .addLightData(Traj.LightReading.newBuilder()
                                     .setLight(light)
                                     .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                     .build());
@@ -993,7 +993,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     secondCounter = 0;
                     //Current Wifi Object
                     Wifi currentWifi = wifiProcessor.getCurrentWifiData();
-                    trajectory.addApsData(Traj.AP_Data.newBuilder()
+                    trajectory.addApsData(Traj.WiFiAPData.newBuilder()
                             .setMac(currentWifi.getBssid())
                             .setSsid(currentWifi.getSsid())
                             .setFrequency(currentWifi.getFrequency()));
