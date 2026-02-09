@@ -90,8 +90,8 @@ public class WiFiPositioning {
                 // Parses the response to obtain the WiFi location and WiFi floor
                 response -> {
                     try {
-                            wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
-                            floor = response.getInt("floor");
+                        wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
+                        floor = response.getInt("floor");
                     } catch (JSONException e) {
                         // Error log to keep record of errors (for secure programming and maintainability)
                         Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);

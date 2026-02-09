@@ -79,13 +79,13 @@ public class TrajectoryMapFragment extends Fragment {
 
     // UI
     private Spinner switchMapSpinner;
-
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+    private List<Marker> markers = new ArrayList<>();
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -359,6 +359,31 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    /**
+     * Adds a Timed marker to the map
+     */
+    public void addTimeMarker(LatLng pos, String timeLabel, int number) {
+        if (gMap == null || pos == null) return;
+
+        Marker marker = gMap.addMarker(new MarkerOptions()
+                .position(pos)
+                .title("Test Point #" + number)
+                .snippet("Time: " + timeLabel)
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+        markers.add(marker);
+    }
+
+    /**
+     * Clears Markers From Maps
+     */
+    public void removeAllMarkers() {
+        for (Marker marker : markers) {
+            if (marker != null) {
+                marker.remove();
+            }
+        }
+        markers.clear();
+    }
 
     /**
      * Get the current user location on the map.

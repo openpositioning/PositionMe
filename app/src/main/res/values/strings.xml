@@ -141,5 +141,6 @@
     <string name="replay_frag_exit">Exit</string>
     <string name="button_indoorPositioning">Indoor Positioning (Coming Soon)</string>
     <string name="text_map_type">Map Type</string>
+    <string name="drop_marker">Drop Marker</string>
 
 </resources>

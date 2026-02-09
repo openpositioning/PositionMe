@@ -2,6 +2,8 @@ package com.openpositioning.PositionMe.presentation.activity;
 
 import android.os.Bundle;
 import android.util.Log;
+import android.view.WindowManager;
+
 import java.io.File;
 
 import androidx.annotation.Nullable;
@@ -75,6 +77,7 @@ public class ReplayActivity extends AppCompatActivity {
         if (savedInstanceState == null) {
             showStartLocationFragment();
         }
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     /**

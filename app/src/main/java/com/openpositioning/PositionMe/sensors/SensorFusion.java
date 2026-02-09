@@ -610,6 +610,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         return Long.parseLong(cleanMac, 16);
     }
 
+
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      *
@@ -618,13 +619,16 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Try catch block to catch any errors and prevent app crashing
         try {
             // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
+            JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList){
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+
+            Log.d("WiFiPositioning", "Sending: " + wifiFingerPrint.toString());
+
             this.wiFiPositioning.request(wifiFingerPrint);
         } catch (JSONException e) {
             // Catching error while making JSON object, to prevent crashes
@@ -640,13 +644,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     private void createWifiPositionRequestCallback(){
         try {
             // Creating a JSON object to store the WiFi access points
-            JSONObject wifiAccessPoints=new JSONObject();
+            JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList){
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
+
+            Log.d("WiFiPositioning", "Sending: " + wifiFingerPrint.toString());
+
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
@@ -663,7 +670,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Error log to keep record of errors (for secure programming and maintainability)
             Log.e("jsonErrors","Error creating json object"+e.toString());
         }
-
     }
 
     /**
@@ -1196,6 +1202,27 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
 
         }
+    }
+
+    public double getGNSSAltitude() {
+        if (gnssProcessor != null && gnssProcessor.getLastLocation() != null) {
+            return gnssProcessor.getLastLocation().getAltitude();
+        }
+        return 0.0;
+    }
+
+    public void addTestPoint(double latitude, double longitude, double altitude) {
+        if (saveRecording && trajectory != null) {
+            trajectory.addTestPoints(Traj.GNSSPosition.newBuilder()
+                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                    .setLatitude(latitude)
+                    .setLongitude(longitude)
+                    .setAltitude(altitude));
+        }
+    }
+
+    public long getRecordingElapsedMs() {
+        return SystemClock.uptimeMillis() - bootTime;
     }
 
     //endregion

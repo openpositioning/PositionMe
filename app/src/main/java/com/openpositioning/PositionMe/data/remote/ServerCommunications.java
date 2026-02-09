@@ -174,11 +174,11 @@ public class ServerCommunications implements Observable {
             // Create a POST request with the required headers
             String uploadURL = createUploadURL();
             Request request = new Request.Builder()
-                .url(uploadURL)
-                .post(requestBody)
-                .addHeader("accept", PROTOCOL_APP_JSON)
-                .addHeader("Content-Type", PROTOCOL_MULTIPART)
-                .build();
+                    .url(uploadURL)
+                    .post(requestBody)
+                    .addHeader("accept", PROTOCOL_APP_JSON)
+                    .addHeader("Content-Type", PROTOCOL_MULTIPART)
+                    .build();
 
             // Enqueue the request to be executed asynchronously and handle the response
             client.newCall(request).enqueue(new Callback() {
@@ -210,8 +210,8 @@ public class ServerCommunications implements Observable {
                             String errorBody = responseBody.string();
                             infoResponse = "Upload failed: " + errorBody;
                             new Handler(Looper.getMainLooper()).post(() ->
-                                Toast.makeText(
-                                    context, infoResponse, Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                            context, infoResponse, Toast.LENGTH_SHORT).show()
                             );
 
                             System.err.println("POST error response: " + errorBody);
@@ -224,7 +224,7 @@ public class ServerCommunications implements Observable {
                         Headers responseHeaders = response.headers();
                         for (int i = 0, size = responseHeaders.size(); i < size; i++) {
                             System.out.println(
-                                responseHeaders.name(i) + ": " + responseHeaders.value(i)
+                                    responseHeaders.name(i) + ": " + responseHeaders.value(i)
                             );
                         }
                         // Print a confirmation of a successful POST to API
@@ -236,17 +236,17 @@ public class ServerCommunications implements Observable {
 
                         // Copy the file to the Downloads folder
                         File downloadsDir = Environment.getExternalStoragePublicDirectory(
-                            Environment.DIRECTORY_DOWNLOADS
+                                Environment.DIRECTORY_DOWNLOADS
                         );
                         File downloadFile = new File(downloadsDir, file.getName());
                         try {
                             copyFile(file, downloadFile);
                             System.out.println("Trajectory file copied to Downloads: "
-                                + downloadFile.getAbsolutePath()
+                                    + downloadFile.getAbsolutePath()
                             );
                         } catch (IOException e) {
                             System.err.println(
-                                "Failed to copy file to Downloads: " + e.getMessage()
+                                    "Failed to copy file to Downloads: " + e.getMessage()
                             );
                         }
 
@@ -310,14 +310,14 @@ public class ServerCommunications implements Observable {
                 // Set success to false and notify observers
                 success = false;
                 System.err.println(
-                    "[" + e.getClass() + "] UPLOAD: Failure to get response"
+                        "[" + e.getClass() + "] UPLOAD: Failure to get response"
                 );
                 notifyObservers(OBSERVER_INDEX_MAIN);
 
                 // Show error message to users
                 infoResponse = "Upload failed: " + e.getMessage(); // Store error message
                 new Handler(Looper.getMainLooper()).post(() ->
-                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
+                        Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
             }
 
             @Override
@@ -382,7 +382,7 @@ public class ServerCommunications implements Observable {
                         downloadRecords.put(id, record);
                     } catch (Exception e) {
                         System.err.println(
-                            "[" + e.getClass() + "] Error loading record with key: " + key
+                                "[" + e.getClass() + "] Error loading record with key: " + key
                         );
                     }
                 }
@@ -625,15 +625,15 @@ public class ServerCommunications implements Observable {
     // TODO - Implement true campaign support
     private String createUploadURL(String campaign){
         return URL_API + API_POST_TRAJECTORIES + "/"
-            + campaign + "/" + API_KEY_USER
-            + "/?key=" + API_KEY_MASTER;
+                + campaign + "/" + API_KEY_USER
+                + "/?key=" + API_KEY_MASTER;
     }
 
     // TODO - Remove this temporary copy once campaigns have been implemented
     private String createUploadURL(){
         return URL_API + API_POST_TRAJECTORIES + "/"
-            + "nucleus_building" + "/" + API_KEY_USER
-            + "/?key=" + API_KEY_MASTER;
+                + "nucleus_building" + "/" + API_KEY_USER
+                + "/?key=" + API_KEY_MASTER;
     }
 
     private void logDataSize(Traj.Trajectory trajectory) {

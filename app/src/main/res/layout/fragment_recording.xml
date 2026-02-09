@@ -93,6 +93,20 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
+        <!-- Drop Marker Button (icon-only) ABOVE progress bar -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/dropMarkerButton"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginBottom="12dp"
+            android:layout_gravity="end"
+            app:srcCompat="@drawable/ic_baseline_add_timed_marker"
+            app:backgroundTint="@color/red"
+            app:tint="@color/md_theme_onPrimary"
+            android:contentDescription="@string/drop_marker" />
+
+
+
         <!-- Progress Bar -->
         <com.google.android.material.progressindicator.LinearProgressIndicator
             android:id="@+id/timeRemainingBar"

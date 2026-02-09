@@ -180,6 +180,7 @@ public class ReplayFragment extends Fragment {
             currentIndex = 0;
             playbackSeekBar.setProgress(0);
             Log.i(TAG, "Restart button pressed. Resetting playback to index 0.");
+            trajectoryMapFragment.removeAllMarkers();
             updateMapForIndex(0);
         });
 
@@ -356,6 +357,9 @@ public class ReplayFragment extends Fragment {
             trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
             if (p.gnssLocation != null) {
                 trajectoryMapFragment.updateGNSS(p.gnssLocation);
+            }
+            if (p.testPoint != null){
+                trajectoryMapFragment.addTimeMarker(p.testPoint, p.testPointTime, p.testPointNumber);
             }
         }
 

@@ -10,6 +10,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
+import com.openpositioning.PositionMe.sensors.GNSSDataProcessor;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.io.BufferedReader;
@@ -65,6 +66,9 @@ public class TrajParser {
         public float orientation;   // Orientation in degrees
         public float speed;         // Speed in meters per second
         public long timestamp;      // Relative timestamp
+        public LatLng testPoint;    // Test point location (null if not a test point)
+        public int testPointNumber; // Test point number (0 if not a test point)
+        public String testPointTime; // Formatted time for test point
 
         /**
          * Constructs a ReplayPoint.
@@ -81,6 +85,9 @@ public class TrajParser {
             this.orientation = orientation;
             this.speed = speed;
             this.timestamp = timestamp;
+            this.testPoint = null;
+            this.testPointNumber = 0;
+            this.testPointTime = null;
         }
     }
 
@@ -102,6 +109,12 @@ public class TrajParser {
     private static class GnssRecord {
         public long relativeTimestamp;
         public double latitude, longitude; // GNSS coordinates
+    }
+
+    /** Represents a Test Point marker saved during recording. */
+    private static class TestPointRecord {
+        public long relativeTimestamp;
+        public double latitude, longitude, altitude;
     }
 
     /**
@@ -150,6 +163,7 @@ public class TrajParser {
             List<ImuRecord> imuList = parseImuData(root.getAsJsonArray("imuData"));
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
+            List<TestPointRecord> testPointList = parseTestPoints(root.getAsJsonArray("testPoints"));
 
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: "
                     + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
@@ -187,6 +201,21 @@ public class TrajParser {
 
                 result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
                         0f, pdr.relativeTimestamp));
+            }
+
+            // Match test points to ReplayPoints by finding closest timestamp
+            for (int i = 0; i < testPointList.size(); i++) {
+                TestPointRecord testPt = testPointList.get(i);
+
+                ReplayPoint closest = result.stream()
+                        .min(Comparator.comparingLong(rp -> Math.abs(rp.timestamp - testPt.relativeTimestamp)))
+                        .orElse(null);
+
+                if (closest != null) {
+                    closest.testPoint = new LatLng(testPt.latitude, testPt.longitude);
+                    closest.testPointNumber = i + 1;
+                    closest.testPointTime = formatTimestamp(testPt.relativeTimestamp);
+                }
             }
 
             Collections.sort(result, Comparator.comparingLong(rp -> rp.timestamp));
@@ -287,6 +316,16 @@ private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
         }
     }
     return gnssList;
+}/** Parses Test Points data from JSON. */
+private static List<TestPointRecord> parseTestPoints(JsonArray testPointsArray) {
+        List<TestPointRecord> testPointsList = new ArrayList<>();
+        if (testPointsArray == null) return testPointsList;
+        Gson gson = new Gson();
+        for (int i = 0; i < testPointsArray.size(); i++) {
+            TestPointRecord record = gson.fromJson(testPointsArray.get(i), TestPointRecord.class);
+            testPointsList.add(record);
+        }
+        return testPointsList;
 }/** Finds the closest IMU record to the given timestamp. */
 private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {
     return imuList.stream().min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp)))
@@ -310,5 +349,13 @@ private static float computeOrientationFromRotationVector(float rx, float ry, fl
     float azimuthDeg = (float) Math.toDegrees(orientationAngles[0]);
     return azimuthDeg < 0 ? azimuthDeg + 360.0f : azimuthDeg;
 }
+
+    /** Formats a relative timestamp into MM:SS format */
+    private static String formatTimestamp(long relativeTimestamp) {
+        long seconds = relativeTimestamp / 1000;
+        long minutes = seconds / 60;
+        seconds = seconds % 60;
+        return String.format("%02d:%02d", minutes, seconds);
+    }
 
 }

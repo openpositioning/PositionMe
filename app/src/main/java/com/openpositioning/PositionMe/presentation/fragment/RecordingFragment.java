@@ -26,6 +26,10 @@ import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.material.button.MaterialButton;
 
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.material.button.MaterialButton;
+
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
@@ -62,6 +66,7 @@ public class RecordingFragment extends Fragment implements Observer {
 
     // UI elements
     private MaterialButton completeButton, cancelButton;
+    private FloatingActionButton timedMarker;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -81,6 +86,7 @@ public class RecordingFragment extends Fragment implements Observer {
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
+    private int timed_marker_counter = 1;
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
@@ -140,6 +146,7 @@ public class RecordingFragment extends Fragment implements Observer {
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
+        timedMarker = view.findViewById(R.id.dropMarkerButton);
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
@@ -183,6 +190,18 @@ public class RecordingFragment extends Fragment implements Observer {
             dialog.show(); // Finally, show the dialog
         });
 
+        timedMarker.setOnClickListener(v -> {
+            if (trajectoryMapFragment == null) return;
+            LatLng marker_location = trajectoryMapFragment.getCurrentLocation();
+            if (marker_location == null) return;
+            long tMs = sensorFusion.getRecordingElapsedMs();
+            String timeLabel = android.text.format.DateFormat.format("HH:mm:ss", tMs).toString();
+            trajectoryMapFragment.addTimeMarker(marker_location, timeLabel, timed_marker_counter);
+            double GNNSAltitude = sensorFusion.getGNSSAltitude();
+            sensorFusion.addTestPoint(marker_location.latitude, marker_location.longitude, GNNSAltitude);
+            timed_marker_counter++;
+        });
+
         // The blinking effect for recIcon
         blinkingRecordingIcon();
 
@@ -212,7 +231,7 @@ public class RecordingFragment extends Fragment implements Observer {
             refreshDataHandler.post(refreshDataTask);
         }
     }
-
+    
     /**
      * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
      */
