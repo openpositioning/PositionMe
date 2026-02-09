@@ -23,17 +23,17 @@
 
 ### Class Name Changes
 
-| Old Name | New Name |
-|----------|----------|
-| `Pdr_Sample` | `RelativePosition` |
-| `GNSS_Sample` | `GNSSReading` |
-| `WiFi_Sample` | `Fingerprint` |
-| `Mac_Scan` | `RFScan` |
-| `Motion_Sample` | `IMUReading` |
+| Old Name          | New Name |
+|-------------------|----------|
+| `Pdr_Sample`      | `RelativePosition` |
+| `GNSS_Sample`     | `GNSSReading` |
+| `WiFi_Sample`     | `Fingerprint` |
+| `Mac_Scan`        | `RFScan` |
+| `Motion_Sampleq`  | `IMUReading` |
 | `Position_Sample` | `MagnetometerReading` |
 | `Pressure_Sample` | `BarometerReading` |
-| `Light_Sample` | `LightReading` |
-| `AP_Data` | `WiFiAPData` |
+| `Light_Sample`    | `LightReading` |
+| `AP_Data`         | `WiFiAPData` |
 
 ### Method Name Changes
 
