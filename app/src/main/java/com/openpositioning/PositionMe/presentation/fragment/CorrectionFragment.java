@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -32,7 +33,6 @@ import com.google.android.gms.maps.model.MarkerOptions;
  * is finished to enable manual adjustments to the PDR. The adjustments are not saved as of now.
  */
 public class CorrectionFragment extends Fragment {
-
     //Map variable
     public GoogleMap mMap;
     //Button to go to next
@@ -62,8 +62,15 @@ public class CorrectionFragment extends Fragment {
         }
         View rootView = inflater.inflate(R.layout.fragment_correction, container, false);
 
-        // Send trajectory data to the cloud
-        sensorFusion.sendTrajectoryToCloud();
+        // Send trajectory only if a venue is selected for campaign-aware upload
+        String selectedCampaign = sensorFusion.getSelectedCampaign();
+        if (selectedCampaign == null || selectedCampaign.trim().isEmpty()) {
+            Toast.makeText(requireContext(),
+                    "Select a venue on the map before submission",
+                    Toast.LENGTH_LONG).show();
+        } else {
+            sensorFusion.sendTrajectoryToCloud(selectedCampaign);
+        }
 
         //Obtain start position
         float[] startPosition = sensorFusion.getGNSSLatitude(true);

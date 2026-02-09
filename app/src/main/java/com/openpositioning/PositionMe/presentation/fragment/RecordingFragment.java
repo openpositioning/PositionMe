@@ -18,6 +18,7 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
@@ -147,6 +148,13 @@ public class RecordingFragment extends Fragment {
 
         // Buttons
         completeButton.setOnClickListener(v -> {
+            String selectedCampaign = sensorFusion.getSelectedCampaign();
+            if (selectedCampaign == null || selectedCampaign.trim().isEmpty()) {
+                Toast.makeText(requireContext(),
+                        "Please select a venue on the map before stopping.",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
             // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
@@ -249,9 +257,11 @@ public class RecordingFragment extends Fragment {
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
+            LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
+            trajectoryMapFragment.updateFloorplanProbeLocation(gnssLocation);
+
             // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
-                LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
                 if (currentLoc != null) {
                     double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
