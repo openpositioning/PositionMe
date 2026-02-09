@@ -23,63 +23,76 @@
             android:layout_height="match_parent"
             android:padding="12dp">
 
+            <!-- Time stamp TextView -->
             <TextView
                 android:id="@+id/trajectoryIdItem"
                 android:layout_width="80dp"
                 android:layout_height="wrap_content"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:text="99999"
-                android:textColor="@color/pastelBlue"
-                android:textAppearance="@style/TextAppearance.Material3.DisplaySmall"
-                android:maxLines="1"
+                android:autoSizeMaxTextSize="65sp"
+                android:autoSizeMinTextSize="12sp"
+                android:autoSizeStepGranularity="2sp"
+                android:autoSizeTextType="uniform"
                 android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:text="99999"
+                android:textAppearance="@style/TextAppearance.Material3.DisplaySmall"
+                android:textColor="@color/pastelBlue"
+                android:textStyle="bold"
+                app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                android:autoSizeTextType="uniform"
-                android:autoSizeMinTextSize="12sp"
-                android:autoSizeMaxTextSize="65sp"
-                android:autoSizeStepGranularity="2sp" />
+                app:layout_constraintVertical_bias="0.152" />
 
-            <!-- Time stamp TextView -->
+            <!-- Delete button with "X" icon -->
             <TextView
                 android:id="@+id/trajectoryDateItem"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:text="1998-05-19 05:28:42"
-                android:textColor="@color/md_theme_onSurface"
                 android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                android:textColor="@color/md_theme_onSurface"
+                app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
                 app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent" />
-
-            <!-- Delete button with "X" icon -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/deletebutton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="8dp"
-                app:icon="@drawable/ic_trash"
-                app:iconTint="@color/md_theme_onError_mediumContrast"
-                android:backgroundTint="@color/md_theme_error"
-                style="@style/Widget.Material3.Button.Icon"
-                app:layout_constraintEnd_toStartOf="@id/uploadTrajectoryButton"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent" />
+                app:layout_constraintVertical_bias="0.158" />
 
             <!-- Upload button with "#" icon -->
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/uploadTrajectoryButton"
+                android:id="@+id/deletebutton"
+                style="@style/Widget.Material3.Button.Icon"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
+                android:layout_marginEnd="28dp"
+                android:backgroundTint="@color/md_theme_error"
+                app:icon="@drawable/ic_trash"
+                app:iconTint="@color/md_theme_onError_mediumContrast"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/uploadTrajectoryButton"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.053" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/uploadTrajectoryButton"
+                style="@style/Widget.Material3.Button.Icon"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="16dp"
                 app:icon="@drawable/ic_baseline_upload_24"
                 app:iconTint="@color/md_theme_light_onPrimary"
-                style="@style/Widget.Material3.Button.Icon"
+                app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent" />
+                app:layout_constraintVertical_bias="0.053" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="6dp"
+                android:layout_height="wrap_content"
+                tools:layout_editor_absoluteX="23dp"
+                tools:layout_editor_absoluteY="52dp">
+
+            </com.google.android.material.textfield.TextInputLayout>
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </com.google.android.material.card.MaterialCardView>
