@@ -59,14 +59,15 @@ import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.openpositioning.PositionMe.utils.BuildingPolygon;
 import java.util.ArrayList;
 import java.util.Collections;
-
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-
+import java.util.Random;
+import java.util.regex.Pattern;
 public class TrajectoryMapFragment extends Fragment {
     private static final String TAG = "TrajectoryMapFragment";
     private static final String CDBG = "C_DEBUG";
@@ -91,6 +92,10 @@ public class TrajectoryMapFragment extends Fragment {
     private void cdbgW(@NonNull String msg) {
         if (CDBG_ENABLED) Log.w(CDBG, msg);
         dbgBufAppend("W", msg);
+    }
+    private void cdbgE(@NonNull String msg) {
+        if (CDBG_ENABLED) Log.e(CDBG, msg);
+        dbgBufAppend("E", msg);
     }
     private void setStatusText(@NonNull String msg) {
         if (!isAdded()) return;
@@ -148,9 +153,9 @@ public class TrajectoryMapFragment extends Fragment {
     private static final int MAX_WIFI_MACS = 200;          // keep more APs so "between buildings" still works
     private static final int MIN_MACS_FOR_API = 6;        // below this we ask for manual input on emulator
     private static final double PROBE_RADIUS_METERS = 50.0;
-    private static final boolean ENABLE_LOCAL_LIBRARY_FALLBACK = true; // hard-coded fallback outlines (Library + Fleeming Jenkin) // hard-coded Library polygon
+    private static final boolean ENABLE_LOCAL_LIBRARY_FALLBACK = false; // hard-coded fallback outlines (Library + Fleeming Jenkin) // hard-coded Library polygon
     private static final boolean USE_LOCAL_FLOORPLAN_FALLBACK = false;  // use bundled drawable floor PNGs
-    private static final boolean ENABLE_LOCAL_FJB_FALLBACK = true;     // hard-coded Fleeming Jenkin polygon
+    private static final boolean ENABLE_LOCAL_FJB_FALLBACK = false;     // hard-coded Fleeming Jenkin polygon
     private final java.util.concurrent.atomic.AtomicInteger indoorReqSeq = new java.util.concurrent.atomic.AtomicInteger(0);
     private GoogleMap gMap;
     private LatLng currentLocation;
@@ -187,6 +192,7 @@ public class TrajectoryMapFragment extends Fragment {
     private static final String PREF_SELECTED_FLOOR_LABEL = "pref_selected_floor_label";
     private static final String PREF_SELECTED_FLOOR_INDEX = "pref_selected_floor_index";
     private static final String PREF_SELECTED_FLOOR_MANUAL = "pref_selected_floor_manual";
+    private static final String PREF_INDOOR_METHOD_B = "pref_indoor_method_b";
     private final FloorplanApi floorplanApi = new FloorplanApi();
     private IndoorMapFragment indoorMapOverlay;
     private final List<Polygon> venuePolygons = new ArrayList<>();
@@ -442,6 +448,22 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
     public LatLng getCurrentLocation() { return currentLocation; }
+    @Nullable
+    public String getSelectedVenueId() {
+        return selectedVenue != null ? selectedVenue.venueId : null;
+    }
+    @Nullable
+    public String getSelectedVenueName() {
+        return selectedVenue != null ? selectedVenue.venueName : null;
+    }
+    public int getSelectedFloorIndex() {
+        if (selectedVenue == null || selectedVenue.floors == null || selectedVenue.floors.isEmpty()) {
+            return Integer.MIN_VALUE;
+        }
+        int pos = floorSpinner != null ? floorSpinner.getSelectedItemPosition() : 0;
+        if (pos < 0 || pos >= selectedVenue.floors.size()) pos = 0;
+        return selectedVenue.floors.get(pos).floorIndex;
+    }
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null || !isGnssOn) return;
         if (gnssMarker == null) {
@@ -926,6 +948,97 @@ public class TrajectoryMapFragment extends Fragment {
         }
         cdbg("saveCachedVenues: saved cacheSize=" + venueCache.size());
     }
+    private static @NonNull LatLng offsetMeters(@NonNull LatLng from, double northMeters, double eastMeters) {
+        final double metersPerDegLat = 111_320.0;
+        double dLat = northMeters / metersPerDegLat;
+        double metersPerDegLon = metersPerDegLat * Math.cos(Math.toRadians(from.latitude));
+        if (Math.abs(metersPerDegLon) < 1e-6) metersPerDegLon = metersPerDegLat;
+        double dLon = eastMeters / metersPerDegLon;
+        return new LatLng(from.latitude + dLat, from.longitude + dLon);
+    }
+    private void onMergedVenuesReady(@NonNull List<FloorplanModels.Venue> venues) {
+        Log.d(TAG, "Floorplan merged venues=" + venues.size());
+        LatLng ref = (lastRequestCenter != null)
+                ? lastRequestCenter
+                : ((pickedCenter != null) ? pickedCenter : currentLocation);
+        if (ref != null) {
+            fixLonLatOrderIfNeeded(venues, ref);
+        }
+        lastFetchedVenues.clear();
+        lastFetchedVenues.addAll(venues);
+        int before = venueCache.size();
+        for (FloorplanModels.Venue v : venues) {
+            if (v == null) continue;
+            venueCache.put(v.venueId, v);
+        }
+        int added = venueCache.size() - before;
+        saveCachedVenues();
+        if (venues.isEmpty()) {
+            Toast.makeText(requireContext(),
+                    "No indoor maps nearby. Tips: Location ON + Wi‑Fi ON + stand near the building entrance.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        clearVenuePolygons();
+        int drawn = drawVenuesAsPolygons(new ArrayList<>(venueCache.values()));
+        zoomToVenues(venueCache.values(), /*animate=*/true);
+        if (selectVenueButton != null) selectVenueButton.setEnabled(true);
+        if (drawn == 0) {
+            Toast.makeText(requireContext(),
+                    "Indoor map found, but no outline geometry was returned. Use Select building.",
+                    Toast.LENGTH_LONG).show();
+            showVenuePickerDialog();
+            return;
+        }
+        Toast.makeText(requireContext(),
+                "Found " + venues.size() + " venues (" + added + " new). Total cached: " + venueCache.size() + ". Tap an outline or press Select building.",
+                Toast.LENGTH_LONG).show();
+        if (venues.size() == 1) {
+            onVenueSelected(venues.get(0));
+        }
+    }
+    private void fixLonLatOrderIfNeeded(@NonNull List<FloorplanModels.Venue> venues, @NonNull LatLng ref) {
+        for (FloorplanModels.Venue v : venues) {
+            if (v.outline != null && v.outline.size() >= 3) {
+                LatLng c1 = venueCenter(v);
+                double d1 = distanceMeters(ref, c1);
+                List<LatLng> swapped = new ArrayList<>(v.outline.size());
+                for (LatLng p : v.outline) swapped.add(new LatLng(p.longitude, p.latitude));
+                LatLng c2 = centroid(swapped);
+                double d2 = distanceMeters(ref, c2);
+                if (d1 > 2000 && d2 < d1 * 0.2) {
+                    Log.w(TAG, "Fixing lon/lat order for venue " + v.venueId + " (" + d1 + "m -> " + d2 + "m)");
+                    v.outline.clear();
+                    v.outline.addAll(swapped);
+                }
+            }
+            if (v.bounds != null) {
+                LatLngBounds b1 = v.bounds;
+                LatLng c1 = new LatLng((b1.southwest.latitude + b1.northeast.latitude) / 2.0,
+                        (b1.southwest.longitude + b1.northeast.longitude) / 2.0);
+                double d1 = distanceMeters(ref, c1);
+                LatLng sw2 = new LatLng(b1.southwest.longitude, b1.southwest.latitude);
+                LatLng ne2 = new LatLng(b1.northeast.longitude, b1.northeast.latitude);
+                LatLngBounds b2;
+                try {
+                    b2 = new LatLngBounds(
+                            new LatLng(Math.min(sw2.latitude, ne2.latitude), Math.min(sw2.longitude, ne2.longitude)),
+                            new LatLng(Math.max(sw2.latitude, ne2.latitude), Math.max(sw2.longitude, ne2.longitude))
+                    );
+                } catch (Exception e) {
+                    b2 = null;
+                }
+                if (b2 != null) {
+                    LatLng c2 = new LatLng((b2.southwest.latitude + b2.northeast.latitude) / 2.0,
+                            (b2.southwest.longitude + b2.northeast.longitude) / 2.0);
+                    double d2 = distanceMeters(ref, c2);
+                    if (d1 > 2000 && d2 < d1 * 0.2) {
+                        Log.w(TAG, "Fixing bounds lon/lat order for venue " + v.venueId + " (" + d1 + "m -> " + d2 + "m)");
+                    }
+                }
+            }
+        }
+    }
     private void showVenuePickerDialog() {
         List<FloorplanModels.Venue> candidates = new ArrayList<>();
         if (!venueCache.isEmpty()) candidates.addAll(venueCache.values());
@@ -1224,6 +1337,41 @@ public class TrajectoryMapFragment extends Fragment {
             }
         }
         return drawn;
+    }
+    private void zoomToVenues(@NonNull Collection<FloorplanModels.Venue> venues, boolean animate) {
+        if (gMap == null || venues.isEmpty()) return;
+        LatLngBounds.Builder b = new LatLngBounds.Builder();
+        boolean hasAny = false;
+        for (FloorplanModels.Venue v : venues) {
+            if (v == null) continue;
+            List<LatLng> pts = v.outline;
+            if (pts == null || pts.isEmpty()) continue;
+            for (LatLng p : pts) {
+                if (p == null) continue;
+                b.include(p);
+                hasAny = true;
+            }
+        }
+        if (!hasAny) return;
+        try {
+            LatLngBounds bounds = b.build();
+            int padPx = Math.round(48f * getResources().getDisplayMetrics().density);
+            if (animate) gMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, padPx));
+            else gMap.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, padPx));
+        } catch (Exception ignored) {
+        }
+    }
+    private static @NonNull LatLng centroid(@NonNull List<LatLng> pts) {
+        double lat = 0.0, lng = 0.0;
+        int n = 0;
+        for (LatLng p : pts) {
+            if (p == null) continue;
+            lat += p.latitude;
+            lng += p.longitude;
+            n++;
+        }
+        if (n == 0) return new LatLng(0, 0);
+        return new LatLng(lat / n, lng / n);
     }
     private static double distanceMeters(@Nullable LatLng a, @Nullable LatLng b) {
         if (a == null || b == null) return Double.NaN;
