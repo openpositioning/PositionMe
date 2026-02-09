@@ -43,13 +43,18 @@ public class MovementSensor {
         this.sensor = sensorManager.getDefaultSensor(sensorType);
 
         if (sensor != null) {
+            float maxRange = sensor.getMaximumRange();
+            int minDelay = sensor.getMinDelay();
+            float frequency = (minDelay > 0) ? (1_000_000f / minDelay) : 0f;
             this.sensorInfo = new SensorInfo(
                     sensor.getName(),
                     sensor.getVendor(),
                     sensor.getResolution(),
                     sensor.getPower(),
                     sensor.getVersion(),
-                    sensor.getType()
+                    sensor.getType(),
+                    maxRange,
+                    frequency
             );
             System.err.println(sensorInfo);
         } else {
@@ -59,7 +64,9 @@ public class MovementSensor {
                     -1.0f,
                     0.0f,
                     0,
-                    0
+                    0,
+                    0.0f,
+                    0.0f
             );
 
         }

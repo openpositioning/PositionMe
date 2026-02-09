@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,6 +16,7 @@ import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.LinearInterpolator;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -77,6 +79,15 @@ public class RecordingFragment extends Fragment {
     private float previousPosX = 0f;
     private float previousPosY = 0f;
 
+    // PDR-WiFi fusion: WiFi corrects rawPdrPosition each cycle (feedback loop)
+    private LatLng rawPdrPosition = null;
+    // Per-cycle correction strength: how much WiFi pulls rawPdrPosition each 200ms update
+    private static final double WIFI_CORRECTION_ALPHA = 0.15;
+    // Track last WiFi position used for fusion to detect actual changes
+    private LatLng lastFusedWifiPos = null;
+    // Max age (ms) for WiFi position to be considered fresh
+    private static final long WIFI_FRESHNESS_MS = 10000;
+
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
@@ -130,6 +141,11 @@ public class RecordingFragment extends Fragment {
                     .commit();
         }
 
+        // Indoor mode: auto-select the nearest building on map load
+        if (getArguments() != null && getArguments().getBoolean("INDOOR_MODE", false)) {
+            trajectoryMapFragment.setAutoSelectVenue(true);
+        }
+
         // Initialize UI references
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
@@ -147,11 +163,35 @@ public class RecordingFragment extends Fragment {
 
         // Buttons
         completeButton.setOnClickListener(v -> {
-            // Stop recording & go to correction
-            if (autoStop != null) autoStop.cancel();
-            sensorFusion.stopRecording();
-            // Show Correction screen
-            ((RecordingActivity) requireActivity()).showCorrectionScreen();
+            // Show naming dialog before completing
+            EditText nameInput = new EditText(requireContext());
+            nameInput.setInputType(InputType.TYPE_CLASS_TEXT);
+            nameInput.setHint("e.g. track1");
+
+            new AlertDialog.Builder(requireContext())
+                    .setTitle("Name Your Trajectory")
+                    .setMessage("Please enter a name for this trajectory:")
+                    .setView(nameInput)
+                    .setPositiveButton("OK", (dialog, which) -> {
+                        String name = nameInput.getText().toString().trim();
+                        if (!name.isEmpty()) {
+                            sensorFusion.setTrajectoryName(name);
+                        }
+                        // Stop recording & go to correction
+                        if (autoStop != null) autoStop.cancel();
+                        sensorFusion.stopRecording();
+                        if (trajectoryMapFragment != null) trajectoryMapFragment.setCameraFollowing(false);
+                        ((RecordingActivity) requireActivity()).showCorrectionScreen();
+                    })
+                    .setNegativeButton("Skip", (dialog, which) -> {
+                        // Keep default trajectoryId
+                        if (autoStop != null) autoStop.cancel();
+                        sensorFusion.stopRecording();
+                        if (trajectoryMapFragment != null) trajectoryMapFragment.setCameraFollowing(false);
+                        ((RecordingActivity) requireActivity()).showCorrectionScreen();
+                    })
+                    .setCancelable(false)
+                    .show();
         });
 
 
@@ -202,6 +242,7 @@ public class RecordingFragment extends Fragment {
                 @Override
                 public void onFinish() {
                     sensorFusion.stopRecording();
+                    if (trajectoryMapFragment != null) trajectoryMapFragment.setCameraFollowing(false);
                     ((RecordingActivity) requireActivity()).showCorrectionScreen();
                 }
             }.start();
@@ -213,43 +254,64 @@ public class RecordingFragment extends Fragment {
 
     /**
      * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
+     * Implements PDR-WiFi sensor fusion: raw PDR position is tracked separately,
+     * then blended with WiFi absolute position using a weighted average.
      */
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
+        // PDR delta since last update
+        float[] pdrDelta = { pdrValues[0] - previousPosX, pdrValues[1] - previousPosY };
+
         // Distance
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
-                + Math.pow(pdrValues[1] - previousPosY, 2));
+        distance += Math.sqrt(Math.pow(pdrDelta[0], 2) + Math.pow(pdrDelta[1], 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
         // Elevation
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
+        // Update raw PDR position and apply WiFi correction
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
+            if (rawPdrPosition == null) {
+                rawPdrPosition = new LatLng(latLngArray[0], latLngArray[1]);
+            }
+            // Apply PDR delta to raw position
+            rawPdrPosition = UtilFunctions.calculateNewPos(rawPdrPosition, pdrDelta);
 
-            // Pass the location + orientation to the map
+            // WiFi absolute position (for display and fusion)
+            LatLng wifiPos = sensorFusion.getLatLngWifiPositioning();
+            if (wifiPos != null && trajectoryMapFragment != null) {
+                trajectoryMapFragment.updateWifiLocation(wifiPos);
+            }
+
+            // WiFi correction: pull rawPdrPosition toward WiFi when data is fresh and changed
+            if (wifiPos != null && trajectoryMapFragment != null
+                    && trajectoryMapFragment.isWifiEnabled()
+                    && sensorFusion.isWifiPositionFresh(WIFI_FRESHNESS_MS)
+                    && !wifiPos.equals(lastFusedWifiPos)) {
+                double correctedLat = rawPdrPosition.latitude
+                        + WIFI_CORRECTION_ALPHA * (wifiPos.latitude - rawPdrPosition.latitude);
+                double correctedLon = rawPdrPosition.longitude
+                        + WIFI_CORRECTION_ALPHA * (wifiPos.longitude - rawPdrPosition.longitude);
+                rawPdrPosition = new LatLng(correctedLat, correctedLon);
+                lastFusedWifiPos = wifiPos;
+            }
+
+            // Pass corrected position to map
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
+                trajectoryMapFragment.updateUserLocation(rawPdrPosition,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
+            // Store trajectory point for correction screen
+            sensorFusion.addTrajectoryPoint(rawPdrPosition.latitude, rawPdrPosition.longitude);
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
+        // GNSS display
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
                 LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();

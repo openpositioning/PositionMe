@@ -186,28 +186,46 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     public void onBindViewHolder(@NonNull TrajDownloadViewHolder holder, int position) {
         // Retrieve the trajectory id from the response item.
         String id = responseItems.get(position).get("id");
-        holder.getTrajId().setText(id);
-
-        // Adjust text size based on the id length.
-        if (id != null && id.length() > 2) {
-            holder.getTrajId().setTextSize(58);
-        } else {
-            holder.getTrajId().setTextSize(65);
-        }
 
         // Parse and format the submission date.
         String dateSubmittedStr = responseItems.get(position).get("date_submitted");
         assert dateSubmittedStr != null;
-        holder.getTrajDate().setText(
-                dateFormat.format(
-                        LocalDateTime.parse(dateSubmittedStr.split("\\.")[0])
-                )
+        String formattedDate = dateFormat.format(
+                LocalDateTime.parse(dateSubmittedStr.split("\\.")[0])
         );
 
         // Determine if the trajectory is already downloaded by checking the records.
         JSONObject recordDetails = ServerCommunications.downloadRecords.get(id);
         boolean matched = recordDetails != null;
         String filePath = null;
+
+        // Show trajectory_name if available, otherwise show ID
+        String displayName = id;
+        if (matched) {
+            String trajName = recordDetails.optString("trajectory_name", "");
+            // If name not in record, try to read from downloaded JSON file
+            if (trajName.isEmpty()) {
+                String fileName = recordDetails.optString("file_name", null);
+                if (fileName != null) {
+                    trajName = extractNameFromFile(fileName);
+                    // Cache it back to the record for next time
+                    if (!trajName.isEmpty()) {
+                        try { recordDetails.put("trajectory_name", trajName); } catch (Exception ignored) {}
+                    }
+                }
+            }
+            if (!trajName.isEmpty()) {
+                displayName = trajName;
+            }
+        }
+        holder.getTrajId().setText(displayName);
+
+        // Show ID in date line when a custom name is used, so ID is still visible
+        if (displayName != null && !displayName.equals(id)) {
+            holder.getTrajDate().setText("#" + id + "  " + formattedDate);
+        } else {
+            holder.getTrajDate().setText(formattedDate);
+        }
 
         if (matched) {
             try {
@@ -266,6 +284,36 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     @Override
     public int getItemCount() {
         return responseItems.size();
+    }
+
+    /**
+     * Extract trajectoryName from a downloaded JSON trajectory file.
+     * The file is stored by ServerCommunications as JSON (protobuf JsonFormat).
+     */
+    private String extractNameFromFile(String fileName) {
+        try {
+            File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
+            if (!file.exists()) return "";
+            BufferedReader reader = new BufferedReader(new FileReader(file), 8192);
+            String line;
+            while ((line = reader.readLine()) != null) {
+                // Look for "trajectoryName": "..." in the JSON
+                if (line.contains("\"trajectoryName\"")) {
+                    int colonIdx = line.indexOf(':');
+                    if (colonIdx >= 0) {
+                        String value = line.substring(colonIdx + 1).trim();
+                        // Remove quotes and trailing comma
+                        value = value.replace("\"", "").replace(",", "").trim();
+                        reader.close();
+                        return value;
+                    }
+                }
+            }
+            reader.close();
+        } catch (Exception e) {
+            Log.e("TrajAdapter", "Error reading trajectory file: " + e.getMessage());
+        }
+        return "";
     }
 
     /**

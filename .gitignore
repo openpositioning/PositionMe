@@ -14,3 +14,15 @@
 .cxx
 local.properties
 /.idea/
+
+# Temp/debug files
+*.zip
+*.pb
+*.pyc
+__pycache__/
+*.py
+nul
+tmp_*.json
+traj_*.json
+traj_list.json
+.claude/

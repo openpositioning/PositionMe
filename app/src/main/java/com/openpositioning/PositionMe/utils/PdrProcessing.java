@@ -6,6 +6,8 @@ import android.hardware.SensorManager;
 
 import androidx.preference.PreferenceManager;
 
+import android.util.Log;
+
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.util.Arrays;
@@ -38,6 +40,8 @@ public class PdrProcessing {
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
     private static final int MIN_REQUIRED_SAMPLES = 2;
+    // Threshold for backward walking detection: if avg forward acceleration < this, step is backward
+    private static final double BACKWARD_ACCEL_THRESHOLD = -0.5;
     //endregion
 
     //region Instance variables
@@ -138,8 +142,9 @@ public class PdrProcessing {
      * @param currentStepEnd            relative time in milliseconds since the start of the recording.
      * @param accelMagnitudeOvertime    recorded acceleration magnitudes since the last step.
      * @param headingRad                heading relative to magnetic north in radians.
+     * @param avgForwardAccel           average forward acceleration (m/s²), negative = backward.
      */
-    public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
+    public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad, double avgForwardAccel) {
         if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.size() < MIN_REQUIRED_SAMPLES) {
             return new float[]{this.positionX, this.positionY};  // Return current position without update
                                                                 // - TODO - temporary solution of the empty list issue
@@ -153,7 +158,7 @@ public class PdrProcessing {
             // return current position, do not update
             return new float[]{this.positionX, this.positionY};
         }
-        
+
         // Calculate step length
         if(!useManualStep) {
             //ArrayList<Double> accelMagnitudeFiltered = filter(accelMagnitudeOvertime);
@@ -169,6 +174,14 @@ public class PdrProcessing {
         // Translate to cartesian coordinate system
         float x = (float) (stepLength * Math.cos(adaptedHeading));
         float y = (float) (stepLength * Math.sin(adaptedHeading));
+
+        // Backward walking detection: reverse step direction if forward acceleration is negative
+        if (avgForwardAccel < BACKWARD_ACCEL_THRESHOLD) {
+            x = -x;
+            y = -y;
+            Log.d("PDR", "Backward step detected, avgForwardAccel=" +
+                    String.format("%.3f", avgForwardAccel));
+        }
 
         // Update position values
         this.positionX += x;

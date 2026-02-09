@@ -152,18 +152,20 @@
                 app:layout_rowWeight="1" />
         </androidx.gridlayout.widget.GridLayout>
 
-        <!-- Grey button for indoor positioning, anchored to the bottom. -->
+        <!-- Indoor Positioning button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/indoorButton"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            style="@style/Widget.MaterialComponents.Button"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Indoor Positioning \n (In Development)"
+            android:text="Indoor Positioning"
             android:textColor="@color/md_theme_onPrimary"
-            android:backgroundTint="#9E9E9E"
+            android:backgroundTint="#00897B"
             android:textSize="14sp"
             app:cornerRadius="14dp"
+            app:icon="@drawable/ic_baseline_location_searching_24"
+            app:iconGravity="textStart"
             app:layout_constraintTop_toBottomOf="@id/buttonGrid"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"

@@ -9,9 +9,11 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.UploadFragment;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -65,7 +67,18 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
      */
     @Override
     public void onBindViewHolder(@NonNull UploadViewHolder holder, int position) {
-        holder.trajId.setText(String.valueOf(position));
+        // Try to read trajectory_name from protobuf file
+        String displayId = String.valueOf(position);
+        try (FileInputStream fis = new FileInputStream(uploadItems.get(position))) {
+            Traj.Trajectory traj = Traj.Trajectory.parseFrom(fis);
+            String trajName = traj.getTrajectoryName();
+            if (trajName != null && !trajName.isEmpty()) {
+                displayId = trajName;
+            }
+        } catch (Exception e) {
+            // Fall back to position index
+        }
+        holder.trajId.setText(displayId);
         Pattern datePattern = Pattern.compile("_(.*?)\\.txt");
         Matcher dateMatcher = datePattern.matcher(uploadItems.get(position).getName());
         String dateString = dateMatcher.find() ? dateMatcher.group(1) : "N/A";

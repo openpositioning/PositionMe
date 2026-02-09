@@ -88,12 +88,13 @@ public class ServerCommunications implements Observable {
     // Static constants necessary for communications
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
+    private static final String campaign = "murchison_house";
     private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
+            "https://openpositioning.org/api/live/trajectory/upload/" + campaign + "/" + userKey
                     + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
-                    + "?skip=0&limit=30&key=" + masterKey;
+                    + "?skip=0&limit=200&key=" + masterKey;
     private static final String infoRequestURL =
             "https://openpositioning.org/api/live/users/trajectories/" + userKey
                     + "?key=" + masterKey;
@@ -129,6 +130,10 @@ public class ServerCommunications implements Observable {
      */
     public void sendTrajectory(Traj.Trajectory trajectory){
         logDataSize(trajectory);
+        Log.i("ServerComm", "Uploading trajectory to: " + uploadURL);
+        Log.i("ServerComm", "IMU samples: " + trajectory.getImuDataCount()
+                + ", GNSS samples: " + trajectory.getGnssDataCount()
+                + ", Test points: " + trajectory.getTestPointsCount());
 
         // Convert the trajectory to byte array
         byte[] binaryTrajectory = trajectory.toByteArray();
@@ -190,9 +195,10 @@ public class ServerCommunications implements Observable {
                 // Handle failure to get response from the server
                 @Override public void onFailure(Call call, IOException e) {
                     e.printStackTrace();
-                    System.err.println("Failure to get response");
-                    // Delete the local file and set success to false
-                    //file.delete();
+                    Log.e("ServerComm", "Upload network failure: " + e.getMessage());
+                    infoResponse = "Upload failed: " + e.getMessage();
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(context, "Upload failed: network error", Toast.LENGTH_LONG).show());
                     success = false;
                     notifyObservers(1);
                 }
@@ -214,15 +220,12 @@ public class ServerCommunications implements Observable {
                         // If the response is unsuccessful, delete the local file and throw an
                         // exception
                         if (!response.isSuccessful()) {
-                            //file.delete();
-//                            System.err.println("POST error response: " + responseBody.string());
-
                             String errorBody = responseBody.string();
                             infoResponse = "Upload failed: " + errorBody;
+                            Log.e("ServerComm", "Upload error " + response.code() + ": " + errorBody);
                             new Handler(Looper.getMainLooper()).post(() ->
-                                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
+                                    Toast.makeText(context, infoResponse, Toast.LENGTH_LONG).show());
 
-                            System.err.println("POST error response: " + errorBody);
                             success = false;
                             notifyObservers(1);
                             throw new IOException("Unexpected code " + response);
@@ -231,10 +234,13 @@ public class ServerCommunications implements Observable {
                         // Print the response headers
                         Headers responseHeaders = response.headers();
                         for (int i = 0, size = responseHeaders.size(); i < size; i++) {
-                            System.out.println(responseHeaders.name(i) + ": " + responseHeaders.value(i));
+                            Log.d("ServerComm", responseHeaders.name(i) + ": " + responseHeaders.value(i));
                         }
                         // Print a confirmation of a successful POST to API
-                        System.out.println("Successful post response: " + responseBody.string());
+                        String responseStr = responseBody.string();
+                        Log.i("ServerComm", "Upload successful: " + responseStr);
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                Toast.makeText(context, "Trajectory uploaded successfully!", Toast.LENGTH_LONG).show());
 
                         System.out.println("Get file: " + file.getName());
                         String originalPath = file.getAbsolutePath();
@@ -261,7 +267,9 @@ public class ServerCommunications implements Observable {
         else {
             // If the device is not connected to network or allowed to send, do not send trajectory
             // and notify observers and user
-            System.err.println("No uploading allowed right now!");
+            Log.w("ServerComm", "No uploading allowed right now! WiFi=" + isWifiConn + " Mobile=" + isMobileConn);
+            new Handler(Looper.getMainLooper()).post(() ->
+                    Toast.makeText(context, "Upload skipped: no network connection", Toast.LENGTH_LONG).show());
             success = false;
             notifyObservers(1);
         }
@@ -403,7 +411,7 @@ public class ServerCommunications implements Observable {
      * @param id the ID of the trajectory
      * @param dateSubmitted the date the trajectory was submitted
      */
-    private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
+    private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted, String trajectoryName) {
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File recordsFile = new File(recordsDir, "download_records.json");
         JSONObject jsonObject;
@@ -443,6 +451,9 @@ public class ServerCommunications implements Observable {
             recordDetails.put("startTimeStamp", startTimestamp);
             recordDetails.put("date_submitted", dateSubmitted);
             recordDetails.put("id", id);
+            if (trajectoryName != null && !trajectoryName.isEmpty()) {
+                recordDetails.put("trajectory_name", trajectoryName);
+            }
 
             // Insert or update in the main JSON
             jsonObject.put(id, recordDetails);
@@ -496,18 +507,25 @@ public class ServerCommunications implements Observable {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
-                    // Extract the nth entry from the zip
+                    // Find the zip entry matching the trajectory ID
                     InputStream inputStream = responseBody.byteStream();
                     ZipInputStream zipInputStream = new ZipInputStream(inputStream);
+                    String targetEntryName = id + ".pkt";
 
                     java.util.zip.ZipEntry zipEntry;
-                    int zipCount = 0;
+                    boolean found = false;
                     while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                        if (zipCount == position) {
-                            // break if zip entry position matches the desired position
+                        if (zipEntry.getName().equals(targetEntryName)) {
+                            found = true;
                             break;
                         }
-                        zipCount++;
+                    }
+
+                    if (!found) {
+                        System.err.println("Trajectory " + id + " not found in zip");
+                        zipInputStream.close();
+                        inputStream.close();
+                        return;
                     }
 
                     // Initialise a byte array output stream
@@ -530,6 +548,7 @@ public class ServerCommunications implements Observable {
 
                     // Print a message in the console
                     long startTimestamp = receivedTrajectory.getStartTimestamp();
+                    String trajectoryName = receivedTrajectory.getTrajectoryName();
                     String fileName = "trajectory_" + dateSubmitted + ".txt";
 
                     // Place the file in your app-specific "Downloads" folder
@@ -555,7 +574,7 @@ public class ServerCommunications implements Observable {
                     }
 
                     // Save the download record
-                    saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
+                    saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted, trajectoryName);
                     loadDownloadRecords();
                 }
             }

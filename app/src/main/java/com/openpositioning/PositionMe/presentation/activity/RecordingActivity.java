@@ -11,6 +11,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 
 /**
@@ -46,7 +47,17 @@ public class RecordingActivity extends AppCompatActivity {
         setContentView(R.layout.activity_recording);
 
         if (savedInstanceState == null) {
-            showStartLocationScreen(); // Start with the user selecting the start location
+            boolean indoorMode = getIntent().getBooleanExtra("INDOOR_MODE", false);
+            if (indoorMode) {
+                // Indoor mode: skip StartLocationFragment, auto-set location and start recording
+                SensorFusion sf = SensorFusion.getInstance();
+                float[] gps = sf.getGNSSLatitude(false);
+                sf.setStartGNSSLatitude(gps);
+                sf.startRecording();
+                showRecordingScreen(true);
+            } else {
+                showStartLocationScreen();
+            }
         }
 
         // Keep screen on
@@ -66,9 +77,27 @@ public class RecordingActivity extends AppCompatActivity {
      * Show the RecordingFragment, which contains the TrajectoryMapFragment internally.
      */
     public void showRecordingScreen() {
+        showRecordingScreen(false);
+    }
+
+    /**
+     * Show the RecordingFragment with optional indoor mode.
+     * When indoorMode is true, the map will auto-select the nearest building.
+     */
+    public void showRecordingScreen(boolean indoorMode) {
+        RecordingFragment fragment = new RecordingFragment();
+        if (indoorMode) {
+            Bundle args = new Bundle();
+            args.putBoolean("INDOOR_MODE", true);
+            fragment.setArguments(args);
+        }
         FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
-        ft.replace(R.id.mainFragmentContainer, new RecordingFragment());
-        ft.addToBackStack(null);
+        ft.replace(R.id.mainFragmentContainer, fragment);
+        if (!indoorMode) {
+            // Only add to back stack when StartLocationFragment exists to go back to.
+            // In indoor mode, Cancel/back should finish the activity entirely.
+            ft.addToBackStack(null);
+        }
         ft.commit();
     }
 

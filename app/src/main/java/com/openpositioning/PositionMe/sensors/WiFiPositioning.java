@@ -54,6 +54,11 @@ public class WiFiPositioning {
     // Store current floor of user, default value 0 (ground floor)
     private int floor=0;
 
+    // Timestamp of last successful WiFi position update
+    private long lastUpdateTime = 0;
+
+    public long getLastUpdateTime() { return lastUpdateTime; }
+
 
     /**
      * Constructor to create the WiFi positioning object
@@ -89,6 +94,9 @@ public class WiFiPositioning {
                     try {
                             wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
                             floor = response.getInt("floor");
+                            lastUpdateTime = System.currentTimeMillis();
+                            Log.d("WiFiFusion", "WiFi API response: lat=" + wifiLocation.latitude
+                                    + ", lon=" + wifiLocation.longitude + ", floor=" + floor);
                     } catch (JSONException e) {
                         // Error log to keep record of errors (for secure programming and maintainability)
                         Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);
@@ -96,15 +104,19 @@ public class WiFiPositioning {
                 },
                 // Handles the errors obtained from the POST request
                 error -> {
+                    String body = "";
+                    if (error.networkResponse != null && error.networkResponse.data != null) {
+                        body = new String(error.networkResponse.data);
+                    }
                     // Validation Error
                     if (error.networkResponse!=null && error.networkResponse.statusCode==422){
-                        Log.e("WiFiPositioning", "Validation Error "+ error.getMessage());
+                        Log.e("WiFiPositioning", "Validation Error "+ error.getMessage() + " body: " + body);
                     }
                     // Other Errors
                     else{
                         // When Response code is available
                         if (error.networkResponse!=null) {
-                            Log.e("WiFiPositioning","Response Code: " + error.networkResponse.statusCode + ", " + error.getMessage());
+                            Log.e("WiFiPositioning","Response Code: " + error.networkResponse.statusCode + ", body: " + body);
                         }
                         else{
                             Log.e("WiFiPositioning","Error message: " + error.getMessage());
@@ -140,6 +152,7 @@ public class WiFiPositioning {
                         Log.d("jsonObject",response.toString());
                         wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
                         floor = response.getInt("floor");
+                        lastUpdateTime = System.currentTimeMillis();
                         callback.onSuccess(wifiLocation,floor);
                     } catch (JSONException e) {
                         Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);

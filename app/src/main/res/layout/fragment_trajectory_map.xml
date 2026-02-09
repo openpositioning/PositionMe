@@ -38,6 +38,13 @@
                 android:text="@string/gnssSwitch" />
 
             <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/wifiSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="false"
+                android:text="@string/wifiSwitch" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/autoFloor"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -66,11 +73,39 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Floating action buttons for floor control, properly spaced -->
+    <!-- Floating action buttons for floor control and test point marker -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <!-- Upload Radiomap Button (bottom-left, above test point) -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/uploadRadiomapButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:src="@android:drawable/ic_menu_upload"
+            app:backgroundTint="#4CAF50"
+            app:tint="@color/white"
+            app:fabSize="mini"
+            app:layout_constraintBottom_toTopOf="@id/addTestPointButton"
+            app:layout_constraintStart_toStartOf="parent"
+            android:contentDescription="@string/upload_radiomap" />
+
+        <!-- Test Point Marker Button (bottom-left) -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/addTestPointButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:src="@drawable/ic_baseline_add_location_24"
+            app:backgroundTint="#FF5722"
+            app:tint="@color/white"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            android:contentDescription="@string/add_test_point" />
+
+        <!-- Floor Down Button (bottom-right) -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton"
             android:layout_width="wrap_content"
@@ -83,6 +118,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_down" />
 
+        <!-- Floor Up Button -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
