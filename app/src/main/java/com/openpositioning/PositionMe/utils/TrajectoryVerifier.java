@@ -2,12 +2,10 @@ package com.openpositioning.PositionMe.utils;
 
 import android.util.Log;
 
-import com.openpositioning.PositionMe.Traj;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-
+import com.openpositioning.PositionMe.Traj;
 /**
  * Utility class to verify trajectory file contents
  * Use this to debug trajectory recording/playback issues

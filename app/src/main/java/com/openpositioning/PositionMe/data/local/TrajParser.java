@@ -4,7 +4,6 @@ import android.content.Context;
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 
 import java.io.File;
@@ -12,7 +11,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-
+import com.openpositioning.PositionMe.Traj;
 /**
  * TrajParser (Updated for Assignment 1 / Proto v2)
  */
