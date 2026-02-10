@@ -103,6 +103,20 @@
     </com.google.android.material.card.MaterialCardView>
 
 
+    <!-- Position correction mode toggle button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/position_correction_toggle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="8dp"
+        android:text="Adjust Position"
+        android:textSize="14sp"
+        style="@style/Widget.Material3.Button.TonalButton"
+        app:icon="@drawable/ic_baseline_navigation_24"
+        app:iconGravity="start"
+        app:layout_constraintTop_toBottomOf="@id/cardView"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <com.google.android.material.button.MaterialButton
         android:id="@+id/correction_done"
         android:layout_width="wrap_content"
@@ -122,6 +136,17 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:contentDescription="@string/path_drawing_descritpion"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Fixed trajectory overlay for position correction mode -->
+    <com.openpositioning.PositionMe.utils.TrajectoryOverlayView
+        android:id="@+id/trajectoryOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"

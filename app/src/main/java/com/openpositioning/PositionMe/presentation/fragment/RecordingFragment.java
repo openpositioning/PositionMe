@@ -15,6 +15,7 @@ import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.LinearInterpolator;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -30,6 +31,8 @@ import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
+import com.openpositioning.PositionMe.utils.LocationDetector;
+import com.openpositioning.PositionMe.utils.WeatherPromptDialog;
 import com.google.android.gms.maps.model.LatLng;
 
 
@@ -77,8 +80,22 @@ public class RecordingFragment extends Fragment {
     private float previousPosX = 0f;
     private float previousPosY = 0f;
 
+    // PDR-WiFi fusion: WiFi corrects rawPdrPosition each cycle (feedback loop)
+    private LatLng rawPdrPosition = null;
+    // Per-cycle correction strength: how much WiFi pulls rawPdrPosition each 200ms update
+    private static final double WIFI_CORRECTION_ALPHA = 0.15;
+    // Track last WiFi position used for fusion to detect actual changes
+    private LatLng lastFusedWifiPos = null;
+    // Max age (ms) for WiFi position to be considered fresh
+    private static final long WIFI_FRESHNESS_MS = 10000;
+
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
+
+    // Weather feature: location detector and prompt dialog
+    private LocationDetector locationDetector;
+    private WeatherPromptDialog weatherPromptDialog;
+    private boolean weatherPromptShown = false;
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
@@ -147,11 +164,9 @@ public class RecordingFragment extends Fragment {
 
         // Buttons
         completeButton.setOnClickListener(v -> {
-            // Stop recording & go to correction
-            if (autoStop != null) autoStop.cancel();
-            sensorFusion.stopRecording();
-            // Show Correction screen
-            ((RecordingActivity) requireActivity()).showCorrectionScreen();
+            // Complete recording and go to correction screen
+            // Naming will happen in CorrectionFragment after position adjustment
+            completeRecording();
         });
 
 
@@ -184,6 +199,10 @@ public class RecordingFragment extends Fragment {
         // The blinking effect for recIcon
         blinkingRecordingIcon();
 
+        // Initialize weather feature components
+        locationDetector = new LocationDetector();
+        weatherPromptDialog = new WeatherPromptDialog(requireActivity());
+
         // Start the timed or indefinite UI refresh
         if (this.settings.getBoolean("split_trajectory", false)) {
             // A maximum recording time is set
@@ -202,6 +221,7 @@ public class RecordingFragment extends Fragment {
                 @Override
                 public void onFinish() {
                     sensorFusion.stopRecording();
+                    if (trajectoryMapFragment != null) trajectoryMapFragment.setCameraFollowing(false);
                     ((RecordingActivity) requireActivity()).showCorrectionScreen();
                 }
             }.start();
@@ -213,43 +233,62 @@ public class RecordingFragment extends Fragment {
 
     /**
      * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
+     * Implements PDR-WiFi sensor fusion: raw PDR position is tracked separately,
+     * then blended with WiFi absolute position using a weighted average.
      */
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
+        // PDR delta since last update
+        float[] pdrDelta = { pdrValues[0] - previousPosX, pdrValues[1] - previousPosY };
+
         // Distance
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
-                + Math.pow(pdrValues[1] - previousPosY, 2));
+        distance += Math.sqrt(Math.pow(pdrDelta[0], 2) + Math.pow(pdrDelta[1], 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
         // Elevation
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
+        // Update raw PDR position and apply WiFi correction
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
+            if (rawPdrPosition == null) {
+                rawPdrPosition = new LatLng(latLngArray[0], latLngArray[1]);
+            }
+            // Step 1: Apply PDR delta to raw position
+            rawPdrPosition = UtilFunctions.calculateNewPos(rawPdrPosition, pdrDelta);
 
-            // Pass the location + orientation to the map
+            // Step 2: Get WiFi position
+            LatLng wifiPos = sensorFusion.getLatLngWifiPositioning();
+
+            // Step 3: WiFi correction feedback loop
+            // Only apply correction when WiFi data is FRESH and has CHANGED
+            // This prevents pinning to a stale WiFi position
+            if (wifiPos != null && trajectoryMapFragment != null
+                    && sensorFusion.isWifiPositionFresh(WIFI_FRESHNESS_MS)
+                    && !wifiPos.equals(lastFusedWifiPos)) {
+                double correctedLat = rawPdrPosition.latitude
+                        + WIFI_CORRECTION_ALPHA * (wifiPos.latitude - rawPdrPosition.latitude);
+                double correctedLon = rawPdrPosition.longitude
+                        + WIFI_CORRECTION_ALPHA * (wifiPos.longitude - rawPdrPosition.longitude);
+                rawPdrPosition = new LatLng(correctedLat, correctedLon);
+                lastFusedWifiPos = wifiPos;
+            }
+
+            // Pass corrected position to map
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
+                trajectoryMapFragment.updateUserLocation(rawPdrPosition,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
+            // Store trajectory point for correction screen
+            sensorFusion.addTrajectoryPoint(rawPdrPosition.latitude, rawPdrPosition.longitude);
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
+        // GNSS display
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
                 LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
@@ -268,6 +307,18 @@ public class RecordingFragment extends Fragment {
         // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
+
+        // Weather feature: check if user is near building entrance
+        // Only show prompt once per session and if location detector allows it
+        if (!weatherPromptShown && gnss != null && locationDetector != null) {
+            boolean nearEntrance = locationDetector.isNearBuildingEntrance(gnss[0], gnss[1]);
+            if (nearEntrance && locationDetector.shouldShowPrompt()) {
+                weatherPromptShown = true;
+                if (weatherPromptDialog != null) {
+                    weatherPromptDialog.showWeatherPrompt();
+                }
+            }
+        }
     }
 
     /**
@@ -282,10 +333,77 @@ public class RecordingFragment extends Fragment {
         recIcon.startAnimation(blinking);
     }
 
+    /**
+     * Show dialog to name the trajectory before completing recording.
+     */
+    private void showTrajectoryNameDialog() {
+        // Create input field for trajectory name
+        EditText input = new EditText(requireContext());
+        input.setHint("Enter trajectory name");
+
+        // Generate default name with timestamp
+        String defaultName = "Traj_" + System.currentTimeMillis();
+        input.setText(defaultName);
+        input.selectAll(); // Select all text for easy replacement
+
+        // Create dialog
+        AlertDialog dialog = new AlertDialog.Builder(requireActivity())
+                .setTitle("Name Your Trajectory")
+                .setMessage("Enter a name for this trajectory recording:")
+                .setView(input)
+                .setPositiveButton("Complete", (dialogInterface, which) -> {
+                    // Get trajectory name from input
+                    String trajectoryName = input.getText().toString().trim();
+                    if (trajectoryName.isEmpty()) {
+                        trajectoryName = defaultName; // Use default if empty
+                    }
+
+                    // Store trajectory name in SensorFusion
+                    sensorFusion.setTrajectoryName(trajectoryName);
+
+                    // Complete the recording
+                    completeRecording();
+                })
+                .setNegativeButton("Cancel", (dialogInterface, which) -> {
+                    // User cancelled naming, do nothing
+                    dialogInterface.dismiss();
+                })
+                .create();
+
+        // Show keyboard automatically
+        dialog.setOnShowListener(dialogInterface -> {
+            input.requestFocus();
+            android.view.inputmethod.InputMethodManager imm =
+                (android.view.inputmethod.InputMethodManager) requireActivity()
+                    .getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            }
+        });
+
+        dialog.show();
+    }
+
+    /**
+     * Complete the recording process (called after naming trajectory).
+     */
+    private void completeRecording() {
+        // Stop recording & go to correction
+        if (autoStop != null) autoStop.cancel();
+        sensorFusion.stopRecording();
+        if (trajectoryMapFragment != null) trajectoryMapFragment.setCameraFollowing(false);
+        // Show Correction screen
+        ((RecordingActivity) requireActivity()).showCorrectionScreen();
+    }
+
     @Override
     public void onPause() {
         super.onPause();
         refreshDataHandler.removeCallbacks(refreshDataTask);
+        // Dismiss weather dialog if showing to prevent window leak
+        if (weatherPromptDialog != null) {
+            weatherPromptDialog.dismiss();
+        }
     }
 
     @Override
@@ -294,5 +412,7 @@ public class RecordingFragment extends Fragment {
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
+        // Reset weather prompt flag for new recording session
+        weatherPromptShown = false;
     }
 }

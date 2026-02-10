@@ -79,8 +79,9 @@ public class UploadFragment extends Fragment {
             trajectoriesDir = getActivity().getFilesDir();
         }
 
+        // Updated to match new .pb format with custom names
         localTrajectories = Stream.of(trajectoriesDir.listFiles((file, name) ->
-                        name.contains("trajectory_") && name.endsWith(".txt")))
+                        (name.endsWith(".pb") || name.endsWith(".txt")) && !name.equals("download_records.json")))
                 .filter(file -> !file.isDirectory())
                 .collect(Collectors.toList());
     }

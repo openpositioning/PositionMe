@@ -24,6 +24,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
 
     private final TextView trajId;
     private final TextView trajDate;
+    private final TextView trajName;  // New field for trajectory name
     final MaterialButton downloadButton;
     private final WeakReference<DownloadClickListener> listenerReference;
 
@@ -39,6 +40,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         this.listenerReference = new WeakReference<>(listener);
         this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
         this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
+        this.trajName = itemView.findViewById(R.id.trajectoryNameItem);  // Bind new name field
         this.downloadButton = itemView.findViewById(R.id.downloadTrajectoryButton);
 
         this.downloadButton.setOnClickListener(this);
@@ -56,6 +58,13 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
      */
     public TextView getTrajDate() {
         return trajDate;
+    }
+
+    /**
+     * Public getter for trajName.
+     */
+    public TextView getTrajName() {
+        return trajName;
     }
 
     /**

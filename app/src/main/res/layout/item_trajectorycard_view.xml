@@ -23,40 +23,67 @@
             android:layout_height="match_parent"
             android:padding="12dp">
 
-            <!-- ID TextView with auto-size text -->
-            <TextView
-                android:id="@+id/trajectoryIdItem"
-                android:layout_width="80dp"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:text="99999"
-                android:textStyle="bold"
-                android:textColor="@color/pastelBlue"
-                android:textAppearance="@style/TextAppearance.Material3.DisplaySmall"
-                android:maxLines="1"
-                android:ellipsize="end"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                android:autoSizeTextType="uniform"
-                android:autoSizeMinTextSize="12sp"
-                android:autoSizeMaxTextSize="65sp"
-                android:autoSizeStepGranularity="2sp" />
-
-            <!-- Time stamp TextView -->
-            <TextView
-                android:id="@+id/trajectoryDateItem"
+            <!-- Left section with trajectory info -->
+            <LinearLayout
+                android:id="@+id/textInfoSection"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
-                android:text="1998-05-19 05:28:42"
-                android:textColor="@color/md_theme_onSurface"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
+                android:orientation="vertical"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/downloadTrajectoryButton"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton" />
+                android:layout_marginEnd="8dp">
+
+                <!-- Server ID (numeric ID) -->
+                <TextView
+                    android:id="@+id/trajectoryIdItem"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="2981"
+                    android:textStyle="bold"
+                    android:textColor="@color/pastelBlue"
+                    android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+                <!-- Time stamp TextView -->
+                <TextView
+                    android:id="@+id/trajectoryDateItem"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="1998-05-19 05:28:42"
+                    android:textColor="@color/md_theme_onSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+
+                <!-- Trajectory name chip (small box) -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/trajectoryNameBox"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    app:cardBackgroundColor="@color/md_theme_secondaryContainer"
+                    app:cardCornerRadius="8dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="0dp">
+
+                    <TextView
+                        android:id="@+id/trajectoryNameItem"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp"
+                        android:text="📂 Lab_Test_1"
+                        android:textColor="@color/md_theme_onSecondaryContainer"
+                        android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                        android:textStyle="bold"
+                        android:maxLines="1"
+                        android:ellipsize="middle" />
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
 
             <!-- Download button with icon -->
             <com.google.android.material.button.MaterialButton

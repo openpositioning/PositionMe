@@ -43,6 +43,12 @@
                 android:layout_height="wrap_content"
                 android:text="@string/auto_floor" />
 
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/statsSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Live Stats" />
+
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/lineColorButton"
                 android:layout_width="wrap_content"
@@ -66,11 +72,121 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Floating action buttons for floor control, properly spaced -->
+    <!-- Live Stats Panel (top-right) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/statsPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="10dp"
+        android:padding="12dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
+        app:cardElevation="4dp"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+        app:layout_anchor="@id/trajectoryMap"
+        app:layout_anchorGravity="top|end">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Live Stats"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:paddingBottom="8dp"
+                android:textColor="?attr/colorPrimary" />
+
+            <TextView
+                android:id="@+id/statsSteps"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🚶 Steps: 0"
+                android:textSize="12sp"
+                android:paddingVertical="2dp" />
+
+            <TextView
+                android:id="@+id/statsDistance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📏 Distance: 0.0m"
+                android:textSize="12sp"
+                android:paddingVertical="2dp" />
+
+            <TextView
+                android:id="@+id/statsTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⏱️ Time: 00:00"
+                android:textSize="12sp"
+                android:paddingVertical="2dp" />
+
+            <TextView
+                android:id="@+id/statsSpeed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📍 Speed: 0.0 m/s"
+                android:textSize="12sp"
+                android:paddingVertical="2dp" />
+
+            <TextView
+                android:id="@+id/statsWifi"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📶 WiFi: 0 APs"
+                android:textSize="12sp"
+                android:paddingVertical="2dp" />
+
+            <TextView
+                android:id="@+id/statsBle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔵 BLE: 0 devices"
+                android:textSize="12sp"
+                android:paddingVertical="2dp" />
+
+            <TextView
+                android:id="@+id/statsGps"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🛰️ GPS: N/A"
+                android:textSize="12sp"
+                android:paddingVertical="2dp" />
+
+            <TextView
+                android:id="@+id/statsFloor"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🏢 Floor: N/A"
+                android:textSize="12sp"
+                android:paddingVertical="2dp" />
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Floating action buttons for floor control and test point marker -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <!-- Test Point Marker Button (bottom-left) -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/addTestPointButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:src="@drawable/ic_baseline_add_location_24"
+            app:backgroundTint="#FF5722"
+            app:tint="@color/white"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            android:contentDescription="@string/add_test_point" />
+
+        <!-- Floor Down Button (bottom-right) -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton"
             android:layout_width="wrap_content"
@@ -83,6 +199,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_down" />
 
+        <!-- Floor Up Button -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"

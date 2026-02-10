@@ -12,6 +12,8 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.UploadFragment;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -65,12 +67,41 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
      */
     @Override
     public void onBindViewHolder(@NonNull UploadViewHolder holder, int position) {
-        holder.trajId.setText(String.valueOf(position));
-        Pattern datePattern = Pattern.compile("_(.*?)\\.txt");
-        Matcher dateMatcher = datePattern.matcher(uploadItems.get(position).getName());
-        String dateString = dateMatcher.find() ? dateMatcher.group(1) : "N/A";
-        System.err.println("UPLOAD - Date string: " + dateString);
+        File file = uploadItems.get(position);
+        String fileName = file.getName();
+
+        // Extract trajectory name (remove file extension)
+        String trajectoryName = fileName.replaceFirst("\\.(pb|txt)$", "");
+        holder.trajId.setText(trajectoryName);
+
+        // Try to extract date/timestamp from filename
+        // Pattern 1: Custom name (e.g., "MyTrajectory" or "Lab_Test_1")
+        // Pattern 2: Old format with date (e.g., "trajectory_08-02-26-15-30-45")
+        // Pattern 3: Timestamp format (e.g., "traj_1707393847315")
+        String dateString = "Custom Name";
+
+        Pattern datePattern = Pattern.compile("_(\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2})");
+        Matcher dateMatcher = datePattern.matcher(fileName);
+        if (dateMatcher.find()) {
+            dateString = dateMatcher.group(1);
+        } else {
+            // Check for timestamp format
+            Pattern timestampPattern = Pattern.compile("_(\\d{13})");
+            Matcher timestampMatcher = timestampPattern.matcher(fileName);
+            if (timestampMatcher.find()) {
+                long timestamp = Long.parseLong(timestampMatcher.group(1));
+                dateString = new java.text.SimpleDateFormat("dd-MM-yy HH:mm:ss").format(new java.util.Date(timestamp));
+            } else if (!fileName.startsWith("trajectory_") && !fileName.startsWith("traj_")) {
+                // It's a custom named file, show file modification date
+                dateString = new java.text.SimpleDateFormat("dd-MM-yy HH:mm:ss").format(new java.util.Date(file.lastModified()));
+            }
+        }
+
+        System.err.println("UPLOAD - File: " + fileName + ", Display name: " + trajectoryName + ", Date: " + dateString);
         holder.trajDate.setText(dateString);
+
+        // Set the custom name in the small box with emoji
+        holder.trajName.setText("📝 " + trajectoryName);
 
         // Set click listener for the delete button
         holder.deletebutton.setOnClickListener(v -> deleteFileAtPosition(position));

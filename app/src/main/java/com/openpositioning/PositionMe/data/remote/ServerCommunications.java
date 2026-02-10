@@ -88,8 +88,9 @@ public class ServerCommunications implements Observable {
     // Static constants necessary for communications
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
+    private static final String campaign = "murchison_house";
     private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
+            "https://openpositioning.org/api/live/trajectory/upload/" + campaign + "/" + userKey
                     + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
@@ -129,6 +130,10 @@ public class ServerCommunications implements Observable {
      */
     public void sendTrajectory(Traj.Trajectory trajectory){
         logDataSize(trajectory);
+        Log.i("ServerComm", "Uploading trajectory to: " + uploadURL);
+        Log.i("ServerComm", "IMU samples: " + trajectory.getImuDataCount()
+                + ", GNSS samples: " + trajectory.getGnssDataCount()
+                + ", Test points: " + trajectory.getTestPointsCount());
 
         // Convert the trajectory to byte array
         byte[] binaryTrajectory = trajectory.toByteArray();
@@ -190,9 +195,10 @@ public class ServerCommunications implements Observable {
                 // Handle failure to get response from the server
                 @Override public void onFailure(Call call, IOException e) {
                     e.printStackTrace();
-                    System.err.println("Failure to get response");
-                    // Delete the local file and set success to false
-                    //file.delete();
+                    Log.e("ServerComm", "Upload network failure: " + e.getMessage());
+                    infoResponse = "Upload failed: " + e.getMessage();
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(context, "Upload failed: network error", Toast.LENGTH_LONG).show());
                     success = false;
                     notifyObservers(1);
                 }
@@ -214,15 +220,12 @@ public class ServerCommunications implements Observable {
                         // If the response is unsuccessful, delete the local file and throw an
                         // exception
                         if (!response.isSuccessful()) {
-                            //file.delete();
-//                            System.err.println("POST error response: " + responseBody.string());
-
                             String errorBody = responseBody.string();
                             infoResponse = "Upload failed: " + errorBody;
+                            Log.e("ServerComm", "Upload error " + response.code() + ": " + errorBody);
                             new Handler(Looper.getMainLooper()).post(() ->
-                                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
+                                    Toast.makeText(context, infoResponse, Toast.LENGTH_LONG).show());
 
-                            System.err.println("POST error response: " + errorBody);
                             success = false;
                             notifyObservers(1);
                             throw new IOException("Unexpected code " + response);
@@ -231,10 +234,13 @@ public class ServerCommunications implements Observable {
                         // Print the response headers
                         Headers responseHeaders = response.headers();
                         for (int i = 0, size = responseHeaders.size(); i < size; i++) {
-                            System.out.println(responseHeaders.name(i) + ": " + responseHeaders.value(i));
+                            Log.d("ServerComm", responseHeaders.name(i) + ": " + responseHeaders.value(i));
                         }
                         // Print a confirmation of a successful POST to API
-                        System.out.println("Successful post response: " + responseBody.string());
+                        String responseStr = responseBody.string();
+                        Log.i("ServerComm", "Upload successful: " + responseStr);
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                Toast.makeText(context, "Trajectory uploaded successfully!", Toast.LENGTH_LONG).show());
 
                         System.out.println("Get file: " + file.getName());
                         String originalPath = file.getAbsolutePath();
@@ -261,7 +267,9 @@ public class ServerCommunications implements Observable {
         else {
             // If the device is not connected to network or allowed to send, do not send trajectory
             // and notify observers and user
-            System.err.println("No uploading allowed right now!");
+            Log.w("ServerComm", "No uploading allowed right now! WiFi=" + isWifiConn + " Mobile=" + isMobileConn);
+            new Handler(Looper.getMainLooper()).post(() ->
+                    Toast.makeText(context, "Upload skipped: no network connection", Toast.LENGTH_LONG).show());
             success = false;
             notifyObservers(1);
         }
@@ -402,8 +410,9 @@ public class ServerCommunications implements Observable {
      * @param fileName the name of the file
      * @param id the ID of the trajectory
      * @param dateSubmitted the date the trajectory was submitted
+     * @param trajectoryId the custom trajectory ID/name from the protobuf
      */
-    private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
+    private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted, String trajectoryId) {
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File recordsFile = new File(recordsDir, "download_records.json");
         JSONObject jsonObject;
@@ -443,6 +452,10 @@ public class ServerCommunications implements Observable {
             recordDetails.put("startTimeStamp", startTimestamp);
             recordDetails.put("date_submitted", dateSubmitted);
             recordDetails.put("id", id);
+            // Save trajectory_id for display purposes
+            if (trajectoryId != null && !trajectoryId.isEmpty()) {
+                recordDetails.put("trajectory_id", trajectoryId);
+            }
 
             // Insert or update in the main JSON
             jsonObject.put(id, recordDetails);
@@ -530,7 +543,27 @@ public class ServerCommunications implements Observable {
 
                     // Print a message in the console
                     long startTimestamp = receivedTrajectory.getStartTimestamp();
-                    String fileName = "trajectory_" + dateSubmitted + ".txt";
+                    String trajectoryId = receivedTrajectory.getTrajectoryId();
+
+                    Log.i("ServerComm", "=== DOWNLOADING TRAJECTORY ===");
+                    Log.i("ServerComm", "Server ID: " + id);
+                    Log.i("ServerComm", "Date submitted: " + dateSubmitted);
+                    Log.i("ServerComm", "Trajectory ID from protobuf: '" + trajectoryId + "'");
+                    Log.i("ServerComm", "Start timestamp: " + startTimestamp);
+
+                    // Use trajectory_id for filename if available, otherwise use date
+                    String fileName;
+                    if (trajectoryId != null && !trajectoryId.isEmpty() && !trajectoryId.startsWith("traj_")) {
+                        // Use custom trajectory name
+                        fileName = trajectoryId.replaceAll("[^a-zA-Z0-9._-]", "_") + ".txt";
+                        Log.i("ServerComm", "✅ Using custom trajectory name: " + fileName);
+                    } else {
+                        // Fall back to date-based naming
+                        fileName = "trajectory_" + dateSubmitted + ".txt";
+                        Log.i("ServerComm", "⚠️ Using date-based name: " + fileName + " (trajectory_id was: '" + trajectoryId + "')");
+                    }
+
+                    Log.i("ServerComm", "Final filename: " + fileName);
 
                     // Place the file in your app-specific "Downloads" folder
                     File appSpecificDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
@@ -554,8 +587,8 @@ public class ServerCommunications implements Observable {
                         inputStream.close();
                     }
 
-                    // Save the download record
-                    saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
+                    // Save the download record with trajectory_id
+                    saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted, trajectoryId);
                     loadDownloadRecords();
                 }
             }

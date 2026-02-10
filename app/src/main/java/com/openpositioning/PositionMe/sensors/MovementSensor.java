@@ -37,19 +37,39 @@ public class MovementSensor {
      * @see SensorInfo objects holding physical sensors properties.
      */
     public MovementSensor(Context context, int sensorType) {
+        this(context, sensorType, 0);
+    }
+
+    /**
+     * Constructor with actual sampling period.
+     *
+     * @param context               Application context used to check permissions and access devices.
+     * @param sensorType            Type of the sensor to be created, using Sensor.TYPE constants.
+     * @param actualSamplingPeriod  Actual sampling period in microseconds (0 to use sensor's minDelay).
+     */
+    public MovementSensor(Context context, int sensorType, int actualSamplingPeriod) {
         this.context = context;
 
         this.sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
         this.sensor = sensorManager.getDefaultSensor(sensorType);
 
         if (sensor != null) {
+            float maxRange = sensor.getMaximumRange();
+            int minDelay = sensor.getMinDelay();
+
+            // Use actual sampling period if provided, otherwise use minDelay
+            int samplingPeriod = (actualSamplingPeriod > 0) ? actualSamplingPeriod : minDelay;
+            float frequency = (samplingPeriod > 0) ? (1_000_000f / samplingPeriod) : 0f;
+
             this.sensorInfo = new SensorInfo(
                     sensor.getName(),
                     sensor.getVendor(),
                     sensor.getResolution(),
                     sensor.getPower(),
                     sensor.getVersion(),
-                    sensor.getType()
+                    sensor.getType(),
+                    maxRange,
+                    frequency
             );
             System.err.println(sensorInfo);
         } else {
@@ -59,7 +79,9 @@ public class MovementSensor {
                     -1.0f,
                     0.0f,
                     0,
-                    0
+                    0,
+                    0.0f,
+                    0.0f
             );
 
         }

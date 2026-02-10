@@ -17,6 +17,8 @@ public class SensorInfo {
     private final float power;
     private final int version;
     private final int type;
+    private final float maxRange;
+    private final float frequency;
 
     /**
      * Public default constructor of the Sensor Info object.
@@ -31,12 +33,25 @@ public class SensorInfo {
      * @param type          generic type of this sensor.
      */
     public SensorInfo(String name, String vendor, float resolution, float power, int version, int type) {
+        this(name, vendor, resolution, power, version, type, 0f, 0f);
+    }
+
+    /**
+     * Full constructor including max range and sampling frequency.
+     *
+     * @param maxRange      maximum range of the sensor in the sensor's unit.
+     * @param frequency     sampling frequency in Hz (derived from minDelay).
+     */
+    public SensorInfo(String name, String vendor, float resolution, float power,
+                      int version, int type, float maxRange, float frequency) {
         this.name = name;
         this.vendor = vendor;
         this.resolution = resolution;
         this.power = power;
         this.version = version;
         this.type = type;
+        this.maxRange = maxRange;
+        this.frequency = frequency;
     }
 
 
@@ -64,6 +79,14 @@ public class SensorInfo {
 
     public int getType() {
         return type;
+    }
+
+    public float getMaxRange() {
+        return maxRange;
+    }
+
+    public float getFrequency() {
+        return frequency;
     }
 
     //endregion

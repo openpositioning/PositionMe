@@ -10,6 +10,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.provider.Settings;
 import android.widget.Toast;
 
@@ -41,7 +42,7 @@ import java.util.TimerTask;
 public class WifiDataProcessor implements Observable {
 
     //Time over which a new scan will be initiated
-    private static final long scanInterval = 5000;
+    private static final long scanInterval = 1000;
 
     // Application context for handling permissions and WifiManager instances
     private final Context context;
@@ -129,13 +130,20 @@ public class WifiDataProcessor implements Observable {
             //Loop though each item in wifi list
             wifiData = new Wifi[wifiScanList.size()];
             for(int i = 0; i < wifiScanList.size(); i++) {
+                ScanResult result = wifiScanList.get(i);
                 wifiData[i] = new Wifi();
                 //Convert String mac address to an integer
-                String wifiMacAddress = wifiScanList.get(i).BSSID;
+                String wifiMacAddress = result.BSSID;
                 long intMacAddress = convertBssidToLong(wifiMacAddress);
                 //store mac address and rssi of wifi
                 wifiData[i].setBssid(intMacAddress);
-                wifiData[i].setLevel(wifiScanList.get(i).level);
+                wifiData[i].setLevel(result.level);
+                // Extract SSID, frequency, and RTT capability
+                wifiData[i].setSsid(result.SSID != null ? result.SSID : "");
+                wifiData[i].setFrequency(result.frequency);
+                wifiData[i].setRttEnabled(
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                                && result.is80211mcResponder());
             }
 
             //Notify observers of change in wifiData variable
@@ -169,6 +177,10 @@ public class WifiDataProcessor implements Observable {
                 //For characters a-f subtract 87 (=97-10) from ASCII code and multiply by 16^index
                 else if ((int) macByte >= 97 && (int) macByte <= 102){
                     intMacAddress = intMacAddress + (((int)macByte-87)*((long)Math.pow(16,16-j-colonCount)));
+                }
+                //For characters A-F subtract 55 (=65-10) from ASCII code and multiply by 16^index
+                else if ((int) macByte >= 65 && (int) macByte <= 70){
+                    intMacAddress = intMacAddress + (((int)macByte-55)*((long)Math.pow(16,16-j-colonCount)));
                 }
             }
             else

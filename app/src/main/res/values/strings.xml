@@ -111,6 +111,7 @@
     <string name="floor_height">Floor height in meters</string>
     <string name="color">Color</string>
     <string name="gnssSwitch">🛰 Show GNSS </string>
+    <string name="wifiSwitch">📶 Show WiFi </string>
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
     <string name="choose_map">Choose Map</string>
@@ -119,6 +120,7 @@
     <string name="satellite">Satellite</string>
     <string name="normal">Normal</string>
     <string name="hybrid">Hybrid</string>
+    <string name="upload_radiomap">Upload WiFi Radiomap</string>
     <string name="delete_button">Delete</string>
     <string name="home_slogan">\"Coordinates Start with Your First Move\"</string>
     <string name="info">Sensor Info</string>
@@ -126,6 +128,7 @@
     <string name="start_recording">Record</string>
     <string name="floor_up">Floor up button</string>
     <string name="floor_down">Floor down button</string>
+    <string name="add_test_point">Add test point marker</string>
     <string name="red_dot_description_text">Recording In Progress</string>
     <string name="correct_your_step">Correct your own avg step length:</string>
     <string name="correct_step_hint">...</string>
