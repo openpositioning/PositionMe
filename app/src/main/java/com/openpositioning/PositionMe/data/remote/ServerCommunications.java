@@ -633,6 +633,7 @@ public class ServerCommunications implements Observable {
         });
     }
 
+    // Used for indoormaps display to retrieve json
     public void requestNearbyIndoorMaps(
             double lat,
             double lon,

@@ -471,6 +471,8 @@ public class TrajectoryMapFragment extends Fragment {
      *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
      */
 
+    //Indoor maps retrieving long and lat
+
     private void requestNearbyIndoorMaps(@NonNull LatLng loc) {
 
         List<String> macs = new ArrayList<>();
