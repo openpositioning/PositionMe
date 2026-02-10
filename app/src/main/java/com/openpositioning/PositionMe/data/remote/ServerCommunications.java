@@ -17,7 +17,6 @@ import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
@@ -32,6 +31,7 @@ import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -149,7 +149,20 @@ public class ServerCommunications implements Observable {
         // Format the file name according to date
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
         Date date = new Date();
-        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
+
+        // Optional user-provided name (from Correction screen). If empty, fall back to timestamp scheme.
+        String rawName = SensorFusion.getInstance().getTrajectoryName();
+        String safeName = sanitiseTrajectoryName(rawName);
+
+        String baseName;
+        if (safeName.isEmpty()) {
+            baseName = "trajectory_" + dateFormat.format(date);
+        } else {
+            baseName = "trajectory_" + safeName;
+        }
+
+        // Ensure we never overwrite an existing file (e.g., same name twice or two saves in the same second)
+        File file = makeUniqueTrajectoryFile(path, baseName, ".txt");
 
         try {
             // Write the binary data to the file
@@ -253,6 +266,8 @@ public class ServerCommunications implements Observable {
 
                         // Delete local file and set success to true
                         success = file.delete();
+                        // Clear name after a completed upload to avoid reusing it for the next recording
+                        SensorFusion.getInstance().setTrajectoryName("");
                         notifyObservers(1);
                     }
                 }
@@ -263,6 +278,7 @@ public class ServerCommunications implements Observable {
             // and notify observers and user
             System.err.println("No uploading allowed right now!");
             success = false;
+            SensorFusion.getInstance().setTrajectoryName("");
             notifyObservers(1);
         }
     }
@@ -658,13 +674,43 @@ public class ServerCommunications implements Observable {
      */
     @Override
     public void notifyObservers(int index) {
-        for(Observer o : observers) {
-            if(index == 0 && o instanceof FilesFragment) {
-                o.update(new String[] {infoResponse});
+        for (Observer o : observers) {
+            if (index == 0 && o instanceof FilesFragment) {
+                o.update(new String[]{infoResponse});
+            } else if (index == 1 && o instanceof MainActivity) {
+                o.update(new Boolean[]{success});
             }
-            else if (index == 1 && o instanceof MainActivity) {
-                o.update(new Boolean[] {success});
-            }
+        }
+    }
+
+    private String sanitiseTrajectoryName(String raw) {
+        if (raw == null) return "";
+        String name = raw.trim();
+        if (name.isEmpty()) return "";
+
+        // Replace whitespace with underscores
+        name = name.replaceAll("\\s+", "_");
+        // Remove characters that are problematic in filenames across Android/Windows/macOS
+        name = name.replaceAll("[\\\\/:*?\"<>|]", "_");
+        // Keep it reasonably short
+        if (name.length() > 80) {
+            name = name.substring(0, 80);
+        }
+        // Avoid empty/degenerate names
+        name = name.replaceAll("_+", "_");
+        name = name.replaceAll("^_+|_+$", "");
+        return name;
+    }
+
+    private File makeUniqueTrajectoryFile(File dir, String baseName, String extension) {
+        File f = new File(dir, baseName + extension);
+        if (!f.exists()) return f;
+
+        int i = 2;
+        while (true) {
+            File candidate = new File(dir, baseName + "_" + i + extension);
+            if (!candidate.exists()) return candidate;
+            i++;
         }
     }
 }

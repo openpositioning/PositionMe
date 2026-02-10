@@ -124,7 +124,9 @@ message GNSSReading {
 }
 
 message Fingerprint {
+  // milliseconds from the start_timestamp
   int64 relative_timestamp = 1;
+
   repeated RFScan rf_scans = 2;
 
 }
@@ -136,7 +138,7 @@ message RFScan {
   // e.g. 207394925843984
   int64 mac = 2;
 
-  // rssi integer in dBm. 
+  // rssi integer in dBm.
   // typically between -120 and -10
   int32 rssi = 3;
 
@@ -155,7 +157,7 @@ message WiFiRTTReading {
   float distance = 3;
   // in mm
   float distance_std = 4;
-  // rssi integer in dBm. 
+  // rssi integer in dBm.
   // typically between -120 and -10
   int32 rssi = 5;
 }
@@ -170,7 +172,7 @@ message WiFiAPData {
 
   // Typically 2.4GHz or 5GHz
   int64 frequency = 3;
-  
+
   // Flag to indicate if the AP supports RTT measurements
   bool rtt_enabled = 4;
 }
@@ -208,4 +210,3 @@ message SensorInfo {
   float max_range = 7;
   float frequency = 8;
 }
-
