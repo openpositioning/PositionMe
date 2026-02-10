@@ -28,6 +28,15 @@ import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
 import java.util.List;
+//added imports
+import com.openpositioning.PositionMe.data.remote.IndoorMapsParser;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.data.remote.IndoorMapsParser;
+import org.json.JSONException;
+
 
 
 /**
@@ -82,6 +91,10 @@ public class TrajectoryMapFragment extends Fragment {
     private Button switchColorButton;
     private Polygon buildingPolygon;
 
+    //indoormapping polygons
+    private com.google.android.gms.maps.model.Polygon lastIndoorPolygon = null;
+    private org.json.JSONObject lastVenueJson = null;
+
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -123,6 +136,16 @@ public class TrajectoryMapFragment extends Fragment {
                     gMap = googleMap;
                     // Initialize map settings with the now non-null gMap
                     initMapSettings(gMap);
+//added indoormaps
+                    gMap.setOnPolygonClickListener(polygon -> {
+                        if (polygon == lastIndoorPolygon && lastVenueJson != null) {
+                            Log.d(
+                                    "IndoorMaps",
+                                    "Polygon clicked for venue: " + lastVenueJson.optString("name")
+                            );
+                            showFirstFloorIfAvailable(lastVenueJson);
+                        }
+                    });
 
                     // If we had a pending camera move, apply it now
                     if (hasPendingCameraMove && pendingCameraPosition != null) {
@@ -209,7 +232,7 @@ public class TrajectoryMapFragment extends Fragment {
         map.getUiSettings().setTiltGesturesEnabled(true);
         map.getUiSettings().setRotateGesturesEnabled(true);
         map.getUiSettings().setScrollGesturesEnabled(true);
-        map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+        map.setMapType(GoogleMap.MAP_TYPE_NORMAL);
 
         // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
@@ -506,18 +529,168 @@ public class TrajectoryMapFragment extends Fragment {
                             }
 
                             @Override
-                            public void onResponse(okhttp3.Call call,
-                                                   okhttp3.Response response)
+                            public void onResponse(okhttp3.Call call, okhttp3.Response response)
                                     throws java.io.IOException {
 
-                                String json = response.body().string();
-                                Log.d("IndoorMaps", "Nearby indoor maps JSON: " + json);
+                                okhttp3.ResponseBody rb = response.body();
+                                if (rb == null) {
+                                    Log.e("IndoorMaps", "Response body is null. HTTP=" + response.code());
+                                    return;
+                                }
+
+                                String json = rb.string();
+                                Log.d("IndoorMaps", "HTTP=" + response.code() + " Nearby indoor maps JSON: " + json);
+
+                                try {
+                                    IndoorMapsParser.Venue venue = IndoorMapsParser.parseFirstVenue(json);
+
+                                    if (venue == null) {
+                                        Log.d("IndoorMaps", "No venue found in response");
+                                        return;
+                                    }
+
+                                    lastVenueJson = venue.raw;
+                                    Log.d("IndoorMaps", "venue=" + venue.name);
+
+                                    requireActivity().runOnUiThread(() -> drawOutlinePolygon(venue.outline));
+
+                                } catch (JSONException e) {
+                                    Log.e("IndoorMaps", "JSON parse error", e);
+                                }
+
+
                             }
+
                         }
                 );
     }
+//indoormaps code
+    private void drawGeoJsonPolygon(@NonNull JSONObject polygon) {
+        JSONArray coords = polygon.optJSONArray("coordinates");
+        if (coords == null || coords.length() == 0) return;
+
+        JSONArray ring = coords.optJSONArray(0);
+        if (ring == null || ring.length() < 3) return;
+
+        List<LatLng> points = new ArrayList<>();
+        for (int i = 0; i < ring.length(); i++) {
+            JSONArray p = ring.optJSONArray(i);
+            if (p == null || p.length() < 2) continue;
+
+            double lon = p.optDouble(0);
+            double lat = p.optDouble(1);
+            points.add(new LatLng(lat, lon));
 
 
+        }
+
+        if (points.size() < 3) return;
+
+        lastIndoorPolygon = gMap.addPolygon(new PolygonOptions()
+                .addAll(points)
+                .clickable(true));
+
+        LatLngBounds.Builder b = new LatLngBounds.Builder();
+        for (LatLng pnt : points) b.include(pnt);
+        gMap.animateCamera(CameraUpdateFactory.newLatLngBounds(b.build(), 80));
+
+
+        Log.d("IndoorMaps", "Polygon drawn with " + points.size() + " points");
+    }
+
+    private void drawGeoJsonMultiPolygon(@NonNull JSONObject multiPolygon) {
+        JSONArray coords = multiPolygon.optJSONArray("coordinates");
+        if (coords == null || coords.length() == 0) return;
+
+        // MultiPolygon: coordinates = [ [ [ [lon,lat], ... ] ], [ ... ] ]
+        // We'll draw the first polygon's outer ring
+        JSONArray firstPoly = coords.optJSONArray(0);
+        if (firstPoly == null || firstPoly.length() == 0) return;
+
+        JSONArray ring = firstPoly.optJSONArray(0);
+        if (ring == null || ring.length() < 3) return;
+
+        List<LatLng> points = new ArrayList<>();
+        for (int i = 0; i < ring.length(); i++) {
+            JSONArray p = ring.optJSONArray(i);
+            if (p == null || p.length() < 2) continue;
+
+            double lon = p.optDouble(0);
+            double lat = p.optDouble(1);
+            points.add(new LatLng(lat, lon));
+        }
+
+        if (points.size() < 3) return;
+
+        lastIndoorPolygon = gMap.addPolygon(new PolygonOptions()
+                .addAll(points)
+                .clickable(true));
+
+        Log.d("IndoorMaps", "MultiPolygon drawn with " + points.size() + " points");
+    }
+
+
+    private void showFirstFloorIfAvailable(@NonNull org.json.JSONObject venue) {
+        Log.d("IndoorMaps", "Clicked venue name=" + venue.optString("name"));
+        Log.d("IndoorMaps", "Venue keys=" + venue.names());
+
+        // Common possibilities: "floors", "floorplans", "levels"
+        org.json.JSONArray floors = venue.optJSONArray("floors");
+        if (floors == null) floors = venue.optJSONArray("floorplans");
+        if (floors == null) floors = venue.optJSONArray("levels");
+
+        if (floors == null || floors.length() == 0) {
+            Log.d("IndoorMaps", "No floors array found (floors/floorplans/levels). Full venue=" + venue);
+            return;
+        }
+
+        org.json.JSONObject first = floors.optJSONObject(0);
+        if (first == null) {
+            Log.d("IndoorMaps", "First floor entry is not an object: " + floors.opt(0));
+            return;
+        }
+
+        Log.d("IndoorMaps", "First floor JSON=" + first.toString());
+    }
+
+
+    private void drawOutlinePolygon(@NonNull JSONObject outline) {
+        if (gMap == null) return;
+
+        String type = outline.optString("type", "");
+        JSONObject geometry = null;
+
+        if ("FeatureCollection".equals(type)) {
+            // outline = { "type":"FeatureCollection", "features":[ { "geometry": {...} } ] }
+            JSONArray features = outline.optJSONArray("features");
+            if (features == null || features.length() == 0) return;
+
+            JSONObject firstFeature = features.optJSONObject(0);
+            if (firstFeature == null) return;
+
+            geometry = firstFeature.optJSONObject("geometry");
+            if (geometry == null) return;
+
+        } else if ("Feature".equals(type)) {
+            geometry = outline.optJSONObject("geometry");
+            if (geometry == null) return;
+
+        } else {
+            // outline might already be a geometry object
+            geometry = outline;
+        }
+
+        String geomType = geometry.optString("type", "");
+        if ("Polygon".equals(geomType)) {
+            drawGeoJsonPolygon(geometry);
+        } else if ("MultiPolygon".equals(geomType)) {
+            drawGeoJsonMultiPolygon(geometry);
+        } else {
+            Log.d("IndoorMaps", "Unsupported geometry type: " + geomType);
+        }
+    }
+
+//indoormaps code ends
     private void drawBuildingPolygon() {
         if (gMap == null) {
             Log.e("TrajectoryMapFragment", "GoogleMap is not ready");
