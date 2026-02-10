@@ -177,8 +177,12 @@ public class ReplayFragment extends Fragment {
 
             // a. Set the polygon click listener on the now-ready map.
             googleMap.setOnPolygonClickListener(polygon -> {
+                Log.d(TAG, "A polygon was clicked!");//Debug logs
                 // The selectVenue() method is now inside TrajectoryMapFragment,
                 // so we don't need to do anything here. The child fragment handles its own clicks.
+                if (trajectoryMapFragment != null) {
+                    trajectoryMapFragment.handlePolygonClick(polygon);
+                }
             });
 
             // b. Run the original logic to determine the starting position.
