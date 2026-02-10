@@ -60,6 +60,8 @@
     <!-- Required if your app needs to access audio files that other apps created. -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
+    <uses-feature android:name="android.hardware.wifi.rtt"/>
+
 
     <!--
          3. requestLegacyExternalStorage:

@@ -405,7 +405,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
      * Called when {@link ServerCommunications} fails to upload a trajectory.
      */
     private final Runnable displayToastTaskFailure = () -> {
-//            Toast.makeText(MainActivity.this, "Failed to complete trajectory upload", Toast.LENGTH_SHORT).show();
+           Toast.makeText(MainActivity.this, "Failed to complete trajectory upload", Toast.LENGTH_SHORT).show();
     };
 
     //endregion

@@ -51,6 +51,9 @@ public class WifiDataProcessor implements Observable {
     //List of nearby networks
     private Wifi[] wifiData;
 
+    //List of raw ScanResult objects for WiFi RTT support
+    private List<ScanResult> scanResults;
+
     //List of observers to be notified when changes are detected
     private ArrayList<Observer> observers;
 
@@ -79,6 +82,7 @@ public class WifiDataProcessor implements Observable {
         this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
         this.scanWifiDataTimer = new Timer();
         this.observers = new ArrayList<>();
+        this.scanResults = new ArrayList<>();
 
         // Decreapted method after API 29
         // Turn on wifi if it is currently disabled
@@ -126,6 +130,9 @@ public class WifiDataProcessor implements Observable {
             //Stop receiver as scan is complete
             context.unregisterReceiver(this);
 
+            //Store raw ScanResult objects for WiFi RTT
+            scanResults = new ArrayList<>(wifiScanList);
+
             //Loop though each item in wifi list
             wifiData = new Wifi[wifiScanList.size()];
             for(int i = 0; i < wifiScanList.size(); i++) {
@@ -136,6 +143,8 @@ public class WifiDataProcessor implements Observable {
                 //store mac address and rssi of wifi
                 wifiData[i].setBssid(intMacAddress);
                 wifiData[i].setLevel(wifiScanList.get(i).level);
+                //Store raw ScanResult for WiFi RTT
+                wifiData[i].setScanResult(wifiScanList.get(i));
             }
 
             //Notify observers of change in wifiData variable

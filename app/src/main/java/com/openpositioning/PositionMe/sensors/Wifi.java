@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
+import android.net.wifi.ScanResult;
+
 import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment;
 
 /**
@@ -8,6 +10,7 @@ import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment
  * It contains the ssid (the identifier of the wifi), bssid (the mac address of the wifi), level
  * (the strength of the wifi in dB) and frequency (the frequency of the wifi network (2.4GHz or
  * 5GHz). For most objects only the bssid and the level are set.
+ * It also holds the raw ScanResult object for WiFi RTT ranging support.
  *
  * @author Virginia Cangelosi
  * @author Mate Stodulka
@@ -17,6 +20,7 @@ public class Wifi {
     private long bssid;
     private int level;
     private long frequency;
+    private ScanResult scanResult;
 
     /**
      * Empty public default constructor of the Wifi object.
@@ -30,6 +34,7 @@ public class Wifi {
     public long getBssid() { return bssid; }
     public int getLevel() { return level; }
     public long getFrequency() { return frequency; }
+    public ScanResult getScanResult() { return scanResult; }
 
     /**
      * Setters for each property
@@ -38,6 +43,7 @@ public class Wifi {
     public void setBssid(long bssid) { this.bssid = bssid; }
     public void setLevel(int level) { this.level = level; }
     public void setFrequency(long frequency) { this.frequency = frequency; }
+    public void setScanResult(ScanResult scanResult) { this.scanResult = scanResult; }
 
     /**
      * Generates a string containing mac address and rssi of Wifi.

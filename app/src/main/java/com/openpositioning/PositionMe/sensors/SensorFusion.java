@@ -1,8 +1,12 @@
 package com.openpositioning.PositionMe.sensors;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.net.wifi.rtt.WifiRttManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.Sensor;
+import androidx.core.app.ActivityCompat;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
@@ -36,6 +40,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -107,6 +112,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private WifiDataProcessor wifiProcessor;
     private GNSSDataProcessor gnssProcessor;
     private Bluetooth bleScanner;
+    private boolean wifiRttAvailable;  // Indicates if device supports WiFi RTT
+
     // Data listener
     private final LocationListener locationListener;
 
@@ -243,6 +250,24 @@ public class SensorFusion implements SensorEventListener, Observer {
         wifiProcessor.registerObserver(this);
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
         this.bleScanner = new Bluetooth(context);
+        // Check if device supports WiFi RTT (API 28+ required)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                WifiRttManager manager = (WifiRttManager) context.getSystemService(Context.WIFI_RTT_RANGING_SERVICE);
+                this.wifiRttAvailable = (manager != null);
+                if (this.wifiRttAvailable) {
+                    Log.d("WIFI_RTT", "WiFi RTT available on this device");
+                } else {
+                    Log.w("WIFI_RTT", "WiFi RTT not available on this device");
+                }
+            } catch (Exception e) {
+                Log.e("WIFI_RTT", "Error checking WiFi RTT support: " + e.getMessage(), e);
+                this.wifiRttAvailable = false;
+            }
+        } else {
+            this.wifiRttAvailable = false;
+            Log.d("WIFI_RTT", "WiFi RTT requires Android 9+");
+        }
         // Create object handling HTTPS communication
         this.serverCommunications = new ServerCommunications(context);
         // Save absolute and relative start time
@@ -1071,11 +1096,15 @@ public class SensorFusion implements SensorEventListener, Observer {
                     secondCounter = 0;
                     //Current Wifi Object
                     Wifi currentWifi = wifiProcessor.getCurrentWifiData();
+                    
+                    // WiFi RTT flag: indicates if device supports 802.11mc
+                    boolean rttCapable = wifiRttAvailable;
+                    
                     trajectory.addApsData(Traj.WiFiAPData.newBuilder()
                             .setMac(currentWifi.getBssid())
                             .setSsid(currentWifi.getSsid())
                             .setFrequency(currentWifi.getFrequency())
-                            .setRttEnabled(false)  // TODO: Detect RTT capability dynamically
+                            .setRttEnabled(rttCapable)
                             .build());
                     
                     // Collect and add BLE fingerprints every 5 seconds
@@ -1142,6 +1171,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         return result;
     }
+
 
     //endregion
 

@@ -661,15 +661,15 @@ public class ServerCommunications implements Observable {
 
 
     private void logDataSize(Traj.Trajectory trajectory) {
-        Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Magnetometer Data size: " + trajectory.getMagnetometerDataCount());
-        Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
-        Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
-        Log.i("ServerCommunications", "Proximity Data size: " + trajectory.getProximityDataCount());
-        Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Fingerprints size: " + trajectory.getWifiFingerprintsCount());
-        Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
-        Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
+        Log.i(LogTag, "IMU Data size: " + trajectory.getImuDataCount());
+        Log.i(LogTag, "Magnetometer Data size: " + trajectory.getMagnetometerDataCount());
+        Log.i(LogTag, "Pressure Data size: " + trajectory.getPressureDataCount());
+        Log.i(LogTag, "Light Data size: " + trajectory.getLightDataCount());
+        Log.i(LogTag, "Proximity Data size: " + trajectory.getProximityDataCount());
+        Log.i(LogTag, "GNSS Data size: " + trajectory.getGnssDataCount());
+        Log.i(LogTag, "WiFi Fingerprints size: " + trajectory.getWifiFingerprintsCount());
+        Log.i(LogTag, "APS Data size: " + trajectory.getApsDataCount());
+        Log.i(LogTag, "PDR Data size: " + trajectory.getPdrDataCount());
     }
 
     /**
