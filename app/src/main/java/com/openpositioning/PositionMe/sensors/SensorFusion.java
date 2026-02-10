@@ -531,6 +531,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setMac(mac)
                             .setRssi(data.getLevel()));
                 }
+                Log.d("WIFI_FINGERPRINT",
+                        "MAC=" + mac + ", RSSI=" + data.getLevel()
+                        );
             }
             // Adding WiFi data to Trajectory
             if (wifiData.getRfScansCount() > 0) {
@@ -1055,7 +1058,15 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setW(rotation[3])
                             .build())
                     .setStepCount(stepCounter));
-            
+
+            if (counter == 0) {
+                Log.d("IMU_DATA",
+                        " Acc=(" + filteredAcc[0] + ", " + filteredAcc[1] + ", " + filteredAcc[2] + ")" +
+                                " Gyr=(" + angularVelocity[0] + ", " + angularVelocity[1] + ", " + angularVelocity[2] + ")" +
+                                " Rot=(" + rotation[0] + ", " + rotation[1] + ", " + rotation[2] + ", " + rotation[3] + ")" +
+                                " Steps=" + stepCounter
+                );
+            }
             // Store magnetometer data separately
             trajectory.addMagnetometerData(Traj.MagnetometerReading.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
@@ -1069,6 +1080,12 @@ public class SensorFusion implements SensorEventListener, Observer {
 //                            .setLongitude(longitude)
 //                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
             ;
+            if (counter == 0) {
+                Log.d("MAGNETOMETER_DATA", "Mag=" + magneticField[0] +
+                        ", " + magneticField[1] +
+                        ", " + magneticField[2]
+                );
+            }
 
             // Divide timer with a counter for storing data every 1 second
             if (counter == 99) {
@@ -1079,16 +1096,21 @@ public class SensorFusion implements SensorEventListener, Observer {
                                     .setPressure(pressure)
                                     .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                     .build());
+                    Log.d("PRESSURE_DATA", "Pressure=" + pressure);
+                }
+                if (lightSensor.sensor != null) {
                     trajectory.addLightData(Traj.LightReading.newBuilder()
-                                    .setLight(light)
-                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                                    .build());
+                            .setLight(light)
+                            .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                            .build());
+                    Log.d("LIGHT_DATA", "Light=" + light);
                 }
                 if (proximitySensor.sensor != null) {
                     trajectory.addProximityData(Traj.ProximityReading.newBuilder()
                             .setDistance(proximity)
                             .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                             .build());
+                    Log.d("PROXIMITY_DATA", "Distance=" + proximity);
                 }
 
                 // Divide the timer for storing AP data every 5 seconds
@@ -1106,7 +1128,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setFrequency(currentWifi.getFrequency())
                             .setRttEnabled(rttCapable)
                             .build());
-                    
+                    Log.d("WIFI_APDATA", "MAC=" + currentWifi.getBssid() +
+                            ", Name=" + currentWifi.getSsid() +
+                            ", Frequency=" + currentWifi.getFrequency() +
+                            ", RTT enabled=" + rttCapable);
+
                     // Collect and add BLE fingerprints every 5 seconds
                     if (bleScanner != null) {
                         List<Bluetooth.BleDevice> bleDevices = bleScanner.getDiscoveredDevices();

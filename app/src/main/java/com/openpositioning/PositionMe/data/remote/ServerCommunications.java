@@ -129,6 +129,9 @@ public class ServerCommunications implements Observable {
                     "https://openpositioning.org/api/live/trajectory/upload/" + SelectedVenueStore.getInstance().getVenueName() + "/" + userKey
                             + "/?key=" + masterKey;
             Log.i(LogTag , "URL is: " + URL);
+        } else {
+            Toast.makeText(context, "Upload Failed: Invalid Venue", Toast.LENGTH_SHORT).show();
+            System.err.println("Upload Failed: Invalid Venue");
         }
         return URL;
     }
@@ -336,7 +339,7 @@ public class ServerCommunications implements Observable {
         String uploadURL = formUploadURL();
         // Create a POST request with the required headers
         if (null == uploadURL) {
-            return; // TODO: ERROR
+            return;
         }
         okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
