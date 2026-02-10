@@ -21,9 +21,10 @@ public class GeoParser {
     private static final String TAG = "GeoParser";
 
     /**
-     * Parse first ring of a Polygon or MultiPolygon from a GeoJSON string. Expects lon,lat order.
-     */
-    public static List<LatLng> parseFirstPolygonRing(String geoJson) {
+    * Parses a GeoJSON string and returns the first polygon ring as a list of LatLng points.
+    * Used to extract the building outline for rendering on the map.
+    */
+    public static List<LatLng> parseOutline(String geoJson) {
         try {
             JSONObject root = new JSONObject(geoJson);
             // If FeatureCollection, take first feature
@@ -34,10 +35,7 @@ public class GeoParser {
                 if (root == null) return null;
             }
             String type = root.optString("type");
-            if ("Polygon".equalsIgnoreCase(type)) {
-                JSONArray coords = root.optJSONArray("coordinates");
-                return coords == null ? null : toLatLngRing(coords.optJSONArray(0));
-            } else if ("MultiPolygon".equalsIgnoreCase(type)) {
+            if ("MultiPolygon".equalsIgnoreCase(type)) {
                 JSONArray coords = root.optJSONArray("coordinates");
                 if (coords == null || coords.length() == 0) return null;
                 JSONArray firstPoly = coords.optJSONArray(0); // first polygon
@@ -49,67 +47,19 @@ public class GeoParser {
         }
         return null;
     }
+    
 
     /**
-     * Parse MultiLineString / LineString collections out of a FeatureCollection or raw geometry.
-     * Returns list of polylines (each as list of LatLng).
-     */
-    public static List<List<LatLng>> parseMultiLineOrPolygonCollection(String geoJson) {
-        List<List<LatLng>> result = new ArrayList<>();
-        try {
-            JSONObject root = new JSONObject(geoJson);
+    * Parses a map_shapes GeoJSON string into a per-floor map of polylines.
+    * The input is a JSON object keyed by floor identifier (e.g. "B1", "GF", "F1"),
+    * where each value is a FeatureCollection of wall/room geometries for that floor.
 
-            // Case: map_shapes is an object with floor keys, each a FeatureCollection
-            if (!root.has("type")) {
-                JSONArray names = root.names();
-                if (names != null) {
-                    for (int i = 0; i < names.length(); i++) {
-                        JSONObject floorObj = root.optJSONObject(names.optString(i));
-                        if (floorObj != null) {
-                            collectFeatureCollection(result, floorObj);
-                        }
-                    }
-                }
-            } else if ("FeatureCollection".equalsIgnoreCase(root.optString("type"))) {
-                collectFeatureCollection(result, root);
-            } else {
-                collectGeom(result, root);
-            }
-            return result.isEmpty() ? null : result;
-        } catch (JSONException e) {
-            Log.e(TAG, "parseMultiLineOrPolygonCollection error", e);
-            return null;
-        }
-    }
-
-    /**
-     * Parse floors: map_shapes structured as { "B1": FeatureCollection, "GF": FeatureCollection, ... }
-     * Returns a map floorName -> list of polylines.
-     */
+    * Returns null if no valid floor data is found.
+    */
     public static Map<String, List<List<LatLng>>> parseFloorPolylines(String geoJson) {
         Map<String, List<List<LatLng>>> out = new LinkedHashMap<>();
         try {
             JSONObject root = new JSONObject(geoJson);
-            // If this is already a FeatureCollection, treat as single unnamed floor
-            if ("FeatureCollection".equalsIgnoreCase(root.optString("type"))) {
-                JSONArray features = root.optJSONArray("features");
-                if (features == null) return null;
-                for (int i = 0; i < features.length(); i++) {
-                    JSONObject feat = features.optJSONObject(i);
-                    if (feat == null) continue;
-                    JSONObject geom = feat.optJSONObject("geometry");
-                    if (geom == null) continue;
-                    String floorKey = extractFloorKey(feat);
-                    List<List<LatLng>> lines = out.get(floorKey);
-                    if (lines == null) {
-                        lines = new ArrayList<>();
-                        out.put(floorKey, lines);
-                    }
-                    collectGeom(lines, geom);
-                }
-                return out.isEmpty() ? null : out;
-            }
-
             JSONArray names = root.names();
             if (names == null) return null;
             for (int i = 0; i < names.length(); i++) {
@@ -127,55 +77,63 @@ public class GeoParser {
         }
     }
 
-    /** Prefer floor/level properties if present on features; fallback to F1. */
-    private static String extractFloorKey(JSONObject feature) {
-        JSONObject props = feature.optJSONObject("properties");
-        if (props != null) {
-            String[] keys = new String[]{"floor", "level", "level_id", "levelId", "floor_id", "floorId", "z_level"};
-            for (String k : keys) {
-                if (props.has(k)) {
-                    String val = props.optString(k, "");
-                    if (val == null || val.isEmpty() || "null".equalsIgnoreCase(val)) continue;
-                    return val;
-                }
-            }
-            if (props.has("z")) {
-                double z = props.optDouble("z", Double.NaN);
-                if (!Double.isNaN(z)) return String.valueOf((int) z);
-            }
-        }
-        return "F1";
-    }
+
+    /**
+    * Extract all geometries from a GeoJSON FeatureCollection and append
+    * their drawable paths into the output list.
+    */
 
     private static void collectFeatureCollection(List<List<LatLng>> out, JSONObject featureCollection) {
+
+        // Get the array of features from the collection
         JSONArray features = featureCollection.optJSONArray("features");
         if (features == null) return;
+
+        // Iterate over every feature
         for (int i = 0; i < features.length(); i++) {
+            // Read the feature object per iteration
             JSONObject feat = features.optJSONObject(i);
             if (feat == null) continue;
+             // Each feature should contain a "geometry" object
             JSONObject geom = feat.optJSONObject("geometry");
             if (geom == null) continue;
+
+            // Parse the geometry and append results into `out`
             collectGeom(out, geom);
         }
     }
 
+
+    /**
+    * Reads GeoJSON and extract drawable path data.
+    * The paths are converted into lists of LatLng and appended to `out`.
+    *
+    * Supports:
+    * - MultiLineString
+    * - MultiPolygon 
+    */
+
     private static void collectGeom(List<List<LatLng>> out, JSONObject geom) {
+
+        // Determine the geometry type (e.g., MultiLineString or  MultiPolygon, etc.)
         String type = geom.optString("type");
+
+        // MultiLineString -> many independent lines
+        // coordinates: [ [ [lon,lat], [lon,lat] ], [ ... ] ]
         if ("MultiLineString".equalsIgnoreCase(type)) {
+
+             // Get the array of lines
             JSONArray lines = geom.optJSONArray("coordinates");
             if (lines == null) return;
+
+            // Process each line
             for (int i = 0; i < lines.length(); i++) {
                 JSONArray line = lines.optJSONArray(i);
+
+                // Convert JSON coordinates to LatLng objects
                 List<LatLng> ring = toLatLngRing(line);
                 if (ring != null && ring.size() > 1) out.add(ring);
             }
-        } else if ("LineString".equalsIgnoreCase(type)) {
-            List<LatLng> ring = toLatLngRing(geom.optJSONArray("coordinates"));
-            if (ring != null && ring.size() > 1) out.add(ring);
-        } else if ("Polygon".equalsIgnoreCase(type)) {
-            // use exterior ring only
-            List<LatLng> ring = toLatLngRing(geom.optJSONArray("coordinates").optJSONArray(0));
-            if (ring != null && ring.size() > 1) out.add(ring);
         } else if ("MultiPolygon".equalsIgnoreCase(type)) {
             JSONArray polys = geom.optJSONArray("coordinates");
             if (polys == null) return;
@@ -188,16 +146,34 @@ public class GeoParser {
         }
     }
 
+    // Convert a JSONArray of [longitude, latitude] pairs
+    // into a List of LatLng objects.
     private static List<LatLng> toLatLngRing(JSONArray arr) {
+        // If the array itself is null, return null to avoid errors
         if (arr == null) return null;
+
+        // Create a list that will hold the converted coordinates
         List<LatLng> list = new ArrayList<>();
+
+         // Loop through each element in the JSON array
         for (int i = 0; i < arr.length(); i++) {
+
+            // Try to read the current element as a JSONArray
+            // Expected format: [lon, lat]
             JSONArray pair = arr.optJSONArray(i);
+
+            // Skip if it's not an array or doesn't have at least two values
             if (pair == null || pair.length() < 2) continue;
+
+            // GeoJSON stores coordinates as [longitude, latitude]
             double lon = pair.optDouble(0);
             double lat = pair.optDouble(1);
+
+            // LatLng expects (latitude, longitude),
+            // so we swap the order here
             list.add(new LatLng(lat, lon));
         }
+        // Return the completed list of coordinates
         return list;
     }
 }

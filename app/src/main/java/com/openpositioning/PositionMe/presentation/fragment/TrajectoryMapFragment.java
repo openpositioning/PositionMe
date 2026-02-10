@@ -618,10 +618,6 @@ public class TrajectoryMapFragment extends Fragment {
         if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
             renderCurrentFloorShapes();
             setFloorControlsVisibility(currentFloorShapes.size() > 1 ? View.VISIBLE : View.GONE);
-        } else {
-            // Fallback: aggregate shapes
-            drawVenueShapes(selectedVenue);
-            setFloorControlsVisibility(View.GONE);
         }
     }
 
@@ -649,21 +645,6 @@ public class TrajectoryMapFragment extends Fragment {
             venueShapeLines.add(pl);
         }
         Toast.makeText(requireContext(), "Floor: " + fs.name, Toast.LENGTH_SHORT).show();
-    }
-
-    private void drawVenueShapes(FloorplanService.Venue venue) {
-        clearVenueShapeLines();
-        if (venue == null || gMap == null) return;
-        List<List<LatLng>> shapes = venue.parseMapShapes();
-        if (shapes == null) return;
-        for (List<LatLng> line : shapes) {
-            Polyline pl = gMap.addPolyline(new PolylineOptions()
-                    .addAll(line)
-                    .width(4f)
-                    .color(Color.CYAN)
-                    .zIndex(4));
-            venueShapeLines.add(pl);
-        }
     }
 
     private void clearVenueShapeLines() {

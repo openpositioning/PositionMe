@@ -57,38 +57,12 @@ public class FloorplanService {
         }
 
         /**
-         * Try to parse outline as GeoJSON MultiPolygon/Polygon string first; fall back to lat,lng;lat,lng.
+         * parse outline as GeoJSON MultiPolygon.
          */
         @Nullable
         public List<LatLng> parseOutline() {
-            if (outlineRaw == null || outlineRaw.isEmpty()) return null;
-            // Attempt GeoJSON
-            List<LatLng> geo = GeoParser.parseFirstPolygonRing(outlineRaw);
-            if (geo != null && !geo.isEmpty()) return geo;
-
-            // Fallback: semicolon-separated lat,lng pairs
-            String[] pairs = outlineRaw.split(";");
-            List<LatLng> result = new ArrayList<>();
-            for (String pair : pairs) {
-                String[] parts = pair.split(",");
-                if (parts.length != 2) continue;
-                try {
-                    double lat = Double.parseDouble(parts[0].trim());
-                    double lng = Double.parseDouble(parts[1].trim());
-                    result.add(new LatLng(lat, lng));
-                } catch (NumberFormatException ignored) {
-                }
-            }
-            return result.isEmpty() ? null : result;
-        }
-
-        /**
-         * Parse map_shapes GeoJSON into a list of polyline rings (each is a list of LatLng).
-         */
-        @Nullable
-        public List<List<LatLng>> parseMapShapes() {
-            if (mapShapesRaw == null || mapShapesRaw.isEmpty()) return null;
-            return GeoParser.parseMultiLineOrPolygonCollection(mapShapesRaw);
+        if (outlineRaw == null || outlineRaw.isEmpty()) return null;
+        return GeoParser.parseOutline(outlineRaw);
         }
 
         /** Parse floor-separated map shapes; each floor has its own set of polylines. */
