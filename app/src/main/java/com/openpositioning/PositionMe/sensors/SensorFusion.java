@@ -36,6 +36,10 @@ import java.util.TimerTask;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import java.util.ArrayList;
+import java.util.List;
+import com.openpositioning.PositionMe.sensors.model.TestPoint;
+
 
 /**
  * The SensorFusion class is the main data gathering and processing class of the application.
@@ -179,6 +183,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
+    private final List<TestPoint> testPoints = new ArrayList<>();
+
 
     //region Initialisation
     /**
@@ -258,6 +264,37 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see GNSSDataProcessor for location data processing.
      * @see WifiDataProcessor for network data processing.
      */
+
+    public void addTestPoint(long timestampMillis, double lat, double lon) {
+        testPoints.add(new TestPoint(timestampMillis, lat, lon));
+    }
+
+//    debugging-
+    public List<TestPoint> getTestPoints() {
+        return testPoints;
+    }
+
+    public void addTestPoint(long timestamp) {
+        Log.d("TestPoint", "Test point marked at: " + timestamp);
+        if (!saveRecording || trajectory == null) {
+            Log.w("SensorFusion", "Test point ignored: not recording");
+            return;
+        }
+
+        long relativeTs = System.currentTimeMillis() - absoluteStartTime;
+
+        Traj.GNSSPosition testPoint = Traj.GNSSPosition.newBuilder()
+                .setRelativeTimestamp(relativeTs)
+                .setLatitude(latitude)
+                .setLongitude(longitude)
+                .setAltitude(elevation) // or GNSS altitude if you prefer
+                .build();
+
+        trajectory.addTestPoints(testPoint);
+
+        Log.d("SensorFusion", "Test point added @ " + latitude + ", " + longitude);
+    }
+
     public void setContext(Context context) {
         this.appContext = context.getApplicationContext(); // store app context for later use
 

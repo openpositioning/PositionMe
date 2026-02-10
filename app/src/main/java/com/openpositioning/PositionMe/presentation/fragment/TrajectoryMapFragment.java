@@ -29,6 +29,17 @@ import com.google.android.gms.maps.model.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.Typeface;
+
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.MarkerOptions;
+
+
 
 /**
  * A fragment responsible for displaying a trajectory map using Google Maps.
@@ -201,6 +212,52 @@ public class TrajectoryMapFragment extends Fragment {
      *
      * @param map
      */
+
+    private Bitmap createNumberedMarkerBitmap(int number) {
+        int size = 100; // marker size in pixels
+
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        Paint circlePaint = new Paint();
+        circlePaint.setColor(Color.RED);
+        circlePaint.setAntiAlias(true);
+
+        Paint textPaint = new Paint();
+        textPaint.setColor(Color.WHITE);
+        textPaint.setTextSize(40f);
+        textPaint.setTypeface(Typeface.DEFAULT_BOLD);
+        textPaint.setAntiAlias(true);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+
+        // Draw circle
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f, circlePaint);
+
+        // Draw number in center
+        Rect bounds = new Rect();
+        String text = String.valueOf(number);
+        textPaint.getTextBounds(text, 0, text.length(), bounds);
+
+        float x = size / 2f;
+        float y = size / 2f - bounds.centerY();
+
+        canvas.drawText(text, x, y, textPaint);
+
+        return bitmap;
+    }
+
+    public void addTestPointMarker(LatLng latLng, int number) {
+        Bitmap numberedMarker = createNumberedMarkerBitmap(number);
+
+        MarkerOptions markerOptions = new MarkerOptions()
+                .position(latLng)
+                .icon(BitmapDescriptorFactory.fromBitmap(numberedMarker))
+                .anchor(0.5f, 0.5f)   // center anchor
+                .title("Test Point " + number);
+
+        gMap.addMarker(markerOptions);
+    }
+
 
     private void initMapSettings(GoogleMap map) {
         // Basic map settings
