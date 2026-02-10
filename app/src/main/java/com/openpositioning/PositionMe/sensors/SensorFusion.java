@@ -18,6 +18,7 @@ import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
@@ -1143,6 +1144,41 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public long getRelativeTimeStamp() {
         return SystemClock.uptimeMillis() - bootTime;
+    }
+
+    /**
+     * Records test point into trajectory protobuf
+     *
+     * Called when "ADD MARKER" button is pressed during active recording session
+     * Each test point stores:
+     * - Latitude and longitude location at time of press
+     * - Relative timestamp at time of press to the start of recording
+     *
+     * Order in repeated field linked to marker numbering shown in the UI.
+     */
+    public void addTestPoint(LatLng currentPosition, long relativeTimeStamp) {
+        // Only store test points when recording session active
+        if (saveRecording) {
+
+        // Build GNSSPosition protobuf message representing test point
+        Traj.GNSSPosition TP = Traj.GNSSPosition.newBuilder()
+                .setRelativeTimestamp(relativeTimeStamp)
+                .setLatitude(currentPosition.latitude)
+                .setLongitude(currentPosition.longitude)
+                .build();
+
+            // Validate position data passed to protobuf
+            Log.d("TP_PROTO",
+                    "Input lat=" + currentPosition.latitude
+                            + " lon=" + currentPosition.longitude
+                            + " tRel=" + relativeTimeStamp);
+
+        // Add test point to trajectory protobuf
+        trajectory.addTestPoints(TP);
+
+        // Validate test point count in protobuf
+        Log.d("TP_PROTO", "Count = " + trajectory.getTestPointsCount());
+        };
     }
 }
 

@@ -28,6 +28,7 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
@@ -204,13 +205,20 @@ public class RecordingFragment extends Fragment {
             TestPoint tp = new TestPoint(currentPosition, relativeTimeStamp, markerCount);
             TestPoints.add(tp);
 
+            // Convert to seconds for display confirmation to two decimal places
+            double timeSeconds = relativeTimeStamp / 1000.0;
+            String timeStr = String.format("%.2f", timeSeconds);
+
             // Display confirmation to screen showing marker number and time in seconds.
             Toast.makeText(requireContext(),
-                    "Test Point " + markerCount + " at " + relativeTimeStamp/1000 + "s",
+                    "Test Point " + markerCount + " at " + timeStr + "s",
                     Toast.LENGTH_SHORT).show();
 
             // Add a test point marker to the map
             trajectoryMapFragment.addTestPointMarker(currentPosition, markerCount);
+
+            // Add to protobuf
+            sensorFusion.addTestPoint(currentPosition, relativeTimeStamp);
         });
 
         // The blinking effect for recIcon
