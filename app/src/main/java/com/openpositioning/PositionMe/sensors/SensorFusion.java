@@ -964,9 +964,13 @@ public class SensorFusion implements SensorEventListener, Observer {
             if (appContext != null && trajectory != null) {
                 try {
                     Traj.Trajectory finalTrajectory = this.trajectory.build();
+
+                    if (serverCommunications != null) {
+                        Log.d("SensorFusion", "Uploading trajectory...");
+                        serverCommunications.sendTrajectory(finalTrajectory, "murchison_house");
+                    }
+
                     String fileName = "term_project_trajectory_" + absoluteStartTime + ".proto";
-
-
                     File file = new File(appContext.getExternalFilesDir(null), fileName);
                     FileOutputStream fileOutputStream = new FileOutputStream(file);
                     fileOutputStream.write(finalTrajectory.toByteArray());
@@ -993,7 +997,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void sendTrajectoryToCloud() {
         if (trajectory != null) {
             Traj.Trajectory sentTrajectory = trajectory.build();
-            this.serverCommunications.sendTrajectory(sentTrajectory);
+            this.serverCommunications.sendTrajectory(sentTrajectory,"murchison_house");
         }
     }
 
@@ -1114,8 +1118,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                                     .setSsid(wifi.getSsid())
                                     .setFrequency(wifi.getFrequency());
                             if (wifi.getRttFlag()) {
-                             wifiBuilder.setRttEnabled(true);
-                               }
+                                wifiBuilder.setRttEnabled(true);
+                            }
                             trajectory.addApsData(wifiBuilder.build());
                         }
                     }

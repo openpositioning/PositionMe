@@ -50,6 +50,8 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private Button start;
     private Button measurements;
     private Button files;
+    // Task D: New button for Indoor Map
+    private MaterialButton indoorMapButton;
     private TextView gnssStatusTextView;
 
     // For the map
@@ -114,6 +116,13 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         files.setOnClickListener(v -> {
             NavDirections action = HomeFragmentDirections.actionHomeFragmentToFilesFragment();
             Navigation.findNavController(v).navigate(action);
+        });
+
+        // Task D: Indoor Map Button Logic
+        indoorMapButton = view.findViewById(R.id.indoorButton);
+        indoorMapButton.setOnClickListener(v -> {
+            // Navigate to IndoorMapDisplayFragment using the ID defined in main_nav.xml
+            Navigation.findNavController(v).navigate(R.id.action_homeFragment_to_indoorMapDisplayFragment);
         });
 
         // TextView to display GNSS disabled message

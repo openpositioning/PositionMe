@@ -12,10 +12,9 @@ import android.util.Log;
 import android.widget.Toast;
 
 import androidx.preference.PreferenceManager;
-
+import com.openpositioning.PositionMe.Traj;
 import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.BuildConfig;
-import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
@@ -56,6 +55,14 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+
+// 在现有的 imports 下方添加：
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import org.json.JSONArray;
+import org.json.JSONException;
+import java.util.Collections;
+import java.util.Comparator;
 /**
  * This class handles communications with the server through HTTPs. The class uses an
  * {@link OkHttpClient} for making requests to the server. The class includes methods for sending
@@ -68,11 +75,16 @@ import okhttp3.ResponseBody;
  * @author Mate Stodulka
  */
 public class ServerCommunications implements Observable {
+    // ==============================================================
+    // 部分 1：变量定义与 Log 标签
+    // ==============================================================
+
+    // 1. 添加日志标签 (在 Logcat 中搜索 "ServerDebug" 就能看到日志)
+    private static final String TAG = "ServerDebug";
+
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();
-    // Application context for handling permissions and devices
     private final Context context;
     private Traj.Trajectory trajectory;
-    // Network status checking
     private ConnectivityManager connMgr;
     private boolean isWifiConn;
     private boolean isMobileConn;
@@ -82,9 +94,11 @@ public class ServerCommunications implements Observable {
     private boolean success;
     private List<Observer> observers;
 
-    // Static constants necessary for communications
-    private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
-    private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
+    // 2. 必须硬编码 Key 以修复 401 错误
+    private static final String userKey = "LY31NlnGAe9vN-HvQJWTZg";
+    private static final String masterKey = "ewireless";
+
+    // 3. URL 定义
     private static final String uploadURL =
             "https://openpositioning.org/api/live/trajectory/upload/" + userKey
                     + "/?key=" + masterKey;
@@ -94,9 +108,15 @@ public class ServerCommunications implements Observable {
     private static final String infoRequestURL =
             "https://openpositioning.org/api/live/users/trajectories/" + userKey
                     + "?key=" + masterKey;
+
+    // Task D: 室内地图请求 URL
+    private static final String floorPlanRequestURL =
+            "https://openpositioning.org/api/live/floorplan/request/" + userKey
+                    + "?key=" + masterKey;
+
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
-
+    // ... (下面接着是你原来的 public ServerCommunications(Context context) 构造函数，不要动)
 
 
     /**
@@ -104,7 +124,7 @@ public class ServerCommunications implements Observable {
      * initialises a {@link ConnectivityManager}, {@link Observer} and gets the user preferences.
      * Boolean variables storing WiFi and Mobile Data connection status are initialised to false.
      *
-     * @param context   application context for handling permissions and devices.
+     * @param context application context for handling permissions and devices.
      */
     public ServerCommunications(Context context) {
         this.context = context;
@@ -113,6 +133,7 @@ public class ServerCommunications implements Observable {
         this.observers = new ArrayList<>();
 
     }
+
     public void sendInfo(Traj.Trajectory trajectory) {
         this.trajectory = trajectory;
 
@@ -131,216 +152,87 @@ public class ServerCommunications implements Observable {
     }
 
 
-    public void sendTrajectory(Map<Integer, Map<Long, ?>> sensorBuf,
-                               Map<Long, ?> wifiBuf,
-                               Map<Long, ?> gnssBuf,
-                               Map<Long, ?> pdrBuf,
-                               Map<Long, ?> apsBuf,
-                               long start, String id){
-
-        Traj.Trajectory.Builder trajectoryBuilder = Traj.Trajectory.newBuilder();
-        // Set trajectory start timestamp (UNIX ms) for relative timestamps.
-        trajectoryBuilder.setStartTimestamp(SensorFusion.getInstance().getStartTimestampMs());
-        //  Attach Add-Tag test points to protobuf
-        trajectoryBuilder.addAllTestPoints(SensorFusion.getInstance().getTestPoints());
-        trajectoryBuilder.setTrajectoryId(id);
-        trajectoryBuilder.setAndroidVersion(String.valueOf(Build.VERSION.SDK_INT));
-        trajectoryBuilder.setStartTimestamp(SensorFusion.getInstance().getStartTimestampMs());
-        trajectoryBuilder.addAllTestPoints(SensorFusion.getInstance().getTestPoints());
-        // Debug log to verify test_points are attached
-        android.util.Log.d("TestPoints", "Attached test_points count = " + trajectoryBuilder.getTestPointsCount());
-
-
-
-        if(sensorBuf.get(0) != null) {
-            for(Object sample : sensorBuf.get(0).values()) {
-                trajectoryBuilder.addImuData((Traj.IMUReading) sample);
-            }
+    /**
+     * 上传轨迹到服务器 (Feature B & D)
+     * 替换了旧的 Map 参数版本，直接接收构建好的 Protobuf 对象和 Campaign 名称
+     */
+    public void sendTrajectory(Traj.Trajectory sentTrajectory, String campaign) {
+        // 1. 处理 Campaign 参数 (Feature D 要求)
+        // 如果未指定，默认为 murchison_house，防止 URL 错误
+        if (campaign == null || campaign.isEmpty()) {
+            campaign = "murchison_house";
         }
 
-        if(sensorBuf.get(1) != null) {
-            for(Object sample : sensorBuf.get(1).values()) {
-                trajectoryBuilder.addMagnetometerData((Traj.MagnetometerReading) sample);
-            }
-        }
+        // 2. 动态构建 URL
+        // 格式: .../upload/{campaign}/{userKey}/?key={masterKey}
+        String dynamicUrl = "https://openpositioning.org/api/live/trajectory/upload/" + campaign + "/" + userKey + "/?key=" + masterKey;
 
-        if(sensorBuf.get(2) != null) {
-            for(Object sample : sensorBuf.get(2).values()) {
-                trajectoryBuilder.addPressureData((Traj.BarometerReading) sample);
-            }
-        }
-
-        if(sensorBuf.get(3) != null) {
-            for(Object sample : sensorBuf.get(3).values()) {
-                trajectoryBuilder.addLightData((Traj.LightReading) sample);
-            }
-        }
-
-        // PDR Data
-        if(pdrBuf != null) {
-            for(Object sample : pdrBuf.values()) {
-                trajectoryBuilder.addPdrData((Traj.RelativePosition) sample);
-            }
-        }
-
-        // GNSS Data
-        if(gnssBuf != null) {
-            for(Object sample : gnssBuf.values()) {
-                trajectoryBuilder.addGnssData((Traj.GNSSReading) sample);
-            }
-        }
-
-        // WiFi Data
-        if(wifiBuf != null) {
-            for(Object sample : wifiBuf.values()) {
-                trajectoryBuilder.addWifiFingerprints((Traj.Fingerprint) sample);
-            }
-        }
-
-        // APs Data
-        if(apsBuf != null) {
-            for(Object sample : apsBuf.values()) {
-                trajectoryBuilder.addApsData((Traj.WiFiAPData) sample);
-            }
-        }
-
-        this.trajectory = trajectoryBuilder.build();
-        System.out.println("Trajectory created with ID: " + trajectory.getTrajectoryId());
-
-        byte[] binaryTrajectory = trajectory.toByteArray();
-
-        File path = null;
-        // for android 13 or higher use dedicated external storage
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            if (path == null) {
-                path = context.getFilesDir();
-            }
-        } else { // for android 12 or lower use internal storage
-            path = context.getFilesDir();
-        }
-
-        System.out.println(path.toString());
-
-        // Format the file name according to date
-        SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
-        Date date = new Date();
-        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
-
+        // 3. 将 Protobuf 对象写入临时文件 (OkHttp 需要文件流)
+        File file;
         try {
-            // Write the binary data to the file
-            FileOutputStream stream = new FileOutputStream(file);
-            stream.write(binaryTrajectory);
-            stream.close();
-            System.out.println("Recorded binary trajectory for debugging stored in: " + path);
-        } catch (IOException ee) {
-            // Catch and print if writing to the file fails
-            System.err.println("Storing of recorded binary trajectory failed: " + ee.getMessage());
+            // 使用时间戳防止文件名冲突
+            String fileName = "upload_" + System.currentTimeMillis() + ".proto";
+            // 使用缓存目录，避免污染外部存储
+            file = new File(context.getCacheDir(), fileName);
+
+            FileOutputStream fos = new FileOutputStream(file);
+            fos.write(sentTrajectory.toByteArray());
+            fos.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.err.println("Failed to save temp file for upload");
+            return;
         }
 
-        // Check connections available before sending data
-        checkNetworkStatus();
+        // 4. 构建网络请求 (Multipart Upload)
+        OkHttpClient client = new OkHttpClient();
 
-        // Check if user preference allows for syncing with mobile data
-        // TODO: add sync delay and enforce settings
-        boolean enableMobileData = this.settings.getBoolean("mobile_sync", false);
-        // Check if device is connected to WiFi or to mobile data with enabled preference
-        if(this.isWifiConn || (enableMobileData && isMobileConn)) {
-            // Instantiate client for HTTP requests
-            OkHttpClient client = new OkHttpClient();
+        RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("file", file.getName(),
+                        RequestBody.create(MediaType.parse("application/octet-stream"), file))
+                .build();
 
-            // Creaet a equest body with a file to upload in multipart/form-data format
-            RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                    .addFormDataPart("file", file.getName(),
-                            RequestBody.create(MediaType.parse("text/plain"), file))
-                    .build();
+        Request request = new Request.Builder()
+                .url(dynamicUrl)
+                .post(requestBody)
+                .build();
 
-            // Create a POST request with the required headers
-            Request request = new Request.Builder().url(uploadURL).post(requestBody)
-                    .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
-                    .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
+        System.out.println("Uploading to: " + dynamicUrl);
 
-            // Enqueue the request to be executed asynchronously and handle the response
-            client.newCall(request).enqueue(new Callback() {
+        // 5. 异步发送请求
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
+                System.err.println("Upload Failed: " + e.getMessage());
 
-                // Handle failure to get response from the server
-                @Override public void onFailure(Call call, IOException e) {
-                    e.printStackTrace();
-                    System.err.println("Failure to get response");
-                    // Delete the local file and set success to false
-                    //file.delete();
-                    success = false;
+                // 通知 MainActivity 更新 UI (失败)
+                success = false;
+                notifyObservers(1);
+
+                // 清理临时文件
+                if (file.exists()) file.delete();
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful()) {
+                        System.err.println("Upload Error: " + response.code() + " " + responseBody.string());
+                        success = false;
+                    } else {
+                        System.out.println("Upload SUCCESS: " + responseBody.string());
+                        success = true;
+                    }
+
+                    // 通知 MainActivity 更新 UI (根据 success 状态)
                     notifyObservers(1);
+
+                    // 清理临时文件
+                    if (file.exists()) file.delete();
                 }
-
-                private void copyFile(File src, File dst) throws IOException {
-                    try (InputStream in = new FileInputStream(src);
-                         OutputStream out = new FileOutputStream(dst)) {
-                        byte[] buf = new byte[1024];
-                        int len;
-                        while ((len = in.read(buf)) > 0) {
-                            out.write(buf, 0, len);
-                        }
-                    }
-                }
-
-                // Process the server's response
-                @Override public void onResponse(Call call, Response response) throws IOException {
-                    try (ResponseBody responseBody = response.body()) {
-                        // If the response is unsuccessful, delete the local file and throw an
-                        // exception
-                        if (!response.isSuccessful()) {
-                            //file.delete();
-//                            System.err.println("POST error response: " + responseBody.string());
-
-                            String errorBody = responseBody.string();
-                            infoResponse = "Upload failed: " + errorBody;
-                            new Handler(Looper.getMainLooper()).post(() ->
-                                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
-
-                            System.err.println("POST error response: " + errorBody);
-                            success = false;
-                            notifyObservers(1);
-                            throw new IOException("Unexpected code " + response);
-                        }
-
-                        // Print the response headers
-                        Headers responseHeaders = response.headers();
-                        for (int i = 0, size = responseHeaders.size(); i < size; i++) {
-                            System.out.println(responseHeaders.name(i) + ": " + responseHeaders.value(i));
-                        }
-                        // Print a confirmation of a successful POST to API
-                        System.out.println("Successful post response: " + responseBody.string());
-
-                        System.out.println("Get file: " + file.getName());
-                        String originalPath = file.getAbsolutePath();
-                        System.out.println("Original trajectory file saved at: " + originalPath);
-
-                        // Copy the file to the Downloads folder
-                        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                        File downloadFile = new File(downloadsDir, file.getName());
-                        try {
-                            copyFile(file, downloadFile);
-                            System.out.println("Trajectory file copied to Downloads: " + downloadFile.getAbsolutePath());
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            System.err.println("Failed to copy file to Downloads: " + e.getMessage());
-                        }
-
-                        // Delete local file and set success to true
-                        success = file.delete();
-                        notifyObservers(1);
-                    }
-                }
-            });
-        }
-        else {
-            // If the device is not connected to network or allowed to send, do not send trajectory
-            // and notify observers and user
-            System.err.println("No uploading allowed right now!");
-            success = false;
-            notifyObservers(1);
-        }
+            }
+        });
     }
 
     /**
@@ -475,9 +367,9 @@ public class ServerCommunications implements Observable {
      * The method creates or updates the JSON file with the provided details.
      *
      * @param startTimestamp the start timestamp of the trajectory
-     * @param fileName the name of the file
-     * @param id the ID of the trajectory
-     * @param dateSubmitted the date the trajectory was submitted
+     * @param fileName       the name of the file
+     * @param id             the ID of the trajectory
+     * @param dateSubmitted  the date the trajectory was submitted
      */
     private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
@@ -543,8 +435,8 @@ public class ServerCommunications implements Observable {
      * trajectory to be downloaded. The trajectory is then converted to a protobuf object and
      * then to a JSON string to be downloaded to the device's Downloads folder.
      *
-     * @param position the position of the trajectory in the zip file to retrieve
-     * @param id the ID of the trajectory
+     * @param position      the position of the trajectory in the zip file to retrieve
+     * @param id            the ID of the trajectory
      * @param dateSubmitted the date the trajectory was submitted
      */
     public void downloadTrajectory(int position, String id, String dateSubmitted) {
@@ -570,7 +462,8 @@ public class ServerCommunications implements Observable {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+                    if (!response.isSuccessful())
+                        throw new IOException("Unexpected code " + response);
 
                     // Extract the nth entry from the zip
                     InputStream inputStream = responseBody.byteStream();
@@ -645,7 +538,6 @@ public class ServerCommunications implements Observable {
     /**
      * API request for information about submitted trajectories. If the response is successful,
      * the {@link ServerCommunications#infoResponse} field is updated and observes notified.
-     *
      */
     public void sendInfoRequest() {
         // Create a new OkHttpclient
@@ -660,11 +552,13 @@ public class ServerCommunications implements Observable {
 
         // Enqueue the GET request for asynchronous execution
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override public void onFailure(Call call, IOException e) {
+            @Override
+            public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }
 
-            @Override public void onResponse(Call call, Response response) throws IOException {
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     // Check if the response is successful
                     if (!response.isSuccessful()) throw new IOException("Unexpected code " +
@@ -672,7 +566,7 @@ public class ServerCommunications implements Observable {
 
                     // Get the requested information from the response body and save it in a string
                     // TODO: add printing to the screen somewhere
-                    infoResponse =  responseBody.string();
+                    infoResponse = responseBody.string();
                     // Print a message in the console and notify observers
                     System.out.println("Response received");
                     notifyObservers(0);
@@ -715,7 +609,7 @@ public class ServerCommunications implements Observable {
 
     /**
      * {@inheritDoc}
-     *
+     * <p>
      * Implement default method from Observable Interface to add new observers to the list of
      * registered observers.
      *
@@ -728,7 +622,7 @@ public class ServerCommunications implements Observable {
 
     /**
      * {@inheritDoc}
-     *
+     * <p>
      * Method for notifying all registered observers. The observer is notified based on the index
      * passed to the method.
      *
@@ -736,17 +630,304 @@ public class ServerCommunications implements Observable {
      */
     @Override
     public void notifyObservers(int index) {
-        for(Observer o : observers) {
-            if(index == 0 && o instanceof FilesFragment) {
-                o.update(new String[] {infoResponse});
-            }
-            else if (index == 1 && o instanceof MainActivity) {
-                o.update(new Boolean[] {success});
+        for (Observer o : observers) {
+            if (index == 0 && o instanceof FilesFragment) {
+                o.update(new String[]{infoResponse});
+            } else if (index == 1 && o instanceof MainActivity) {
+                o.update(new Boolean[]{success});
             }
         }
     }
+    // ==========================================
+    // 部分 2：Task D 功能实现 (带 Logcat 调试)
+    // ==========================================
 
+    public interface BuildingCallback {
+        void onBuildingsReceived(List<Building> buildings);
+        void onError(String message);
+    }
 
+    public interface ImageCallback {
+        void onImageLoaded(Bitmap bitmap);
+        void onError(String message);
+    }
+
+    public void getNearbyBuildings(double lat, double lng, BuildingCallback callback) {
+        OkHttpClient client = new OkHttpClient();
+
+        // [Debug] 打印请求 URL 和参数
+        Log.d(TAG, "------------------------------------------------");
+        Log.d(TAG, "Requesting Buildings...");
+        Log.d(TAG, "URL: " + floorPlanRequestURL);
+        Log.d(TAG, "Coordinates: " + lat + ", " + lng);
+
+        JSONObject jsonBody = new JSONObject();
+        try {
+            jsonBody.put("lat", lat);
+            jsonBody.put("lon", lng);
+            jsonBody.put("macs", new JSONArray());
+            Log.d(TAG, "Request Body: " + jsonBody.toString());
+        } catch (JSONException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+        RequestBody body = RequestBody.create(JSON, jsonBody.toString());
+
+        Request request = new Request.Builder()
+                .url(floorPlanRequestURL)
+                .post(body) // 必须是 POST
+                .addHeader("accept", "application/json")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                // [Debug] 网络请求失败
+                Log.e(TAG, "Network FAILURE: " + e.getMessage());
+                new Handler(Looper.getMainLooper()).post(() ->
+                        callback.onError("Network Error: " + e.getMessage()));
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                // [Debug] 收到服务器响应
+                Log.d(TAG, "Response Code: " + response.code());
+
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful()) {
+                        // [Debug] 打印错误详情 (例如 401 Unauthorized)
+                        String errorMsg = responseBody != null ? responseBody.string() : "null";
+                        Log.e(TAG, "Server Error Body: " + errorMsg);
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                callback.onError("Server Error " + response.code() + ": " + errorMsg));
+                        return;
+                    }
+
+                    String jsonString = responseBody.string();
+                    // [Debug] 打印成功的 JSON 数据
+                    Log.d(TAG, "Response JSON: " + jsonString);
+
+                    try {
+                        List<Building> buildings = parseBuildingsJson(jsonString);
+                        Log.d(TAG, "Parsed Buildings Count: " + buildings.size());
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                callback.onBuildingsReceived(buildings));
+                    } catch (JSONException e) {
+                        Log.e(TAG, "JSON Parsing Error: " + e.getMessage());
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                callback.onError("Parsing Error: " + e.getMessage()));
+                    }
+                }
+            }
+        });
+    }
+
+    public void downloadFloorMapImage(String url, ImageCallback callback) {
+        Log.d(TAG, "Downloading Image from: " + url);
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder().url(url).build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "Image Download Failure: " + e.getMessage());
+                new Handler(Looper.getMainLooper()).post(() ->
+                        callback.onError("Image Download Failed"));
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (response.isSuccessful() && response.body() != null) {
+                    InputStream inputStream = response.body().byteStream();
+                    Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
+                    Log.d(TAG, "Image Downloaded & Decoded. Size: " + bitmap.getByteCount());
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            callback.onImageLoaded(bitmap));
+                } else {
+                    Log.e(TAG, "Image Response Error: " + response.code());
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            callback.onError("Image Response Failed"));
+                }
+            }
+        });
+    }
+
+    /**
+     * 修复后的解析方法：支持解析 GeoJSON 格式的 outline 字符串
+     */
+    /**
+     * 修复后的解析方法：同时支持 outline 和 map_shapes (GeoJSON 格式)
+     */
+    /**
+     * 修复后的解析方法：加入楼层智能排序 (B1 < G < 1 < 2 ...)
+     */
+    /**
+     * 修复后的解析方法：支持任意 GeoJSON 形状 (LineString, MultiLineString, Polygon)
+     */
+    private List<Building> parseBuildingsJson(String jsonString) throws JSONException {
+        List<Building> buildingList = new ArrayList<>();
+        JSONArray jsonArray = new JSONArray(jsonString);
+
+        for (int i = 0; i < jsonArray.length(); i++) {
+            JSONObject bObj = jsonArray.getJSONObject(i);
+
+            String id = bObj.has("id") && !bObj.isNull("id") ? bObj.getString("id") : "unknown";
+            String name = bObj.has("name") ? bObj.getString("name") : "Unknown Building";
+
+            // 1. 解析 Outline
+            List<List<Double>> outline = new ArrayList<>();
+            if (bObj.has("outline")) {
+                Object outlineObj = bObj.get("outline");
+                if (outlineObj instanceof String) {
+                    // 提取轮廓
+                    extractPolygonsFromGeoJson((String) outlineObj, outline);
+                }
+            }
+
+            // 2. 解析 Floors
+            List<FloorPlan> floors = new ArrayList<>();
+            if (bObj.has("map_shapes")) {
+                String mapShapesStr = bObj.getString("map_shapes");
+                JSONObject mapShapes = new JSONObject(mapShapesStr);
+
+                Iterator<String> keys = mapShapes.keys();
+                while (keys.hasNext()) {
+                    String floorCode = keys.next();
+                    double[] bounds = new double[]{0, 0, 0, 0};
+
+                    // 🔴 关键修改：提取墙体 (walls)
+                    List<List<List<Double>>> walls = new ArrayList<>();
+                    Object floorData = mapShapes.get(floorCode);
+
+                    // 无论数据是 JSONObject 还是 String，都转成 String 处理
+                    String floorGeoJson = floorData instanceof JSONObject ? floorData.toString() : floorData.toString();
+
+                    // 使用新的增强版解析器
+                    extractWallsFromGeoJson(floorGeoJson, walls);
+
+                    floors.add(new FloorPlan(floorCode, 0, null, bounds, walls));
+                }
+            }
+
+            // 排序楼层
+            Collections.sort(floors, new Comparator<FloorPlan>() {
+                @Override
+                public int compare(FloorPlan f1, FloorPlan f2) {
+                    return Integer.compare(getFloorOrderValue(f1.getFloorCode()), getFloorOrderValue(f2.getFloorCode()));
+                }
+            });
+
+            buildingList.add(new Building(id, name, outline, floors));
+        }
+        return buildingList;
+    }
+
+    /**
+     * 辅助方法：楼层排序权重
+     */
+    private int getFloorOrderValue(String code) {
+        if (code == null) return 0;
+        String raw = code.trim().toUpperCase();
+        if (raw.equals("G") || raw.equals("GROUND") || raw.equals("0")) return 0;
+        if (raw.equals("LG") || raw.startsWith("B")) return -1;
+        try { return Integer.parseInt(raw); } catch (NumberFormatException e) { return 0; }
+    }
+
+    /**
+     * 辅助方法：提取 Outline (仅多边形)
+     */
+    private void extractPolygonsFromGeoJson(String geoJsonStr, List<List<Double>> outList) {
+        try {
+            JSONObject featureCollection = new JSONObject(geoJsonStr);
+            JSONArray features = featureCollection.getJSONArray("features");
+            if (features.length() > 0) {
+                JSONObject geometry = features.getJSONObject(0).getJSONObject("geometry");
+                JSONArray coordinates = geometry.getJSONArray("coordinates");
+                String type = geometry.getString("type");
+
+                JSONArray ring = null;
+                if (type.equalsIgnoreCase("MultiPolygon")) ring = coordinates.getJSONArray(0).getJSONArray(0);
+                else if (type.equalsIgnoreCase("Polygon")) ring = coordinates.getJSONArray(0);
+
+                if (ring != null) {
+                    for (int j = 0; j < ring.length(); j++) {
+                        JSONArray point = ring.getJSONArray(j);
+                        List<Double> latLng = new ArrayList<>();
+                        latLng.add(point.getDouble(1));
+                        latLng.add(point.getDouble(0));
+                        outList.add(latLng);
+                    }
+                }
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    /**
+     * 🔴 增强版墙体解析器：支持 LineString, MultiLineString 和 Polygon
+     */
+    private void extractWallsFromGeoJson(String geoJsonStr, List<List<List<Double>>> wallsList) {
+        try {
+            JSONObject featureCollection = new JSONObject(geoJsonStr);
+            JSONArray features = featureCollection.getJSONArray("features");
+
+            for (int i = 0; i < features.length(); i++) {
+                JSONObject feature = features.getJSONObject(i);
+                if (!feature.has("geometry")) continue;
+
+                JSONObject geometry = feature.getJSONObject("geometry");
+                String type = geometry.getString("type");
+                JSONArray coordinates = geometry.getJSONArray("coordinates");
+
+                // 情况 1: MultiLineString (多条线) -> [[[lon,lat], [lon,lat]], ...]
+                if (type.equalsIgnoreCase("MultiLineString")) {
+                    for (int k = 0; k < coordinates.length(); k++) {
+                        parseLineString(coordinates.getJSONArray(k), wallsList);
+                    }
+                }
+                // 情况 2: LineString (单条线) -> [[lon,lat], [lon,lat], ...]
+                else if (type.equalsIgnoreCase("LineString")) {
+                    parseLineString(coordinates, wallsList);
+                }
+                // 情况 3: Polygon (多边形房间) -> [[[lon,lat], ...]]
+                else if (type.equalsIgnoreCase("Polygon")) {
+                    // Polygon 的第一个元素是外环，当作线条画出来
+                    parseLineString(coordinates.getJSONArray(0), wallsList);
+                }
+                // 情况 4: MultiPolygon
+                else if (type.equalsIgnoreCase("MultiPolygon")) {
+                    for (int k = 0; k < coordinates.length(); k++) {
+                        parseLineString(coordinates.getJSONArray(k).getJSONArray(0), wallsList);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            Log.e(TAG, "Wall Parsing Error: " + e.getMessage());
+        }
+    }
+
+    // 解析单个 LineString 的坐标数组
+    private void parseLineString(JSONArray lineArray, List<List<List<Double>>> wallsList) throws JSONException {
+        List<List<Double>> path = new ArrayList<>();
+        for (int p = 0; p < lineArray.length(); p++) {
+            JSONArray point = lineArray.getJSONArray(p);
+            List<Double> latLng = new ArrayList<>();
+            latLng.add(point.getDouble(1)); // Lat
+            latLng.add(point.getDouble(0)); // Lon
+            path.add(latLng);
+        }
+        if (!path.isEmpty()) {
+            wallsList.add(path);
+        }
+    }
+    /**
+     * 兼容性方法：修复 SensorFusion 报错
+     */
     public void sendTrajectory(Traj.Trajectory sentTrajectory) {
+        Log.d(TAG, "sendTrajectory (compatibility overload) called");
+        this.sendTrajectory(sentTrajectory, "murchison_house");
     }
 }
+
