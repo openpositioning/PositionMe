@@ -75,7 +75,7 @@ public class IndoorMapManager {
 
     private Map<Polygon, IndoorBuilding> polygonMap = new HashMap<>();
 
-    // ✅ Request tracking to handle race conditions
+    // Request tracking to handle race conditions
     private int currentRequestId = 0;
     private String pendingBuildingName = null;  // Building name for current pending request
 
@@ -99,7 +99,7 @@ public class IndoorMapManager {
     }
 
     // ============================================================
-    // 1. Core API Methods
+    // Core API Methods
     // ============================================================
 
     public void fetchFloorPlan(LatLng loc, List<String> macs) {
@@ -154,7 +154,7 @@ public class IndoorMapManager {
                     // Clear previous map
                     mainHandler.post(this::hideMap);
 
-                    // ✅ Check if this response is still relevant (not superseded by newer request)
+                    // Check if this response is still relevant (not superseded by newer request)
                     if (thisRequestId != currentRequestId) {
                         Log.w(TAG, ">>> [REQUEST #" + thisRequestId + "] IGNORED - superseded by request #" + currentRequestId);
                         return;
@@ -224,11 +224,10 @@ public class IndoorMapManager {
             Log.d(TAG, "    - API Returned Venue Name: " + currentVenueName);
             Log.d(TAG, "    - Expected Building Name: " + (selectedBuilding != null ? selectedBuilding.name : "null"));
             
-            // Check if API returned wrong building
             if (selectedBuilding != null && currentVenueName != null) {
                 if (!currentVenueName.equalsIgnoreCase(selectedBuilding.name) && 
                     !currentVenueName.contains("Nucleus") && selectedBuilding.name.contains("Library")) {
-                    Log.w(TAG, "    - ⚠️ WARNING: Building mismatch!");
+                    Log.w(TAG, "    - WARNING: Building mismatch!");
                     Log.w(TAG, "    - Clicked: " + selectedBuilding.name);
                     Log.w(TAG, "    - API returned: " + currentVenueName);
                 }
@@ -281,18 +280,18 @@ public class IndoorMapManager {
                 Log.d(TAG, "    - Requested: " + expectedBuildingName);
                 Log.d(TAG, "    - API returned: " + currentVenueName);
                 
-                // ✅ NO STRICT VALIDATION - Accept any data from API
+                // NO STRICT VALIDATION - Accept any data from API
                 // The API returns the nearest building with indoor map data.
                 // We display whatever data is returned to ensure the map is always shown.
                 if (!currentVenueName.equalsIgnoreCase(expectedBuildingName)) {
-                    Log.w(TAG, "    - ⚠️ Note: API returned different building's data.");
+                    Log.w(TAG, "    - Note: API returned different building's data.");
                     Log.w(TAG, "    - This is normal if the requested building has no data in the server.");
                 }
                 
                 // Always accept: Update building info with API response
                 selectedBuilding.name = currentVenueName;
                 selectedBuilding.id = "venue_" + currentVenueName.toLowerCase().replace(" ", "_");
-                Log.d(TAG, "    - ✅ Accepted API data");
+                Log.d(TAG, "    - Accepted API data");
                 Log.d(TAG, "    - New ID: " + selectedBuilding.id);
             }
 
@@ -614,7 +613,7 @@ public class IndoorMapManager {
             selectedBuilding = b;
             currentFloor = 0;
             
-            // ✅ Clear old floor data immediately when selecting a new building
+            // Clear old floor data immediately when selecting a new building
             // This prevents stale floor data from a previous building being used
             floorShapesMap.clear();
             floorNamesList.clear();
@@ -637,10 +636,10 @@ public class IndoorMapManager {
             polygon.setStrokeColor(Color.rgb(0, 230, 118));  // Material green accent
             polygon.setStrokeWidth(6f);
 
-            // ✅ Convert building name to API campaign ID and save to SharedPreferences
+            // Convert building name to API campaign ID and save to SharedPreferences
             String apiCampaignId = convertNameToApiId(b.name);
             settings.edit().putString("current_campaign", apiCampaignId).apply();
-            Log.d(TAG, "💾 Saved Campaign to Prefs: " + apiCampaignId);
+            Log.d(TAG, "Saved Campaign to Prefs: " + apiCampaignId);
 
             fetchFloorPlan(center, new ArrayList<>());
             return true;

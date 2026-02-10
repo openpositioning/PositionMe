@@ -31,7 +31,7 @@ import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.PermissionManager;
 
-// [New] Import required for file saving
+// Import required for file saving
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -235,13 +235,12 @@ public class MainActivity extends AppCompatActivity implements Observer {
     //endregion
 
     // ====================================================================================
-    // ⬇️ Only Modified Part: File Saving Logic ⬇️
+    // File Saving Logic
     // ====================================================================================
 
     /**
-     * This method fixes the file saving issue.
-     * 1. Force use of .protobuf suffix
-     * 2. Use writeTo() to write binary data, preventing garbled txt generation
+     * Stops the sensor recording and saves the trajectory data to a file.
+     * The file is saved with a .protobuf extension in the app's external files directory.
      * Call this method in the Stop button of HomeFragment: ((MainActivity)getActivity()).stopRecordingAndSave();
      */
     public void stopRecordingAndSave() {
@@ -252,14 +251,17 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
         // 2. Prepare to save
         try {
-            // [Critical Modification] File name suffix must be .protobuf, otherwise History interface won't recognize it
+            // File name suffix must be .protobuf for History interface recognition
             String filename = "Traj_" + System.currentTimeMillis() + ".protobuf";
 
             // Get App private storage path
             File file = new File(getExternalFilesDir(null), filename);
             FileOutputStream fos = new FileOutputStream(file);
 
-            // [Critical Modification] Use writeTo to write binary stream directly
+            File file = new File(getExternalFilesDir(null), filename);
+            FileOutputStream fos = new FileOutputStream(file);
+
+            // Use writeTo to write binary stream directly
             // Note: You need to add a public Traj.Trajectory.Builder getTrajectory() method in SensorFusion.java
             if (sensorFusion != null && sensorFusion.getTrajectory() != null) {
                 sensorFusion.getTrajectory().build().writeTo(fos);
@@ -276,7 +278,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
     }
 
-    // 如果您需要从 Fragment 调用开始录制并设置名字，可以使用这个辅助方法
+    // Helper method to start recording with a filename from a Fragment
     public void startRecording(String filename) {
         if (sensorFusion != null) {
             sensorFusion.startRecording(filename);

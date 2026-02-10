@@ -114,7 +114,7 @@ public class StartLocationFragment extends Fragment {
                     // Clear any existing markers
                     mMap.clear();
 
-                    // ✅ Initialize new IndoorMapManager (supports all buildings via API)
+                    // Initialize new IndoorMapManager (supports all buildings via API)
                     indoorMapManager = new IndoorMapManager(mMap, requireContext());
                     
                     // Load all building outlines (Nucleus, Library, FJB, Murchison)

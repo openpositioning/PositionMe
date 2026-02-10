@@ -194,7 +194,7 @@ public class IndoorPositioningFragment extends Fragment implements OnMapReadyCal
             
             // Trigger indoor map load
             if (indoorMapManager != null) {
-                // ✅ CRITICAL: Set selected building BEFORE API call
+                // Set selected building BEFORE API call
                 // This enables building name verification in API response
                 indoorMapManager.setSelectedBuilding(buildingName, buildingCenter);
                 indoorMapManager.fetchFloorPlan(buildingCenter, new java.util.ArrayList<>());

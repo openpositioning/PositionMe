@@ -54,9 +54,7 @@ import okhttp3.ResponseBody;
 import com.openpositioning.PositionMe.Traj;
 
 /**
- * ServerCommunications (Key Sanitized Version)
- * 1. Auto-sanitize API Key and Master Key (remove < >)
- * 2. Fixed URL concatenation errors to ensure upload/download works
+ * Handles communication with the remote server for uploading and downloading trajectories.
  */
 public class ServerCommunications implements Observable {
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();
@@ -71,19 +69,13 @@ public class ServerCommunications implements Observable {
     private boolean success;
     private List<Observer> observers;
 
-    // ============================================================
-    // Core fix: Key sanitization logic
-    // ============================================================
-
-    // 1. Get raw Keys
+    // API Keys and URL constants
     private static final String RAW_USER_KEY = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String RAW_MASTER_KEY = BuildConfig.OPENPOSITIONING_MASTER_KEY;
 
-    // 2. Sanitize Keys (remove angle brackets and spaces)
     private static final String userKey = RAW_USER_KEY.replace("<", "").replace(">", "").trim();
     private static final String masterKey = RAW_MASTER_KEY.replace("<", "").replace(">", "").trim();
 
-    // 3. Base upload URL (up to upload/, excluding campaign)
     private static final String BASE_UPLOAD_URL = "https://openpositioning.org/api/live/trajectory/upload/";
 
     private static final String downloadURL =
@@ -107,17 +99,17 @@ public class ServerCommunications implements Observable {
     }
 
     /**
-     * Send trajectory data (with crash protection)
+     * Send trajectory data to the server.
      * @param trajectory Trajectory data
      * @param campaign Building name (e.g. "murchison_house"), empty string for no campaign
      */
     public void sendTrajectory(Traj.Trajectory trajectory, String campaign){
-        // 1. URL construction - dynamically append campaign (upload to user root if empty)
+        // URL construction - dynamically append campaign (upload to user root if empty)
         String dynamicUrl;
         if (campaign != null && !campaign.isEmpty()) {
             dynamicUrl = BASE_UPLOAD_URL + campaign + "/" + userKey + "/?key=" + masterKey;
         } else {
-            String defaultCampaign = "murchison_house"; // <--- Enter your default building name here
+            String defaultCampaign = "murchison_house";
             dynamicUrl = BASE_UPLOAD_URL + defaultCampaign + "/" + userKey + "/?key=" + masterKey;
         }
 
@@ -134,7 +126,7 @@ public class ServerCommunications implements Observable {
             byte[] binaryTrajectory = trajectory.toByteArray();
             Log.e("SERVER_DEBUG", "Trajectory Byte Size: " + binaryTrajectory.length);
 
-            // Critical section 2: file path retrieval
+            // Determine file storage path
             File path = null;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
@@ -165,7 +157,7 @@ public class ServerCommunications implements Observable {
             File file = new File(path, fileName);
             Log.e("SERVER_DEBUG", "Saving temp file to: " + file.getAbsolutePath());
 
-            // Critical section 3: file writing
+            // Write trajectory to file
             FileOutputStream stream = new FileOutputStream(file);
             stream.write(binaryTrajectory);
             stream.close();
@@ -177,7 +169,7 @@ public class ServerCommunications implements Observable {
             if(this.isWifiConn || (enableMobileData && isMobileConn)) {
                 
                 // Log detailed trajectory information before upload
-                Log.e("SERVER_DEBUG", "==================== UPLOAD REQUEST ====================");
+                Log.i("SERVER_DEBUG", "Starting upload for file: " + file.getName());
                 Log.e("SERVER_DEBUG", "File: " + file.getName());
                 Log.e("SERVER_DEBUG", "File Size: " + file.length() + " bytes");
                 Log.e("SERVER_DEBUG", "Campaign: " + (campaign != null && !campaign.isEmpty() ? campaign : "[empty - user directory]"));
@@ -213,7 +205,7 @@ public class ServerCommunications implements Observable {
                 client.newCall(request).enqueue(new Callback() {
                     @Override public void onFailure(Call call, IOException e) {
                         e.printStackTrace();
-                        Log.e("SERVER_DEBUG", "==================== NETWORK FAILURE ====================");
+                        Log.e("ServerCommunications", "Upload failed: " + e.getMessage());
                         Log.e("SERVER_DEBUG", "Exception Type: " + e.getClass().getSimpleName());
                         Log.e("SERVER_DEBUG", "Error Message: " + e.getMessage());
                         Log.e("SERVER_DEBUG", "Stack Trace:");
@@ -240,22 +232,9 @@ public class ServerCommunications implements Observable {
                                 String errorBody = responseBody.string();
                                 infoResponse = "Upload failed (" + response.code() + "): " + errorBody;
                                 
-                                // Enhanced error logging - split long messages to avoid truncation
-                                Log.e("SERVER_DEBUG", "==================== UPLOAD FAILED ====================");
-                                Log.e("SERVER_DEBUG", "Response Code: " + response.code());
-                                Log.e("SERVER_DEBUG", "Response Message: " + response.message());
-                                Log.e("SERVER_DEBUG", "Error Body Length: " + errorBody.length() + " characters");
-                                Log.e("SERVER_DEBUG", "----------- ERROR BODY START -----------");
-                                
-                                // Split error body into chunks to avoid logcat truncation (max ~4000 chars per log)
-                                int chunkSize = 3000;
-                                for (int i = 0; i < errorBody.length(); i += chunkSize) {
-                                    int end = Math.min(errorBody.length(), i + chunkSize);
-                                    String chunk = errorBody.substring(i, end);
-                                    Log.e("SERVER_DEBUG", "ERROR CHUNK [" + (i/chunkSize + 1) + "]: " + chunk);
-                                }
-                                Log.e("SERVER_DEBUG", "------------ ERROR BODY END ------------");
-                                Log.e("SERVER_DEBUG", "======================================================");
+                                // Enhanced error logging
+                                Log.e("SERVER_DEBUG", "Upload Response Code: " + response.code());
+                                Log.e("SERVER_DEBUG", "Error Body: " + errorBody);
                                 
                                 new Handler(Looper.getMainLooper()).post(() ->
                                         Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
@@ -478,10 +457,8 @@ public class ServerCommunications implements Observable {
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
                     long startTimestamp = receivedTrajectory.getStartTimestamp();
 
-                    // ==========================================
-                    // ✅ Core Fix: Save as .protobuf binary file
-                    // ==========================================
-                    String fileName = "trajectory_" + dateSubmitted + ".protobuf"; // Changed suffix
+                    // Save as .protobuf binary file
+                    String fileName = "trajectory_" + dateSubmitted + ".protobuf";
 
                     File appSpecificDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
                     if (appSpecificDownloads != null && !appSpecificDownloads.exists()) {
@@ -490,7 +467,7 @@ public class ServerCommunications implements Observable {
 
                     File file = new File(appSpecificDownloads, fileName);
 
-                    // ⚠️ Key Point: Use FileOutputStream to write bytes directly, do not convert to JSON!
+                    // Use FileOutputStream to write bytes directly
                     try (FileOutputStream fos = new FileOutputStream(file)) {
                         fos.write(byteArray);
                         fos.flush();
@@ -504,7 +481,7 @@ public class ServerCommunications implements Observable {
                         inputStream.close();
                     }
 
-                    // 4. 保存记录
+                    // 4. Save record
                     saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
                     loadDownloadRecords();
                 }
@@ -556,15 +533,15 @@ public class ServerCommunications implements Observable {
         int pdrCount = trajectory.getPdrDataCount();
         
         if (gnssCount > 0) {
-            Log.i("ServerCommunications", "✓ GNSS Data size: " + gnssCount + " (OK)");
+            Log.i("ServerCommunications", "GNSS Data size: " + gnssCount);
         } else {
-            Log.e("ServerCommunications", "✗ GNSS Data size: 0 (NO TRAJECTORY!)");
+            Log.e("ServerCommunications", "GNSS Data size: 0 (No GNSS data)");
         }
         
         if (pdrCount > 0) {
-            Log.i("ServerCommunications", "✓ PDR Data size: " + pdrCount + " (OK)");
+            Log.i("ServerCommunications", "PDR Data size: " + pdrCount);
         } else {
-            Log.w("ServerCommunications", "⚠ PDR Data size: 0 (No PDR)");
+            Log.w("ServerCommunications", "PDR Data size: 0 (No PDR data)");
         }
         
         Log.i("ServerCommunications", "WiFi Fingerprints size: " + trajectory.getWifiFingerprintsCount());
