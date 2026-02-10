@@ -518,7 +518,7 @@ public class TrajectoryMapFragment extends Fragment {
                     .position(gnssLocation)
                     .title("GNSS Position")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
-                    .alpha(0.6f)  // 0.0 = invisible, 1.0 = fully opaque
+                    .alpha(1.0f)  // 0.0 = invisible, 1.0 = fully opaque
             );
 
             lastGnssLocation = gnssLocation;
@@ -611,7 +611,7 @@ public class TrajectoryMapFragment extends Fragment {
         Canvas canvas = new Canvas(bmp);
 
         Paint circle = new Paint(Paint.ANTI_ALIAS_FLAG);
-        circle.setColor(Color.argb(140, 120, 190, 255)); // translucent light blue
+        circle.setColor(Color.argb(140, 0, 0, 139)); // translucent light blue
         canvas.drawCircle(size / 2f, size / 2f, size / 2.2f, circle);
 
         Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -635,7 +635,7 @@ public class TrajectoryMapFragment extends Fragment {
         Marker marker = gMap.addMarker(new MarkerOptions()
                 .position(position)
                 .icon(BitmapDescriptorFactory.fromBitmap(makeNumberedMarkerIcon(index)))
-                .alpha(0.7f)
+                .alpha(1.0f)
         );
 
         if (marker != null) {
