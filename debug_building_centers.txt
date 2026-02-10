@@ -1,0 +1,50 @@
+Building Center Coordinates Debug
+===================================
+
+Library (Murray Library):
+  Polygon points:
+    - (55.92303, -3.17505)
+    - (55.92303, -3.17455)
+    - (55.92280, -3.17455)
+    - (55.92280, -3.17505)
+  Center calculation:
+    - Max lat: 55.92303, Min lat: 55.92280
+    - Max lng: -3.17455, Min lng: -3.17505
+    - Center lat: (55.92303 + 55.92280) / 2 = 55.922915
+    - Center lng: (-3.17455 + -3.17505) / 2 = -3.17480
+  **Center: (55.922915, -3.174800)**
+
+FJB (Fleeming Jenkin Building):
+  Polygon points:
+    - (55.922692, -3.172956)
+    - (55.922822, -3.172594)
+    - (55.922235, -3.171921)
+    - (55.922107, -3.172281)
+  Center calculation:
+    - Max lat: 55.922822, Min lat: 55.922107
+    - Max lng: -3.171921, Min lng: -3.172956
+    - Center lat: (55.922822 + 55.922107) / 2 = 55.9224645
+    - Center lng: (-3.171921 + -3.172956) / 2 = -3.1724385
+  **Center: (55.922465, -3.172439)**
+
+Nucleus:
+  Polygon points:
+    - (55.92332, -3.17387)
+    - (55.92332, -3.17460)
+    - (55.92282, -3.17460)
+    - (55.92282, -3.17387)
+  Center: (55.92307, -3.174235)
+
+Murchison House:
+  Polygon points:
+    - (55.92440, -3.17950)
+    - (55.92440, -3.17882)
+    - (55.92385, -3.17882)
+    - (55.92385, -3.17950)
+  Center: (55.924125, -3.17916)
+
+DIAGNOSIS PLAN:
+1. Add detailed API response logging for each building
+2. Log the exact JSON response for Library and FJB
+3. Check if API returns empty/error responses
+4. Compare coordinates with BuildingPolygon.java reference data
