@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -10,6 +12,7 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
+import android.widget.TextView;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import androidx.annotation.NonNull;
@@ -537,6 +540,7 @@ public class TrajectoryMapFragment extends Fragment {
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
 
+    // Defines test point marker to be added to the map
     public void addTestPointMarker(@NonNull LatLng currentPosition, int markerCount) {
         if (gMap == null) return;
 
@@ -545,7 +549,35 @@ public class TrajectoryMapFragment extends Fragment {
               .position(currentPosition)
               .title("Test Point " + markerCount)
         );
+
+        gMap.addMarker(new MarkerOptions()
+                .position(currentPosition)
+                .icon(markerNumber(markerCount))
+                .anchor(0.5f, 2f)
+                .zIndex(10f)
+
+        );
     }
 
+    private BitmapDescriptor markerNumber(int markerCount) {
+        View view = LayoutInflater.from(getContext()).inflate(R.layout.marker_number, null);
+
+        TextView markerText = view.findViewById(R.id.marker_text);
+        markerText.setText(String.valueOf(markerCount));
+
+        view.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        view.layout(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight());
+
+        Bitmap bitmap = Bitmap.createBitmap(
+                view.getMeasuredWidth(),
+                view.getMeasuredHeight(),
+                Bitmap.Config.ARGB_8888
+        );
+
+        Canvas canvas = new Canvas(bitmap);
+        view.draw(canvas);
+
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
 
 }
