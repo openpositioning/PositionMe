@@ -11,7 +11,12 @@ import android.location.LocationListener;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
+
 import android.util.Log;
+import android.view.Surface;
+import android.view.WindowManager;
+
+
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
@@ -28,9 +33,12 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.stream.Collectors;
@@ -84,7 +92,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     //region Instance variables
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
+    // Application context (used for system services and processors)
     private Context appContext;
+    // Cached WindowManager (must come from an Activity context for correct display rotation)
+    private WindowManager windowManager;
 
     // Settings
     private SharedPreferences settings;
@@ -149,6 +160,23 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
+
+
+    /*
+     * WiFi fingerprint repeat control
+     * --------------------------------
+     * We want to avoid storing redundant WiFi fingerprints while recording, because:
+     *  - WiFi scan results often change only slightly when the user is stationary
+     *  - Android may deliver scans at a higher rate than is useful for fingerprinting
+     *
+     * Strategy:
+     *  1) Enforce a minimum time interval between stored fingerprints
+     *  2) Compute a content-based signature (MACs + binned RSSI values)
+     *  3) Skip storing if the new fingerprint is identical to the last stored one
+     */
+    private static final long WIFI_FP_MIN_INTERVAL_MS = 1500; // Store at most ~0.7 Hz
+    private long lastWifiFpStoredAtUptimeMs = 0;             // Uptime of last stored fingerprint
+    private long lastWifiFpSignatureHash = 0;                // Signature of last stored fingerprint
 
 
     // Over time accelerometer magnitude values since last step
@@ -226,6 +254,14 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public void setContext(Context context) {
         this.appContext = context.getApplicationContext(); // store app context for later use
+        // IMPORTANT: use the Activity context (not appContext) to obtain the correct display rotation.
+        // Using appContext here can cause getDefaultDisplay().getRotation() to always report ROTATION_0,
+        // which shows up as a constant 90° heading offset on some devices / orientation-lock setups.
+        this.windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        if (this.windowManager == null) {
+            // Fallback (should rarely happen)
+            this.windowManager = (WindowManager) this.appContext.getSystemService(Context.WINDOW_SERVICE);
+        }
 
         // Initialise data collection devices (unchanged)...
         this.accelerometerSensor = new MovementSensor(context, Sensor.TYPE_ACCELEROMETER);
@@ -262,6 +298,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         } else {
             this.filter_coefficient = FILTER_COEFFICIENT;
         }
+
 
         // Keep app awake during the recording (using stored appContext)
         PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
@@ -324,6 +361,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 angularVelocity[0] = sensorEvent.values[0];
                 angularVelocity[1] = sensorEvent.values[1];
                 angularVelocity[2] = sensorEvent.values[2];
+                break;
 
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 filteredAcc[0] = sensorEvent.values[0];
@@ -372,10 +410,57 @@ public class SensorFusion implements SensorEventListener, Observer {
                 break;
 
             case Sensor.TYPE_ROTATION_VECTOR:
+                // Copy the raw rotation vector (may be length 3 or 4 depending on device)
                 this.rotation = sensorEvent.values.clone();
+
+                // Convert rotation vector -> rotation matrix
                 float[] rotationVectorDCM = new float[9];
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM, this.rotation);
-                SensorManager.getOrientation(rotationVectorDCM, this.orientation);
+
+                // Remap the coordinate system to match the current screen orientation.
+                // Without this, azimuth/pitch/roll can appear rotated when the device display is not in
+                // its natural orientation (e.g., portrait vs landscape).
+                float[] remappedDCM = new float[9];
+                int displayRotation = Surface.ROTATION_0;
+                try {
+                    if (this.windowManager != null && this.windowManager.getDefaultDisplay() != null) {
+                        displayRotation = this.windowManager.getDefaultDisplay().getRotation();
+                    }
+                } catch (Exception ignored) {
+                    // Fall back to ROTATION_0
+                }
+
+                switch (displayRotation) {
+                    case Surface.ROTATION_0:
+                        SensorManager.remapCoordinateSystem(rotationVectorDCM,
+                                SensorManager.AXIS_X, SensorManager.AXIS_Y, remappedDCM);
+                        break;
+                    case Surface.ROTATION_90:
+                        SensorManager.remapCoordinateSystem(rotationVectorDCM,
+                                SensorManager.AXIS_Y, SensorManager.AXIS_MINUS_X, remappedDCM);
+                        break;
+                    case Surface.ROTATION_180:
+                        SensorManager.remapCoordinateSystem(rotationVectorDCM,
+                                SensorManager.AXIS_MINUS_X, SensorManager.AXIS_MINUS_Y, remappedDCM);
+                        break;
+                    case Surface.ROTATION_270:
+                        SensorManager.remapCoordinateSystem(rotationVectorDCM,
+                                SensorManager.AXIS_MINUS_Y, SensorManager.AXIS_X, remappedDCM);
+                        break;
+                    default:
+                        SensorManager.remapCoordinateSystem(rotationVectorDCM,
+                                SensorManager.AXIS_X, SensorManager.AXIS_Y, remappedDCM);
+                        break;
+                }
+
+                // Extract yaw/pitch/roll (radians) from the remapped matrix
+                SensorManager.getOrientation(remappedDCM, this.orientation);
+
+                // Empirical fix: some devices/activity configurations yield an azimuth that is
+                // consistently shifted by +90° relative to the map/PDR frame.
+                // App is locked to portrait and the phone is held in portrait, so we correct here
+                // so BOTH PDR updates and map marker rotation use the same corrected heading.
+                this.orientation[0] = wrapAngleRad(this.orientation[0] - (float) (Math.PI / 2.5));
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
@@ -399,7 +484,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                         Log.d("SensorFusion",
                                 "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
                     }
-
                     float[] newCords = this.pdrProcessing.updatePdr(
                             stepTime,
                             this.accelMagnitude,
@@ -408,7 +492,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     // Clear the accelMagnitude after using it
                     this.accelMagnitude.clear();
-
 
                     if (saveRecording) {
                         this.pathView.drawTrajectory(newCords);
@@ -504,10 +587,22 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     @Override
     public void update(Object[] wifiList) {
+        /*
+         * WiFi update pipeline:
+         * ---------------------
+         * 1) Receive raw scan results from WifiDataProcessor
+         * 2) Store latest scans for WiFi positioning (always)
+         * 3) If recording is enabled:
+         *    a) De-duplicate APs within the scan by MAC (keep strongest RSSI)
+         *    b) Apply a minimum time gap between stored fingerprints
+         *    c) Suppress consecutive fingerprints with identical content
+         *    d) Store a new fingerprint only if it is sufficiently novel
+         */
         // Save newest wifi values to local variable (defensive against null)
         if (wifiList == null) {
             this.wifiList = new ArrayList<>();
-            return;}
+            return;
+        }
 
         this.wifiList = Stream.of(wifiList)
                 .filter(o -> o instanceof Wifi)
@@ -515,10 +610,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .collect(Collectors.toList());
 
         if (this.saveRecording) {
-            // traj.proto: repeated Fingerprint wifi_fingerprints = 11;
-            Traj.Fingerprint.Builder fp = Traj.Fingerprint.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
-
+            // Build a de-duplicated fingerprint:
+            //   key   = AP MAC address (encoded as int64)
+            //   value = strongest RSSI observed for that AP in this scan
+            Map<Long, Integer> macToBestRssi = new HashMap<>();
             for (Wifi data : this.wifiList) {
                 if (data == null) continue;
 
@@ -533,14 +628,59 @@ public class SensorFusion implements SensorEventListener, Observer {
                     continue;
                 }
 
-                fp.addRfScans(Traj.RFScan.newBuilder()
-                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                        .setMac(macAsInt64)
-                        .setRssi((int) data.getLevel()));
+                int rssi = (int) data.getLevel();
+                Integer prev = macToBestRssi.get(macAsInt64);
+                if (prev == null || rssi > prev) {
+                    macToBestRssi.put(macAsInt64, rssi);
+                }
             }
 
-            // Add the fingerprint to the trajectory
-            this.trajectory.addWifiFingerprints(fp);
+            // If no usable scans, don't store a fingerprint
+            if (!macToBestRssi.isEmpty()) {
+                long nowUptimeMs = SystemClock.uptimeMillis();
+
+                // Enforce minimum time interval between stored fingerprints
+                // (prevents high-rate duplicates when scans arrive frequently)
+                if (lastWifiFpStoredAtUptimeMs != 0
+                        && (nowUptimeMs - lastWifiFpStoredAtUptimeMs) < WIFI_FP_MIN_INTERVAL_MS) {
+                    // Too soon since last stored fingerprint
+                    createWifiPositioningRequest();
+                    return;
+                }
+
+                // Signature-based repeat suppression:
+                // If the content (AP set + RSSI bins) is identical to the last
+                // stored fingerprint, skip storing this one
+                long sig = computeWifiFingerprintSignature(macToBestRssi);
+                if (sig != 0L && sig == lastWifiFpSignatureHash) {
+                    // Same content as last stored fingerprint
+                    createWifiPositioningRequest();
+                    return;
+                }
+
+                // traj.proto: repeated Fingerprint wifi_fingerprints = 11;
+                // Use one consistent relative timestamp for the whole fingerprint (and all contained RFScans)
+                // so that a single scan "event" is represented coherently.
+                long relTs = SystemClock.uptimeMillis() - bootTime;
+
+                Traj.Fingerprint.Builder fp = Traj.Fingerprint.newBuilder()
+                        .setRelativeTimestamp(relTs);
+
+                // Store RF scans in a stable, sorted order (by MAC address)
+                // This makes debugging, diffing, and offline inspection easier
+                List<Map.Entry<Long, Integer>> entries = new ArrayList<>(macToBestRssi.entrySet());
+                Collections.sort(entries, Comparator.comparingLong(Map.Entry::getKey));
+                for (Map.Entry<Long, Integer> e : entries) {
+                    fp.addRfScans(Traj.RFScan.newBuilder()
+                            .setRelativeTimestamp(relTs)
+                            .setMac(e.getKey())
+                            .setRssi(e.getValue()));
+                }
+
+                this.trajectory.addWifiFingerprints(fp);
+                lastWifiFpStoredAtUptimeMs = nowUptimeMs;
+                lastWifiFpSignatureHash = sig;
+            }
         }
         createWifiPositioningRequest();
     }
@@ -680,6 +820,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         return result;
     }
+
 
     /**
      * {@inheritDoc}
@@ -880,7 +1021,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         proximitySensor.sensorManager.registerListener(this, proximitySensor.sensor, (int) 1e6);
         magnetometerSensor.sensorManager.registerListener(this, magnetometerSensor.sensor, 10000, (int) maxReportLatencyNs);
         stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
-        rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, (int) 1e6);
+        rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, 10000, (int) maxReportLatencyNs);
         wifiProcessor.startListening();
         gnssProcessor.startLocationUpdates();
     }
@@ -933,6 +1074,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
         }
+        // Make sure the app is always ON
         wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
 
         this.saveRecording = true;
@@ -941,6 +1083,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.initialOrientationSet = false;
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
+        this.lastWifiFpStoredAtUptimeMs = 0;
+        this.lastWifiFpSignatureHash = 0;
+        this.lastStepTime = 0;
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
@@ -950,8 +1095,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
                 .setLightSensorInfo(createInfoBuilder(lightSensor));
-
-
 
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
@@ -1123,6 +1266,58 @@ public class SensorFusion implements SensorEventListener, Observer {
     //endregion
 
     /**
+     * Compute a stable 64-bit signature for a WiFi fingerprint.
+     *
+     * Design goals:
+     *  - Identical fingerprints must produce identical hashes
+     *  - Small RSSI noise (±1–2 dB) should NOT create a new fingerprint
+     *  - Order of APs in the scan list must not matter
+     *
+     * Implementation details:
+     *  - APs are sorted by MAC address to ensure deterministic ordering
+     *  - RSSI values are quantised into ~3 dB bins
+     *  - MAC + RSSI bins are hashed using FNV-1a (64-bit)
+     *
+     * @param macToRssi Map of MAC address → RSSI (strongest per AP)
+     * @return 64-bit content signature (0 if empty)
+     */
+    private static long computeWifiFingerprintSignature(Map<Long, Integer> macToRssi) {
+        if (macToRssi == null || macToRssi.isEmpty()) return 0L;
+
+        // Sort by MAC to ensure stable ordering
+        List<Map.Entry<Long, Integer>> entries = new ArrayList<>(macToRssi.entrySet());
+        Collections.sort(entries, Comparator.comparingLong(Map.Entry::getKey));
+
+        // FNV-1a 64-bit
+        long hash = 0xcbf29ce484222325L;
+        final long prime = 0x100000001b3L;
+
+        for (Map.Entry<Long, Integer> e : entries) {
+            long mac = e.getKey();
+            int rssi = (e.getValue() == null) ? 0 : e.getValue();
+
+            // Bin RSSI to reduce sensitivity to small fluctuations (e.g., -63 vs -64)
+            int rssiBin = (int) Math.round(rssi / 3.0); // ~3 dB bins
+
+            // Mix MAC (8 bytes)
+            for (int i = 0; i < 8; i++) {
+                hash ^= (mac & 0xffL);
+                hash *= prime;
+                mac >>= 8;
+            }
+
+            // Mix RSSI bin (4 bytes)
+            int x = rssiBin;
+            for (int i = 0; i < 4; i++) {
+                hash ^= (x & 0xff);
+                hash *= prime;
+                x >>= 8;
+            }
+        }
+        return hash;
+    }
+
+    /**
      * Convert a colon-separated MAC address (BSSID) like "aa:bb:cc:dd:ee:ff" into the
      * int64 encoding expected by traj.proto (hex interpreted as an unsigned 48-bit integer).
      */
@@ -1136,6 +1331,12 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         // 48-bit value fits in signed long; parse as unsigned to avoid sign issues.
         return Long.parseUnsignedLong(hex, 16);
+    }
+    /** Wrap an angle in radians to (-pi, pi]. */
+    private static float wrapAngleRad(float a) {
+        while (a <= -Math.PI) a += (float) (2.0 * Math.PI);
+        while (a > Math.PI) a -= (float) (2.0 * Math.PI);
+        return a;
     }
 }
 
