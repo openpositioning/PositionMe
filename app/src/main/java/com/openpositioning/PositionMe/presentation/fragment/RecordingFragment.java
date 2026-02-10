@@ -21,6 +21,7 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
@@ -35,6 +36,8 @@ import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Fragment responsible for managing the recording process of trajectory data.
@@ -62,10 +65,28 @@ import com.google.android.gms.maps.model.LatLng;
 public class RecordingFragment extends Fragment {
 
     // UI elements
-    private MaterialButton completeButton, cancelButton;
+    private MaterialButton completeButton, cancelButton, addMarkerButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
+
+    // Marker data  elements
+    private final List<MarkerPoint> markerPoints = new ArrayList<>();
+    private int markerIndex = 0;
+    private long recordingStartElapsedMs;
+    private static class MarkerPoint {
+        final int index;
+        final long tMs;
+        final LatLng pos;
+
+        MarkerPoint(int index, long tMs, LatLng pos) {
+            this.index = index;
+            this.tMs = tMs;
+            this.pos = pos;
+        }
+    }
+
+
 
     // App settings
     private SharedPreferences settings;
@@ -104,6 +125,7 @@ public class RecordingFragment extends Fragment {
         Context context = requireActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.refreshDataHandler = new Handler();
+
     }
 
     @Nullable
@@ -141,6 +163,24 @@ public class RecordingFragment extends Fragment {
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
+
+        // Marker button and data
+        markerPoints.clear();
+        markerIndex = 0;
+        // Marker button and data (new recording session)
+        markerPoints.clear();
+        markerIndex = 0;
+        recordingStartElapsedMs = SystemClock.elapsedRealtime();
+
+        addMarkerButton = view.findViewById(R.id.addMarkerButton);
+        addMarkerButton.setEnabled(true);
+
+// 同步清空地图上的 TP marker（如果地图已经起来）
+        if (trajectoryMapFragment != null) {
+            trajectoryMapFragment.clearTestPointMarkers();
+        }
+
+
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
@@ -189,6 +229,31 @@ public class RecordingFragment extends Fragment {
 
             dialog.show(); // Finally, show the dialog
         });
+
+        // MarkerButton event
+        addMarkerButton.setOnClickListener(v -> {
+            long tMs = SystemClock.elapsedRealtime() - recordingStartElapsedMs;
+            int idx = ++markerIndex;
+
+            LatLng pos = sensorFusion.getCurrentGnssLatLng();
+            if (pos == null) {
+                Toast.makeText(requireContext(), "No GNSS fix yet", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            markerPoints.add(new MarkerPoint(idx, tMs, pos));
+
+            if (trajectoryMapFragment != null) {
+                trajectoryMapFragment.addTestPointMarker(pos, idx);
+            }
+
+            Log.d("MARKER", "TP" + idx + " tMs=" + tMs + " pos=" + pos);
+            Toast.makeText(requireContext(),
+                    "Marker TP" + idx + " @" + (tMs / 1000.0) + "s",
+                    Toast.LENGTH_SHORT).show();
+        });
+
+
 
         // The blinking effect for recIcon
         blinkingRecordingIcon();

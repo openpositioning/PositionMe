@@ -99,6 +99,10 @@ public class TrajectoryMapFragment extends Fragment {
     private GroundOverlay floorplanOverlay;
     private OnMapReadyCallback mapReadyCallback; // To communicate with parent fragment.
 
+    // Marker
+    private final List<Marker> testPointMarkers = new ArrayList<>();
+
+
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -606,10 +610,29 @@ public class TrajectoryMapFragment extends Fragment {
         return gMap;
     }
 
+    public void addTestPointMarker(@NonNull LatLng pos, int idx) {
+        if (gMap == null) return;
+
+        Marker m = gMap.addMarker(new MarkerOptions()
+                .position(pos)
+                .title("TP " + idx));
+
+        if (m != null) testPointMarkers.add(m);
+    }
+
+    public void clearTestPointMarkers() {
+        for (Marker m : testPointMarkers) {
+            if (m != null) m.remove();
+        }
+        testPointMarkers.clear();
+    }
+
+
     /**
      * NEW FEATURE: Draws venue outlines on the map based on the API response.
      * @param apiResponse The JSON object received from the floorplan API.
      */
+
     private void drawVenueOutlines(JsonObject apiResponse) {
         // Clear any previously drawn polygons before adding new ones.
         for (Polygon p : venuePolygons) {
