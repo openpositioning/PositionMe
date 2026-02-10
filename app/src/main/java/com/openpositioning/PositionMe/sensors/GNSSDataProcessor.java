@@ -4,77 +4,89 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.Priority;
+
 /**
  * Class for handling and recording location data.
  *
- * The class is responsibly for handling location data from GNSS and cellular sources using the
- * Android LocationManager class.
+ * Uses Google's FusedLocationProviderClient for maximum accuracy by combining
+ * GPS, WiFi, cell towers, and device sensors automatically.
+ * Falls back to raw LocationManager if FusedLocation is unavailable.
  *
  * @author Virginia Cangelosi
  * @author Mate Stodulka
  */
 public class GNSSDataProcessor {
-    // Application context for handling permissions and locationManager instances
+    private static final String TAG = "GNSSDataProcessor";
+
     private final Context context;
-    // Locations manager to enable access to GNSS and cellular location data via the android system
     private LocationManager locationManager;
-    // Location listener to receive the location data broadcast by the system
     private LocationListener locationListener;
 
+    // Google Fused Location (high accuracy)
+    private FusedLocationProviderClient fusedLocationClient;
+    private LocationCallback fusedLocationCallback;
+    private boolean usingFusedLocation = false;
 
     /**
      * Public default constructor of the GNSSDataProcessor class.
      *
-     * The constructor saves the context, checks for permissions to use the location services,
-     * creates an instance of the shared preferences to access settings using the context,
-     * initialises the location manager, and the location listener that will receive the data in the
-     * class the called the constructor. It checks if GPS and cellular networks are available and
-     * notifies the user via toasts if they need to be turned on. If permissions are granted it
-     * starts the location information gathering process.
-     *
-     * @param context           Application Context to be used for permissions and device accesses.
-     * @param locationListener  Location listener that will receive the location information from
-     *                          the device broadcasts.
-     *
-     * @see SensorFusion the intended parent class.
+     * Uses Google FusedLocationProviderClient as primary source for maximum accuracy.
+     * Falls back to raw GPS + Network providers if fused location is unavailable.
      */
     public GNSSDataProcessor(Context context, LocationListener locationListener) {
         this.context = context;
-
-        // Check for permissions
-        boolean permissionsGranted = checkLocationPermissions();
-
-        //Location manager and listener
-        this.locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
         this.locationListener = locationListener;
 
-        // Turn on gps if it is currently disabled
+        boolean permissionsGranted = checkLocationPermissions();
+
+        // Initialize LocationManager as fallback
+        this.locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+
+        // Initialize Google Fused Location Client (primary - highest accuracy)
+        try {
+            this.fusedLocationClient = LocationServices.getFusedLocationProviderClient(context);
+            this.fusedLocationCallback = new LocationCallback() {
+                @Override
+                public void onLocationResult(LocationResult locationResult) {
+                    if (locationResult == null) return;
+                    // Use the most recent location
+                    Location location = locationResult.getLastLocation();
+                    if (location != null) {
+                        // Forward to existing LocationListener for compatibility with SensorFusion
+                        locationListener.onLocationChanged(location);
+                    }
+                }
+            };
+            Log.d(TAG, "FusedLocationProviderClient initialized");
+        } catch (Exception e) {
+            Log.w(TAG, "FusedLocationProvider unavailable, will use raw GPS: " + e.getMessage());
+            this.fusedLocationClient = null;
+        }
+
         if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
             Toast.makeText(context, "Open GPS", Toast.LENGTH_SHORT).show();
         }
-        if (!locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-            Toast.makeText(context, "Enable Cellular", Toast.LENGTH_SHORT).show();
-        }
-        // Start location updates
+
         if (permissionsGranted) {
             startLocationUpdates();
         }
     }
 
-    /**
-     * Checks if the user authorised all permissions necessary for accessing location data.
-     *
-     * Explicit user permissions must be granted for android sdk version 23 and above. This
-     * function checks which permissions are granted, and returns their conjunction.
-     *
-     * @return  boolean true if all permissions are granted for location access, false otherwise.
-     */
     private boolean checkLocationPermissions() {
         int coarseLocationPermission = ActivityCompat.checkSelfPermission(this.context,
                 Manifest.permission.ACCESS_COARSE_LOCATION);
@@ -83,42 +95,68 @@ public class GNSSDataProcessor {
         int internetPermission = ActivityCompat.checkSelfPermission(this.context,
                 Manifest.permission.INTERNET);
 
-        // Return missing permissions
         return coarseLocationPermission == PackageManager.PERMISSION_GRANTED &&
                 fineLocationPermission == PackageManager.PERMISSION_GRANTED &&
                 internetPermission == PackageManager.PERMISSION_GRANTED;
     }
 
     /**
-     * Request location updates via the GNSS and Cellular networks.
-     *
-     * The function checks for permissions again, and then requests updates via the location
-     * manager to the location listener. If permissions are granted but the GPS and cellular
-     * networks are disabled it reminds the user via toasts to turn them on.
+     * Start location updates using Google Fused Location (primary) + raw GPS (fallback).
+     * FusedLocation combines GPS, WiFi, cell, and sensors for best accuracy.
      */
     @SuppressLint("MissingPermission")
     public void startLocationUpdates() {
-        //if (sharedPreferences.getBoolean("location", true)) {
         boolean permissionGranted = checkLocationPermissions();
-        if (permissionGranted && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
-                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){
+        if (!permissionGranted) return;
 
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
+        // PRIMARY: Google Fused Location Provider - highest accuracy
+        if (fusedLocationClient != null) {
+            try {
+                LocationRequest locationRequest = new LocationRequest.Builder(
+                        Priority.PRIORITY_HIGH_ACCURACY, 300)  // 300ms interval (balanced for smoothing)
+                        .setMinUpdateIntervalMillis(200)        // fastest 200ms (avoid too frequent updates)
+                        .setMinUpdateDistanceMeters(0.5f)       // small distance threshold
+                        .setWaitForAccurateLocation(false)      // don't wait, send immediately
+                        .build();
+
+                fusedLocationClient.requestLocationUpdates(locationRequest,
+                        fusedLocationCallback, Looper.getMainLooper());
+                usingFusedLocation = true;
+                Log.d(TAG, "Started FusedLocation updates (HIGH_ACCURACY, 300ms, smooth mode)");
+            } catch (Exception e) {
+                Log.w(TAG, "FusedLocation failed, falling back to raw GPS: " + e.getMessage());
+                usingFusedLocation = false;
+            }
         }
-        else if(permissionGranted && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){
+
+        // FALLBACK/SUPPLEMENT: Raw GPS provider (always start for redundancy)
+        if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER, 500, 0, locationListener);
+            Log.d(TAG, "Started raw GPS updates");
+        } else {
             Toast.makeText(context, "Open GPS", Toast.LENGTH_LONG).show();
         }
-        else if(permissionGranted && !locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){
-            Toast.makeText(context, "Turn on WiFi", Toast.LENGTH_LONG).show();
+
+        // SUPPLEMENT: Network provider for faster initial fix
+        if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER, 1000, 0, locationListener);
+            Log.d(TAG, "Started Network location updates");
         }
     }
 
     /**
-     * Stops updates to the location listener via the location manager.
+     * Stops all location updates.
      */
     public void stopUpdating() {
+        // Stop fused location
+        if (fusedLocationClient != null && fusedLocationCallback != null) {
+            fusedLocationClient.removeLocationUpdates(fusedLocationCallback);
+            Log.d(TAG, "Stopped FusedLocation updates");
+        }
+        // Stop raw GPS/Network
         locationManager.removeUpdates(locationListener);
+        Log.d(TAG, "Stopped raw GPS/Network updates");
     }
-
 }

@@ -131,6 +131,23 @@ public class PdrProcessing {
     }
 
     /**
+     * Re-read settings from SharedPreferences (e.g. step length).
+     * Call this when starting recording to ensure latest settings are used.
+     */
+    public void refreshSettings() {
+        this.useManualStep = this.settings.getBoolean("manual_step_values", false);
+        if(useManualStep) {
+            try {
+                this.stepLength = this.settings.getInt("user_step_length", 75) / 100f;
+            } catch (Exception e) {
+                this.stepLength = 0.75f;
+            }
+        } else {
+            this.stepLength = 0;
+        }
+    }
+
+    /**
      * Function to calculate PDR coordinates from sensor values.
      * Should be called from the step detector sensor's event with the sensor values since the last
      * step.
@@ -174,7 +191,32 @@ public class PdrProcessing {
         this.positionX += x;
         this.positionY += y;
 
-        // return current position
+    // return current position
+        return new float[]{this.positionX, this.positionY};
+    }
+
+    /**
+     * Update PDR with a specific step length (e.g. from Weinberg algorithm).
+     * @param stepLengthMeters  The calculated stride length in meters.
+     * @param headingRad        Current heading in radians.
+     * @return                  New [x, y] coordinates.
+     */
+    public float[] updatePdrWithStride(float stepLengthMeters, float headingRad) {
+        // Change angle so zero rad is east
+        float adaptedHeading = (float) (Math.PI/2 - headingRad);
+
+        // Increment aggregate variables
+        this.sumStepLength += stepLengthMeters;
+        this.stepCount++;
+
+        // Translate to cartesian coordinate system
+        float x = (float) (stepLengthMeters * Math.cos(adaptedHeading));
+        float y = (float) (stepLengthMeters * Math.sin(adaptedHeading));
+
+        // Update position values
+        this.positionX += x;
+        this.positionY += y;
+
         return new float[]{this.positionX, this.positionY};
     }
 

@@ -20,5 +20,7 @@ public enum SensorTypes {
     PRESSURE,
     PROXIMITY,
     GNSSLATLONG,
-    PDR;
+    PDR,   // Changed semicolon to comma to continue the list
+    WIFI,  // Added
+    BLE;   // Semicolon now correctly ends the constant list
 }
