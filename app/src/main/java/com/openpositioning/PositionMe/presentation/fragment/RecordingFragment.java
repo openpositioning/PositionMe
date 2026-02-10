@@ -18,6 +18,8 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
@@ -26,11 +28,15 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
 /**
@@ -60,6 +66,7 @@ public class RecordingFragment extends Fragment {
 
     // UI elements
     private MaterialButton completeButton, cancelButton;
+    private Button btnTestPoint;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -79,6 +86,9 @@ public class RecordingFragment extends Fragment {
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
+
+    // Test point tracking
+    private int markerCount = 0;
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
@@ -137,6 +147,7 @@ public class RecordingFragment extends Fragment {
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
+        btnTestPoint = view.findViewById(R.id.btnTestPoint);
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
@@ -179,6 +190,35 @@ public class RecordingFragment extends Fragment {
             });
 
             dialog.show(); // Finally, show the dialog
+        });
+
+        // Add marker button
+        btnTestPoint.setOnClickListener(v -> {
+            // Increment marker count on press
+            markerCount++;
+
+            // Get current location from trajectoryMapFragment
+             LatLng currentPosition = trajectoryMapFragment.getCurrentLocation();
+
+            // Obtain recording timestamp and create new Testpoint object
+            long relativeTimeStamp = sensorFusion.getRelativeTimeStamp();
+            TestPoint tp = new TestPoint(currentPosition, relativeTimeStamp, markerCount);
+            TestPoints.add(tp);
+
+            // Convert to seconds for display confirmation to two decimal places
+            double timeSeconds = relativeTimeStamp / 1000.0;
+            String timeStr = String.format("%.2f", timeSeconds);
+
+            // Display confirmation to screen showing marker number and time in seconds.
+            Toast.makeText(requireContext(),
+                    "Test Point " + markerCount + " at " + timeStr + "s",
+                    Toast.LENGTH_SHORT).show();
+
+            // Add a test point marker to the map
+            trajectoryMapFragment.addTestPointMarker(currentPosition, markerCount);
+
+            // Add to protobuf
+            sensorFusion.addTestPoint(currentPosition, relativeTimeStamp);
         });
 
         // The blinking effect for recIcon
@@ -295,4 +335,27 @@ public class RecordingFragment extends Fragment {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
     }
+
+    /**
+     * Structure defines the added test point markers during trajectory recording
+     *
+     * Each test point corresponds to the "ADD MARKER" button press event and stores:
+     *  - markerCount: sequential marker identifier
+     *  - currentPostion: LatLng at time of press
+     *  - relativeTimeStamp: recording time in ms to recording session start
+     */
+    private static class TestPoint {
+        final int markerCount;
+        final LatLng currentPosition;
+        final long relativeTimeStamp;
+
+        TestPoint(LatLng currentPosition, long relativeTimestamp, int markerCount) {
+            this.currentPosition = currentPosition;
+            this.relativeTimeStamp = relativeTimestamp;
+            this.markerCount = markerCount;
+        }
+    }
+
+    // List storing all test points added during recording session
+    private final List<TestPoint> TestPoints = new ArrayList<>();
 }

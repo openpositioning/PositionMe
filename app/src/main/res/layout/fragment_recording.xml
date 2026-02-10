@@ -79,7 +79,39 @@
         android:layout_marginStart="8dp"
         android:layout_marginEnd="8dp"
         app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
-        app:layout_constraintBottom_toTopOf="@id/controlLayout" />
+        app:layout_constraintBottom_toTopOf="@id/controlLayout" >
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="wrap_content"
+            android:layout_height="51dp"
+            android:layout_gravity="bottom|center"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0.1dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center">
+
+                <Button
+                    android:id="@+id/btnTestPoint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="56dp"
+                    android:layout_gravity="center"
+                    android:backgroundTint="#CC1856"
+                    android:gravity="center"
+                    android:text="@string/add_marker"
+                    android:textSize="16sp"
+                    app:cornerRadius="16dp"
+                    app:icon="@drawable/baseline_location_on_24"
+                    app:iconGravity="start"
+                    app:iconSize="24dp" />
+            </FrameLayout>
+
+        </androidx.cardview.widget.CardView>
+    </FrameLayout>
 
     <!-- 🔹 BOTTOM SECTION: Controls (Progress Bar & Buttons) -->
     <LinearLayout

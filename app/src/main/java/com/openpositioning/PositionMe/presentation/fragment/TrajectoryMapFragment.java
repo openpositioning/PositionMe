@@ -1,6 +1,11 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -10,10 +15,12 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
+import android.widget.TextView;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -537,5 +544,69 @@ public class TrajectoryMapFragment extends Fragment {
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
 
+    // Defines test point marker to be added to the map
+    public void addTestPointMarker(@NonNull LatLng currentPosition, int markerCount) {
+        if (gMap == null) return;
+
+        gMap.addMarker(new MarkerOptions()
+                .position(currentPosition)
+                .icon(markerNumber(markerCount)) // Applies defined custom icon to marker
+                .anchor(0.5f, 0.94f)  // Centre marker on current location
+                .zIndex(10f) // Top overlay priority above other map elements
+                .title("Test Point " + markerCount)
+        );
+    }
+
+    /**
+     * Defines custom map marker icon:
+     * - Scaled red maps marker drawable
+     * - White circular background for number placement
+     * - Marker number centred on the white circle
+     */
+    private BitmapDescriptor markerNumber(int markerCount) {
+        // Loads created red marker drawable
+        Drawable pinDrawable = ContextCompat.getDrawable(getContext(), R.drawable.baseline_location_on_24_red);
+
+        // Scale factor to control marker size
+        float scale = 1.2f;
+
+        // Define bitmap dimensions based on intrinsic size and scaling factor
+        int width = (int) (pinDrawable.getIntrinsicWidth() * scale);
+        int height = (int) (pinDrawable.getIntrinsicHeight() * scale);
+
+        // Define empty bitmap and canvas to draw marker elements
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        // Draw the red marker
+        pinDrawable.setBounds(0, 0, width, height);
+        pinDrawable.draw(canvas);
+
+        // Draw white number container
+        Paint circlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        circlePaint.setColor(Color.WHITE);
+
+        // Centre on red marker
+        float cx = width / 2f;
+        float cy = height * 0.42f;
+        float radius = width * 0.22f;
+
+        canvas.drawCircle(cx, cy, radius, circlePaint);
+
+        // Add black number text
+        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setColor(Color.BLACK);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        textPaint.setTextSize(width * 0.35f);
+
+        Paint.FontMetrics fm = textPaint.getFontMetrics();
+        float textY = cy - (fm.ascent + fm.descent) / 2f; // Y position for text vertical alignment with white circle background
+
+        // Draw marker number to centre of white circle
+        canvas.drawText(String.valueOf(markerCount), cx, textY, textPaint);
+
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
 
 }
