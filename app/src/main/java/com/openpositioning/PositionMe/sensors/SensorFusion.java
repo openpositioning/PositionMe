@@ -85,6 +85,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final float ALPHA = 0.8f;
     // String for creating WiFi fingerprint JSO N object
     private static final String WIFI_FINGERPRINT= "wf";
+    private static final String DEFAULT_COLLECTION_VENUE = "traj";
     //endregion
 
     //region Instance variables
@@ -164,6 +165,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private List<Wifi> wifiList;
     private Set<Long> recordedApMacs = new HashSet<>();
     private String lastFingerprintSignature;
+    private String collectionVenue = DEFAULT_COLLECTION_VENUE;
 
 
     // Over time accelerometer magnitude values since last step
@@ -930,6 +932,43 @@ public class SensorFusion implements SensorEventListener, Observer {
         startLocation = startPosition;
     }
 
+    public synchronized void setCollectionVenue(String venueId) {
+        this.collectionVenue = sanitiseVenueTag(venueId);
+        if (this.trajectory == null) {
+            return;
+        }
+        String existingId = this.trajectory.getTrajectoryId();
+        String suffix;
+        String[] parts = existingId.split("_", 3);
+        if (parts.length == 3) {
+            suffix = parts[1] + "_" + parts[2];
+        } else {
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(new Date());
+            String shortUuid = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            suffix = timestamp + "_" + shortUuid;
+        }
+        this.trajectory.setTrajectoryId(this.collectionVenue + "_" + suffix);
+    }
+
+    public synchronized String getCollectionVenue() {
+        return collectionVenue;
+    }
+
+    private String sanitiseVenueTag(String venue) {
+        if (venue == null) {
+            return DEFAULT_COLLECTION_VENUE;
+        }
+        String normalised = venue.trim().toLowerCase(Locale.US)
+                .replaceAll("[^a-z0-9]+", "_")
+                .replaceAll("_+", "_")
+                .replaceAll("^_", "")
+                .replaceAll("_$", "");
+        if (normalised.isEmpty()) {
+            return DEFAULT_COLLECTION_VENUE;
+        }
+        return normalised;
+    }
+
 
     /**
      * Function to redraw path in corrections fragment.
@@ -1144,7 +1183,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
-        String venueOrBuilding = "traj";
+        String venueOrBuilding = sanitiseVenueTag(collectionVenue);
+        this.collectionVenue = venueOrBuilding;
         String timestamp = new SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(new Date());
         String shortUuid = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String trajectoryId = venueOrBuilding + "_" + timestamp + "_" + shortUuid;

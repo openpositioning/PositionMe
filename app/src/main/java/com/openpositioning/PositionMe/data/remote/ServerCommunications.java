@@ -172,9 +172,11 @@ public class ServerCommunications implements Observable {
         if(this.isWifiConn || (enableMobileData && isMobileConn)) {
             // Instantiate client for HTTP requests
             OkHttpClient client = new OkHttpClient();
+            String venueTag = extractVenueFromTrajectoryId(trajectory.getTrajectoryId());
 
             // Creaet a equest body with a file to upload in multipart/form-data format
             RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
+                    .addFormDataPart("venue", venueTag)
                     .addFormDataPart("file", file.getName(),
                             RequestBody.create(MediaType.parse("text/plain"), file))
                     .build();
@@ -265,6 +267,17 @@ public class ServerCommunications implements Observable {
             success = false;
             notifyObservers(1);
         }
+    }
+
+    private String extractVenueFromTrajectoryId(String trajectoryId) {
+        if (trajectoryId == null || trajectoryId.isEmpty()) {
+            return "traj";
+        }
+        int firstUnderscore = trajectoryId.indexOf('_');
+        if (firstUnderscore <= 0) {
+            return trajectoryId;
+        }
+        return trajectoryId.substring(0, firstUnderscore);
     }
 
     /**
