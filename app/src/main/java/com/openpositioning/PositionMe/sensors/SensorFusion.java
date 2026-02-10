@@ -214,6 +214,22 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.startLocation = new float[2];
     }
 
+    /**
+     * Get current BLE device list
+     * @return List of BLE devices from last scan
+     */
+    public List<BleDataProcessor.BleDevice> getBleDeviceList() {
+        return this.bleDeviceList;
+    }
+
+    /**
+     * Get current trajectory being recorded
+     * @return Trajectory protobuf builder
+     */
+    public Traj.Trajectory.Builder getTrajectory() {
+        return this.trajectory;
+    }
+
 
     /**
      * Static function to access singleton instance of SensorFusion.
@@ -222,6 +238,10 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public static SensorFusion getInstance() {
         return sensorFusion;
+    }
+
+    public float[] getInitialRotation() {
+        return this.initialRotation;
     }
 
     /**
@@ -650,9 +670,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         ));
 
         // Consider duplicate if:
-        // 1. High overlap (≥90%) AND
+        // 1. High overlap (≥70%) AND
         // 2. Few RSSI changes (<30% of common APs changed significantly)
-        return overlapRatio >= 0.9f && rssiChangeRatio < 0.3f;
+        return overlapRatio >= 0.7f && rssiChangeRatio < 0.3f;
     }
 
     /**

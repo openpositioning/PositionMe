@@ -16,6 +16,7 @@ import android.view.animation.Animation;
 import android.view.animation.LinearInterpolator;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import com.google.android.material.button.MaterialButton;
@@ -63,6 +64,26 @@ public class RecordingFragment extends Fragment {
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
+
+    // Trajectory Info Card (merged collapsible card)
+    private TextView trajectoryNameText;
+    private TextView initialPositionText;
+    private TextView initialOrientationText;
+    private TextView wifiCountText;
+    private TextView bleCountText;
+    private TextView imuCountText;
+    private LinearLayout trajectoryInfoContent;
+    private TextView collapseIcon;  // 使用 TextView 显示 ▼ ▶
+    private boolean isCardExpanded = false;
+
+    // Counters
+    private int wifiFingerprints = 0;
+    private int bleDeviceLists = 0;
+
+    // Counters for live data
+    private int totalWifiScans = 0;
+    private int totalBleScans = 0;
+    private int totalImuReadings = 0;
 
     // App settings
     private SharedPreferences settings;
@@ -135,6 +156,16 @@ public class RecordingFragment extends Fragment {
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
 
+        // Bind Trajectory Info Card (NEW - 合并后的卡片)
+        trajectoryNameText = view.findViewById(R.id.trajectoryNameText);
+        initialPositionText = view.findViewById(R.id.initialPositionText);
+        initialOrientationText = view.findViewById(R.id.initialOrientationText);
+        wifiCountText = view.findViewById(R.id.wifiCountText);
+        bleCountText = view.findViewById(R.id.bleCountText);
+        imuCountText = view.findViewById(R.id.imuCountText);
+        trajectoryInfoContent = view.findViewById(R.id.trajectoryInfoContent);
+        collapseIcon = view.findViewById(R.id.collapseIcon);
+
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
         recIcon = view.findViewById(R.id.redDot);
@@ -153,7 +184,6 @@ public class RecordingFragment extends Fragment {
             // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
         });
-
 
         // Cancel button with confirmation dialog
         cancelButton.setOnClickListener(v -> {
@@ -209,6 +239,49 @@ public class RecordingFragment extends Fragment {
             // No set time limit, just keep refreshing
             refreshDataHandler.post(refreshDataTask);
         }
+
+        // Set up collapse/expand functionality
+        View trajectoryInfoHeader = view.findViewById(R.id.trajectoryInfoHeader);
+        if (trajectoryInfoHeader != null) {
+            trajectoryInfoHeader.setOnClickListener(v -> toggleCardExpansion());
+        }
+
+        // Set initial trajectory name
+        if (trajectoryNameText != null) {
+            trajectoryNameText.setText("📝 Recording...");
+
+            // Update trajectory name after recording starts (with delay)
+            new Handler().postDelayed(() -> {
+                if (sensorFusion != null && sensorFusion.getTrajectory() != null) {
+                    String trajName = sensorFusion.getTrajectory().getTrajectoryId();
+                    if (trajName != null && !trajName.isEmpty() && getActivity() != null) {
+                        getActivity().runOnUiThread(() ->
+                                trajectoryNameText.setText("📝 " + trajName));
+                    }
+                }
+            }, 1000); // 1 second delay to ensure trajectory is initialized
+        }
+
+        // Update initial position and orientation after recording starts
+        new Handler().postDelayed(() -> {
+            if (sensorFusion != null) {
+                // Update initial position
+                float[] latLng = sensorFusion.getGNSSLatitude(false);
+                if (latLng != null && latLng.length >= 2) {
+                    double lat = latLng[0];
+                    double lon = latLng[1];
+                    double alt = sensorFusion.getElevation();
+                    updateInitialPosition(lat, lon, alt);
+                }
+
+                // Update initial orientation
+                float[] initialRotation = sensorFusion.getInitialRotation();
+                if (initialRotation != null) {
+                    updateInitialOrientation(initialRotation);
+                }
+            }
+        }, 1500); // 1.5 second delay to ensure GPS data is available
+
     }
 
     /**
@@ -268,6 +341,28 @@ public class RecordingFragment extends Fragment {
         // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
+
+    // Update live data counts - track actual recorded data
+        if (sensorFusion != null && sensorFusion.getTrajectory() != null) {
+            try {
+                // WiFi fingerprints (actual recorded)
+                int wifiFpCount = sensorFusion.getTrajectory().getWifiFingerprintsCount();
+                android.util.Log.d("RecordingUI", "WiFi Fingerprints: " + wifiFpCount);
+                updateWifiCount(wifiFpCount);
+
+                // BLE data (actual recorded)
+                int bleCount = sensorFusion.getTrajectory().getBleDataCount();
+                android.util.Log.d("RecordingUI", "BLE Devices: " + bleCount);
+                updateBleCount(bleCount);
+
+                // IMU readings
+                int imuCount = sensorFusion.getTrajectory().getImuDataList().size();
+                android.util.Log.d("RecordingUI", "IMU Readings: " + imuCount);
+                updateImuCount(imuCount);
+            } catch (Exception e) {
+                android.util.Log.e("RecordingUI", "Error updating counts: " + e.getMessage());
+            }
+        }
     }
 
     /**
@@ -293,6 +388,86 @@ public class RecordingFragment extends Fragment {
         super.onResume();
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
+        }
+    }
+
+    /**
+     * Toggle card expansion/collapse
+     */
+    private void toggleCardExpansion() {
+        isCardExpanded = !isCardExpanded;
+
+        if (isCardExpanded) {
+            trajectoryInfoContent.setVisibility(View.VISIBLE);
+            collapseIcon.setText("▼");
+        } else {
+            trajectoryInfoContent.setVisibility(View.GONE);
+            collapseIcon.setText("▶");
+        }
+    }
+
+    /**
+     * Update initial position display
+     * Called when recording starts with initial GPS position
+     */
+    public void updateInitialPosition(double lat, double lon, double alt) {
+        if (initialPositionText != null && getActivity() != null) {
+            getActivity().runOnUiThread(() -> {
+                // Format: Lat: 55.920, Lon: -3.168, Alt: 112m
+                String posText = String.format(java.util.Locale.US,
+                        "Lat: %.6f, Lon: %.6f, Alt: %.1fm", lat, lon, alt);
+                initialPositionText.setText(posText);
+            });
+        }
+    }
+
+    /**
+     * Update initial orientation display
+     * Called when recording starts with initial sensor orientation
+     */
+    public void updateInitialOrientation(float[] quaternion) {
+        if (initialOrientationText != null && getActivity() != null && quaternion != null && quaternion.length >= 4) {
+            getActivity().runOnUiThread(() -> {
+                // Convert quaternion to Euler angles (simplified)
+                // For display purposes, just show quaternion values
+                String oriText = String.format(java.util.Locale.US,
+                        "Q: [%.2f, %.2f, %.2f, %.2f]",
+                        quaternion[0], quaternion[1], quaternion[2], quaternion[3]);
+                initialOrientationText.setText(oriText);
+            });
+        }
+    }
+
+    /**
+     * Update WiFi count display
+     */
+    public void updateWifiCount(int count) {
+        if (wifiCountText != null && getActivity() != null) {
+            totalWifiScans = count;
+            getActivity().runOnUiThread(() ->
+                    wifiCountText.setText(String.valueOf(totalWifiScans)));
+        }
+    }
+
+    /**
+     * Update BLE count display
+     */
+    public void updateBleCount(int count) {
+        if (bleCountText != null && getActivity() != null) {
+            totalBleScans = count;
+            getActivity().runOnUiThread(() ->
+                    bleCountText.setText(String.valueOf(totalBleScans)));
+        }
+    }
+
+    /**
+     * Update IMU count display
+     */
+    public void updateImuCount(int count) {
+        if (imuCountText != null && getActivity() != null) {
+            totalImuReadings = count;
+            getActivity().runOnUiThread(() ->
+                    imuCountText.setText(String.valueOf(totalImuReadings)));
         }
     }
 }
