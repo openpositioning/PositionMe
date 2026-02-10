@@ -235,16 +235,30 @@ public class RecordingFragment extends Fragment {
             long tMs = SystemClock.elapsedRealtime() - recordingStartElapsedMs;
             int idx = ++markerIndex;
 
+            // Prefer GNSS; fall back to current fused/PDR map location; then start location.
             LatLng pos = sensorFusion.getCurrentGnssLatLng();
-            if (pos == null) {
-                Toast.makeText(requireContext(), "No GNSS fix yet", Toast.LENGTH_SHORT).show();
-                return;
+            if (pos == null && trajectoryMapFragment != null) {
+                pos = trajectoryMapFragment.getCurrentLocation();
             }
+            if (pos == null) {
+                float[] start = sensorFusion.getGNSSLatitude(true);
+                if (start != null && start.length >= 2) {
+                    pos = new LatLng(start[0], start[1]);
+                }
+            }
+
+            boolean hasValidPos = pos != null && !(pos.latitude == 0 && pos.longitude == 0);
 
             markerPoints.add(new MarkerPoint(idx, tMs, pos));
 
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.addTestPointMarker(pos, idx);
+            if (hasValidPos) {
+                double altitude = sensorFusion.getCurrentGnssAltitude();
+                sensorFusion.addTestPoint(pos, altitude);
+                if (trajectoryMapFragment != null) {
+                    trajectoryMapFragment.addTestPointMarker(pos, idx);
+                }
+            } else {
+                Toast.makeText(requireContext(), "No location yet — marker not saved to trajectory", Toast.LENGTH_SHORT).show();
             }
 
             Log.d("MARKER", "TP" + idx + " tMs=" + tMs + " pos=" + pos);
@@ -400,4 +414,3 @@ public class RecordingFragment extends Fragment {
         }
     }
 }
-

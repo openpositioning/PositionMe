@@ -38,6 +38,9 @@
     <!-- Internet -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Storage - Deprecated in Android 10+ (use scoped storage instead)
          If you plan to adopt scoped storage fully and store only within your app-specific directories
          (or MediaStore for shared media), consider removing READ/WRITE_EXTERNAL_STORAGE eventually.

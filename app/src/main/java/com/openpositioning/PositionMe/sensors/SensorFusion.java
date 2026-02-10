@@ -1076,6 +1076,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void sendTrajectoryToCloud() {
         // Build object
         Traj.Trajectory sentTrajectory = trajectory.build();
+        Log.d("MARKER", "UPLOAD proto test_points_count=" + sentTrajectory.getTestPointsCount());
         // Pass object to communications object
         this.serverCommunications.sendTrajectory(sentTrajectory);
     }
@@ -1084,6 +1085,33 @@ public class SensorFusion implements SensorEventListener, Observer {
         // 还没拿到定位时，lat/lon 可能为 0
         if (latitude == 0f && longitude == 0f) return null;
         return new LatLng(latitude, longitude);
+    }
+
+    /**
+     * Add a user-created test point (timestamped marker) into the trajectory proto.
+     * This ensures the marker is uploaded together with the rest of the trajectory data.
+     *
+     * @param position  GNSS lat/lon at the time of the marker tap
+     * @param altitudeM altitude in metres (if unavailable, pass 0)
+     */
+    public void addTestPoint(@NonNull LatLng position, double altitudeM) {
+        if (trajectory == null) {
+            Log.w("SensorFusion", "Trajectory not initialized; skip adding test point");
+            return;
+        }
+
+        long relativeTimestamp = System.currentTimeMillis() - absoluteStartTime;
+
+        Traj.GNSSPosition testPoint = Traj.GNSSPosition.newBuilder()
+                .setRelativeTimestamp(relativeTimestamp)
+                .setLatitude(position.latitude)
+                .setLongitude(position.longitude)
+                .setAltitude(altitudeM)
+                .build();
+
+        trajectory.addTestPoints(testPoint);
+        Log.d("MARKER", "PROTO test_points_count=" + trajectory.getTestPointsCount());
+        testPoints.add(testPoint);
     }
 
     public void clearTestPoints() {
