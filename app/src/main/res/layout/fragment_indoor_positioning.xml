@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/md_theme_background">
+
+    <!-- Map Container -->
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/indoorMapFragment"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Top Info Card: Location Data -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/locationInfoCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        app:cardBackgroundColor="#E6FFFFFF"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="6dp"
+        app:layout_anchor="@id/indoorMapFragment"
+        app:layout_anchorGravity="top">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📍 Real-time Position"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textColor="@color/md_theme_primary"
+                android:layout_marginBottom="8dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginEnd="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Latitude"
+                        android:textSize="11sp"
+                        android:textColor="#666666" />
+
+                    <TextView
+                        android:id="@+id/latitudeText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0.000000"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/md_theme_onSurface"
+                        android:fontFamily="monospace" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginEnd="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Longitude"
+                        android:textSize="11sp"
+                        android:textColor="#666666" />
+
+                    <TextView
+                        android:id="@+id/longitudeText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0.000000"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/md_theme_onSurface"
+                        android:fontFamily="monospace" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.8"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Altitude"
+                        android:textSize="11sp"
+                        android:textColor="#666666" />
+
+                    <TextView
+                        android:id="@+id/altitudeText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0.0 m"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/md_theme_onSurface"
+                        android:fontFamily="monospace" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Additional sensor info row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginEnd="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Accuracy"
+                        android:textSize="11sp"
+                        android:textColor="#666666" />
+
+                    <TextView
+                        android:id="@+id/accuracyText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="± 0.0 m"
+                        android:textSize="13sp"
+                        android:textColor="@color/md_theme_onSurface" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Floor"
+                        android:textSize="11sp"
+                        android:textColor="#666666" />
+
+                    <TextView
+                        android:id="@+id/floorText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Ground"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/md_theme_primary" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Building Selector (Horizontal Scroll) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/buildingSelectorCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        app:cardBackgroundColor="#E6FFFFFF"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="6dp"
+        app:layout_anchor="@id/indoorMapFragment"
+        app:layout_anchorGravity="bottom">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🏢 Select Building"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:textColor="@color/md_theme_primary"
+                android:layout_marginBottom="8dp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/nucleusButton"
+                        style="@style/Widget.MaterialComponents.Button"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:text="Nucleus"
+                        android:textSize="12sp"
+                        app:cornerRadius="12dp"
+                        app:icon="@drawable/ic_baseline_info_24"
+                        app:iconSize="18dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/libraryButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:text="Library"
+                        android:textSize="12sp"
+                        app:cornerRadius="12dp"
+                        app:icon="@drawable/ic_baseline_info_24"
+                        app:iconSize="18dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/murchisonButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:text="Murchison"
+                        android:textSize="12sp"
+                        app:cornerRadius="12dp"
+                        app:icon="@drawable/ic_baseline_info_24"
+                        app:iconSize="18dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/fjbButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="FJB"
+                        android:textSize="12sp"
+                        app:cornerRadius="12dp"
+                        app:icon="@drawable/ic_baseline_info_24"
+                        app:iconSize="18dp" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <!-- Floor controls (initially hidden) -->
+            <LinearLayout
+                android:id="@+id/floorControlsLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:visibility="gone">
+
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/floorDownBtn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:src="@android:drawable/arrow_down_float"
+                    app:fabSize="mini"
+                    app:backgroundTint="@color/md_theme_primary"
+                    android:contentDescription="Floor Down" />
+
+                <TextView
+                    android:id="@+id/currentFloorText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="16dp"
+                    android:text="Ground Floor"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/md_theme_primary" />
+
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/floorUpBtn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:src="@android:drawable/arrow_up_float"
+                    app:fabSize="mini"
+                    app:backgroundTint="@color/md_theme_primary"
+                    android:contentDescription="Floor Up" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

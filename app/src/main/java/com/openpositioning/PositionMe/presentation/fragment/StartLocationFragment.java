@@ -22,12 +22,18 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
-import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
+import com.openpositioning.PositionMe.utils.IndoorMapManager;
+import com.google.android.gms.maps.model.Polygon;
+import android.widget.Toast;
 
 /**
  * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
  * recording starts. This fragment displays a map in which the user can adjust their location to
- * correct the PDR when it is complete
+ * correct the PDR when it is complete.
+ *
+ * Updated for Assignment 1:
+ * - Removed immediate startRecording() call (moved to RecordingFragment).
+ * - Ensures start position is passed to SensorFusion before navigation.
  *
  * @author Virginia Cangelosi
  * @see HomeFragment the previous fragment in the nav graph.
@@ -46,10 +52,10 @@ public class StartLocationFragment extends Fragment {
     private float[] startPosition = new float[2];
     // Zoom level for the Google map
     private float zoom = 19f;
-    // Instance for managing indoor building overlays (if any)
-    private NucleusBuildingManager nucleusBuildingManager;
-    // Dummy variable for floor index
-    private int FloorNK;
+    // Instance for managing indoor building overlays using new API-based system
+    private IndoorMapManager indoorMapManager;
+    // Google map instance
+    private GoogleMap googleMap;
 
     /**
      * Public Constructor for the class.
@@ -85,71 +91,86 @@ public class StartLocationFragment extends Fragment {
         SupportMapFragment supportMapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.startMap);
 
-        supportMapFragment.getMapAsync(new OnMapReadyCallback() {
-            /**
-             * {@inheritDoc}
-             * Controls to allow scrolling, tilting, rotating and a compass view of the
-             * map are enabled. A marker is added to the map with the start position and a marker
-             * drag listener is generated to detect when the marker has moved to obtain the new
-             * location.
-             */
-            @Override
-            public void onMapReady(GoogleMap mMap) {
-                // Set map type and UI settings
-                mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-                mMap.getUiSettings().setCompassEnabled(true);
-                mMap.getUiSettings().setTiltGesturesEnabled(true);
-                mMap.getUiSettings().setRotateGesturesEnabled(true);
-                mMap.getUiSettings().setScrollGesturesEnabled(true);
+        if (supportMapFragment != null) {
+            supportMapFragment.getMapAsync(new OnMapReadyCallback() {
+                /**
+                 * {@inheritDoc}
+                 * Controls to allow scrolling, tilting, rotating and a compass view of the
+                 * map are enabled. A marker is added to the map with the start position and a marker
+                 * drag listener is generated to detect when the marker has moved to obtain the new
+                 * location.
+                 */
+                @Override
+                public void onMapReady(GoogleMap mMap) {
+                    googleMap = mMap;
+                    
+                    // Set map type and UI settings
+                    mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                    mMap.getUiSettings().setCompassEnabled(true);
+                    mMap.getUiSettings().setTiltGesturesEnabled(true);
+                    mMap.getUiSettings().setRotateGesturesEnabled(true);
+                    mMap.getUiSettings().setScrollGesturesEnabled(true);
 
-                // *** FIX: Clear any existing markers so the start marker isn’t duplicated ***
-                mMap.clear();
+                    // Clear any existing markers
+                    mMap.clear();
 
-                // Create NucleusBuildingManager instance (if needed)
-                nucleusBuildingManager = new NucleusBuildingManager(mMap);
-                nucleusBuildingManager.getIndoorMapManager().hideMap();
+                    // ✅ Initialize new IndoorMapManager (supports all buildings via API)
+                    indoorMapManager = new IndoorMapManager(mMap, requireContext());
+                    
+                    // Load all building outlines (Nucleus, Library, FJB, Murchison)
+                    indoorMapManager.addFallbackBuildings();
+                    
+                    // Try to fetch building data from API
+                    LatLng kbCampus = new LatLng(55.9230, -3.1750);
+                    indoorMapManager.fetchBuildingsFromApi(kbCampus);
+                    
+                    // Set up building polygon click listener
+                    mMap.setOnPolygonClickListener(new GoogleMap.OnPolygonClickListener() {
+                        @Override
+                        public void onPolygonClick(@NonNull Polygon polygon) {
+                            if (indoorMapManager != null) {
+                                boolean handled = indoorMapManager.onPolygonClick(polygon);
+                                if (handled) {
+                                    String buildingName = indoorMapManager.getSelectedBuildingName();
+                                    Toast.makeText(getContext(), "Selected: " + buildingName, Toast.LENGTH_SHORT).show();
+                                }
+                            }
+                        }
+                    });
 
-                // Add a marker at the current GPS location and move the camera
-                position = new LatLng(startPosition[0], startPosition[1]);
-                Marker startMarker = mMap.addMarker(new MarkerOptions()
-                        .position(position)
-                        .title("Start Position")
-                        .draggable(true));
-                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
+                    // Add a marker at the current GPS location and move the camera
+                    position = new LatLng(startPosition[0], startPosition[1]);
+                    Marker startMarker = mMap.addMarker(new MarkerOptions()
+                            .position(position)
+                            .title("Start Position")
+                            .draggable(true));
+                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
 
-                // Drag listener for the marker to update the start position when dragged
-                mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
-                    /**
-                     * {@inheritDoc}
-                     */
-                    @Override
-                    public void onMarkerDragStart(Marker marker) {}
+                    // Drag listener for the marker to update the start position when dragged
+                    mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
+                        @Override
+                        public void onMarkerDragStart(Marker marker) {}
 
-                    /**
-                     * {@inheritDoc}
-                     * Updates the start position of the user.
-                     */
-                    @Override
-                    public void onMarkerDragEnd(Marker marker) {
-                        startPosition[0] = (float) marker.getPosition().latitude;
-                        startPosition[1] = (float) marker.getPosition().longitude;
-                    }
+                        @Override
+                        public void onMarkerDragEnd(Marker marker) {
+                            startPosition[0] = (float) marker.getPosition().latitude;
+                            startPosition[1] = (float) marker.getPosition().longitude;
+                        }
 
-                    /**
-                     * {@inheritDoc}
-                     */
-                    @Override
-                    public void onMarkerDrag(Marker marker) {}
-                });
-            }
-        });
+                        @Override
+                        public void onMarkerDrag(Marker marker) {}
+                    });
+                }
+            });
+        }
 
         return rootView;
     }
 
     /**
      * {@inheritDoc}
-     * Button onClick listener enabled to detect when to go to next fragment and start PDR recording.
+     * Button onClick listener enabled to detect when to go to next fragment.
+     * NOTE: Actual recording start is now deferred to RecordingFragment.
      */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
@@ -157,11 +178,6 @@ public class StartLocationFragment extends Fragment {
 
         this.button = view.findViewById(R.id.startLocationDone);
         this.button.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * When button clicked the PDR recording can start and the start position is stored for
-             * the {@link CorrectionFragment} to display. The {@link RecordingFragment} is loaded.
-             */
             @Override
             public void onClick(View view) {
                 float chosenLat = startPosition[0];
@@ -169,38 +185,18 @@ public class StartLocationFragment extends Fragment {
 
                 // If the Activity is RecordingActivity
                 if (requireActivity() instanceof RecordingActivity) {
-                    // Start sensor recording + set the start location
-                    sensorFusion.startRecording();
+                    // 【Task B Change】: Do NOT start recording here.
+                    // Just set the corrected start location in SensorFusion.
                     sensorFusion.setStartGNSSLatitude(startPosition);
 
-                    // Now switch to the recording screen
+                    // Navigate to the Recording Screen where user will enter ID and click Start
                     ((RecordingActivity) requireActivity()).showRecordingScreen();
 
-                    // If the Activity is ReplayActivity
                 } else if (requireActivity() instanceof ReplayActivity) {
-                    // *Do not* cast to RecordingActivity here
                     // Just call the Replay method
                     ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);
-
-                    // Otherwise (unexpected host)
-                } else {
-                    // Optional: log or handle error
-                    // Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
                 }
             }
         });
-    }
-
-    /**
-     * Switches the indoor map to the specified floor.
-     *
-     * @param floorIndex the index of the floor to switch to
-     */
-    private void switchFloorNU(int floorIndex) {
-        FloorNK = floorIndex; // Set the current floor index
-        if (nucleusBuildingManager != null) {
-            // Call the switchFloor method of the IndoorMapManager to switch to the specified floor
-            nucleusBuildingManager.getIndoorMapManager().switchFloor(floorIndex);
-        }
     }
 }

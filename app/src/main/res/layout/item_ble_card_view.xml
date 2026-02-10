@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="4dp">
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="2dp"
+        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="4dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="12dp">
+
+            <!-- BLE Device Name -->
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/bleNameItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="8dp"
+                android:text="Unknown Device"
+                android:textColor="@color/md_theme_onSurface"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textStyle="bold"
+                app:layout_constraintEnd_toStartOf="@+id/bleRssiItem"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <!-- BLE MAC Address -->
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/bleMacItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginEnd="8dp"
+                android:text="00:00:00:00:00:00"
+                android:textColor="@color/md_theme_onSurfaceVariant"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                app:layout_constraintEnd_toStartOf="@+id/bleRssiItem"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/bleNameItem" />
+
+            <!-- BLE Signal Strength (RSSI) -->
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/bleRssiItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="-70 dBm"
+                android:textColor="@color/md_theme_onSurface"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textStyle="bold"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

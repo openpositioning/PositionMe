@@ -58,10 +58,18 @@ public class WifiListAdapter extends RecyclerView.Adapter<WifiViewHolder> {
      */
     @Override
     public void onBindViewHolder(@NonNull WifiViewHolder holder, int position) {
-        String macString = context.getString(R.string.mac, Long.toString(items.get(position).getBssid()));
-        holder.bssid.setText(macString);
-        String levelString = context.getString(R.string.db, Long.toString(items.get(position).getLevel()));
-        holder.level.setText(levelString);
+        Wifi wifi = items.get(position);
+        
+        // Check if this is a placeholder item (BSSID = 0)
+        if (wifi.getBssid() == 0) {
+            holder.bssid.setText(wifi.getSsid());  // Display "Scanning..." or similar message
+            holder.level.setText("");
+        } else {
+            String macString = context.getString(R.string.mac, Long.toString(wifi.getBssid()));
+            holder.bssid.setText(macString);
+            String levelString = context.getString(R.string.db, Long.toString(wifi.getLevel()));
+            holder.level.setText(levelString);
+        }
     }
 
     /**

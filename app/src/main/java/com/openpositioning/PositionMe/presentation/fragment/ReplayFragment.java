@@ -18,6 +18,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.data.local.TrajParser;
+import com.openpositioning.PositionMe.utils.TrajectoryVerifier;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -95,12 +96,28 @@ public class ReplayFragment extends Fragment {
 
         Log.i(TAG, "Trajectory file confirmed to exist and is readable.");
 
-        // Parse the JSON file and prepare replayData using TrajParser
+        // VERIFY FILE CONTENTS FIRST - this will show what data is in the file
+        boolean isValid = TrajectoryVerifier.verifyTrajectoryFile(filePath);
+        if (!isValid) {
+            Log.e(TAG, "Trajectory file verification FAILED - file may be corrupt or empty");
+        }
+
+        // Parse the trajectory file and prepare replayData using TrajParser
         replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
 
-        // Log the number of parsed points
+        // Log the number of parsed points with detailed info
         if (replayData != null && !replayData.isEmpty()) {
             Log.i(TAG, "Trajectory data loaded successfully. Total points: " + replayData.size());
+            
+            // Count points with GNSS data
+            int gnssCount = 0;
+            for (TrajParser.ReplayPoint point : replayData) {
+                if (point.gnssLocation != null) gnssCount++;
+            }
+            Log.i(TAG, "Points with GNSS data: " + gnssCount);
+            Log.i(TAG, "First point - PDR: " + replayData.get(0).pdrLocation + 
+                       ", GNSS: " + replayData.get(0).gnssLocation + 
+                       ", Orientation: " + replayData.get(0).orientation);
         } else {
             Log.e(TAG, "Failed to load trajectory data! replayData is empty or null.");
         }
@@ -114,6 +131,11 @@ public class ReplayFragment extends Fragment {
                              @Nullable Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_replay, container, false);
     }
+
+    // Rotation controls
+    private SeekBar rotationSeekBar;
+    private android.widget.TextView rotationLabel;
+    private int currentRotationDegrees = 0;
 
     @Override
     public void onViewCreated(@NonNull View view,
@@ -130,8 +152,6 @@ public class ReplayFragment extends Fragment {
                     .replace(R.id.replayMapFragmentContainer, trajectoryMapFragment)
                     .commit();
         }
-
-
 
         // 1) Check if the file contains any GNSS data
         boolean gnssExists = hasAnyGnssData(replayData);
@@ -153,6 +173,27 @@ public class ReplayFragment extends Fragment {
         exitButton      = view.findViewById(R.id.exitButton);
         goEndButton     = view.findViewById(R.id.goEndButton);
         playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
+
+        // Rotation UI
+        rotationSeekBar = view.findViewById(R.id.rotationSeekBar);
+        rotationLabel = view.findViewById(R.id.rotationLabel);
+
+        // Rotation Listener
+        if (rotationSeekBar != null) {
+            rotationSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    currentRotationDegrees = progress;
+                    if (rotationLabel != null) {
+                        rotationLabel.setText("Rotate: " + progress + "°");
+                    }
+                    // Redraw map with new rotation (refresh current state)
+                    updateMapForIndex(currentIndex);
+                }
+                @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+                @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+            });
+        }
 
         // Set SeekBar max value based on replay data
         if (!replayData.isEmpty()) {
@@ -228,8 +269,6 @@ public class ReplayFragment extends Fragment {
             updateMapForIndex(0);
         }
     }
-
-
 
     /**
      * Checks if any ReplayPoint contains a non-null gnssLocation.
@@ -324,30 +363,65 @@ public class ReplayFragment extends Fragment {
     private void updateMapForIndex(int newIndex) {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
 
+        // Apply rotation to the PDR location
+        // Base Rotation Center: The first point of the PDR path
+        LatLng rotationCenter = replayData.get(0).pdrLocation;
+
         // Detect if user is playing sequentially (lastIndex + 1)
         // or is skipping around (backwards, or jump forward)
-        boolean isSequentialForward = (newIndex == lastIndex + 1);
+        // Note: When rotating, we must redraw everything to update positions
+        boolean isSequentialForward = (newIndex == lastIndex + 1) && (lastIndex != -1);
 
-        if (!isSequentialForward) {
-            // Clear everything and redraw up to newIndex
-            trajectoryMapFragment.clearMapAndReset();
-            for (int i = 0; i <= newIndex; i++) {
-                TrajParser.ReplayPoint p = replayData.get(i);
-                trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-                if (p.gnssLocation != null) {
-                    trajectoryMapFragment.updateGNSS(p.gnssLocation);
-                }
-            }
-        } else {
-            // Normal sequential forward step: add just the new point
-            TrajParser.ReplayPoint p = replayData.get(newIndex);
-            trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
+        // However, if rotation changed, we MUST invalid equality and redraw all
+        // For simplicity with rotation, let's redraw full path if dragging slider (not efficient but safe)
+        // If playing, we can just add point? No, because previous points need rotation too.
+        // Actually, if orientation changes, the Whole Path rotates.
+        // So we should probably redraw everything in the current view.
+        
+        trajectoryMapFragment.clearMapAndReset();
+        for (int i = 0; i <= newIndex; i++) {
+            TrajParser.ReplayPoint p = replayData.get(i);
+            
+            // Calculate rotated location
+            LatLng rotatedLoc = getRotatedLocation(p.pdrLocation, rotationCenter, currentRotationDegrees);
+            
+            // Also rotate orientation
+            float rotatedOri = p.orientation + (float) Math.toRadians(currentRotationDegrees);
+
+            trajectoryMapFragment.updateUserLocation(rotatedLoc, rotatedOri);
             if (p.gnssLocation != null) {
                 trajectoryMapFragment.updateGNSS(p.gnssLocation);
             }
         }
 
         lastIndex = newIndex;
+    }
+
+    // Helper to rotate LatLng around a center point
+    private LatLng getRotatedLocation(LatLng point, LatLng center, int angleDegrees) {
+        if (angleDegrees == 0) return point;
+
+        double lat1 = Math.toRadians(center.latitude);
+        double lon1 = Math.toRadians(center.longitude);
+        double lat2 = Math.toRadians(point.latitude);
+        double lon2 = Math.toRadians(point.longitude);
+
+        // Convert to meters approximation relative to center
+        // Radius of Earth ~ 6371km
+        double R = 6371000;
+        double x = (lon2 - lon1) * Math.cos((lat1 + lat2) / 2) * R;
+        double y = (lat2 - lat1) * R;
+
+        // Rotate
+        double theta = Math.toRadians(angleDegrees);
+        double xNew = x * Math.cos(theta) - y * Math.sin(theta);
+        double yNew = x * Math.sin(theta) + y * Math.cos(theta);
+
+        // Convert back to LatLng
+        double latNew = lat1 + yNew / R;
+        double lonNew = lon1 + xNew / (R * Math.cos((lat1 + latNew) / 2));
+
+        return new LatLng(Math.toDegrees(latNew), Math.toDegrees(lonNew));
     }
 
     @Override

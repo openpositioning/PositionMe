@@ -12,15 +12,15 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Overlaid controls for map visualization -->
+    <!-- ===== Top-left: Compact map controls ===== -->
     <com.google.android.material.card.MaterialCardView
+        android:id="@+id/mapControlsCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="10dp"
-        android:padding="18dp"
-        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
+        android:layout_margin="8dp"
+        app:cardBackgroundColor="#E6FFFFFF"
+        app:cardCornerRadius="12dp"
         app:cardElevation="4dp"
-        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
         app:layout_anchor="@id/trajectoryMap"
         app:layout_anchorGravity="top|start">
 
@@ -28,72 +28,138 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center">
+            android:padding="6dp"
+            android:gravity="start">
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/gnssSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="140dp"
+                android:layout_height="36dp"
+                android:textSize="12sp"
                 android:text="@string/gnssSwitch" />
 
             <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/indoorMapSwitch"
+                android:layout_width="140dp"
+                android:layout_height="36dp"
+                android:textSize="12sp"
+                android:checked="true"
+                android:text="@string/indoor_map" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/autoFloor"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="140dp"
+                android:layout_height="36dp"
+                android:textSize="12sp"
+                android:visibility="gone"
                 android:text="@string/auto_floor" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/lineColorButton"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@color/md_theme_onPrimary"
-                android:text="@string/color"
-                app:elevation="5dp"/>
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="2dp">
 
-            <Spinner
-                android:id="@+id/mapSwitchSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="0dp"
-                android:layout_marginTop="8dp"
-                android:background="@android:color/white"
-                android:spinnerMode="dropdown"
-                app:layout_constraintTop_toTopOf="parent"
-                android:elevation="5dp"/>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/lineColorButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:padding="0dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:backgroundTint="@color/red"
+                    app:cornerRadius="8dp"
+                    android:text=""
+                    android:contentDescription="@string/color"/>
 
+                <Spinner
+                    android:id="@+id/mapSwitchSpinner"
+                    android:layout_width="90dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@android:color/white"
+                    android:spinnerMode="dropdown" />
+            </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Floating action buttons for floor control, properly spaced -->
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
+    <!-- ===== Top-center: Building name indicator ===== -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/buildingInfoCard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="8dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="#E6000000"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="6dp"
+        app:layout_anchor="@id/trajectoryMap"
+        app:layout_anchorGravity="top|center_horizontal">
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/floorDownButton"
+        <TextView
+            android:id="@+id/buildingNameText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:src="@android:drawable/arrow_down_float"
-            app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:contentDescription="@string/floor_down" />
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:text="Building"
+            android:textColor="@android:color/white"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- ===== Bottom-right: Floor controls ===== -->
+    <LinearLayout
+        android:id="@+id/floorControlsContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="12dp"
+        android:layout_marginBottom="24dp"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:visibility="gone">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorUpButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
             android:src="@android:drawable/arrow_up_float"
-            app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
-            app:layout_constraintBottom_toTopOf="@id/floorDownButton"
-            app:layout_constraintEnd_toEndOf="parent"
+            app:backgroundTint="#E6FFFFFF"
+            app:tint="@color/md_theme_primary"
+            app:fabSize="mini"
             android:contentDescription="@string/floor_up" />
-    </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="48dp"
+            android:layout_height="wrap_content"
+            android:layout_marginVertical="4dp"
+            app:cardBackgroundColor="@color/md_theme_primary"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="4dp">
+
+            <TextView
+                android:id="@+id/floorTextView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingVertical="6dp"
+                android:text="G"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorDownButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/arrow_down_float"
+            app:backgroundTint="#E6FFFFFF"
+            app:tint="@color/md_theme_primary"
+            app:fabSize="mini"
+            android:contentDescription="@string/floor_down" />
+    </LinearLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

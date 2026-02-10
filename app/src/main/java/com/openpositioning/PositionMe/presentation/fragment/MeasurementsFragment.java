@@ -19,8 +19,11 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
+import com.openpositioning.PositionMe.sensors.BleDevice;
 import com.openpositioning.PositionMe.presentation.viewitems.WifiListAdapter;
+import com.openpositioning.PositionMe.presentation.viewitems.BleListAdapter;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -47,6 +50,7 @@ public class MeasurementsFragment extends Fragment {
     // UI elements
     private ConstraintLayout sensorMeasurementList;
     private RecyclerView wifiListView;
+    private RecyclerView bleListView;
     // List of string resource IDs
     private int[] prefaces;
     private int[] gnssPrefaces;
@@ -110,8 +114,10 @@ public class MeasurementsFragment extends Fragment {
      */
     @Override
     public void onResume() {
-        refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
         super.onResume();
+        // Ensure sensors and WiFi scanner are running
+        sensorFusion.resumeListening();
+        refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
     }
 
     /**
@@ -125,6 +131,8 @@ public class MeasurementsFragment extends Fragment {
         sensorMeasurementList = (ConstraintLayout) getView().findViewById(R.id.sensorMeasurementList);
         wifiListView = (RecyclerView) getView().findViewById(R.id.wifiList);
         wifiListView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        bleListView = (RecyclerView) getView().findViewById(R.id.bleList);
+        bleListView.setLayoutManager(new LinearLayoutManager(getActivity()));
     }
 
     /**
@@ -141,35 +149,80 @@ public class MeasurementsFragment extends Fragment {
         public void run() {
             // Get all the values from SensorFusion
             Map<SensorTypes, float[]> sensorValueMap = sensorFusion.getSensorValueMap();
+
             // Loop through UI elements and update the values
             for(SensorTypes st : SensorTypes.values()) {
-                CardView cardView = (CardView) sensorMeasurementList.getChildAt(st.ordinal());
-                ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
-                float[] values = sensorValueMap.get(st);
-                for (int i = 0; i < values.length; i++) {
-                    String valueString;
-                    // Set string wrapper based on data type.
-                    if(values.length == 1) {
-                        valueString = getString(R.string.level, String.format("%.2f", values[0]));
+                // Safety check: prevent index out of bounds for new enum items (WIFI, BLE)
+                if (st.ordinal() < sensorMeasurementList.getChildCount()) {
+                    View view = sensorMeasurementList.getChildAt(st.ordinal());
+                    if (view instanceof CardView) {
+                        CardView cardView = (CardView) view;
+                        ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
+                        float[] values = sensorValueMap.get(st);
+
+                        if (values != null && currentRow != null) {
+                            for (int i = 0; i < values.length; i++) {
+                                if (i + 1 < currentRow.getChildCount()) {
+                                    String valueString;
+                                    if(values.length == 1) {
+                                        valueString = getString(R.string.level, String.format("%.2f", values[0]));
+                                    }
+                                    else if(values.length == 2){
+                                        if(st == SensorTypes.GNSSLATLONG)
+                                            valueString = getString(gnssPrefaces[i], String.format("%.2f", values[i]));
+                                        else
+                                            valueString = getString(prefaces[i], String.format("%.2f", values[i]));
+                                    }
+                                    else{
+                                        valueString = getString(prefaces[i], String.format("%.2f", values[i]));
+                                    }
+                                    ((TextView) currentRow.getChildAt(i + 1)).setText(valueString);
+                                }
+                            }
+                        }
                     }
-                    else if(values.length == 2){
-                        if(st == SensorTypes.GNSSLATLONG)
-                            valueString = getString(gnssPrefaces[i], String.format("%.2f", values[i]));
-                        else
-                            valueString = getString(prefaces[i], String.format("%.2f", values[i]));
-                    }
-                    else{
-                        valueString = getString(prefaces[i], String.format("%.2f", values[i]));
-                    }
-                    ((TextView) currentRow.getChildAt(i + 1)).setText(valueString);
                 }
             }
-            // Get all WiFi values - convert to list of strings
+
+            // Update WiFi list
             List<Wifi> wifiObjects = sensorFusion.getWifiList();
-            // If there are WiFi networks visible, update the recycler view with the data.
-            if(wifiObjects != null) {
-                wifiListView.setAdapter(new WifiListAdapter(getActivity(), wifiObjects));
+            if (wifiObjects != null && !wifiObjects.isEmpty()) {
+                android.util.Log.d("WiFiDebug", "Detected networks: " + wifiObjects.size());
+                if (getContext() != null) {
+                    wifiListView.setAdapter(new WifiListAdapter(getContext(), wifiObjects));
+                }
+            } else {
+                android.util.Log.d("WiFiDebug", "No WiFi networks detected");
+                // Create placeholder item for empty state
+                if (getContext() != null) {
+                    List<Wifi> placeholderList = new ArrayList<>();
+                    Wifi placeholder = new Wifi();
+                    placeholder.setBssid(0);
+                    placeholder.setSsid("Scanning...");
+                    placeholder.setLevel(-100);
+                    placeholderList.add(placeholder);
+                    wifiListView.setAdapter(new WifiListAdapter(getContext(), placeholderList));
+                }
             }
+
+            // Update BLE list
+            List<BleDevice> bleDevices = sensorFusion.getBleList();
+            if (bleDevices != null && !bleDevices.isEmpty()) {
+                android.util.Log.d("BLEDebug", "Detected BLE devices: " + bleDevices.size());
+                if (getContext() != null) {
+                    bleListView.setAdapter(new BleListAdapter(getContext(), bleDevices));
+                }
+            } else {
+                android.util.Log.d("BLEDebug", "No BLE devices detected");
+                // Create placeholder item for empty state
+                if (getContext() != null) {
+                    List<BleDevice> placeholderList = new ArrayList<>();
+                    BleDevice placeholder = new BleDevice("00:00:00:00:00:00", "Scanning...", -100);
+                    placeholderList.add(placeholder);
+                    bleListView.setAdapter(new BleListAdapter(getContext(), placeholderList));
+                }
+            }
+
             // Restart the data updater task in REFRESH_TIME milliseconds.
             refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
         }

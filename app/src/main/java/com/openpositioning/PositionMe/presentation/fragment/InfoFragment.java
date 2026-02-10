@@ -17,6 +17,7 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorInfo;
 import com.openpositioning.PositionMe.presentation.viewitems.SensorInfoListAdapter;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -81,9 +82,22 @@ public class InfoFragment extends Fragment {
         sensorInfoView = (RecyclerView) getView().findViewById(R.id.sensorInfoList);
         // Register layout manager
         sensorInfoView.setLayoutManager(new LinearLayoutManager(getActivity()));
-        // Get singleton sensor fusion instance, load sensor info data
+
+        // Get singleton sensor fusion instance
         sensorFusion = SensorFusion.getInstance();
-        List<SensorInfo> sensorInfoList = sensorFusion.getSensorInfos();
+
+        // Fix: Explicitly cast the generic objects back to SensorInfo
+        List<Object> rawList = sensorFusion.getSensorInfos();
+        List<SensorInfo> sensorInfoList = new ArrayList<>();
+
+        if (rawList != null) {
+            for (Object obj : rawList) {
+                if (obj instanceof SensorInfo) {
+                    sensorInfoList.add((SensorInfo) obj);
+                }
+            }
+        }
+
         // Set adapter for the recycler view.
         sensorInfoView.setAdapter(new SensorInfoListAdapter(getActivity(), sensorInfoList));
     }

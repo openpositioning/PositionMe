@@ -32,6 +32,13 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
+        <action
+            android:id="@+id/action_homeFragment_to_indoorPositioningFragment"
+            app:destination="@id/indoorPositioningFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right"/>
     </fragment>
 
     <fragment
@@ -76,6 +83,12 @@
         android:name="com.openpositioning.PositionMe.presentation.fragment.UploadFragment"
         android:label="UploadFragment"
         tools:layout="@layout/fragment_upload" />
+
+    <fragment
+        android:id="@+id/indoorPositioningFragment"
+        android:name="com.openpositioning.PositionMe.presentation.fragment.IndoorPositioningFragment"
+        android:label="Indoor Positioning Debug"
+        tools:layout="@layout/fragment_indoor_positioning" />
 
     <action
         android:id="@+id/action_global_settingsFragment"
