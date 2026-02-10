@@ -57,12 +57,32 @@ public class PermissionManager {
         requiredPermissions.add(Manifest.permission.ACCESS_COARSE_LOCATION);
         requiredPermissions.add(Manifest.permission.ACCESS_WIFI_STATE);
         requiredPermissions.add(Manifest.permission.CHANGE_WIFI_STATE);
+
+        // Add BLE permissions based on Android version
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12+ (API 31+)
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_SCAN);
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_CONNECT);
+            android.util.Log.i("PermissionManager", "Added Android 12+ BLE permissions");
+        } else {
+            // Android 11 and below
+            requiredPermissions.add(Manifest.permission.BLUETOOTH);
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_ADMIN);
+            android.util.Log.i("PermissionManager", "Added Android 11- BLE permissions");
+        }
+
         // For API < 29, also request broad storage permissions
         // For API >= 29, also request ACTIVITY_RECOGNITION
         // (We can do the check here or just always add them; the OS will skip as needed.)
         requiredPermissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         requiredPermissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
         requiredPermissions.add(Manifest.permission.ACTIVITY_RECOGNITION);
+
+        // Log all permissions
+        android.util.Log.i("PermissionManager", "Total permissions to request: " + requiredPermissions.size());
+        for (String perm : requiredPermissions) {
+            android.util.Log.i("PermissionManager", "  - " + perm);
+        }
     }
 
     /**

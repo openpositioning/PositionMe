@@ -105,6 +105,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private MovementSensor linearAccelerationSensor;
     // Other data recording
     private WifiDataProcessor wifiProcessor;
+    private BleDataProcessor bleProcessor;
     private GNSSDataProcessor gnssProcessor;
     // Data listener
     private final LocationListener locationListener;
@@ -162,6 +163,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
+    private List<BleDataProcessor.BleDevice> bleDeviceList;
 
 
     // Over time accelerometer magnitude values since last step
@@ -251,6 +253,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Listener based devices
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(this);
+        this.bleProcessor = new BleDataProcessor(context);
+        bleProcessor.registerObserver(this);
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
         // Create object handling HTTPS communication
         this.serverCommunications = new ServerCommunications(context);
@@ -483,16 +487,34 @@ public class SensorFusion implements SensorEventListener, Observer {
      * {@inheritDoc}
      *
      * Receives updates from {@link WifiDataProcessor}.
-     *
+     * Receives updates from {@link BleDataProcessor}
      * @see WifiDataProcessor object for wifi scanning.
+     * @see BleDataProcessor object for BLE scanning.
      */
+
     @Override
-    public void update(Object[] wifiList) {
+    public void update(Object[] dataArray) {
+        if (dataArray == null || dataArray.length == 0) {
+            return;
+        }
+
+        // Check the type of the first element to determine if it's WiFi or BLE
+        if (dataArray[0] instanceof Wifi) {
+            // Handle WiFi data
+            updateWifiData(dataArray);
+        } else if (dataArray[0] instanceof BleDataProcessor.BleDevice) {
+            // Handle BLE data
+            updateBleData(dataArray);
+        }
+    }
+
+    // Original WiFi update logic
+    private void updateWifiData(Object[] wifiList) {
         // Save newest wifi values to local variable
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
 
         if(this.saveRecording) {
-            // Building a new WiFi fingerprint
+            // build new wifi fingerprint
             Traj.Fingerprint.Builder wifiData = Traj.Fingerprint.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
             for (Wifi data : this.wifiList) {
@@ -506,16 +528,54 @@ public class SensorFusion implements SensorEventListener, Observer {
             Traj.Fingerprint newFingerprint = wifiData.build();
 
             if (!isSameFingerprintAs(newFingerprint, lastWifiFingerprint)) {
-                // Only add when the fingerprint changes
                 this.trajectory.addWifiFingerprints(newFingerprint);
-                lastWifiFingerprint = newFingerprint;  // save this fingerprint for comparison
+                lastWifiFingerprint = newFingerprint;
                 android.util.Log.i("SensorFusion", "New WiFi fingerprint added (" +
                         newFingerprint.getRfScansCount() + " APs)");
             } else {
                 android.util.Log.d("SensorFusion", "Duplicate WiFi fingerprint skipped");
             }
         }
+
         createWifiPositioningRequest();
+    }
+
+    // BLE update logic
+    private void updateBleData(Object[] bleArray) {
+        BleDataProcessor.BleDevice[] bleDevices = new BleDataProcessor.BleDevice[bleArray.length];
+        for (int i = 0; i < bleArray.length; i++) {
+            bleDevices[i] = (BleDataProcessor.BleDevice) bleArray[i];
+        }
+
+        // Save BLE devices to local variable
+        this.bleDeviceList = java.util.Arrays.asList(bleDevices);
+
+        if(this.saveRecording) {
+            // Add each BLE device to trajectory
+            for (BleDataProcessor.BleDevice device : bleDevices) {
+                Traj.BleData.Builder bleData = Traj.BleData.newBuilder()
+                        .setMacAddress(device.macAddress)
+                        .setName(device.name)
+                        .setTxPowerLevel(device.txPowerLevel)
+                        .setAdvertiseFlags(device.advertiseFlags);
+
+                // Add service UUIDs if available
+                if (device.serviceUuids != null && !device.serviceUuids.isEmpty()) {
+                    bleData.addAllServiceUuids(device.serviceUuids);
+                }
+
+                // Add manufacturer data if available
+                if (device.manufacturerData != null) {
+                    bleData.setManufacturerData(com.google.protobuf.ByteString.copyFrom(device.manufacturerData));
+                }
+
+                this.trajectory.addBleData(bleData.build());
+            }
+
+            if (bleDevices.length > 0) {
+                android.util.Log.i("SensorFusion", "Added " + bleDevices.length + " BLE devices to trajectory");
+            }
+        }
     }
 
 
@@ -916,6 +976,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         stepDetectionSensor.sensorManager.registerListener(this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
         rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, (int) 1e6);
         wifiProcessor.startListening();
+        bleProcessor.startListening();
         gnssProcessor.startLocationUpdates();
     }
 
@@ -948,6 +1009,14 @@ public class SensorFusion implements SensorEventListener, Observer {
             } catch (Exception e) {
                 System.err.println("Wifi resumed before existing");
             }
+
+            // Stop BLE scanning
+            try {
+                this.bleProcessor.stopListening();
+            } catch (Exception e) {
+                System.err.println("BLE stopped before existing");
+            }
+
             // Stop receiving location updates
             this.gnssProcessor.stopUpdating();
         }
