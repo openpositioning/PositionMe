@@ -258,9 +258,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
             File file = new File(getExternalFilesDir(null), filename);
             FileOutputStream fos = new FileOutputStream(file);
 
-            File file = new File(getExternalFilesDir(null), filename);
-            FileOutputStream fos = new FileOutputStream(file);
-
             // Use writeTo to write binary stream directly
             // Note: You need to add a public Traj.Trajectory.Builder getTrajectory() method in SensorFusion.java
             if (sensorFusion != null && sensorFusion.getTrajectory() != null) {

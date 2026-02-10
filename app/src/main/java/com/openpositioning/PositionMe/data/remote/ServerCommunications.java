@@ -104,13 +104,13 @@ public class ServerCommunications implements Observable {
      * @param campaign Building name (e.g. "murchison_house"), empty string for no campaign
      */
     public void sendTrajectory(Traj.Trajectory trajectory, String campaign){
-        // URL construction - dynamically append campaign (upload to user root if empty)
+        // 1. URL construction - dynamically append campaign (upload to user root if empty)
         String dynamicUrl;
         if (campaign != null && !campaign.isEmpty()) {
             dynamicUrl = BASE_UPLOAD_URL + campaign + "/" + userKey + "/?key=" + masterKey;
         } else {
-            String defaultCampaign = "murchison_house";
-            dynamicUrl = BASE_UPLOAD_URL + defaultCampaign + "/" + userKey + "/?key=" + masterKey;
+            // Empty campaign: upload directly to user directory
+            dynamicUrl = BASE_UPLOAD_URL + userKey + "/?key=" + masterKey;
         }
 
         Log.e("SERVER_DEBUG", "--------------------------------------------------");
