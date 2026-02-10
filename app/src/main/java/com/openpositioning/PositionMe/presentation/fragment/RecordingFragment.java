@@ -196,8 +196,8 @@ public class RecordingFragment extends Fragment {
             // Increment marker count on press
             markerCount++;
 
-            // Get current location from TrajectoryMapFragment
-            LatLng currentPosition = trajectoryMapFragment.getCurrentLocation();
+            // Get current location from trajectoryMapFragment
+             LatLng currentPosition = trajectoryMapFragment.getCurrentLocation();
 
             // Obtain recording timestamp and create new Testpoint object
             long relativeTimeStamp = sensorFusion.getRelativeTimeStamp();
@@ -328,6 +328,14 @@ public class RecordingFragment extends Fragment {
         }
     }
 
+    /**
+     * Structure defines the added test point markers during trajectory recording
+     *
+     * Each test point corresponds to the "ADD MARKER" button press event and stores:
+     *  - markerCount: sequential marker identifier
+     *  - currentPostion: LatLng at time of press
+     *  - relativeTimeStamp: recording time in ms to recording session start
+     */
     private static class TestPoint {
         final int markerCount;
         final LatLng currentPosition;
@@ -340,5 +348,6 @@ public class RecordingFragment extends Fragment {
         }
     }
 
+    // List storing all test points added during recording session
     private final List<TestPoint> TestPoints = new ArrayList<>();
 }
