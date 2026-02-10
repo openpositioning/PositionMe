@@ -70,6 +70,7 @@ public class TrajectoryMapFragment extends Fragment {
     private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
 
+    private boolean indoorMapsRequested = false;
 
     // UI
     private Spinner switchMapSpinner;
@@ -130,7 +131,7 @@ public class TrajectoryMapFragment extends Fragment {
                         pendingCameraPosition = null;
                     }
 
-                    drawBuildingPolygon();
+                  //  drawBuildingPolygon();
 
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
 
@@ -325,6 +326,13 @@ public class TrajectoryMapFragment extends Fragment {
             indoorMapManager.setCurrentLocation(newLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
+
+        // Request nearby indoor maps ONCE, when first location arrives
+        if (!indoorMapsRequested) {
+            indoorMapsRequested = true;
+            requestNearbyIndoorMaps(newLocation);
+        }
+
     }
 
 
@@ -462,6 +470,52 @@ public class TrajectoryMapFragment extends Fragment {
      *
      *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
      */
+
+    private void requestNearbyIndoorMaps(@NonNull LatLng loc) {
+
+        List<String> macs = new ArrayList<>();
+        List<com.openpositioning.PositionMe.sensors.Wifi> wifiList =
+                SensorFusion.getInstance().getWifiList();
+
+        if (wifiList != null) {
+            for (com.openpositioning.PositionMe.sensors.Wifi w : wifiList) {
+                macs.add(String.valueOf(w.getBssid()));
+            }
+        }
+
+        Log.d(
+                "IndoorMaps",
+                "lat=" + loc.latitude
+                        + " lon=" + loc.longitude
+                        + " macsCount=" + macs.size()
+                        + " firstMac=" + (macs.isEmpty() ? "none" : macs.get(0))
+        );
+
+
+        new com.openpositioning.PositionMe.data.remote.ServerCommunications(getContext())
+                .requestNearbyIndoorMaps(
+                        loc.latitude,
+                        loc.longitude,
+                        macs,
+                        new okhttp3.Callback() {
+                            @Override
+                            public void onFailure(okhttp3.Call call, java.io.IOException e) {
+                                Log.e("IndoorMaps", "Indoor map request failed", e);
+                            }
+
+                            @Override
+                            public void onResponse(okhttp3.Call call,
+                                                   okhttp3.Response response)
+                                    throws java.io.IOException {
+
+                                String json = response.body().string();
+                                Log.d("IndoorMaps", "Nearby indoor maps JSON: " + json);
+                            }
+                        }
+                );
+    }
+
+
     private void drawBuildingPolygon() {
         if (gMap == null) {
             Log.e("TrajectoryMapFragment", "GoogleMap is not ready");

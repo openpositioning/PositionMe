@@ -59,6 +59,19 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+import okhttp3.MediaType;
+import okhttp3.RequestBody;
+import okhttp3.Callback;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.List;
+
+
+
+
 /**
  * This class handles communications with the server through HTTPs. The class uses an
  * {@link OkHttpClient} for making requests to the server. The class includes methods for sending
@@ -100,6 +113,7 @@ public class ServerCommunications implements Observable {
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
 
+    private OkHttpClient client;
 
 
     /**
@@ -111,6 +125,7 @@ public class ServerCommunications implements Observable {
      */
     public ServerCommunications(Context context) {
         this.context = context;
+        this.client = new OkHttpClient();
         this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.isWifiConn = false;
@@ -617,6 +632,48 @@ public class ServerCommunications implements Observable {
             }
         });
     }
+
+    public void requestNearbyIndoorMaps(
+            double lat,
+            double lon,
+            List<String> macs,
+            okhttp3.Callback callback
+    ) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("lat", lat);
+            body.put("lon", lon);
+
+            JSONArray macArray = new JSONArray();
+            if (macs != null) {
+                for (String m : macs) {
+                    macArray.put(m);
+                }
+            }
+            body.put("macs", macArray);
+
+            RequestBody requestBody = RequestBody.create(
+                    body.toString(),
+                    MediaType.parse("application/json; charset=utf-8")
+            );
+
+            String url =
+                    "https://openpositioning.org/api/live/floorplan/request/"
+                            + userKey + "?key=" + masterKey;
+
+            okhttp3.Request request = new okhttp3.Request.Builder()
+                    .url(url)
+                    .post(requestBody)
+                    .build();
+
+            client.newCall(request).enqueue(callback);
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+
+
 
     /**
      * This method checks the device's connection status. It sets boolean variables depending on
