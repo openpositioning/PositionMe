@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -32,7 +33,6 @@ import com.google.android.gms.maps.model.MarkerOptions;
  * is finished to enable manual adjustments to the PDR. The adjustments are not saved as of now.
  */
 public class CorrectionFragment extends Fragment {
-
     //Map variable
     public GoogleMap mMap;
     //Button to go to next
@@ -49,6 +49,8 @@ public class CorrectionFragment extends Fragment {
     private static LatLng start;
     private PathView pathView;
 
+    private EditText trajNameInput; // adding to the class
+
     public CorrectionFragment() {
         // Required empty public constructor
     }
@@ -62,8 +64,15 @@ public class CorrectionFragment extends Fragment {
         }
         View rootView = inflater.inflate(R.layout.fragment_correction, container, false);
 
-        // Send trajectory data to the cloud
-        sensorFusion.sendTrajectoryToCloud();
+        // Send trajectory only if a venue is selected for campaign-aware upload
+        String selectedCampaign = sensorFusion.getSelectedCampaign();
+        if (selectedCampaign == null || selectedCampaign.trim().isEmpty()) {
+            Toast.makeText(requireContext(),
+                    "Select a venue on the map before submission",
+                    Toast.LENGTH_LONG).show();
+        } else {
+            sensorFusion.sendTrajectoryToCloud(selectedCampaign);
+        }
 
         //Obtain start position
         float[] startPosition = sensorFusion.getGNSSLatitude(true);
@@ -103,8 +112,10 @@ public class CorrectionFragment extends Fragment {
         this.averageStepLengthText = view.findViewById(R.id.averageStepView);
         this.stepLengthInput = view.findViewById(R.id.inputStepLength);
         this.pathView = view.findViewById(R.id.pathView1);
+        this.trajNameInput = view.findViewById(R.id.trajname); //initialize 
 
         averageStepLength = sensorFusion.passAverageStepLength();
+
         averageStepLengthText.setText(getString(R.string.averageStepLgn) + ": "
                 + String.format("%.2f", averageStepLength));
 
@@ -126,6 +137,17 @@ public class CorrectionFragment extends Fragment {
             }
             return false;
         });
+
+        this.trajNameInput.setOnKeyListener((v, keyCode, event) -> {
+            if (keyCode == KeyEvent.KEYCODE_ENTER) { //when user presses enter 
+                String trajName = trajNameInput.getText().toString();
+                sensorFusion.setTrajName(trajName); //send it 
+            }
+            return false;
+        });
+
+
+
 
         this.stepLengthInput.addTextChangedListener(new TextWatcher() {
             @Override
@@ -150,6 +172,15 @@ public class CorrectionFragment extends Fragment {
                 //   ((AppCompatActivity)getActivity()).getSupportActionBar().show();
 
                 // Now, simply tell the Activity we are done:
+
+                String trajName = trajNameInput.getText().toString();
+                sensorFusion.setTrajName(trajName); //send it 
+
+                        // Send trajectory data to the cloud
+                // Send trajectory data to the cloud
+                sensorFusion.sendTrajectoryToCloud();
+
+
                 ((RecordingActivity) requireActivity()).finishFlow();
             }
         });

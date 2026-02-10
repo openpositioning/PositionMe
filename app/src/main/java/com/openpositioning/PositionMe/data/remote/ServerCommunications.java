@@ -16,6 +16,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
@@ -88,9 +89,6 @@ public class ServerCommunications implements Observable {
     // Static constants necessary for communications
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
-    private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
-                    + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
                     + "?skip=0&limit=30&key=" + masterKey;
@@ -99,6 +97,7 @@ public class ServerCommunications implements Observable {
                     + "?key=" + masterKey;
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
+    private static final String DEFAULT_CAMPAIGN = "murchison_house";
 
 
 
@@ -120,6 +119,15 @@ public class ServerCommunications implements Observable {
         this.observers = new ArrayList<>();
     }
 
+    private String buildUploadUrl(String campaign) {
+        String effectiveCampaign = (campaign == null || campaign.trim().isEmpty())
+                ? DEFAULT_CAMPAIGN
+                : campaign.trim();
+        return "https://openpositioning.org/api/live/trajectory/upload/"
+                + Uri.encode(effectiveCampaign)
+                + "/" + userKey + "/?key=" + masterKey;
+    }
+
     /**
      * Outgoing communication request with a {@link Traj trajectory} object. The recorded
      * trajectory is passed to the method. It is processed into the right format for sending
@@ -127,7 +135,7 @@ public class ServerCommunications implements Observable {
      *
      * @param trajectory    Traj object matching all the timing and formal restrictions.
      */
-    public void sendTrajectory(Traj.Trajectory trajectory){
+    public void sendTrajectory(Traj.Trajectory trajectory, String campaign){
         logDataSize(trajectory);
 
         // Convert the trajectory to byte array
@@ -180,7 +188,7 @@ public class ServerCommunications implements Observable {
                     .build();
 
             // Create a POST request with the required headers
-            Request request = new Request.Builder().url(uploadURL).post(requestBody)
+            Request request = new Request.Builder().url(buildUploadUrl(campaign)).post(requestBody)
                     .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                     .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
 
@@ -274,6 +282,17 @@ public class ServerCommunications implements Observable {
      * @param localTrajectory the File object of the local trajectory to be uploaded
      */
     public void uploadLocalTrajectory(File localTrajectory) {
+        uploadLocalTrajectory(localTrajectory, DEFAULT_CAMPAIGN);
+    }
+
+    /**
+     * Uploads a local trajectory file to the API server in the specified format and campaign.
+     * {@link OkHttp} library is used for the asynchronous POST request.
+     *
+     * @param localTrajectory the File object of the local trajectory to be uploaded
+     * @param campaign venue campaign for server path
+     */
+    public void uploadLocalTrajectory(File localTrajectory, String campaign) {
 
         // Instantiate client for HTTP requests
         OkHttpClient client = new OkHttpClient();
@@ -299,7 +318,7 @@ public class ServerCommunications implements Observable {
                 .build();
 
         // Create a POST request with the required headers
-        okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
+        okhttp3.Request request = new okhttp3.Request.Builder().url(buildUploadUrl(campaign)).post(requestBody)
                 .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
                 .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
 

@@ -146,6 +146,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float[] startLocation;
     // Wifi values
     private List<Wifi> wifiList;
+    // Selected venue campaign for upload endpoint
+    private String selectedCampaign;
 
 
     // Over time accelerometer magnitude values since last step
@@ -191,6 +193,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.R = new float[9];
         // GNSS initial Long-Lat array
         this.startLocation = new float[2];
+        this.selectedCampaign = null;
     }
 
 
@@ -484,6 +487,12 @@ public class SensorFusion implements SensorEventListener, Observer {
         createWifiPositioningRequest();
     }
 
+
+    private String trajname = "";
+    public void setTrajName(String name) {
+        this.trajname = name;
+    }
+    
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      *
@@ -718,6 +727,24 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
+     * Stores currently selected venue campaign from indoor map screen.
+     *
+     * @param campaign selected campaign value, null clears selection
+     */
+    public void setSelectedCampaign(String campaign) {
+        this.selectedCampaign = campaign;
+    }
+
+    /**
+     * Returns currently selected venue campaign.
+     *
+     * @return campaign or null when not selected
+     */
+    public String getSelectedCampaign() {
+        return selectedCampaign;
+    }
+
+    /**
      * Get information about all the sensors registered in SensorFusion.
      *
      * @return  List of SensorInfo objects containing name, resolution, power, etc.
@@ -861,6 +888,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         this.saveRecording = true;
         this.stepCounter = 0;
+        this.selectedCampaign = null;
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
         // Protobuf trajectory class for sending sensor data to restful API
@@ -915,10 +943,19 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see ServerCommunications for sending and receiving data via HTTPS.
      */
     public void sendTrajectoryToCloud() {
+        sendTrajectoryToCloud(this.selectedCampaign);
+    }
+
+    /**
+     * Send the trajectory object to servers with selected campaign.
+     *
+     * @param campaign venue campaign path segment used in upload endpoint
+     */
+    public void sendTrajectoryToCloud(String campaign) {
         // Build object
         Traj.Trajectory sentTrajectory = trajectory.build();
         // Pass object to communications object
-        this.serverCommunications.sendTrajectory(sentTrajectory);
+        this.serverCommunications.sendTrajectory(sentTrajectory, campaign);
     }
 
     /**
