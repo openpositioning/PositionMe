@@ -65,6 +65,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     //Save the last WiFi fingerprint for deduplication.
     private Traj.Fingerprint lastWifiFingerprint = null;
+    private List<BleDataProcessor.BleDevice> lastBleDeviceList = null;
+
 
     long maxReportLatencyNs = 0;  // Disable batching to deliver events immediately
 
@@ -535,12 +537,17 @@ public class SensorFusion implements SensorEventListener, Observer {
             } else {
                 android.util.Log.d("SensorFusion", "Duplicate WiFi fingerprint skipped");
             }
+
+
         }
 
         createWifiPositioningRequest();
     }
 
     // BLE update logic
+    /**
+     * Update BLE data with deduplication
+     */
     private void updateBleData(Object[] bleArray) {
         BleDataProcessor.BleDevice[] bleDevices = new BleDataProcessor.BleDevice[bleArray.length];
         for (int i = 0; i < bleArray.length; i++) {
@@ -548,32 +555,37 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
 
         // Save BLE devices to local variable
-        this.bleDeviceList = java.util.Arrays.asList(bleDevices);
+        List<BleDataProcessor.BleDevice> newBleDeviceList = java.util.Arrays.asList(bleDevices);
+        this.bleDeviceList = newBleDeviceList;
 
         if(this.saveRecording) {
-            // Add each BLE device to trajectory
-            for (BleDataProcessor.BleDevice device : bleDevices) {
-                Traj.BleData.Builder bleData = Traj.BleData.newBuilder()
-                        .setMacAddress(device.macAddress)
-                        .setName(device.name)
-                        .setTxPowerLevel(device.txPowerLevel)
-                        .setAdvertiseFlags(device.advertiseFlags);
+            // Check for duplicate BLE device list
+            if (!isSameBleDeviceList(newBleDeviceList, lastBleDeviceList)) {
+                // Add each BLE device to trajectory
+                for (BleDataProcessor.BleDevice device : bleDevices) {
+                    Traj.BleData.Builder bleData = Traj.BleData.newBuilder()
+                            .setMacAddress(device.macAddress)
+                            .setName(device.name)
+                            .setTxPowerLevel(device.txPowerLevel)
+                            .setAdvertiseFlags(device.advertiseFlags);
 
-                // Add service UUIDs if available
-                if (device.serviceUuids != null && !device.serviceUuids.isEmpty()) {
-                    bleData.addAllServiceUuids(device.serviceUuids);
+                    // Add service UUIDs if available
+                    if (device.serviceUuids != null && !device.serviceUuids.isEmpty()) {
+                        bleData.addAllServiceUuids(device.serviceUuids);
+                    }
+
+                    // Add manufacturer data if available
+                    if (device.manufacturerData != null) {
+                        bleData.setManufacturerData(com.google.protobuf.ByteString.copyFrom(device.manufacturerData));
+                    }
+
+                    this.trajectory.addBleData(bleData.build());
                 }
 
-                // Add manufacturer data if available
-                if (device.manufacturerData != null) {
-                    bleData.setManufacturerData(com.google.protobuf.ByteString.copyFrom(device.manufacturerData));
-                }
-
-                this.trajectory.addBleData(bleData.build());
-            }
-
-            if (bleDevices.length > 0) {
-                android.util.Log.i("SensorFusion", "Added " + bleDevices.length + " BLE devices to trajectory");
+                lastBleDeviceList = newBleDeviceList;
+                android.util.Log.i("SensorFusion", "New BLE device list added (" + bleDevices.length + " devices)");
+            } else {
+                android.util.Log.d("SensorFusion", "Duplicate BLE device list skipped");
             }
         }
     }
@@ -583,76 +595,141 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Check if two WiFi fingerprints are similar enough to be considered duplicates
      * Uses overlap ratio instead of exact match to handle unstable WiFi signals
      */
+    /**
+     * Check if two WiFi fingerprints are similar (for deduplication)
+     * Uses both MAC address overlap and RSSI change to determine similarity
+     *
+     * @param newFingerprint New WiFi fingerprint
+     * @param oldFingerprint Previous WiFi fingerprint
+     * @return true if fingerprints are similar, false otherwise
+     */
     private boolean isSameFingerprintAs(Traj.Fingerprint newFingerprint, Traj.Fingerprint oldFingerprint) {
-        if (oldFingerprint == null) {
-            return false;  // The first scan will definitely not be repeated.
+        if (oldFingerprint == null) return false;
+        if (newFingerprint.getRfScansCount() < 3 || oldFingerprint.getRfScansCount() < 3) return false;
+
+        // Build maps of MAC -> RSSI for both fingerprints
+        java.util.Map<Long, Integer> oldMacRssi = new java.util.HashMap<>();
+        for (Traj.RFScan scan : oldFingerprint.getRfScansList()) {
+            oldMacRssi.put(scan.getMac(), scan.getRssi());
         }
 
-        // If the number of Wi-Fi networks detected in both scans is very low (<3), record each instance.
-        if (newFingerprint.getRfScansCount() < 3 || oldFingerprint.getRfScansCount() < 3) {
+        java.util.Map<Long, Integer> newMacRssi = new java.util.HashMap<>();
+        for (Traj.RFScan scan : newFingerprint.getRfScansList()) {
+            newMacRssi.put(scan.getMac(), scan.getRssi());
+        }
+
+        // Count common MACs and check RSSI changes
+        int commonCount = 0;
+        int significantRssiChanges = 0;
+        final int RSSI_THRESHOLD = 5; // dBm threshold for "significant" change
+
+        for (Traj.RFScan newScan : newFingerprint.getRfScansList()) {
+            Long mac = newScan.getMac();
+            if (oldMacRssi.containsKey(mac)) {
+                commonCount++;
+
+                // Check if RSSI changed significantly
+                int oldRssi = oldMacRssi.get(mac);
+                int newRssi = newScan.getRssi();
+                int rssiDiff = Math.abs(newRssi - oldRssi);
+
+                if (rssiDiff >= RSSI_THRESHOLD) {
+                    significantRssiChanges++;
+                }
+            }
+        }
+
+        int minCount = Math.min(newFingerprint.getRfScansCount(), oldFingerprint.getRfScansCount());
+        float overlapRatio = (float) commonCount / minCount;
+        float rssiChangeRatio = commonCount > 0 ? (float) significantRssiChanges / commonCount : 0;
+
+        android.util.Log.d("SensorFusion", String.format(
+                "WiFi comparison: overlap %.0f%% (%d/%d MACs), RSSI changes %.0f%% (%d/%d APs)",
+                overlapRatio * 100, commonCount, minCount,
+                rssiChangeRatio * 100, significantRssiChanges, commonCount
+        ));
+
+        // Consider duplicate if:
+        // 1. High overlap (≥90%) AND
+        // 2. Few RSSI changes (<30% of common APs changed significantly)
+        return overlapRatio >= 0.9f && rssiChangeRatio < 0.3f;
+    }
+
+    /**
+     * Check if two BLE device lists are similar (for deduplication)
+     * Uses MAC address overlap ratio to determine similarity
+     *
+     * @param newList New BLE device list
+     * @param oldList Previous BLE device list
+     * @return true if lists are similar (overlap >= 80%), false otherwise
+     */
+    /**
+     * Check if two BLE device lists are similar (for deduplication)
+     * Uses dynamic threshold based on device count:
+     * - Many devices (≥20): 50% overlap or 15+ common devices
+     * - Medium devices (≥10): 60% overlap or 8+ common devices
+     * - Few devices (<10): 70% overlap or 5+ common devices
+     *
+     * @param newList New BLE device list
+     * @param oldList Previous BLE device list
+     * @return true if lists are similar, false otherwise
+     */
+    private boolean isSameBleDeviceList(List<BleDataProcessor.BleDevice> newList,
+                                        List<BleDataProcessor.BleDevice> oldList) {
+        if (oldList == null || oldList.isEmpty()) {
             return false;
         }
 
-        // Create a set of MAC addresses for old fingerprints
-        java.util.Set<Long> oldMacs = new java.util.HashSet<>();
-        for (Traj.RFScan scan : oldFingerprint.getRfScansList()) {
-            oldMacs.add(scan.getMac());
+        if (newList.isEmpty()) {
+            return false;
         }
 
-        // Count how many MACs in the new fingerprint appeared in the old fingerprint.
+        // Create set of MAC addresses from old list
+        java.util.Set<String> oldMacs = new java.util.HashSet<>();
+        for (BleDataProcessor.BleDevice device : oldList) {
+            oldMacs.add(device.macAddress);
+        }
+
+        // Count common MAC addresses
         int commonCount = 0;
-        for (Traj.RFScan newScan : newFingerprint.getRfScansList()) {
-            if (oldMacs.contains(newScan.getMac())) {
+        for (BleDataProcessor.BleDevice device : newList) {
+            if (oldMacs.contains(device.macAddress)) {
                 commonCount++;
             }
         }
 
-        // Calculate the overlap rate (using the smaller quantity from the two scans as the baseline)
-        int minCount = Math.min(newFingerprint.getRfScansCount(), oldFingerprint.getRfScansCount());
+        // Calculate overlap ratio
+        int minCount = Math.min(newList.size(), oldList.size());
         float overlapRatio = (float) commonCount / minCount;
 
-        // If the overlap rate is 80% or higher, it is considered a duplicate fingerprint.
-        boolean isDuplicate = overlapRatio >= 0.90f;
+        // Determine if duplicate based on dynamic threshold
+        boolean isDuplicate;
+        String thresholdInfo;
 
-        if (isDuplicate) {
-            android.util.Log.d("SensorFusion", String.format(
-                    "Duplicate fingerprint: overlap %.0f%% (%d/%d common MACs)",
-                    overlapRatio * 100, commonCount, minCount));
+        if (minCount >= 20) {
+            // Many devices: use 50% threshold
+            isDuplicate = overlapRatio >= 0.5f || commonCount >= 15;
+            thresholdInfo = "threshold=50% or 15+ devices";
+        } else if (minCount >= 10) {
+            // Medium devices: use 60% threshold
+            isDuplicate = overlapRatio >= 0.6f || commonCount >= 8;
+            thresholdInfo = "threshold=60% or 8+ devices";
+        } else {
+            // Few devices: use 70% threshold
+            isDuplicate = overlapRatio >= 0.7f || commonCount >= 5;
+            thresholdInfo = "threshold=70% or 5+ devices";
         }
+
+        android.util.Log.d("SensorFusion", String.format(
+                "BLE comparison: overlap %.0f%% (%d/%d common MACs), common: %d, %s → %s",
+                overlapRatio * 100, commonCount, minCount, commonCount,
+                thresholdInfo, isDuplicate ? "DUPLICATE" : "NEW"
+        ));
 
         return isDuplicate;
     }
 
-//    /**
-//     * Check if two WiFi fingerprints are identical (same MACs and RSSIs)
-//     * Used to avoid recording duplicate fingerprints when user is stationary
-//     */
-//    private boolean isSameFingerprintAs(Traj.Fingerprint newFingerprint, Traj.Fingerprint oldFingerprint) {
-//        if (oldFingerprint == null) {
-//            return false;  // The first scan will definitely not be repeated.
-//        }
-//
-//        // Check if the number of WiFi signals scanned is the same
-//        if (newFingerprint.getRfScansCount() != oldFingerprint.getRfScansCount()) {
-//            return false;  // The different numbers indicate a change.
-//        }
-//
-//        // The Set created for MAC addresses is used for quick comparison.
-//        java.util.Set<Long> oldMacs = new java.util.HashSet<>();
-//        for (Traj.RFScan scan : oldFingerprint.getRfScansList()) {
-//            oldMacs.add(scan.getMac());
-//        }
-//
-//        // Check whether each MAC in the new fingerprint is present in the old fingerprint.
-//        for (Traj.RFScan newScan : newFingerprint.getRfScansList()) {
-//            if (!oldMacs.contains(newScan.getMac())) {
-//                return false;  // A new WiFi has been scanned.
-//            }
-//        }
-//
-//        // If the MAC addresses are the same, they are considered as duplicate fingerprints.
-//        return true;
-//    }
+
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
@@ -1076,6 +1153,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
 
         this.lastWifiFingerprint = null;
+        this.lastBleDeviceList = null;
         this.saveRecording = true;
         this.stepCounter = 0;
         this.absoluteStartTime = System.currentTimeMillis();

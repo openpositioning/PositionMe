@@ -8,6 +8,7 @@
 
     <!-- MaterialCardView for each file item -->
     <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
@@ -16,13 +17,17 @@
         android:layout_marginBottom="5dp"
         app:cardBackgroundColor="@color/md_theme_tertiaryContainer"
         app:cardCornerRadius="16dp"
-        app:strokeColor="@color/md_theme_outlineVariant">
+        app:strokeColor="@color/md_theme_outlineVariant"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:padding="12dp">
 
+            <!-- Trajectory ID (left side number) -->
             <TextView
                 android:id="@+id/trajectoryIdItem"
                 android:layout_width="80dp"
@@ -45,15 +50,35 @@
             <!-- Time stamp TextView -->
             <TextView
                 android:id="@+id/trajectoryDateItem"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
                 android:text="1998-05-19 05:28:42"
                 android:textColor="@color/md_theme_onSurface"
                 android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                android:maxLines="1"
+                android:ellipsize="end"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent" />
+                app:layout_constraintEnd_toStartOf="@id/deletebutton"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <!-- Trajectory Name TextView (NEW) -->
+            <TextView
+                android:id="@+id/trajectory_name_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginEnd="8dp"
+                android:text="Building_A_Floor_1"
+                android:textSize="14sp"
+                android:textColor="#666666"
+                android:ellipsize="end"
+                android:maxLines="1"
+                app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
+                app:layout_constraintEnd_toStartOf="@id/deletebutton"
+                app:layout_constraintTop_toBottomOf="@id/trajectoryDateItem" />
 
             <!-- Delete button with "X" icon -->
             <com.google.android.material.button.MaterialButton

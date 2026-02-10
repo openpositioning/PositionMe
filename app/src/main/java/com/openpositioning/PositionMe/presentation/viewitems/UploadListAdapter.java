@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.presentation.viewitems;
 
 import android.content.Context;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
@@ -12,6 +13,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.UploadFragment;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -66,15 +68,26 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
     @Override
     public void onBindViewHolder(@NonNull UploadViewHolder holder, int position) {
         holder.trajId.setText(String.valueOf(position));
+
+        // Extract date from filename
         Pattern datePattern = Pattern.compile("_(.*?)\\.txt");
         Matcher dateMatcher = datePattern.matcher(uploadItems.get(position).getName());
         String dateString = dateMatcher.find() ? dateMatcher.group(1) : "N/A";
         System.err.println("UPLOAD - Date string: " + dateString);
         holder.trajDate.setText(dateString);
 
+        // Read and display Trajectory Name (NEW)
+        String trajectoryName = readTrajectoryName(uploadItems.get(position));
+        if (trajectoryName != null && !trajectoryName.isEmpty()) {
+            holder.trajectoryNameText.setText(trajectoryName);
+            holder.trajectoryNameText.setVisibility(View.VISIBLE);
+        } else {
+            holder.trajectoryNameText.setText("No name");
+            holder.trajectoryNameText.setVisibility(View.VISIBLE);
+        }
+
         // Set click listener for the delete button
         holder.deletebutton.setOnClickListener(v -> deleteFileAtPosition(position));
-
     }
 
     /**
@@ -86,23 +99,45 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
         return uploadItems.size();
     }
 
-    private void deleteFileAtPosition(int position)
-    {
-        if (position >= 0 && position < uploadItems.size())
-        {
+    /**
+     * Delete trajectory file at specified position
+     */
+    private void deleteFileAtPosition(int position) {
+        if (position >= 0 && position < uploadItems.size()) {
             File fileToDelete = uploadItems.get(position);
 
-            if (fileToDelete.exists() && fileToDelete.delete())
-            {
+            if (fileToDelete.exists() && fileToDelete.delete()) {
                 uploadItems.remove(position);
                 notifyItemRemoved(position);
                 notifyItemRangeChanged(position, uploadItems.size()); // Update subsequent items
                 Toast.makeText(context, "File deleted successfully", Toast.LENGTH_SHORT).show();
-            }
-            else
-            {
+            } else {
                 Toast.makeText(context, "Failed to delete file", Toast.LENGTH_SHORT).show();
             }
+        }
+    }
+
+    /**
+     * Read trajectory name (trajectory_id) from the protobuf file
+     *
+     * @param file The trajectory .txt file containing protobuf data
+     * @return The trajectory_id string, or null if not found/error
+     */
+    private String readTrajectoryName(File file) {
+        try {
+            FileInputStream fis = new FileInputStream(file);
+            com.openpositioning.PositionMe.Traj.Trajectory trajectory =
+                    com.openpositioning.PositionMe.Traj.Trajectory.parseFrom(fis);
+            fis.close();
+
+            // Get trajectory_id from proto
+            String trajectoryId = trajectory.getTrajectoryId();
+            return (trajectoryId != null && !trajectoryId.isEmpty()) ? trajectoryId : null;
+
+        } catch (Exception e) {
+            android.util.Log.e("UploadListAdapter", "Error reading trajectory name from " +
+                    file.getName() + ": " + e.getMessage());
+            return null;
         }
     }
 }
