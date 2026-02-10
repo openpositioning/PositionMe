@@ -43,9 +43,23 @@
                 android:autoSizeMaxTextSize="65sp"
                 android:autoSizeStepGranularity="2sp" />
 
-            <!-- Time stamp TextView -->
+            <!-- Trajectory Name TextView -->
+            <TextView
+                android:id="@+id/trajectoryNameItem"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:text="Trajectory Name"
+                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                android:textColor="@color/md_theme_onSurface"
+                android:maxLines="1"
+                android:ellipsize="end"
+                app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton" />
 
-            <!-- Download button with icon -->
+            <!-- Time stamp TextView -->
             <TextView
                 android:id="@+id/trajectoryDateItem"
                 android:layout_width="0dp"
@@ -53,13 +67,12 @@
                 android:layout_marginStart="8dp"
                 android:layout_marginEnd="8dp"
                 android:text="1998-05-19 05:28:42"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                android:textColor="@color/md_theme_onSurface"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textColor="@color/md_theme_onSurfaceVariant"
+                app:layout_constraintTop_toBottomOf="@id/trajectoryNameItem"
                 app:layout_constraintStart_toEndOf="@id/trajectoryIdItem"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintVertical_bias="0.0" />
+                app:layout_constraintEnd_toStartOf="@+id/downloadTrajectoryButton"
+                app:layout_constraintBottom_toBottomOf="parent" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/downloadTrajectoryButton"
@@ -71,22 +84,6 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent" />
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="18dp"
-                android:layout_height="wrap_content"
-                tools:layout_editor_absoluteX="243dp"
-                tools:layout_editor_absoluteY="34dp">
-
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="10dp"
-                android:layout_height="wrap_content"
-                tools:layout_editor_absoluteX="1dp"
-                tools:layout_editor_absoluteY="36dp">
-
-            </com.google.android.material.textfield.TextInputLayout>
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </com.google.android.material.card.MaterialCardView>

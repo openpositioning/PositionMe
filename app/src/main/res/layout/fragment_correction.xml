@@ -113,15 +113,17 @@
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/trajname"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_width="326dp"
+                android:layout_height="49dp"
                 android:layout_marginTop="40dp"
                 android:hint="Enter Trajectory Name"
                 android:textColorHint="@android:color/white"
                 app:boxStrokeColor="@color/md_theme_secondaryContainer"
                 app:hintTextColor="@android:color/white"
-                app:layout_constraintTop_toBottomOf="@+id/correctStepLabel"
-                tools:layout_editor_absoluteX="10dp" />
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/correctStepLabel" />
         </androidx.constraintlayout.widget.ConstraintLayout>
     </com.google.android.material.card.MaterialCardView>
 

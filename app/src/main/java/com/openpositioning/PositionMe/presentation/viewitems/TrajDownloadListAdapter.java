@@ -204,8 +204,20 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 )
         );
 
-        // Determine if the trajectory is already downloaded by checking the records.
+        String trajectoryName = null;
         JSONObject recordDetails = ServerCommunications.downloadRecords.get(id);
+        if (recordDetails != null) {
+            trajectoryName = recordDetails.optString("trajectory_name", null);
+        }
+        holder.getTrajName().setText(trajectoryName != null && !trajectoryName.isEmpty()
+                ? trajectoryName
+                : "Unnamed");
+
+        
+        
+
+        // Determine if the trajectory is already downloaded by checking the records.
+        
         boolean matched = recordDetails != null;
         String filePath = null;
 

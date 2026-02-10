@@ -71,7 +71,8 @@ public class CorrectionFragment extends Fragment {
                     "Select a venue on the map before submission",
                     Toast.LENGTH_LONG).show();
         } else {
-            sensorFusion.sendTrajectoryToCloud(selectedCampaign);
+            //do nothing
+
         }
 
         //Obtain start position
@@ -119,6 +120,8 @@ public class CorrectionFragment extends Fragment {
         averageStepLengthText.setText(getString(R.string.averageStepLgn) + ": "
                 + String.format("%.2f", averageStepLength));
 
+        String selectedCampaign = sensorFusion.getSelectedCampaign();
+
         // Listen for ENTER key
         this.stepLengthInput.setOnKeyListener((v, keyCode, event) -> {
             if (keyCode == KeyEvent.KEYCODE_ENTER) {
@@ -140,8 +143,9 @@ public class CorrectionFragment extends Fragment {
 
         this.trajNameInput.setOnKeyListener((v, keyCode, event) -> {
             if (keyCode == KeyEvent.KEYCODE_ENTER) { //when user presses enter 
-                String trajName = trajNameInput.getText().toString();
-                sensorFusion.setTrajName(trajName); //send it 
+                String trajName = trajNameInput.getText().toString().trim();
+                sensorFusion.setTrajectoryName(trajName);
+                // sensorFusion.sendTrajectoryToCloud(selectedCampaign);
             }
             return false;
         });
@@ -174,7 +178,7 @@ public class CorrectionFragment extends Fragment {
                 // Now, simply tell the Activity we are done:
 
                 String trajName = trajNameInput.getText().toString();
-                sensorFusion.setTrajName(trajName); //send it 
+                sensorFusion.setTrajectoryName(trajName); //send it 
 
                         // Send trajectory data to the cloud
                 // Send trajectory data to the cloud

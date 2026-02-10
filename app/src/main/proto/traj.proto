@@ -1,4 +1,7 @@
 syntax = "proto3";
+option java_package = "com.openpositioning.PositionMe";
+option java_outer_classname = "Traj";
+
 
 message Trajectory {
   string android_version = 1;
