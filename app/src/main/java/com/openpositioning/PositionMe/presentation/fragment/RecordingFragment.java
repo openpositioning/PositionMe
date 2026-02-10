@@ -384,11 +384,13 @@ public class RecordingFragment extends Fragment {
     public void onPause() {
         super.onPause();
         refreshDataHandler.removeCallbacks(refreshDataTask);
+        sensorFusion.stopListening();
     }
 
     @Override
     public void onResume() {
         super.onResume();
+        sensorFusion.resumeListening();
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }

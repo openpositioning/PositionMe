@@ -57,6 +57,13 @@ public class RecordingActivity extends AppCompatActivity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Ensure sensors are re-registered when returning to recording flow
+        sensorFusion.resumeListening();
+    }
+
     /**
      * Show the StartLocationFragment (beginning of flow).
      */

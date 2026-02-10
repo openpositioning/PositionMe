@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.location.Location;
+import com.openpositioning.PositionMe.BuildConfig;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
@@ -119,6 +120,12 @@ public class IndoorMapManager {
             return;
         }
 
+        if (BuildConfig.DEBUG) {
+            int wifiCount = observedAps == null ? 0 : observedAps.size();
+            Log.d(TAG, "floorplan request lat=" + location.latitude + " lon=" + location.longitude
+                    + " wifiCount=" + wifiCount);
+        }
+
         requestInFlight = true;
         lastRequestTs = now;
         lastRequestLocation = location;
@@ -145,6 +152,12 @@ public class IndoorMapManager {
                     }
                     List<VenueModel> venues = parseVenueResponse(body.string());
                     mainHandler.post(() -> applyNearbyVenues(venues));
+                    if (BuildConfig.DEBUG) {
+                        String selected = selectedVenueId == null ? "" : selectedVenueId;
+                        Log.d(TAG, "floorplan response code=" + response.code()
+                                + " venues=" + venues.size()
+                                + " selected=" + selected);
+                    }
                 } catch (Exception ex) {
                     Log.e(TAG, "Failed to parse nearby floorplan response", ex);
                 } finally {

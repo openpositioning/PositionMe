@@ -73,13 +73,10 @@ public class CorrectionFragment extends Fragment {
         // B. Obtain the venueId from the ViewModel
         String selectedVenueId = mapViewModel.getSelectedVenueId().getValue();
 
-        // C. Security checks and default values provided.
-        if (selectedVenueId == null) {
-            selectedVenueId = ""; // Use an empty string as the default value.
+        if (selectedVenueId != null) {
+            // Recording 已经在 TrajectoryMapFragment 设置过 venue_id；这里仅作为兜底。
+            sensorFusion.setVenueIdForTrajectory(selectedVenueId);
         }
-
-        // D. Call the new method we created in SensorFusion, passing in the venueId.
-        sensorFusion.setVenueIdForTrajectory(selectedVenueId);
 
         // Send trajectory data to the cloud
         sensorFusion.sendTrajectoryToCloud();

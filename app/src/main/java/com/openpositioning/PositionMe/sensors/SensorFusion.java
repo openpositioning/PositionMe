@@ -165,6 +165,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private String lastFingerprintSignature;
     // 当前录制会话的轨迹标识，用于上报 Wi-Fi 指纹
     private String trajectoryId;
+    // 用户选择的场地标识，默认占位符
+    private String collectionVenue = DEFAULT_COLLECTION_VENUE;
 
     // For Marker
     private double gnssAltitude = 0.0;
@@ -393,6 +395,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                 float[] rotationVectorDCM = new float[9];
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM, this.rotation);
                 SensorManager.getOrientation(rotationVectorDCM, this.orientation);
+
+                Log.d("HeadingDbg", "onSensorChanged azimuth(rad)=" + orientation[0]);
 
                 if (DEBUG_HEADING) {
                     long now = SystemClock.elapsedRealtime();
@@ -762,7 +766,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     public synchronized void setCollectionVenue(String venueId) {
-        this.collectionVenue = sanitiseVenueTag(venueId);
+        this.collectionVenue = sanitiseVenueTagStatic(venueId);
         if (this.trajectory == null) {
             return;
         }
@@ -784,6 +788,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     private String sanitiseVenueTag(String venue) {
+        return sanitiseVenueTagStatic(venue);
+    }
+
+    static String sanitiseVenueTagStatic(String venue) {
         if (venue == null) {
             return DEFAULT_COLLECTION_VENUE;
         }
@@ -1109,13 +1117,29 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @param venueId The ID of the venue selected by the user.
      */
     public void setVenueIdForTrajectory(String venueId) {
-        // Check if a recording is in progress and the trajectory builder exists
-        if (this.saveRecording && this.trajectory != null) {
-            // Use the Protobuf builder to set the venue ID
-            this.trajectory.setVenueId(venueId);
-            Log.i("SensorFusion", "Venue ID '" + venueId + "' has been set for the current trajectory.");
+        this.collectionVenue = sanitiseVenueTagStatic(venueId);
+        if (this.trajectory != null) {
+            applyVenuePrefixToTrajectoryId(this.trajectory, this.collectionVenue);
+            Log.i("SensorFusion", "Venue tag '" + this.collectionVenue + "' applied to trajectoryId");
         } else {
-            Log.w("SensorFusion", "Could not set Venue ID. Is a recording in progress?");
+            Log.w("SensorFusion", "Trajectory not ready; venue tag cached as " + this.collectionVenue);
+        }
+    }
+
+    // Visible for tests; prefixes the trajectory_id with venue tag when missing.
+    static void applyVenuePrefixToTrajectoryId(Traj.Trajectory.Builder trajectoryBuilder, String venueId) {
+        if (trajectoryBuilder == null) {
+            return;
+        }
+        String safeVenue = sanitiseVenueTagStatic(venueId);
+        String existingId = trajectoryBuilder.getTrajectoryId();
+        if (existingId == null || existingId.isEmpty()) {
+            trajectoryBuilder.setTrajectoryId(safeVenue);
+            return;
+        }
+        String prefix = safeVenue + "_";
+        if (!existingId.startsWith(prefix)) {
+            trajectoryBuilder.setTrajectoryId(prefix + existingId);
         }
     }
 
@@ -1132,7 +1156,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     public void sendTrajectoryToCloud() {
         // Build object
         Traj.Trajectory sentTrajectory = trajectory.build();
-        Log.d("MARKER", "UPLOAD proto test_points_count=" + sentTrajectory.getTestPointsCount());
+        Log.d("MARKER", "UPLOAD proto test_points_count=" + sentTrajectory.getTestPointsCount()
+                + " trajectory_id=" + sentTrajectory.getTrajectoryId());
         // Pass object to communications object
         this.serverCommunications.sendTrajectory(sentTrajectory);
     }
