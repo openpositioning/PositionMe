@@ -102,22 +102,20 @@ public class ReplayFragment extends Fragment {
             Log.e(TAG, "Trajectory file verification FAILED - file may be corrupt or empty");
         }
 
-        // Parse the trajectory file and prepare replayData using TrajParser
-        replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
+        // Parse ONLY to check for GNSS presence (temporary parse)
+        // We will do the full parse with correct start location after user choice
+        List<TrajParser.ReplayPoint> tempReplayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
 
-        // Log the number of parsed points with detailed info
-        if (replayData != null && !replayData.isEmpty()) {
-            Log.i(TAG, "Trajectory data loaded successfully. Total points: " + replayData.size());
-            
-            // Count points with GNSS data
-            int gnssCount = 0;
-            for (TrajParser.ReplayPoint point : replayData) {
-                if (point.gnssLocation != null) gnssCount++;
+        if (tempReplayData != null && !tempReplayData.isEmpty()) {
+            // Check if ANY point has GNSS data
+            boolean gnssExists = hasAnyGnssData(tempReplayData);
+            if (gnssExists) {
+                showGnssChoiceDialog();
+            } else {
+                // No GNSS data -> automatically use param lat/lon
+                Log.i(TAG, "No GNSS data in file, using manual start location.");
+                loadTrajectory(initialLat, initialLon);
             }
-            Log.i(TAG, "Points with GNSS data: " + gnssCount);
-            Log.i(TAG, "First point - PDR: " + replayData.get(0).pdrLocation + 
-                       ", GNSS: " + replayData.get(0).gnssLocation + 
-                       ", Orientation: " + replayData.get(0).orientation);
         } else {
             Log.e(TAG, "Failed to load trajectory data! replayData is empty or null.");
         }
@@ -152,20 +150,9 @@ public class ReplayFragment extends Fragment {
                     .replace(R.id.replayMapFragmentContainer, trajectoryMapFragment)
                     .commit();
         }
-
-        // 1) Check if the file contains any GNSS data
-        boolean gnssExists = hasAnyGnssData(replayData);
-
-        if (gnssExists) {
-            showGnssChoiceDialog();
-        } else {
-            // No GNSS data -> automatically use param lat/lon
-            if (initialLat != 0f || initialLon != 0f) {
-                LatLng startPoint = new LatLng(initialLat, initialLon);
-                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-                trajectoryMapFragment.setInitialCameraPosition(startPoint);
-            }
-        }
+        
+        // Note: Trajectory loading is now handled in onCreate (async-like) or via dialog choice
+        // Map initialization happens here, but data might be loaded after map is ready
 
         // Initialize UI controls
         playPauseButton = view.findViewById(R.id.playPauseButton);
@@ -293,27 +280,51 @@ public class ReplayFragment extends Fragment {
                 .setTitle("Choose Starting Location")
                 .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or the one you manually picked?")
                 .setPositiveButton("Use File's GNSS", (dialog, which) -> {
-                    LatLng firstGnss = getFirstGnssLocation(replayData);
+                    // Temporarily parse to find first GNSS point
+                    List<TrajParser.ReplayPoint> tempReplayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
+                    LatLng firstGnss = getFirstGnssLocation(tempReplayData);
+                    
                     if (firstGnss != null) {
-                        setupInitialMapPosition((float) firstGnss.latitude, (float) firstGnss.longitude);
+                        // Re-parse using this GNSS point as start
+                        loadTrajectory((float) firstGnss.latitude, (float) firstGnss.longitude);
                     } else {
-                        // Fallback if no valid GNSS found
-                        setupInitialMapPosition(initialLat, initialLon);
+                        // Fallback
+                        loadTrajectory(initialLat, initialLon);
                     }
                     dialog.dismiss();
                 })
                 .setNegativeButton("Use Manual Set", (dialog, which) -> {
-                    setupInitialMapPosition(initialLat, initialLon);
+                    loadTrajectory(initialLat, initialLon);
                     dialog.dismiss();
                 })
                 .setCancelable(false)
                 .show();
     }
 
-    private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
+    private void loadTrajectory(float latitude, float longitude) {
+        // 1. Set map initial position
+        LatLng startPoint = new LatLng(latitude, longitude);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-        trajectoryMapFragment.setInitialCameraPosition(startPoint);
+        if (trajectoryMapFragment != null) {
+            trajectoryMapFragment.setInitialCameraPosition(startPoint);
+        }
+
+        // 2. Parse trajectory with the chosen start location
+        replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), latitude, longitude);
+
+        // 3. Log results
+        if (replayData != null && !replayData.isEmpty()) {
+            Log.i(TAG, "Trajectory data loaded successfully. Total points: " + replayData.size());
+            // Update UI
+            if (playbackSeekBar != null) {
+                playbackSeekBar.setMax(replayData.size() - 1);
+                playbackSeekBar.setProgress(0);
+            }
+            // Draw initial state
+            updateMapForIndex(0);
+        } else {
+            Log.e(TAG, "Failed to load trajectory data!");
+        }
     }
 
     /**
