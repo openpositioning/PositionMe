@@ -117,6 +117,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     private WifiDataProcessor wifiProcessor;
     private GNSSDataProcessor gnssProcessor;
     // Data listener
+
+    private BleDataProcessor bleProcessor;
+    private List<BLE> bleList;
+    // BLE values
+    private Set<String> recordedBleMacs = new HashSet<>();
+    private String lastBleFingerprintSignature;
+
+    private long lastBleUiToastMs = 0;
+
+
     private final LocationListener locationListener;
 
     // Server communication class for sending data
@@ -184,6 +194,26 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
+
+    // Convert "AA:BB:CC:DD:EE:FF" -> int64 (same idea as WiFi bssid long)
+    private long macStringToLong(String mac) {
+        if (mac == null) return 0L;
+        // remove ":" or "-"
+        String hex = mac.replace(":", "").replace("-", "");
+        if (hex.isEmpty()) return 0L;
+        try {
+            return Long.parseUnsignedLong(hex, 16);
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    private String safeBleName(String name) {
+        if (name == null) return "unknown";
+        name = name.trim();
+        return name.isEmpty() ? "unknown" : name;
+    }
+
 
     //region Initialisation
     /**
@@ -260,6 +290,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Listener based devices
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(this);
+
+        this.bleProcessor = new BleDataProcessor(context);
+        bleProcessor.registerObserver(this);
+
+
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
         // Create object handling HTTPS communication
         this.serverCommunications = new ServerCommunications(context);
@@ -513,7 +548,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @see WifiDataProcessor object for wifi scanning.
      */
-    @Override
+    /*@Override
     public void update(Object[] wifiList) {
         // Save newest wifi values to local variable
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
@@ -584,7 +619,176 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
         }
         createWifiPositioningRequest();
+    }*/
+
+    @Override
+    public void update(Object[] objList) {
+        if (objList == null || objList.length == 0) return;
+
+        // Case 1: WiFi update
+        if (objList[0] instanceof Wifi) {
+            Object[] wifiArr = objList;
+
+            this.wifiList = Stream.of(wifiArr)
+                    .map(o -> (Wifi) o)
+                    .collect(Collectors.toList());
+
+            // === keep ALL your existing WiFi fingerprint code here ===
+            // (the whole "if(saveRecording) { ... trajectory.addWifiFingerprints ... }"
+            //  plus createWifiPositioningRequest(); )
+
+            if (this.saveRecording) {
+                List<Wifi> sortedWifi = new ArrayList<>(this.wifiList);
+                sortedWifi.sort((a, b) -> Long.compare(a.getBssid(), b.getBssid()));
+                StringBuilder signatureBuilder = new StringBuilder();
+                for (Wifi data : sortedWifi) {
+                    signatureBuilder.append(data.getBssid())
+                            .append(':')
+                            .append(data.getLevel())
+                            .append(';');
+                }
+                String fingerprintSignature = signatureBuilder.toString();
+                boolean isDuplicateFingerprint = fingerprintSignature.equals(lastFingerprintSignature);
+                if (isDuplicateFingerprint) {
+                    Log.d("SensorFusion", "Skipping duplicate WiFi fingerprint: " + fingerprintSignature);
+                }
+
+                long sampleTimestamp = SystemClock.uptimeMillis() - bootTime;
+                Traj.Fingerprint.Builder fingerprint = Traj.Fingerprint.newBuilder()
+                        .setRelativeTimestamp(sampleTimestamp);
+
+                if (!isDuplicateFingerprint) {
+                    for (Wifi data : this.wifiList) {
+                        fingerprint.addRfScans(Traj.RFScan.newBuilder()
+                                .setRelativeTimestamp(sampleTimestamp)
+                                .setMac(data.getBssid())
+                                .setRssi(data.getLevel()));
+
+                        if (!recordedApMacs.contains(data.getBssid())) {
+                            boolean rttCapable = data.isRttSupported();
+                            String ssid = data.getSsid();
+                            if (ssid == null || ssid.isEmpty() || "<unknown ssid>".equalsIgnoreCase(ssid)) {
+                                ssid = "hidden";
+                            } else if (ssid.length() >= 2 && ssid.startsWith("\"") && ssid.endsWith("\"")) {
+                                ssid = ssid.substring(1, ssid.length() - 1);
+                                if (ssid.isEmpty()) {
+                                    ssid = "hidden";
+                                }
+                            }
+                            long frequency = data.getFrequency();
+                            if (frequency <= 0) frequency = 0;
+
+                            Traj.WiFiAPData.Builder apData = Traj.WiFiAPData.newBuilder()
+                                    .setMac(data.getBssid())
+                                    .setSsid(ssid)
+                                    .setFrequency(frequency)
+                                    .setRttEnabled(rttCapable);
+
+                            trajectory.addApsData(apData);
+                            recordedApMacs.add(data.getBssid());
+                        }
+                    }
+                    this.trajectory.addWifiFingerprints(fingerprint);
+                    lastFingerprintSignature = fingerprintSignature;
+                }
+            }
+
+            createWifiPositioningRequest();
+            return;
+        }
+
+        // Case 2: BLE update
+        if (objList[0] instanceof BLE) {
+
+            Log.d("BLE_PIPE", "SensorFusion.update(): got BLE count=" + objList.length);
+
+            BLE first = (BLE) objList[0];
+            Log.d("BLE_PIPE", "First BLE: mac=" + first.getMac()
+                    + " rssi=" + first.getRssi()
+                    + " name=" + first.getName());
+
+            // 1) 保存 bleList
+            Object[] bleArr = objList;
+            this.bleList = Stream.of(bleArr)
+                    .map(o -> (BLE) o)
+                    .collect(Collectors.toList());
+
+            // ✅ 2) 不管是否 recording，都给 UI 一个提示（3秒一次）
+            long now = SystemClock.uptimeMillis();
+            if (appContext != null && (now - lastBleUiToastMs) > 3000) {
+                String msg = "BLE ok: count=" + objList.length
+                        + (saveRecording && trajectory != null
+                        ? (" bleFp=" + trajectory.getBleFingerprintsCount()
+                        + " bleData=" + trajectory.getBleDataCount())
+                        : " (not recording)");
+                android.widget.Toast.makeText(appContext, msg, android.widget.Toast.LENGTH_SHORT).show();
+                lastBleUiToastMs = now;
+            }
+
+            // 3) 只有 recording 才写入 traj
+            if (this.saveRecording && trajectory != null) {
+
+                // fingerprint signature：mac+rssi 排序拼接（防重复）
+                List<BLE> sortedBle = new ArrayList<>(this.bleList);
+                sortedBle.sort((a, b) -> {
+                    String ma = (a.getMac() == null) ? "" : a.getMac();
+                    String mb = (b.getMac() == null) ? "" : b.getMac();
+                    return ma.compareTo(mb);
+                });
+
+                StringBuilder sig = new StringBuilder();
+                for (BLE d : sortedBle) sig.append(d.getMac()).append(':').append(d.getRssi()).append(';');
+                String bleFingerprintSignature = sig.toString();
+
+                if (bleFingerprintSignature.equals(lastBleFingerprintSignature)) {
+                    Log.d("SensorFusion", "Skipping duplicate BLE fingerprint");
+                    return;
+                }
+
+                long sampleTimestamp = SystemClock.uptimeMillis() - bootTime;
+
+                Traj.Fingerprint.Builder bleFp = Traj.Fingerprint.newBuilder()
+                        .setRelativeTimestamp(sampleTimestamp);
+
+                for (BLE d : this.bleList) {
+                    long macLong = macStringToLong(d.getMac());
+
+                    bleFp.addRfScans(
+                            Traj.RFScan.newBuilder()
+                                    .setRelativeTimestamp(sampleTimestamp)
+                                    .setMac(macLong)
+                                    .setRssi(d.getRssi())
+                    );
+
+                    String macStr = d.getMac();
+                    if (macStr != null && !recordedBleMacs.contains(macStr)) {
+                        Traj.BleData.Builder bleData = Traj.BleData.newBuilder()
+                                .setMacAddress(macStr)
+                                .setName(safeBleName(d.getName()))
+                                .setTxPowerLevel(0)
+                                .setAdvertiseFlags(0);
+
+                        trajectory.addBleData(bleData);
+                        recordedBleMacs.add(macStr);
+                    }
+                }
+
+                trajectory.addBleFingerprints(bleFp);
+                lastBleFingerprintSignature = bleFingerprintSignature;
+
+                Log.d("BLE_PIPE",
+                        "traj updated: bleFpCount=" + trajectory.getBleFingerprintsCount()
+                                + ", bleDataCount=" + trajectory.getBleDataCount()
+                                + ", lastFpScans=" + bleFp.getRfScansCount());
+            }
+
+            return;
+        }
+ 
     }
+
+
+
 
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
@@ -958,6 +1162,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         rotationSensor.sensorManager.registerListener(this, rotationSensor.sensor, (int) 1e6);
         wifiProcessor.startListening();
         gnssProcessor.startLocationUpdates();
+        bleProcessor.startListening();
+
     }
 
     /**
@@ -991,6 +1197,10 @@ public class SensorFusion implements SensorEventListener, Observer {
             }
             // Stop receiving location updates
             this.gnssProcessor.stopUpdating();
+            try {
+                this.bleProcessor.stopListening();
+            } catch (Exception ignored) {}
+
         }
     }
 
@@ -1040,6 +1250,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         this.recordedApMacs = new HashSet<>();
         this.lastFingerprintSignature = null;
+        // +++ add these for BLE +++
+        this.recordedBleMacs = new HashSet<>();
+        this.lastBleFingerprintSignature = null;
 
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
@@ -1049,6 +1262,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         } else {
             this.filter_coefficient = FILTER_COEFFICIENT;
         }
+        Log.d("BLE_PIPE", "startRecording(): saveRecording=" + saveRecording);
+
     }
 
     /**
