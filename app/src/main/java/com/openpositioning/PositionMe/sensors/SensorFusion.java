@@ -91,6 +91,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     // String for creating WiFi fingerprint JSO N object
     private static final String WIFI_FINGERPRINT = "wf";
     //endregion
+    /**
+     * Flag to ensure the initial GNSS position is recorded only once
+     * at the start of a trajectory (first valid location fix after recording starts)
+     */
     private boolean initialPositionSet = false;
 
     //region Instance variables
@@ -180,15 +184,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
-    /**  
-     * Flag to ensure the initial GNSS position is recorded only once
-     * at the start of a trajectory (first valid location fix after recording starts)
-     */
-    private boolean initialPositionSet = false;
 
-    // Track fingerprints that are already added to trajectory
-    private final Set<String> usedWifiFingerprintUuids = new HashSet<>();
-    
     private WifiRttManager rttManager;
     private WifiManager wifiManager;
     //region Initialisation
@@ -593,10 +589,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             //  Add the completed WiFi fingerprint to trajectory
             trajectory.addWifiFingerprints(fingerprint);
         }
-
-        this.trajectory.addWifiFingerprints(fingerprint.build());
-        usedWifiFingerprintUuids.add(scanUuid);
-
         createWifiPositioningRequest();
     }
 

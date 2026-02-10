@@ -60,6 +60,9 @@ import com.openpositioning.PositionMe.data.model.FloorplanModels;
 import com.openpositioning.PositionMe.data.remote.FloorplanApi;
 import org.json.JSONArray;
 import org.json.JSONObject;
+
+import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.openpositioning.PositionMe.utils.BuildingPolygon;
 import java.util.ArrayList;
@@ -77,17 +80,6 @@ public class TrajectoryMapFragment extends Fragment {
     private static final boolean CDBG_ENABLED = true;
     private static final int DEBUG_BUFFER_MAX_CHARS = 14000;
     private final StringBuilder debugBuffer = new StringBuilder(4096);
-    private void dbgBufAppend(@NonNull String level, @NonNull String msg) {
-        try {
-            String line = String.format(Locale.US, "%tT %s %s\n", System.currentTimeMillis(), level, msg);
-            debugBuffer.append(line);
-            if (debugBuffer.length() > DEBUG_BUFFER_MAX_CHARS) {
-                int cut = debugBuffer.length() - DEBUG_BUFFER_MAX_CHARS;
-                debugBuffer.delete(0, Math.min(cut, debugBuffer.length()));
-            }
-        } catch (Exception ignore) {
-        }
-
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
@@ -117,6 +109,63 @@ public class TrajectoryMapFragment extends Fragment {
     private Button switchColorButton;
     private Polygon buildingPolygon;
 
+    private static final String PREF_CACHED_VENUES_JSON = "pref_cached_venues_json";
+    private static final int MAX_WIFI_MACS = 200;          // keep more APs so "between buildings" still works
+    private static final int MIN_MACS_FOR_API = 6;        // below this we ask for manual input on emulator
+
+    //  private static final double PROBE_RADIUS_METERS = 50.0;
+    private static final boolean ENABLE_LOCAL_LIBRARY_FALLBACK = false; // hard-coded fallback outlines (Library + Fleeming Jenkin) // hard-coded Library polygon
+    private static final boolean USE_LOCAL_FLOORPLAN_FALLBACK = false;  // use bundled drawable floor PNGs
+    private static final boolean ENABLE_LOCAL_FJB_FALLBACK = false;     // hard-coded Fleeming Jenkin polygon
+
+    private final java.util.concurrent.atomic.AtomicInteger indoorReqSeq = new java.util.concurrent.atomic.AtomicInteger(0);
+    private boolean followCamera = true;
+    private LatLng pickedCenter = null;
+    private LatLng lastRequestCenter = null;
+    private Button requestIndoorButton;
+    private Button selectVenueButton;
+    private TextView selectedVenueText;
+    private Spinner floorSpinner;
+    private boolean programmaticFloorSelection = false;
+    private CircularProgressIndicator indoorLoadingIndicator;
+    private String requestIndoorButtonText = null;
+    private volatile boolean indoorSearching = false;
+    private Polygon selectedPolygon = null;
+    private int polyStrokeColor = Color.MAGENTA;
+    private int polyFillColor = Color.argb(50, 126, 87, 194);
+    private int polySelectedStrokeColor = Color.WHITE;
+    private int polySelectedFillColor = Color.argb(90, 126, 87, 194);
+
+    private static final String PREF_SELECTED_VENUE_ID = "pref_selected_venue_id";
+    private static final String PREF_SELECTED_VENUE_NAME = "pref_selected_venue_name";
+    private static final String PREF_SELECTED_FLOOR_LABEL = "pref_selected_floor_label";
+    private static final String PREF_SELECTED_FLOOR_INDEX = "pref_selected_floor_index";
+    private static final String PREF_SELECTED_FLOOR_MANUAL = "pref_selected_floor_manual";
+
+    private final FloorplanApi floorplanApi = new FloorplanApi();
+    private IndoorMapFragment indoorMapOverlay;
+    private final List<Polygon> venuePolygons = new ArrayList<>();
+    private final Map<Polygon, FloorplanModels.Venue> polyToVenue = new HashMap<>();
+    private final List<Marker> venueCenterMarkers = new ArrayList<>();
+    private final Map<Marker, FloorplanModels.Venue> markerToVenue = new HashMap<>();
+    private FloorplanModels.Venue selectedVenue = null;
+    private final List<FloorplanModels.Venue> lastFetchedVenues = new ArrayList<>();
+    private final Map<String, FloorplanModels.Venue> venueCache = new HashMap<>();
+    private final List<FloorplanModels.Venue> venuePickerCandidates = new ArrayList<>();
+    private String lastManualMacText = "";
+
+    private static final int REQUEST_WIFI_PERMS = 2105;
+    private void dbgBufAppend(@NonNull String level, @NonNull String msg) {
+        try {
+            String line = String.format(Locale.US, "%tT %s %s\n", System.currentTimeMillis(), level, msg);
+            debugBuffer.append(line);
+            if (debugBuffer.length() > DEBUG_BUFFER_MAX_CHARS) {
+                int cut = debugBuffer.length() - DEBUG_BUFFER_MAX_CHARS;
+                debugBuffer.delete(0, Math.min(cut, debugBuffer.length()));
+            }
+        } catch (Exception ignore) {
+        }
+    }
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -181,68 +230,7 @@ public class TrajectoryMapFragment extends Fragment {
         boolean hasBounds = v.bounds != null;
         return "id=" + v.venueId + " name=" + v.venueName + " outlinePts=" + outlineN + " bounds=" + hasBounds + " floors=" + floorsN;
     }
-    private static final String PREF_CACHED_VENUES_JSON = "pref_cached_venues_json";
-    private static final int MAX_WIFI_MACS = 200;          // keep more APs so "between buildings" still works
-    private static final int MIN_MACS_FOR_API = 6;        // below this we ask for manual input on emulator
 
-    //  private static final double PROBE_RADIUS_METERS = 50.0;
-    private static final boolean ENABLE_LOCAL_LIBRARY_FALLBACK = false; // hard-coded fallback outlines (Library + Fleeming Jenkin) // hard-coded Library polygon
-    private static final boolean USE_LOCAL_FLOORPLAN_FALLBACK = false;  // use bundled drawable floor PNGs
-    private static final boolean ENABLE_LOCAL_FJB_FALLBACK = false;     // hard-coded Fleeming Jenkin polygon
-
-    private final java.util.concurrent.atomic.AtomicInteger indoorReqSeq = new java.util.concurrent.atomic.AtomicInteger(0);
-    private GoogleMap gMap;
-    private LatLng currentLocation;
-    private Marker orientationMarker;
-    private Marker gnssMarker;
-    private Polyline polyline;
-    private Polyline gnssPolyline;
-    private LatLng lastGnssLocation = null;
-    private boolean isRed = true;
-    private boolean isGnssOn = false;
-    private boolean followCamera = true;
-    private LatLng pickedCenter = null;
-    private LatLng lastRequestCenter = null;
-    private Spinner switchMapSpinner;
-    private SwitchMaterial gnssSwitch;
-    private SwitchMaterial autoFloorSwitch; // hidden
-    private FloatingActionButton floorUpButton, floorDownButton;
-    private Button switchColorButton;
-    private Button requestIndoorButton;
-    private Button selectVenueButton;
-    private TextView selectedVenueText;
-    private Spinner floorSpinner;
-    private boolean programmaticFloorSelection = false;
-    private CircularProgressIndicator indoorLoadingIndicator;
-    private String requestIndoorButtonText = null;
-    private volatile boolean indoorSearching = false;
-    private Polygon selectedPolygon = null;
-    private int polyStrokeColor = Color.MAGENTA;
-    private int polyFillColor = Color.argb(50, 126, 87, 194);
-    private int polySelectedStrokeColor = Color.WHITE;
-    private int polySelectedFillColor = Color.argb(90, 126, 87, 194);
-
-    private static final String PREF_SELECTED_VENUE_ID = "pref_selected_venue_id";
-    private static final String PREF_SELECTED_VENUE_NAME = "pref_selected_venue_name";
-    private static final String PREF_SELECTED_FLOOR_LABEL = "pref_selected_floor_label";
-    private static final String PREF_SELECTED_FLOOR_INDEX = "pref_selected_floor_index";
-    private static final String PREF_SELECTED_FLOOR_MANUAL = "pref_selected_floor_manual";
-
-    private final FloorplanApi floorplanApi = new FloorplanApi();
-    private IndoorMapFragment indoorMapOverlay;
-    private final List<Polygon> venuePolygons = new ArrayList<>();
-    private final Map<Polygon, FloorplanModels.Venue> polyToVenue = new HashMap<>();
-    private final List<Marker> venueCenterMarkers = new ArrayList<>();
-    private final Map<Marker, FloorplanModels.Venue> markerToVenue = new HashMap<>();
-    private FloorplanModels.Venue selectedVenue = null;
-    private final List<FloorplanModels.Venue> lastFetchedVenues = new ArrayList<>();
-    private final Map<String, FloorplanModels.Venue> venueCache = new HashMap<>();
-    private final List<FloorplanModels.Venue> venuePickerCandidates = new ArrayList<>();
-    private String lastManualMacText = "";
-    private LatLng pendingCameraPosition = null;
-    private boolean hasPendingCameraMove = false;
-
-    private static final int REQUEST_WIFI_PERMS = 2105;
     private boolean ensureWifiScanPermissions() {
         boolean hasFine = ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
@@ -511,7 +499,6 @@ public class TrajectoryMapFragment extends Fragment {
             hasPendingCameraMove = true;
         }
     }
-    public LatLng getCurrentLocation() { return currentLocation; }
 
     /**
      * Get the current user location on the map.
@@ -530,9 +517,8 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker = gMap.addMarker(new MarkerOptions()
                     .position(gnssLocation)
                     .title("GNSS Position")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
-                    .alpha(0.6f)   // 0.0 = invisible, 1.0 = fully opaque
+                    .alpha(0.6f)  // 0.0 = invisible, 1.0 = fully opaque
             );
 
             lastGnssLocation = gnssLocation;
@@ -556,7 +542,6 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker = null;
         }
     }
-    public boolean isGnssEnabled() { return isGnssOn; }
 
     /**
      * Whether user is currently showing GNSS or not
@@ -575,44 +560,42 @@ public class TrajectoryMapFragment extends Fragment {
         LatLng center = (pickedCenter != null) ? pickedCenter : currentLocation;
         if (center == null) {
             Toast.makeText(requireContext(), "No location yet. Move map or wait for GNSS.", Toast.LENGTH_SHORT).show();
-
-    public void clearMapAndReset() {
-        if (polyline != null) {
-            polyline.remove();
-            polyline = null;
+            return;
         }
-        if (gnssPolyline != null) {
-            gnssPolyline.remove();
-            gnssPolyline = null;
+        lastRequestCenter = center;
+        if (!ensureWifiScanPermissions()) return;
+        clearVenuePolygons();
+        lastFetchedVenues.clear();
+        if (selectVenueButton != null) selectVenueButton.setEnabled(false);
+        if (selectedVenueText != null) selectedVenueText.setText("Tap a building outline to select a venue");
+        if (indoorMapOverlay != null) indoorMapOverlay.clearOverlay();
+        selectedVenue = null;
+        floorSpinner.setVisibility(View.GONE);
+        setFloorControlsVisibility(View.GONE);
+        List<String> macs = getNearbyWifiMacsCached();
+        cdbg("IndoorMaps: button clicked. pickedCenter=" + ll(center) + " currentLocation=" + ll(currentLocation) + " followCamera=" + followCamera);
+        cdbg("IndoorMaps: WiFi scan results -> macsSelected=" + macs.size() + " (MIN=" + MIN_MACS_FOR_API + ", MAX=" + MAX_WIFI_MACS + ")");
+        if (!macs.isEmpty()) {
+            cdbg("IndoorMaps: MAC sample=" + macs.subList(0, Math.min(8, macs.size())));
         }
-        if (orientationMarker != null) {
-            orientationMarker.remove();
-            orientationMarker = null;
+        if (macs.size() < MIN_MACS_FOR_API) {
+            setStatusText("Not enough Wi‑Fi access points (" + macs.size() + "). If you're on a real phone, turn Wi‑Fi on and try again.");
+            showMacInputDialog(center, macs.size());
+            return;
         }
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
-        }
-        lastGnssLocation = null;
-        currentLocation  = null;
-
-        // Re-create empty polylines with your chosen colors
-        if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.RED)
-                    .width(5f)
-                    .add());
-            gnssPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.BLUE)
-                    .width(5f)
-                    .add());
-        }
-        //Clear test point markers
-        for (Marker m: testPointMarkers){
-            if(m != null) m.remove();
-        }
-        testPointMarkers.clear();
+        setIndoorLoading(true);
+        setStatusText("Searching indoor maps… (WiFi APs=" + macs.size() + ")");
+        showSnack("Searching indoor maps… (WiFi APs=" + macs.size() + ")");
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (!isAdded()) return;
+            if (indoorSearching) {
+                showSnack("Still waiting for the floorplan server… please check Logcat (tag: C_DEBUG / FloorplanApi) or long-press the button to copy the debug log.");
+            }
+        }, 35000);
+        requestVenuesMultiProbeWithFallback(center, macs);
     }
+
+
 
     /**
      * Creates a small bitmap icon that looks like a colored circular marker with a number in the middle.
@@ -678,43 +661,6 @@ public class TrajectoryMapFragment extends Fragment {
      *
      *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
      */
-    private void drawBuildingPolygon() {
-        if (gMap == null) {
-            Log.e("TrajectoryMapFragment", "GoogleMap is not ready");
-            return;
-        }
-        lastRequestCenter = center;
-        if (!ensureWifiScanPermissions()) return;
-        clearVenuePolygons();
-        lastFetchedVenues.clear();
-        if (selectVenueButton != null) selectVenueButton.setEnabled(false);
-        if (selectedVenueText != null) selectedVenueText.setText("Tap a building outline to select a venue");
-        if (indoorMapOverlay != null) indoorMapOverlay.clearOverlay();
-        selectedVenue = null;
-        floorSpinner.setVisibility(View.GONE);
-        setFloorControlsVisibility(View.GONE);
-        List<String> macs = getNearbyWifiMacsCached();
-        cdbg("IndoorMaps: button clicked. pickedCenter=" + ll(center) + " currentLocation=" + ll(currentLocation) + " followCamera=" + followCamera);
-        cdbg("IndoorMaps: WiFi scan results -> macsSelected=" + macs.size() + " (MIN=" + MIN_MACS_FOR_API + ", MAX=" + MAX_WIFI_MACS + ")");
-        if (!macs.isEmpty()) {
-            cdbg("IndoorMaps: MAC sample=" + macs.subList(0, Math.min(8, macs.size())));
-        }
-        if (macs.size() < MIN_MACS_FOR_API) {
-            setStatusText("Not enough Wi‑Fi access points (" + macs.size() + "). If you're on a real phone, turn Wi‑Fi on and try again.");
-            showMacInputDialog(center, macs.size());
-            return;
-        }
-        setIndoorLoading(true);
-        setStatusText("Searching indoor maps… (WiFi APs=" + macs.size() + ")");
-        showSnack("Searching indoor maps… (WiFi APs=" + macs.size() + ")");
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if (!isAdded()) return;
-            if (indoorSearching) {
-                showSnack("Still waiting for the floorplan server… please check Logcat (tag: C_DEBUG / FloorplanApi) or long-press the button to copy the debug log.");
-            }
-        }, 35000);
-        requestVenuesMultiProbeWithFallback(center, macs);
-    }
     private void requestVenuesMultiProbeWithFallback(@NonNull LatLng center, @NonNull List<String> macs) {
         if (floorplanApi == null) {
             Log.w(TAG, "Floorplan API not initialised yet");
@@ -1999,5 +1945,4 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
     }
-}
 }

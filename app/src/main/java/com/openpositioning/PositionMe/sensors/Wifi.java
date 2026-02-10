@@ -23,9 +23,6 @@ public class Wifi {
 
     // Whether this AP supports WiFi RTT (802.11mc)
     private boolean isRttCapable;
-  
-    // Uuid
-    private String uuid;
 
     /**
      * Empty public default constructor of the Wifi object.
