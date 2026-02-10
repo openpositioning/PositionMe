@@ -165,6 +165,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     // 当前录制会话的轨迹标识，用于上报 Wi-Fi 指纹
     private String trajectoryId;
 
+    // For Marker
+    private double gnssAltitude = 0.0;
+    private final List<Traj.GNSSPosition> testPoints = new ArrayList<>();
+
+
 
     // Over time accelerometer magnitude values since last step
     private List<Double> accelMagnitude;
@@ -491,6 +496,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                 trajectory.addGnssData(gnssBuilder);
             }
+            gnssAltitude = location.getAltitude();
+
         }
     }
 
@@ -1077,6 +1084,21 @@ public class SensorFusion implements SensorEventListener, Observer {
         // 还没拿到定位时，lat/lon 可能为 0
         if (latitude == 0f && longitude == 0f) return null;
         return new LatLng(latitude, longitude);
+    }
+
+    public void clearTestPoints() {
+        testPoints.clear();
+    }
+
+    // 轨迹里的 relative_timestamp 必须是“相对 start_timestamp 的毫秒”
+// 你们工程里 start_timestamp 对应 bootTime，所以这里用 uptimeMillis - bootTime
+    public long getRelativeTimestampMs() {
+        if (bootTime == 0) return 0;
+        return SystemClock.uptimeMillis() - bootTime;
+    }
+
+    public double getCurrentGnssAltitude() {
+        return gnssAltitude;
     }
 
 
