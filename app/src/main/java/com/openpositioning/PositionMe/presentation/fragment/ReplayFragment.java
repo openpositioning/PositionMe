@@ -96,28 +96,21 @@ public class ReplayFragment extends Fragment {
 
         Log.i(TAG, "Trajectory file confirmed to exist and is readable.");
 
-        // VERIFY FILE CONTENTS FIRST - this will show what data is in the file
+        // VERIFY FILE CONTENTS FIRST
         boolean isValid = TrajectoryVerifier.verifyTrajectoryFile(filePath);
         if (!isValid) {
             Log.e(TAG, "Trajectory file verification FAILED - file may be corrupt or empty");
         }
 
-        // Parse ONLY to check for GNSS presence (temporary parse)
-        // We will do the full parse with correct start location after user choice
-        List<TrajParser.ReplayPoint> tempReplayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
+        // Check for GNSS data presence using robust check
+        boolean gnssExists = TrajParser.hasGnssData(filePath);
 
-        if (tempReplayData != null && !tempReplayData.isEmpty()) {
-            // Check if ANY point has GNSS data
-            boolean gnssExists = hasAnyGnssData(tempReplayData);
-            if (gnssExists) {
-                showGnssChoiceDialog();
-            } else {
-                // No GNSS data -> automatically use param lat/lon
-                Log.i(TAG, "No GNSS data in file, using manual start location.");
-                loadTrajectory(initialLat, initialLon);
-            }
+        if (gnssExists) {
+            showGnssChoiceDialog();
         } else {
-            Log.e(TAG, "Failed to load trajectory data! replayData is empty or null.");
+            // No GNSS data -> automatically use param lat/lon
+            Log.i(TAG, "No GNSS data in file, using manual start location.");
+            loadTrajectory(initialLat, initialLon);
         }
     }
 
@@ -257,17 +250,7 @@ public class ReplayFragment extends Fragment {
         }
     }
 
-    /**
-     * Checks if any ReplayPoint contains a non-null gnssLocation.
-     */
-    private boolean hasAnyGnssData(List<TrajParser.ReplayPoint> data) {
-        for (TrajParser.ReplayPoint point : data) {
-            if (point.gnssLocation != null) {
-                return true;
-            }
-        }
-        return false;
-    }
+
 
 
     /**
@@ -280,9 +263,8 @@ public class ReplayFragment extends Fragment {
                 .setTitle("Choose Starting Location")
                 .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or the one you manually picked?")
                 .setPositiveButton("Use File's GNSS", (dialog, which) -> {
-                    // Temporarily parse to find first GNSS point
-                    List<TrajParser.ReplayPoint> tempReplayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
-                    LatLng firstGnss = getFirstGnssLocation(tempReplayData);
+                    // Use robust method to get first GNSS point directly from file
+                    LatLng firstGnss = TrajParser.getFirstGnssPoint(filePath);
                     
                     if (firstGnss != null) {
                         // Re-parse using this GNSS point as start
@@ -327,17 +309,7 @@ public class ReplayFragment extends Fragment {
         }
     }
 
-    /**
-     * Retrieve the first available GNSS location from the replay data.
-     */
-    private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
-        for (TrajParser.ReplayPoint point : data) {
-            if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
-            }
-        }
-        return null; // None found
-    }
+
 
 
     /**
@@ -373,6 +345,7 @@ public class ReplayFragment extends Fragment {
      */
     private void updateMapForIndex(int newIndex) {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
+        if (trajectoryMapFragment == null) return;
 
         // Apply rotation to the PDR location
         // Base Rotation Center: The first point of the PDR path

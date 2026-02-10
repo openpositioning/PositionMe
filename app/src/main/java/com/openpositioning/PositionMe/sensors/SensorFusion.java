@@ -772,9 +772,20 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setBarometerInfo(createSensorInfo(barometerSensor))
                 .setLightSensorInfo(createSensorInfo(lightSensor));
 
+        // Use manual start location if set, otherwise use device GNSS
+        float initLat = latitude;
+        float initLon = longitude;
+        if (startLocation != null && startLocation[0] != 0 && startLocation[1] != 0) {
+            initLat = startLocation[0];
+            initLon = startLocation[1];
+            Log.d("SensorFusion", "Using Manual Start Location: " + initLat + ", " + initLon);
+        } else {
+            Log.d("SensorFusion", "Using Device GNSS Location: " + initLat + ", " + initLon);
+        }
+
         Traj.GNSSPosition initialPos = Traj.GNSSPosition.newBuilder()
-                .setLatitude(latitude)
-                .setLongitude(longitude)
+                .setLatitude(initLat)
+                .setLongitude(initLon)
                 .setAltitude(altitude_val)
                 .setRelativeTimestamp(0)
                 .build();

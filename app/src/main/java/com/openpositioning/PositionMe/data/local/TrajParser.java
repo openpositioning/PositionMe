@@ -141,6 +141,44 @@ public class TrajParser {
         return replayPoints;
     }
 
+    /**
+     * Checks if the trajectory file contains ANY GNSS data, regardless of PDR matching.
+     */
+    public static boolean hasGnssData(String filePath) {
+        File file = new File(filePath);
+        if (!file.exists()) return false;
+
+        try (FileInputStream fis = new FileInputStream(file)) {
+            Traj.Trajectory traj = Traj.Trajectory.parseFrom(fis);
+            return !traj.getGnssDataList().isEmpty();
+        } catch (IOException e) {
+            Log.e(TAG, "Error parsing trajectory file for GNSS check", e);
+            return false;
+        }
+    }
+
+    /**
+     * Retrieves the first valid GNSS point from the file, if available.
+     */
+    public static LatLng getFirstGnssPoint(String filePath) {
+        File file = new File(filePath);
+        if (!file.exists()) return null;
+
+        try (FileInputStream fis = new FileInputStream(file)) {
+            Traj.Trajectory traj = Traj.Trajectory.parseFrom(fis);
+            List<Traj.GNSSReading> gnssList = traj.getGnssDataList();
+            if (!gnssList.isEmpty()) {
+                Traj.GNSSReading first = gnssList.get(0);
+                if (first.hasPosition()) {
+                    return new LatLng(first.getPosition().getLatitude(), first.getPosition().getLongitude());
+                }
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error parsing trajectory file for first GNSS point", e);
+        }
+        return null; // No GNSS data found
+    }
+
     public List<Object[]> parse(SensorTypes type) {
         List<Object[]> dataList = new ArrayList<>();
         if (trajectory == null) return dataList;
