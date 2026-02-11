@@ -129,6 +129,9 @@ message Fingerprint {
 
   repeated RFScan rf_scans = 2;
 
+  // Unique identifier for this fingerprint/scan event
+  string uuid = 3;
+
 }
 
 message RFScan {
