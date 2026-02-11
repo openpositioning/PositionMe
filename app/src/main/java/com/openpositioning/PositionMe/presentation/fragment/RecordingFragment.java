@@ -3,11 +3,11 @@ package com.openpositioning.PositionMe.presentation.fragment;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,10 +19,6 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
-
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.material.button.MaterialButton;
 
 import androidx.annotation.NonNull;
@@ -36,6 +32,8 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
+import java.util.ArrayList;
+import java.util.List;
 
 
 /**
@@ -63,8 +61,19 @@ import com.google.android.gms.maps.model.LatLng;
 
 public class RecordingFragment extends Fragment {
 
+    private List<String> observedMacs = new ArrayList<>();
+    private TextView selectedVenueText;
+
+    public void updateObservedMacs(@NonNull List<String> macs) {
+        observedMacs = new ArrayList<>(macs);
+    }
+
+    private List<String> getObservedMacsOrEmpty() {
+        return observedMacs == null ? new ArrayList<>() : new ArrayList<>(observedMacs);
+    }
+
     // UI elements
-    private MaterialButton completeButton, cancelButton, markTestPointButton;
+    private MaterialButton completeButton, cancelButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -81,8 +90,6 @@ public class RecordingFragment extends Fragment {
     private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
-    private int testPointCounter = 0;
-
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
@@ -123,6 +130,10 @@ public class RecordingFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        selectedVenueText = view.findViewById(R.id.selectedVenueText);
+        selectedVenueText.setText("Venue: none");
+
+
         // Child Fragment: the container in fragment_recording.xml
         // where TrajectoryMapFragment is placed
         trajectoryMapFragment = (TrajectoryMapFragment)
@@ -144,7 +155,6 @@ public class RecordingFragment extends Fragment {
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
-        markTestPointButton= view.findViewById(R.id.markPointButton);
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
@@ -160,37 +170,6 @@ public class RecordingFragment extends Fragment {
             sensorFusion.stopRecording();
             // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
-        });
-
-        markTestPointButton.setOnClickListener(v -> {
-            long timestampMillis = System.currentTimeMillis();
-
-            SensorFusion.getInstance().addTestPoint(timestampMillis);
-
-            float[] gnss = SensorFusion.getInstance().getGNSSLatitude(false);
-            if (gnss != null) {
-                double lat = gnss[0];
-                double lon = gnss[1];
-
-                SensorFusion.getInstance().addTestPoint(timestampMillis, lat, lon);
-
-                testPointCounter++;
-
-                if (trajectoryMapFragment != null) {
-                    trajectoryMapFragment.addTestPointMarker(
-                            new LatLng(lat, lon),
-                            testPointCounter
-                    );
-                }
-
-                Toast.makeText(requireContext(),
-                        "Test point " + testPointCounter + " marked",
-                        Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(requireContext(),
-                        "GNSS not available yet",
-                        Toast.LENGTH_SHORT).show();
-            }
         });
 
 
@@ -279,8 +258,17 @@ public class RecordingFragment extends Fragment {
             );
 
             // Pass the location + orientation to the map
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
+            TrajectoryMapFragment mapFrag = (TrajectoryMapFragment)
+                    getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
+
+            if (mapFrag != null) {
+
+                List<String> macs = sensorFusion.getLatestBssids();
+                Log.d("RecordingFragment", "passing macs size=" + macs.size());
+                mapFrag.updateObservedMacs(macs);
+
+//                trajectoryMapFragment.updateObservedMacs(sensorFusion.getLatestBssids());
+                mapFrag.updateUserLocation(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
         }
@@ -303,6 +291,10 @@ public class RecordingFragment extends Fragment {
                 trajectoryMapFragment.clearGNSS();
             }
         }
+        RecordingActivity act = (RecordingActivity) requireActivity();
+        String v = act.getSelectedVenueIdOrName();
+        selectedVenueText.setText("Venue: " + (v == null ? "none" : v));
+
 
         // Update previous
         previousPosX = pdrValues[0];

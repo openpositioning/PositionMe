@@ -62,7 +62,7 @@ public class BuildingPolygon {
      * @return True if point in polygon
      * False otherwise
      */
-    private static boolean pointInPolygon(LatLng point, List<LatLng> polygon) {
+    public static boolean pointInPolygon(LatLng point, List<LatLng> polygon) {
         int numCrossings = 0;
         List<LatLng> path=polygon;
         // For each edge

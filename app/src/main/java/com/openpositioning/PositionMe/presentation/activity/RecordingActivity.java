@@ -11,6 +11,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
+import com.openpositioning.PositionMe.presentation.fragment.TrajectoryMapFragment;
 
 
 /**
@@ -38,7 +39,25 @@ import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
  * @author ShuGu
  */
 
-public class RecordingActivity extends AppCompatActivity {
+public class RecordingActivity extends AppCompatActivity
+     implements TrajectoryMapFragment.VenueSelectionListener {
+         private String selectedVenueIdOrName = null;
+        private String selectedFloorId = null;
+
+
+         @Override
+        public void onVenueSelected(String venueIdOrName){
+                    selectedVenueIdOrName = venueIdOrName;
+        }
+
+        @Override
+        public void onVenueCleared() {
+            selectedVenueIdOrName = null;
+        }
+
+        public String getSelectedVenueIdOrName() {
+            return selectedVenueIdOrName;
+        }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -88,5 +107,13 @@ public class RecordingActivity extends AppCompatActivity {
     public void finishFlow() {
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         finish();
+    }
+
+    public void onFloorChanged(String floorId) {
+        selectedFloorId = floorId;
+    }
+
+    public String getSelectedFloorId() {
+        return selectedFloorId;
     }
 }
