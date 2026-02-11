@@ -193,7 +193,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
-    // Initial position/orientation flags
+    // Initial position/orientation flags - determine when first position and orientation data is received during recording
     private boolean initialPositionSet = false;
     private boolean initialOrientationSet = false;
 
@@ -468,10 +468,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // Snapshot yaw/pitch/roll
                     System.arraycopy(this.orientation, 0, initialOrientation, 0, 3);
 
-                    // Snapshot quaternion (make sure you have 4 components x,y,z,w)
+                    // Snapshot quaternion
                     System.arraycopy(this.rotation, 0, initialRotationQuat, 0, 4);
 
-                    // Write “t=0” IMU entry (protobuf initial orientation)
+                    // Write initial IMU entry (protobuf initial orientation)
                     Traj.Quaternion.Builder q0 = Traj.Quaternion.newBuilder()
                             .setX(initialRotationQuat[0])
                             .setY(initialRotationQuat[1])
@@ -488,7 +488,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // consistently shifted by +90° relative to the map/PDR frame.
                 // App is locked to portrait and the phone is held in portrait, so we correct here
                 // so BOTH PDR updates and map marker rotation use the same corrected heading.
-                this.orientation[0] = wrapAngleRad(this.orientation[0] - (float) (Math.PI / 2.5));
+                this.orientation[0] = wrapAngleRad(this.orientation[0] - (float) (1.45));
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
@@ -554,7 +554,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     class myLocationListener implements LocationListener {
         @Override
         public void onLocationChanged(@NonNull Location location) {
-            // Keep the latest GNSS fix in the instance fields so getters (e.g. getGNSSLatitude(false)) work.
+            // Keep latest GNSS fix in the instance fields so getters work.
             SensorFusion.this.latitude = (float) location.getLatitude();
             SensorFusion.this.longitude = (float) location.getLongitude();
 
@@ -562,7 +562,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             float speed = (float) location.getSpeed();
             float bearing = (float) location.getBearing();
 
-            // Use doubles for the protobuf payload (better precision), but don't shadow the instance fields.
+            // Use doubles for the protobuf payload (better precision)
             double lat = location.getLatitude();
             double lon = location.getLongitude();
             double alt = location.getAltitude();
@@ -572,8 +572,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                 // Record initial position at start of recording
                 if (!initialPositionSet) {
-                    initialPositionSet = true;
+                    initialPositionSet = true; // Runs once
 
+                    // Write initial GNSS entry setting initial position at start of recording
                     trajectory.setInitialPosition(Traj.GNSSPosition.newBuilder()
                             .setRelativeTimestamp(0)
                             .setAltitude(alt)
@@ -586,6 +587,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                     Log.d("INIT_POS", "InitialPosition set: lat=" + lat + ", lon=" + lon + ", alt=" + alt);
                 }
 
+                // Construct GNSS position sample as the latitude, longitude and
+                // altitude with a timestamp relative to recording start.
                 Traj.GNSSPosition position = Traj.GNSSPosition.newBuilder()
                         .setRelativeTimestamp(System.currentTimeMillis() - absoluteStartTime)
                         .setAltitude(alt)
@@ -593,6 +596,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .setLongitude(lon)
                         .build();
 
+                // Continuously add GNSS reading to trajectory including measurement
+                // metadata linked to the position sample.
                 trajectory.addGnssData(Traj.GNSSReading.newBuilder()
                         .setAccuracy(accuracy)
                         .setSpeed(speed)
@@ -1143,8 +1148,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         this.saveRecording = true;
         this.stepCounter = 0;
-        this.initialPositionSet = false;
-        this.initialOrientationSet = false;
+        this.initialPositionSet = false; // Ensure if conditional for initial position is met
+        this.initialOrientationSet = false; // Ensure if conditional for initial orientation is met
         this.absoluteStartTime = System.currentTimeMillis();
         this.bootTime = SystemClock.uptimeMillis();
         this.lastWifiFpStoredAtUptimeMs = 0;
@@ -1262,24 +1267,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                     .setX(magneticField[0])
                     .setY(magneticField[1])
                     .setZ(magneticField[2]);
-
-            if (saveRecording) {
-                if (!initialOrientationSet) {
-                    initialOrientationSet = true;
-
-                    Traj.Quaternion q = rotBuilder.build();
-                    Log.d("INIT_ORI", "Initial orientation: "
-                            + q.getX() + ", " + q.getY() + ", "
-                            + q.getZ() + ", " + q.getW());
-
-                    trajectory.addImuData(Traj.IMUReading.newBuilder()
-                            .setRelativeTimestamp(0)
-                            .setAcc(accBuilder)
-                            .setGyr(gyrBuilder)
-                            .setRotationVector(rotBuilder)
-                            .setStepCount(stepCounter));
-                }
-            }
 
             // Store IMU and magnetometer data in the Trajectory object using the correct structure
             trajectory.addImuData(Traj.IMUReading.newBuilder()
