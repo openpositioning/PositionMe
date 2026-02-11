@@ -103,6 +103,15 @@
             android:progress="0"
             android:layout_marginBottom="12dp" />
 
+        <!-- NEW TEST POINT BUTTON -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_add_test_point"
+            android:layout_width="346dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:text="ADD TEST POINT" />
+
         <!-- Buttons Container -->
         <LinearLayout
             android:layout_width="wrap_content"
