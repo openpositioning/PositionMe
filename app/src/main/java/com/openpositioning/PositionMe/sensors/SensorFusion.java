@@ -111,6 +111,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private MovementSensor linearAccelerationSensor;
     // Other data recording
     private WifiDataProcessor wifiProcessor;
+    private volatile List<String> latestBssids = new ArrayList<>();
+
     private BleDataProcessor bleProcessor;
     private GNSSDataProcessor gnssProcessor;
     // Data listener
@@ -311,6 +313,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.linearAccelerationSensor = new MovementSensor(context, Sensor.TYPE_LINEAR_ACCELERATION);
         // Listener based devices
         this.wifiProcessor = new WifiDataProcessor(context);
+
         wifiProcessor.registerObserver(this);
         this.bleProcessor = new BleDataProcessor(context);
         bleProcessor.registerObserver(this);
@@ -339,6 +342,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Keep app awake during the recording (using stored appContext)
         PowerManager powerManager = (PowerManager) this.appContext.getSystemService(Context.POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
+        wifiProcessor.startListening();
+
     }
 
     //endregion
@@ -486,7 +491,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (saveRecording) {
                         this.pathView.drawTrajectory(newCords);
                         stepCounter++;
-                        trajectory.addPdrData(Traj.RelativePosition.newBuilder()
+                        trajectory.addPdrData(Traj.Pdr_Sample.newBuilder()
                                 .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                 .setX(newCords[0])
                                 .setY(newCords[1]));
@@ -526,18 +531,14 @@ public class SensorFusion implements SensorEventListener, Observer {
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
             if(saveRecording) {
-                trajectory.addGnssData(Traj.GNSSReading.newBuilder()
-                        .setPosition(Traj.GNSSPosition.newBuilder()
-                                .setLatitude(latitude)
-                                .setLongitude(longitude)
-                                .setAltitude(altitude)
-                                .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime)
-                                .build())
+                trajectory.addGnssData(Traj.GNSS_Sample.newBuilder()
                         .setAccuracy(accuracy)
+                        .setAltitude(altitude)
+                        .setLatitude(latitude)
+                        .setLongitude(longitude)
                         .setSpeed(speed)
-                        .setBearing(0)
                         .setProvider(provider)
-                        .build());
+                        .setRelativeTimestamp(System.currentTimeMillis()-absoluteStartTime));
             }
         }
     }
@@ -577,7 +578,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             Traj.Fingerprint.Builder wifiData = Traj.Fingerprint.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime);
             for (Wifi data : this.wifiList) {
-                wifiData.addRfScans(Traj.RFScan.newBuilder()
+                wifiData.addMacScans(Traj.Mac_Scan.newBuilder()
                         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                         .setMac(data.getBssid())
                         .setRssi(data.getLevel())
@@ -594,11 +595,17 @@ public class SensorFusion implements SensorEventListener, Observer {
             } else {
                 android.util.Log.d("SensorFusion", "Duplicate WiFi fingerprint skipped");
             }
+            // Adding WiFi data to Trajectory
+            this.trajectory.addWifiData(wifiData);
 
 
         }
 
         createWifiPositioningRequest();
+        Log.d("SensorFusion", "wifiList length = " +
+                (wifiList == null ? 0 : wifiList.length));
+
+
     }
 
     // BLE update logic
@@ -1300,7 +1307,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
-     * Creates a {@link Traj.SensorInfo} objects from the specified sensor's data.
+     * Creates a {@link Traj.Sensor_Info} objects from the specified sensor's data.
      *
      * @param sensor    MovementSensor objects with populated sensorInfo fields
      * @return          Traj.SensorInfo object to be used in building the trajectory
@@ -1308,8 +1315,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see Traj            Trajectory object used for communication with the server
      * @see MovementSensor  class abstracting SensorManager based sensors
      */
-    private Traj.SensorInfo.Builder createInfoBuilder(MovementSensor sensor) {
-        return Traj.SensorInfo.newBuilder()
+    private Traj.Sensor_Info.Builder createInfoBuilder(MovementSensor sensor) {
+        return Traj.Sensor_Info.newBuilder()
                 .setName(sensor.sensorInfo.getName())
                 .setVendor(sensor.sensorInfo.getVendor())
                 .setResolution(sensor.sensorInfo.getResolution())
@@ -1327,45 +1334,40 @@ public class SensorFusion implements SensorEventListener, Observer {
     private class storeDataInTrajectory extends TimerTask {
         public void run() {
             // Store IMU and magnetometer data in Trajectory class
-            trajectory.addImuData(Traj.IMUReading.newBuilder()
+            trajectory.addImuData(Traj.Motion_Sample.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
-                    .setAcc(Traj.Vector3.newBuilder()
-                            .setX(acceleration[0])
-                            .setY(acceleration[1])
-                            .setZ(acceleration[2])
-                            .build())
-                    .setGyr(Traj.Vector3.newBuilder()
-                            .setX(angularVelocity[0])
-                            .setY(angularVelocity[1])
-                            .setZ(angularVelocity[2])
-                            .build())
-                    .setRotationVector(Traj.Quaternion.newBuilder()
-                            .setX(rotation[0])
-                            .setY(rotation[1])
-                            .setZ(rotation[2])
-                            .setW(rotation[3])
-                            .build())
-                    .setStepCount(stepCounter)
-                    .build());
-
-            trajectory.addMagnetometerData(Traj.MagnetometerReading.newBuilder()
-                    .setMag(Traj.Vector3.newBuilder()
-                            .setX(magneticField[0])
-                            .setY(magneticField[1])
-                            .setZ(magneticField[2])
-                            .build())
-                    .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime)
-                    .build());
+                    .setAccX(acceleration[0])
+                    .setAccY(acceleration[1])
+                    .setAccZ(acceleration[2])
+                    .setGyrX(angularVelocity[0])
+                    .setGyrY(angularVelocity[1])
+                    .setGyrZ(angularVelocity[2])
+                    .setGyrZ(angularVelocity[2])
+                    .setRotationVectorX(rotation[0])
+                    .setRotationVectorY(rotation[1])
+                    .setRotationVectorZ(rotation[2])
+                    .setRotationVectorW(rotation[3])
+                    .setStepCount(stepCounter))
+                    .addPositionData(Traj.Position_Sample.newBuilder()
+                            .setMagX(magneticField[0])
+                            .setMagY(magneticField[1])
+                            .setMagZ(magneticField[2])
+                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
+//                    .addGnssData(Traj.GNSS_Sample.newBuilder()
+//                            .setLatitude(latitude)
+//                            .setLongitude(longitude)
+//                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
+            ;
 
             // Divide timer with a counter for storing data every 1 second
             if (counter == 99) {
                 counter = 0;
                 // Store pressure and light data
                 if (barometerSensor.sensor != null) {
-                    trajectory.addPressureData(Traj.BarometerReading.newBuilder()
+                    trajectory.addPressureData(Traj.Pressure_Sample.newBuilder()
                                     .setPressure(pressure)
                                     .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
-                            .addLightData(Traj.LightReading.newBuilder()
+                            .addLightData(Traj.Light_Sample.newBuilder()
                                     .setLight(light)
                                     .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                     .build());
@@ -1376,7 +1378,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     secondCounter = 0;
                     //Current Wifi Object
                     Wifi currentWifi = wifiProcessor.getCurrentWifiData();
-                    trajectory.addApsData(Traj.WiFiAPData.newBuilder()
+                    trajectory.addApsData(Traj.AP_Data.newBuilder()
                             .setMac(currentWifi.getBssid())
                             .setSsid(currentWifi.getSsid())
                             .setFrequency(currentWifi.getFrequency()));
@@ -1391,6 +1393,18 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         }
     }
+
+    public List<String> getLatestBssids() {
+        if (wifiProcessor == null) {
+            Log.w("SensorFusion", "getLatestBssids(): wifiProcessor is null");
+            return new ArrayList<>();
+        }
+        List<String> macs = wifiProcessor.getLastObservedBssids();
+        Log.d("SensorFusion", "getLatestBssids(): macs=" + macs.size());
+        return macs;
+    }
+
+
 
     //endregion
 

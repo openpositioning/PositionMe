@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -37,6 +38,8 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
+import java.util.ArrayList;
+import java.util.List;
 
 
 /**
@@ -63,6 +66,17 @@ import com.google.android.gms.maps.model.LatLng;
  */
 
 public class RecordingFragment extends Fragment {
+
+    private List<String> observedMacs = new ArrayList<>();
+    private TextView selectedVenueText;
+
+    public void updateObservedMacs(@NonNull List<String> macs) {
+        observedMacs = new ArrayList<>(macs);
+    }
+
+    private List<String> getObservedMacsOrEmpty() {
+        return observedMacs == null ? new ArrayList<>() : new ArrayList<>(observedMacs);
+    }
 
     // UI elements
     private MaterialButton completeButton, cancelButton, markTestPointButton;
@@ -143,6 +157,10 @@ public class RecordingFragment extends Fragment {
     public void onViewCreated(@NonNull View view,
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
+        selectedVenueText = view.findViewById(R.id.selectedVenueText);
+        selectedVenueText.setText("Venue: none");
+
 
         // Child Fragment: the container in fragment_recording.xml
         // where TrajectoryMapFragment is placed
@@ -353,8 +371,17 @@ public class RecordingFragment extends Fragment {
             );
 
             // Pass the location + orientation to the map
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
+            TrajectoryMapFragment mapFrag = (TrajectoryMapFragment)
+                    getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
+
+            if (mapFrag != null) {
+
+                List<String> macs = sensorFusion.getLatestBssids();
+                Log.d("RecordingFragment", "passing macs size=" + macs.size());
+                mapFrag.updateObservedMacs(macs);
+
+//                trajectoryMapFragment.updateObservedMacs(sensorFusion.getLatestBssids());
+                mapFrag.updateUserLocation(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
         }
@@ -377,6 +404,10 @@ public class RecordingFragment extends Fragment {
                 trajectoryMapFragment.clearGNSS();
             }
         }
+        RecordingActivity act = (RecordingActivity) requireActivity();
+        String v = act.getSelectedVenueIdOrName();
+        selectedVenueText.setText("Venue: " + (v == null ? "none" : v));
+
 
         // Update previous
         previousPosX = pdrValues[0];

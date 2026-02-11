@@ -6,6 +6,14 @@
     android:layout_height="match_parent">
 
     <!-- 🔹 TOP SECTION: Status Display -->
+    <TextView
+        android:id="@+id/selectedVenueText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Venue: none"
+        android:textSize="14sp"
+        android:padding="8dp"/>
+
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/currentPositionCard"
         android:layout_width="match_parent"
