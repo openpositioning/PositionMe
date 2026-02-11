@@ -985,6 +985,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         clearTestPoints();
         this.absoluteStartTime = System.currentTimeMillis();
         this.recordingTime = 0L;
+        this.bootTime = SystemClock.uptimeMillis();
         this.lastRunDistance = 0.0; // Reset mailbox for new recording
         this.lastRunTime = 0L; // Reset mailbox for new recording
         // Protobuf trajectory class for sending sensor data to restful API
