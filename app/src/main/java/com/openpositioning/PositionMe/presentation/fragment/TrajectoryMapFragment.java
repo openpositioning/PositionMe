@@ -108,6 +108,8 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
 
+    private long lastAutoFloorSwitchTimeMs = 0L;
+    private static final long max_time = 5000L; // 5 seconds debounce to prevent rapid floor switching
 
     private Float lastElevationMeters = null;
     public void setElevation(float elevationMeters) {
@@ -253,11 +255,16 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
+        long now = System.currentTimeMillis();
+        if ((now - lastAutoFloorSwitchTimeMs) < max_time) {
+            return;
+        }
         int targetFloor = mapElevationToFloor(elevationMeters);
         int levelIndex = findLevelIndexByFloor(targetFloor);
 
         if (levelIndex >= 0) {
             switchFloor(levelIndex);
+            lastAutoFloorSwitchTimeMs = now;
         }
     }
 
@@ -268,7 +275,11 @@ public class TrajectoryMapFragment extends Fragment {
             return 0;
         } else if (elevationMeters >= -1.0 && elevationMeters <= 1.0) {
             return -1;
-        }
+        } else if (elevationMeters >= 8.0 && elevationMeters <= 10.0) {
+            return 2;
+        } else if (elevationMeters >= 11.0 && elevationMeters <= 13.0) {
+            return 3;
+        } 
         return 0; // Default fallback
     }
 
