@@ -151,6 +151,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Over time accelerometer magnitude values since last step
     private List<Double> accelMagnitude;
 
+    private List<Long> markerTimestamps = new ArrayList<>();
     // PDR calculation class
     private PdrProcessing pdrProcessing;
 
@@ -482,6 +483,14 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.trajectory.addWifiData(wifiData);
         }
         createWifiPositioningRequest();
+    }
+
+    public void addMarker(long timestamp) {
+        // task c
+        long relativeTimestamp = timestamp - absoluteStartTime;
+        this.markerTimestamps.add(relativeTimestamp);
+
+        Log.d("SensorFusion", "Marker added at relative time: " + relativeTimestamp);
     }
 
     /**
@@ -915,12 +924,27 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see ServerCommunications for sending and receiving data via HTTPS.
      */
     public void sendTrajectoryToCloud() {
+
+        // Before building the payload, append all recorded marker timestamps
+        if (markerTimestamps != null && !markerTimestamps.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (Long ts : markerTimestamps) {
+                sb.append(ts).append(",");
+            }
+
+            // Use the built-in string field of Trajectory to store the timestamps
+            trajectory.setDataIdentifier(sb.toString());
+
+            // Clear the list to prevent duplicate uploads
+            markerTimestamps.clear();
+        }
+
+
         // Build object
         Traj.Trajectory sentTrajectory = trajectory.build();
         // Pass object to communications object
         this.serverCommunications.sendTrajectory(sentTrajectory);
     }
-
     /**
      * Creates a {@link Traj.Sensor_Info} objects from the specified sensor's data.
      *
