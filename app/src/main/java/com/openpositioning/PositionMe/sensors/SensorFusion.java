@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -634,6 +635,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .map(o -> (Wifi) o)
                 .collect(Collectors.toList());
 
+        // DEBUG: log each WiFi scan entry (includes RTT)
+        for (Wifi w : this.wifiList) {
+            if (w != null) Log.d("WIFI_SCAN", w.toString());
+        }
+
         if (this.saveRecording) {
             // Build a de-duplicated fingerprint:
             //   key   = AP MAC address (encoded as int64)
@@ -719,7 +725,8 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Creating a JSON object to store the WiFi access points
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList) {
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+                // Server expects standard BSSID strings (aa:bb:cc:dd:ee:ff)
+                wifiAccessPoints.put(macLongToBssidString(data.getBssid()), data.getLevel());
             }
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
@@ -742,7 +749,8 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Creating a JSON object to store the WiFi access points
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList) {
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+                // Server expects standard BSSID strings (aa:bb:cc:dd:ee:ff)
+                wifiAccessPoints.put(macLongToBssidString(data.getBssid()), data.getLevel());
             }
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
@@ -764,6 +772,17 @@ public class SensorFusion implements SensorEventListener, Observer {
             Log.e("jsonErrors", "Error creating json object" + e.toString());
         }
 
+    }
+    /**
+     * Convert a 48-bit MAC stored as a long (e.g. 0xAABBCCDDEEFF) into a colon-separated
+     * BSSID string ("aa:bb:cc:dd:ee:ff").
+     */
+    private static String macLongToBssidString(long mac) {
+        // Mask to 48 bits to be safe
+        long m = mac & 0xFFFFFFFFFFFFL;
+        String hex = String.format(java.util.Locale.US, "%012x", m);
+        return hex.substring(0, 2) + ":" + hex.substring(2, 4) + ":" + hex.substring(4, 6) + ":"
+                + hex.substring(6, 8) + ":" + hex.substring(8, 10) + ":" + hex.substring(10, 12);
     }
 
     /**
@@ -1295,7 +1314,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                     trajectory.addApsData(Traj.WiFiAPData.newBuilder()
                             .setMac(currentWifi.getBssid())
                             .setSsid(currentWifi.getSsid())
-                            .setFrequency(currentWifi.getFrequency()));
+                            .setFrequency(currentWifi.getFrequency())
+                            .setRttEnabled(currentWifi.isRttEnabled()));
                 } else {
                     secondCounter++;
                 }
