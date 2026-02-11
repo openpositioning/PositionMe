@@ -498,6 +498,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setAltitude(altitude)
                             .build());
                     initialPositionSet = true;
+                    Log.d("INIT_POS", "Initial position set: " + latitude + ", " + longitude);
                 }
             }
         }
