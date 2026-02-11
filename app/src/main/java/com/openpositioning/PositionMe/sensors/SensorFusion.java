@@ -642,6 +642,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                 sortedWifi.sort((a, b) -> Long.compare(a.getBssid(), b.getBssid()));
                 StringBuilder signatureBuilder = new StringBuilder();
                 for (Wifi data : sortedWifi) {
+                    if (data.getBssid() == 0) {
+                        continue; // 无效 MAC 不参与去重签名
+                    }
                     signatureBuilder.append(data.getBssid())
                             .append(':')
                             .append(data.getLevel())
@@ -659,6 +662,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                 if (!isDuplicateFingerprint) {
                     for (Wifi data : this.wifiList) {
+                        if (data.getBssid() == 0) {
+                            continue; // 过滤无效 AP
+                        }
+
                         fingerprint.addRfScans(Traj.RFScan.newBuilder()
                                 .setRelativeTimestamp(sampleTimestamp)
                                 .setMac(data.getBssid())
@@ -1205,6 +1212,19 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
+     * Pause only BLE scanning (e.g. when fragment is paused) without changing recording flag.
+     */
+    public void pauseBleScan() {
+        if (bleProcessor != null) {
+            try {
+                bleProcessor.stopListening();
+            } catch (Exception e) {
+                Log.w("SensorFusion", "pauseBleScan(): failed to stop BLE", e);
+            }
+        }
+    }
+
+    /**
      * Enables saving sensor values to the trajectory object.
      *
      * Sets save recording to true, resets the absolute start time and create new timer object for
@@ -1237,7 +1257,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.trajectoryId = venueOrBuilding + "_" + timestamp + "_" + shortUuid;
 
         // Protobuf trajectory class for sending sensor data to restful API
-        this.trajectory = Traj.Trajectory.newBuilder()
+        Traj.Trajectory.Builder trajectoryBuilder = Traj.Trajectory.newBuilder()
                 .setTrajectoryId(trajectoryId)
                 .setTrajectoryVersion(2.0f)
                 .setAndroidVersion(Build.VERSION.RELEASE)
@@ -1247,6 +1267,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
                 .setBarometerInfo(createInfoBuilder(barometerSensor))
                 .setLightSensorInfo(createInfoBuilder(lightSensor));
+
+        maybeSetInitialPosition(trajectoryBuilder, startLocation);
+
+        this.trajectory = trajectoryBuilder;
 
         this.recordedApMacs = new HashSet<>();
         this.lastFingerprintSignature = null;
@@ -1321,7 +1345,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.saveRecording = false;
             storeTrajectoryTimer.cancel();
         }
-        if(wakeLock.isHeld()) {
+        if (wakeLock != null && wakeLock.isHeld()) {
             this.wakeLock.release();
         }
     }
@@ -1356,6 +1380,17 @@ public class SensorFusion implements SensorEventListener, Observer {
         if (!existingId.startsWith(prefix)) {
             trajectoryBuilder.setTrajectoryId(prefix + existingId);
         }
+    }
+
+    // Visible for tests
+    static void maybeSetInitialPosition(Traj.Trajectory.Builder builder, float[] startLoc) {
+        if (builder == null || startLoc == null || startLoc.length < 2) {
+            return;
+        }
+        Traj.GNSSPosition.Builder pos = Traj.GNSSPosition.newBuilder()
+                .setLatitude(startLoc[0])
+                .setLongitude(startLoc[1]);
+        builder.setInitialPosition(pos);
     }
 
 

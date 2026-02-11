@@ -5,22 +5,26 @@ import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
-import android.content.BroadcastReceiver;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 
+import com.openpositioning.PositionMe.BuildConfig;
+import android.bluetooth.le.BluetoothLeScanner;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
 
 /**
  * BLE data gathering and processing using BluetoothAdapter discovery + BroadcastReceiver.
@@ -43,25 +47,23 @@ public class BleDataProcessor implements Observable {
 
     private static final long SCAN_INTERVAL_MS = 5000;
     private static final long TOAST_DEBOUNCE_MS = 8000;
-
-    // log throttling (avoid spam)
-    private static final long STATUS_LOG_DEBOUNCE_MS = 3000;
-    private long lastStatusLogElapsed = 0L;
-
+    private static final long LOG_SAMPLE_DEBOUNCE_MS = 3000;
     private String lastToastMsg = "";
     private long lastToastTimeMs = 0L;
 
     private final Context context;
     private final BluetoothAdapter bluetoothAdapter;
+    private BluetoothLeScanner bluetoothLeScanner;
 
     private final ArrayList<Observer> observers = new ArrayList<>();
-    private Timer scanTimer;
+    private ScanCallback scanCallback;
 
-    private boolean isReceiverRegistered = false;
-    private long lastScanElapsedMs = 0L;
+    // Flush window every SCAN_INTERVAL_MS
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     // MAC -> latest obs in current window
     private final Map<String, BLE> windowMap = new HashMap<>();
+    private long lastLogSampleMs = 0L;
 
     public BleDataProcessor(Context context) {
         this.context = context.getApplicationContext();
@@ -88,16 +90,11 @@ public class BleDataProcessor implements Observable {
 
     @Override
     public void notifyObservers(int idx) {
-        BLE[] data = windowMap.values().toArray(new BLE[0]);
-        Log.i(TAG, "notifyObservers(): sending count=" + data.length + " to observers=" + observers.size());
-
-        for (Observer o : observers) {
-            try {
-                o.update(data);
-            } catch (Exception e) {
-                Log.e(TAG, "notifyObservers(): observer.update() crashed", e);
-            }
+        BLE[] data;
+        synchronized (windowMap) {
+            data = windowMap.values().toArray(new BLE[0]);
         }
+        sendToObservers(data);
     }
 
     // -------------------- Public lifecycle --------------------
@@ -118,193 +115,168 @@ public class BleDataProcessor implements Observable {
         }
 
         if (!checkBlePermissions()) {
-            Log.e(TAG, "Missing ACCESS_FINE_LOCATION permission");
-            showDebouncedToast("Missing ACCESS_FINE_LOCATION permission", Toast.LENGTH_SHORT);
+            Log.e(TAG, "Missing BLE permissions");
+            showDebouncedToast("Missing Bluetooth permissions", Toast.LENGTH_SHORT);
             return;
         }
 
-        registerReceiverIfNeeded();
-
-        if (scanTimer != null) {
-            scanTimer.cancel();
-            scanTimer = null;
+        bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
+        if (bluetoothLeScanner == null) {
+            Log.e(TAG, "BluetoothLeScanner is null (adapter disabled?)");
+            return;
         }
 
-        scanTimer = new Timer();
-        scanTimer.scheduleAtFixedRate(new ScheduledBleScan(), 0, SCAN_INTERVAL_MS);
+        stopScanningInternal(); // ensure clean state
+        startScanningInternal();
+        scheduleFlush();
 
-        Log.i(TAG, "startListening(): timer scheduled every " + SCAN_INTERVAL_MS + "ms");
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "BLE scan started (mode=LOW_LATENCY, interval=" + SCAN_INTERVAL_MS + "ms)");
+        }
     }
 
     public void stopListening() {
         Log.i(TAG, "stopListening() called");
 
-        if (scanTimer != null) {
-            scanTimer.cancel();
-            scanTimer = null;
+        stopScanningInternal();
+        cancelFlush();
+        synchronized (windowMap) {
+            windowMap.clear();
         }
 
-        stopDiscoverySafely();
-        windowMap.clear();
-        unregisterReceiverIfNeeded();
-
-        Log.i(TAG, "stopListening(): stopped, cache cleared, receiver unregistered(if needed)");
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "BLE scan stopped");
+        }
     }
 
     // -------------------- Core scanning --------------------
 
-    @SuppressLint("MissingPermission")
-    private void startBleDiscovery() {
-        if (bluetoothAdapter == null) {
-            logStatusThrottled("startBleDiscovery(): adapter null => cannot start");
-            return;
-        }
-
-        if (!checkBlePermissions()) {
-            Log.e(TAG, "startBleDiscovery(): permission missing => stopListening()");
-            stopListening();
-            return;
-        }
-
-        if (!bluetoothAdapter.isEnabled()) {
-            logStatusThrottled("startBleDiscovery(): bluetooth disabled => skip");
-            return;
-        }
-
-        long now = SystemClock.elapsedRealtime();
-        if (now - lastScanElapsedMs < SCAN_INTERVAL_MS) {
-            // should rarely happen because timer already uses SCAN_INTERVAL_MS
-            logStatusThrottled("startBleDiscovery(): debounced (too soon)");
-            return;
-        }
-        lastScanElapsedMs = now;
-
-        if (bluetoothAdapter.isDiscovering()) {
-            Log.d(TAG, "startBleDiscovery(): was discovering => cancelDiscovery()");
-            bluetoothAdapter.cancelDiscovery();
-        }
-
-        Log.i(TAG, "startBleDiscovery(): calling startDiscovery()");
-        boolean ok = bluetoothAdapter.startDiscovery();
-        Log.i(TAG, "startBleDiscovery(): startDiscovery() returned " + ok);
-
-        if (!ok) {
-            Log.w(TAG, "startDiscovery() returned false (busy? permission? device limitation?)");
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private void stopDiscoverySafely() {
-        if (bluetoothAdapter == null) return;
-
-        if (bluetoothAdapter.isDiscovering()) {
-            Log.i(TAG, "stopDiscoverySafely(): cancelDiscovery()");
-            bluetoothAdapter.cancelDiscovery();
-        }
-    }
-
-    // -------------------- Receiver --------------------
-
-    private final BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
-        @SuppressLint("MissingPermission")
-        @Override
-        public void onReceive(Context c, Intent intent) {
-            if (intent == null || intent.getAction() == null) return;
-
-            if (!checkBlePermissions()) {
-                Log.e(TAG, "Receiver: permission missing => stopListening()");
-                stopListening();
-                return;
-            }
-
-            String action = intent.getAction();
-
-            if (BluetoothAdapter.ACTION_DISCOVERY_STARTED.equals(action)) {
-                windowMap.clear();
-                Log.i(TAG, "Receiver: ACTION_DISCOVERY_STARTED (cache cleared)");
-                return;
-            }
-
-            if (BluetoothDevice.ACTION_FOUND.equals(action)) {
-                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                if (device == null) return;
-
-                String mac = device.getAddress();
-                String name = device.getName();
-
-                short rssiShort = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE);
-                int rssi = (rssiShort == Short.MIN_VALUE) ? 0 : (int) rssiShort;
-
-                // Placeholder for UUID (classic discovery doesn't easily provide BLE adv uuids)
-                String uuid = "unknown";
-
-                BLE obs = new BLE();
-                obs.setMac(mac);
-                obs.setName(name);
-                obs.setRssi(rssi);
-                obs.setUuid(uuid);
-                obs.setTimestampMs(SystemClock.elapsedRealtime());
-
-                if (mac != null) windowMap.put(mac, obs);
-
-                // Throttle FOUND logs so it won't spam too much
-                if (windowMap.size() <= 5 || (windowMap.size() % 10 == 0)) {
-                    Log.d(TAG, "Receiver: ACTION_FOUND mac=" + mac + " name=" + name + " rssi=" + rssi
-                            + " uniqueSoFar=" + windowMap.size());
-                }
-                return;
-            }
-
-            if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
-                Log.i(TAG, "Receiver: ACTION_DISCOVERY_FINISHED, unique devices=" + windowMap.size());
-                notifyObservers(0);
-                windowMap.clear();
-            }
-        }
-    };
-
-    private void registerReceiverIfNeeded() {
-        if (isReceiverRegistered) {
-            Log.d(TAG, "registerReceiverIfNeeded(): already registered");
-            return;
-        }
-
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
-        filter.addAction(BluetoothDevice.ACTION_FOUND);
-        filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
-
-        context.registerReceiver(bluetoothReceiver, filter);
-        isReceiverRegistered = true;
-
-        Log.i(TAG, "registerReceiverIfNeeded(): receiver registered");
-    }
-
-    private void unregisterReceiverIfNeeded() {
-        if (!isReceiverRegistered) return;
-        try {
-            context.unregisterReceiver(bluetoothReceiver);
-            Log.i(TAG, "unregisterReceiverIfNeeded(): receiver unregistered");
-        } catch (IllegalArgumentException ignored) {
-            Log.w(TAG, "unregisterReceiverIfNeeded(): receiver not registered (ignored)");
-        }
-        isReceiverRegistered = false;
-    }
-
-    // -------------------- Permissions (Android <= 11 style) --------------------
+    // -------------------- Permissions --------------------
 
     private boolean checkBlePermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            int scan = ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN);
+            int connect = ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT);
+            return scan == PackageManager.PERMISSION_GRANTED && connect == PackageManager.PERMISSION_GRANTED;
+        }
         int fineLoc = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION);
         return fineLoc == PackageManager.PERMISSION_GRANTED;
     }
 
-    // -------------------- Timer task --------------------
+    // -------------------- Scan helpers --------------------
 
-    private class ScheduledBleScan extends TimerTask {
+    @SuppressLint("MissingPermission")
+    private void startScanningInternal() {
+        if (bluetoothLeScanner == null) return;
+
+        ScanSettings settings = new ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build();
+
+        scanCallback = new ScanCallback() {
+            @Override
+            public void onScanResult(int callbackType, ScanResult result) {
+                handleScanResult(result);
+            }
+
+            @Override
+            public void onBatchScanResults(java.util.List<ScanResult> results) {
+                if (results == null) return;
+                for (ScanResult r : results) {
+                    handleScanResult(r);
+                }
+            }
+
+            @Override
+            public void onScanFailed(int errorCode) {
+                Log.e(TAG, "onScanFailed(): errorCode=" + errorCode);
+            }
+        };
+
+        bluetoothLeScanner.startScan(null, settings, scanCallback);
+    }
+
+    @SuppressLint("MissingPermission")
+    private void stopScanningInternal() {
+        if (bluetoothLeScanner != null && scanCallback != null) {
+            bluetoothLeScanner.stopScan(scanCallback);
+        }
+        scanCallback = null;
+    }
+
+    @SuppressLint("MissingPermission")
+    private void handleScanResult(ScanResult result) {
+        if (result == null) return;
+        if (!checkBlePermissions()) {
+            Log.w(TAG, "handleScanResult(): permissions revoked during scan, stopping");
+            stopListening();
+            return;
+        }
+
+        BluetoothDevice device = result.getDevice();
+        String mac = (device != null) ? device.getAddress() : null;
+        if (mac == null) return; // cannot dedup without id
+
+        BLE obs = new BLE();
+        obs.setMac(mac);
+        obs.setName(device != null ? device.getName() : null);
+        obs.setRssi(result.getRssi());
+        obs.setUuid("unknown");
+        long tsMs = result.getTimestampNanos() > 0
+                ? result.getTimestampNanos() / 1_000_000L
+                : SystemClock.elapsedRealtime();
+        obs.setTimestampMs(tsMs);
+
+        synchronized (windowMap) {
+            windowMap.put(mac, obs);
+        }
+
+        long now = SystemClock.elapsedRealtime();
+        if (BuildConfig.DEBUG && (windowMap.size() <= 5 || now - lastLogSampleMs >= LOG_SAMPLE_DEBOUNCE_MS)) {
+            Log.d(TAG, "scan result mac=" + mac + " rssi=" + result.getRssi()
+                    + " unique=" + windowMap.size());
+            lastLogSampleMs = now;
+        }
+    }
+
+    private void scheduleFlush() {
+        cancelFlush();
+        mainHandler.postDelayed(flushRunnable, SCAN_INTERVAL_MS);
+    }
+
+    private void cancelFlush() {
+        mainHandler.removeCallbacks(flushRunnable);
+    }
+
+    private final Runnable flushRunnable = new Runnable() {
         @Override
         public void run() {
-            Log.d(TAG, "ScheduledBleScan tick");
-            startBleDiscovery();
+            flushWindow();
+            mainHandler.postDelayed(this, SCAN_INTERVAL_MS);
+        }
+    };
+
+    private void flushWindow() {
+        BLE[] data;
+        synchronized (windowMap) {
+            if (windowMap.isEmpty()) return;
+            data = windowMap.values().toArray(new BLE[0]);
+            windowMap.clear();
+        }
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "flushWindow(): sending " + data.length + " entries to observers");
+        }
+        sendToObservers(data);
+    }
+
+    private void sendToObservers(BLE[] data) {
+        Log.i(TAG, "notifyObservers(): sending count=" + data.length + " to observers=" + observers.size());
+        for (Observer o : observers) {
+            try {
+                o.update(data);
+            } catch (Exception e) {
+                Log.e(TAG, "notifyObservers(): observer.update() crashed", e);
+            }
         }
     }
 
@@ -316,12 +288,5 @@ public class BleDataProcessor implements Observable {
         lastToastMsg = message;
         lastToastTimeMs = now;
         Toast.makeText(context, message, duration).show();
-    }
-
-    private void logStatusThrottled(String msg) {
-        long now = SystemClock.elapsedRealtime();
-        if (now - lastStatusLogElapsed < STATUS_LOG_DEBOUNCE_MS) return;
-        lastStatusLogElapsed = now;
-        Log.w(TAG, msg);
     }
 }
