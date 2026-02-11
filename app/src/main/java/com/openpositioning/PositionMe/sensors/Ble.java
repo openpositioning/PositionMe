@@ -1,11 +1,10 @@
 package com.openpositioning.PositionMe.sensors;
 import android.os.ParcelUuid;
 import android.util.SparseArray;
-
 import java.util.List;
-public class Ble {
 
-    private long mac_long;          // int64 like RFScan.mac
+public class Ble {
+    private long mac_long;
     private String mac_str; // Mac address in string
     private int rssi;
     private int rssiSum = 0;
@@ -18,6 +17,7 @@ public class Ble {
 
     public Ble() {}
 
+    // Getter methods
     public long getMacLong() { return mac_long; }
     public String getMacStr() { return mac_str; }
     public int getRssi() {
@@ -30,6 +30,7 @@ public class Ble {
     public List<String> getServiceUuids() { return serviceUuids; }
     public SparseArray<byte[]> getManufacturerData() { return manufacturerData; }
 
+    // Setter Methods
     public void setMacLong(long mac) { this.mac_long = mac; }
     public void setMacStr(String mac) { this.mac_str = mac; }
     public void setName(String name) { this.name = name; }

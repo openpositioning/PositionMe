@@ -13,7 +13,6 @@ import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.provider.Settings;
 import android.widget.Toast;
-
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -25,6 +24,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
 import android.util.Log;
+
 import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ActivityCompat;
@@ -418,6 +418,8 @@ public class WifiDataProcessor implements Observable {
         Log.d("WifiProcessor", "get current wifi");
         return currentWifi;
     }
+
+    // Collect wift Rtt function
     public void collectWifiRtt(Consumer<Traj.WiFiRTTReading.Builder> callback) {
         // Check Android version (RTT requires Android 9+)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {

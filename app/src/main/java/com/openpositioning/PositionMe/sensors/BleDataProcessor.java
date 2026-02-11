@@ -34,7 +34,6 @@ public class BleDataProcessor implements Observable {
     private long lastWindowTimestamp = System.currentTimeMillis();
     private final ArrayList<Observer> observers = new ArrayList<>();
     private Timer scanTimer;
-    private Ble lastSeenBle;   // similar role to current WiFi connection
 
     public BleDataProcessor(Context context) {
         this.context = context;
@@ -49,31 +48,47 @@ public class BleDataProcessor implements Observable {
         }
     }
 
-    // ------------------------------------------------------------------
-    // Permissions
-    // ------------------------------------------------------------------
+    /*
+     * Checks required BLE permissions depending on Android version.
+     *
+     * Android 12+ (S):
+     *   - BLUETOOTH_SCAN
+     *   - BLUETOOTH_CONNECT
+     *
+     * Below Android 12:
+     *   - ACCESS_FINE_LOCATION (required for BLE scan results)
+     */
     private boolean checkBlePermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             return ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
                     == PackageManager.PERMISSION_GRANTED &&
-                   ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
-                    == PackageManager.PERMISSION_GRANTED;
+                    ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
+                            == PackageManager.PERMISSION_GRANTED;
         } else {
             return ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
                     == PackageManager.PERMISSION_GRANTED;
         }
     }
 
-    // Scanning
+    // Start BLE scanning
     private void startBleScan() {
         if (!checkBlePermissions()) return;
         bleScanner.startScan(scanCallback);
     }
 
+    // Stop BLE scanning
     private void stopBleScan() {
         bleScanner.stopScan(scanCallback);
     }
 
+    /*
+     * This callback is triggered every time a BLE advertisement is detected.
+     *
+     * Responsibilities:
+     * 1. Extract device information (MAC, RSSI, name, txPower, etc.).
+     * 2. Aggregate RSSI values within fingerprint window.
+     * 3. When window expires, notify observers with BLE fingerprint.
+     */
     private final ScanCallback scanCallback = new ScanCallback() {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
@@ -112,11 +127,10 @@ public class BleDataProcessor implements Observable {
             ble.addRssi(rssi);   // internally store sum + count
 
             long now = System.currentTimeMillis();
+            // when window expired
             if (now - lastWindowTimestamp >= FINGERPRINT_WINDOW_MS) {
-
                 // Notify Observer
                 notifyObservers(0);
-
                 // Reset window
                 bleWindow.clear();
                 // Update TIme stamp
@@ -156,7 +170,7 @@ public class BleDataProcessor implements Observable {
     }
 
     // ------------------------------------------------------------------
-    // Timer
+    // start Timer and start BLE scan
     // ------------------------------------------------------------------
     public void startListening() {
         scanTimer = new Timer();
@@ -170,6 +184,9 @@ public class BleDataProcessor implements Observable {
         }, 0, SCAN_INTERVAL);
     }
 
+    /*
+     * Stops BLE scanning and cancels timer.
+     */
     public void stopListening() {
         if (scanTimer != null) scanTimer.cancel();
         stopBleScan();
@@ -183,6 +200,12 @@ public class BleDataProcessor implements Observable {
         observers.add(o);
     }
 
+    /*
+     * Notifies all registered observers with the BLE fingerprint
+     * collected within the current time window.
+     *
+     * updateBle() receives an array of Ble objects.
+     */
     @Override
     public void notifyObservers(int idx) {
         for (Observer o : observers) {
