@@ -145,6 +145,11 @@ public class CorrectionFragment extends Fragment {
             if (keyCode == KeyEvent.KEYCODE_ENTER) { //when user presses enter 
                 String trajName = trajNameInput.getText().toString().trim();
                 sensorFusion.setTrajectoryName(trajName);
+                if (trajName.isEmpty()) {
+                    Toast.makeText(requireContext(), "Trajectory name cannot be empty", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(requireContext(), "Trajectory name set to: " + trajName, Toast.LENGTH_SHORT).show();
+                }
                 // sensorFusion.sendTrajectoryToCloud(selectedCampaign);
             }
             return false;
@@ -181,7 +186,10 @@ public class CorrectionFragment extends Fragment {
                 sensorFusion.setTrajectoryName(trajName); //send it 
 
                         // Send trajectory data to the cloud
-                // Send trajectory data to the cloud
+                if (trajName.isEmpty()) {
+                    Toast.makeText(requireContext(), "Trajectory name cannot be empty. Please enter a name before submission.", Toast.LENGTH_LONG).show();
+                    return; // Don't proceed if the trajectory name is empty
+                }
                 sensorFusion.sendTrajectoryToCloud();
 
 

@@ -481,8 +481,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     @Override
     public void update(Object[] wifiList) {
         // Save newest wifi values to local variable
+        
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
-        if (this.saveRecording) {
+        if (this.saveRecording && this.wifiList != null && !this.wifiList.isEmpty()) {
             Traj.Fingerprint.Builder wifiFingerprint = Traj.Fingerprint.newBuilder()
                     .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime);
 
@@ -970,6 +971,16 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Build object
         Traj.Trajectory sentTrajectory = trajectory.build();
         // Pass object to communications object
+        if (sentTrajectory.getApsDataCount() == 0 || sentTrajectory.getWifiFingerprintsCount() == 0) {
+            Log.w("SensorFusion", "Trajectory has no AP data! This can lead to bad positioning performance and should be investigated.");
+            this.serverCommunications.sendTrajectory(sentTrajectory, campaign);
+            
+            return;
+        } else {
+            Log.d("SensorFusion", "Trajectory has " + sentTrajectory.getApsDataCount() + " AP data points and " + sentTrajectory.getWifiFingerprintsCount() + " wifi fingerprints.");
+        
+
+        }
         this.serverCommunications.sendTrajectory(sentTrajectory, campaign);
     }
 
@@ -1061,17 +1072,20 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                         .setLight(light));
 
-                // Divide the timer for storing AP data every 5 seconds
-                if (secondCounter == 4) {
+                // Divide the timer for storing AP data every 1 seconds
+                if (secondCounter == 0) {
                     secondCounter = 0;
+                    
                     //Current Wifi Object
                         Wifi currentWifi = wifiProcessor.getCurrentWifiData();
-                        if (currentWifi != null && currentWifi.getBssid() != 0L) {
+                        
                             trajectory.addApsData(Traj.WiFiAPData.newBuilder()
                                     .setMac(currentWifi.getBssid())
                                     .setSsid(currentWifi.getSsid())
                                     .setFrequency(currentWifi.getFrequency()));
-                        }
+                            Log.d("SensorFusion", "Adding AP data to trajectory: BSSID=" + currentWifi.getBssid() + ", SSID=" + currentWifi.getSsid() + ", Frequency=" + currentWifi.getFrequency());
+
+                        
                 }
                 else {
                     secondCounter++;
