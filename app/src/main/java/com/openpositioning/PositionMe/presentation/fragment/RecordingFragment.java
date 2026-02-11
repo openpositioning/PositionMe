@@ -155,11 +155,20 @@ public class RecordingFragment extends Fragment {
                         Toast.LENGTH_LONG).show();
                 return;
             }
+
+            long recordingTime = sensorFusion.getRecordingTime();
+                if (recordingTime < 30_000L) { // Minimum recording time of 30 seconds
+                    Toast.makeText(requireContext(),
+                            "Recording time must be at least 30 seconds before stopping.",
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
             // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
             // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
+
         });
 
 

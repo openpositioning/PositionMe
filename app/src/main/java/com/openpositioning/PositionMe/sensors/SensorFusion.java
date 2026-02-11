@@ -150,6 +150,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private String selectedCampaign;
 
     private String trajectoryName;
+    private long recordingTime = 0;
+
 
     public void setTrajectoryName(String name){
         this.trajectoryName = name;
@@ -890,6 +892,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @see Traj object for storing data.
      */
+
+    
     public void startRecording() {
         // If wakeLock is null (e.g. not initialized or was cleared), reinitialize it.
         if (wakeLock == null) {
@@ -902,6 +906,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.stepCounter = 0;
         this.selectedCampaign = null;
         this.absoluteStartTime = System.currentTimeMillis();
+        this.recordingTime = 0L;
         this.bootTime = SystemClock.uptimeMillis();
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
@@ -938,6 +943,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Only cancel if we are running
         if(this.saveRecording) {
             this.saveRecording = false;
+            this.recordingTime = System.currentTimeMillis() - this.absoluteStartTime;
             storeTrajectoryTimer.cancel();
         }
         if(wakeLock.isHeld()) {
@@ -946,6 +952,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     //endregion
+
+    public long getRecordingTime() {
+        if (this.saveRecording) {
+            return System.currentTimeMillis() - this.absoluteStartTime;
+        } else {
+            return this.recordingTime;
+        }
+    }
 
     //region Trajectory object
 
@@ -983,6 +997,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         this.serverCommunications.sendTrajectory(sentTrajectory, campaign);
     }
+
+
 
     /**
      * Creates a {@link Traj.SensorInfo} objects from the specified sensor's data.
