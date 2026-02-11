@@ -8,6 +8,16 @@ import com.google.android.gms.maps.model.GroundOverlay;
 import com.google.android.gms.maps.model.GroundOverlayOptions;
 import com.google.android.gms.maps.model.LatLngBounds;
 
+
+/**
+ *
+ *
+ * TO-DO: INDOOR MAP FRAGMENT DESCRIPTION - outline implementation
+ *
+ *
+ */
+
+
 public class IndoorMapFragment {
     private GoogleMap mMap;
     private GroundOverlay[] groundOverlays; // GroundOverlay used to store each layer
