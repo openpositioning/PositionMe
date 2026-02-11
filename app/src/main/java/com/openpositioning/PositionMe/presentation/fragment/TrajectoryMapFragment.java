@@ -388,6 +388,16 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    public void addMarkerAtLocation(@NonNull LatLng latLng, String title) {
+        if (gMap == null) return;
+
+        gMap.addMarker(new MarkerOptions()
+                .position(latLng)
+                .title(title)
+                // 使用橙色区分当前位置标记和 GNSS 标记
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+                .alpha(0.8f)); // 稍微透明一点，防止遮挡轨迹
+    }
 
     /**
      * Remove GNSS marker if user toggles it off

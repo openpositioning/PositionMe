@@ -28,6 +28,7 @@ Sensor_Info magnetometer_info = 15;
 Sensor_Info barometer_info = 16;
 Sensor_Info light_sensor_info = 17;
 
+repeated int64 marker_timestamps = 18;
 }
 
 message Pdr_Sample {

@@ -80,6 +80,8 @@ public class RecordingFragment extends Fragment {
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
+    private int markerCount = 0;
+
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
@@ -180,6 +182,37 @@ public class RecordingFragment extends Fragment {
 
             dialog.show(); // Finally, show the dialog
         });
+
+        // 🔹 Task C: Add Marker Button Logic
+        MaterialButton addMarkerButton = view.findViewById(R.id.addMarkerButton);
+        addMarkerButton.setOnClickListener(v -> {
+
+            // 1. Get the current system timestamp
+            long timestamp = System.currentTimeMillis();
+
+            // 2. Notify SensorFusion to record this timestamp (ensure data is stored in Protobuf)
+            // Note: Make sure the SensorFusion class has an addMarker method.
+            // If not, you need to implement it there.
+            sensorFusion.addMarker(timestamp);
+
+            // 3. Display the marker on the map in real time
+            if (trajectoryMapFragment != null) {
+                LatLng currentPos = trajectoryMapFragment.getCurrentLocation();
+                if (currentPos != null) {
+                    markerCount++;
+                    // Call the map fragment method to add a marker at the current location
+                    trajectoryMapFragment.addMarkerAtLocation(currentPos, "Marker " + markerCount);
+                }
+            }
+
+            // 4. Use vibration or Toast to notify the user that the click succeeded
+            android.widget.Toast.makeText(
+                    getContext(),
+                    "Marker " + markerCount + " added",
+                    android.widget.Toast.LENGTH_SHORT
+            ).show();
+        });
+
 
         // The blinking effect for recIcon
         blinkingRecordingIcon();

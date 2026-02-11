@@ -57,6 +57,7 @@ public class WifiDataProcessor implements Observable {
     // Timer object
     private Timer scanWifiDataTimer;
 
+    private String trajectoryName = "Default_Trajectory";
     /**
      * Public default constructor of the WifiDataProcessor class.
      * The constructor saves the context, checks for permissions to use the location services,
@@ -72,6 +73,10 @@ public class WifiDataProcessor implements Observable {
      * @author Virginia Cangelosi
      * @author Mate Stodulka
      */
+
+    public void setTrajectoryName(String name) {
+        this.trajectoryName = name;
+    }
     public WifiDataProcessor(Context context) {
         this.context = context;
         // Check for permissions
@@ -114,36 +119,58 @@ public class WifiDataProcessor implements Observable {
          */
         @Override
         public void onReceive(Context context, Intent intent) {
-
-            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                // Unregister this listener
+            if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED) {
                 stopListening();
                 return;
             }
 
-            //Collect the list of nearby wifis
             List<ScanResult> wifiScanList = wifiManager.getScanResults();
-            //Stop receiver as scan is complete
             context.unregisterReceiver(this);
 
-            //Loop though each item in wifi list
-            wifiData = new Wifi[wifiScanList.size()];
-            for(int i = 0; i < wifiScanList.size(); i++) {
-                wifiData[i] = new Wifi();
-                //Convert String mac address to an integer
-                String wifiMacAddress = wifiScanList.get(i).BSSID;
-                long intMacAddress = convertBssidToLong(wifiMacAddress);
-                //store mac address and rssi of wifi
-                wifiData[i].setBssid(intMacAddress);
-                wifiData[i].setLevel(wifiScanList.get(i).level);
+            java.util.Set<Long> seenBssids = new java.util.HashSet<>();
+            List<Wifi> filteredWifiList = new ArrayList<>();
+
+            for (ScanResult scanResult : wifiScanList) {
+                long intMacAddress = convertBssidToLong(scanResult.BSSID);
+
+
+                if (!seenBssids.contains(intMacAddress)) {
+                    seenBssids.add(intMacAddress);
+
+                    Wifi wifi = new Wifi();
+                    wifi.setBssid(intMacAddress);
+                    wifi.setLevel(scanResult.level);
+
+
+                    // 1. WiFi RTT Flag
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        boolean isRttResponder = scanResult.is80211mcResponder();
+                        wifi.setRttFlag(isRttResponder);
+                    }
+
+                    // 2. UUID
+                    String uuid = java.util.UUID
+                            .nameUUIDFromBytes(scanResult.BSSID.getBytes())
+                            .toString();
+                    wifi.setUuid(uuid);
+
+                    filteredWifiList.add(wifi);
+                }
             }
 
-            //Notify observers of change in wifiData variable
+
+            wifiData = filteredWifiList.toArray(new Wifi[0]);
+
+
             notifyObservers(0);
         }
-    };
+        };
 
-    /**
+
+        /**
      * Converts mac address from string to integer.
      * Removes semicolons from mac address and converts each hex byte to a hex integer.
      *
@@ -244,19 +271,29 @@ public class WifiDataProcessor implements Observable {
      * If the device supports wifi throttling check if it is enabled and instruct the user to
      * disable it.
      */
-    public void checkWifiThrottling(){
-        if(checkWifiPermissions()) {
-            //If the device does not support wifi throttling an exception is thrown
+    public void checkWifiThrottling() {
+        if (checkWifiPermissions()) {
             try {
-                if(Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled")==1) {
-                    //Inform user to disable wifi throttling
-                    Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
+                // Check whether the throttling state is enabled (value == 1)
+                if (Settings.Global.getInt(
+                        context.getContentResolver(),
+                        "wifi_scan_throttle_enabled") == 1) {
+
+                    // Prompt the user to disable this feature in Developer Options
+                    Toast.makeText(
+                            context,
+                            "WiFi throttling must be disabled in Developer Options to ensure accurate data!",
+                            Toast.LENGTH_LONG
+                    ).show();
                 }
+
             } catch (Settings.SettingNotFoundException e) {
                 e.printStackTrace();
             }
         }
     }
+
+
 
     /**
      * Implement default method from Observable Interface to add new observers to the class.
