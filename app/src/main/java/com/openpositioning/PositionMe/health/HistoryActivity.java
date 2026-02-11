@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.activity;
+package com.openpositioning.PositionMe.health;
 
 import android.os.Bundle;
 import android.util.Log;
@@ -10,8 +10,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.health.WalkSessionSummary;
-import com.openpositioning.PositionMe.presentation.adapter.HistoryAdapter;
 import com.openpositioning.PositionMe.utils.WalkFileParser;
 
 import java.io.File;

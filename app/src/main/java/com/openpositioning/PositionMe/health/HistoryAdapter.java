@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.presentation.adapter;
+package com.openpositioning.PositionMe.health;
 
 import android.content.Context;
 import android.view.LayoutInflater;
@@ -10,8 +10,6 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.health.ScoreCalculator;
-import com.openpositioning.PositionMe.health.WalkSessionSummary;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;

@@ -1,5 +1,6 @@
-package com.openpositioning.PositionMe.presentation.activity;
+package com.openpositioning.PositionMe.health;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
@@ -15,16 +16,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputEditText;
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.health.ScoreCalculator;
-import com.openpositioning.PositionMe.health.ScoreResult;
-import com.openpositioning.PositionMe.health.WalkSessionSummary;
 import com.openpositioning.PositionMe.utils.WalkFileParser;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 public class HealthActivity extends AppCompatActivity {
 
@@ -115,13 +113,14 @@ public class HealthActivity extends AppCompatActivity {
         }
 
         // Sort by most recent first
-        Collections.sort(sessions, (s1, s2) -> Long.compare(s2.getTimestampMillis(), s1.getTimestampMillis()));
+        sessions.sort((s1, s2) -> Long.compare(s2.getTimestampMillis(), s1.getTimestampMillis()));
         return sessions.get(0);
     }
 
     /**
      * Reads the goals from the input fields and recalculates the score.
      */
+    @SuppressLint("SetTextI18n")
     private void updateScore() {
         if (currentWalkSummary == null) {
             scoreTextView.setText("—");
@@ -132,8 +131,8 @@ public class HealthActivity extends AppCompatActivity {
 
         try {
             // 1. Get User Goals from EditTexts
-            double distanceGoalKm = Double.parseDouble(distanceGoalInput.getText().toString());
-            double durationGoalMin = Double.parseDouble(durationGoalInput.getText().toString());
+            double distanceGoalKm = Double.parseDouble(Objects.requireNonNull(distanceGoalInput.getText()).toString());
+            double durationGoalMin = Double.parseDouble(Objects.requireNonNull(durationGoalInput.getText()).toString());
 
             // Convert to meters and seconds for the calculator
             double distanceGoalM = distanceGoalKm * 1000;
