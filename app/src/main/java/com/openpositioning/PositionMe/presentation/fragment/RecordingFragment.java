@@ -155,6 +155,14 @@ public class RecordingFragment extends Fragment {
                         Toast.LENGTH_LONG).show();
                 return;
             }
+
+            long recordingTime = sensorFusion.getRecordingTime();
+                if (recordingTime < 30_000L) { // Minimum recording time of 30 seconds
+                    Toast.makeText(requireContext(),
+                            "Recording time must be at least 30 seconds before stopping.",
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
             // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
@@ -165,6 +173,7 @@ public class RecordingFragment extends Fragment {
 
             // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
+
         });
 
 
@@ -265,12 +274,12 @@ public class RecordingFragment extends Fragment {
             LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
 
             //TODO UNCOMMENT WHEN SUBMITTING
-//            trajectoryMapFragment.updateFloorplanProbeLocation(gnssLocation);
+           trajectoryMapFragment.updateFloorplanProbeLocation(gnssLocation);
 
-            LatLng probe = trajectoryMapFragment.getCurrentLocation();
-            if (probe != null) {
-                trajectoryMapFragment.updateFloorplanProbeLocation(probe);
-            }
+            // LatLng probe = trajectoryMapFragment.getCurrentLocation();
+            // if (probe != null) {
+            //     trajectoryMapFragment.updateFloorplanProbeLocation(probe);
+            // }
 
 
             // If user toggles showing GNSS in the map, call e.g.

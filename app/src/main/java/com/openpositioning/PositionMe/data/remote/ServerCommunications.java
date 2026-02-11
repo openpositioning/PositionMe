@@ -238,6 +238,7 @@ public class ServerCommunications implements Observable {
 
                             String errorBody = responseBody.string();
                             infoResponse = "Upload failed: " + errorBody;
+                            Log.i("TrajName", "Upload failed: " + errorBody);
                             new Handler(Looper.getMainLooper()).post(() ->
                                     Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
 
@@ -344,6 +345,8 @@ public class ServerCommunications implements Observable {
                 System.err.println("UPLOAD: Failure to get response");
                 notifyObservers(1);
                 infoResponse = "Upload failed: " + e.getMessage(); // Store error message
+                Log.i("TrajName", "Upload failed: " + e.getMessage());
+
                 new Handler(Looper.getMainLooper()).post(() ->
                         Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
             }
@@ -361,6 +364,8 @@ public class ServerCommunications implements Observable {
                         String errorBody = responseBody.string();
                         System.err.println("UPLOAD unsuccessful: " + errorBody);
                         infoResponse = "Upload failed: " + errorBody;
+                        Log.i("TrajName", "Upload failed: " + errorBody);
+
                         new Handler(Looper.getMainLooper()).post(() ->
                                 Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
                         throw new IOException("UPLOAD failed with code " + response);
