@@ -84,6 +84,8 @@ public class TrajectoryMapFragment extends Fragment {
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
 
+    private volatile boolean hasRotationFix = false;
+
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
@@ -607,6 +609,10 @@ public class TrajectoryMapFragment extends Fragment {
         canvas.drawText(String.valueOf(markerCount), cx, textY, textPaint);
 
         return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
+
+    public boolean hasRotationFix() {
+        return hasRotationFix;
     }
 
 }
