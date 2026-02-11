@@ -92,6 +92,17 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
 
+
+    private Float lastElevationMeters = null;
+    public void setElevation(float elevationMeters) {
+        this.lastElevationMeters = elevationMeters;
+    }
+
+    private boolean autoFloorEnabled = false;
+    public boolean isAutoFloorEnabled(){
+        return autoFloorEnabled;
+    }
+
     public TrajectoryMapFragment() {
         // Required empty public constructor
     }
@@ -170,19 +181,62 @@ public class TrajectoryMapFragment extends Fragment {
         });
 
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-            // Auto-floor behavior intentionally not enabled in this release.
+            
+            autoFloorEnabled = isChecked;
+            if (isChecked && lastElevationMeters != null) {
+                autoFloorFromElevation(lastElevationMeters);
+            }
         });
 
         floorUpButton.setOnClickListener(v -> {
             autoFloorSwitch.setChecked(false);
             switchFloor(selectedFloorIndex + 1);
+            Log.d(TAG, "Floor up button clicked. New floor index: " + selectedFloorIndex);
         });
 
         floorDownButton.setOnClickListener(v -> {
             autoFloorSwitch.setChecked(false);
             switchFloor(selectedFloorIndex - 1);
+            Log.d(TAG, "Floor down button clicked. New floor index: " + selectedFloorIndex);
         });
     }
+
+    //auto floor helper maps elevation to a floor
+    public void autoFloorFromElevation(float elevationMeters) {
+        if (!hasFloorData()) {
+            return;
+        }
+
+        int targetFloor = mapElevationToFloor(elevationMeters);
+        int levelIndex = findLevelIndexByFloor(targetFloor);
+
+        if (levelIndex >= 0) {
+            switchFloor(levelIndex);
+        }
+    }
+
+    private int mapElevationToFloor(float elevationMeters) { // murchison 
+        if (elevationMeters >= 5.5 && elevationMeters <= 7.5) {
+            return 1;
+        } else if (elevationMeters >= 2.5 && elevationMeters <= 4.5) {
+            return 0;
+        } else if (elevationMeters >= -1.0 && elevationMeters <= 1.0) {
+            return -1;
+        }
+        return 0; // Default fallback
+    }
+
+    private int findLevelIndexByFloor(int targetFloor) {
+        if (targetFloor == -1) return 0;
+        if (targetFloor == 0)  return 1; // GF
+        if (targetFloor == 1)  return 2; // F1
+        if (targetFloor == 2)  return 3; // F2
+        if (targetFloor == 3)  return 4; // F3
+        return -1;
+    }
+
+
+
 
     private void initMapSettings(GoogleMap map) {
         map.getUiSettings().setCompassEnabled(true);
@@ -296,13 +350,13 @@ public class TrajectoryMapFragment extends Fragment {
         boolean isStale = now - lastFloorplanRequestTimeMs >= FLOORPLAN_REFRESH_MS;
         boolean movedFar = false;
 
-        if (!isFirst && lastFloorplanRequestLocation != null) {
+        if (lastFloorplanRequestLocation != null) {
             movedFar = UtilFunctions.distanceBetweenPoints(lastFloorplanRequestLocation, location)
                     >= FLOORPLAN_REFRESH_DISTANCE_METERS;
         }
 
-        if (!isFirst && !isStale && !movedFar) {
-            Log.d(TAG, "Skip request: throttle active (isStale=" + isStale + ", movedFar=" + movedFar + ")");
+        if (!isStale && !movedFar) {
+           // Log.d(TAG, "Skip request: throttle active (isStale=" + isStale + ", movedFar=" + movedFar + ")");
             return;
         }
 

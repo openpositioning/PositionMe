@@ -117,6 +117,11 @@ public class RecordingFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+
+
+ 
+
+
         // Child Fragment: the container in fragment_recording.xml
         // where TrajectoryMapFragment is placed
         trajectoryMapFragment = (TrajectoryMapFragment)
@@ -130,6 +135,8 @@ public class RecordingFragment extends Fragment {
                     .replace(R.id.trajectoryMapFragmentContainer, trajectoryMapFragment)
                     .commit();
         }
+
+
 
         // Initialize UI references
         elevation = view.findViewById(R.id.currentElevation);
@@ -248,6 +255,17 @@ public class RecordingFragment extends Fragment {
         // Elevation
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
+        
+        // Pass elevation to map for auto-floor switching and display
+        if (trajectoryMapFragment != null) {
+            trajectoryMapFragment.setElevation(elevationVal);
+            if (trajectoryMapFragment.isAutoFloorEnabled()) {
+                trajectoryMapFragment.autoFloorFromElevation(elevationVal);
+            }
+        }
+
+        
+
 
         // Current location
         // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon

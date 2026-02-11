@@ -321,7 +321,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                     this.elevation = pdrProcessing.updateElevation(
                             SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, pressure)
                     );
+
+                   
                 }
+
+                
                 break;
 
             case Sensor.TYPE_GYROSCOPE:
@@ -358,7 +362,15 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // Possibly log gravity values if needed
                 //Log.v("SensorFusion", "Gravity: " + Arrays.toString(gravity));
 
-                elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
+                // elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
+                // Log.v("SensorFusion", "Elevator status: " + elevator);
+                // //get floor id
+                
+                
+                // Log.v("SensorFusion", "Current estimated floor: " + pdrProcessing.getCurrentFloor());
+                // //if floor change from 1 to 2
+                
+                
                 break;
 
             case Sensor.TYPE_LIGHT:
@@ -696,6 +708,11 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public float passAverageStepLength(){
         return pdrProcessing.getAverageStepLength();
+    }
+
+
+    public int getPDRFloor(){
+        return pdrProcessing.getCurrentFloor();
     }
 
     /**

@@ -46,7 +46,7 @@ message Trajectory {
 
 
 
-  // STRING added
+  // Japjot added for name
   string trajectory_name = 27;
 
 }

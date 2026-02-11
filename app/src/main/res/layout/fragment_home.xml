@@ -140,7 +140,7 @@
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:layout_margin="8dp"
-                android:backgroundTint="#CDDC39"
+                android:backgroundTint="#464D07"
                 android:text="@string/measurements"
                 android:textColor="@color/md_theme_onTertiary"
                 app:cornerRadius="16dp"
