@@ -191,17 +191,10 @@ public class ServerCommunications implements Observable {
             OkHttpClient client = new OkHttpClient();
 
             // Creaet a equest body with a file to upload in multipart/form-data format
-                MultipartBody.Builder formBuilder = new MultipartBody.Builder().setType(MultipartBody.FORM)
+            RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", file.getName(),
-                        RequestBody.create(MediaType.parse("text/plain"), file));
-
-                String venueName = SelectedVenueStore.getInstance().getVenueName();
-                if (venueName != null && !venueName.isEmpty()) {
-                formBuilder.addFormDataPart("venue", venueName);
-                formBuilder.addFormDataPart("venue_floor", String.valueOf(SelectedVenueStore.getInstance().getFloorIndex()));
-                }
-
-                RequestBody requestBody = formBuilder.build();
+                            RequestBody.create(MediaType.parse("text/plain"), file))
+                    .build();
 
             // Create a POST request with the required headers
             String uploadURL = formUploadURL();
@@ -324,17 +317,9 @@ public class ServerCommunications implements Observable {
             fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), localTrajectory);
         }
 
-        // Create request body with a file to upload in multipart/form-data format
-        MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM)
-            .addFormDataPart("file", localTrajectory.getName(), fileRequestBody);
-
-        String venueName = SelectedVenueStore.getInstance().getVenueName();
-        if (venueName != null && !venueName.isEmpty()) {
-            builder.addFormDataPart("venue", venueName);
-            builder.addFormDataPart("venue_floor", String.valueOf(SelectedVenueStore.getInstance().getFloorIndex()));
-        }
-
-        RequestBody requestBody = builder.build();
+        RequestBody requestBody = new MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("file", localTrajectory.getName(), fileRequestBody)
+                .build();
 
         String uploadURL = formUploadURL();
         // Create a POST request with the required headers
