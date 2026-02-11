@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -72,8 +73,25 @@ public class StartLocationFragment extends Fragment {
         }
         View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
 
-        // Obtain the start position from the GPS data from the SensorFusion class
-        startPosition = sensorFusion.getGNSSLatitude(false);
+        // Check if the trajectory file's original recording position was passed via arguments
+        // (from ReplayActivity). If available, use it instead of current GPS.
+        boolean hasFilePosition = false;
+        if (getArguments() != null) {
+            float fileLat = getArguments().getFloat(ReplayActivity.EXTRA_FILE_INITIAL_LAT, 0f);
+            float fileLon = getArguments().getFloat(ReplayActivity.EXTRA_FILE_INITIAL_LON, 0f);
+            if (fileLat != 0f || fileLon != 0f) {
+                startPosition[0] = fileLat;
+                startPosition[1] = fileLon;
+                hasFilePosition = true;
+                Log.i("StartLocationFragment", "Using file's recording position: " + fileLat + ", " + fileLon);
+            }
+        }
+
+        // If no file position, fall back to current GPS from SensorFusion
+        if (!hasFilePosition) {
+            startPosition = sensorFusion.getGNSSLatitude(false);
+        }
+
         // If no location found, zoom the map out
         if (startPosition[0] == 0 && startPosition[1] == 0) {
             zoom = 1f;

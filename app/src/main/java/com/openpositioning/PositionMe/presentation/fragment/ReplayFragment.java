@@ -125,6 +125,17 @@ public class ReplayFragment extends Fragment {
                 getChildFragmentManager().findFragmentById(R.id.replayMapFragmentContainer);
         if (trajectoryMapFragment == null) {
             trajectoryMapFragment = new TrajectoryMapFragment();
+
+            // 🆕 Pass initial coordinates and enable indoor map loading
+            Bundle mapArgs = new Bundle();
+            mapArgs.putBoolean("has_venue", true);
+            mapArgs.putString("venue_id", "");
+            mapArgs.putString("venue_name", "");
+            mapArgs.putString("venue_floor", "0");
+            mapArgs.putDouble("initial_lat", (double) initialLat);
+            mapArgs.putDouble("initial_lon", (double) initialLon);
+            trajectoryMapFragment.setArguments(mapArgs);
+
             getChildFragmentManager()
                     .beginTransaction()
                     .replace(R.id.replayMapFragmentContainer, trajectoryMapFragment)
@@ -133,18 +144,18 @@ public class ReplayFragment extends Fragment {
 
 
 
+        // Always set initial camera position first, so map is centered correctly
+        if (initialLat != 0f || initialLon != 0f) {
+            LatLng startPoint = new LatLng(initialLat, initialLon);
+            Log.i(TAG, "Setting initial map position: " + startPoint.toString());
+            trajectoryMapFragment.setInitialCameraPosition(startPoint);
+        }
+
         // 1) Check if the file contains any GNSS data
         boolean gnssExists = hasAnyGnssData(replayData);
 
         if (gnssExists) {
             showGnssChoiceDialog();
-        } else {
-            // No GNSS data -> automatically use param lat/lon
-            if (initialLat != 0f || initialLon != 0f) {
-                LatLng startPoint = new LatLng(initialLat, initialLon);
-                Log.i(TAG, "Setting initial map position: " + startPoint.toString());
-                trajectoryMapFragment.setInitialCameraPosition(startPoint);
-            }
         }
 
         // Initialize UI controls
@@ -184,6 +195,7 @@ public class ReplayFragment extends Fragment {
         restartButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = 0;
+            lastIndex = -1; // Reset lastIndex so updateMapForIndex does a full redraw
             playbackSeekBar.setProgress(0);
             Log.i(TAG, "Restart button pressed. Resetting playback to index 0.");
             updateMapForIndex(0);
@@ -224,8 +236,12 @@ public class ReplayFragment extends Fragment {
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
+        // Don't call updateMapForIndex(0) here - the map isn't ready yet.
+        // lastIndex stays at -1 so the first playback call will do a full redraw.
         if (!replayData.isEmpty()) {
-            updateMapForIndex(0);
+            Log.i(TAG, "Replay data loaded with " + replayData.size() + " points. Ready to play.");
+        } else {
+            Log.w(TAG, "WARNING: replayData is empty! No trajectory to display.");
         }
     }
 
@@ -272,7 +288,7 @@ public class ReplayFragment extends Fragment {
     }
 
     private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
+        LatLng startPoint = new LatLng(latitude, longitude);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
     }
@@ -283,7 +299,7 @@ public class ReplayFragment extends Fragment {
     private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
         for (TrajParser.ReplayPoint point : data) {
             if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+                return new LatLng(point.gnssLocation.latitude, point.gnssLocation.longitude);
             }
         }
         return null; // None found
@@ -299,17 +315,26 @@ public class ReplayFragment extends Fragment {
         public void run() {
             if (!isPlaying || replayData.isEmpty()) return;
 
-            Log.i(TAG, "Playing index: " + currentIndex);
-            updateMapForIndex(currentIndex);
-            currentIndex++;
-            playbackSeekBar.setProgress(currentIndex);
+            try {
+                Log.i(TAG, "Playing index: " + currentIndex);
+                updateMapForIndex(currentIndex);
+                currentIndex++;
+                playbackSeekBar.setProgress(currentIndex);
 
-            if (currentIndex < replayData.size()) {
-                playbackHandler.postDelayed(this, PLAYBACK_INTERVAL_MS);
-            } else {
-                Log.i(TAG, "Playback completed. Reached end of data.");
-                isPlaying = false;
-                playPauseButton.setText("Play");
+                if (currentIndex < replayData.size()) {
+                    playbackHandler.postDelayed(this, PLAYBACK_INTERVAL_MS);
+                } else {
+                    Log.i(TAG, "Playback completed. Reached end of data.");
+                    isPlaying = false;
+                    playPauseButton.setText("Play");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error during playback at index " + currentIndex + ": " + e.getMessage(), e);
+                // Continue playback from next index rather than crashing silently
+                currentIndex++;
+                if (currentIndex < replayData.size() && isPlaying) {
+                    playbackHandler.postDelayed(this, PLAYBACK_INTERVAL_MS);
+                }
             }
         }
     };
@@ -323,6 +348,9 @@ public class ReplayFragment extends Fragment {
      */
     private void updateMapForIndex(int newIndex) {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
+
+        // Check if map is ready before drawing
+        if (trajectoryMapFragment == null) return;
 
         // Detect if user is playing sequentially (lastIndex + 1)
         // or is skipping around (backwards, or jump forward)

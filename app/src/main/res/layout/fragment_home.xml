@@ -10,8 +10,8 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="24dp"
-        android:background="@color/md_theme_background">
+        android:background="@color/md_theme_background"
+        android:padding="24dp">
 
         <!-- Extra-large page title -->
         <TextView
@@ -19,43 +19,123 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/position_me"
-            android:textSize="36sp"
-            android:textStyle="bold"
             android:textAlignment="center"
             android:textColor="@color/md_theme_primary"
-            app:layout_constraintTop_toTopOf="parent"
+            android:textSize="36sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintTop_toTopOf="parent" />
 
         <!-- Slogan beneath the title -->
         <TextView
             android:id="@+id/sloganText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:text="@string/fragment_home_slogan"
-            android:textSize="14sp"
-            android:textStyle="italic"
             android:textAlignment="center"
             android:textColor="@color/md_theme_primary"
-            app:layout_constraintTop_toBottomOf="@id/pageTitle"
-            app:layout_constraintStart_toStartOf="parent"
+            android:textSize="14sp"
+            android:textStyle="italic"
             app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="20dp" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/pageTitle" />
+
+        <!-- 🆕 NEW: Venue Selection Card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/venueCard"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/md_theme_secondaryContainer"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/sloganText">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.7"
+                    android:text="📍 Selected Venue"
+                    android:textColor="@color/md_theme_onSecondaryContainer"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/venueNameTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Murchison House"
+                    android:textColor="@color/md_theme_onSecondaryContainer"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/venueFloorTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Floor: Ground Floor"
+                    android:textColor="@color/md_theme_onSecondaryContainer"
+                    android:textSize="14sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/changeVenueButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="4dp"
+                        android:layout_weight="1"
+                        android:padding="8dp"
+                        android:text="Change"
+                        android:textSize="12sp"
+                        app:cornerRadius="8dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/clearVenueButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_weight="1"
+                        android:padding="8dp"
+                        android:text="Clear"
+                        android:textSize="12sp"
+                        app:cornerRadius="8dp" />
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
 
         <!-- GNSS status message (hidden by default) -->
         <TextView
             android:id="@+id/gnssStatusTextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/gnss_disabled"
             android:textColor="@android:color/holo_red_dark"
             android:textSize="16sp"
             android:visibility="gone"
-            android:text="@string/gnss_disabled"
-            app:layout_constraintTop_toBottomOf="@id/sloganText"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="8dp" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/venueCard" />
 
         <!-- Google Map container -->
         <androidx.fragment.app.FragmentContainerView
@@ -63,25 +143,25 @@
             android:name="com.google.android.gms.maps.SupportMapFragment"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:layout_marginTop="20dp"
-            app:layout_constraintTop_toBottomOf="@id/gnssStatusTextView"
-            app:layout_constraintStart_toStartOf="parent"
+            android:layout_marginTop="16dp"
+            app:layout_constraintDimensionRatio="16:9"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintDimensionRatio="16:9" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/gnssStatusTextView" />
 
         <!-- 2x2 Button Grid with equal-sized buttons -->
         <androidx.gridlayout.widget.GridLayout
             android:id="@+id/buttonGrid"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:minHeight="80dp"
             android:layout_marginTop="24dp"
+            android:minHeight="80dp"
             app:columnCount="2"
-            app:rowCount="2"
-            app:layout_constraintTop_toBottomOf="@id/mapFragmentContainer"
-            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/indoorButton"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintBottom_toTopOf="@id/indoorButton">
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/mapFragmentContainer"
+            app:rowCount="2">
 
             <!-- Start Recording Button -->
             <com.google.android.material.button.MaterialButton
@@ -152,22 +232,24 @@
                 app:layout_rowWeight="1" />
         </androidx.gridlayout.widget.GridLayout>
 
-        <!-- Grey button for indoor positioning, anchored to the bottom. -->
+        <!-- Grey button for indoor positioning, anchored to the bottom -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/indoorButton"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Indoor Positioning \n (In Development)"
-            android:textColor="@color/md_theme_onPrimary"
-            android:backgroundTint="#9E9E9E"
+            android:backgroundTint="#26A69A"
+            android:text="Indoor Map"
+            android:textColor="@color/md_theme_light_onPrimary"
             android:textSize="14sp"
+            app:backgroundTint="@color/ic_launcher_simple_background"
             app:cornerRadius="14dp"
-            app:layout_constraintTop_toBottomOf="@id/buttonGrid"
+            app:iconTint="@color/ic_launcher_simple_background"
             app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintTop_toBottomOf="@id/buttonGrid" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>

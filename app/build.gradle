@@ -3,6 +3,7 @@ plugins {
     id 'com.google.gms.google-services'
     id 'androidx.navigation.safeargs'
     id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
+    id 'com.google.protobuf'
 }
 
 // (Optional) load local secrets file:
@@ -32,6 +33,9 @@ android {
                 "\"${localProperties['OPENPOSITIONING_API_KEY'] ?: ''}\""
         buildConfigField "String", "OPENPOSITIONING_MASTER_KEY",
                 "\"${localProperties['OPENPOSITIONING_MASTER_KEY'] ?: ''}\""
+
+        //I ADD
+        resValue "string", "google_maps_key", localProperties.getProperty("MAPS_API_KEY", "")
     }
 
     buildFeatures {
@@ -57,6 +61,19 @@ android {
     }
 }
 
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.21.12'
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java { }
+            }
+        }
+    }
+}
+
 dependencies {
     // Core AndroidX
     implementation 'androidx.appcompat:appcompat:1.7.0-alpha03' // or stable: 1.6.1
@@ -73,9 +90,9 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
     implementation 'com.google.android.material:material:1.12.0'
 
-    implementation 'com.google.protobuf:protobuf-java:3.0.0'
+    implementation 'com.google.protobuf:protobuf-java:3.21.12'
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
-    implementation "com.google.protobuf:protobuf-java-util:3.0.0"
+    implementation "com.google.protobuf:protobuf-java-util:3.21.12"
     implementation "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava"
     implementation 'com.google.android.gms:play-services-maps:19.0.0'
 
@@ -92,4 +109,7 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+
+    //修改的部分
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
 }

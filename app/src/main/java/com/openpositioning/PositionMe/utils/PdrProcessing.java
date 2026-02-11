@@ -28,6 +28,7 @@ public class PdrProcessing {
 
     //region Static variables
     // Weiberg algorithm coefficient for stride calculations
+    // Original was K=0.364 with *2 multiplier. Now using K=0.364 without multiplier.
     private static final float K = 0.364f;
     // Number of samples (seconds) to keep as memory for elevation calculation
     private static final int elevationSeconds = 4;
@@ -254,11 +255,12 @@ public class PdrProcessing {
         float bounce = (float) Math.pow((maxAccel - minAccel), 0.25);
 
         // determine which constant to use based on settings
+        // Note: Removed *2 multiplier that was causing overestimation
         if (this.settings.getBoolean("overwrite_constants", false)) {
-            return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934")) * 2;
+            return bounce * Float.parseFloat(settings.getString("weiberg_k", "0.934"));
         }
 
-        return bounce * K * 2;
+        return bounce * K;
     }
 
     /**

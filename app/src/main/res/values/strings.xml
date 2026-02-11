@@ -137,4 +137,43 @@
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
 
+
+
+    <!--
+    ========================================
+    RecordingFragment 字符串资源
+    请将以下内容添加到你的 res/values/strings.xml 文件中
+    ========================================
+    -->
+
+    <!-- Venue Selection -->
+    <string name="venue_outdoor_hint">📍 Outdoor (Tap building to select venue)</string>
+    <string name="change_venue">Change</string>
+    <string name="back_to_recording">← Back</string>
+
+    <!-- Recording Status -->
+    <string name="recording_status">RECORDING</string>
+    <string name="recording_indicator_desc">Recording indicator</string>
+
+    <!-- Measurements -->
+    <string name="distance_default">Distance: 0.00m</string>
+    <string name="elevation_default">Elevation: 0.0m</string>
+    <string name="gnss_error_default">GNSS Error: 0.00m</string>
+
+    <!-- Buttons -->
+    <string name="cancel_recording">Cancel</string>
+    <string name="complete_recording">Complete</string>
+
+    <!-- Existing strings that should already be in your strings.xml -->
+    <!-- If these are missing, add them too: -->
+    <!--
+    <string name="elevation">Elevation: %s m</string>
+    <string name="meter">Distance: %s m</string>
+    <string name="gnss_error">GNSS Error: </string>
+    -->
+
+
+
+
+
 </resources>

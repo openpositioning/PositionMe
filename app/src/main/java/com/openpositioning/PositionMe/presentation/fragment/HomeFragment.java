@@ -32,27 +32,38 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 
 /**
- * A simple {@link Fragment} subclass. The home fragment is the start screen of the application.
- * The home fragment acts as a hub for all other fragments, with buttons and icons for navigation.
- * The default screen when opening the application
+ * HomeFragment - Main screen with venue selection display
  *
- * @see RecordingFragment
- * @see FilesFragment
- * @see MeasurementsFragment
- * @see SettingsFragment
+ * Features:
+ * - Display current selected venue for data collection
+ * - Navigate to other fragments
+ * - Show map with current location
+ *
+ * Integration with venue selection:
+ * - Displays venue selected in MapsFragment
+ * - Updates automatically when venue changes
  *
  * @author Mate Stodulka
+ * @author Your Team (venue display integration)
  */
 public class HomeFragment extends Fragment implements OnMapReadyCallback {
 
-    // Interactive UI elements to navigate to other fragments
+    // Interactive UI elements
     private MaterialButton goToInfo;
     private Button start;
     private Button measurements;
     private Button files;
+    private Button indoorButton;
     private TextView gnssStatusTextView;
 
-    // For the map
+    // 🆕 NEW: Venue display elements
+    private androidx.cardview.widget.CardView venueCard;
+    private TextView venueNameTextView;
+    private TextView venueFloorTextView;
+    private MaterialButton changeVenueButton;
+    private MaterialButton clearVenueButton;
+
+    // Map components
     private GoogleMap mMap;
     private SupportMapFragment mapFragment;
 
@@ -67,7 +78,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
 
     /**
      * {@inheritDoc}
-     * Ensure the action bar is shown at the top of the screen. Set the title visible to Home.
+     * Ensure the action bar is shown at the top of the screen.
      */
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -79,12 +90,26 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     }
 
     /**
-     * Initialise UI elements and set onClick actions for the buttons.
+     * Initialize UI elements and set onClick actions
      */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        // Initialize existing buttons
+        setupNavigationButtons(view);
+
+        // 🆕 Initialize venue display elements
+        setupVenueDisplay(view);
+
+        // Initialize map
+        setupMap(view);
+    }
+
+    /**
+     * Setup navigation buttons
+     */
+    private void setupNavigationButtons(View view) {
         // Sensor Info button
         goToInfo = view.findViewById(R.id.sensorInfoButton);
         goToInfo.setOnClickListener(v -> {
@@ -116,20 +141,105 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             Navigation.findNavController(v).navigate(action);
         });
 
-        // TextView to display GNSS disabled message
-        gnssStatusTextView = view.findViewById(R.id.gnssStatusTextView);
+        // Indoor positioning button
+        indoorButton = view.findViewById(R.id.indoorButton);
+        if (indoorButton != null) {
+            indoorButton.setOnClickListener(v -> {
+                Navigation.findNavController(v).navigate(R.id.action_homeFragment_to_mapsFragment);
+            });
+        }
 
-        // Locate the MapFragment nested in this fragment
+        // GNSS status text
+        gnssStatusTextView = view.findViewById(R.id.gnssStatusTextView);
+    }
+
+    /**
+     * 🆕 NEW: Setup venue display elements
+     */
+    private void setupVenueDisplay(View view) {
+        venueCard = view.findViewById(R.id.venueCard);
+        venueNameTextView = view.findViewById(R.id.venueNameTextView);
+        venueFloorTextView = view.findViewById(R.id.venueFloorTextView);
+        changeVenueButton = view.findViewById(R.id.changeVenueButton);
+        clearVenueButton = view.findViewById(R.id.clearVenueButton);
+
+        // Setup change venue button
+        if (changeVenueButton != null) {
+            changeVenueButton.setOnClickListener(v -> {
+                // Navigate to MapsFragment to select a different venue
+                Navigation.findNavController(v).navigate(R.id.action_homeFragment_to_mapsFragment);
+            });
+        }
+
+        // Setup clear venue button
+        if (clearVenueButton != null) {
+            clearVenueButton.setOnClickListener(v -> {
+                VenueManager.getInstance(requireContext()).clearVenueSelection();
+                updateVenueDisplay();
+                android.widget.Toast.makeText(getContext(),
+                        "Venue selection cleared",
+                        android.widget.Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        // Update venue display with current selection
+        updateVenueDisplay();
+    }
+
+    /**
+     * 🆕 NEW: Update venue display with current selection
+     */
+    private void updateVenueDisplay() {
+        VenueManager venueManager = VenueManager.getInstance(requireContext());
+
+        if (venueManager.hasSelectedVenue()) {
+            // Show venue information
+            if (venueCard != null) {
+                venueCard.setVisibility(View.VISIBLE);
+            }
+
+            if (venueNameTextView != null) {
+                venueNameTextView.setText(venueManager.getSelectedVenueName());
+            }
+
+            if (venueFloorTextView != null) {
+                String floor = venueManager.getSelectedFloor();
+                if (!floor.isEmpty()) {
+                    venueFloorTextView.setText("Floor: " + floor);
+                    venueFloorTextView.setVisibility(View.VISIBLE);
+                } else {
+                    venueFloorTextView.setVisibility(View.GONE);
+                }
+            }
+
+            if (changeVenueButton != null) {
+                changeVenueButton.setVisibility(View.VISIBLE);
+            }
+
+            if (clearVenueButton != null) {
+                clearVenueButton.setVisibility(View.VISIBLE);
+            }
+        } else {
+            // No venue selected - hide the card or show "no venue" message
+            if (venueCard != null) {
+                venueCard.setVisibility(View.GONE);
+            }
+        }
+    }
+
+    /**
+     * Setup map fragment
+     */
+    private void setupMap(View view) {
         mapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.mapFragmentContainer);
         if (mapFragment != null) {
-            // Asynchronously initialize the map
             mapFragment.getMapAsync(this);
         }
     }
 
     /**
-     * Callback triggered when the Google Map is ready to be used.
+     * Callback triggered when the Google Map is ready
      */
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
@@ -141,22 +251,24 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     public void onResume() {
         super.onResume();
         checkAndUpdatePermissions();
+
+        // 🆕 Update venue display when returning to this fragment
+        updateVenueDisplay();
     }
 
     /**
-     * Checks if GNSS/Location is enabled on the device.
+     * Check if GNSS/Location is enabled on the device
      */
     private boolean isGnssEnabled() {
         LocationManager locationManager =
                 (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
-        // Checks both GPS and network provider. Adjust as needed.
         boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
         boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
         return (gpsEnabled || networkEnabled);
     }
 
     /**
-     * Move the map to the University of Edinburgh and display a message.
+     * Move the map to the University of Edinburgh and display a message
      */
     private void showEdinburghAndMessage(String message) {
         gnssStatusTextView.setText(message);
@@ -169,19 +281,18 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                 .title("University of Edinburgh"));
     }
 
+    /**
+     * Check and update location permissions
+     */
     private void checkAndUpdatePermissions() {
-
         if (mMap == null) {
             return;
         }
 
-        // Check if GNSS/Location is enabled
         boolean gnssEnabled = isGnssEnabled();
         if (gnssEnabled) {
-            // Hide the "GNSS Disabled" message
             gnssStatusTextView.setVisibility(View.GONE);
 
-            // Check runtime permissions for location
             if (ActivityCompat.checkSelfPermission(
                     requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                     == PackageManager.PERMISSION_GRANTED ||
@@ -189,29 +300,11 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                             requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
                             == PackageManager.PERMISSION_GRANTED) {
 
-                // Enable the MyLocation layer of Google Map
                 mMap.setMyLocationEnabled(true);
-
-                // Optionally move the camera to last known or default location:
-                //   (You could retrieve it from FusedLocationProvider or similar).
-                // Here, just leaving it on default.
-                // If you want to center on the user as soon as it loads, do something like:
-                /*
-                FusedLocationProviderClient fusedLocationClient =
-                    LocationServices.getFusedLocationProviderClient(requireContext());
-                fusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
-                    if (location != null) {
-                        LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f));
-                    }
-                });
-                */
             } else {
-                // If no permission, simply show a default location or prompt for permissions
                 showEdinburghAndMessage("Permission not granted. Please enable in settings.");
             }
         } else {
-            // If GNSS is disabled, show University of Edinburgh + message
             showEdinburghAndMessage("GNSS is disabled. Please enable in settings.");
         }
     }

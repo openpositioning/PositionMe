@@ -214,13 +214,25 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                 String fileName = recordDetails.optString("file_name", null);
                 if (fileName != null) {
                     File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
-                    filePath = file.getAbsolutePath();
+                    // Verify the cached file actually exists on disk
+                    if (file.exists() && file.length() > 0) {
+                        filePath = file.getAbsolutePath();
+                    } else {
+                        // File is missing or empty - treat as not downloaded
+                        Log.w("TrajDownloadListAdapter", "Cached file missing or empty for ID " + id + ": " + file.getAbsolutePath());
+                        matched = false;
+                    }
+                } else {
+                    matched = false;
                 }
-                // Set the button state to "downloaded".
-                setButtonState(holder.downloadButton, 1);
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+
+        // Set the button state based on the final matched status
+        if (matched) {
+            setButtonState(holder.downloadButton, 1);
         } else if (downloadingTrajIds.contains(id)) {
             // If the item is still being downloaded, set the button state to "downloading".
             setButtonState(holder.downloadButton, 2);
