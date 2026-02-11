@@ -489,7 +489,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                         .setAccuracy(accuracy)
                         .setSpeed(speed)
                         .setProvider(provider));
-                
+                Log.d("LOCATION", "Location saved: " + latitude + ", " + longitude);
+
                 // Set initial position from first GNSS reading
                 if (!initialPositionSet) {
                     trajectory.setInitialPosition(Traj.GNSSPosition.newBuilder()
@@ -927,6 +928,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
+                .setTrajectoryVersion(2.0f)
                 .setTrajectoryId("trajectory_" + System.currentTimeMillis())
                 .setStartTimestamp(absoluteStartTime)
                 .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
