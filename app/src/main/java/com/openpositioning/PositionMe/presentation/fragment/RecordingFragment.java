@@ -166,6 +166,11 @@ public class RecordingFragment extends Fragment {
             // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
+
+            // Save the timestamp of this walk for the ZenWorker
+            SharedPreferences prefs = requireActivity().getSharedPreferences("ZenPrefs", Context.MODE_PRIVATE);
+            prefs.edit().putLong("lastWalkTimestamp", System.currentTimeMillis()).apply();
+
             // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
 

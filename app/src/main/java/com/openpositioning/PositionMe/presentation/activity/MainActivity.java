@@ -25,9 +25,12 @@ import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 import androidx.preference.PreferenceManager;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
 
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+import com.openpositioning.PositionMe.health.ZenWorker;
 import com.openpositioning.PositionMe.presentation.fragment.HomeFragment;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import com.openpositioning.PositionMe.sensors.Observer;
@@ -36,6 +39,7 @@ import com.openpositioning.PositionMe.utils.PermissionManager;
 
 
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The Main Activity of the application, handling setup, permissions and starting all other fragments
@@ -138,9 +142,15 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();
+
+        // Schedule ZenWorker
+        scheduleZenWorker();
     }
 
-
+    private void scheduleZenWorker() {
+        PeriodicWorkRequest zenWorkRequest = new PeriodicWorkRequest.Builder(ZenWorker.class, 1, TimeUnit.DAYS).build();
+        WorkManager.getInstance(this).enqueue(zenWorkRequest);
+    }
 
 
     /**
@@ -341,8 +351,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
         assert objList[0] instanceof Boolean;
         if((Boolean) objList[0]) {
             this.httpResponseHandler.post(displayToastTaskSuccess);
-        }
-        else {
+        } else {
             this.httpResponseHandler.post(displayToastTaskFailure);
         }
     }

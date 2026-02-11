@@ -22,6 +22,7 @@
     -->
 
     <!-- Wake lock -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Physical activity / Step detection (Android 10+ requires runtime permission) -->
@@ -79,6 +80,12 @@
         android:exported="false" />
     <activity
         android:name=".presentation.activity.RecordingActivity"
+        android:exported="false" />
+    <activity
+        android:name=".health.HealthActivity"
+        android:exported="true" />
+    <activity
+        android:name=".health.HistoryActivity"
         android:exported="false" />
 
     <!-- Google Maps API key metadata -->
