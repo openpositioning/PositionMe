@@ -10,14 +10,17 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <!-- ====== Sensor measurement cards（原样保留） ====== -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/sensorMeasurementList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintBottom_toTopOf="@id/dividerLine">
+
+            <!-- ====== 下面这一大段 CardView 你原样保留（我这里直接放回你给的内容） ====== -->
 
             <androidx.cardview.widget.CardView
                 android:id="@+id/accelerometerView"
@@ -544,9 +547,9 @@
                 </androidx.constraintlayout.widget.ConstraintLayout>
             </androidx.cardview.widget.CardView>
 
-
         </androidx.constraintlayout.widget.ConstraintLayout>
 
+        <!-- ====== WiFi title bar（原样保留） ====== -->
         <androidx.cardview.widget.CardView
             android:id="@+id/dividerLine"
             android:layout_width="match_parent"
@@ -557,10 +560,10 @@
             app:cardBackgroundColor="?attr/colorPrimary"
             app:cardCornerRadius="10dp"
             app:cardElevation="8dp"
-            app:layout_constraintBottom_toTopOf="@id/wifiList"
-            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/sensorMeasurementList"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/sensorMeasurementList">
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/wifiList">
 
             <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
@@ -592,22 +595,73 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent"
                     app:tint="@color/white" />
+
             </androidx.constraintlayout.widget.ConstraintLayout>
         </androidx.cardview.widget.CardView>
 
-
+        <!-- ====== WiFi list（必须在 WiFi title 下面） ====== -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/wifiList"
             android:layout_width="match_parent"
-            android:layout_height="300sp"
+            android:layout_height="0dp"
             android:layout_marginStart="8dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="8dp"
+            app:layout_constraintTop_toBottomOf="@id/dividerLine"
+            app:layout_constraintBottom_toTopOf="@id/bleDividerLine"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- ====== BLE title bar（在 WiFi list 之后） ====== -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/bleDividerLine"
+            android:layout_width="match_parent"
+            android:layout_height="34sp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="8dp"
+            app:cardBackgroundColor="?attr/colorPrimary"
+            app:cardCornerRadius="10dp"
+            app:cardElevation="8dp"
+            app:layout_constraintTop_toBottomOf="@id/wifiList"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/bleList">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <TextView
+                    android:id="@+id/bleTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="BLE Devices"
+                    android:textColor="@color/white"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ====== BLE list（最后显示） ====== -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/bleList"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="6dp"
             android:layout_marginEnd="8dp"
             android:layout_marginBottom="8dp"
+            app:layout_constraintTop_toBottomOf="@id/bleDividerLine"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/dividerLine" />
-    </androidx.constraintlayout.widget.ConstraintLayout>
+            app:layout_constraintEnd_toEndOf="parent" />
 
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
 </FrameLayout>

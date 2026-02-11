@@ -120,6 +120,10 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private BleDataProcessor bleProcessor;
     private List<BLE> bleList;
+    public List<BLE> getBleList() {
+        return bleList;
+    }
+
     // BLE values
     private Set<String> recordedBleMacs = new HashSet<>();
     private String lastBleFingerprintSignature;
