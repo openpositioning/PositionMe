@@ -533,12 +533,20 @@ public class TrajectoryMapFragment extends Fragment {
      *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
      */
 
-    //Indoormapping
+
+    /**
+     * Clear any existing venue outline polygons added from the API before drawing new ones.
+     */
     private void clearApiVenueOutlines() {
         for (com.google.android.gms.maps.model.Polygon p : apiVenueOutlines) p.remove();
         apiVenueOutlines.clear();
     }
 
+
+    /**
+     * Request indoor map data from the API for the given location,
+     * but only if user is not currently viewing map_shapes from a previously selected venue.
+     */
     private void maybeRequestIndoorMaps(@NonNull LatLng loc) {
         // Do not fetch new indoor data while user is viewing a selected venue's floors.
         if (mapShapesLocked) return;
@@ -546,8 +554,12 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
+    /**
+     * Request indoor map data from the API for the given location,
+     * then fall back to hardcoded polygons on failure.
+     */
     private void requestIndoorMapsApiThenFallback(@NonNull LatLng loc) {
-        // If you don't want MACs, pass an empty list.
+        // Empty list passed for case of MACs
         List<String> macs = new ArrayList<>();
 
         new ServerCommunications(requireContext())
@@ -606,7 +618,9 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
-
+    /**
+     * Draw a polygon on the map from the given GeoJSON outline
+     */
     private void drawOutlinePolygon(@NonNull JSONObject outline) {
         if (gMap == null) return;
 
@@ -645,18 +659,21 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
-
+    /**
+     * Show hardcoded fallback polygons (e.g., Nucleus/Murchison),
+     * when indoor map API fails or returns no data.
+     */
     private void showHardcodedFallback(@NonNull LatLng loc) {
         clearMapShapeFloors();
         mapShapesLocked = false;
 
-        // whatever you already do to pick Nucleus/Murchison from location:
         setHardcodedPolygonsVisible(true);
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(loc);
         }
         updateFloorControlVisibility();
     }
+
 
     private void drawApiOutline(@NonNull org.json.JSONObject outline, @NonNull org.json.JSONObject venueTag) {
         if (gMap == null) return;
@@ -674,6 +691,8 @@ public class TrajectoryMapFragment extends Fragment {
             }
         }
     }
+
+
 
     private org.json.JSONObject extractGeometry(@NonNull org.json.JSONObject geo) {
         String t = geo.optString("type", "");
@@ -714,6 +733,10 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+
+    /**
+     * Handle a click on a venue polygon by parsing its map shapes and displaying them as floor layers.
+     */
     private void handleVenueClick(@NonNull JSONObject venueJson) {
         JSONArray mapShapesArray = optJsonArrayFlexible(venueJson, "map_shapes");
         JSONObject mapShapesObject = optJsonObjectFlexible(venueJson, "map_shapes");
@@ -806,6 +829,10 @@ public class TrajectoryMapFragment extends Fragment {
         return created;
     }
 
+
+    /**
+     * Add shapes from the given floor entry to the specified layer
+     */
     private boolean addShapesToLayer(@NonNull JSONObject floorEntry,
                                      @NonNull FloorLayer layer,
                                      @NonNull List<FloorLayer> layers) {
@@ -825,6 +852,10 @@ public class TrajectoryMapFragment extends Fragment {
         return added;
     }
 
+
+    /**
+     * Recursively add geometry to the specified floor layer
+     */
     private void addGeometryToLayer(@NonNull JSONObject geometry,
                                     @NonNull FloorLayer layer,
                                     @NonNull List<FloorLayer> layers) {
@@ -903,6 +934,11 @@ public class TrajectoryMapFragment extends Fragment {
         p.setZIndex(3f);
     }
 
+
+    /**
+     * Extract geometry from a shape object,
+     * trying multiple common patterns to be flexible with different APIs or data formats.
+     */
     private JSONObject extractGeometryFromShape(@NonNull JSONObject shape) {
         JSONObject geometry = shape.optJSONObject("geometry");
         if (geometry != null) return extractGeometry(geometry);
@@ -960,6 +996,11 @@ public class TrajectoryMapFragment extends Fragment {
         return trimmed.trim();
     }
 
+
+    /**
+     * Derive a floor index from a label string,
+     * with some common heuristics (e.g., "B1" -> -1, "F1" -> 1, "G" -> 0).
+     */
     private int deriveFloorIndexFromLabel(@NonNull String label, int fallbackIndex) {
         String t = label.trim().toUpperCase(Locale.US);
         if (t.isEmpty()) return fallbackIndex;
@@ -1046,7 +1087,6 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
-    //Indoormapping end
 
     private void drawBuildingPolygon() {
         if (gMap == null) {
@@ -1054,7 +1094,7 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
-        // nuclear building polygon vertices
+        // NUCLEUS venue polygon vertices
         LatLng nucleus1 = new LatLng(55.92279538827796, -3.174612147506538);
         LatLng nucleus2 = new LatLng(55.92278121423647, -3.174107900816096);
         LatLng nucleus3 = new LatLng(55.92288405733954, -3.173843694667146);
@@ -1062,52 +1102,52 @@ public class TrajectoryMapFragment extends Fragment {
         LatLng nucleus5 = new LatLng(55.923337194112555, -3.1746284301397387);
 
 
-        // nkml building polygon vertices
+        // NKML venue polygon vertices
         LatLng nkml1 = new LatLng(55.9230343434213, -3.1751847990731954);
         LatLng nkml2 = new LatLng(55.923032840563366, -3.174777103346131);
         LatLng nkml4 = new LatLng(55.92280139974615, -3.175195527934348);
         LatLng nkml3 = new LatLng(55.922793885410734, -3.1747958788136867);
 
+        // FJB venue polygon vertices
         LatLng fjb1 = new LatLng(55.92269205199916, -3.1729563477188774);//left top
         LatLng fjb2 = new LatLng(55.922822801570994, -3.172594249522305);
         LatLng fjb3 = new LatLng(55.92223512226413, -3.171921917547244);
         LatLng fjb4 = new LatLng(55.9221071265519, -3.1722813131202097);
 
+        // FARADAY venue polygon vertices
         LatLng faraday1 = new LatLng(55.92242866264128, -3.1719553662011815);
         LatLng faraday2 = new LatLng(55.9224966752294, -3.1717846714743474);
         LatLng faraday3 = new LatLng(55.922271383074154, -3.1715191463437162);
         LatLng faraday4 = new LatLng(55.92220124468304, -3.171705013935158);
 
 
-
+        /**
+         * Venue outline polygon properties: different colors for different venues
+         * Red outline for Nucleus, blue for NKML, green for FJB, yellow for Faraday
+         */
         PolygonOptions buildingPolygonOptions = new PolygonOptions()
                 .add(nucleus1, nucleus2, nucleus3, nucleus4, nucleus5)
-                .strokeColor(Color.RED)    // Red border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 0, 0)) // Semi-transparent red fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.RED)
+                .strokeWidth(10f)
+                .zIndex(1);
 
-        // Options for the new polygon
         PolygonOptions buildingPolygonOptions2 = new PolygonOptions()
                 .add(nkml1, nkml2, nkml3, nkml4, nkml1)
-                .strokeColor(Color.BLUE)    // Blue border
-                .strokeWidth(10f)           // Border width
-                // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.BLUE)
+                .strokeWidth(10f)
+                .zIndex(1);
 
         PolygonOptions buildingPolygonOptions3 = new PolygonOptions()
                 .add(fjb1, fjb2, fjb3, fjb4, fjb1)
-                .strokeColor(Color.GREEN)    // Green border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 0, 255, 0)) // Semi-transparent green fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.GREEN)
+                .strokeWidth(10f)
+                .zIndex(1);
 
         PolygonOptions buildingPolygonOptions4 = new PolygonOptions()
                 .add(faraday1, faraday2, faraday3, faraday4, faraday1)
-                .strokeColor(Color.YELLOW)    // Yellow border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 255, 0)) // Semi-transparent yellow fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.YELLOW)
+                .strokeWidth(10f)
+                .zIndex(1);
 
 
         // Remove the old polygon if it exists
@@ -1124,18 +1164,33 @@ public class TrajectoryMapFragment extends Fragment {
         Polygon p4 = gMap.addPolygon(buildingPolygonOptions4);
 
         buildingPolygon = p1;
-// Store them so we can hide/show later
+
+        // Store them so we can hide/show later
         hardcodedPolygons.add(p1);
         hardcodedPolygons.add(p2);
         hardcodedPolygons.add(p3);
         hardcodedPolygons.add(p4);
 
+        // TESTING: Log the number of vertices in the venue building polygons
         Log.d("TrajectoryMapFragment",
                 "Hardcoded polygons added. nucleus vertex count: " + (p1 != null ? p1.getPoints().size() : -1));
 
+        Log.d("TrajectoryMapFragment",
+                "Hardcoded polygons added. NKML vertex count: " + (p2 != null ? p2.getPoints().size() : -1));
+
+        Log.d("TrajectoryMapFragment",
+                "Hardcoded polygons added. FJB vertex count: " + (p3 != null ? p3.getPoints().size() : -1));
+
+        Log.d("TrajectoryMapFragment",
+                "Hardcoded polygons added. FARADAY vertex count: " + (p4 != null ? p4.getPoints().size() : -1));
     }
 
-    // Defines test point marker to be added to the map
+
+    /** TEST POINT MARKER LOGIC FOR TRAJECTORY MAP FRAGMENT
+     * Defines test point marker to be added to the map
+     * @param currentPosition
+     * @param markerCount
+     */
     public void addTestPointMarker(@NonNull LatLng currentPosition, int markerCount) {
         if (gMap == null) return;
 
@@ -1198,10 +1253,6 @@ public class TrajectoryMapFragment extends Fragment {
         canvas.drawText(String.valueOf(markerCount), cx, textY, textPaint);
 
         return BitmapDescriptorFactory.fromBitmap(bitmap);
-    }
-
-    public boolean hasRotationFix() {
-        return hasRotationFix;
     }
 
 }
