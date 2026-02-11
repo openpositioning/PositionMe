@@ -6,47 +6,38 @@ import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment
  * The Wifi object holds the Wifi parameters listed below.
  *
  * It contains the ssid (the identifier of the wifi), bssid (the mac address of the wifi), level
- * (the strength of the wifi in dB) and frequency (the frequency of the wifi network (2.4GHz or
- * 5GHz). For most objects only the bssid and the level are set.
+ * (the strength of the wifi in dB) and frequency (the frequency of the wifi network).
  *
- * @author Virginia Cangelosi
- * @author Mate Stodulka
+ * For assignment v2.0 we also keep:
+ * - macString: original BSSID string ("aa:bb:..")
+ * - rttEnabled: whether the AP supports 802.11mc responder (RTT-capable)
  */
 public class Wifi {
     private String ssid;
     private long bssid;
+    private String macString;
     private int level;
     private long frequency;
+    private boolean rttEnabled;
 
-    /**
-     * Empty public default constructor of the Wifi object.
-     */
     public Wifi(){}
 
-    /**
-     * Getters for each property
-     */
     public String getSsid() { return ssid; }
     public long getBssid() { return bssid; }
+    public String getMacString() { return macString; }
     public int getLevel() { return level; }
     public long getFrequency() { return frequency; }
+    public boolean isRttEnabled() { return rttEnabled; }
 
-    /**
-     * Setters for each property
-     */
     public void setSsid(String ssid) { this.ssid = ssid; }
     public void setBssid(long bssid) { this.bssid = bssid; }
+    public void setMacString(String macString) { this.macString = macString; }
     public void setLevel(int level) { this.level = level; }
     public void setFrequency(long frequency) { this.frequency = frequency; }
+    public void setRttEnabled(boolean rttEnabled) { this.rttEnabled = rttEnabled; }
 
-    /**
-     * Generates a string containing mac address and rssi of Wifi.
-     *
-     * Concatenates mac address and rssi to display in the
-     * {@link MeasurementsFragment} fragment
-     */
     @Override
     public String toString() {
-        return  "bssid: " + bssid +", level: " + level;
+        return  "mac: " + macString + ", level: " + level;
     }
 }

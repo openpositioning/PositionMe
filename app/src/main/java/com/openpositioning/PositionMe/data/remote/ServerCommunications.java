@@ -25,7 +25,6 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
-import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.BuildConfig;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
@@ -88,9 +87,13 @@ public class ServerCommunications implements Observable {
     // Static constants necessary for communications
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
+    private static final String CAMPAIGN = "murchison_house"; // coursework venue
+
     private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
+            "https://openpositioning.org/api/live/trajectory/upload/" + CAMPAIGN + "/" + userKey
                     + "/?key=" + masterKey;
+    //Log.i("UPLOAD", "uploadURL=" + uploadURL);
+
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
                     + "?skip=0&limit=30&key=" + masterKey;
@@ -128,6 +131,9 @@ public class ServerCommunications implements Observable {
      * @param trajectory    Traj object matching all the timing and formal restrictions.
      */
     public void sendTrajectory(Traj.Trajectory trajectory){
+        Log.i("UPLOAD", "userKey=" + BuildConfig.OPENPOSITIONING_API_KEY);
+        Log.i("UPLOAD", "masterKey=" + BuildConfig.OPENPOSITIONING_MASTER_KEY);
+
         logDataSize(trajectory);
 
         // Convert the trajectory to byte array
@@ -181,8 +187,8 @@ public class ServerCommunications implements Observable {
 
             // Create a POST request with the required headers
             Request request = new Request.Builder().url(uploadURL).post(requestBody)
-                    .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
-                    .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
+                    .addHeader("accept", PROTOCOL_ACCEPT_TYPE).build();
+                    //.addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
 
             // Enqueue the request to be executed asynchronously and handle the response
             client.newCall(request).enqueue(new Callback() {
@@ -299,9 +305,9 @@ public class ServerCommunications implements Observable {
                 .build();
 
         // Create a POST request with the required headers
-        okhttp3.Request request = new okhttp3.Request.Builder().url(uploadURL).post(requestBody)
-                .addHeader("accept", PROTOCOL_ACCEPT_TYPE)
-                .addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
+        okhttp3.Request request = new Request.Builder().url(uploadURL).post(requestBody)
+                .addHeader("accept", PROTOCOL_ACCEPT_TYPE).build();
+                //.addHeader("Content-Type", PROTOCOL_CONTENT_TYPE).build();
 
         // Enqueue the request to be executed asynchronously and handle the response
         client.newCall(request).enqueue(new okhttp3.Callback() {
@@ -540,7 +546,7 @@ public class ServerCommunications implements Observable {
 
                     File file = new File(appSpecificDownloads, fileName);
                     try (FileWriter fileWriter = new FileWriter(file)) {
-                        String receivedTrajectoryString = JsonFormat.printer().print(receivedTrajectory);
+                        String receivedTrajectoryString = receivedTrajectory.toString();
                         fileWriter.write(receivedTrajectoryString);
                         fileWriter.flush();
                         System.err.println("Received trajectory stored in: " + file.getAbsolutePath());
@@ -623,11 +629,11 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+        //Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+        //Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }

@@ -130,13 +130,16 @@ public class WifiDataProcessor implements Observable {
             wifiData = new Wifi[wifiScanList.size()];
             for(int i = 0; i < wifiScanList.size(); i++) {
                 wifiData[i] = new Wifi();
-                //Convert String mac address to an integer
+                // Mac address (string + long)
                 String wifiMacAddress = wifiScanList.get(i).BSSID;
                 long intMacAddress = convertBssidToLong(wifiMacAddress);
-                //store mac address and rssi of wifi
+                wifiData[i].setMacString(wifiMacAddress);
                 wifiData[i].setBssid(intMacAddress);
                 wifiData[i].setLevel(wifiScanList.get(i).level);
-            }
+                wifiData[i].setSsid(wifiScanList.get(i).SSID);
+                wifiData[i].setFrequency(wifiScanList.get(i).frequency);
+                wifiData[i].setRttEnabled(wifiScanList.get(i).is80211mcResponder());
+}
 
             //Notify observers of change in wifiData variable
             notifyObservers(0);
@@ -303,7 +306,16 @@ public class WifiDataProcessor implements Observable {
      *
      * @return wifi object containing the currently connected wifi's ssid, mac address and frequency
      */
-    public Wifi getCurrentWifiData(){
+    
+    /**
+     * Returns the latest WiFi scan results captured by the BroadcastReceiver.
+     * May be null if no scan has completed yet.
+     */
+    public Wifi[] getLatestScanResults() {
+        return wifiData;
+    }
+
+public Wifi getCurrentWifiData(){
         //Set up a connectivity manager to get information about the wifi
         ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService
                 (Context.CONNECTIVITY_SERVICE);

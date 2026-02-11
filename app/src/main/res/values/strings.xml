@@ -16,7 +16,7 @@
     <string name="show_storage">Show locally</string>
     <string name="setLocation">Set</string>
     <string name="cancel">Cancel</string>
-    <string name="add_tag">Add Tag</string>
+    <string name="add_tag">Test Point</string>
 
     <!-- Sensors -->
     <string name="accelerometer">Accelerometer</string>
