@@ -18,6 +18,12 @@
 - **Android Studio 4.2** or later
 - **Android SDK 30** or later
 
+## Before Installation
+
+1. Go to a file named `secrets.properties` in the project root.
+2. Insert your API keys as described in the "API Keys Configuration" section.
+3. Build and run the project on your Android device.
+
 ## Installation:
 
 1. **Clone the repository.**
