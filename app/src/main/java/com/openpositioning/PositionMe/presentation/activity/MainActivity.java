@@ -97,7 +97,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
         if (savedInstanceState == null) {
             IndoorSelectionStore.clear(this);
         }
-        
+
         // Set up navigation and fragments
         NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.nav_host_fragment);

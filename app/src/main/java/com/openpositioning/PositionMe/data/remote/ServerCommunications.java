@@ -178,10 +178,20 @@ public class ServerCommunications implements Observable {
             path = context.getFilesDir();
         }
 
-        // Format the file name according to date
+        // Format the file name according to start + end time
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
-        Date date = new Date();
-        File file = new File(path, "trajectory_" + dateFormat.format(date) + ".txt");
+
+        // Start = when Record pressed (stored in protobuf)
+        Date startDate = new Date(trajectory.getStartTimestamp());
+
+        // End = when Complete pressed (now)
+        Date endDate = new Date();
+
+        String fileName = "trajectory_start_" + dateFormat.format(startDate)
+                + "end" + dateFormat.format(endDate)
+                + ".txt";
+
+        File file = new File(path, fileName);
 
         try {
             // Write the binary data to the file
