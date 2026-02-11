@@ -50,6 +50,8 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 
 public class IndoorMapManager {
+    private final Map<String, List<String>> shapeFloorKeysCache = new HashMap<>();
+
     private static final String TAG = "IndoorMapManager";
     private static final String FLOORPLAN_REQUEST_URL =
             "https://openpositioning.org/api/live/floorplan/request/"
@@ -222,8 +224,12 @@ public class IndoorMapManager {
 
     public int getFloorCount() {
         VenueModel selected = getSelectedVenue();
-        return selected == null ? 0 : selected.floors.size();
+        if (selected == null) return 0;
+        if (!selected.floors.isEmpty()) return selected.floors.size();
+        if (TextUtils.isEmpty(selected.mapShapesPayload)) return 0;
+        return getShapeFloorKeys(selected).size();
     }
+
 
     public int getCurrentFloor() {
         return currentFloor;
@@ -242,16 +248,65 @@ public class IndoorMapManager {
 
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
         VenueModel selected = getSelectedVenue();
-        if (selected == null || selected.floors.isEmpty()) {
+        if (selected == null) return;
+
+        // ---- map_shapes 模式：floors 为空，但 mapShapesPayload 有内容 ----
+        if (selected.floors.isEmpty()) {
+            int count = getFloorCount(); // 你要按我之前说的把 getFloorCount() 改成支持 map_shapes keys
+            if (count <= 0) return;
+
+            int bounded = Math.max(0, Math.min(newFloor, count - 1));
+            Log.d(TAG, "UI wants newFloor=" + newFloor
+                    + " map_shapes floorsCount=" + count
+                    + " currentFloor(before)=" + currentFloor
+                    + " bounded(listPos)=" + bounded);
+
+            if (bounded == currentFloor && isIndoorMapSet) {
+                Log.d(TAG, "NOOP map_shapes: same floor");
+                return;
+            }
+
+            currentFloor = bounded;
+
+            // 关键：触发重新绘制当前 floorKey 的 shapes（不要 renderCurrentFloor）
+            loadFloorplanForVenue(selected);
+            updatePolygonStyle();
             return;
         }
+
+        // ---- image overlay 模式：floors 不为空，原逻辑保留 ----
+        Log.d(TAG, "UI wants newFloor=" + newFloor
+                + " floors.size=" + selected.floors.size()
+                + " currentFloor(before)=" + currentFloor
+                + " floorIndexList=" + dumpFloorIndexList(selected));
+
         int bounded = Math.max(0, Math.min(newFloor, selected.floors.size() - 1));
+        Log.d(TAG, "bounded(listPos)=" + bounded);
+
         if (bounded == currentFloor && isIndoorMapSet) {
+            Log.d(TAG, "NOOP: bounded == currentFloor and map set, return");
             return;
         }
+
         currentFloor = bounded;
         renderCurrentFloor();
     }
+
+
+    private String dumpFloorIndexList(VenueModel venue) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < venue.floors.size(); i++) {
+            FloorModel f = venue.floors.get(i);
+            sb.append("[")
+                    .append(i)
+                    .append("->floorIndex=").append(f.floorIndex)
+                    .append(", floorName=").append(f.floorName)
+                    .append("] ");
+        }
+        return sb.toString();
+    }
+
+
 
     public void increaseFloor() {
         setCurrentFloor(currentFloor + 1, false);
@@ -344,11 +399,26 @@ public class IndoorMapManager {
             Log.d(TAG, "FLOOR_NET: request venueId=" + venue.id + " url=inline://map_shapes");
             Log.d(TAG, "FLOOR_NET: response http_status=200 body_preview=" + previewForLog(payload));
         }
-        int[] counts = drawMapShapes(payload);
-        isIndoorMapSet = counts[0] > 0 || counts[1] > 0;
-        if (BuildConfig.DEBUG) {
-            Log.d(TAG, "FLOOR_DRAW: drawnPolylines=" + counts[0] + " drawnPolygons=" + counts[1]);
+        List<String> keys = getShapeFloorKeys(venue);
+        if (keys.isEmpty()) {
+            isIndoorMapSet = false;
+            return;
         }
+
+// clamp currentFloor 到 key 范围
+        currentFloor = Math.max(0, Math.min(currentFloor, keys.size() - 1));
+        String key = keys.get(currentFloor);
+
+        int[] counts = new int[]{0, 0};
+        drawMapShapesForKey(payload, key, counts);
+
+        isIndoorMapSet = counts[0] > 0 || counts[1] > 0;
+
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "FLOOR_DRAW: floorKey=" + key
+                    + " drawnPolylines=" + counts[0] + " drawnPolygons=" + counts[1]);
+        }
+
     }
 
     private void clearFloorShapeOverlays() {
@@ -360,6 +430,50 @@ public class IndoorMapManager {
             polygon.remove();
         }
         floorShapePolygons.clear();
+    }
+
+    @NonNull
+    private List<String> getShapeFloorKeys(@NonNull VenueModel venue) {
+        List<String> cached = shapeFloorKeysCache.get(venue.id);
+        if (cached != null) return cached;
+
+        List<String> keys = new ArrayList<>();
+        try {
+            String trimmed = venue.mapShapesPayload == null ? "" : venue.mapShapesPayload.trim();
+            if (trimmed.startsWith("{")) {
+                JSONObject root = new JSONObject(trimmed);
+                JSONArray names = root.names();
+                if (names != null) {
+                    for (int i = 0; i < names.length(); i++) {
+                        String k = names.optString(i, "");
+                        if (!TextUtils.isEmpty(k)) keys.add(k);
+                    }
+                }
+            }
+        } catch (JSONException ignored) {}
+
+        // 可选：排序，让 UI 顺序稳定（B1,G,1,2... 你也可以自定义排序规则）
+        Collections.sort(keys);
+
+        shapeFloorKeysCache.put(venue.id, keys);
+        return keys;
+    }
+
+    private void drawMapShapesForKey(@NonNull String payload, @NonNull String floorKey, @NonNull int[] counts) {
+        try {
+            JSONObject root = new JSONObject(payload.trim());
+            Object child = root.opt(floorKey);
+            if (child instanceof JSONObject) {
+                drawMapShapesFromObject((JSONObject) child, counts);
+            } else if (child instanceof String) {
+                String raw = ((String) child).trim();
+                if (raw.startsWith("{")) {
+                    drawMapShapesFromObject(new JSONObject(raw), counts);
+                }
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "Failed to parse map_shapes payload for key=" + floorKey, e);
+        }
     }
 
     @NonNull
