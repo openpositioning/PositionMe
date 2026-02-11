@@ -37,6 +37,9 @@ import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.data.remote.IndoorMapsParser;
 import org.json.JSONException;
 
+import java.util.Iterator;
+import java.util.Collections;
+
 
 
 /**
@@ -95,6 +98,19 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.gms.maps.model.Polygon lastIndoorPolygon = null;
     private org.json.JSONObject lastVenueJson = null;
 
+    // Stores polygons drawn for indoor floors so we can remove them when switching floors
+    private final List<com.google.android.gms.maps.model.Polygon> indoorPolygons = new ArrayList<>();
+
+
+    private LatLng lastIndoorRequestLoc = null;
+
+    // --- indoor floors state ---
+    private org.json.JSONArray floorsArray = null;
+    private int currentFloorIndex = 0;
+
+    private java.util.List<String> lastFloorNames = new java.util.ArrayList<>();
+
+
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -134,18 +150,24 @@ public class TrajectoryMapFragment extends Fragment {
                 public void onMapReady(@NonNull GoogleMap googleMap) {
                     // Assign the provided googleMap to your field variable
                     gMap = googleMap;
+
+
                     // Initialize map settings with the now non-null gMap
                     initMapSettings(gMap);
 //added indoormaps
                     gMap.setOnPolygonClickListener(polygon -> {
-                        if (polygon == lastIndoorPolygon && lastVenueJson != null) {
-                            Log.d(
-                                    "IndoorMaps",
-                                    "Polygon clicked for venue: " + lastVenueJson.optString("name")
-                            );
-                            showFirstFloorIfAvailable(lastVenueJson);
+                        Log.d("IndoorMaps", "Polygon clicked!");
+
+                        Object tag = polygon.getTag();
+                        if (tag instanceof org.json.JSONObject) {
+                            org.json.JSONObject venue = (org.json.JSONObject) tag;
+                            Log.d("IndoorMaps", "Clicked venue=" + venue.optString("name"));
+                            onVenueSelected(venue);
+                        } else {
+                            Log.d("IndoorMaps", "Clicked polygon has no venue tag");
                         }
                     });
+
 
                     // If we had a pending camera move, apply it now
                     if (hasPendingCameraMove && pendingCameraPosition != null) {
@@ -200,19 +222,34 @@ public class TrajectoryMapFragment extends Fragment {
         });
 
         floorUpButton.setOnClickListener(v -> {
-            // If user manually changes floor, turn off auto floor
             autoFloorSwitch.setChecked(false);
-            if (indoorMapManager != null) {
-                indoorMapManager.increaseFloor();
+            Log.d("IndoorMaps", "UP pressed current=" + currentFloorIndex + " floors=" + lastFloorNames);
+
+            if (lastFloorNames == null || lastFloorNames.isEmpty()) return;
+
+            int next = currentFloorIndex + 1;
+            if (next < lastFloorNames.size()) {
+                currentFloorIndex = next;
+                showFloor(currentFloorIndex);
             }
         });
 
+
+
         floorDownButton.setOnClickListener(v -> {
             autoFloorSwitch.setChecked(false);
-            if (indoorMapManager != null) {
-                indoorMapManager.decreaseFloor();
+            Log.d("IndoorMaps", "DOWN pressed current=" + currentFloorIndex + " floors=" + lastFloorNames);
+
+            if (lastFloorNames == null || lastFloorNames.isEmpty()) return;
+
+            int next = currentFloorIndex - 1;
+            if (next >= 0) {
+                currentFloorIndex = next;
+                showFloor(currentFloorIndex);
             }
         });
+
+
     }
 
     /**
@@ -516,6 +553,8 @@ public class TrajectoryMapFragment extends Fragment {
                         + " firstMac=" + (macs.isEmpty() ? "none" : macs.get(0))
         );
 
+        lastIndoorRequestLoc = loc;
+
 
         new com.openpositioning.PositionMe.data.remote.ServerCommunications(getContext())
                 .requestNearbyIndoorMaps(
@@ -565,7 +604,7 @@ public class TrajectoryMapFragment extends Fragment {
                 );
     }
 //indoormaps code
-    private void drawGeoJsonPolygon(@NonNull JSONObject polygon) {
+    private void drawGeoJsonPolygon(@NonNull JSONObject polygon, boolean isIndoor) {
         JSONArray coords = polygon.optJSONArray("coordinates");
         if (coords == null || coords.length() == 0) return;
 
@@ -586,9 +625,18 @@ public class TrajectoryMapFragment extends Fragment {
 
         if (points.size() < 3) return;
 
-        lastIndoorPolygon = gMap.addPolygon(new PolygonOptions()
-                .addAll(points)
-                .clickable(true));
+        com.google.android.gms.maps.model.Polygon poly =
+                gMap.addPolygon(new PolygonOptions().addAll(points).clickable(true));
+
+        poly.setTag(lastVenueJson);   // <-- ADD THIS LINE (tags polygon with venue JSON)
+        lastIndoorPolygon = poly;
+
+
+        // --- DEBUG: show 3 reference points from the outline ---
+        gMap.addMarker(new MarkerOptions().position(points.get(0)).title("Outline P0"));
+        gMap.addMarker(new MarkerOptions().position(points.get(points.size() / 2)).title("Outline Pmid"));
+        gMap.addMarker(new MarkerOptions().position(points.get(points.size() - 1)).title("Outline Plast"));
+
 
         LatLngBounds.Builder b = new LatLngBounds.Builder();
         for (LatLng pnt : points) b.include(pnt);
@@ -596,9 +644,24 @@ public class TrajectoryMapFragment extends Fragment {
 
 
         Log.d("IndoorMaps", "Polygon drawn with " + points.size() + " points");
+        double latSum = 0, lonSum = 0;
+        for (LatLng p : points) {
+            latSum += p.latitude;
+            lonSum += p.longitude;
+        }
+        LatLng centroid = new LatLng(latSum / points.size(), lonSum / points.size());
+
+        if (lastIndoorRequestLoc != null) {
+            double d = haversineMeters(
+                    lastIndoorRequestLoc.latitude, lastIndoorRequestLoc.longitude,
+                    centroid.latitude, centroid.longitude
+            );
+            Log.d("IndoorMaps", "request->centroid offset(m)=" + d);
+        }
+
     }
 
-    private void drawGeoJsonMultiPolygon(@NonNull JSONObject multiPolygon) {
+    private void drawGeoJsonMultiPolygon(@NonNull JSONObject multiPolygon, boolean isIndoor) {
         JSONArray coords = multiPolygon.optJSONArray("coordinates");
         if (coords == null || coords.length() == 0) return;
 
@@ -622,36 +685,161 @@ public class TrajectoryMapFragment extends Fragment {
 
         if (points.size() < 3) return;
 
-        lastIndoorPolygon = gMap.addPolygon(new PolygonOptions()
-                .addAll(points)
-                .clickable(true));
+        com.google.android.gms.maps.model.Polygon poly =
+                gMap.addPolygon(new PolygonOptions().addAll(points).clickable(true));
+
+        poly.setTag(lastVenueJson);   // <-- ADD THIS LINE (tags polygon with venue JSON)
+        lastIndoorPolygon = poly;
+
+        gMap.addMarker(new MarkerOptions().position(points.get(0)).title("Outline P0"));
+        gMap.addMarker(new MarkerOptions().position(points.get(points.size() / 2)).title("Outline Pmid"));
+        gMap.addMarker(new MarkerOptions().position(points.get(points.size() - 1)).title("Outline Plast"));
 
         Log.d("IndoorMaps", "MultiPolygon drawn with " + points.size() + " points");
+
+        double latSum = 0, lonSum = 0;
+        for (LatLng p : points) {
+            latSum += p.latitude;
+            lonSum += p.longitude;
+        }
+        LatLng centroid = new LatLng(latSum / points.size(), lonSum / points.size());
+
+        if (lastIndoorRequestLoc != null) {
+            double d = haversineMeters(
+                    lastIndoorRequestLoc.latitude, lastIndoorRequestLoc.longitude,
+                    centroid.latitude, centroid.longitude
+            );
+            Log.d("IndoorMaps", "request->centroid offset(m)=" + d);
+        }
     }
 
 
-    private void showFirstFloorIfAvailable(@NonNull org.json.JSONObject venue) {
-        Log.d("IndoorMaps", "Clicked venue name=" + venue.optString("name"));
+    private void onVenueSelected(@NonNull org.json.JSONObject venue) {
+        Log.d("IndoorMaps", "Selected venue name=" + venue.optString("name"));
         Log.d("IndoorMaps", "Venue keys=" + venue.names());
 
         // Common possibilities: "floors", "floorplans", "levels"
-        org.json.JSONArray floors = venue.optJSONArray("floors");
-        if (floors == null) floors = venue.optJSONArray("floorplans");
-        if (floors == null) floors = venue.optJSONArray("levels");
+// --- Try common keys first ---
+        floorsArray = venue.optJSONArray("floors");
+        if (floorsArray == null) floorsArray = venue.optJSONArray("floorplans");
+        if (floorsArray == null) floorsArray = venue.optJSONArray("levels");
 
-        if (floors == null || floors.length() == 0) {
-            Log.d("IndoorMaps", "No floors array found (floors/floorplans/levels). Full venue=" + venue);
+// --- Now handle map_shapes robustly (could be JSONArray / JSONObject / String) ---
+        if (floorsArray == null) {
+            Object ms = venue.opt("map_shapes");
+            Log.d("IndoorMaps", "map_shapes raw type=" + (ms == null ? "null" : ms.getClass().getSimpleName()));
+
+            try {
+                if (ms instanceof org.json.JSONArray) {
+                    floorsArray = (org.json.JSONArray) ms;
+                } else if (ms instanceof org.json.JSONObject) {
+                    // Sometimes map_shapes is a single object – wrap it in an array
+                    floorsArray = new org.json.JSONArray();
+                    floorsArray.put(ms);
+                } else if (ms instanceof String) {
+                    // Sometimes map_shapes is a JSON string
+                    String s = (String) ms;
+                    s = s.trim();
+                    if (s.startsWith("[")) {
+                        floorsArray = new org.json.JSONArray(s);
+                    } else if (s.startsWith("{")) {
+                        floorsArray = new org.json.JSONArray();
+                        floorsArray.put(new org.json.JSONObject(s));
+                    }
+                }
+            } catch (org.json.JSONException e) {
+                Log.e("IndoorMaps", "Failed to parse map_shapes", e);
+            }
+        }
+
+// --- Debug what we actually got ---
+        if (floorsArray != null && floorsArray.length() > 0) {
+            Object first = floorsArray.opt(0);
+            Log.d("IndoorMaps", "floorsArray[0] type=" + (first == null ? "null" : first.getClass().getSimpleName()));
+            Log.d("IndoorMaps", "floorsArray[0]=" + String.valueOf(first));
+        }
+
+        if (floorsArray == null || floorsArray.length() == 0) {
+            Log.d("IndoorMaps", "No floors data found (floors/floorplans/levels/map_shapes). Full venue=" + venue);
+            setFloorControlsVisibility(View.GONE);
             return;
         }
 
-        org.json.JSONObject first = floors.optJSONObject(0);
-        if (first == null) {
-            Log.d("IndoorMaps", "First floor entry is not an object: " + floors.opt(0));
-            return;
-        }
+// Show UI now that we know floors exist
+        setFloorControlsVisibility(View.VISIBLE);
 
-        Log.d("IndoorMaps", "First floor JSON=" + first.toString());
+        currentFloorIndex = 0;
+        showFloor(currentFloorIndex);
+
     }
+
+    private void showFloor(int index) {
+        if (floorsArray == null) return;
+        if (index < 0 || index >= floorsArray.length()) return;
+
+        JSONObject floorObj = floorsArray.optJSONObject(index);
+        if (floorObj == null) return;
+
+
+
+        // Get floor keys (e.g. "B1", "GF")
+        Iterator<String> keys = floorObj.keys();
+        List<String> floorNames = new ArrayList<>();
+        while (keys.hasNext()) floorNames.add(keys.next());
+
+        Collections.sort(floorNames);
+        Log.d("IndoorMaps", "Available floors=" + floorNames + " currentFloorIndex=" + index);
+        lastFloorNames = floorNames;
+
+        if (floorNames.isEmpty()) return;
+
+        // Clamp index in case
+        int safeIndex = Math.min(index, floorNames.size() - 1);
+        String floorKey = floorNames.get(safeIndex);
+
+        Log.d("IndoorMaps", "Rendering floor=" + floorKey);
+
+        JSONObject geoJson = floorObj.optJSONObject(floorKey);
+        if (geoJson == null) return;
+
+        // Draw the FeatureCollection for this floor
+
+
+        // Optional: update UI label if you have one
+        // floorLabel.setText("Floor: " + floorKey);
+    }
+
+
+    private void clearIndoorMapShapes() {
+        for (com.google.android.gms.maps.model.Polygon p : indoorPolygons) {
+            p.remove();
+        }
+        indoorPolygons.clear();
+    }
+
+    private void drawIndoorFeatureCollection(@NonNull JSONObject featureCollection) {
+        JSONArray features = featureCollection.optJSONArray("features");
+        if (features == null) return;
+
+        for (int i = 0; i < features.length(); i++) {
+            JSONObject feature = features.optJSONObject(i);
+            if (feature == null) continue;
+
+            JSONObject geometry = feature.optJSONObject("geometry");
+            if (geometry == null) continue;
+
+            String type = geometry.optString("type");
+
+            if ("Polygon".equals(type)) {
+                drawGeoJsonPolygon(geometry, true);
+            } else if ("MultiPolygon".equals(type)) {
+                drawGeoJsonMultiPolygon(geometry, true);
+            }
+        }
+    }
+
+
+
 
 
     private void drawOutlinePolygon(@NonNull JSONObject outline) {
@@ -682,15 +870,34 @@ public class TrajectoryMapFragment extends Fragment {
 
         String geomType = geometry.optString("type", "");
         if ("Polygon".equals(geomType)) {
-            drawGeoJsonPolygon(geometry);
+            drawGeoJsonPolygon(geometry, false);
         } else if ("MultiPolygon".equals(geomType)) {
-            drawGeoJsonMultiPolygon(geometry);
+            drawGeoJsonMultiPolygon(geometry, false);
         } else {
             Log.d("IndoorMaps", "Unsupported geometry type: " + geomType);
         }
     }
 
-//indoormaps code ends
+    private double haversineMeters(
+            double lat1, double lon1,
+            double lat2, double lon2
+    ) {
+        double R = 6371000; // metres
+        double phi1 = Math.toRadians(lat1);
+        double phi2 = Math.toRadians(lat2);
+        double dPhi = Math.toRadians(lat2 - lat1);
+        double dLambda = Math.toRadians(lon2 - lon1);
+
+        double a = Math.sin(dPhi / 2) * Math.sin(dPhi / 2)
+                + Math.cos(phi1) * Math.cos(phi2)
+                * Math.sin(dLambda / 2) * Math.sin(dLambda / 2);
+
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+
+    //indoormaps code ends
     private void drawBuildingPolygon() {
         if (gMap == null) {
             Log.e("TrajectoryMapFragment", "GoogleMap is not ready");
