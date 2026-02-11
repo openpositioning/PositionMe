@@ -41,6 +41,8 @@ public class CorrectionFragment extends Fragment {
     private SensorFusion sensorFusion = SensorFusion.getInstance();
     private TextView averageStepLengthText;
     private EditText stepLengthInput;
+    private EditText trajectoryNameInput;
+    private String trajectoryName = "";
     private float averageStepLength;
     private float newStepLength;
     private int secondPass = 0;
@@ -61,9 +63,6 @@ public class CorrectionFragment extends Fragment {
             activity.getSupportActionBar().hide();
         }
         View rootView = inflater.inflate(R.layout.fragment_correction, container, false);
-
-        // Send trajectory data to the cloud
-        sensorFusion.sendTrajectoryToCloud();
 
         //Obtain start position
         float[] startPosition = sensorFusion.getGNSSLatitude(true);
@@ -100,18 +99,41 @@ public class CorrectionFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        this.trajectoryNameInput = view.findViewById(R.id.inputTrajectoryName);
         this.averageStepLengthText = view.findViewById(R.id.averageStepView);
         this.stepLengthInput = view.findViewById(R.id.inputStepLength);
         this.pathView = view.findViewById(R.id.pathView1);
+
+        this.trajectoryNameInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                trajectoryName = s.toString();
+            }
+        });
 
         averageStepLength = sensorFusion.passAverageStepLength();
         averageStepLengthText.setText(getString(R.string.averageStepLgn) + ": "
                 + String.format("%.2f", averageStepLength));
 
-        // Listen for ENTER key
+        // Listen for ENTER key (optional step-length correction)
         this.stepLengthInput.setOnKeyListener((v, keyCode, event) -> {
-            if (keyCode == KeyEvent.KEYCODE_ENTER) {
-                newStepLength = Float.parseFloat(changedText.toString());
+            if (keyCode == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN) {
+                // If user didn't enter anything, do nothing (keep computed average)
+                if (changedText == null || changedText.toString().trim().isEmpty()) {
+                    return true;
+                }
+
+                try {
+                    newStepLength = Float.parseFloat(changedText.toString().trim());
+                } catch (NumberFormatException ex) {
+                    // Invalid number; ignore and keep current average
+                    return true;
+                }
+
                 // Rescale path
                 sensorFusion.redrawPath(newStepLength / averageStepLength);
                 averageStepLengthText.setText(getString(R.string.averageStepLgn)
@@ -123,6 +145,7 @@ public class CorrectionFragment extends Fragment {
                     averageStepLength = newStepLength;
                     secondPass = 0;
                 }
+                return true;
             }
             return false;
         });
@@ -143,13 +166,9 @@ public class CorrectionFragment extends Fragment {
         this.button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // ************* CHANGED CODE HERE *************
-                // Before:
-                //   NavDirections action = CorrectionFragmentDirections.actionCorrectionFragmentToHomeFragment();
-                //   Navigation.findNavController(view).navigate(action);
-                //   ((AppCompatActivity)getActivity()).getSupportActionBar().show();
+                sensorFusion.setTrajectoryName(trajectoryName == null ? "" : trajectoryName.trim());
+                sensorFusion.sendTrajectoryToCloud();
 
-                // Now, simply tell the Activity we are done:
                 ((RecordingActivity) requireActivity()).finishFlow();
             }
         });

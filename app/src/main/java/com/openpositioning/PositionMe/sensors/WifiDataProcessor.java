@@ -11,6 +11,8 @@ import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.provider.Settings;
+import android.util.Log;
+import android.os.Build;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
@@ -133,9 +135,18 @@ public class WifiDataProcessor implements Observable {
                 //Convert String mac address to an integer
                 String wifiMacAddress = wifiScanList.get(i).BSSID;
                 long intMacAddress = convertBssidToLong(wifiMacAddress);
-                //store mac address and rssi of wifi
+                // store mac address, rssi, ssid, frequency, and RTT capability
                 wifiData[i].setBssid(intMacAddress);
                 wifiData[i].setLevel(wifiScanList.get(i).level);
+                wifiData[i].setSsid(wifiScanList.get(i).SSID);
+                wifiData[i].setFrequency(wifiScanList.get(i).frequency);
+
+                // RTT capability (802.11mc responder). Available from API 23+.
+                boolean rttCapable = false;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    rttCapable = wifiScanList.get(i).is80211mcResponder();
+                }
+                wifiData[i].setRttEnabled(rttCapable);
             }
 
             //Notify observers of change in wifiData variable
@@ -227,6 +238,8 @@ public class WifiDataProcessor implements Observable {
     public void startListening() {
         this.scanWifiDataTimer = new Timer();
         this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, scanInterval);
+        // Log throttling state when scanning starts (often after runtime permissions are granted)
+        checkWifiThrottling();
     }
 
     /**
@@ -246,15 +259,21 @@ public class WifiDataProcessor implements Observable {
      */
     public void checkWifiThrottling(){
         if(checkWifiPermissions()) {
-            //If the device does not support wifi throttling an exception is thrown
+            // If the device does not support wifi throttling an exception is thrown
             try {
-                if(Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled")==1) {
-                    //Inform user to disable wifi throttling
-                    Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
+                int v = Settings.Global.getInt(context.getContentResolver(), "wifi_scan_throttle_enabled");
+                Log.d("WIFI_THROTTLE", "wifi_scan_throttle_enabled=" + v);
+                if (v == 1) {
+                    // Inform user to disable wifi throttling
+                    Toast.makeText(context, "Wi-Fi scan throttling is ON (disable it in Developer options)", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(context, "Wi-Fi scan throttling is OFF", Toast.LENGTH_SHORT).show();
                 }
             } catch (Settings.SettingNotFoundException e) {
-                e.printStackTrace();
+                Log.d("WIFI_THROTTLE", "wifi_scan_throttle_enabled setting not present on this device");
             }
+        } else {
+            Log.d("WIFI_THROTTLE", "Skipping check: Wi-Fi throttle permissions not granted");
         }
     }
 
@@ -320,12 +339,33 @@ public class WifiDataProcessor implements Observable {
             long intMacAddress = convertBssidToLong(wifiMacAddress);
             currentWifi.setBssid(intMacAddress);
             currentWifi.setFrequency(wifiManager.getConnectionInfo().getFrequency());
+
+            // RTT capability for the connected AP (best-effort lookup in latest scan results)
+            boolean rttCapable = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                try {
+                    List<ScanResult> scans = wifiManager.getScanResults();
+                    if (scans != null) {
+                        for (ScanResult sr : scans) {
+                            if (sr == null || sr.BSSID == null) continue;
+                            long srMac = convertBssidToLong(sr.BSSID);
+                            if (srMac == intMacAddress) {
+                                rttCapable = sr.is80211mcResponder();
+                                break;
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            currentWifi.setRttEnabled(rttCapable);
         }
         else{
             //Store standard information if not connected
             currentWifi.setSsid("Not connected");
             currentWifi.setBssid(0);
             currentWifi.setFrequency(0);
+            currentWifi.setRttEnabled(false);
         }
         return currentWifi;
     }

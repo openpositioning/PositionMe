@@ -28,6 +28,7 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
@@ -65,7 +66,7 @@ public class RecordingFragment extends Fragment {
 
     // UI elements
     private MaterialButton completeButton, cancelButton;
-    private Button btnTestPoint;
+    private Button btnTestPoint; // Add marker button UI element
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -146,7 +147,7 @@ public class RecordingFragment extends Fragment {
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
-        btnTestPoint = view.findViewById(R.id.btnTestPoint);
+        btnTestPoint = view.findViewById(R.id.btnTestPoint); // Initialise marker button UI reference
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
@@ -193,24 +194,31 @@ public class RecordingFragment extends Fragment {
 
         // Add marker button
         btnTestPoint.setOnClickListener(v -> {
-            // Increment marker count on press
+            // Increment marker count on press for naming convention
             markerCount++;
 
-            // Get current location from TrajectoryMapFragment
-            LatLng currentPosition = trajectoryMapFragment.getCurrentLocation();
+            // Get current location from trajectoryMapFragment
+             LatLng currentPosition = trajectoryMapFragment.getCurrentLocation();
 
             // Obtain recording timestamp and create new Testpoint object
             long relativeTimeStamp = sensorFusion.getRelativeTimeStamp();
             TestPoint tp = new TestPoint(currentPosition, relativeTimeStamp, markerCount);
             TestPoints.add(tp);
 
-            // Display confirmation to screen showing marker number and time in seconds.
+            // Convert to seconds for display confirmation to two decimal places
+            double timeSeconds = relativeTimeStamp / 1000.0;
+            String timeStr = String.format("%.2f", timeSeconds);
+
+            // Display confirmation to screen showing marker number and time in seconds
             Toast.makeText(requireContext(),
-                    "Test Point " + markerCount + " at " + relativeTimeStamp/1000 + "s",
+                    "Test Point " + markerCount + " at " + timeStr + "s",
                     Toast.LENGTH_SHORT).show();
 
             // Add a test point marker to the map
             trajectoryMapFragment.addTestPointMarker(currentPosition, markerCount);
+
+            // Add to protobuf
+            sensorFusion.addTestPoint(currentPosition, relativeTimeStamp);
         });
 
         // The blinking effect for recIcon
@@ -328,6 +336,14 @@ public class RecordingFragment extends Fragment {
         }
     }
 
+    /**
+     * Structure defines the added test point markers during trajectory recording
+     *
+     * Each test point corresponds to the "ADD MARKER" button press event and stores:
+     *  - markerCount: sequential marker identifier
+     *  - currentPostion: LatLng at time of press
+     *  - relativeTimeStamp: recording time in ms to recording session start
+     */
     private static class TestPoint {
         final int markerCount;
         final LatLng currentPosition;
@@ -340,8 +356,6 @@ public class RecordingFragment extends Fragment {
         }
     }
 
+    // List storing all test points added during recording session
     private final List<TestPoint> TestPoints = new ArrayList<>();
-
-    // TESTING...
-    //TESTING 2...
 }

@@ -17,7 +17,6 @@ import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
@@ -32,6 +31,7 @@ import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -58,6 +58,19 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+
+import okhttp3.MediaType;
+import okhttp3.RequestBody;
+import okhttp3.Callback;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.List;
+
+
+
 
 /**
  * This class handles communications with the server through HTTPs. The class uses an
@@ -89,7 +102,7 @@ public class ServerCommunications implements Observable {
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
     private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
+            "https://openpositioning.org/api/live/trajectory/upload/" + "murchison_house/" + userKey
                     + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
@@ -100,6 +113,7 @@ public class ServerCommunications implements Observable {
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";
 
+    private OkHttpClient client;
 
 
     /**
@@ -111,6 +125,7 @@ public class ServerCommunications implements Observable {
      */
     public ServerCommunications(Context context) {
         this.context = context;
+        this.client = new OkHttpClient();
         this.connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.isWifiConn = false;
@@ -121,19 +136,15 @@ public class ServerCommunications implements Observable {
     }
 
     /**
-     * Outgoing communication request with a {@link Traj trajectory} object. The recorded
-     * trajectory is passed to the method. It is processed into the right format for sending
-     * to the API server.
-     *
-     * @param trajectory    Traj object matching all the timing and formal restrictions.
+     * Writes the given trajectory to a unique .txt file and returns the created File, or null if failed.
      */
-    public void sendTrajectory(Traj.Trajectory trajectory){
+    public File saveTrajectoryToFile(Traj.Trajectory trajectory) {
         logDataSize(trajectory);
 
         // Convert the trajectory to byte array
         byte[] binaryTrajectory = trajectory.toByteArray();
 
-        File path = null;
+        File path;
         // for android 13 or higher use dedicated external storage
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
@@ -149,7 +160,20 @@ public class ServerCommunications implements Observable {
         // Format the file name according to date
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
         Date date = new Date();
-        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
+
+        // Optional user-provided name (from Correction screen). If empty, fall back to timestamp scheme.
+        String rawName = SensorFusion.getInstance().getTrajectoryName();
+        String safeName = sanitiseTrajectoryName(rawName);
+
+        String baseName;
+        if (safeName.isEmpty()) {
+            baseName = "trajectory_" + dateFormat.format(date);
+        } else {
+            baseName = "trajectory_" + safeName;
+        }
+
+        // Ensure we never overwrite an existing file (e.g., same name twice or two saves in the same second)
+        File file = makeUniqueTrajectoryFile(path, baseName, ".txt");
 
         try {
             // Write the binary data to the file
@@ -157,9 +181,28 @@ public class ServerCommunications implements Observable {
             stream.write(binaryTrajectory);
             stream.close();
             System.out.println("Recorded binary trajectory for debugging stored in: " + path);
+            return file;
         } catch (IOException ee) {
             // Catch and print if writing to the file fails
             System.err.println("Storing of recorded binary trajectory failed: " + ee.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Outgoing communication request with a {@link Traj trajectory} object. The recorded
+     * trajectory is passed to the method. It is processed into the right format for sending
+     * to the API server.
+     *
+     * @param trajectory    Traj object matching all the timing and formal restrictions.
+     */
+    public void sendTrajectory(Traj.Trajectory trajectory){
+        File file = saveTrajectoryToFile(trajectory);
+        if (file == null) {
+            success = false;
+            SensorFusion.getInstance().setTrajectoryName("");
+            notifyObservers(1);
+            return;
         }
 
         // Check connections available before sending data
@@ -240,19 +283,32 @@ public class ServerCommunications implements Observable {
                         String originalPath = file.getAbsolutePath();
                         System.out.println("Original trajectory file saved at: " + originalPath);
 
-                        // Copy the file to the Downloads folder
-                        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                        File downloadFile = new File(downloadsDir, file.getName());
-                        try {
-                            copyFile(file, downloadFile);
-                            System.out.println("Trajectory file copied to Downloads: " + downloadFile.getAbsolutePath());
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            System.err.println("Failed to copy file to Downloads: " + e.getMessage());
+                        // Copy the file to an app-specific Downloads folder (works reliably with scoped storage)
+                        File downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                        if (downloadsDir != null && !downloadsDir.exists()) {
+                            //noinspection ResultOfMethodCallIgnored
+                            downloadsDir.mkdirs();
                         }
 
-                        // Delete local file and set success to true
-                        success = file.delete();
+                        boolean copiedOk = false;
+                        if (downloadsDir != null) {
+                            File downloadFile = new File(downloadsDir, file.getName());
+                            try {
+                                copyFile(file, downloadFile);
+                                copiedOk = true;
+                                System.out.println("Trajectory file copied to app Downloads: " + downloadFile.getAbsolutePath());
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                                System.err.println("Failed to copy file to app Downloads: " + e.getMessage());
+                            }
+                        } else {
+                            System.err.println("App-specific Downloads directory is unavailable; keeping original file only.");
+                        }
+
+                        // Keep the original file on successful upload (previously it was deleted)
+                        success = true;
+                        // Clear name after a completed upload to avoid reusing it for the next recording
+                        SensorFusion.getInstance().setTrajectoryName("");
                         notifyObservers(1);
                     }
                 }
@@ -263,6 +319,7 @@ public class ServerCommunications implements Observable {
             // and notify observers and user
             System.err.println("No uploading allowed right now!");
             success = false;
+            SensorFusion.getInstance().setTrajectoryName("");
             notifyObservers(1);
         }
     }
@@ -602,6 +659,49 @@ public class ServerCommunications implements Observable {
         });
     }
 
+    // Used for indoormaps display to retrieve json
+    public void requestNearbyIndoorMaps(
+            double lat,
+            double lon,
+            List<String> macs,
+            okhttp3.Callback callback
+    ) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("lat", lat);
+            body.put("lon", lon);
+
+            JSONArray macArray = new JSONArray();
+            if (macs != null) {
+                for (String m : macs) {
+                    macArray.put(m);
+                }
+            }
+            body.put("macs", macArray);
+
+            RequestBody requestBody = RequestBody.create(
+                    body.toString(),
+                    MediaType.parse("application/json; charset=utf-8")
+            );
+
+            String url =
+                    "https://openpositioning.org/api/live/floorplan/request/"
+                            + userKey + "?key=" + masterKey;
+
+            okhttp3.Request request = new okhttp3.Request.Builder()
+                    .url(url)
+                    .post(requestBody)
+                    .build();
+
+            client.newCall(request).enqueue(callback);
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
     /**
      * This method checks the device's connection status. It sets boolean variables depending on
      * the type of active network connection.
@@ -623,11 +723,14 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+        // There is no `position_data` field in the current traj.proto.
+        // Use corrected_positions as the closest equivalent to "position" samples.
+        Log.i("ServerCommunications", "Corrected Positions size: " + trajectory.getCorrectedPositionsCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+        // traj.proto uses `wifi_fingerprints` (repeated Fingerprint) instead of `wifi_data`.
+        Log.i("ServerCommunications", "WiFi Fingerprints size: " + trajectory.getWifiFingerprintsCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
@@ -655,13 +758,43 @@ public class ServerCommunications implements Observable {
      */
     @Override
     public void notifyObservers(int index) {
-        for(Observer o : observers) {
-            if(index == 0 && o instanceof FilesFragment) {
-                o.update(new String[] {infoResponse});
+        for (Observer o : observers) {
+            if (index == 0 && o instanceof FilesFragment) {
+                o.update(new String[]{infoResponse});
+            } else if (index == 1 && o instanceof MainActivity) {
+                o.update(new Boolean[]{success});
             }
-            else if (index == 1 && o instanceof MainActivity) {
-                o.update(new Boolean[] {success});
-            }
+        }
+    }
+
+    private String sanitiseTrajectoryName(String raw) {
+        if (raw == null) return "";
+        String name = raw.trim();
+        if (name.isEmpty()) return "";
+
+        // Replace whitespace with underscores
+        name = name.replaceAll("\\s+", "_");
+        // Remove characters that are problematic in filenames across Android/Windows/macOS
+        name = name.replaceAll("[\\\\/:*?\"<>|]", "_");
+        // Keep it reasonably short
+        if (name.length() > 80) {
+            name = name.substring(0, 80);
+        }
+        // Avoid empty/degenerate names
+        name = name.replaceAll("_+", "_");
+        name = name.replaceAll("^_+|_+$", "");
+        return name;
+    }
+
+    private File makeUniqueTrajectoryFile(File dir, String baseName, String extension) {
+        File f = new File(dir, baseName + extension);
+        if (!f.exists()) return f;
+
+        int i = 2;
+        while (true) {
+            File candidate = new File(dir, baseName + "_" + i + extension);
+            if (!candidate.exists()) return candidate;
+            i++;
         }
     }
 }
