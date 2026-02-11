@@ -176,9 +176,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         // UX: selected venue label under indoor button
         selectedVenueTextView = view.findViewById(R.id.selectedVenueText);
 
-        // Fresh app session: don't show a stale previously-selected venue.
-        IndoorSelectionStore.clear(requireContext());
-
         updateSelectedVenueLabel();
 
         // Map fragment
@@ -295,6 +292,11 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         // Clear previous selection before requesting new indoor venues
         IndoorSelectionStore.clear(requireContext());
 
+        // ✅ Update label immediately (no need to touch map)
+        if (selectedVenueTextView != null) {
+            selectedVenueTextView.setText("Selected venue: None (select a building)");
+        }
+
         boolean fineGranted = ActivityCompat.checkSelfPermission(
                 requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean coarseGranted = ActivityCompat.checkSelfPermission(
@@ -308,6 +310,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         // Force a fresh location fix for the request.
         requestFreshLocationAndIndoorRequest();
     }
+
 
     /**
      * Requests a one-shot location update (Network preferred indoors).

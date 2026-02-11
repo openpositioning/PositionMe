@@ -32,6 +32,7 @@ import com.openpositioning.PositionMe.presentation.fragment.HomeFragment;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.IndoorSelectionStore;
 import com.openpositioning.PositionMe.utils.PermissionManager;
 
 
@@ -92,6 +93,11 @@ public class MainActivity extends AppCompatActivity implements Observer {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         setContentView(R.layout.activity_main);
 
+        // Clear only on a real fresh app launch (not fragment navigation).
+        if (savedInstanceState == null) {
+            IndoorSelectionStore.clear(this);
+        }
+        
         // Set up navigation and fragments
         NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.nav_host_fragment);
