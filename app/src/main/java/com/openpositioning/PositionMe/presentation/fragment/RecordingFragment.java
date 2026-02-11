@@ -309,6 +309,8 @@ public class RecordingFragment extends Fragment {
         
 
 
+        // HELLO
+
         // Current location
         // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
         // Or simply pass relative data for the TrajectoryMapFragment to handle
