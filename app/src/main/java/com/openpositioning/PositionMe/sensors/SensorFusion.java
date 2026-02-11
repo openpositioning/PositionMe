@@ -458,6 +458,31 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // Extract yaw/pitch/roll (radians) from the remapped matrix
                 SensorManager.getOrientation(remappedDCM, this.orientation);
 
+                if (saveRecording && !initialOrientationSet) {
+                    initialOrientationSet = true;
+
+                    final float[] initialOrientation = new float[3];   // yaw,pitch,roll (radians)
+                    final float[] initialRotationQuat = new float[4];  // x,y,z,w
+
+                    // Snapshot yaw/pitch/roll
+                    System.arraycopy(this.orientation, 0, initialOrientation, 0, 3);
+
+                    // Snapshot quaternion (make sure you have 4 components x,y,z,w)
+                    System.arraycopy(this.rotation, 0, initialRotationQuat, 0, 4);
+
+                    // Write “t=0” IMU entry (protobuf initial orientation)
+                    Traj.Quaternion.Builder q0 = Traj.Quaternion.newBuilder()
+                            .setX(initialRotationQuat[0])
+                            .setY(initialRotationQuat[1])
+                            .setZ(initialRotationQuat[2])
+                            .setW(initialRotationQuat[3]);
+
+                    trajectory.addImuData(Traj.IMUReading.newBuilder()
+                            .setRelativeTimestamp(0)
+                            .setRotationVector(q0)
+                            .setStepCount(0));
+                }
+
                 // Empirical fix: some devices/activity configurations yield an azimuth that is
                 // consistently shifted by +90° relative to the map/PDR frame.
                 // App is locked to portrait and the phone is held in portrait, so we correct here
