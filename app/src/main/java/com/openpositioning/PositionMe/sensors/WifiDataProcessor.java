@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.sensors;
 
+import android.util.Log;
 import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -41,7 +42,7 @@ import java.util.TimerTask;
 public class WifiDataProcessor implements Observable {
 
     //Time over which a new scan will be initiated
-    private static final long scanInterval = 5000;
+    private static final long scanInterval = 15000;
 
     // Application context for handling permissions and WifiManager instances
     private final Context context;
@@ -56,6 +57,10 @@ public class WifiDataProcessor implements Observable {
 
     // Timer object
     private Timer scanWifiDataTimer;
+
+    // Raw BSSIDs from the most recent scan (colon-separated MAC strings)
+    private final List<String> lastObservedBssids = new ArrayList<>();
+
 
     /**
      * Public default constructor of the WifiDataProcessor class.
@@ -73,28 +78,63 @@ public class WifiDataProcessor implements Observable {
      * @author Mate Stodulka
      */
     public WifiDataProcessor(Context context) {
-        this.context = context;
-        // Check for permissions
-        boolean permissionsGranted = checkWifiPermissions();
-        this.wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+
+        Log.d("WifiDataProcessor",
+                "constructed instance=" + System.identityHashCode(this));
+
+        this.context = context.getApplicationContext();
+        this.wifiManager = (WifiManager) this.context.getSystemService(Context.WIFI_SERVICE);
         this.scanWifiDataTimer = new Timer();
         this.observers = new ArrayList<>();
+        this.wifiData = new Wifi[0];
+    }
 
-        // Decreapted method after API 29
-        // Turn on wifi if it is currently disabled
-        // TODO - turn it to a notification toward user
-//      //  if(permissionsGranted && wifiManager.getWifiState()== WifiManager.WIFI_STATE_DISABLED) {
-//      //      wifiManager.setWifiEnabled(true);
-//      //  }
+    public void startListening() {
 
-        // Start wifi scan and return results via broadcast
-        if(permissionsGranted) {
-            this.scanWifiDataTimer.schedule(new scheduledWifiScan(), 0, scanInterval);
+        if (!checkWifiPermissions()) {
+            Log.w("WifiDataProcessor", "Permissions not granted, not starting WiFi scan");
+            return;
         }
 
-        //Inform the user if wifi throttling is enabled on their device
-        checkWifiThrottling();
+        // Immediately process cached results
+        List<ScanResult> initialResults = wifiManager.getScanResults();
+        processScanResults(initialResults);
+
+        scanWifiDataTimer.scheduleAtFixedRate(
+                new scheduledWifiScan(),
+                0,
+                15000
+        );
     }
+
+    private void processScanResults(List<ScanResult> wifiScanList) {
+
+        if (wifiScanList == null) return;
+
+        lastObservedBssids.clear();
+
+        for (ScanResult r : wifiScanList) {
+            if (r.BSSID != null && !r.BSSID.isEmpty()) {
+                lastObservedBssids.add(r.BSSID.toLowerCase());
+            }
+        }
+
+        wifiData = new Wifi[wifiScanList.size()];
+
+        for (int i = 0; i < wifiScanList.size(); i++) {
+            wifiData[i] = new Wifi();
+            String mac = wifiScanList.get(i).BSSID;
+            long intMacAddress = convertBssidToLong(mac);
+            wifiData[i].setBssid(intMacAddress);
+            wifiData[i].setLevel(wifiScanList.get(i).level);
+        }
+
+        Log.d("WifiDataProcessor",
+                "Processed scan results, BSSIDs=" + lastObservedBssids.size());
+
+        notifyObservers(0);
+    }
+
 
     /**
      * Broadcast receiver to receive updates from the wifi manager.
@@ -114,6 +154,7 @@ public class WifiDataProcessor implements Observable {
          */
         @Override
         public void onReceive(Context context, Intent intent) {
+            Log.d("WifiDataProcessor", "Scan complete, BSSIDs=" + lastObservedBssids.size());
 
             if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 // Unregister this listener
@@ -125,6 +166,14 @@ public class WifiDataProcessor implements Observable {
             List<ScanResult> wifiScanList = wifiManager.getScanResults();
             //Stop receiver as scan is complete
             context.unregisterReceiver(this);
+            // Collect raw BSSIDs for floorplan API
+            lastObservedBssids.clear();
+            for (ScanResult r : wifiScanList) {
+                if (r.BSSID != null && !r.BSSID.isEmpty()) {
+                    lastObservedBssids.add(r.BSSID.toLowerCase());
+                }
+            }
+
 
             //Loop though each item in wifi list
             wifiData = new Wifi[wifiScanList.size()];
@@ -137,6 +186,7 @@ public class WifiDataProcessor implements Observable {
                 wifiData[i].setBssid(intMacAddress);
                 wifiData[i].setLevel(wifiScanList.get(i).level);
             }
+
 
             //Notify observers of change in wifiData variable
             notifyObservers(0);
@@ -224,10 +274,8 @@ public class WifiDataProcessor implements Observable {
      * Initiate scans for nearby networks every 5 seconds.
      * The method declares a new timer instance to schedule a scan for nearby wifis every 5 seconds.
      */
-    public void startListening() {
-        this.scanWifiDataTimer = new Timer();
-        this.scanWifiDataTimer.scheduleAtFixedRate(new scheduledWifiScan(), 0, scanInterval);
-    }
+
+
 
     /**
      * Cancel wifi scans.
@@ -287,12 +335,21 @@ public class WifiDataProcessor implements Observable {
      * calling wifi scans every 5 seconds.
      */
     private class scheduledWifiScan extends TimerTask {
-
         @Override
         public void run() {
-            startWifiScan();
+
+            if (!checkWifiPermissions()) return;
+
+            // Always read cached results first
+            List<ScanResult> cached = wifiManager.getScanResults();
+            processScanResults(cached);
+
+            // Best-effort request a new scan (may be throttled)
+            boolean ok = wifiManager.startScan();
+            Log.d("WifiDataProcessor", "startScan() returned=" + ok);
         }
     }
+
 
     /**
      * Obtains required information about wifi in which the device is currently connected.
@@ -329,4 +386,15 @@ public class WifiDataProcessor implements Observable {
         }
         return currentWifi;
     }
+
+
+
+    public List<String> getLastObservedBssids() {
+        Log.d("WifiDataProcessor", "getLastObservedBssids() size=" + lastObservedBssids.size()
+                + " instance=" + System.identityHashCode(this));
+        return new ArrayList<>(lastObservedBssids);
+    }
+
+
+
 }

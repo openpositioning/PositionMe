@@ -10,6 +10,8 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
+import android.widget.TextView;
+
 import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import androidx.annotation.NonNull;
@@ -28,6 +30,11 @@ import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.openpositioning.PositionMe.data.remote.FloorPlanData;
+import com.openpositioning.PositionMe.utils.VenueMapper;
+
+import okhttp3.OkHttpClient;
+
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -62,8 +69,13 @@ import com.google.android.gms.maps.model.MarkerOptions;
  * @author Mate Stodulka
  */
 
+//request nearby indoor maps
+    //draw venue polygons
+    //handle venue click
+
 public class TrajectoryMapFragment extends Fragment {
 
+    private static final boolean USE_MOCK_FLOORPLAN = true;
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
@@ -80,6 +92,9 @@ public class TrajectoryMapFragment extends Fragment {
 
     private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
+    private TextView floorLabel;
+
+
 
 
     // UI
@@ -91,6 +106,19 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
+
+    private List <IndoorMapManager.IndoorVenue> selectedVenue;
+//    private IndoorMapManager.IndoorFloor selectedFloor;
+    private FloorPlanData floorplanRemote;
+    private long lastVenueQueryMs = 0;
+    private LatLng lastVenueQueryLoc = null;
+
+    private final Object macLock = new Object();
+    private List<String> observedMacs = new ArrayList<>();
+
+    // cache venues if they arrive before map/manager is ready (optional)
+    private List<IndoorMapManager.IndoorVenue> lastFetchedVenues = null;
+
 
 
     public TrajectoryMapFragment() {
@@ -116,11 +144,16 @@ public class TrajectoryMapFragment extends Fragment {
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
+        floorUpButton.setOnClickListener(v -> indoorMapManager.increaseFloor());
         floorDownButton = view.findViewById(R.id.floorDownButton);
+        floorDownButton.setOnClickListener(v -> indoorMapManager.decreaseFloor());
         switchColorButton = view.findViewById(R.id.lineColorButton);
+        floorLabel = view.findViewById(R.id.floorLabel);
+        floorLabel.setText("Floor: -");
+
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
-        setFloorControlsVisibility(View.GONE);
+//        setFloorControlsVisibility(View.GONE);
 
         // Initialize the map asynchronously
         SupportMapFragment mapFragment = (SupportMapFragment)
@@ -133,6 +166,8 @@ public class TrajectoryMapFragment extends Fragment {
                     gMap = googleMap;
                     // Initialize map settings with the now non-null gMap
                     initMapSettings(gMap);
+                    floorplanRemote = new FloorPlanData(new OkHttpClient());
+
 
                     // If we had a pending camera move, apply it now
                     if (hasPendingCameraMove && pendingCameraPosition != null) {
@@ -141,7 +176,37 @@ public class TrajectoryMapFragment extends Fragment {
                         pendingCameraPosition = null;
                     }
 
-                    drawBuildingPolygon();
+//                    drawBuildingPolygon();
+                    indoorMapManager = new IndoorMapManager(gMap);
+                    // 1) Handle user clicking a venue outline polygon
+                    gMap.setOnPolygonClickListener(polygon -> {
+                        IndoorMapManager.IndoorVenue v = indoorMapManager.getVenueForPolygon(polygon);
+
+                        if (v != null) {
+                            Log.d("IndoorDebug", "Clicked venue=" + v.name);
+
+                            Log.d("IndoorDebug", "mapShapes length=" +
+                                    (v.rawMapShapes == null ? "null" : v.rawMapShapes.length()));
+
+                            Log.d("IndoorDebug", "mapShapes preview=" +
+                                    (v.rawMapShapes == null ? "null" :
+                                            v.rawMapShapes.substring(0,
+                                                    Math.min(400, v.rawMapShapes.length()))));
+
+                            indoorMapManager.selectVenue(v);
+
+                            if(getActivity() instanceof VenueSelectionListener) {
+                                ((VenueSelectionListener) getActivity()).onVenueSelected(
+                                        v.venueId != null ? v.venueId : v.name
+                                );
+                            }
+                            setFloorControlsVisibility(View.VISIBLE);
+
+                            String fk = indoorMapManager.getCurrentFloorKey();
+                            if (floorLabel != null) floorLabel.setText("Floor: " + (fk == null ? "-" : fk));
+
+                        }
+                    });
 
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
 
@@ -191,14 +256,22 @@ public class TrajectoryMapFragment extends Fragment {
             autoFloorSwitch.setChecked(false);
             if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
+                String fk = indoorMapManager.getCurrentFloorKey();
+                if (floorLabel != null) floorLabel.setText("Floor: " + (fk == null ? "-" : fk));
+
             }
+
         });
 
         floorDownButton.setOnClickListener(v -> {
             autoFloorSwitch.setChecked(false);
             if (indoorMapManager != null) {
                 indoorMapManager.decreaseFloor();
+                String fk = indoorMapManager.getCurrentFloorKey();
+                if (floorLabel != null) floorLabel.setText("Floor: " + (fk == null ? "-" : fk));
+
             }
+
         });
     }
 
@@ -284,6 +357,78 @@ public class TrajectoryMapFragment extends Fragment {
                 .add() // start empty
         );
     }
+
+    private void maybeRequestNearbyVenues(@NonNull LatLng loc) {
+        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) return;
+
+        long now = System.currentTimeMillis();
+        if (now - lastVenueQueryMs < 15000) return; // 15s throttle
+
+        if (lastVenueQueryLoc != null && distanceMeters(loc, lastVenueQueryLoc) < 25) return; // 25m threshold
+
+        lastVenueQueryMs = now;
+        lastVenueQueryLoc = loc;
+
+
+        List<String> macs = getObservedMacsOrEmpty();
+        Log.d("TrajectoryMapFragment", "maybeRequestNearbyVenues instance=" + System.identityHashCode(this)
+                + " observedMacs=" + macs.size());
+
+        if (macs.isEmpty()) {
+            Log.d("TrajectoryMapFragment", "Skipping floorplan request: no MACs yet");
+            return;
+        }
+
+        Log.d("TrajectoryMapFragment", "Floorplan request @ " +
+                loc.latitude + "," + loc.longitude + " macs=" + macs.size());
+        if (floorplanRemote == null) {
+            Log.w("TrajectoryMapFragment", "floorplanRemote not initialized");
+            return;
+        }
+
+        floorplanRemote.requestNearbyVenues(
+                loc.latitude, loc.longitude, macs,
+                new FloorPlanData.VenueCallback() {
+                    @Override public void onSuccess(List<FloorPlanData.VenueDto> dtos) {
+                        requireActivity().runOnUiThread(() -> {
+                            Log.d("TrajectoryMapFragment", "Floorplan response venues=" + dtos.size());
+
+                            List<IndoorMapManager.IndoorVenue> venues = VenueMapper.toIndoorVenues(dtos);
+                            Log.d("TrajectoryMapFragment", "Mapped venues=" + venues.size());
+
+                            if (indoorMapManager != null) {
+                                indoorMapManager.showVenueOutlines(venues);
+                            }
+                        });
+                    }
+
+//                        requireActivity().runOnUiThread(() -> {
+//                            Log.d("TrajectoryMapFragment", "Floorplan response venues=" + dtos.size());
+//                            // temporarily: if empty, clear outlines or do nothing
+//                            List<IndoorMapManager.IndoorVenue> venues = VenueMapper.toIndoorVenues(dtos);
+//                            if (dtos.isEmpty()) return; // nothing to draw yet
+//
+//// TEMP: just log first venue strings
+//                            FloorPlanData.VenueDto v0 = dtos.get(0);
+//                            Log.d("TrajectoryMapFragment", "First venue name=" + v0.name);
+//                            Log.d("TrajectoryMapFragment", "Outline raw=" + v0.outline);
+//                            Log.d("TrajectoryMapFragment", "Map_shapes raw=" + v0.mapShapes);
+//
+//                            lastFetchedVenues = venues;
+//
+//                            if (indoorMapManager != null) {
+//                                indoorMapManager.showVenueOutlines(venues);
+//                            }
+//                        });
+//                    }
+
+                    @Override public void onError(Exception e) {
+                         Log.d("TrajectoryMapFragment", "floorplan request failed", e);
+                    }
+                }
+        );
+    }
+
 
 
     /**
@@ -377,10 +522,16 @@ public class TrajectoryMapFragment extends Fragment {
             polyline.setPoints(points);
         }
 
+
         // Update indoor map overlay
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
             setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+        }
+
+        // call api
+        if (floorplanRemote != null) {
+            maybeRequestNearbyVenues(newLocation);
         }
     }
 
@@ -593,6 +744,31 @@ public class TrajectoryMapFragment extends Fragment {
         gMap.addPolygon(buildingPolygonOptions4);
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
+    public interface VenueSelectionListener {
+        void onVenueSelected(String venueIdOrName);
+        void onVenueCleared();
+    }
+
+    private static float distanceMeters(LatLng a, LatLng b) {
+        float[] out = new float[1];
+        android.location.Location.distanceBetween(
+                a.latitude, a.longitude, b.latitude, b.longitude, out
+        );
+        return out[0];
+    }
+    private List<String> getObservedMacsOrEmpty() {
+        return observedMacs == null ? new ArrayList<>() : new ArrayList<>(observedMacs);
+    }
+
+
+    public void updateObservedMacs(@NonNull List<String> macs) {
+        Log.d("TrajectoryMapFragment", "Observed macs updated size=" + macs.size()+ " instance=" + System.identityHashCode(this));
+        synchronized (macLock) {
+            observedMacs = new ArrayList<>(macs);
+        }
+    }
+
+
 
 
 }

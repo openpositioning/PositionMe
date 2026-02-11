@@ -218,7 +218,8 @@ public class ServerCommunications implements Observable {
 //                            System.err.println("POST error response: " + responseBody.string());
 
                             String errorBody = responseBody.string();
-                            infoResponse = "Upload failed: " + errorBody;
+//                            infoResponse = "Upload failed: " + errorBody;
+                            infoResponse = "";
                             new Handler(Looper.getMainLooper()).post(() ->
                                     Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
 
@@ -313,7 +314,8 @@ public class ServerCommunications implements Observable {
                 success = false;
                 System.err.println("UPLOAD: Failure to get response");
                 notifyObservers(1);
-                infoResponse = "Upload failed: " + e.getMessage(); // Store error message
+//                infoResponse = "Upload failed: " + e.getMessage(); // Store error message
+                infoResponse = "";
                 new Handler(Looper.getMainLooper()).post(() ->
                         Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()); // show error message to users
             }
@@ -330,7 +332,8 @@ public class ServerCommunications implements Observable {
                         assert responseBody != null;
                         String errorBody = responseBody.string();
                         System.err.println("UPLOAD unsuccessful: " + errorBody);
-                        infoResponse = "Upload failed: " + errorBody;
+//                        infoResponse = "Upload failed: " + errorBody;
+                        infoResponse = "";
                         new Handler(Looper.getMainLooper()).post(() ->
                                 Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
                         throw new IOException("UPLOAD failed with code " + response);
@@ -623,11 +626,11 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getMagnetometerDataCount());
+        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiFingerprintsCount());
+        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
