@@ -87,10 +87,8 @@ public class RecordingFragment extends Fragment {
     private float previousPosY = 0f;
 
     //Marker numberings
-    private int nextTestPointId = 1;
 
     // relative timestamp baseline (ms since epoch at "recording start")
-    private long startTimestampMs = 0L;
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
@@ -160,7 +158,7 @@ public class RecordingFragment extends Fragment {
         cancelButton = view.findViewById(R.id.cancelButton);
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
-        addTagButton = view.findViewById(R.id.button_add_tag);
+        addTagButton = view.findViewById(R.id.button_add_Test_Point);
 
         //adding the test point button
         TestPointButton = view.findViewById(R.id.button_add_Test_Point);

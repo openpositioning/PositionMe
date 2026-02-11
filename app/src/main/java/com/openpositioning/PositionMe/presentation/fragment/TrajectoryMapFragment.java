@@ -13,39 +13,35 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
-import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polygon;
+import com.google.android.gms.maps.model.PolygonOptions;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
-
 /**
  * A fragment responsible for displaying a trajectory map using Google Maps.
- * <p>
- * The TrajectoryMapFragment provides a map interface for visualizing movement trajectories,
- * GNSS tracking, and indoor mapping. It manages map settings, user interactions, and real-time
- * updates to user location and GNSS markers.
- * <p>
- * Key Features:
- * - Displays a Google Map with support for different map types (Hybrid, Normal, Satellite).
- * - Tracks and visualizes user movement using polylines.
- * - Supports GNSS position updates and visual representation.
- * - Includes indoor mapping with floor selection and auto-floor adjustments.
- * - Allows user interaction through map controls and UI elements.
  *
  * @see com.openpositioning.PositionMe.presentation.activity.RecordingActivity The activity hosting this fragment.
  * @see com.openpositioning.PositionMe.utils.IndoorMapManager Utility for managing indoor map overlays.
@@ -53,7 +49,6 @@ import java.util.List;
  *
  * @author Mate Stodulka
  */
-
 public class TrajectoryMapFragment extends Fragment {
 
     private GoogleMap gMap; // Google Maps instance
@@ -73,7 +68,6 @@ public class TrajectoryMapFragment extends Fragment {
     private IndoorMapManager indoorMapManager; // Manages indoor mapping
     private SensorFusion sensorFusion;
 
-
     // UI
     private Spinner switchMapSpinner;
 
@@ -83,7 +77,6 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private Button switchColorButton;
     private Polygon buildingPolygon;
-
 
     public TrajectoryMapFragment() {
         // Required empty public constructor
@@ -105,9 +98,9 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
-        gnssSwitch      = view.findViewById(R.id.gnssSwitch);
+        gnssSwitch = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
-        floorUpButton   = view.findViewById(R.id.floorUpButton);
+        floorUpButton = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         switchColorButton = view.findViewById(R.id.lineColorButton);
 
@@ -117,12 +110,14 @@ public class TrajectoryMapFragment extends Fragment {
         // Initialize the map asynchronously
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.trajectoryMap);
+
         if (mapFragment != null) {
             mapFragment.getMapAsync(new OnMapReadyCallback() {
                 @Override
                 public void onMapReady(@NonNull GoogleMap googleMap) {
                     // Assign the provided googleMap to your field variable
                     gMap = googleMap;
+
                     // Initialize map settings with the now non-null gMap
                     initMapSettings(gMap);
 
@@ -134,10 +129,7 @@ public class TrajectoryMapFragment extends Fragment {
                     }
 
                     drawBuildingPolygon();
-
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
-
-
                 }
             });
         }
@@ -171,11 +163,9 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-
-            //TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
-//            float elevationVal = sensorFusion.getElevation();
-//            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-//                    ,true);
+            // TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
+            // float elevationVal = sensorFusion.getElevation();
+            // indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight()), true);
         });
 
         floorUpButton.setOnClickListener(v -> {
@@ -193,50 +183,10 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
     }
-    private BitmapDescriptor makeNumberedIcon(@NonNull String label) {
-        final int sizePx = 96;
 
-        Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-
-        Paint circlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        circlePaint.setColor(Color.RED);
-        canvas.drawCircle(sizePx / 2f, sizePx / 2f, sizePx / 2.2f, circlePaint);
-
-        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        textPaint.setColor(Color.WHITE);
-        textPaint.setTextAlign(Paint.Align.CENTER);
-        textPaint.setTextSize(40f);
-
-
-        Paint.FontMetrics fm = textPaint.getFontMetrics();
-        float textCenterY = (sizePx / 2f) - (fm.ascent + fm.descent) / 2f;
-
-        canvas.drawText(label, sizePx / 2f, textCenterY, textPaint);
-
-        return BitmapDescriptorFactory.fromBitmap(bitmap);
-    }
-    public void addNumberedMarker(@NonNull LatLng pos, @NonNull String label) {
-        if (gMap == null) return;
-
-        gMap.addMarker(new MarkerOptions()
-                .position(pos)
-                .icon(makeNumberedIcon(label))
-                .anchor(0.5f, 0.5f)
-                .flat(true)
-                .title("Test Point " + label));
-    }
     /**
      * Initialize the map settings with the provided GoogleMap instance.
-     * <p>
-     *     The method sets basic map settings, initializes the indoor map manager,
-     *     and creates an empty polyline for user movement tracking.
-     *     The method also initializes the GNSS polyline for tracking GNSS path.
-     *     The method sets the map type to Hybrid and initializes the map with these settings.
-     *
-     * @param map
      */
-
     private void initMapSettings(GoogleMap map) {
         // Basic map settings
         map.getUiSettings().setCompassEnabled(true);
@@ -263,6 +213,8 @@ public class TrajectoryMapFragment extends Fragment {
         );
     }
 
+    // ===== Timestamp Marker Helpers (KEEP ONLY ONE COPY) =====
+
     private BitmapDescriptor makeNumberedIcon(@NonNull String label) {
         final int sizePx = 96;
 
@@ -277,7 +229,6 @@ public class TrajectoryMapFragment extends Fragment {
         textPaint.setColor(Color.WHITE);
         textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setTextSize(40f);
-
 
         Paint.FontMetrics fm = textPaint.getFontMetrics();
         float textCenterY = (sizePx / 2f) - (fm.ascent + fm.descent) / 2f;
@@ -298,21 +249,8 @@ public class TrajectoryMapFragment extends Fragment {
                 .title("Test Point " + label));
     }
 
-
     /**
      * Initialize the map type spinner with the available map types.
-     * <p>
-     *     The spinner allows the user to switch between different map types
-     *     (e.g. Hybrid, Normal, Satellite) to customize their map view.
-     *     The spinner is populated with the available map types and listens
-     *     for user selection to update the map accordingly.
-     *     The map type is updated directly on the GoogleMap instance.
-     *     <p>
-     *         Note: The spinner is initialized with the default map type (Hybrid).
-     *         The map type is updated on user selection.
-     *     </p>
-     * </p>
-     *     @see com.google.android.gms.maps.GoogleMap The GoogleMap instance to update map type.
      */
     private void initMapTypeSpinner() {
         if (switchMapSpinner == null) return;
@@ -333,7 +271,7 @@ public class TrajectoryMapFragment extends Fragment {
             public void onItemSelected(AdapterView<?> parent, View view,
                                        int position, long id) {
                 if (gMap == null) return;
-                switch (position){
+                switch (position) {
                     case 0:
                         gMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                         break;
@@ -345,17 +283,16 @@ public class TrajectoryMapFragment extends Fragment {
                         break;
                 }
             }
+
             @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
         });
     }
 
     /**
      * Update the user's current location on the map, create or move orientation marker,
      * and append to polyline if the user actually moved.
-     *
-     * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
@@ -379,6 +316,7 @@ public class TrajectoryMapFragment extends Fragment {
             // Update marker position + orientation
             orientationMarker.setPosition(newLocation);
             orientationMarker.setRotation(orientation);
+
             // Move camera a bit
             gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
@@ -397,18 +335,6 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-
-
-    /**
-     * Set the initial camera position for the map.
-     * <p>
-     *     The method sets the initial camera position for the map when it is first loaded.
-     *     If the map is already ready, the camera is moved immediately.
-     *     If the map is not ready, the camera position is stored until the map is ready.
-     *     The method also tracks if there is a pending camera move.
-     * </p>
-     * @param startLocation The initial camera position to set.
-     */
     public void setInitialCameraPosition(@NonNull LatLng startLocation) {
         // If the map is already ready, move camera immediately
         if (gMap != null) {
@@ -420,18 +346,10 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-
-    /**
-     * Get the current user location on the map.
-     * @return The current user location as a LatLng object.
-     */
     public LatLng getCurrentLocation() {
         return currentLocation;
     }
 
-    /**
-     * Called when we want to set or update the GNSS marker position
-     */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;
         if (!isGnssOn) return;
@@ -441,8 +359,7 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker = gMap.addMarker(new MarkerOptions()
                     .position(gnssLocation)
                     .title("GNSS Position")
-                    .icon(BitmapDescriptorFactory
-                            .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
             lastGnssLocation = gnssLocation;
         } else {
             // Move existing GNSS marker
@@ -458,10 +375,6 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-
-    /**
-     * Remove GNSS marker if user toggles it off
-     */
     public void clearGNSS() {
         if (gnssMarker != null) {
             gnssMarker.remove();
@@ -469,9 +382,6 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-    /**
-     * Whether user is currently showing GNSS or not
-     */
     public boolean isGnssEnabled() {
         return isGnssOn;
     }
@@ -500,7 +410,7 @@ public class TrajectoryMapFragment extends Fragment {
             gnssMarker = null;
         }
         lastGnssLocation = null;
-        currentLocation  = null;
+        currentLocation = null;
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
@@ -517,20 +427,6 @@ public class TrajectoryMapFragment extends Fragment {
 
     /**
      * Draw the building polygon on the map
-     * <p>
-     *     The method draws a polygon representing the building on the map.
-     *     The polygon is drawn with specific vertices and colors to represent
-     *     different buildings or areas on the map.
-     *     The method removes the old polygon if it exists and adds the new polygon
-     *     to the map with the specified options.
-     *     The method logs the number of vertices in the polygon for debugging.
-     *     <p>
-     *
-     *    Note: The method uses hard-coded vertices for the building polygon.
-     *
-     *    </p>
-     *
-     *    See: {@link com.google.android.gms.maps.model.PolygonOptions} The options for the new polygon.
      */
     private void drawBuildingPolygon() {
         if (gMap == null) {
@@ -545,12 +441,11 @@ public class TrajectoryMapFragment extends Fragment {
         LatLng nucleus4 = new LatLng(55.92331786793876, -3.173832892645086);
         LatLng nucleus5 = new LatLng(55.923337194112555, -3.1746284301397387);
 
-
         // nkml building polygon vertices
         LatLng nkml1 = new LatLng(55.9230343434213, -3.1751847990731954);
         LatLng nkml2 = new LatLng(55.923032840563366, -3.174777103346131);
-        LatLng nkml4 = new LatLng(55.92280139974615, -3.175195527934348);
         LatLng nkml3 = new LatLng(55.922793885410734, -3.1747958788136867);
+        LatLng nkml4 = new LatLng(55.92280139974615, -3.175195527934348);
 
         LatLng fjb1 = new LatLng(55.92269205199916, -3.1729563477188774);//left top
         LatLng fjb2 = new LatLng(55.922822801570994, -3.172594249522305);
@@ -562,50 +457,42 @@ public class TrajectoryMapFragment extends Fragment {
         LatLng faraday3 = new LatLng(55.922271383074154, -3.1715191463437162);
         LatLng faraday4 = new LatLng(55.92220124468304, -3.171705013935158);
 
-
-
         PolygonOptions buildingPolygonOptions = new PolygonOptions()
                 .add(nucleus1, nucleus2, nucleus3, nucleus4, nucleus5)
-                .strokeColor(Color.RED)    // Red border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 0, 0)) // Semi-transparent red fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.RED)
+                .strokeWidth(10f)
+                .zIndex(1);
 
-        // Options for the new polygon
         PolygonOptions buildingPolygonOptions2 = new PolygonOptions()
                 .add(nkml1, nkml2, nkml3, nkml4, nkml1)
-                .strokeColor(Color.BLUE)    // Blue border
-                .strokeWidth(10f)           // Border width
-               // .fillColor(Color.argb(50, 0, 0, 255)) // Semi-transparent blue fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.BLUE)
+                .strokeWidth(10f)
+                .zIndex(1);
 
         PolygonOptions buildingPolygonOptions3 = new PolygonOptions()
                 .add(fjb1, fjb2, fjb3, fjb4, fjb1)
-                .strokeColor(Color.GREEN)    // Green border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 0, 255, 0)) // Semi-transparent green fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
+                .strokeColor(Color.GREEN)
+                .strokeWidth(10f)
+                .zIndex(1);
 
         PolygonOptions buildingPolygonOptions4 = new PolygonOptions()
                 .add(faraday1, faraday2, faraday3, faraday4, faraday1)
-                .strokeColor(Color.YELLOW)    // Yellow border
-                .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 255, 0)) // Semi-transparent yellow fill
-                .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
-
+                .strokeColor(Color.YELLOW)
+                .strokeWidth(10f)
+                .zIndex(1);
 
         // Remove the old polygon if it exists
         if (buildingPolygon != null) {
             buildingPolygon.remove();
         }
 
-        // Add the polygon to the map
+        // Add the polygon(s) to the map
         buildingPolygon = gMap.addPolygon(buildingPolygonOptions);
         gMap.addPolygon(buildingPolygonOptions2);
         gMap.addPolygon(buildingPolygonOptions3);
         gMap.addPolygon(buildingPolygonOptions4);
+
         Log.d("TrajectoryMapFragment", "Building polygon added, vertex count: " + buildingPolygon.getPoints().size());
     }
-
-
 }
+
