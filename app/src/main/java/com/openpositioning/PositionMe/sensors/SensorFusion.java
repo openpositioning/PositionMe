@@ -153,7 +153,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float light;
     private float proximity;
     private float[] R;
-
     private float initialYawRad = 0f;
     private int stepCounter;
     // Derived values
@@ -195,7 +194,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
-    // Initial position/orientation flags - determine when first position and orientation data is received during recording
+    // Initial position/orientation flags - determine when first
+    // position and orientation data is received during recording
     private boolean initialPositionSet = false;
     private boolean initialOrientationSet = false;
 
@@ -461,37 +461,39 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // Extract yaw/pitch/roll (radians) from the remapped matrix
                 SensorManager.getOrientation(remappedDCM, this.orientation);
 
+                // Set yaw variable to hold initial orientation
                 float yaw = this.orientation[0];
 
-                // --- 4) Compute a real quaternion from rotation vector and store as x,y,z,w ---
+                // Convert rotation vector to quaternion
                 float[] quatWxyz = new float[4];
-                SensorManager.getQuaternionFromVector(quatWxyz, this.rotation); // [w, x, y, z]
+                SensorManager.getQuaternionFromVector(quatWxyz, this.rotation);
 
-                // Keep this.rotation always length 4: [x,y,z,w]
+                // Store quaternion in rotation array as [x, y, z ,w]
                 this.rotation[0] = quatWxyz[1];
                 this.rotation[1] = quatWxyz[2];
                 this.rotation[2] = quatWxyz[3];
                 this.rotation[3] = quatWxyz[0];
 
-                // --- 5) Snapshot initial heading/orientation ONCE at start of recording ---
+                // Captures heading once at recording start and defines the initial
+                // orientation of the device on the map
                 if (saveRecording && !initialOrientationSet) {
                     initialOrientationSet = true;
                     initialYawRad = yaw;
 
+                    // Build quaternion representing the device’s absolute orientation
+                    // at the start of recording session
                     Traj.Quaternion.Builder q0 = Traj.Quaternion.newBuilder()
                             .setX(this.rotation[0])
                             .setY(this.rotation[1])
                             .setZ(this.rotation[2])
                             .setW(this.rotation[3]);
 
+                    // Insert synthetic IMU sample at recording session start
                     trajectory.addImuData(Traj.IMUReading.newBuilder()
                             .setRelativeTimestamp(0)
                             .setRotationVector(q0)
                             .setStepCount(0));
                 }
-
-                // If you want "heading relative to start", expose/consume this:
-                // float relativeYaw = wrapAngleRad(yaw - initialYawRad);
 
                 break;
 
@@ -558,15 +560,14 @@ public class SensorFusion implements SensorEventListener, Observer {
     class myLocationListener implements LocationListener {
         @Override
         public void onLocationChanged(@NonNull Location location) {
-            // Keep latest GNSS fix in the instance fields so getters work.
+            // Keep latest GNSS fix in the instance fields so getters work
             SensorFusion.this.latitude = (float) location.getLatitude();
             SensorFusion.this.longitude = (float) location.getLongitude();
 
+            // Extract GNSS measurement fields and cast to match protobuf types
             float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
             float bearing = (float) location.getBearing();
-
-            // Use doubles for the protobuf payload (better precision)
             double lat = location.getLatitude();
             double lon = location.getLongitude();
             double alt = location.getAltitude();
@@ -1422,13 +1423,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Validate test point count in protobuf
             Log.d("TP_PROTO", "Count = " + trajectory.getTestPointsCount());
         };
-    }
-
-    /** Wrap an angle in radians to (-pi, pi]. */
-    private static float wrapAngleRad(float a) {
-        while (a <= -Math.PI) a += (float) (2.0 * Math.PI);
-        while (a > Math.PI) a -= (float) (2.0 * Math.PI);
-        return a;
     }
 }
 

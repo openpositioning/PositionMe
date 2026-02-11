@@ -66,7 +66,7 @@ public class RecordingFragment extends Fragment {
 
     // UI elements
     private MaterialButton completeButton, cancelButton;
-    private Button btnTestPoint;
+    private Button btnTestPoint; // Add marker button UI element
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -147,7 +147,7 @@ public class RecordingFragment extends Fragment {
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
-        btnTestPoint = view.findViewById(R.id.btnTestPoint);
+        btnTestPoint = view.findViewById(R.id.btnTestPoint); // Initialise marker button UI reference
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
@@ -194,7 +194,7 @@ public class RecordingFragment extends Fragment {
 
         // Add marker button
         btnTestPoint.setOnClickListener(v -> {
-            // Increment marker count on press
+            // Increment marker count on press for naming convention
             markerCount++;
 
             // Get current location from trajectoryMapFragment
@@ -209,7 +209,7 @@ public class RecordingFragment extends Fragment {
             double timeSeconds = relativeTimeStamp / 1000.0;
             String timeStr = String.format("%.2f", timeSeconds);
 
-            // Display confirmation to screen showing marker number and time in seconds.
+            // Display confirmation to screen showing marker number and time in seconds
             Toast.makeText(requireContext(),
                     "Test Point " + markerCount + " at " + timeStr + "s",
                     Toast.LENGTH_SHORT).show();

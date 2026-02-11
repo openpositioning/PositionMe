@@ -1186,10 +1186,10 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
 
-    /** TEST POINT MARKER LOGIC FOR TRAJECTORY MAP FRAGMENT
-     * Defines test point marker to be added to the map
-     * @param currentPosition
-     * @param markerCount
+    /**
+     * Defines numbered test point marker to be added to the map
+     *
+     * Anchored to improve visualisation of user current position during recording.
      */
     public void addTestPointMarker(@NonNull LatLng currentPosition, int markerCount) {
         if (gMap == null) return;
@@ -1205,9 +1205,9 @@ public class TrajectoryMapFragment extends Fragment {
 
     /**
      * Defines custom map marker icon:
-     * - Scaled red maps marker drawable
-     * - White circular background for number placement
-     * - Marker number centred on the white circle
+     * - Applies scaled red maps marker drawable
+     * - Defines white circular background for number placement
+     * - Defines marker number centred on the white circle
      */
     private BitmapDescriptor markerNumber(int markerCount) {
         // Loads created red marker drawable
