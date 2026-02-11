@@ -244,11 +244,6 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-
-            //TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
-//            float elevationVal = sensorFusion.getElevation();
-//            indoorMapManager.setCurrentFloor((int)(elevationVal/indoorMapManager.getFloorHeight())
-//                    ,true);
         });
 
         floorUpButton.setOnClickListener(v -> {
@@ -402,25 +397,7 @@ public class TrajectoryMapFragment extends Fragment {
                         });
                     }
 
-//                        requireActivity().runOnUiThread(() -> {
-//                            Log.d("TrajectoryMapFragment", "Floorplan response venues=" + dtos.size());
-//                            // temporarily: if empty, clear outlines or do nothing
-//                            List<IndoorMapManager.IndoorVenue> venues = VenueMapper.toIndoorVenues(dtos);
-//                            if (dtos.isEmpty()) return; // nothing to draw yet
-//
-//// TEMP: just log first venue strings
-//                            FloorPlanData.VenueDto v0 = dtos.get(0);
-//                            Log.d("TrajectoryMapFragment", "First venue name=" + v0.name);
-//                            Log.d("TrajectoryMapFragment", "Outline raw=" + v0.outline);
-//                            Log.d("TrajectoryMapFragment", "Map_shapes raw=" + v0.mapShapes);
-//
-//                            lastFetchedVenues = venues;
-//
-//                            if (indoorMapManager != null) {
-//                                indoorMapManager.showVenueOutlines(venues);
-//                            }
-//                        });
-//                    }
+
 
                     @Override public void onError(Exception e) {
                          Log.d("TrajectoryMapFragment", "floorplan request failed", e);
@@ -706,7 +683,6 @@ public class TrajectoryMapFragment extends Fragment {
                 .add(nucleus1, nucleus2, nucleus3, nucleus4, nucleus5)
                 .strokeColor(Color.RED)    // Red border
                 .strokeWidth(10f)           // Border width
-                //.fillColor(Color.argb(50, 255, 0, 0)) // Semi-transparent red fill
                 .zIndex(1);                // Set a higher zIndex to ensure it appears above other overlays
 
         // Options for the new polygon
