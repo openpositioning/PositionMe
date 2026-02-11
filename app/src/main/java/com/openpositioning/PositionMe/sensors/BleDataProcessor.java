@@ -11,6 +11,7 @@ import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.ParcelUuid;
+import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +47,7 @@ public class BleDataProcessor implements Observable {
         this.observers = new ArrayList<>();
 
         if (!hasPermission()) {
+            Toast.makeText(context, "Enable Nearby Devices / Location Permission", Toast.LENGTH_LONG).show();
             return;
         }
 
