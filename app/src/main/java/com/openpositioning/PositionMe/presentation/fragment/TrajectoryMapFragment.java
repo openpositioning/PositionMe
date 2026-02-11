@@ -91,6 +91,12 @@ public class TrajectoryMapFragment extends Fragment {
         // Required empty public constructor
     }
 
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        sensorFusion = SensorFusion.getInstance();
+    }
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -172,10 +178,7 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Floor up/down logic
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-
-            // TODO - fix the sensor fusion method to get the elevation (cannot get it from the current method)
-//            float elevationVal = sensorFusion.getElevation();
-            float elevationVal = 0f;
+            float elevationVal = sensorFusion.getElevation();
             int newFloor = (int)(elevationVal/indoorMapManager.getFloorHeight());
             indoorMapManager.setCurrentFloor(newFloor, true);
         });
