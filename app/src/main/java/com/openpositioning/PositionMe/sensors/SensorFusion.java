@@ -149,6 +149,48 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Selected venue campaign for upload endpoint
     private String selectedCampaign;
 
+
+    //region Test points (user annotations during recording)
+    /**
+     * Represents a user-defined reference point recorded during a session.
+     * Stores both relative (for replay) and absolute (wall-clock) timestamps.
+     */
+    public static class TestPoint {
+
+        /** Time offset from the start of recording (milliseconds) */
+        public final long relativeTimestampMs;
+
+        /** Absolute wall-clock time when the button was pressed (UTC millis) */
+        public final long absoluteTimestampMs;
+
+        /** Latitude of the test point */
+        public final double lat;
+
+        /** Longitude of the test point */
+        public final double lon;
+
+        public TestPoint(long relativeTimestampMs,
+                         long absoluteTimestampMs,
+                         double lat,
+                         double lon) {
+            this.relativeTimestampMs = relativeTimestampMs;
+            this.absoluteTimestampMs = absoluteTimestampMs;
+            this.lat = lat;
+            this.lon = lon;
+        }
+    }
+
+
+    /**
+     * Collection of all test points recorded during the current session.
+     * Cleared when a new recording starts.
+     */
+    private final List<TestPoint> testPoints = new ArrayList<>();
+
+    //endregion
+
+
+
     private String trajectoryName;
     private long recordingTime = 0;
 
@@ -931,6 +973,97 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
+     * Adds a new test point at the provided estimated position.
+     *
+     * Test points are user annotations and are only accepted while a recording session is active.
+     * The timestamp is stored relative to the beginning of the recording so it can be aligned
+     * with other recorded samples.
+     *
+     * @param latLng The current estimated position to mark.
+     * Adds a test point at the exact moment the user presses the button.
+     * Stores both relative and absolute timestamps.
+     *
+     *
+     *  Furthermore, Adds a user test point (button press) into:
+     *   1) the in-memory list (for UI use)
+     *  2) the protobuf Trajectory builder (so it is saved/uploaded)
+     *
+     */
+    public void addTestPoint(@NonNull LatLng latLng) {
+        if (!saveRecording) return;
+        Log.e("TP", "### addTestPoint CALLED ### saveRecording=" + saveRecording
+                + " trajectoryNull=" + (trajectory == null));
+
+        long relativeTimeMs = SystemClock.uptimeMillis() - bootTime;
+        long absoluteTimeMs = System.currentTimeMillis();
+
+
+        // Relative time since recording started (used for replay)
+        long relativeTime = SystemClock.uptimeMillis() - bootTime;
+
+        // Absolute wall-clock time (used for logs, export, analysis)
+        long absoluteTime = System.currentTimeMillis();
+
+        // ---- 1) Store in memory (for UI) ----
+        testPoints.add(new TestPoint(
+                relativeTime,
+                absoluteTime,
+                latLng.latitude,
+                latLng.longitude
+        ));
+
+        // ---- 2) Store in protobuf ----
+        if (trajectory == null) return;
+
+        // Build the GNSSPosition (because proto uses that type already)
+        Traj.GNSSPosition pos = Traj.GNSSPosition.newBuilder()
+                .setRelativeTimestamp(relativeTimeMs)  // field exists in GNSSPosition in your proto
+                .setLatitude(latLng.latitude)
+                .setLongitude(latLng.longitude)
+                .setAltitude(0)                         // replace if you have real altitude
+                .setFloor("")                           // replace if you have floor string
+                .build();
+
+
+        // Build the new v2 test point that contains absolute time as well
+        Traj.TestPointV2 tpV2 = Traj.TestPointV2.newBuilder()
+                .setRelativeTimestampMs(relativeTimeMs)
+                .setAbsoluteTimestampMs(absoluteTimeMs)
+                .setPosition(pos)
+                .setIndex(trajectory.getTestPointsV2Count() + 1) // 1,2,3,...
+                .build();
+
+        // Append to protobuf list
+        trajectory.addTestPointsV2(tpV2);
+        Log.e("TP", "### AFTER ADD ### builder test_points_v2="
+                + trajectory.getTestPointsV2Count());
+
+        // (Optional) keep writing the old legacy field too, for backward compatibility:
+        // trajectory.addTestPoints(pos);
+    }
+
+
+
+    /**
+     * Returns a copy of all test points recorded during the current session.
+     * A defensive copy is returned to protect internal state from accidental modification.
+     */
+    public List<TestPoint> getTestPoints() {
+        return new ArrayList<>(testPoints);
+    }
+
+    /**
+     * Clears all test points for the current session.
+     * This is called automatically when a new recording starts.
+     */
+    public void clearTestPoints() {
+        testPoints.clear();
+    }
+
+    //endregion
+
+
+    /**
      * Disables saving sensor values to the trajectory object.
      *
      * Check if a recording is in progress. If it is, it sets save recording to false, and cancels
@@ -1017,6 +1150,18 @@ public class SensorFusion implements SensorEventListener, Observer {
                 .setPower(sensor.sensorInfo.getPower())
                 .setVersion(sensor.sensorInfo.getVersion())
                 .setType(sensor.sensorInfo.getType());
+    }
+
+    /**
+     * For debugging protobuf
+     */
+    public void logTrajectoryDebug(String where) {
+        if (trajectory == null) {
+            Log.e("TP", "### " + where + " ### trajectory is NULL");
+            return;
+        }
+        Traj.Trajectory built = trajectory.build();
+        Log.e("TP", "### " + where + " ### built test_points_v2=" + built.getTestPointsV2Count());
     }
 
     /**

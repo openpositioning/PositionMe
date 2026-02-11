@@ -49,6 +49,9 @@ message Trajectory {
   // STRING added
   string trajectory_name = 27;
 
+  // Backwards-compatible v2 test points containing both relative and absolute time.
+  repeated TestPointV2 test_points_v2 = 28;
+
 }
 
 message RelativePosition {
@@ -129,6 +132,22 @@ message GNSSReading {
   
   // e.g 'gps' or 'network'
   string provider = 5;
+}
+
+
+// A user-annotated test point (button press) with both relative and absolute time.
+message TestPointV2 {
+  // milliseconds from the Trajectory.start_timestamp (for replay alignment)
+  int64 relative_timestamp_ms = 1;
+
+  // absolute UNIX epoch timestamp in milliseconds (wall-clock time)
+  int64 absolute_timestamp_ms = 2;
+
+  // location marked by the user
+  GNSSPosition position = 3;
+
+  // optional sequential index (1,2,3...). Set if you want stable numbering.
+  int32 index = 4;
 }
 
 message Fingerprint {

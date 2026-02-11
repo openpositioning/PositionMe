@@ -43,6 +43,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.Typeface;
+
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+
 /**
  * A fragment responsible for displaying and managing live trajectory and indoor map views.
  */
@@ -55,6 +64,13 @@ public class TrajectoryMapFragment extends Fragment {
     private static final double FLOORPLAN_REFRESH_DISTANCE_METERS = 30.0;
 
     private GoogleMap gMap;
+
+    /**
+     * Markers used to visualize user-added test points on the map.
+     * We store references so we can clear them later if needed.
+     */
+    private final List<Marker> testPointMarkers = new ArrayList<>();
+
     private LatLng currentLocation;
     private Marker orientationMarker;
     private Marker gnssMarker;
@@ -130,6 +146,25 @@ public class TrajectoryMapFragment extends Fragment {
                     gMap = googleMap;
                     initMapSettings(gMap);
 
+                    // Handle taps on test-point markers to show absolute timestamp
+                    gMap.setOnMarkerClickListener(marker -> {
+
+                        Object tag = marker.getTag();
+
+                        // Only react to markers that represent test points
+                        if (tag instanceof SensorFusion.TestPoint) {
+                            SensorFusion.TestPoint tp = (SensorFusion.TestPoint) tag;
+
+                            marker.setTitle("Test Point");
+                            marker.setSnippet(formatAbsoluteTime(tp.absoluteTimestampMs));
+                            marker.showInfoWindow();
+
+                            return true; // consume the click
+                        }
+
+                        return false; // allow default behavior for other markers
+                    });
+
                     if (hasPendingCameraMove && pendingCameraPosition != null) {
                         gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, 19f));
                         hasPendingCameraMove = false;
@@ -141,6 +176,17 @@ public class TrajectoryMapFragment extends Fragment {
                     }
 
                     Log.d(TAG, "onMapReady: map initialized");
+                }
+
+                /**
+                 * Formats an absolute wall-clock timestamp into a readable local date-time string.
+                 */
+                private String formatAbsoluteTime(long absoluteTimestampMs) {
+                    java.text.DateFormat df = java.text.DateFormat.getDateTimeInstance(
+                            java.text.DateFormat.MEDIUM,
+                            java.text.DateFormat.MEDIUM
+                    );
+                    return df.format(new java.util.Date(absoluteTimestampMs));
                 }
             });
         }
@@ -554,6 +600,78 @@ public class TrajectoryMapFragment extends Fragment {
     public LatLng getCurrentLocation() {
         return currentLocation;
     }
+
+
+    /**
+     * Creates a simple circular marker icon with a number drawn on top.
+     * This allows the user to see "1,2,3..." directly on the map.
+     */
+    private BitmapDescriptor createNumberedMarkerIcon(int number) {
+        final int sizePx = 96; // icon size
+        final int radius = sizePx / 2;
+
+        Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        Paint circlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        circlePaint.setARGB(255, 33, 150, 243); // blue-ish
+        canvas.drawCircle(radius, radius, radius, circlePaint);
+
+        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setARGB(255, 255, 255, 255); // white
+        textPaint.setTextSize(40f);
+        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        textPaint.setTextAlign(Paint.Align.CENTER);
+
+        String text = String.valueOf(number);
+
+        // Vertically center the text using font metrics
+        Rect bounds = new Rect();
+        textPaint.getTextBounds(text, 0, text.length(), bounds);
+        float x = radius;
+        float y = radius - bounds.exactCenterY();
+
+        canvas.drawText(text, x, y, textPaint);
+
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
+
+
+    /**
+     * Adds a visible numbered marker on the map for a user-defined test point.
+     *
+     * @param location The test point position (LatLng)
+     * @param index    Sequential number for labeling (1, 2, 3...)
+     */
+    public void addTestPointMarker(@NonNull LatLng location, int index, @NonNull SensorFusion.TestPoint testPoint) {
+        if (gMap == null) return;
+
+        BitmapDescriptor icon = createNumberedMarkerIcon(index);
+
+        Marker marker = gMap.addMarker(new MarkerOptions()
+                .position(location)
+                .icon(icon)
+                .anchor(0.5f, 0.5f) // center the circle
+                .title("Test Point " + index));
+
+        if (marker != null) {
+            marker.setTag(testPoint);   // ← timestamp is stored here
+            testPointMarkers.add(marker);
+        }
+    }
+
+
+    /**
+     * Clears all test point markers from the map.
+     * Useful when starting a new recording session.
+     */
+    public void clearTestPointMarkers() {
+        for (Marker marker : testPointMarkers) {
+            if (marker != null) marker.remove();
+        }
+        testPointMarkers.clear();
+    }
+
 
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;

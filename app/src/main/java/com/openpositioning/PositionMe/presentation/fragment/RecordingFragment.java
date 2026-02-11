@@ -33,6 +33,7 @@ import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 
+import java.util.List;
 
 /**
  * Fragment responsible for managing the recording process of trajectory data.
@@ -60,7 +61,7 @@ import com.google.android.gms.maps.model.LatLng;
 public class RecordingFragment extends Fragment {
 
     // UI elements
-    private MaterialButton completeButton, cancelButton;
+    private MaterialButton completeButton, cancelButton, testPointButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -138,6 +139,10 @@ public class RecordingFragment extends Fragment {
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
+
+        // "Add Test Point" button from fragment_recording.xml
+        testPointButton = view.findViewById(R.id.btn_add_test_point);
+
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
@@ -169,6 +174,43 @@ public class RecordingFragment extends Fragment {
             // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
 
+        });
+
+        /**
+         * Adds a user-defined test point at the current estimated position.
+         * The point is stored in SensorFusion and shown immediately on the map.
+         */
+        testPointButton.setOnClickListener(v -> {
+
+            if (trajectoryMapFragment == null) return;
+
+            // Get current estimated position from sensor fusion / map
+            LatLng currentLocation = trajectoryMapFragment.getCurrentLocation();
+
+            // If no position is available yet, do not allow test point creation
+            if (currentLocation == null) {
+                Toast.makeText(requireContext(),
+                        "Move first so a position can be determined.",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // Store test point in SensorFusion (timestamped relative to recording start)
+            sensorFusion.addTestPoint(currentLocation);
+
+            // DEBUG: check protobuf content
+            sensorFusion.logTrajectoryDebug("TESTPOINT_ADDED_TO_PROTOBUF");
+
+            // Index for labeling markers
+            List<SensorFusion.TestPoint> points = sensorFusion.getTestPoints();
+            int index = points.size();
+            SensorFusion.TestPoint latest = points.get(index - 1);
+
+            trajectoryMapFragment.addTestPointMarker(currentLocation, index, latest);
+
+            Toast.makeText(requireContext(),
+                    "Test point " + index + " recorded.",
+                    Toast.LENGTH_SHORT).show();
         });
 
 
