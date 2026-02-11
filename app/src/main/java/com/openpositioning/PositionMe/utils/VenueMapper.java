@@ -1,4 +1,18 @@
-//package com.openpositioning.PositionMe.presentation.fragment;
+/**
+ * VenueMapper is responsible for converting raw API response objects
+ * (FloorPlanData.VenueDto) into IndoorMapManager.IndoorVenue objects
+ * that can be rendered and managed by the map layer.
+ *
+ * It parses the GeoJSON building outline into a list of LatLng points,
+ * computes bounding boxes for overlay placement, and stores raw
+ * floor map (mapShapes) data for later floor rendering.
+ *
+ * This class isolates data transformation logic from both the
+ * networking layer (FloorPlanData) and the UI layer
+ * (TrajectoryMapFragment / IndoorMapManager), maintaining a clear
+ * separation of concerns and improving maintainability.
+ */
+
 package com.openpositioning.PositionMe.utils;
 
 
