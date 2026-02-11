@@ -1,4 +1,17 @@
-//call from TrajectoryMapFragment when we have LatLng currentLocation and List<String> observedMacs
+/**
+ * FloorPlanData is responsible for communicating with the OpenPositioning
+ * live floorplan API to retrieve nearby indoor venues.
+ *
+ * This class performs asynchronous HTTP POST requests using OkHttp,
+ * sending the user's current latitude, longitude, and observed Wi-Fi
+ * BSSID values to the server. The API response is parsed into
+ * lightweight VenueDto objects containing:
+ *   - Venue name (identifier)
+ *   - Building outline (GeoJSON)
+ *   - Floor map geometry (GeoJSON map_shapes)
+ *
+ */
+
 package com.openpositioning.PositionMe.data.remote;
 import com.openpositioning.PositionMe.BuildConfig;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
