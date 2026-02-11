@@ -12,70 +12,88 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Overlaid controls for map visualization -->
+    <!-- Overlaid controls (extra compact, UI-only changes) -->
     <com.google.android.material.card.MaterialCardView
-        android:layout_width="wrap_content"
+        android:id="@+id/mapControlsCard"
+        android:layout_width="150dp"
         android:layout_height="wrap_content"
-        android:layout_margin="10dp"
-        android:padding="18dp"
-        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
-        app:cardElevation="4dp"
-        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+        android:layout_margin="4dp"
+        android:padding="4dp"
+        app:cardBackgroundColor="#CCFFFFFF"
+        app:cardElevation="2dp"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.SmallComponent"
         app:layout_anchor="@id/trajectoryMap"
         app:layout_anchorGravity="top|start">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="8dp"
-            android:gravity="center">
+            android:padding="2dp"
+            android:gravity="start">
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/gnssSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch" />
+                android:layout_width="match_parent"
+                android:layout_height="32dp"
+                android:padding="0dp"
+                android:minHeight="0dp"
+                android:text="@string/gnssSwitch"
+                android:textSize="10sp"
+                android:layout_marginBottom="2dp" />
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/autoFloor"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/auto_floor" />
+                android:layout_width="match_parent"
+                android:layout_height="32dp"
+                android:padding="0dp"
+                android:minHeight="0dp"
+                android:text="@string/auto_floor"
+                android:textSize="10sp"
+                android:layout_marginBottom="4dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/lineColorButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@color/md_theme_onPrimary"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="30dp"
                 android:text="@string/color"
-                app:elevation="5dp"/>
+                android:textSize="10sp"
+                android:textAllCaps="false"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:layout_marginBottom="4dp" />
 
             <Spinner
                 android:id="@+id/mapSwitchSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="0dp"
-                android:layout_marginTop="8dp"
-                android:background="@android:color/white"
+                android:layout_width="match_parent"
+                android:layout_height="32dp"
                 android:spinnerMode="dropdown"
-                app:layout_constraintTop_toTopOf="parent"
-                android:elevation="5dp"/>
+                android:background="@android:color/white"
+                android:dropDownVerticalOffset="2dp"
+                android:elevation="1dp" />
 
             <TextView
                 android:id="@+id/selectedVenueText"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="2dp"
                 android:text="@string/venue_not_selected"
                 android:textColor="@color/md_theme_onSurface"
-                android:textSize="12sp" />
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="8sp"
+                android:autoSizeMaxTextSize="10sp"
+                android:autoSizeStepGranularity="1sp"
+                android:maxLines="2"
+                android:ellipsize="end" />
+
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Floating action buttons for floor control, properly spaced -->
+    <!-- Floating action buttons for floor control -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">

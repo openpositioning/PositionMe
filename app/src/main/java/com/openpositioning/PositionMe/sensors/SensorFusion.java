@@ -721,7 +721,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                     .collect(Collectors.toList());
 
             // ✅ 2) 不管是否 recording，都给 UI 一个提示（3秒一次）
+
+            /* Sb uu y uu
             long now = SystemClock.uptimeMillis();
+
             if (appContext != null && (now - lastBleUiToastMs) > 3000) {
                 String msg = "BLE ok: count=" + objList.length
                         + (saveRecording && trajectory != null
@@ -731,6 +734,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 android.widget.Toast.makeText(appContext, msg, android.widget.Toast.LENGTH_SHORT).show();
                 lastBleUiToastMs = now;
             }
+            */
 
             // 3) 只有 recording 才写入 traj
             if (this.saveRecording && trajectory != null) {
