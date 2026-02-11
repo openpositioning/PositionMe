@@ -30,6 +30,9 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
     // Weak reference to the click listener to enable garbage collection on recyclerview items
     private WeakReference<DownloadClickListener> listenerReference;
     public Button deletebutton;
+    public RecyclerView testPointRecyclerView;
+    public MaterialButton toggleTestPointsButton;
+
 
     /**
      * {@inheritDoc}
@@ -44,14 +47,15 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
         super(itemView);
 
         this.listenerReference = new WeakReference<>(listener);
-        this.trajId = itemView.findViewById(R.id.trajectoryIdItem);
-        this.trajDate = itemView.findViewById(R.id.trajectoryDateItem);
-        this.trajectoryNameText = itemView.findViewById(R.id.trajectory_name_text);  // NEW
-        this.uploadButton = itemView.findViewById(R.id.uploadTrajectoryButton);
-
-        this.uploadButton.setOnClickListener(this);
-        this.deletebutton = itemView.findViewById(R.id.deletebutton);
+        trajId = itemView.findViewById(R.id.trajectoryIdItem);
+        trajDate = itemView.findViewById(R.id.trajectoryDateItem);
+        trajectoryNameText = itemView.findViewById(R.id.trajectory_name_text); // ✅ ADD THIS
+        uploadButton = itemView.findViewById(R.id.uploadTrajectoryButton);
+        toggleTestPointsButton = itemView.findViewById(R.id.toggleTestPointsButton);
+        testPointRecyclerView = itemView.findViewById(R.id.rvTestPoints);
+        deletebutton = itemView.findViewById(R.id.deletebutton);
     }
+
 
     /**
      * {@inheritDoc}

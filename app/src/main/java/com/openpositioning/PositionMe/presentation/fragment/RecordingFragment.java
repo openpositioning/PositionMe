@@ -214,9 +214,9 @@ public class RecordingFragment extends Fragment {
                     );
                 }
 
-                Toast.makeText(requireContext(),
-                        "Test point " + testPointCounter + " marked",
-                        Toast.LENGTH_SHORT).show();
+//                Toast.makeText(requireContext(),
+//                        "Test point " + testPointCounter + " marked",
+//                        Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(requireContext(),
                         "GNSS not available yet",

@@ -17,6 +17,20 @@ import java.io.FileInputStream;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.ArrayList;
+
+import androidx.recyclerview.widget.LinearLayoutManager;
+
+import com.openpositioning.PositionMe.data.model.TestPointInfo;
+import com.openpositioning.PositionMe.data.utils.TestPointParser;
+
+import androidx.core.content.ContextCompat;
+
+import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+
+import android.os.Handler;
+import android.os.Looper;
+
 
 /**
  * Adapter used for displaying local Trajectory file data
@@ -32,6 +46,13 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
     private final List<File> uploadItems;
     private final DownloadClickListener listener;
 
+    List<TestPointInfo> testPoints;
+
+    private final List<Boolean> expandedState;
+
+    private final ServerCommunications serverCommunications;
+
+
     /**
      * Default public constructor with context for inflating views and list to be displayed.
      *
@@ -45,6 +66,12 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
         this.context = context;
         this.uploadItems = uploadItems;
         this.listener = listener;
+        this.serverCommunications = new ServerCommunications(context);
+
+        expandedState = new ArrayList<>();
+        for (int i = 0; i < uploadItems.size(); i++) {
+            expandedState.add(false); // collapsed by default
+        }
     }
 
     /**
@@ -67,6 +94,8 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
      */
     @Override
     public void onBindViewHolder(@NonNull UploadViewHolder holder, int position) {
+        File trajectoryFile = uploadItems.get(position);
+
         holder.trajId.setText(String.valueOf(position));
 
         // Extract date from filename
@@ -86,8 +115,91 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
             holder.trajectoryNameText.setVisibility(View.VISIBLE);
         }
 
+        // ---------------------------
+        // 🔽 Setup test point dropdown
+        // ---------------------------
+        // Parse test points from protobuf file
+
+//        List<TestPointInfo> testPoints =
+//                TestPointParser.parseFromFile(trajectoryFile);
+
+        try {
+            testPoints = TestPointParser.parseFromFile(trajectoryFile);
+        } catch (Exception e) {
+            testPoints = java.util.Collections.emptyList();
+            android.util.Log.e("UploadListAdapter",
+                    "Failed to parse test points from " + trajectoryFile.getName(), e);
+        }
+
+
+        // Setup nested RecyclerView
+        TestPointListAdapter testPointListAdapter =
+                new TestPointListAdapter(context, testPoints);
+
+        holder.testPointRecyclerView.setLayoutManager(
+                new LinearLayoutManager(context));
+
+        holder.testPointRecyclerView.setAdapter(testPointListAdapter);
+
+        // Initially collapsed
+        holder.testPointRecyclerView.setVisibility(android.view.View.GONE);
+
+        boolean isExpanded = expandedState.get(position);
+
+        // Apply state when binding (IMPORTANT for RecyclerView recycling)
+        holder.testPointRecyclerView.setVisibility(isExpanded ? View.VISIBLE : View.GONE);
+        holder.toggleTestPointsButton.setIcon(
+                ContextCompat.getDrawable(context,
+                        isExpanded ? R.drawable.up_arrow : R.drawable.down_arrow)
+        );
+
+        // Toggle expand/collapse
+        holder.toggleTestPointsButton.setOnClickListener(v -> {
+            boolean newState = !expandedState.get(position);
+            expandedState.set(position, newState);
+
+            holder.testPointRecyclerView.setVisibility(newState ? View.VISIBLE : View.GONE);
+            holder.toggleTestPointsButton.setIcon(
+                    ContextCompat.getDrawable(context,
+                            newState ? R.drawable.up_arrow : R.drawable.down_arrow)
+            );
+        });
+
+
         // Set click listener for the delete button
         holder.deletebutton.setOnClickListener(v -> deleteFileAtPosition(position));
+
+        // ---------------------------
+        // ⬆ Upload button
+        // ---------------------------
+        holder.uploadButton.setOnClickListener(v -> {
+            File fileToUpload = uploadItems.get(position);
+
+            if (!fileToUpload.exists()) {
+                Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            holder.uploadButton.setEnabled(false);
+
+            String name = readTrajectoryName(fileToUpload);
+            String displayName = (name != null && !name.isEmpty())
+
+                    ? name
+                    : fileToUpload.getName();
+
+            Toast.makeText(context,
+                    "Uploading trajectory: " + displayName,
+                    Toast.LENGTH_LONG).show();
+
+            serverCommunications.uploadLocalTrajectory(fileToUpload);
+
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                holder.uploadButton.setEnabled(true);
+            }, 3000);  // re-enable after 3 seconds
+        });
+
+
     }
 
     /**
