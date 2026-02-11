@@ -6,6 +6,8 @@ plugins {
     id 'com.google.protobuf'
 }
 
+//JAPJOT CHANGES
+
 // (Optional) load local secrets file:
 def localProperties = new Properties()
 def localPropertiesFile = rootProject.file('secrets.properties')
