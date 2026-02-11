@@ -82,7 +82,7 @@ public class CorrectionFragment extends Fragment {
             // Record venue information to the log
             if (hasVenue) {
                 Log.d(TAG, "========================================");
-                Log.d(TAG, "📍 Venue Information (for future proto integration):");
+                Log.d(TAG, "   Venue Information (for future proto integration):");
                 Log.d(TAG, "   Venue ID: " + venueId);
                 Log.d(TAG, "   Venue Name: " + venueName);
                 Log.d(TAG, "   Floor: " + venueFloor);
