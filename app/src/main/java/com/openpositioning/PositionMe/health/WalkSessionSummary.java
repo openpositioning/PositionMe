@@ -1,47 +1,77 @@
 package com.openpositioning.PositionMe.health;
 
+import android.os.Parcel;
+import android.os.Parcelable;
+
 /**
- * Represents a summary of a user's walk session.
- * This is an immutable data class containing the key metrics of a single walk.
+ * A data class holding the summary of a single walk session.
+ * It is immutable and Parcelable to be easily passed between activities.
  */
-public class WalkSessionSummary {
+public class WalkSessionSummary implements Parcelable {
 
     private final String sessionId;
-    private final int distanceMeters;
+    private final double distanceMeters;
     private final int durationSeconds;
-    private final double outdoorRatio;
+    private final long timestampMillis;
 
     /**
      * Constructs a new WalkSessionSummary.
      *
-     * @param sessionId A unique identifier for the session. If null, defaults to an empty string.
-     * @param distanceMeters The total distance walked in meters. Must be non-negative.
-     * @param durationSeconds The total duration of the walk in seconds. Must be non-negative.
-     * @param outdoorRatio The fraction of the walk that was outdoors (0.0 to 1.0). Clamped to range.
+     * @param sessionId      A unique identifier for the session.
+     * @param distanceMeters Total distance walked in meters.
+     * @param durationSeconds Total duration of the walk in seconds.
+     * @param timestampMillis The time the session ended, in UTC milliseconds from the epoch.
      */
-    public WalkSessionSummary(String sessionId, int distanceMeters, int durationSeconds, double outdoorRatio) {
+    public WalkSessionSummary(String sessionId, double distanceMeters, int durationSeconds, long timestampMillis) {
         this.sessionId = (sessionId == null) ? "" : sessionId;
         this.distanceMeters = Math.max(0, distanceMeters);
         this.durationSeconds = Math.max(0, durationSeconds);
-        this.outdoorRatio = Math.max(0.0, Math.min(1.0, outdoorRatio));
+        this.timestampMillis = timestampMillis;
     }
 
-    public String getSessionId() {
-        return sessionId;
+    //region Parcelable Implementation
+    protected WalkSessionSummary(Parcel in) {
+        sessionId = in.readString();
+        distanceMeters = in.readDouble();
+        durationSeconds = in.readInt();
+        timestampMillis = in.readLong();
     }
 
-    public int getDistanceMeters() {
-        return distanceMeters;
+    @Override
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeString(sessionId);
+        dest.writeDouble(distanceMeters);
+        dest.writeInt(durationSeconds);
+        dest.writeLong(timestampMillis);
     }
 
-    public int getDurationSeconds() {
-        return durationSeconds;
+    @Override
+    public int describeContents() {
+        return 0;
     }
 
-    /**
-     * @return The fraction of the walk that was outdoors, from 0.0 (entirely indoors) to 1.0 (entirely outdoors).
-     */
-    public double getOutdoorRatio() {
-        return outdoorRatio;
-    }
+    public static final Creator<WalkSessionSummary> CREATOR = new Creator<WalkSessionSummary>() {
+        @Override
+        public WalkSessionSummary createFromParcel(Parcel in) {
+            return new WalkSessionSummary(in);
+        }
+
+        @Override
+        public WalkSessionSummary[] newArray(int size) {
+            return new WalkSessionSummary[size];
+        }
+    };
+    //endregion
+
+    /** @return The unique identifier for the session. */
+    public String getSessionId() { return sessionId; }
+
+    /** @return The total distance walked in meters. */
+    public double getDistanceMeters() { return distanceMeters; }
+
+    /** @return The total duration of the walk in seconds. */
+    public int getDurationSeconds() { return durationSeconds; }
+
+    /** @return The time the session ended, in UTC milliseconds from the epoch. */
+    public long getTimestampMillis() { return timestampMillis; }
 }

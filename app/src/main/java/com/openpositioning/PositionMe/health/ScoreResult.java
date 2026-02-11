@@ -2,7 +2,7 @@ package com.openpositioning.PositionMe.health;
 
 /**
  * Represents the result of a score calculation.
- * <p>
+ *
  * This is an immutable data class that holds a score and a corresponding feedback message.
  */
 public class ScoreResult {
@@ -25,6 +25,8 @@ public class ScoreResult {
     }
 
     /**
+     * Returns the calculated score.
+     *
      * @return The score, guaranteed to be between 0 and 100 (inclusive).
      */
     public int getScore0to100() {
@@ -32,6 +34,8 @@ public class ScoreResult {
     }
 
     /**
+     * Returns the feedback message associated with the score.
+     *
      * @return The feedback message, guaranteed to be non-null.
      */
     public String getFeedbackText() {

@@ -46,6 +46,8 @@ import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
  */
 public class HomeFragment extends Fragment implements OnMapReadyCallback {
 
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
+
     // Interactive UI elements to navigate to other fragments
     private MaterialButton goToInfo;
     private Button start;
@@ -135,6 +137,9 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             // Asynchronously initialize the map
             mapFragment.getMapAsync(this);
         }
+
+        // Request permissions right away
+        requestLocationPermissions();
     }
 
     /**
@@ -143,13 +148,30 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
-        checkAndUpdatePermissions();
+        updateMapUI();
+    }
+
+    private void requestLocationPermissions() {
+        if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                    LOCATION_PERMISSION_REQUEST_CODE);
+        }
     }
 
     @Override
-    public void onResume() {
-        super.onResume();
-        checkAndUpdatePermissions();
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission was granted
+                updateMapUI();
+            } else {
+                // Permission was denied
+                showEdinburghAndMessage("Permission not granted. Please enable in settings.");
+            }
+        }
     }
 
     /**
@@ -171,14 +193,16 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         gnssStatusTextView.setText(message);
         gnssStatusTextView.setVisibility(View.VISIBLE);
 
-        LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
-        mMap.addMarker(new MarkerOptions()
-                .position(edinburghLatLng)
-                .title("University of Edinburgh"));
+        if (mMap != null) {
+            LatLng edinburghLatLng = new LatLng(55.944425, -3.188396);
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(edinburghLatLng, 15f));
+            mMap.addMarker(new MarkerOptions()
+                    .position(edinburghLatLng)
+                    .title("University of Edinburgh"));
+        }
     }
 
-    private void checkAndUpdatePermissions() {
+    private void updateMapUI() {
 
         if (mMap == null) {
             return;
@@ -200,23 +224,8 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
 
                 // Enable the MyLocation layer of Google Map
                 mMap.setMyLocationEnabled(true);
-
-                // Optionally move the camera to last known or default location:
-                //   (You could retrieve it from FusedLocationProvider or similar).
-                // Here, just leaving it on default.
-                // If you want to center on the user as soon as it loads, do something like:
-                /*
-                FusedLocationProviderClient fusedLocationClient =
-                    LocationServices.getFusedLocationProviderClient(requireContext());
-                fusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
-                    if (location != null) {
-                        LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f));
-                    }
-                });
-                */
             } else {
-                // If no permission, simply show a default location or prompt for permissions
+                // If no permission, simply show a default location
                 showEdinburghAndMessage("Permission not granted. Please enable in settings.");
             }
         } else {

@@ -1,60 +1,90 @@
 package com.openpositioning.PositionMe.health;
 
 /**
- * Calculates a wellbeing/walk score based on a user's walk session summary.
+ * Calculates a wellbeing score based on a walk session summary.
  *
- * - It calculates a base score from distance and duration, each capped at a target threshold.
- * - It adds an optional bonus for outdoor activity.
- * - The final score is normalized to a 0-100 scale and paired with a feedback message.
+ * This class computes a score from 0-100 based on a walk's distance and duration
+ * against configurable thresholds. It also applies a bonus for maintaining a
+ * healthy pace.
  */
 public class ScoreCalculator {
 
-    // Target thresholds for a "full" score in each dimension.
-    private static final double DISTANCE_THRESHOLD_M = 3000.0; // 3km
-    private static final double DURATION_THRESHOLD_S = 1800.0; // 30min
+    //region Constants
+    private static final double DEFAULT_DISTANCE_THRESHOLD_M = 3000.0; // 3km
+    private static final double DEFAULT_DURATION_THRESHOLD_S = 1800.0; // 30min
 
-    // Weights for combining normalized distance and duration. Must sum to 1.0.
-    private static final double W_DISTANCE = 0.5;
-    private static final double W_DURATION = 0.5;
+    private static final double HEALTHY_PACE_THRESHOLD_MS = 1.4; // ~5 km/h
+    private static final int INTENSITY_BONUS = 5;
+    //endregion
 
-    // Bonus points for outdoor activity. A ratio of 1.0 outdoor gives the max bonus.
-    private static final int OUTDOOR_BONUS_MAX = 10;
+    private final double distanceThresholdM;
+    private final double durationThresholdS;
 
     /**
-     * Calculates the score for a given walk session.
+     * Constructs a ScoreCalculator with custom goals for distance and duration.
      *
-     * @param summary The summary of the walk session.
-     * @return A {@link ScoreResult} containing the score and feedback.
+     * @param distanceGoal The target distance for a session in meters.
+     * @param durationGoal The target duration for a session in seconds.
+     */
+    public ScoreCalculator(double distanceGoal, double durationGoal) {
+        this.distanceThresholdM = distanceGoal;
+        this.durationThresholdS = durationGoal;
+    }
+
+    /**
+     * Constructs a ScoreCalculator with default goals (3km, 30 minutes).
+     */
+    public ScoreCalculator() {
+        this.distanceThresholdM = DEFAULT_DISTANCE_THRESHOLD_M;
+        this.durationThresholdS = DEFAULT_DURATION_THRESHOLD_S;
+    }
+
+    /**
+     * Calculates the score for a single session.
+     *
+     * @param summary The summary of the walk session to be scored.
+     * @return A {@link ScoreResult} containing the final score and feedback.
      */
     public ScoreResult calculateScore(WalkSessionSummary summary) {
         if (summary == null) {
             return new ScoreResult(0, "No walk data available yet.");
         }
 
-        // 1. Normalize distance and duration to a 0.0-1.0 scale against their thresholds.
-        double dNorm = (DISTANCE_THRESHOLD_M <= 0) ? 0.0 :
-                Math.min(summary.getDistanceMeters() / DISTANCE_THRESHOLD_M, 1.0);
-        double tNorm = (DURATION_THRESHOLD_S <= 0) ? 0.0 :
-                Math.min(summary.getDurationSeconds() / DURATION_THRESHOLD_S, 1.0);
+        // Calculate the score based on the single session.
+        int score = calculateRawScore(summary);
 
-        // 2. Calculate a weighted average for the base score (0-100).
-        double base = 100.0 * (W_DISTANCE * dNorm + W_DURATION * tNorm);
+        // Generate feedback and return the final result.
+        return new ScoreResult(score, generateFeedback(score));
+    }
 
-        // 3. Calculate the outdoor bonus.
-        int outdoorBonus = (int) Math.round(OUTDOOR_BONUS_MAX * clamp01(summary.getOutdoorRatio()));
+    /**
+     * Calculates the raw score for a single session using a smooth efficiency bonus.
+     */
+    private int calculateRawScore(WalkSessionSummary summary) {
+        // 1. Calculate the raw completion ratios for distance and time.
+        double dNorm = (distanceThresholdM <= 0) ? 0.0 : Math.min(summary.getDistanceMeters() / distanceThresholdM, 1.0);
+        double tNorm = (durationThresholdS <= 0) ? 0.0 : Math.min(summary.getDurationSeconds() / durationThresholdS, 1.0);
 
-        // 4. Combine base score and bonus, and clamp to the final 0-100 range.
-        int finalScore = clamp0to100((int) Math.round(base) + outdoorBonus);
+        // 2. Adjust the time score based on distance completion.
+        // This formula smoothly boosts the time score as distance completion increases, rewarding efficiency.
+        double tNormAdjusted = tNorm + ((1 - tNorm) * dNorm);
 
-        // 5. Generate feedback and return the result.
-        return new ScoreResult(finalScore, generateFeedback(finalScore));
+        // 3. The base score is a weighted average of distance and the adjusted time score.
+        double base = 100.0 * (0.5 * dNorm + 0.5 * tNormAdjusted);
+
+        // 4. Add a bonus for maintaining a healthy pace.
+        int intensityBonus = 0;
+        if (summary.getDurationSeconds() > 0) {
+            double pace = (double) summary.getDistanceMeters() / summary.getDurationSeconds();
+            if (pace >= HEALTHY_PACE_THRESHOLD_MS) {
+                intensityBonus = INTENSITY_BONUS;
+            }
+        }
+        return clamp0to100((int) Math.round(base) + intensityBonus);
     }
 
     /**
      * Generates a feedback message based on the final score.
-     *
-     * @param score The final score (0-100).
-     * @return A feedback string.
      */
     private String generateFeedback(int score) {
         if (score >= 90) return "Excellent walk! Keep it up.";
@@ -64,16 +94,6 @@ public class ScoreCalculator {
         return "Let’s get moving — even a short walk helps.";
     }
 
-    /**
-     * Clamps a double value to the range [0.0, 1.0].
-     */
-    private static double clamp01(double v) {
-        return Math.max(0.0, Math.min(1.0, v));
-    }
-
-    //Clamps an integer value to the range [0, 100].
-
-    private static int clamp0to100(int v) {
-        return Math.max(0, Math.min(100, v));
-    }
+    // Helper to clamp a value between 0 and 100.
+    private static int clamp0to100(int v) { return Math.max(0, Math.min(100, v)); }
 }
