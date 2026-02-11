@@ -27,15 +27,14 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 //Indoormapping Imports
 import java.io.IOException;
 import com.openpositioning.PositionMe.data.remote.IndoorMapsParser;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -102,11 +101,13 @@ public class TrajectoryMapFragment extends Fragment {
 
     //Indoor Mapping
     private final List<com.google.android.gms.maps.model.Polygon> apiVenueOutlines = new ArrayList<>();
-    private long lastIndoorReqMs = 0L;
-    private static final long INDOOR_REQ_COOLDOWN_MS = 8000; // avoid spamming server
-
     @Nullable
     private JSONObject lastVenueJson = null;
+
+    private final List<FloorLayer> mapShapeFloors = new ArrayList<>();
+    private int currentMapShapeFloor = 0;
+    // When true, keep current map_shapes visible and ignore new incoming indoor map responses
+    private boolean mapShapesLocked = false;
 
     private final List<Polygon> hardcodedPolygons = new ArrayList<>();
 
@@ -152,6 +153,13 @@ public class TrajectoryMapFragment extends Fragment {
                     gMap = googleMap;
                     // Initialize map settings with the now non-null gMap
                     initMapSettings(gMap);
+
+                    gMap.setOnPolygonClickListener(polygon -> {
+                        Object tag = polygon.getTag();
+                        if (tag instanceof JSONObject) {
+                            handleVenueClick((JSONObject) tag);
+                        }
+                    });
 
                     // If we had a pending camera move, apply it now
                     if (hasPendingCameraMove && pendingCameraPosition != null) {
@@ -208,14 +216,18 @@ public class TrajectoryMapFragment extends Fragment {
         floorUpButton.setOnClickListener(v -> {
             // If user manually changes floor, turn off auto floor
             autoFloorSwitch.setChecked(false);
-            if (indoorMapManager != null) {
+            if (hasActiveMapShapes()) {
+                changeMapShapeFloor(1);
+            } else if (indoorMapManager != null) {
                 indoorMapManager.increaseFloor();
             }
         });
 
         floorDownButton.setOnClickListener(v -> {
             autoFloorSwitch.setChecked(false);
-            if (indoorMapManager != null) {
+            if (hasActiveMapShapes()) {
+                changeMapShapeFloor(-1);
+            } else if (indoorMapManager != null) {
                 indoorMapManager.decreaseFloor();
             }
         });
@@ -357,8 +369,9 @@ public class TrajectoryMapFragment extends Fragment {
         // Update indoor map overlay
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(newLocation);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
+
+        updateFloorControlVisibility();
     }
 
 
@@ -446,6 +459,20 @@ public class TrajectoryMapFragment extends Fragment {
         autoFloorSwitch.setVisibility(visibility);
     }
 
+    private void updateFloorControlVisibility() {
+        if (hasActiveMapShapes()) {
+            setFloorControlsVisibility(View.VISIBLE);
+        } else if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
+            setFloorControlsVisibility(View.VISIBLE);
+        } else {
+            setFloorControlsVisibility(View.GONE);
+        }
+    }
+
+    private boolean hasActiveMapShapes() {
+        return !mapShapeFloors.isEmpty();
+    }
+
     public void clearMapAndReset() {
         if (polyline != null) {
             polyline.remove();
@@ -504,10 +531,8 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     private void maybeRequestIndoorMaps(@NonNull LatLng loc) {
-        long now = System.currentTimeMillis();
-        if (now - lastIndoorReqMs < INDOOR_REQ_COOLDOWN_MS) return;
-        lastIndoorReqMs = now;
-
+        // Do not fetch new indoor data while user is viewing a selected venue's floors.
+        if (mapShapesLocked) return;
         requestIndoorMapsApiThenFallback(loc);
     }
 
@@ -549,7 +574,12 @@ public class TrajectoryMapFragment extends Fragment {
                         if (act == null) return;
 
                         act.runOnUiThread(() -> {
+                            // If user is viewing map_shapes, do not override until they tap a new venue
+                            if (mapShapesLocked) return;
+
                             clearApiVenueOutlines();
+                            clearMapShapeFloors();
+                            updateFloorControlVisibility();
 
                             if (finalV == null || finalV.outline == null) {
                                 showHardcodedFallback(loc);
@@ -608,12 +638,15 @@ public class TrajectoryMapFragment extends Fragment {
 
 
     private void showHardcodedFallback(@NonNull LatLng loc) {
+        clearMapShapeFloors();
+        mapShapesLocked = false;
+
         // whatever you already do to pick Nucleus/Murchison from location:
         setHardcodedPolygonsVisible(true);
         if (indoorMapManager != null) {
             indoorMapManager.setCurrentLocation(loc);
-            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
         }
+        updateFloorControlVisibility();
     }
 
     private void drawApiOutline(@NonNull org.json.JSONObject outline, @NonNull org.json.JSONObject venueTag) {
@@ -669,6 +702,337 @@ public class TrajectoryMapFragment extends Fragment {
     private void setHardcodedPolygonsVisible(boolean visible) {
         for (Polygon p : hardcodedPolygons) {
             p.setVisible(visible);
+        }
+    }
+
+    private void handleVenueClick(@NonNull JSONObject venueJson) {
+        JSONArray mapShapesArray = optJsonArrayFlexible(venueJson, "map_shapes");
+        JSONObject mapShapesObject = optJsonObjectFlexible(venueJson, "map_shapes");
+
+        clearMapShapeFloors();
+        mapShapesLocked = true;
+
+        List<FloorLayer> layers = new ArrayList<>();
+        if (mapShapesArray != null) {
+            layers.addAll(buildFloorsFromArray(mapShapesArray));
+        }
+        if (mapShapesObject != null) {
+            layers.addAll(buildFloorsFromObject(mapShapesObject));
+        }
+
+        if (layers.isEmpty()) {
+            updateFloorControlVisibility();
+            return;
+        }
+
+        layers.sort((a, b) -> Integer.compare(a.floorIndex, b.floorIndex));
+
+        mapShapeFloors.addAll(layers);
+        currentMapShapeFloor = 0;
+        showMapShapeFloor(currentMapShapeFloor);
+        setHardcodedPolygonsVisible(false);
+        updateFloorControlVisibility();
+    }
+
+    private List<FloorLayer> buildFloorsFromArray(@NonNull JSONArray arr) {
+        List<FloorLayer> layers = new ArrayList<>();
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject item = arr.optJSONObject(i);
+            if (item == null) continue;
+
+            int floorIndex = extractFloorIndex(item, i);
+            String label = extractFloorLabel(item, floorIndex);
+            FloorLayer layer = findOrCreateLayer(layers, floorIndex, label);
+
+            boolean added = addShapesToLayer(item, layer, layers);
+            if (!added) {
+                // Some APIs may nest shapes under "geojson" or "geometry" directly on the item
+                JSONObject geom = extractGeometryFromShape(item);
+                if (geom != null) {
+                    addGeometryToLayer(geom, layer, layers);
+                }
+            }
+        }
+        return layers;
+    }
+
+    private List<FloorLayer> buildFloorsFromObject(@NonNull JSONObject obj) {
+        List<FloorLayer> layers = new ArrayList<>();
+        int fallbackIndex = 0;
+        for (Iterator<String> it = obj.keys(); it.hasNext(); ) {
+            String key = it.next();
+            JSONObject shape = obj.optJSONObject(key);
+            if (shape == null) continue;
+
+            int parsedFromKey = deriveFloorIndexFromLabel(key, fallbackIndex);
+            int floorIndex = extractFloorIndex(shape, parsedFromKey);
+            String label = extractFloorLabel(shape, floorIndex);
+            if (label.isEmpty()) label = key; // keep the key (e.g., "B1") as the label when provided
+
+            FloorLayer layer = findOrCreateLayer(layers, floorIndex, label);
+
+            boolean added = addShapesToLayer(shape, layer, layers);
+            if (!added) {
+                JSONObject geom = extractGeometryFromShape(shape);
+                if (geom != null) {
+                    addGeometryToLayer(geom, layer, layers);
+                }
+            }
+
+            fallbackIndex++;
+        }
+        return layers;
+    }
+
+    private FloorLayer findOrCreateLayer(@NonNull List<FloorLayer> layers,
+                                         int floorIndex,
+                                         @NonNull String label) {
+        for (FloorLayer l : layers) {
+            if (l.floorIndex == floorIndex) {
+                return l;
+            }
+        }
+        FloorLayer created = new FloorLayer(floorIndex, label);
+        layers.add(created);
+        return created;
+    }
+
+    private boolean addShapesToLayer(@NonNull JSONObject floorEntry,
+                                     @NonNull FloorLayer layer,
+                                     @NonNull List<FloorLayer> layers) {
+        JSONArray shapes = floorEntry.optJSONArray("shapes");
+        if (shapes == null || shapes.length() == 0) return false;
+
+        boolean added = false;
+        for (int i = 0; i < shapes.length(); i++) {
+            JSONObject shape = shapes.optJSONObject(i);
+            if (shape == null) continue;
+            JSONObject geom = extractGeometryFromShape(shape);
+            if (geom != null) {
+                addGeometryToLayer(geom, layer, layers);
+                added = true;
+            }
+        }
+        return added;
+    }
+
+    private void addGeometryToLayer(@NonNull JSONObject geometry,
+                                    @NonNull FloorLayer layer,
+                                    @NonNull List<FloorLayer> layers) {
+        String type = geometry.optString("type", "");
+        if ("FeatureCollection".equals(type)) {
+            JSONArray features = geometry.optJSONArray("features");
+            if (features != null) {
+                for (int i = 0; i < features.length(); i++) {
+                    JSONObject f = features.optJSONObject(i);
+                    if (f == null) continue;
+
+                    // Prefer floor info on the feature or its properties; fall back to the current layer.
+                    JSONObject props = f.optJSONObject("properties");
+                    int featureFloor = extractFloorIndex(f, layer.floorIndex);
+                    String featureLabel = extractFloorLabel(f, featureFloor);
+                    if (props != null) {
+                        featureFloor = extractFloorIndex(props, featureFloor);
+                        String labelFromProps = extractFloorLabel(props, featureFloor);
+                        if (!labelFromProps.isEmpty()) featureLabel = labelFromProps;
+                    }
+
+                    FloorLayer target = findOrCreateLayer(layers, featureFloor,
+                            featureLabel.isEmpty() ? layer.label : featureLabel);
+
+                    JSONObject g = f.optJSONObject("geometry");
+                    if (g != null) addGeometryToLayer(g, target, layers);
+                }
+            }
+        } else if ("Feature".equals(type)) {
+            JSONObject props = geometry.optJSONObject("properties");
+            int featureFloor = extractFloorIndex(geometry, layer.floorIndex);
+            String featureLabel = extractFloorLabel(geometry, featureFloor);
+            if (props != null) {
+                featureFloor = extractFloorIndex(props, featureFloor);
+                String labelFromProps = extractFloorLabel(props, featureFloor);
+                if (!labelFromProps.isEmpty()) featureLabel = labelFromProps;
+            }
+
+            FloorLayer target = findOrCreateLayer(layers, featureFloor,
+                    featureLabel.isEmpty() ? layer.label : featureLabel);
+
+            JSONObject g = geometry.optJSONObject("geometry");
+            if (g != null) addGeometryToLayer(g, target, layers);
+        } else if ("Polygon".equals(type)) {
+            Polygon p = addPolygonFromGeoJson(geometry);
+            if (p != null) {
+                styleMapShapePolygon(p);
+                layer.polygons.add(p);
+            }
+        } else if ("MultiPolygon".equals(type)) {
+            JSONArray coords = geometry.optJSONArray("coordinates");
+            if (coords == null) return;
+            for (int i = 0; i < coords.length(); i++) {
+                JSONArray poly = coords.optJSONArray(i);
+                if (poly == null) continue;
+                JSONObject fake = new JSONObject();
+                try {
+                    fake.put("type", "Polygon");
+                    fake.put("coordinates", poly);
+                    Polygon p = addPolygonFromGeoJson(fake);
+                    if (p != null) {
+                        styleMapShapePolygon(p);
+                        layer.polygons.add(p);
+                    }
+                } catch (Exception ignored) { }
+            }
+        }
+    }
+
+    private void styleMapShapePolygon(@NonNull Polygon p) {
+        p.setStrokeColor(Color.MAGENTA);
+        p.setStrokeWidth(6f);
+        p.setFillColor(Color.argb(40, 156, 39, 176));
+        p.setClickable(false);
+        p.setVisible(false);
+        p.setZIndex(3f);
+    }
+
+    private JSONObject extractGeometryFromShape(@NonNull JSONObject shape) {
+        JSONObject geometry = shape.optJSONObject("geometry");
+        if (geometry != null) return extractGeometry(geometry);
+
+        JSONObject geojson = shape.optJSONObject("geojson");
+        if (geojson != null) return extractGeometry(geojson);
+
+        String geomStr = shape.optString("geometry", null);
+        if (geomStr != null) {
+            String trimmed = geomStr.trim();
+            try {
+                if (trimmed.startsWith("{")) {
+                    return extractGeometry(new JSONObject(trimmed));
+                }
+            } catch (Exception ignored) { }
+        }
+
+        // If the object already looks like geometry (has type), return it directly
+        if (shape.has("type")) return extractGeometry(shape);
+
+        return null;
+    }
+
+    private JSONArray optJsonArrayFlexible(@NonNull JSONObject obj, @NonNull String key) {
+        Object raw = obj.opt(key);
+        if (raw instanceof JSONArray) return (JSONArray) raw;
+        if (raw instanceof String) {
+            String s = sanitizeJsonString((String) raw);
+            try {
+                if (s.startsWith("[")) return new JSONArray(s);
+            } catch (Exception ignored) { }
+        }
+        return null;
+    }
+
+    private JSONObject optJsonObjectFlexible(@NonNull JSONObject obj, @NonNull String key) {
+        Object raw = obj.opt(key);
+        if (raw instanceof JSONObject) return (JSONObject) raw;
+        if (raw instanceof String) {
+            String s = sanitizeJsonString((String) raw);
+            try {
+                if (s.startsWith("{")) return new JSONObject(s);
+            } catch (Exception ignored) { }
+        }
+        return null;
+    }
+
+    private String sanitizeJsonString(@NonNull String s) {
+        String trimmed = s.trim();
+        // Handle cases like ""{...}"" or '"{...}' where JSON is wrapped twice
+        while ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+            if (trimmed.length() <= 2) break;
+            trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+        }
+        return trimmed.trim();
+    }
+
+    private int deriveFloorIndexFromLabel(@NonNull String label, int fallbackIndex) {
+        String t = label.trim().toUpperCase(Locale.US);
+        if (t.isEmpty()) return fallbackIndex;
+
+        if ("GF".equals(t) || "G".equals(t) || "GROUND".equals(t)) return 0;
+
+        if (t.startsWith("B") && t.length() > 1) {
+            try {
+                int n = Integer.parseInt(t.substring(1));
+                return -n; // B1 -> -1
+            } catch (NumberFormatException ignored) { }
+        }
+
+        if (t.startsWith("F") && t.length() > 1) {
+            try {
+                return Integer.parseInt(t.substring(1)); // F1 -> 1
+            } catch (NumberFormatException ignored) { }
+        }
+
+        try {
+            return Integer.parseInt(t);
+        } catch (NumberFormatException ignored) { }
+
+        return fallbackIndex;
+    }
+
+    private int extractFloorIndex(@NonNull JSONObject obj, int defaultIndex) {
+        if (obj.has("floor_index")) return obj.optInt("floor_index", defaultIndex);
+        if (obj.has("floor")) return obj.optInt("floor", defaultIndex);
+        if (obj.has("level")) return obj.optInt("level", defaultIndex);
+        if (obj.has("z_index")) return obj.optInt("z_index", defaultIndex);
+        if (obj.has("z")) return obj.optInt("z", defaultIndex);
+        return defaultIndex;
+    }
+
+    private String extractFloorLabel(@NonNull JSONObject obj, int floorIndex) {
+        String label = obj.optString("label", "");
+        if (label.isEmpty()) label = obj.optString("name", "");
+        if (label.isEmpty()) label = obj.optString("title", "");
+        if (label.isEmpty()) label = "Floor " + floorIndex;
+        return label;
+    }
+
+    private void clearMapShapeFloors() {
+        for (FloorLayer layer : mapShapeFloors) {
+            for (Polygon p : layer.polygons) {
+                if (p != null) p.remove();
+            }
+        }
+        mapShapeFloors.clear();
+        currentMapShapeFloor = 0;
+        mapShapesLocked = false;
+    }
+
+    private void showMapShapeFloor(int floorIndex) {
+        if (mapShapeFloors.isEmpty()) return;
+        if (floorIndex < 0 || floorIndex >= mapShapeFloors.size()) return;
+
+        for (int i = 0; i < mapShapeFloors.size(); i++) {
+            boolean visible = i == floorIndex;
+            for (Polygon p : mapShapeFloors.get(i).polygons) {
+                if (p != null) p.setVisible(visible);
+            }
+        }
+        currentMapShapeFloor = floorIndex;
+    }
+
+    private void changeMapShapeFloor(int delta) {
+        if (!hasActiveMapShapes()) return;
+        int next = currentMapShapeFloor + delta;
+        if (next < 0 || next >= mapShapeFloors.size()) return;
+        showMapShapeFloor(next);
+    }
+
+    private static final class FloorLayer {
+        final int floorIndex;
+        final String label;
+        final List<Polygon> polygons = new ArrayList<>();
+
+        FloorLayer(int floorIndex, @NonNull String label) {
+            this.floorIndex = floorIndex;
+            this.label = label;
         }
     }
 
