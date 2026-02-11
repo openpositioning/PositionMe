@@ -733,6 +733,7 @@ public class TrajectoryMapFragment extends Fragment {
 
         clearSelectedVenue();
         clearVenueOutlines();
+        clearTestPointMarkers();
 
         lastGnssLocation = null;
         currentLocation = null;

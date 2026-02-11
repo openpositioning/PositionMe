@@ -68,6 +68,19 @@ android {
     }
 }
 
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.21.12"
+    }
+    generateProtoTasks {
+        all().configureEach { task ->
+            task.builtins {
+                java {}
+            }
+        }
+    }
+}
+
 dependencies {
     // Core AndroidX
     implementation 'androidx.appcompat:appcompat:1.7.0-alpha03' // or stable: 1.6.1

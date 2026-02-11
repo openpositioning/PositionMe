@@ -310,9 +310,9 @@ public class RecordingFragment extends Fragment {
         if (gnss != null && trajectoryMapFragment != null) {
             LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
 
-            //TODO UNCOMMENT WHEN SUBMITTING
-           trajectoryMapFragment.updateFloorplanProbeLocation(gnssLocation);
+            trajectoryMapFragment.updateFloorplanProbeLocation(gnssLocation);
 
+            // No need:
             // LatLng probe = trajectoryMapFragment.getCurrentLocation();
             // if (probe != null) {
             //     trajectoryMapFragment.updateFloorplanProbeLocation(probe);

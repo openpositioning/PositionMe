@@ -947,6 +947,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.saveRecording = true;
         this.stepCounter = 0;
         this.selectedCampaign = null;
+        clearTestPoints();
         this.absoluteStartTime = System.currentTimeMillis();
         this.recordingTime = 0L;
         this.bootTime = SystemClock.uptimeMillis();
