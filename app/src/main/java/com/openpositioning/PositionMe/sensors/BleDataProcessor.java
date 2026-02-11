@@ -13,17 +13,21 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelUuid;
 import android.os.SystemClock;
 import android.util.Log;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 
 import com.openpositioning.PositionMe.BuildConfig;
 import android.bluetooth.le.BluetoothLeScanner;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -221,7 +225,9 @@ public class BleDataProcessor implements Observable {
         obs.setMac(mac);
         obs.setName(device != null ? device.getName() : null);
         obs.setRssi(result.getRssi());
-        obs.setUuid("unknown");
+        List<String> serviceUuids = extractServiceUuids(result);
+        obs.setServiceUuids(serviceUuids);
+        obs.setUuid(serviceUuids.isEmpty() ? "unknown" : serviceUuids.get(0));
         long tsMs = result.getTimestampNanos() > 0
                 ? result.getTimestampNanos() / 1_000_000L
                 : SystemClock.elapsedRealtime();
@@ -237,6 +243,28 @@ public class BleDataProcessor implements Observable {
                     + " unique=" + windowMap.size());
             lastLogSampleMs = now;
         }
+    }
+
+    @NonNull
+    private List<String> extractServiceUuids(@NonNull ScanResult result) {
+        if (result.getScanRecord() == null) {
+            return Collections.emptyList();
+        }
+        List<ParcelUuid> parcelUuids = result.getScanRecord().getServiceUuids();
+        if (parcelUuids == null || parcelUuids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> out = new ArrayList<>(parcelUuids.size());
+        for (ParcelUuid parcelUuid : parcelUuids) {
+            if (parcelUuid == null) {
+                continue;
+            }
+            String value = parcelUuid.toString();
+            if (value != null && !value.trim().isEmpty()) {
+                out.add(value.trim());
+            }
+        }
+        return out;
     }
 
     private void scheduleFlush() {

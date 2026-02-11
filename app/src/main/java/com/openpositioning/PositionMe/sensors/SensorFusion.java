@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -216,6 +217,31 @@ public class SensorFusion implements SensorEventListener, Observer {
         if (name == null) return "unknown";
         name = name.trim();
         return name.isEmpty() ? "unknown" : name;
+    }
+
+    @NonNull
+    private List<String> normalizeBleServiceUuids(@NonNull BLE ble) {
+        Set<String> dedup = new LinkedHashSet<>();
+        for (String uuid : ble.getServiceUuids()) {
+            if (uuid == null) {
+                continue;
+            }
+            String normalized = uuid.trim();
+            if (normalized.isEmpty() || "unknown".equalsIgnoreCase(normalized)) {
+                continue;
+            }
+            dedup.add(normalized);
+        }
+        if (dedup.isEmpty()) {
+            String fallback = ble.getUuid();
+            if (fallback != null) {
+                String normalized = fallback.trim();
+                if (!normalized.isEmpty() && !"unknown".equalsIgnoreCase(normalized)) {
+                    dedup.add(normalized);
+                }
+            }
+        }
+        return new ArrayList<>(dedup);
     }
 
 
@@ -782,6 +808,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 .setName(safeBleName(d.getName()))
                                 .setTxPowerLevel(0)
                                 .setAdvertiseFlags(0);
+                        List<String> serviceUuids = normalizeBleServiceUuids(d);
+                        if (!serviceUuids.isEmpty()) {
+                            bleData.addAllServiceUuids(serviceUuids);
+                        }
 
                         trajectory.addBleData(bleData);
                         recordedBleMacs.add(macStr);
