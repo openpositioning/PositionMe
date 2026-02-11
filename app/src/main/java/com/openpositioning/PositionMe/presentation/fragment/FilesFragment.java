@@ -190,7 +190,7 @@ public class FilesFragment extends Fragment implements Observer {
      *
      * @param entryList List of Maps of String to String containing metadata about the uploaded
      *                  trajectories (ID, owner ID, date).
-     */
+     **/
     private void updateView(List<Map<String, String>> entryList) {
         // Initialise RecyclerView with Manager and Adapter
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
@@ -202,7 +202,7 @@ public class FilesFragment extends Fragment implements Observer {
             String dateSubmitted = selectedItem.get("date_submitted");
 
             // Pass ID and date_submitted
-            serverCommunications.downloadTrajectory(position, id, dateSubmitted);
+            serverCommunications.downloadTrajectory(position, id, dateSubmitted, null);
 
 //            new AlertDialog.Builder(getContext())
 //                    .setTitle("File downloaded")

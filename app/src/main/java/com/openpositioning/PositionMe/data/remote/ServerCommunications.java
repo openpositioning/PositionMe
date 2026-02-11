@@ -157,7 +157,18 @@ public class ServerCommunications implements Observable {
         // Format the file name according to date
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
         Date date = new Date();
-        File file = new File(path, "trajectory_" + dateFormat.format(date) +  ".txt");
+
+        //define trajectory name
+        String trajectoryName = trajectory.getTrajectoryName();
+        //add debugging info to the name
+
+
+        //sanitize
+        trajectoryName = trajectoryName.replaceAll("[^a-zA-Z0-9-_\\.]", "_");
+
+
+        File file = new File(path, "trajectory_" + trajectoryName + "_" + dateFormat.format(date) +  ".txt");
+        Log.i("TrajName", "Name=" + trajectory.getTrajectoryName());
 
         try {
             // Write the binary data to the file
@@ -421,8 +432,9 @@ public class ServerCommunications implements Observable {
      * @param fileName the name of the file
      * @param id the ID of the trajectory
      * @param dateSubmitted the date the trajectory was submitted
-     */
-    private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted) {
+     * @param trajectoryName the name of the trajectory  New additiion for the project
+     **/
+    private void saveDownloadRecord(long startTimestamp, String fileName, String id, String dateSubmitted, String trajectoryName) {
         File recordsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         File recordsFile = new File(recordsDir, "download_records.json");
         JSONObject jsonObject;
@@ -462,6 +474,7 @@ public class ServerCommunications implements Observable {
             recordDetails.put("startTimeStamp", startTimestamp);
             recordDetails.put("date_submitted", dateSubmitted);
             recordDetails.put("id", id);
+            recordDetails.put("trajectory_name", trajectoryName);
 
             // Insert or update in the main JSON
             jsonObject.put(id, recordDetails);
@@ -489,8 +502,9 @@ public class ServerCommunications implements Observable {
      * @param position the position of the trajectory in the zip file to retrieve
      * @param id the ID of the trajectory
      * @param dateSubmitted the date the trajectory was submitted
+     * @param trajectoryName the name of the trajectory
      */
-    public void downloadTrajectory(int position, String id, String dateSubmitted) {
+    public void downloadTrajectory(int position, String id, String dateSubmitted, String trajectoryName) {
         loadDownloadRecords();  // Load existing records from app-specific directory
 
         // Initialise OkHttp client
@@ -544,12 +558,23 @@ public class ServerCommunications implements Observable {
                     byte[] byteArray = byteArrayOutputStream.toByteArray();
                     Traj.Trajectory receivedTrajectory = Traj.Trajectory.parseFrom(byteArray);
 
+
+                    //read receivedTrajectory.getDataIdentifier() and add it to saveDownloadRecord(...).
+                    String trajectoryName = receivedTrajectory.getTrajectoryName();
+
+                    
+
                     // Inspect the size of the received trajectory
                     logDataSize(receivedTrajectory);
 
                     // Print a message in the console
                     long startTimestamp = receivedTrajectory.getStartTimestamp();
-                    String fileName = "trajectory_" + dateSubmitted + ".txt";
+                    String safeName = (trajectoryName == null || trajectoryName.trim().isEmpty())
+                            ? "unnamed"
+                            : trajectoryName.replaceAll("[^a-zA-Z0-9._-]", "_");
+                    String fileName = "trajectory_" + safeName + "_" + dateSubmitted + ".txt";
+
+
 
                     // Place the file in your app-specific "Downloads" folder
                     File appSpecificDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
@@ -574,7 +599,7 @@ public class ServerCommunications implements Observable {
                     }
 
                     // Save the download record
-                    saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
+                    saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted, trajectoryName);
                     loadDownloadRecords();
                 }
             }
@@ -642,11 +667,11 @@ public class ServerCommunications implements Observable {
 
     private void logDataSize(Traj.Trajectory trajectory) {
         Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPositionDataCount());
+        Log.i("ServerCommunications", "Position Data size: " + trajectory.getPdrDataCount());
         Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
         Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
         Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiDataCount());
+        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiFingerprintsCount());
         Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
         Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
     }
