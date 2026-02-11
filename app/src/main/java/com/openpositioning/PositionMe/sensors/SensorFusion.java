@@ -1,5 +1,8 @@
 package com.openpositioning.PositionMe.sensors;
 
+import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_OUTSIDE;
+import static com.openpositioning.PositionMe.utils.UtilConstants.SENSOR_POLL_TIME_MS;
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.Sensor;
@@ -36,7 +39,6 @@ import java.util.TimerTask;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-
 /**
  * The SensorFusion class is the main data gathering and processing class of the application.
  *
@@ -68,7 +70,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Define a threshold for large time gaps (in milliseconds)
     private static final long LARGE_GAP_THRESHOLD_MS = 500;  // Adjust this if needed
 
-    //region Static variables
     // Singleton Class
     private static final SensorFusion sensorFusion = new SensorFusion();
     // Static constant for calculations with milliseconds
@@ -77,11 +78,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     public static final float FILTER_COEFFICIENT = 0.96f;
     //Tuning value for low pass filter
     private static final float ALPHA = 0.8f;
-    // String for creating WiFi fingerprint JSO N object
+    // String for creating WiFi fingerprint JSON object
     private static final String WIFI_FINGERPRINT= "wf";
-    //endregion
 
-    //region Instance variables
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
     private Context appContext;
@@ -111,6 +110,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private ServerCommunications serverCommunications;
     // Trajectory object containing all data
     private Traj.Trajectory.Builder trajectory;
+    // Name of current building recording is associated with
+    // Defaults to outside (invalid for upload to server)
+    private String currentBuilding = BUILDING_NAME_OUTSIDE;
 
     // Settings
     private boolean saveRecording;
@@ -158,7 +160,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     private long lastBleFingerprintTime = 0;
     private int lastBleFingerprintHash = 0;
 
-
     // Over time accelerometer magnitude values since last step
     private List<Double> accelMagnitude;
 
@@ -170,7 +171,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
 
-    //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
      * Initialises empty arrays and new objects that do not depends on outside information.
@@ -275,9 +275,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag");
     }
 
-    //endregion
-
-    //region Sensor processing
     /**
      * {@inheritDoc}
      *
@@ -292,24 +289,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         long currentTime = System.currentTimeMillis();  // Current time in milliseconds
         int sensorType = sensorEvent.sensor.getType();
 
-        // Get the previous timestamp for this sensor type
-        Long lastTimestamp = lastEventTimestamps.get(sensorType);
-
-        if (lastTimestamp != null) {
-            long timeGap = currentTime - lastTimestamp;
-
-//            // Log a warning if the time gap is larger than the threshold
-//            if (timeGap > LARGE_GAP_THRESHOLD_MS) {
-//                Log.e("SensorFusion", "Large time gap detected for sensor " + sensorType +
-//                        " | Time gap: " + timeGap + " ms");
-//            }
-        }
-
         // Update timestamp and frequency counter for this sensor
         lastEventTimestamps.put(sensorType, currentTime);
         eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
-
-
 
         switch (sensorType) {
             case Sensor.TYPE_ACCELEROMETER:
@@ -343,12 +325,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 Math.pow(filteredAcc[1], 2) +
                                 Math.pow(filteredAcc[2], 2)
                 );
-                this.accelMagnitude.add(accelMagFiltered);
 
-//                // Debug logging
-//                Log.v("SensorFusion",
-//                        "Added new linear accel magnitude: " + accelMagFiltered
-//                                + "; accelMagnitude size = " + accelMagnitude.size());
+                // TODO - This grows without bound! Would limiting it break functionality?
+                this.accelMagnitude.add(accelMagFiltered);
 
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
@@ -389,7 +368,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 long stepTime = SystemClock.uptimeMillis() - bootTime;
 
 
-                if (currentTime - lastStepTime < 20) {
+                if (currentTime - lastStepTime < SENSOR_POLL_TIME_MS) {
                     Log.e("SensorFusion", "Ignoring step event, too soon after last step event:" + (currentTime - lastStepTime) + " ms");
                     // Ignore rapid successive step events
                     break;
@@ -414,6 +393,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     );
 
                     // Clear the accelMagnitude after using it
+                    // CAUTION - This line never runs!
                     this.accelMagnitude.clear();
 
 
@@ -757,9 +737,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {}
-    //endregion
 
-    //region Getters/Setters
     /**
      * Getter function for core location data.
      *
@@ -922,10 +900,6 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
-    //endregion
-
-    //region Start/Stop
-
     /**
      * Registers all device listeners and enables updates with the specified sampling rate.
      *
@@ -1025,17 +999,17 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.bootTime = SystemClock.uptimeMillis();
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
-                .setAndroidVersion(Build.VERSION.RELEASE)
-                .setStartTimestamp(absoluteStartTime)
-                .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
-                .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
-                .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
-                .setBarometerInfo(createInfoBuilder(barometerSensor))
-                .setLightSensorInfo(createInfoBuilder(lightSensor))
-                .setRotationVectorInfo(createInfoBuilder(rotationSensor))
-                .setProximityInfo(createInfoBuilder(proximitySensor))
-                .setTrajectoryVersion(2.0f)
-                .setTrajectoryId(generateTrajectoryId());
+            .setAndroidVersion(Build.VERSION.RELEASE)
+            .setStartTimestamp(absoluteStartTime)
+            .setAccelerometerInfo(createInfoBuilder(accelerometerSensor))
+            .setGyroscopeInfo(createInfoBuilder(gyroscopeSensor))
+            .setMagnetometerInfo(createInfoBuilder(magnetometerSensor))
+            .setBarometerInfo(createInfoBuilder(barometerSensor))
+            .setLightSensorInfo(createInfoBuilder(lightSensor))
+            .setRotationVectorInfo(createInfoBuilder(rotationSensor))
+            .setProximityInfo(createInfoBuilder(proximitySensor))
+            .setTrajectoryVersion(2.0f)
+            .setTrajectoryId(generateTrajectoryId());
 
         // Set initial position from user-selected start location
         if (startLocation != null && (startLocation[0] != 0 || startLocation[1] != 0)) {
@@ -1076,9 +1050,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     /**
      * Disables saving sensor values to the trajectory object.
-     *
-     * Check if a recording is in progress. If it is, it sets save recording to false, and cancels
-     * the timer objects.
+     * <p>
+     * Check if a recording is in progress. If it is, it sets
+     * save recording to false, and cancels the timer objects.
      *
      * @see Traj object for storing data.
      * @see SettingsFragment navigation that might cancel recording.
@@ -1094,20 +1068,18 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
     }
 
-    //endregion
-
-    //region Trajectory object
-
     /**
      * Send the trajectory object to servers.
      *
      * @see ServerCommunications for sending and receiving data via HTTPS.
+     * @return Boolean to confirm upload has completed
      */
-    public void sendTrajectoryToCloud() {
+    public boolean sendTrajectoryToCloud() {
         // Build object
         Traj.Trajectory sentTrajectory = trajectory.build();
         // Pass object to communications object
-        this.serverCommunications.sendTrajectory(sentTrajectory);
+        this.serverCommunications.sendTrajectory(sentTrajectory, currentBuilding);
+        return true;
     }
 
     /**
@@ -1159,11 +1131,13 @@ public class SensorFusion implements SensorEventListener, Observer {
 
             // Store magnetometer data in Trajectory class
             trajectory.addMagnetometerData(Traj.MagnetometerReading.newBuilder()
-                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                    .setMag(Traj.Vector3.newBuilder()
-                            .setX(magneticField[0])
-                            .setY(magneticField[1])
-                            .setZ(magneticField[2])));
+                .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                .setMag(Traj.Vector3.newBuilder()
+                    .setX(magneticField[0])
+                    .setY(magneticField[1])
+                    .setZ(magneticField[2])
+                )
+            );
 
             // Divide timer with a counter for storing data every 1 second
             if (counter == 99) {
@@ -1171,14 +1145,17 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // Store pressure and light data
                 if (barometerSensor.sensor != null) {
                     trajectory.addPressureData(Traj.BarometerReading.newBuilder()
-                                    .setPressure(pressure)
-                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
-                            .addLightData(Traj.LightReading.newBuilder()
-                                    .setLight(light)
-                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime))
-                            .addProximityData(Traj.ProximityReading.newBuilder()
-                                    .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                                    .setDistance(proximity));
+                        .setPressure(pressure)
+                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                    )
+                    .addLightData(Traj.LightReading.newBuilder()
+                        .setLight(light)
+                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                    )
+                    .addProximityData(Traj.ProximityReading.newBuilder()
+                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                        .setDistance(proximity)
+                    );
                 }
 
                 // Divide the timer for storing AP data every 5 seconds
@@ -1187,10 +1164,10 @@ public class SensorFusion implements SensorEventListener, Observer {
                     //Current Wifi Object
                     Wifi currentWifi = wifiProcessor.getCurrentWifiData();
                     trajectory.addApsData(Traj.WiFiAPData.newBuilder()
-                            .setMac(currentWifi.getBssid())
-                            .setSsid(currentWifi.getSsid())
-                            .setFrequency(currentWifi.getFrequency())
-                            .setRttEnabled(currentWifi.isRttEnabled()));
+                        .setMac(currentWifi.getBssid())
+                        .setSsid(currentWifi.getSsid())
+                        .setFrequency(currentWifi.getFrequency())
+                        .setRttEnabled(currentWifi.isRttEnabled()));
                     seenAPs.put(currentWifi.getBssid(), true);
                 }
                 else {
@@ -1225,6 +1202,19 @@ public class SensorFusion implements SensorEventListener, Observer {
         return SystemClock.uptimeMillis() - bootTime;
     }
 
-    //endregion
+    public void requestFloorplans(LatLng position){
+        this.serverCommunications.requestFloorplans(position, this.wifiList);
+    }
+
+    public void setCurrentBuilding(String currentBuilding) {
+        this.currentBuilding = currentBuilding;
+        Log.i("SensorFusion",
+        "Route now associated with " + this.currentBuilding
+        );
+    }
+
+    public String getCurrentBuilding(){
+        return currentBuilding;
+    }
 
 }

@@ -71,9 +71,15 @@ public class ReplayFragment extends Fragment {
 
         // Retrieve transferred data from ReplayActivity
         if (getArguments() != null) {
-            filePath = getArguments().getString(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, "");
-            initialLat = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LAT, 0f);
-            initialLon = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LON, 0f);
+            filePath = getArguments().getString(
+                ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH,""
+            );
+            initialLat = getArguments().getFloat(
+                ReplayActivity.EXTRA_INITIAL_LAT, 0f
+            );
+            initialLon = getArguments().getFloat(
+                ReplayActivity.EXTRA_INITIAL_LON, 0f
+            );
         }
 
         // Log the received data
@@ -96,7 +102,12 @@ public class ReplayFragment extends Fragment {
         Log.i(TAG, "Trajectory file confirmed to exist and is readable.");
 
         // Parse the JSON file and prepare replayData using TrajParser
-        replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), initialLat, initialLon);
+        replayData = TrajParser.parseTrajectoryData(
+            filePath,
+            requireContext(),
+            initialLat,
+            initialLon
+        );
 
         // Log the number of parsed points
         if (replayData != null && !replayData.isEmpty()) {

@@ -25,7 +25,6 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
-import com.openpositioning.PositionMe.utils.NucleusBuildingManager;
 
 /**
  * A simple {@link Fragment} subclass. The startLocation fragment is displayed before the trajectory
@@ -49,8 +48,6 @@ public class StartLocationFragment extends Fragment {
     private float[] startPosition = new float[2];
     // Zoom level for the Google map
     private float zoom = ZOOM_LEVEL_DEFAULT;
-    // Instance for managing indoor building overlays (if any)
-    private NucleusBuildingManager nucleusBuildingManager;
     // Dummy variable for floor index
     private int FloorNK;
 
@@ -93,7 +90,7 @@ public class StartLocationFragment extends Fragment {
 
         // Initialize map fragment
         SupportMapFragment supportMapFragment = (SupportMapFragment)
-                getChildFragmentManager().findFragmentById(R.id.startMap);
+            getChildFragmentManager().findFragmentById(R.id.startMap);
 
         supportMapFragment.getMapAsync(new OnMapReadyCallback() {
             /**
@@ -117,17 +114,12 @@ public class StartLocationFragment extends Fragment {
                 // *** FIX: Clear any existing markers so the start marker isn’t duplicated ***
                 mMap.clear();
 
-                // Create NucleusBuildingManager instance (if needed)
-                nucleusBuildingManager = new NucleusBuildingManager(mMap);
-                nucleusBuildingManager.getIndoorMapFragment().setMapVisibility(false);
-
                 // Add a marker at the current GPS location and move the camera
-                // TODO - What does startMarker do?
                 position = new LatLng(startPosition[0], startPosition[1]);
-                Marker startMarker = mMap.addMarker(new MarkerOptions()
-                        .position(position)
-                        .title("Start Position")
-                        .draggable(true));
+                mMap.addMarker(new MarkerOptions()
+                    .position(position)
+                    .title("Start Position")
+                    .draggable(true));
                 mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
 
                 // Drag listener for the marker to update the start position when dragged
@@ -203,18 +195,5 @@ public class StartLocationFragment extends Fragment {
                 }
             }
         });
-    }
-
-    /**
-     * Switches the indoor map to the specified floor.
-     *
-     * @param floorIndex the index of the floor to switch to
-     */
-    private void switchFloorNU(int floorIndex) {
-        FloorNK = floorIndex; // Set the current floor index
-        if (nucleusBuildingManager != null) {
-            // Call the switchFloor method of the IndoorMapManager to switch to the specified floor
-            nucleusBuildingManager.getIndoorMapFragment().switchFloor(floorIndex);
-        }
     }
 }

@@ -54,4 +54,3 @@
     - The recorded trajectory will be simulated and displayed on the map.
 6. **Control playback**:
     - Pause, restart, or jump to the end using playback controls.
-

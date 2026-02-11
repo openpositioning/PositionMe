@@ -5,6 +5,7 @@ import static com.openpositioning.PositionMe.utils.UtilConstants.URL_GET_USER_TR
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -120,7 +121,7 @@ public class FilesFragment extends Fragment implements Observer {
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             if (filesList.getAdapter() != null) {
                 filesList.getAdapter().notifyDataSetChanged();
-                System.out.println("RecyclerView refreshed after page load.");
+                Log.i("FilesFragment", "RecyclerView refreshed after page load.");
             }
         }, 500);
     }
@@ -175,11 +176,13 @@ public class FilesFragment extends Fragment implements Observer {
                 entryList.add(entryMap);
             }
         } catch (JSONException e) {
-            System.err.println("JSON reading failed");
-            e.printStackTrace();
+            Log.e("FilesFragment", "JSON reading failed: " + e.getMessage());
         }
         // Sort the list by the ID fields of the maps
-        entryList.sort(Comparator.comparing(m -> Integer.parseInt(m.get("id")), Comparator.nullsLast(Comparator.naturalOrder())));
+        entryList.sort(Comparator.comparing(
+            m -> Integer.parseInt(m.get("id")),
+            Comparator.nullsLast(Comparator.naturalOrder()))
+        );
         return entryList;
     }
 

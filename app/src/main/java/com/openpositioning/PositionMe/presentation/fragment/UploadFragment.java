@@ -1,5 +1,7 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_M_HOUSE;
+
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -129,7 +131,11 @@ public class UploadFragment extends Fragment {
             LinearLayoutManager manager = new LinearLayoutManager(getActivity());
             uploadList.setLayoutManager(manager);
             uploadList.setHasFixedSize(true);
-            listAdapter = new UploadListAdapter(getActivity(), localTrajectories, new DownloadClickListener() {
+            listAdapter = new UploadListAdapter(
+                getActivity(),
+                localTrajectories,
+                new DownloadClickListener()
+            {
                 /**
                  * {@inheritDoc}
                  * Upload the trajectory at the clicked position, remove it from the recycler view
@@ -137,7 +143,10 @@ public class UploadFragment extends Fragment {
                  */
                 @Override
                 public void onPositionClicked(int position) {
-                    serverCommunications.uploadLocalTrajectory(localTrajectories.get(position));
+                    File trajectory = localTrajectories.get(position);
+
+                    // TODO - Replace static test value with dynamic building name
+                    serverCommunications.uploadLocalTrajectory(trajectory, BUILDING_NAME_M_HOUSE);
 //                    localTrajectories.remove(position);
 //                    listAdapter.notifyItemRemoved(position);
                 }

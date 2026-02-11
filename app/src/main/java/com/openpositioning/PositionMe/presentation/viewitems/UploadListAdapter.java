@@ -39,7 +39,11 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
      *
      * @see com.openpositioning.PositionMe.Traj protobuf objects exchanged with the server.
      */
-    public UploadListAdapter(Context context, List<File> uploadItems, DownloadClickListener listener) {
+    public UploadListAdapter(
+        Context context,
+        List<File> uploadItems,
+        DownloadClickListener listener
+    ) {
         this.context = context;
         this.uploadItems = uploadItems;
         this.listener = listener;
@@ -53,7 +57,11 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
     @NonNull
     @Override
     public UploadViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        return new UploadViewHolder(LayoutInflater.from(context).inflate(R.layout.item_upload_card_view, parent, false), listener);
+        return new UploadViewHolder(
+            LayoutInflater.from(context).inflate(
+                R.layout.item_upload_card_view, parent, false
+            ), listener
+        );
     }
 
     /**

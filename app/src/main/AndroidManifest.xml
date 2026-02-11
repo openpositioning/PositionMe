@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.openpositioning.PositionMe">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
          1. Hardware features.
@@ -75,8 +74,7 @@
         android:roundIcon="@mipmap/ic_launcher_icon_map_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Material3.DayNight.NoActionBar"
-        android:requestLegacyExternalStorage="true"
-    >
+        android:requestLegacyExternalStorage="true">
 
     <activity
         android:name=".presentation.activity.ReplayActivity"

@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -9,11 +10,18 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.TextView;
+
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.cardview.widget.CardView;
+import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.fragment.app.Fragment;
 
 import com.openpositioning.PositionMe.R;
@@ -26,6 +34,14 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+
+import androidx.preference.PreferenceManager;
+
+import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_OUTSIDE;
+import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_M_HOUSE;
+import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_NUCLEUS;
+
+import org.w3c.dom.Text;
 
 /**
  * A simple {@link Fragment} subclass. Corrections Fragment is displayed after a recording session
@@ -49,6 +65,14 @@ public class CorrectionFragment extends Fragment {
     private static LatLng start;
     private PathView pathView;
 
+    private Spinner campaignSelect;
+    private String selectedCampaign;
+
+    private TextView campaignText;
+
+
+    private CardView cardView;
+
     public CorrectionFragment() {
         // Required empty public constructor
     }
@@ -61,9 +85,6 @@ public class CorrectionFragment extends Fragment {
             activity.getSupportActionBar().hide();
         }
         View rootView = inflater.inflate(R.layout.fragment_correction, container, false);
-
-        // Send trajectory data to the cloud
-        sensorFusion.sendTrajectoryToCloud();
 
         //Obtain start position
         float[] startPosition = sensorFusion.getGNSSLatitude(true);
@@ -104,6 +125,13 @@ public class CorrectionFragment extends Fragment {
         this.stepLengthInput = view.findViewById(R.id.inputStepLength);
         this.pathView = view.findViewById(R.id.pathView1);
 
+        this.campaignSelect = view.findViewById(R.id.campaignSelectSpinner);
+        this.campaignText = view.findViewById(R.id.correctedCampaingTextView);
+        this.cardView = view.findViewById(R.id.cardView2);
+
+        // Call for user to select campaign if necessary
+        initCampaignSelect();
+
         averageStepLength = sensorFusion.passAverageStepLength();
         averageStepLengthText.setText(getString(R.string.averageStepLgn) + ": "
                 + String.format("%.2f", averageStepLength));
@@ -143,11 +171,10 @@ public class CorrectionFragment extends Fragment {
         this.button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // ************* CHANGED CODE HERE *************
-                // Before:
-                //   NavDirections action = CorrectionFragmentDirections.actionCorrectionFragmentToHomeFragment();
-                //   Navigation.findNavController(view).navigate(action);
-                //   ((AppCompatActivity)getActivity()).getSupportActionBar().show();
+                // Set campaign, and wait until upload is complete
+                sensorFusion.setCurrentBuilding(selectedCampaign);
+                while(!sensorFusion.sendTrajectoryToCloud()){}
+                sensorFusion.setCurrentBuilding(BUILDING_NAME_OUTSIDE);
 
                 // Now, simply tell the Activity we are done:
                 ((RecordingActivity) requireActivity()).finishFlow();
@@ -158,4 +185,56 @@ public class CorrectionFragment extends Fragment {
     public void setScalingRatio(float scalingRatio) {
         this.scalingRatio = scalingRatio;
     }
+
+    private void initCampaignSelect() {
+        if (campaignSelect == null) return;
+
+        // Retrieve the current building from SensorFusion
+        String currentBuilding = SensorFusion.getInstance().getCurrentBuilding();
+
+        // Check if the building is "outside"
+        if ("outside".equalsIgnoreCase(currentBuilding)) {
+
+            // Initialize campaigns only if the building is "outside"
+            String[] campaigns = new String[]{
+                    "Murchison House",
+                    "Nucleus"
+            };
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                    requireContext(),
+                    android.R.layout.simple_spinner_dropdown_item,
+                    campaigns
+            );
+            campaignSelect.setAdapter(adapter);
+            campaignSelect.setSelection(0);
+
+            // Set item selected listener
+            campaignSelect.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                    switch (position) {
+                        case 0:
+                            selectedCampaign = BUILDING_NAME_M_HOUSE;
+                            break;
+                        case 1:
+                            selectedCampaign = BUILDING_NAME_NUCLEUS;
+                            break;
+                    }
+                    Log.d("CorrectionFragment", "Selected campaign: " + selectedCampaign); // Log selection
+                }
+
+                @Override
+                public void onNothingSelected(AdapterView<?> parent) {
+                    selectedCampaign = BUILDING_NAME_OUTSIDE;
+                }
+            });
+        } else {
+            selectedCampaign = currentBuilding;
+            // Hide the Spinner if not "outside"
+            campaignSelect.setVisibility(View.GONE);
+            cardView.setVisibility(View.GONE);
+            campaignText.setVisibility(View.GONE);
+        }
+    }
+
 }
