@@ -114,6 +114,7 @@ public class TrajectoryMapFragment extends Fragment {
 
     private Float autoFloorBaseElevation = null;
     private long lastAutoFloorSwitchMs = 0L;
+    private Integer autoFloorBaseIdx = null;
     private static final long AUTO_FLOOR_INTERVAL_MS = 800;
     private static final long AUTO_FLOOR_DEBOUNCE_MS = 1500;
     private static final float DEFAULT_FLOOR_HEIGHT_M = 3.2f;
@@ -275,8 +276,10 @@ public class TrajectoryMapFragment extends Fragment {
             if (!isChecked) {
                 autoFloorHandler.removeCallbacksAndMessages(null);
                 autoFloorBaseElevation = null;
+                autoFloorBaseIdx = null;
                 return;
             }
+
 
             if (selectedVenue == null || availableFloors.isEmpty()) {
                 Toast.makeText(requireContext(),
@@ -297,6 +300,7 @@ public class TrajectoryMapFragment extends Fragment {
             }
 
             autoFloorBaseElevation = sensorFusion.getElevation();
+            autoFloorBaseIdx = currentFloorIdx;
             lastAutoFloorSwitchMs = 0L;
 
             if (autoFloorRunnable == null) {
@@ -310,13 +314,22 @@ public class TrajectoryMapFragment extends Fragment {
                     }
 
                     float elev = sensorFusion.getElevation();
-                    Log.e("AUTO_FLOOR", "elev=" + elev + " base=" + autoFloorBaseElevation + " curIdx=" + currentFloorIdx);
+                    Log.e("AUTO_FLOOR",
+                            "elev=" + elev +
+                                    " baseElev=" + autoFloorBaseElevation +
+                                    " baseIdx=" + autoFloorBaseIdx +
+                                    " curIdx=" + currentFloorIdx
+                    );
 
                     if (autoFloorBaseElevation == null) autoFloorBaseElevation = elev;
 
                     float floorHeight = DEFAULT_FLOOR_HEIGHT_M;
 
-                    int targetIdx = elevationToFloorIndex(elev, autoFloorBaseElevation, floorHeight);
+                    if (autoFloorBaseElevation == null) autoFloorBaseElevation = elev;
+                    if (autoFloorBaseIdx == null) autoFloorBaseIdx = currentFloorIdx;
+
+                    int deltaIdx = elevationToFloorIndex(elev, autoFloorBaseElevation, floorHeight);
+                    int targetIdx = autoFloorBaseIdx + deltaIdx;
 
                     targetIdx = Math.max(0, Math.min(targetIdx, availableFloors.size() - 1));
 
@@ -592,15 +605,15 @@ public class TrajectoryMapFragment extends Fragment {
                     @Override
                     public void onSuccess(org.json.JSONObject response) {
                         floorplanInFlight = false;
-                        hasReceivedFloorplan = true;
 
-                        Log.d("Floorplan", "Floorplan success, switch to slow refresh");
-                        Log.e("Floorplan", "✅ SUCCESS keys=" + response.names());
-                        Log.e("Floorplan", "response=" + response.toString());
+                        boolean ok = renderNearbyFloorplans(response);
+                        hasReceivedFloorplan = ok;
 
-                        renderNearbyFloorplans(response);
-
+                        Log.d("Floorplan", ok
+                                ? "Floorplan VALID -> switch to slow refresh (30s)"
+                                : "Floorplan NOT valid -> keep fast retry (5s)");
                     }
+
 
                     @Override
                     public void onError(String error) {
@@ -958,8 +971,8 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     //Chen :Parse floorplan results, clear old polygons, draw new venue outlines, and build clickable venue list.
-    private void renderNearbyFloorplans(@NonNull org.json.JSONObject wrapper) {
-        if (gMap == null) return;
+    private boolean renderNearbyFloorplans(@NonNull org.json.JSONObject wrapper) {
+        if (gMap == null) return false;
 
         clearNearbyVenuePolygons();
 
@@ -967,8 +980,10 @@ public class TrajectoryMapFragment extends Fragment {
             org.json.JSONArray results = wrapper.optJSONArray("results");
             if (results == null || results.length() == 0) {
                 Log.e("Floorplan", "results empty");
-                return;
+                return false;
             }
+
+            // 你原来的 campaign 默认保存逻辑保持不变
             try {
                 String existing = com.openpositioning.PositionMe.utils.CampaignStore.get(requireContext());
                 if (existing == null || existing.isEmpty()) {
@@ -998,10 +1013,14 @@ public class TrajectoryMapFragment extends Fragment {
             }
 
             Log.e("Floorplan", "drawn venue polygons=" + nearbyVenuePolygons.size());
+            return nearbyVenuePolygons.size() > 0;
+
         } catch (Exception e) {
             Log.e("Floorplan", "renderNearbyFloorplans error: " + e.getMessage());
+            return false;
         }
     }
+
 
     //Chen :Draw outline polygons from venue GeoJSON (FeatureCollection/MultiPolygon, etc.) and return polygon handles.
     private List<Polygon> drawOutlineMultiPolygon(@NonNull NearbyVenue venue) throws Exception {

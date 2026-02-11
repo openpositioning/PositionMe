@@ -79,7 +79,6 @@ public class RecordingFragment extends Fragment {
     private Handler refreshDataHandler;
     private CountDownTimer autoStop;
     //Chen
-    private boolean requestedFloorplanInRecording = false;
 
     //end
 
@@ -268,10 +267,8 @@ public class RecordingFragment extends Fragment {
                 trajectoryMapFragment.updateUserLocation(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
 
-                if (!requestedFloorplanInRecording) {
-                    requestedFloorplanInRecording = true;
-                    trajectoryMapFragment.requestFloorplansIfNeeded(newLocation);
-                }
+                trajectoryMapFragment.requestFloorplansIfNeeded(newLocation);
+
             }
             //END
 
