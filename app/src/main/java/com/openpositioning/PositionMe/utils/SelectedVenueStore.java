@@ -11,27 +11,50 @@ public class SelectedVenueStore {
 
     private SelectedVenueStore() {}
 
+    /**
+     * Global access point for the singleton instance.
+     * @return instance of SelectedVenueStore
+     */
     public static SelectedVenueStore getInstance() {
         return INSTANCE;
     }
 
+    /**
+     * Resets current venue and floor
+     */
     public void reset() {
         this.venueName = null;
         this.floorIndex = 0;
     }
 
+    /**
+     *
+     * @param venueName
+     */
     public void setVenueName(String venueName) {
         this.venueName = venueName;
     }
 
+    /**
+     *
+     * @return venueName
+     */
     public String getVenueName() {
         return venueName;
     }
 
+    /**
+     *
+     * @param floorIndex
+     */
     public void setFloorIndex(int floorIndex) {
         this.floorIndex = floorIndex;
     }
 
+    /**
+     *
+     * @return
+     */
     public int getFloorIndex() {
         return floorIndex;
     }

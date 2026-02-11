@@ -1063,7 +1063,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     .setStepCount(stepCounter));
 
             if (counter == 0) {
-                Log.d("IMU_DATA",
+                Log.d("SENSOR_DATA",
                         " Acc=(" + filteredAcc[0] + ", " + filteredAcc[1] + ", " + filteredAcc[2] + ")" +
                                 " Gyr=(" + angularVelocity[0] + ", " + angularVelocity[1] + ", " + angularVelocity[2] + ")" +
                                 " Rot=(" + rotation[0] + ", " + rotation[1] + ", " + rotation[2] + ", " + rotation[3] + ")" +
@@ -1084,7 +1084,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 //                            .setRelativeTimestamp(SystemClock.uptimeMillis()-bootTime))
             ;
             if (counter == 0) {
-                Log.d("MAGNETOMETER_DATA", "Mag=" + magneticField[0] +
+                Log.d("SENSOR_DATA", "Mag=" + magneticField[0] +
                         ", " + magneticField[1] +
                         ", " + magneticField[2]
                 );
@@ -1099,21 +1099,21 @@ public class SensorFusion implements SensorEventListener, Observer {
                                     .setPressure(pressure)
                                     .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                                     .build());
-                    Log.d("PRESSURE_DATA", "Pressure=" + pressure);
+                    Log.d("SENSOR_DATA", "Pressure=" + pressure);
                 }
                 if (lightSensor.sensor != null) {
                     trajectory.addLightData(Traj.LightReading.newBuilder()
                             .setLight(light)
                             .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                             .build());
-                    Log.d("LIGHT_DATA", "Light=" + light);
+                    Log.d("SENSOR_DATA", "Light=" + light);
                 }
                 if (proximitySensor.sensor != null) {
                     trajectory.addProximityData(Traj.ProximityReading.newBuilder()
                             .setDistance(proximity)
                             .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
                             .build());
-                    Log.d("PROXIMITY_DATA", "Distance=" + proximity);
+                    Log.d("SENSOR_DATA", "Distance=" + proximity);
                 }
 
                 // Divide the timer for storing AP data every 5 seconds
