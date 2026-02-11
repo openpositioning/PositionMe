@@ -656,24 +656,16 @@ public class SensorFusion implements SensorEventListener, Observer {
             Map<Long, Integer> macToBestRssi = new HashMap<>();
             for (Wifi data : this.wifiList) {
                 if (data == null) continue;
-
-                String bssid = String.valueOf(data.getBssid());
-                if (bssid == null || bssid.isEmpty()) continue;
-
-                long macAsInt64;
-                try {
-                    macAsInt64 = macToInt64(bssid);
-                } catch (IllegalArgumentException e) {
-                    Log.w("SensorFusion", "Skipping WiFi scan with invalid BSSID: " + bssid, e);
-                    continue;
-                }
-
+                // In this codebase, Wifi.getBssid() is already a long representing the 48-bit MAC.
+                long macAsInt64 = data.getBssid();
+                if (macAsInt64 == 0L) continue;
                 int rssi = (int) data.getLevel();
                 Integer prev = macToBestRssi.get(macAsInt64);
                 if (prev == null || rssi > prev) {
                     macToBestRssi.put(macAsInt64, rssi);
                 }
             }
+            Log.d("WIFI_FP", "macToBestRssi size=" + macToBestRssi.size());
 
             // If no usable scans, don't store a fingerprint
             if (!macToBestRssi.isEmpty()) {
@@ -717,6 +709,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setRssi(e.getValue()));
                 }
 
+                Log.d("WIFI_FP", "Storing fingerprint rf_scans=" + fp.getRfScansCount());
                 this.trajectory.addWifiFingerprints(fp);
                 lastWifiFpStoredAtUptimeMs = nowUptimeMs;
                 lastWifiFpSignatureHash = sig;

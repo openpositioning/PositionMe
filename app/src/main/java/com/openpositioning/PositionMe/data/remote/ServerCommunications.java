@@ -89,7 +89,7 @@ public class ServerCommunications implements Observable {
     private static final String userKey = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String masterKey = BuildConfig.OPENPOSITIONING_MASTER_KEY;
     private static final String uploadURL =
-            "https://openpositioning.org/api/live/trajectory/upload/" + userKey
+            "https://openpositioning.org/api/live/trajectory/upload/" + "murchison_house/" + userKey
                     + "/?key=" + masterKey;
     private static final String downloadURL =
             "https://openpositioning.org/api/live/trajectory/download/" + userKey
@@ -121,19 +121,15 @@ public class ServerCommunications implements Observable {
     }
 
     /**
-     * Outgoing communication request with a {@link Traj trajectory} object. The recorded
-     * trajectory is passed to the method. It is processed into the right format for sending
-     * to the API server.
-     *
-     * @param trajectory    Traj object matching all the timing and formal restrictions.
+     * Writes the given trajectory to a unique .txt file and returns the created File, or null if failed.
      */
-    public void sendTrajectory(Traj.Trajectory trajectory){
+    public File saveTrajectoryToFile(Traj.Trajectory trajectory) {
         logDataSize(trajectory);
 
         // Convert the trajectory to byte array
         byte[] binaryTrajectory = trajectory.toByteArray();
 
-        File path = null;
+        File path;
         // for android 13 or higher use dedicated external storage
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             path = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
@@ -170,9 +166,28 @@ public class ServerCommunications implements Observable {
             stream.write(binaryTrajectory);
             stream.close();
             System.out.println("Recorded binary trajectory for debugging stored in: " + path);
+            return file;
         } catch (IOException ee) {
             // Catch and print if writing to the file fails
             System.err.println("Storing of recorded binary trajectory failed: " + ee.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Outgoing communication request with a {@link Traj trajectory} object. The recorded
+     * trajectory is passed to the method. It is processed into the right format for sending
+     * to the API server.
+     *
+     * @param trajectory    Traj object matching all the timing and formal restrictions.
+     */
+    public void sendTrajectory(Traj.Trajectory trajectory){
+        File file = saveTrajectoryToFile(trajectory);
+        if (file == null) {
+            success = false;
+            SensorFusion.getInstance().setTrajectoryName("");
+            notifyObservers(1);
+            return;
         }
 
         // Check connections available before sending data
@@ -253,19 +268,30 @@ public class ServerCommunications implements Observable {
                         String originalPath = file.getAbsolutePath();
                         System.out.println("Original trajectory file saved at: " + originalPath);
 
-                        // Copy the file to the Downloads folder
-                        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                        File downloadFile = new File(downloadsDir, file.getName());
-                        try {
-                            copyFile(file, downloadFile);
-                            System.out.println("Trajectory file copied to Downloads: " + downloadFile.getAbsolutePath());
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            System.err.println("Failed to copy file to Downloads: " + e.getMessage());
+                        // Copy the file to an app-specific Downloads folder (works reliably with scoped storage)
+                        File downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                        if (downloadsDir != null && !downloadsDir.exists()) {
+                            //noinspection ResultOfMethodCallIgnored
+                            downloadsDir.mkdirs();
                         }
 
-                        // Delete local file and set success to true
-                        success = file.delete();
+                        boolean copiedOk = false;
+                        if (downloadsDir != null) {
+                            File downloadFile = new File(downloadsDir, file.getName());
+                            try {
+                                copyFile(file, downloadFile);
+                                copiedOk = true;
+                                System.out.println("Trajectory file copied to app Downloads: " + downloadFile.getAbsolutePath());
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                                System.err.println("Failed to copy file to app Downloads: " + e.getMessage());
+                            }
+                        } else {
+                            System.err.println("App-specific Downloads directory is unavailable; keeping original file only.");
+                        }
+
+                        // Keep the original file on successful upload (previously it was deleted)
+                        success = true;
                         // Clear name after a completed upload to avoid reusing it for the next recording
                         SensorFusion.getInstance().setTrajectoryName("");
                         notifyObservers(1);
