@@ -43,3 +43,33 @@
 6. **Control playback**:
     - Pause, restart, or jump to the end using playback controls.
 
+## ADB Floorplan Automation
+
+Use the script below to automatically open the app, enter recording map flow, select a venue polygon, and save screenshots for validation.
+
+```bash
+bash scripts/open_floorplan.sh
+```
+
+Outputs in project root by default:
+
+- `step1_home.png`
+- `step2_after_record.png`
+- `step3_recording_map.png`
+- `step4_floorplan_selected.png`
+
+Default tap coordinates in `scripts/open_floorplan.sh`:
+
+- `Record`: `(301,1408)`
+- `Set`: `(540,2200)`
+- `Map/Polygon select`: `(540,1200)`
+
+Optional overrides:
+
+```bash
+DEVICE_SERIAL=4C211JEKB00536 OUT_DIR=. \
+TAP_RECORD_X=301 TAP_RECORD_Y=1408 \
+TAP_SET_X=540 TAP_SET_Y=2200 \
+TAP_MAP_X=540 TAP_MAP_Y=1200 \
+bash scripts/open_floorplan.sh
+```

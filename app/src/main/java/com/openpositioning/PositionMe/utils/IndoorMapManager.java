@@ -21,6 +21,8 @@ import com.google.android.gms.maps.model.GroundOverlay;
 import com.google.android.gms.maps.model.GroundOverlayOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
 import com.openpositioning.PositionMe.sensors.Wifi;
@@ -49,16 +51,23 @@ import okhttp3.ResponseBody;
 
 public class IndoorMapManager {
     private static final String TAG = "IndoorMapManager";
-    private static final String FLOORPLAN_REQUEST_URL = "https://openpositioning.org/api/live/floorplan/request";
+    private static final String FLOORPLAN_REQUEST_URL =
+            "https://openpositioning.org/api/live/floorplan/request/"
+                    + BuildConfig.OPENPOSITIONING_API_KEY
+                    + "?key=" + BuildConfig.OPENPOSITIONING_MASTER_KEY;
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private static final long REQUEST_INTERVAL_MS = 8_000L;
     private static final float REQUEST_DISTANCE_M = 8f;
     private static final float DEFAULT_FLOOR_HEIGHT_M = 3.6f;
+    private static final int LOG_PREVIEW_LIMIT = 220;
 
     private static final int VENUE_STROKE = Color.argb(220, 0, 190, 255);
     private static final int VENUE_FILL = Color.argb(45, 0, 190, 255);
     private static final int SELECTED_STROKE = Color.argb(255, 255, 193, 7);
     private static final int SELECTED_FILL = Color.argb(90, 255, 193, 7);
+    private static final int FLOOR_SHAPE_STROKE = Color.argb(220, 255, 255, 255);
+    private static final int FLOOR_SHAPE_FILL = Color.argb(40, 255, 255, 255);
+    private static final float FLOOR_SHAPE_STROKE_WIDTH = 3f;
 
     private final GoogleMap gMap;
     private final OkHttpClient httpClient;
@@ -66,6 +75,8 @@ public class IndoorMapManager {
     private final Map<String, VenueModel> venuesById = new LinkedHashMap<>();
     private final Map<String, Polygon> polygonsByVenueId = new HashMap<>();
     private final Map<String, BitmapDescriptor> floorImageCache = new HashMap<>();
+    private final List<Polygon> floorShapePolygons = new ArrayList<>();
+    private final List<Polyline> floorShapePolylines = new ArrayList<>();
 
     private GroundOverlay groundOverlay;
     private LatLng currentLocation;
@@ -120,21 +131,22 @@ public class IndoorMapManager {
             return;
         }
 
-        if (BuildConfig.DEBUG) {
-            int wifiCount = observedAps == null ? 0 : observedAps.size();
-            Log.d(TAG, "floorplan request lat=" + location.latitude + " lon=" + location.longitude
-                    + " wifiCount=" + wifiCount);
-        }
-
         requestInFlight = true;
         lastRequestTs = now;
         lastRequestLocation = location;
 
+        String payloadString = payload.toString();
         Request request = new Request.Builder()
                 .url(FLOORPLAN_REQUEST_URL)
-                .post(RequestBody.create(payload.toString(), JSON))
+                .post(RequestBody.create(payloadString, JSON))
                 .addHeader("accept", "application/json")
                 .build();
+
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "floorplan request method=" + request.method()
+                    + " url=" + request.url()
+                    + " bodyPreview=" + previewForLog(payloadString));
+        }
 
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
@@ -146,17 +158,19 @@ public class IndoorMapManager {
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 try (ResponseBody body = response.body()) {
+                    String rawBody = body == null ? "" : body.string();
+                    List<VenueModel> venues = Collections.emptyList();
                     if (!response.isSuccessful() || body == null) {
                         Log.w(TAG, "Nearby floorplan request not successful: " + response.code());
-                        return;
+                    } else {
+                        venues = parseVenueResponse(rawBody);
+                        List<VenueModel> finalVenues = venues;
+                        mainHandler.post(() -> applyNearbyVenues(finalVenues));
                     }
-                    List<VenueModel> venues = parseVenueResponse(body.string());
-                    mainHandler.post(() -> applyNearbyVenues(venues));
                     if (BuildConfig.DEBUG) {
-                        String selected = selectedVenueId == null ? "" : selectedVenueId;
-                        Log.d(TAG, "floorplan response code=" + response.code()
-                                + " venues=" + venues.size()
-                                + " selected=" + selected);
+                        Log.d(TAG, "floorplan response http_status=" + response.code()
+                                + " body_preview=" + previewForLog(rawBody)
+                                + " venuesCount=" + venues.size());
                     }
                 } catch (Exception ex) {
                     Log.e(TAG, "Failed to parse nearby floorplan response", ex);
@@ -184,9 +198,12 @@ public class IndoorMapManager {
         }
 
         selectedVenueId = venue.id;
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "FLOOR_UI: venue selected id=" + venue.id);
+        }
         floorHeight = venue.floorHeight;
         currentFloor = Math.min(currentFloor, Math.max(venue.floors.size() - 1, 0));
-        renderCurrentFloor();
+        loadFloorplanForVenue(venue);
         updatePolygonStyle();
 
         if (venueSelectionListener != null) {
@@ -258,6 +275,9 @@ public class IndoorMapManager {
         }
 
         int requestToken = ++floorImageToken;
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "FLOOR_NET: request floors venueId=" + selected.id + " url=" + floor.imageUrl);
+        }
         Request req = new Request.Builder().url(floor.imageUrl).get().build();
         httpClient.newCall(req).enqueue(new Callback() {
             @Override
@@ -269,9 +289,17 @@ public class IndoorMapManager {
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 try (ResponseBody body = response.body()) {
                     if (!response.isSuccessful() || body == null) {
+                        if (BuildConfig.DEBUG) {
+                            Log.d(TAG, "FLOOR_NET: response http_status=" + response.code()
+                                    + " body_preview=");
+                        }
                         return;
                     }
                     byte[] bytes = body.bytes();
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "FLOOR_NET: response http_status=" + response.code()
+                                + " body_preview=bytes=" + bytes.length);
+                    }
                     Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                     if (bitmap == null) {
                         return;
@@ -300,12 +328,183 @@ public class IndoorMapManager {
         });
     }
 
+    private void loadFloorplanForVenue(@NonNull VenueModel venue) {
+        clearFloorShapeOverlays();
+        if (!venue.floors.isEmpty()) {
+            renderCurrentFloor();
+            return;
+        }
+        removeGroundOverlay();
+        if (TextUtils.isEmpty(venue.mapShapesPayload)) {
+            isIndoorMapSet = false;
+            return;
+        }
+        String payload = venue.mapShapesPayload;
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "FLOOR_NET: request venueId=" + venue.id + " url=inline://map_shapes");
+            Log.d(TAG, "FLOOR_NET: response http_status=200 body_preview=" + previewForLog(payload));
+        }
+        int[] counts = drawMapShapes(payload);
+        isIndoorMapSet = counts[0] > 0 || counts[1] > 0;
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "FLOOR_DRAW: drawnPolylines=" + counts[0] + " drawnPolygons=" + counts[1]);
+        }
+    }
+
+    private void clearFloorShapeOverlays() {
+        for (Polyline polyline : floorShapePolylines) {
+            polyline.remove();
+        }
+        floorShapePolylines.clear();
+        for (Polygon polygon : floorShapePolygons) {
+            polygon.remove();
+        }
+        floorShapePolygons.clear();
+    }
+
+    @NonNull
+    private int[] drawMapShapes(@NonNull String payload) {
+        int[] counts = new int[]{0, 0}; // [polylines, polygons]
+        try {
+            String trimmed = payload.trim();
+            if (trimmed.startsWith("{")) {
+                JSONObject root = new JSONObject(trimmed);
+                drawMapShapesFromObject(root, counts);
+            } else if (trimmed.startsWith("[")) {
+                JSONArray arr = new JSONArray(trimmed);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject obj = arr.optJSONObject(i);
+                    if (obj != null) {
+                        drawMapShapesFromObject(obj, counts);
+                    }
+                }
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "Failed to parse map_shapes payload", e);
+        }
+        return counts;
+    }
+
+    private void drawMapShapesFromObject(@NonNull JSONObject obj, @NonNull int[] counts) {
+        if ("FeatureCollection".equalsIgnoreCase(obj.optString("type")) || obj.has("features")) {
+            drawFeatureCollection(obj, counts);
+            return;
+        }
+        JSONArray names = obj.names();
+        if (names == null) {
+            return;
+        }
+        for (int i = 0; i < names.length(); i++) {
+            String key = names.optString(i, "");
+            Object child = obj.opt(key);
+            if (child instanceof JSONObject) {
+                drawMapShapesFromObject((JSONObject) child, counts);
+            } else if (child instanceof String) {
+                String raw = ((String) child).trim();
+                try {
+                    if (raw.startsWith("{")) {
+                        drawMapShapesFromObject(new JSONObject(raw), counts);
+                    }
+                } catch (JSONException ignored) {
+                }
+            }
+        }
+    }
+
+    private void drawFeatureCollection(@NonNull JSONObject collection, @NonNull int[] counts) {
+        JSONArray features = collection.optJSONArray("features");
+        if (features == null) {
+            return;
+        }
+        for (int i = 0; i < features.length(); i++) {
+            JSONObject feature = features.optJSONObject(i);
+            if (feature == null) {
+                continue;
+            }
+            JSONObject geometry = feature.optJSONObject("geometry");
+            if (geometry == null) {
+                continue;
+            }
+            drawGeometry(geometry, counts);
+        }
+    }
+
+    private void drawGeometry(@NonNull JSONObject geometry, @NonNull int[] counts) {
+        String type = geometry.optString("type", "");
+        JSONArray coordinates = geometry.optJSONArray("coordinates");
+        if (coordinates == null) {
+            return;
+        }
+        if ("LineString".equalsIgnoreCase(type)) {
+            drawLineString(coordinates, counts);
+            return;
+        }
+        if ("MultiLineString".equalsIgnoreCase(type)) {
+            for (int i = 0; i < coordinates.length(); i++) {
+                JSONArray line = coordinates.optJSONArray(i);
+                if (line != null) {
+                    drawLineString(line, counts);
+                }
+            }
+            return;
+        }
+        if ("Polygon".equalsIgnoreCase(type)) {
+            drawPolygonGeometry(coordinates, counts);
+            return;
+        }
+        if ("MultiPolygon".equalsIgnoreCase(type)) {
+            for (int i = 0; i < coordinates.length(); i++) {
+                JSONArray polygon = coordinates.optJSONArray(i);
+                if (polygon != null) {
+                    drawPolygonGeometry(polygon, counts);
+                }
+            }
+        }
+    }
+
+    private void drawPolygonGeometry(@NonNull JSONArray polygonCoordinates, @NonNull int[] counts) {
+        JSONArray outerRing = polygonCoordinates.optJSONArray(0);
+        if (outerRing == null) {
+            return;
+        }
+        List<LatLng> points = parsePointArray(outerRing);
+        if (points.size() < 3) {
+            return;
+        }
+        Polygon polygon = gMap.addPolygon(new PolygonOptions()
+                .addAll(points)
+                .strokeColor(FLOOR_SHAPE_STROKE)
+                .fillColor(FLOOR_SHAPE_FILL)
+                .strokeWidth(FLOOR_SHAPE_STROKE_WIDTH)
+                .clickable(false)
+                .zIndex(8f));
+        floorShapePolygons.add(polygon);
+        counts[1]++;
+    }
+
+    private void drawLineString(@NonNull JSONArray lineCoordinates, @NonNull int[] counts) {
+        List<LatLng> points = parsePointArray(lineCoordinates);
+        if (points.size() < 2) {
+            return;
+        }
+        Polyline polyline = gMap.addPolyline(new PolylineOptions()
+                .addAll(points)
+                .color(FLOOR_SHAPE_STROKE)
+                .width(FLOOR_SHAPE_STROKE_WIDTH)
+                .zIndex(8f));
+        floorShapePolylines.add(polyline);
+        counts[0]++;
+    }
+
     private void setGroundOverlay(@NonNull BitmapDescriptor descriptor, @NonNull LatLngBounds bounds) {
         removeGroundOverlay();
         groundOverlay = gMap.addGroundOverlay(new GroundOverlayOptions()
                 .image(descriptor)
                 .positionFromBounds(bounds)
                 .zIndex(10f));
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "FLOOR_DRAW: addGroundOverlay");
+        }
         isIndoorMapSet = groundOverlay != null;
     }
 
@@ -327,6 +526,7 @@ public class IndoorMapManager {
             polygon.remove();
         }
         polygonsByVenueId.clear();
+        clearFloorShapeOverlays();
 
         for (VenueModel venue : venues) {
             if (venue.outline.size() < 3) {
@@ -339,6 +539,9 @@ public class IndoorMapManager {
                     .strokeWidth(4f)
                     .clickable(true)
                     .zIndex(5f));
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "addPolygon called venueId=" + venue.id + " points=" + venue.outline.size());
+            }
             polygon.setTag(venue.id);
             polygonsByVenueId.put(venue.id, polygon);
         }
@@ -380,42 +583,61 @@ public class IndoorMapManager {
         JSONObject root = new JSONObject();
         root.put("lat", location.latitude);
         root.put("lon", location.longitude);
-        root.put("latitude", location.latitude);
-        root.put("longitude", location.longitude);
-
-        JSONObject wf = new JSONObject();
-        JSONArray aps = new JSONArray();
+        JSONArray macs = new JSONArray();
         if (observedAps != null) {
             for (Wifi wifi : observedAps) {
-                String mac = String.valueOf(wifi.getBssid());
-                wf.put(mac, wifi.getLevel());
-                JSONObject ap = new JSONObject();
-                ap.put("bssid", mac);
-                ap.put("rssi", wifi.getLevel());
-                ap.put("frequency", wifi.getFrequency());
-                String ssid = wifi.getSsid();
-                if (!TextUtils.isEmpty(ssid)) {
-                    ap.put("ssid", ssid);
+                long bssid = wifi.getBssid();
+                if (bssid > 0L) {
+                    macs.put(toMacString(bssid));
                 }
-                aps.put(ap);
             }
         }
-        root.put("wf", wf);
-        root.put("aps", aps);
+        root.put("macs", macs);
         return root;
+    }
+
+    @NonNull
+    private String toMacString(long bssid) {
+        String hex = String.format(Locale.US, "%012x", bssid);
+        StringBuilder out = new StringBuilder(17);
+        for (int i = 0; i < hex.length(); i += 2) {
+            if (i > 0) {
+                out.append(':');
+            }
+            out.append(hex, i, i + 2);
+        }
+        return out.toString();
+    }
+
+    @NonNull
+    private String previewForLog(@Nullable String text) {
+        if (text == null) {
+            return "";
+        }
+        String normalized = text.replace('\n', ' ').replace('\r', ' ');
+        if (normalized.length() <= LOG_PREVIEW_LIMIT) {
+            return normalized;
+        }
+        return normalized.substring(0, LOG_PREVIEW_LIMIT) + "...";
     }
 
     @NonNull
     private List<VenueModel> parseVenueResponse(@NonNull String payload) throws JSONException {
         String trimmed = payload.trim();
         if (trimmed.isEmpty()) {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "parseVenueResponse: topLevel=empty venuesCount=0");
+            }
             return Collections.emptyList();
         }
 
         JSONArray venueArray = null;
+        String topLevel;
         if (trimmed.startsWith("[")) {
+            topLevel = "array";
             venueArray = new JSONArray(trimmed);
         } else {
+            topLevel = "object";
             JSONObject root = new JSONObject(trimmed);
             String[] candidateKeys = new String[]{"venues", "results", "data", "maps", "floorplans"};
             for (String key : candidateKeys) {
@@ -429,6 +651,9 @@ public class IndoorMapManager {
             }
         }
         if (venueArray == null) {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "parseVenueResponse: topLevel=" + topLevel + " venuesCount=0");
+            }
             return Collections.emptyList();
         }
 
@@ -443,6 +668,9 @@ public class IndoorMapManager {
                 venues.add(parsed);
             }
         }
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "parseVenueResponse: topLevel=" + topLevel + " venuesCount=" + venues.size());
+        }
         return venues;
     }
 
@@ -452,7 +680,7 @@ public class IndoorMapManager {
 
     @Nullable
     private VenueModel parseVenue(@NonNull JSONObject obj, int index) {
-        String id = firstNonEmpty(obj, "venue_id", "venueId", "id", "slug", "name");
+        String id = firstNonEmpty(obj, "id", "venue_id", "slug", "name", "venueId");
         if (TextUtils.isEmpty(id)) {
             id = "venue_" + index;
         }
@@ -466,6 +694,10 @@ public class IndoorMapManager {
         if ((outline == null || outline.size() < 3) && bounds != null) {
             outline = boundsToPolygon(bounds);
         }
+        if (BuildConfig.DEBUG) {
+            int outlinePoints = outline == null ? 0 : outline.size();
+            Log.d(TAG, "parsed venue: id=" + id + " outlinePoints=" + outlinePoints);
+        }
         if (outline == null || outline.size() < 3) {
             return null;
         }
@@ -478,7 +710,8 @@ public class IndoorMapManager {
 
         List<FloorModel> floors = parseFloors(obj, bounds);
         float parsedFloorHeight = (float) optDouble(obj, DEFAULT_FLOOR_HEIGHT_M, "floor_height", "floorHeight");
-        return new VenueModel(id, name, outline, floors, parsedFloorHeight);
+        String mapShapesPayload = toJsonPayload(obj.opt("map_shapes"));
+        return new VenueModel(id, name, outline, floors, parsedFloorHeight, mapShapesPayload);
     }
 
     @NonNull
@@ -512,6 +745,9 @@ public class IndoorMapManager {
             if (TextUtils.isEmpty(imageUrl)) {
                 continue;
             }
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "FLOOR_NET: floor imageUrl=" + imageUrl);
+            }
 
             int idx = (int) optDouble(f, i, "floor", "index", "level", "floor_index");
             String floorName = firstNonEmpty(f, "name", "label", "title");
@@ -522,10 +758,65 @@ public class IndoorMapManager {
             if (bounds == null) {
                 bounds = fallbackBounds;
             }
+            if (BuildConfig.DEBUG) {
+                int shapeCount = countShapeElements(f);
+                if (shapeCount > 0) {
+                    Log.d(TAG, "FLOOR_NET: walls/polylines/polygons count=" + shapeCount);
+                }
+            }
             floors.add(new FloorModel(idx, floorName, imageUrl, bounds));
+        }
+        if (BuildConfig.DEBUG) {
+            int venueShapeCount = countShapeElements(venue);
+            if (venueShapeCount > 0) {
+                Log.d(TAG, "FLOOR_NET: walls/polylines/polygons count=" + venueShapeCount);
+            }
         }
         floors.sort((a, b) -> Integer.compare(a.floorIndex, b.floorIndex));
         return floors;
+    }
+
+    private int countShapeElements(@NonNull JSONObject container) {
+        int count = 0;
+        String[] shapeKeys = new String[]{"walls", "polylines", "polygons", "shapes"};
+        for (String key : shapeKeys) {
+            JSONArray arr = container.optJSONArray(key);
+            if (arr != null) {
+                count += arr.length();
+            }
+        }
+        Object mapShapes = container.opt("map_shapes");
+        if (mapShapes instanceof JSONArray) {
+            count += ((JSONArray) mapShapes).length();
+        } else if (mapShapes instanceof JSONObject) {
+            count += ((JSONObject) mapShapes).length();
+        } else if (mapShapes instanceof String) {
+            String raw = ((String) mapShapes).trim();
+            try {
+                if (raw.startsWith("[")) {
+                    count += new JSONArray(raw).length();
+                } else if (raw.startsWith("{")) {
+                    count += new JSONObject(raw).length();
+                }
+            } catch (JSONException ignored) {
+            }
+        }
+        return count;
+    }
+
+    @Nullable
+    private String toJsonPayload(@Nullable Object value) {
+        if (value == null || value == JSONObject.NULL) {
+            return null;
+        }
+        if (value instanceof JSONObject || value instanceof JSONArray) {
+            return value.toString();
+        }
+        if (value instanceof String) {
+            String raw = ((String) value).trim();
+            return raw.isEmpty() ? null : raw;
+        }
+        return null;
     }
 
     @Nullable
@@ -544,7 +835,15 @@ public class IndoorMapManager {
 
     @Nullable
     private List<LatLng> parseOutline(@NonNull JSONObject obj) {
-        JSONArray arr = obj.optJSONArray("outline");
+        JSONArray arr = null;
+        Object outlineObj = obj.opt("outline");
+        if (outlineObj instanceof JSONArray) {
+            arr = (JSONArray) outlineObj;
+        } else if (outlineObj instanceof JSONObject) {
+            arr = extractCoordinateArray((JSONObject) outlineObj);
+        } else if (outlineObj instanceof String) {
+            arr = parseOutlineString((String) outlineObj);
+        }
         if (arr == null) {
             arr = obj.optJSONArray("polygon");
         }
@@ -554,7 +853,7 @@ public class IndoorMapManager {
         if (arr == null) {
             JSONObject geometry = obj.optJSONObject("geometry");
             if (geometry != null) {
-                arr = geometry.optJSONArray("coordinates");
+                arr = extractCoordinateArray(geometry);
             }
         }
         if (arr == null) {
@@ -563,17 +862,80 @@ public class IndoorMapManager {
         return parsePointArray(arr);
     }
 
+    @Nullable
+    private JSONArray parseOutlineString(@Nullable String rawOutline) {
+        if (TextUtils.isEmpty(rawOutline)) {
+            return null;
+        }
+        String trimmed = rawOutline.trim();
+        if (trimmed.isEmpty() || "null".equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        try {
+            if (trimmed.startsWith("{")) {
+                return extractCoordinateArray(new JSONObject(trimmed));
+            }
+            if (trimmed.startsWith("[")) {
+                return new JSONArray(trimmed);
+            }
+        } catch (JSONException e) {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Failed to parse outline string", e);
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private JSONArray extractCoordinateArray(@NonNull JSONObject obj) {
+        JSONArray coordinates = obj.optJSONArray("coordinates");
+        if (coordinates != null) {
+            return coordinates;
+        }
+
+        JSONObject geometry = obj.optJSONObject("geometry");
+        if (geometry != null) {
+            JSONArray geometryCoordinates = geometry.optJSONArray("coordinates");
+            if (geometryCoordinates != null) {
+                return geometryCoordinates;
+            }
+        }
+
+        JSONArray features = obj.optJSONArray("features");
+        if (features != null) {
+            for (int i = 0; i < features.length(); i++) {
+                JSONObject feature = features.optJSONObject(i);
+                if (feature == null) {
+                    continue;
+                }
+                JSONArray featureCoordinates = extractCoordinateArray(feature);
+                if (featureCoordinates != null) {
+                    return featureCoordinates;
+                }
+            }
+        }
+        return null;
+    }
+
     @NonNull
     private List<LatLng> parsePointArray(@NonNull JSONArray arr) {
         if (arr.length() == 0) {
             return Collections.emptyList();
         }
-        Object first = arr.opt(0);
-        if (first instanceof JSONArray) {
-            Object nested = ((JSONArray) first).opt(0);
-            if (nested instanceof JSONArray) {
-                arr = (JSONArray) first;
+        while (arr.length() > 0) {
+            Object first = arr.opt(0);
+            if (!(first instanceof JSONArray)) {
+                break;
             }
+            JSONArray firstArray = (JSONArray) first;
+            if (firstArray.length() == 0) {
+                break;
+            }
+            Object nested = firstArray.opt(0);
+            if (!(nested instanceof JSONArray) && !(nested instanceof JSONObject)) {
+                break;
+            }
+            arr = firstArray;
         }
 
         List<LatLng> out = new ArrayList<>();
@@ -755,13 +1117,17 @@ public class IndoorMapManager {
         final List<LatLng> outline;
         final List<FloorModel> floors;
         final float floorHeight;
+        @Nullable
+        final String mapShapesPayload;
 
-        VenueModel(String id, String name, List<LatLng> outline, List<FloorModel> floors, float floorHeight) {
+        VenueModel(String id, String name, List<LatLng> outline, List<FloorModel> floors,
+                   float floorHeight, @Nullable String mapShapesPayload) {
             this.id = id;
             this.name = name;
             this.outline = outline;
             this.floors = floors;
             this.floorHeight = floorHeight;
+            this.mapShapesPayload = mapShapesPayload;
         }
     }
 
