@@ -1,12 +1,10 @@
 package com.openpositioning.PositionMe.health;
 
 import android.annotation.SuppressLint;
-import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
-import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -16,13 +14,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputEditText;
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.utils.WalkFileParser;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 public class HealthActivity extends AppCompatActivity {
 
@@ -33,6 +29,15 @@ public class HealthActivity extends AppCompatActivity {
     private ProgressBar scoreProgressBar;
 
     private WalkSessionSummary currentWalkSummary;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Every time the Health page is resumed, refresh the data.
+        currentWalkSummary = loadLatestWalk();
+        updateScore();
+        displaySessionMetrics();
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -51,11 +56,9 @@ public class HealthActivity extends AppCompatActivity {
         distanceTextView = findViewById(R.id.distance_text);
         timeTextView = findViewById(R.id.time_text);
         feedbackTextView = findViewById(R.id.feedback_text);
-        Button historyButton = findViewById(R.id.history_button);
-
-        currentWalkSummary = loadLatestWalk();
 
         // --- Initial Calculation ---
+        currentWalkSummary = loadLatestWalk();
         updateScore();
         displaySessionMetrics();
 
@@ -72,53 +75,30 @@ public class HealthActivity extends AppCompatActivity {
         };
         distanceGoalInput.addTextChangedListener(textWatcher);
         durationGoalInput.addTextChangedListener(textWatcher);
-
-        // --- CTA Button: Launch History Activity ---
-        historyButton.setOnClickListener(v -> {
-            Intent intent = new Intent(HealthActivity.this, HistoryActivity.class);
-            startActivity(intent);
-        });
     }
 
     /**
-     * Scans the app's storage for trajectory files, parses them, and returns the most recent summary.
+     * Loads the latest walk data from the recently completed recording.
+     * It fetches real-time distance and time from the SensorFusion's in-memory mailbox.
      */
     private WalkSessionSummary loadLatestWalk() {
-        List<WalkSessionSummary> sessions = new ArrayList<>();
-        WalkFileParser parser = new WalkFileParser(getApplicationContext());
-        File storageDir = new File(getExternalFilesDir(null), "trajectories");
+        // Directly read the distance and time from the just-completed recording from SensorFusion's memory.
+        SensorFusion sensorFusion = SensorFusion.getInstance();
+        double liveDist = sensorFusion.getLastRunDistance(); // This corresponds to the distance in RecordingFragment.
+        long lastRunTimeInMillis = sensorFusion.getLastRunTime();
 
-        if (!storageDir.exists()) {
-            Log.w(TAG, "Trajectories directory does not exist: " + storageDir.getAbsolutePath());
-            return null; // No walks found
+        // If liveDist > 0, it means a recording was just made and produced distance data.
+        if (liveDist > 0.01) {
+            Log.d(TAG, "Successfully captured live data from SensorFusion: " + liveDist + "m, time: " + lastRunTimeInMillis + "ms");
+            return new WalkSessionSummary("live_session", liveDist, (int)(lastRunTimeInMillis / 1000), System.currentTimeMillis());
         }
 
-        File[] files = storageDir.listFiles();
-        if (files == null) {
-            Log.w(TAG, "Failed to list files in directory: " + storageDir.getAbsolutePath());
-            return null;
-        }
-
-        for (File file : files) {
-            if (file.isFile() && file.getName().endsWith(".csv")) {
-                WalkSessionSummary summary = parser.parseFile(file);
-                if (summary != null) {
-                    sessions.add(summary);
-                }
-            }
-        }
-
-        if (sessions.isEmpty()) {
-            return null; // No walks found
-        }
-
-        // Sort by most recent first
-        sessions.sort((s1, s2) -> Long.compare(s2.getTimestampMillis(), s1.getTimestampMillis()));
-        return sessions.get(0);
+        // If no recent recording data is found, return null.
+        return null;
     }
 
     /**
-     * Reads the goals from the input fields and recalculates the score.
+     * Calculates the score based on the latest walk and user goals.
      */
     @SuppressLint("SetTextI18n")
     private void updateScore() {
@@ -130,26 +110,31 @@ public class HealthActivity extends AppCompatActivity {
         }
 
         try {
-            // 1. Get User Goals from EditTexts
-            double distanceGoalKm = Double.parseDouble(Objects.requireNonNull(distanceGoalInput.getText()).toString());
-            double durationGoalMin = Double.parseDouble(Objects.requireNonNull(durationGoalInput.getText()).toString());
+            String distStr = Objects.requireNonNull(distanceGoalInput.getText()).toString();
+            String durStr = Objects.requireNonNull(durationGoalInput.getText()).toString();
 
-            // Convert to meters and seconds for the calculator
+            if (distStr.isEmpty() || durStr.isEmpty()) {
+                scoreTextView.setText("—");
+                scoreProgressBar.setProgress(0);
+                feedbackTextView.setText("Please enter your goals.");
+                return;
+            }
+
+            double distanceGoalKm = Double.parseDouble(distStr);
+            double durationGoalMin = Double.parseDouble(durStr);
+
             double distanceGoalM = distanceGoalKm * 1000;
             double durationGoalS = durationGoalMin * 60;
 
-            // 2. Use the constructor that accepts custom goals.
             ScoreCalculator calculator = new ScoreCalculator(distanceGoalM, durationGoalS);
             ScoreResult scoreResult = calculator.calculateScore(currentWalkSummary);
 
-            // 3. Update UI
             int score = scoreResult.getScore0to100();
             scoreTextView.setText(String.valueOf(score));
             scoreProgressBar.setProgress(score);
             feedbackTextView.setText(scoreResult.getFeedbackText());
 
         } catch (NumberFormatException e) {
-            // Handle cases where the user enters empty or invalid text
             Log.w(TAG, "Invalid number format in goal input.", e);
             scoreTextView.setText("—");
             scoreProgressBar.setProgress(0);
@@ -158,7 +143,7 @@ public class HealthActivity extends AppCompatActivity {
     }
 
     /**
-     * Displays the metrics of the current walk session.
+     * Displays the metrics for the latest walk session.
      */
     private void displaySessionMetrics() {
         if (currentWalkSummary == null) {
@@ -168,9 +153,12 @@ public class HealthActivity extends AppCompatActivity {
         }
 
         double distanceKm = currentWalkSummary.getDistanceMeters() / 1000.0;
-        int durationMinutes = currentWalkSummary.getDurationSeconds() / 60;
+        long totalSeconds = currentWalkSummary.getDurationSeconds();
+        long minutes = TimeUnit.SECONDS.toMinutes(totalSeconds);
+        long seconds = totalSeconds - TimeUnit.MINUTES.toSeconds(minutes);
 
-        distanceTextView.setText(String.format(Locale.getDefault(), "%.1f km", distanceKm));
-        timeTextView.setText(String.format(Locale.getDefault(), "%d min", durationMinutes));
+
+        distanceTextView.setText(String.format(Locale.getDefault(), "%.2f km", distanceKm));
+        timeTextView.setText(String.format(Locale.getDefault(), "%d min %d s", minutes, seconds));
     }
 }

@@ -163,6 +163,11 @@ public class RecordingFragment extends Fragment {
                             Toast.LENGTH_LONG).show();
                     return;
                 }
+
+            // --- REVERTED: Using SensorFusion mailbox instead of SharedPreferences ---
+            sensorFusion.setLastRunDistance(distance);
+            sensorFusion.setLastRunTime(sensorFusion.getRecordingTime());
+
             // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
@@ -223,6 +228,8 @@ public class RecordingFragment extends Fragment {
 
                 @Override
                 public void onFinish() {
+                    sensorFusion.setLastRunDistance(distance);
+                    sensorFusion.setLastRunTime(sensorFusion.getRecordingTime());
                     sensorFusion.stopRecording();
                     ((RecordingActivity) requireActivity()).showCorrectionScreen();
                 }

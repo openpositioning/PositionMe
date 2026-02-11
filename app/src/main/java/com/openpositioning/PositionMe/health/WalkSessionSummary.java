@@ -14,6 +14,7 @@ public class WalkSessionSummary implements Parcelable {
     private final int durationSeconds;
     private final long timestampMillis;
 
+
     /**
      * Constructs a new WalkSessionSummary.
      *

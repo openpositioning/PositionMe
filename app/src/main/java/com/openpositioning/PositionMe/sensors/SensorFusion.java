@@ -151,6 +151,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private String trajectoryName;
     private long recordingTime = 0;
+    private double lastRunDistance = 0.0;
+    private long lastRunTime = 0L; // Added field for last run time
 
 
     public void setTrajectoryName(String name){
@@ -820,6 +822,22 @@ public class SensorFusion implements SensorEventListener, Observer {
             return 0;
         }
     }
+    
+    public void setLastRunDistance(double distance) {
+        this.lastRunDistance = distance;
+    }
+
+    public double getLastRunDistance() {
+        return this.lastRunDistance;
+    }
+
+    public void setLastRunTime(long time) { 
+        this.lastRunTime = time; 
+    }
+
+    public long getLastRunTime() { 
+        return this.lastRunTime; 
+    }
 
     //endregion
 
@@ -907,7 +925,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.selectedCampaign = null;
         this.absoluteStartTime = System.currentTimeMillis();
         this.recordingTime = 0L;
-        this.bootTime = SystemClock.uptimeMillis();
+        this.lastRunDistance = 0.0; // Reset mailbox for new recording
+        this.lastRunTime = 0L; // Reset mailbox for new recording
         // Protobuf trajectory class for sending sensor data to restful API
         this.trajectory = Traj.Trajectory.newBuilder()
                 .setAndroidVersion(Build.VERSION.RELEASE)
