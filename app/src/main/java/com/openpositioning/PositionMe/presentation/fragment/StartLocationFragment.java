@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -159,36 +160,87 @@ public class StartLocationFragment extends Fragment {
         this.button.setOnClickListener(new View.OnClickListener() {
             /**
              * {@inheritDoc}
-             * When button clicked the PDR recording can start and the start position is stored for
-             * the {@link CorrectionFragment} to display. The {@link RecordingFragment} is loaded.
+             * When button clicked, first ask for trajectory name, then start PDR recording
              */
             @Override
             public void onClick(View view) {
-                float chosenLat = startPosition[0];
-                float chosenLon = startPosition[1];
-
-                // If the Activity is RecordingActivity
-                if (requireActivity() instanceof RecordingActivity) {
-                    // Start sensor recording + set the start location
-                    sensorFusion.startRecording();
-                    sensorFusion.setStartGNSSLatitude(startPosition);
-
-                    // Now switch to the recording screen
-                    ((RecordingActivity) requireActivity()).showRecordingScreen();
-
-                    // If the Activity is ReplayActivity
-                } else if (requireActivity() instanceof ReplayActivity) {
-                    // *Do not* cast to RecordingActivity here
-                    // Just call the Replay method
-                    ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);
-
-                    // Otherwise (unexpected host)
-                } else {
-                    // Optional: log or handle error
-                    // Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
-                }
+                // Show dialog to get trajectory name
+                showTrajectoryNameDialog();
             }
         });
+    }
+
+    /**
+     * Show dialog to get trajectory name from user
+     */
+    private void showTrajectoryNameDialog() {
+        // Create EditText for input
+        final android.widget.EditText input = new android.widget.EditText(requireContext());
+        input.setHint("e.g., Building_A_Floor_1");
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+
+        // Set some padding for better UX
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        input.setPadding(padding, padding, padding, padding);
+
+        // Create dialog
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("Enter Trajectory Name")
+                .setMessage("Please provide a name for this trajectory recording:")
+                .setView(input)
+                .setPositiveButton("Start Recording", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface dialog, int which) {
+                        String trajectoryName = input.getText().toString().trim();
+
+                        // If empty, use default name with timestamp
+                        if (trajectoryName.isEmpty()) {
+                            trajectoryName = "Trajectory_" + System.currentTimeMillis();
+                        }
+
+                        // Start recording with the name
+                        startRecordingWithName(trajectoryName);
+                    }
+                })
+                .setNegativeButton("Cancel", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface dialog, int which) {
+                        dialog.cancel();
+                    }
+                })
+                .show();
+    }
+
+    /**
+     * Start recording with trajectory name
+     */
+    private void startRecordingWithName(String trajectoryName) {
+        float chosenLat = startPosition[0];
+        float chosenLon = startPosition[1];
+
+        // If the Activity is RecordingActivity
+        if (requireActivity() instanceof RecordingActivity) {
+            // Set trajectory name in SensorFusion
+            sensorFusion.setTrajectoryName(trajectoryName);
+
+            // Set initial position
+            sensorFusion.setInitialPositionData(chosenLat, chosenLon);
+
+            // Start sensor recording + set the start location
+            sensorFusion.startRecording();
+            sensorFusion.setStartGNSSLatitude(startPosition);
+
+            // Now switch to the recording screen
+            ((RecordingActivity) requireActivity()).showRecordingScreen();
+
+        } else if (requireActivity() instanceof ReplayActivity) {
+            // For replay, just proceed without trajectory name
+            ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);
+
+        } else {
+            // Optional: log or handle error
+            android.util.Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
+        }
     }
 
     /**

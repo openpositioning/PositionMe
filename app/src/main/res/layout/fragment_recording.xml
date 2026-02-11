@@ -66,7 +66,6 @@
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp" />
 
-
             <!-- GNSS Error -->
             <TextView
                 android:id="@+id/gnssError"
@@ -79,6 +78,201 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- 🔹 NEW: Trajectory Info Card (Collapsible) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/trajectoryInfoCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginTop="4dp"
+        app:cardBackgroundColor="@color/md_theme_surfaceContainerHigh"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="2dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="@color/md_theme_outline"
+        app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Header with Trajectory Name and Collapse Button -->
+            <LinearLayout
+                android:id="@+id/trajectoryInfoHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="12dp"
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+
+                <TextView
+                    android:id="@+id/trajectoryNameText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📝 Recording..."
+                    android:textStyle="bold"
+                    android:textSize="14sp"
+                    android:textColor="@color/md_theme_primary"
+                    android:maxLines="1"
+                    android:ellipsize="end"/>
+
+                <TextView
+                    android:id="@+id/collapseIcon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:text="▼"
+                    android:gravity="center"
+                    android:textSize="16sp"
+                    android:textColor="@color/md_theme_primary"/>
+            </LinearLayout>
+
+            <!-- Collapsible Content -->
+            <LinearLayout
+                android:id="@+id/trajectoryInfoContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="12dp"
+                android:visibility="visible">
+
+                <!-- Divider -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/md_theme_outlineVariant"
+                    android:layout_marginBottom="8dp"/>
+
+                <!-- Initial Position -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="📍 Initial Position:"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="2dp"/>
+
+                <TextView
+                    android:id="@+id/initialPositionText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Waiting for GPS..."
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:layout_marginBottom="6dp"
+                    android:paddingStart="16dp"/>
+
+                <!-- Initial Orientation -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🧭 Initial Orientation:"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="2dp"/>
+
+                <TextView
+                    android:id="@+id/initialOrientationText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Waiting for Sensor..."
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:layout_marginBottom="6dp"
+                    android:paddingStart="16dp"/>
+
+                <!-- Data Collection Stats -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="📊 Data Collection:"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="4dp"/>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:layout_marginBottom="2dp">
+
+                    <TextView
+                        android:layout_width="120dp"
+                        android:layout_height="wrap_content"
+                        android:text="WiFi Fingerprints:"
+                        android:textSize="10sp"/>
+
+                    <TextView
+                        android:id="@+id/wifiCountText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/md_theme_primary"
+                        android:fontFamily="monospace"/>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:layout_marginBottom="2dp">
+
+                    <TextView
+                        android:layout_width="120dp"
+                        android:layout_height="wrap_content"
+                        android:text="BLE Devices:"
+                        android:textSize="10sp"/>
+
+                    <TextView
+                        android:id="@+id/bleCountText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/md_theme_primary"
+                        android:fontFamily="monospace"/>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp">
+
+                    <TextView
+                        android:layout_width="120dp"
+                        android:layout_height="wrap_content"
+                        android:text="IMU Readings:"
+                        android:textSize="10sp"/>
+
+                    <TextView
+                        android:id="@+id/imuCountText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/md_theme_primary"
+                        android:fontFamily="monospace"/>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
     <!-- 🔹 MIDDLE SECTION: Map Display -->
     <FrameLayout
         android:id="@+id/trajectoryMapFragmentContainer"
@@ -86,7 +280,8 @@
         android:layout_height="0dp"
         android:layout_marginStart="8dp"
         android:layout_marginEnd="8dp"
-        app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
+        android:layout_marginTop="4dp"
+        app:layout_constraintTop_toBottomOf="@id/trajectoryInfoCard"
         app:layout_constraintBottom_toTopOf="@id/controlLayout" />
 
     <!-- 🔹 BOTTOM SECTION: Controls (Progress Bar & Buttons) -->
@@ -122,27 +317,46 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/cancelButton"
                 style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
+                android:layout_width="180dp"
                 android:layout_height="56dp"
                 android:layout_marginEnd="16dp"
-                app:icon="@drawable/ic_unavailable"
+                android:layout_weight="1"
                 android:text="@string/cancel"
-                android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onError"
+                android:textSize="11sp"
                 app:backgroundTint="@color/md_theme_error"
-                app:cornerRadius="16dp" />
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_unavailable"
+                app:iconGravity="textStart"
+                app:iconSize="24dp"
+                app:iconTint="@color/md_theme_onError" />
+
+            <!-- Mark Test Point Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/markPointButton"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="180dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="12dp"
+                android:layout_weight="1"
+                android:text="@string/markPoint"
+                android:textSize="11sp"
+                app:backgroundTint="@color/md_theme_secondary"
+                app:cornerRadius="16dp"
+                app:icon="@drawable/baseline_add_location_24"
+                app:iconGravity="textStart"
+                app:iconSize="24dp"
+                app:iconTint="@color/md_theme_onSecondary" />
 
             <!-- Stop Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/stopButton"
                 style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="160dp"
+                android:layout_width="200dp"
                 android:layout_height="56dp"
+                android:layout_weight="1"
                 app:icon="@drawable/ic_baseline_assignment_turned_in_24"
                 android:text="@string/stop"
-                android:textSize="16sp"
+                android:textSize="11sp"
                 app:iconSize="24dp"
                 app:iconGravity="textStart"
                 app:iconTint="@color/md_theme_onPrimary"
