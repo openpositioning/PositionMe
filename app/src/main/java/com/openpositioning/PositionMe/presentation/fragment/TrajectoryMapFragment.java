@@ -193,7 +193,6 @@ public class TrajectoryMapFragment extends Fragment {
                 if (building != null) {
                     building.setCurrentFloor(
                     building.getFloorNumber()+1,
-                        false,
                         gMap
                     );
                 } else {
@@ -209,7 +208,6 @@ public class TrajectoryMapFragment extends Fragment {
                 if (building != null) {
                     building.setCurrentFloor(
                     building.getFloorNumber()-1,
-                        false,
                         gMap
                     );
                 } else {
@@ -400,9 +398,7 @@ public class TrajectoryMapFragment extends Fragment {
                                     polygon.setFillColor(COLOUR_FLOOR_PLAN_FILL_TRANSPARENT);
                         }
                         // Display floor plan of ground floor
-                        int groundFloorIndex = building.getName().equals(BUILDING_NAME_NUCLEUS)
-                            ? 1
-                            : 0;
+                        int groundFloorIndex = building.getGroundFloorIndex();
                         List<Polyline> elements = building.getFloorPlanElements(
                             building.getFloorNames().get(groundFloorIndex)
                         );
@@ -426,7 +422,7 @@ public class TrajectoryMapFragment extends Fragment {
             if (building != null){
                 float elevationVal = sensorFusion.getElevation();
                 int newFloor = (int)(elevationVal/building.getFloorHeight());
-                building.setCurrentFloor(newFloor, true, gMap);
+                building.setCurrentFloor(newFloor, gMap);
             }
         }
     }

@@ -56,11 +56,7 @@ public class IndoorMapManager {
         for (Building building : buildings){
             if (building.equals(getCurrentBuilding(currentLocation))){
                 building.setFillColour(COLOUR_FLOOR_PLAN_FILL_INSIDE);
-                building.setCurrentFloor(
-                    Math.max(building.getFloorNumber(), 0),
-                    building.getName().equals(BUILDING_NAME_NUCLEUS),
-                    gMap
-                );
+                building.setCurrentFloor(Math.max(building.getFloorNumber(), 0), gMap);
                 // Disable preview if present
                 building.setIsPreviewingFloorPlan(false);
             } else if (building.getIsPreviowingFloorPlan()){
@@ -72,6 +68,14 @@ public class IndoorMapManager {
         }
     }
 
+    /**
+     * Get the building the user is currently inside of,
+     * based on a given position.
+     *
+     * @param position The position being queried
+     * @return The building, if position is inside one,
+     * or null if no building contains position
+     * */
     public Building getCurrentBuilding(LatLng position){
         for (Building building : buildings){
             if (building.isPointInBuilding(position)){

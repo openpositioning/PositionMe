@@ -198,7 +198,7 @@ public class CorrectionFragment extends Fragment {
             // Initialize campaigns only if the building is "outside"
             String[] campaigns = new String[]{
                     "Murchison House",
-                    "Nucleus"
+                    "Nucleus Building"
             };
             ArrayAdapter<String> adapter = new ArrayAdapter<>(
                     requireContext(),

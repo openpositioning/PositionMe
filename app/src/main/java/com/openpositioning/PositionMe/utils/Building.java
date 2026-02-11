@@ -30,12 +30,18 @@ import java.util.Map;
 
 public class Building {
   private static final int BUILDING_NO_FLOOR = -1;
+  private static final String BUILDING_GROUND_PREFIX = "G";
+  private static final String[] BUILDING_FLOOR_PREFIX_ORDER = new String[] {
+    "B", "L", BUILDING_GROUND_PREFIX, "U", "F"
+  };
+
   private List<LatLng> outlinePoints;
   private String name;
   private Map<String, List<Object>> floorPlans;
   private List<String> floorNames;
   private float floorHeight;
   private int floorNumber = BUILDING_NO_FLOOR;
+  private int groundFloorIndex = 0;
   private boolean isInsideBuilding = false;
   private boolean isPreviewingFloorPlan = false;
   private Map<String, List<PolylineOptions>> floorPlanElementOptions;
@@ -50,7 +56,6 @@ public class Building {
   ){
     this.name = name;
     this.floorPlans = floorPlans;
-    this.floorNames = new ArrayList<>(this.floorPlans.keySet());
     this.outlinePoints = outlinePoints;
     this.floorPlanElements = new HashMap<>();
 
@@ -62,6 +67,16 @@ public class Building {
     */
     this.outlinePolygonOptions = buildOutlinePolygon();
     this.floorPlanElementOptions = buildFloorPlanElements();
+
+    /*
+    * Sort the floor names in the order:
+    * - Basement
+    * - Lower ground
+    * - Ground
+    * - Upper ground
+    * - (Upper) Floors
+    * */
+    this.floorNames = defineFloorNameOrder(new ArrayList<>(this.floorPlans.keySet()));
 
     // Define the floor height
     if (name.equals(BUILDING_NAME_NUCLEUS)){
@@ -93,6 +108,7 @@ public class Building {
    */
   private Map<String, List<PolylineOptions>> buildFloorPlanElements(){
     Map<String, List<PolylineOptions>> floorPlanElementOptions = new HashMap<>();
+    List<String> floorNames = new ArrayList<>(this.floorPlans.keySet());
     for(String floorName : floorNames){
       List<Object> plan = floorPlans.get(floorName);
       List<PolylineOptions> floorElements = new ArrayList<>();
@@ -129,8 +145,29 @@ public class Building {
     return floorPlanElementOptions;
   }
 
+  // Sort elements based on B -> L -> G -> U -> F order for floors
+  private List<String> defineFloorNameOrder(List<String> names){
+    List<String> orderedNames = new ArrayList<>();
+    for (String floorPrefix : BUILDING_FLOOR_PREFIX_ORDER){
+      for (String name : names){
+        if (name.toUpperCase().startsWith(floorPrefix)){
+          orderedNames.add(name);
+        }
+      }
+    }
+    // Set the index of the ground floor, for future reference
+    for (String name : orderedNames){
+      if (name.toUpperCase().startsWith(BUILDING_GROUND_PREFIX)){
+        this.groundFloorIndex = orderedNames.indexOf(name);
+      }
+    }
+    return orderedNames;
+  }
+
   public String getName(){return name;}
   public float getFloorHeight(){return floorHeight;}
+  public int getGroundFloorIndex(){return groundFloorIndex;}
+
   /**
    * Getter to obtain if currently an indoor floor map is being displayed
    * @return true if an indoor map is visible to the user, false otherwise
@@ -179,10 +216,9 @@ public class Building {
    * Draw the floor plan elements of the desired floor on a map object
    *
    * @param newFloor The number of the floor being drawn
-   * @param autoFloor Flag for whether autoFloor is enabled
    * @param gMap The GoogleMap object where floor plans are being drawn
    * */
-  public void setCurrentFloor(int newFloor, boolean autoFloor, GoogleMap gMap) {
+  public void setCurrentFloor(int newFloor, GoogleMap gMap) {
     if (newFloor < 0 || newFloor >= floorNames.size()) {
       Log.w(
     "Building",
@@ -194,11 +230,8 @@ public class Building {
       Log.w("Building", name + ": Already on floor " + newFloor);
     } else {
       // Floor number initialises to -1, so reinitialise if required
-      // Nucleus building (autoFloor) has ground floor indexed at 1
-      if (floorNumber == BUILDING_NO_FLOOR && name.equals(BUILDING_NAME_NUCLEUS)){
-        floorNumber = 1;
-      } else if (floorNumber == BUILDING_NO_FLOOR) {
-        floorNumber = 0;
+      if (floorNumber == BUILDING_NO_FLOOR){
+        floorNumber = groundFloorIndex;
       } else {
         // Remove old floor plan before continuing
         editFloorPlan(gMap, floorNumber, false);
