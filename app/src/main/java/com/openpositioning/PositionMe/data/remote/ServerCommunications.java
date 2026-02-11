@@ -168,6 +168,7 @@ public class ServerCommunications implements Observable {
 
 
         File file = new File(path, "trajectory_" + trajectoryName + "_" + dateFormat.format(date) +  ".txt");
+        Log.i("TrajName", "Name=" + trajectory.getTrajectoryName());
 
         try {
             // Write the binary data to the file
