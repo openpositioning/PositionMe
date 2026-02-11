@@ -12,12 +12,14 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
-
-import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.Traj;
+import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.fragment.SettingsFragment;
@@ -37,6 +39,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.Collections;
 
 
 /**
@@ -156,6 +159,9 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // Trajectory displaying class
     private PathView pathView;
+    // Latest trajectory coordinates from step updates (x,y)
+    private volatile float[] lastCords = null;
+
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
     private Timer timer;
@@ -201,7 +207,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     }
 
-
     /**
      * Static function to access singleton instance of SensorFusion.
      *
@@ -245,9 +250,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.gnssProcessor = new GNSSDataProcessor(appContext, locationListener);
         this.serverCommunications = new ServerCommunications(appContext);
 
-        // Save absolute and relative start time
-        this.absoluteStartTime = System.currentTimeMillis();
-        this.bootTime = SystemClock.uptimeMillis();
+        // Do not reset recording time bases here; they are set in startRecording().
+        // Resetting during recording can invalidate relative timestamps.
+        if (!saveRecording) {
+            this.absoluteStartTime = System.currentTimeMillis();
+            this.bootTime = SystemClock.uptimeMillis();
+        }
+
         // Initialise saveRecording to false
         this.saveRecording = false;
 
@@ -269,6 +278,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         if (powerManager != null) {
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PositionMe::SensorWakeLock");
         }
+    }
+    public void setPathView(PathView view) {
+        this.pathView = view;
     }
     //endregion
 
@@ -338,11 +350,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                                     .setZ(angularVelocity[2])
                                     .build())
                             .build();
-
-
-                    synchronized (trajectory) {
-                        trajectory.addImuData(imuReading);
-                    }
                 }
                 break;
 
@@ -359,11 +366,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 );
                 this.accelMagnitude.add(accelMagFiltered);
 
-//                // Debug logging
-//                Log.v("SensorFusion",
-//                        "Added new linear accel magnitude: " + accelMagFiltered
-//                                + "; accelMagnitude size = " + accelMagnitude.size());
-
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
 
@@ -372,9 +374,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                 gravity[1] = sensorEvent.values[1];
                 gravity[2] = sensorEvent.values[2];
 
-                // Possibly log gravity values if needed
-                //Log.v("SensorFusion", "Gravity: " + Arrays.toString(gravity));
-
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
 
@@ -382,6 +381,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 if (lightSensor != null) {
                     lightSensor.values = sensorEvent.values.clone();
                 }
+                light = sensorEvent.values[0];
                 break;
 
             case Sensor.TYPE_PROXIMITY:
@@ -437,8 +437,47 @@ public class SensorFusion implements SensorEventListener, Observer {
                     this.accelMagnitude.clear();
 
 
-                    if (saveRecording) {
+                    // Always cache the latest coordinates for uploading (do not depend on UI binding)
+                    if (newCords != null) {
+                        lastCords = newCords;
+                    }
+
+                    // UI drawing should be optional
+                    if (this.pathView != null) {
                         this.pathView.drawTrajectory(newCords);
+                    }
+
+
+                    if (saveRecording && trajectory != null) {
+                        float x = (newCords != null && newCords.length > 0) ? newCords[0] : 0f;
+                        float y = (newCords != null && newCords.length > 1) ? newCords[1] : 0f;
+
+                        // relative_timestamp is milliseconds from start_timestamp
+                        long pdrTime = SystemClock.uptimeMillis() - bootTime;
+                        if (pdrTime == 0) pdrTime = 1;
+
+
+                        Traj.RelativePosition pdrPoint = Traj.RelativePosition.newBuilder()
+                                .setRelativeTimestamp(pdrTime)
+                                .setX(x)
+                                .setY(y)
+                                .build();
+
+                        int pdrCount;
+                        synchronized (trajectory) {
+                            trajectory.addPdrData(pdrPoint);
+                            pdrCount = trajectory.getPdrDataCount();
+                        }
+
+                        // Log every 10 points to avoid spamming Logcat
+                        if (pdrCount % 10 == 0) {
+                            Log.i("PDR", "pdr_data count=" + pdrCount + " last t=" + pdrTime + " x=" + x + " y=" + y);
+
+                        }
+                    }
+
+
+                    if (saveRecording) {
                         stepCounter++;
                     }
                     break;
@@ -902,6 +941,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         // Initialize Traj Builder
         this.trajectory = Traj.Trajectory.newBuilder();
+
         // Attach Add-Tag test points to protobuf
         this.trajectory.addAllTestPoints(getTestPoints());
         // Debug log to verify test_points are attached.
@@ -912,6 +952,19 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.trajectory.setTrajectoryId(currentTrajectoryIdtrajectoryId);
         this.trajectory.setAndroidVersion(Build.VERSION.RELEASE);
         this.trajectory.setStartTimestamp(absoluteStartTime);
+        // Seed PDR with non-default values so it is serialized in proto3 (server needs a valid start time)
+        this.trajectory.addPdrData(
+                Traj.RelativePosition.newBuilder()
+                        .setRelativeTimestamp(1)      // must be non-zero, otherwise it can be omitted in serialization
+                        .setX(1e-4f)                  // tiny epsilon to avoid default 0 being omitted/filtered
+                        .setY(0f)
+                        .build()
+        );
+        Log.i("PDR", "Seeded PDR origin point (t=1ms, x=1e-4, y=0)");
+
+        // Initialize last known coordinates so 1Hz PDR logging can run even before the first step event
+        lastCords = new float[]{0f, 0f};
+
 
         if (accelerometerSensor != null) this.trajectory.setAccelerometerInfo(createSensorInfo(accelerometerSensor));
         if (gyroscopeSensor != null) this.trajectory.setGyroscopeInfo(createSensorInfo(gyroscopeSensor));
@@ -963,14 +1016,77 @@ public class SensorFusion implements SensorEventListener, Observer {
 
             if (appContext != null && trajectory != null) {
                 try {
+                    int pdrCount = trajectory.getPdrDataCount();
+                    if (pdrCount > 1) {
+                        long t0 = trajectory.getPdrData(0).getRelativeTimestamp();
+                        long t1 = trajectory.getPdrData(pdrCount - 1).getRelativeTimestamp();
+                        double dtSec = (t1 - t0) / 1000.0;
+                        Log.e("ServerDebug", "PDR duration check: " + dtSec + "s (t0=" + t0 + ", t1=" + t1 + ") count=" + pdrCount);
+                    } else {
+                        Log.e("ServerDebug", "PDR duration check: insufficient pdr_data count=" + pdrCount);
+                    }
+                    // Ensure startTimestamp is non-zero before building/uploading (server validates duration using it)
+                    if (this.trajectory.getStartTimestamp() == 0L) {
+                        this.trajectory.setStartTimestamp(absoluteStartTime);
+                    }
+
                     Traj.Trajectory finalTrajectory = this.trajectory.build();
+                    // verify startTimestamp is actually written into final protobuf
+                    Log.e("ServerDebug", "FINAL startTimestamp=" + finalTrajectory.getStartTimestamp());
+                    try {
+                        String js = com.google.protobuf.util.JsonFormat.printer().print(finalTrajectory);
+                        Log.e("ServerDebug", "FINAL JSON has startTimestamp? " + js.contains("startTimestamp"));
+                    } catch (Exception e) {
+                        Log.e("ServerDebug", "FINAL JSON print failed", e);
+                    }
+
+                    // Verify PDR duration on the built trajectory (the one that will be uploaded)
+                    try {
+                        int pdrCountFinal = finalTrajectory.getPdrDataCount();
+                        if (pdrCountFinal > 1) {
+                            long t0 = finalTrajectory.getPdrData(0).getRelativeTimestamp();
+                            long t1 = finalTrajectory.getPdrData(pdrCountFinal - 1).getRelativeTimestamp();
+                            double dtSec = (t1 - t0) / 1000.0;
+                            Log.e("ServerDebug", "PDR duration FINAL: " + dtSec + "s (t0=" + t0 + ", t1=" + t1 + ") count=" + pdrCountFinal);
+                        } else {
+                            Log.e("ServerDebug", "PDR duration FINAL: insufficient pdr_data count=" + pdrCountFinal);
+                        }
+                    } catch (Exception e) {
+                        Log.e("ServerDebug", "PDR duration FINAL check failed: " + e.getMessage(), e);
+                    }
 
                     if (serverCommunications != null) {
                         Log.d("SensorFusion", "Uploading trajectory...");
+                        // Reject upload if the recorded IMU duration is less than 30 seconds (server requirement).
+                        try {
+                            if (finalTrajectory.getImuDataCount() > 1) {
+                                long t0 = finalTrajectory.getImuData(0).getRelativeTimestamp();
+                                long t1 = finalTrajectory.getImuData(finalTrajectory.getImuDataCount() - 1).getRelativeTimestamp();
+                                double durationSec = (t1 - t0) / 1000.0;
+
+                                Log.e("ServerDebug", "IMU duration check: " + durationSec + "s (t0=" + t0 + ", t1=" + t1 + ")");
+
+                                if (durationSec < 30.0) {
+                                    Log.e("ServerDebug", "Upload skipped: recording is shorter than 30 seconds.");
+
+                                    new Handler(Looper.getMainLooper()).post(() ->
+                                            Toast.makeText(appContext,
+                                                    "Recording too short (" + String.format(java.util.Locale.US, "%.1f", durationSec)
+                                                            + "s). Please record at least 30s before uploading.",
+                                                    Toast.LENGTH_LONG).show()
+                                    );
+                                    return; // Stop here: do not upload or save
+                                }
+                            }
+                        } catch (Exception e) {
+                            Log.e("ServerDebug", "IMU duration check failed: " + e.getMessage(), e);
+                        }
+
                         serverCommunications.sendTrajectory(finalTrajectory, "murchison_house");
                     }
-
                     String fileName = "term_project_trajectory_" + absoluteStartTime + ".proto";
+
+
                     File file = new File(appContext.getExternalFilesDir(null), fileName);
                     FileOutputStream fileOutputStream = new FileOutputStream(file);
                     fileOutputStream.write(finalTrajectory.toByteArray());
@@ -995,10 +1111,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @see ServerCommunications for sending and receiving data via HTTPS.
      */
     public void sendTrajectoryToCloud() {
-        if (trajectory != null) {
-            Traj.Trajectory sentTrajectory = trajectory.build();
-            this.serverCommunications.sendTrajectory(sentTrajectory,"murchison_house");
-        }
+        // Upload is handled in stopRecording() to avoid duplicate / inconsistent uploads.
+        return;
     }
 
     /**
@@ -1030,14 +1144,22 @@ public class SensorFusion implements SensorEventListener, Observer {
     private class storeDataInTrajectory extends TimerTask {
         @Override
         public void run() {
+            if (counter == 0) {
+                Log.e("REC", "storeDataInTrajectory running: saveRecording="
+                        + saveRecording + ", trajectoryNull=" + (trajectory == null));
+            }
+
+
             if (!saveRecording || trajectory == null) return;
 
-            // Calculate temporal delta relative to system boot
-            long relativeTime = SystemClock.uptimeMillis() - bootTime;
+            // relative_timestamp is milliseconds from start_timestamp
+            long relativeTime = System.currentTimeMillis() - absoluteStartTime;
 
             // Combine Acc, Gyro, Rotation, Steps into one IMUReading message
             Traj.IMUReading.Builder imuBuilder = Traj.IMUReading.newBuilder()
                     .setStepCount(stepCounter);
+            imuBuilder.setRelativeTimestamp(relativeTime);
+
 
             if (accelerometerSensor != null && accelerometerSensor.values != null) {
                 imuBuilder.setAcc(Traj.Vector3.newBuilder()
@@ -1055,22 +1177,51 @@ public class SensorFusion implements SensorEventListener, Observer {
 
             // Handle Rotation Vector (x,y,z,w)
             if (rotation != null && rotation.length >= 3) {
+
+                float x = rotation[0];
+                float y = rotation[1];
+                float z = rotation[2];
                 float w = (rotation.length > 3) ? rotation[3] : 1.0f;
-                imuBuilder.setRotationVector(Traj.Quaternion.newBuilder()
-                        .setX(rotation[0])
-                        .setY(rotation[1])
-                        .setZ(rotation[2])
-                        .setW(w).build());
+
+                // Normalize quaternion to satisfy server tolerance (norm ~ 1)
+                double norm = Math.sqrt((double) x * x + (double) y * y + (double) z * z + (double) w * w);
+                if (norm > 1e-9) {
+                    x /= norm;
+                    y /= norm;
+                    z /= norm;
+                    w /= norm;
+
+                    imuBuilder.setRotationVector(
+                            Traj.Quaternion.newBuilder()
+                                    .setX(x)
+                                    .setY(y)
+                                    .setZ(z)
+                                    .setW(w)
+                                    .build()
+                    );
+                }
             }
+
 
             // Add IMU reading to trajectory
             synchronized (trajectory) {
                 trajectory.addImuData(imuBuilder.build());
+
+                // Print counts once per second to avoid spamming Logcat
+                if (counter == 0) {
+                    Log.e("REC", "trajectory counts:"
+                            + " imu=" + trajectory.getImuDataCount()
+                            + " wifi=" + trajectory.getWifiFingerprintsCount()
+                            + " pdr=" + trajectory.getPdrDataCount()
+                            + " test_points=" + trajectory.getTestPointsCount());
+                }
+
             }
 
             //  Magnetometer Data
             if (magnetometerSensor != null && magnetometerSensor.values != null) {
                 trajectory.addMagnetometerData(Traj.MagnetometerReading.newBuilder()
+                        .setRelativeTimestamp(relativeTime) // timestamp for server duration
                         .setMag(Traj.Vector3.newBuilder()
                                 .setX(magnetometerSensor.values[0])
                                 .setY(magnetometerSensor.values[1])
@@ -1081,10 +1232,62 @@ public class SensorFusion implements SensorEventListener, Observer {
             //  Low Frequency Data (1Hz or slower)
             if (counter >= 100) { // 100 * 10ms = 1000ms = 1s
                 counter = 0;
+                // Record a 1Hz position point into pdr_data (write every second to guarantee >=30s duration)
+                if (saveRecording && trajectory != null) {
+
+                    float x = 0f;
+                    float y = 0f;
+
+                    // Prefer the latest coordinates produced by step-based PDR
+                    if (lastCords != null && lastCords.length >= 2) {
+                        x = lastCords[0];
+                        y = lastCords[1];
+                    } else {
+                        // Fallback: ask PDR module for its current movement estimate
+                        try {
+                            if (pdrProcessing != null) {
+                                float[] pdrMove = pdrProcessing.getPDRMovement();
+                                if (pdrMove != null && pdrMove.length >= 2) {
+                                    x = pdrMove[0];
+                                    y = pdrMove[1];
+                                }
+                            }
+                        } catch (Exception e) {
+                            Log.e("ServerDebug", "Failed to read PDR movement: " + e.getMessage(), e);
+                        }
+                    }
+
+                    // Use monotonic time since start (consistent with IMU relative timestamps)
+                    long pdrTime = SystemClock.uptimeMillis() - bootTime;
+
+                    // Avoid an all-default point (some servers may ignore/filter it)
+                    if (pdrTime == 0) pdrTime = 1;
+                    if (x == 0f && y == 0f) x = 1e-4f;
+
+                    Traj.RelativePosition pdrPoint = Traj.RelativePosition.newBuilder()
+                            .setRelativeTimestamp(pdrTime)
+                            .setX(x)
+                            .setY(y)
+                            .build();
+
+                    int pdrCount;
+                    synchronized (trajectory) {
+                        trajectory.addPdrData(pdrPoint);
+                        pdrCount = trajectory.getPdrDataCount();
+                    }
+
+                    // Log every 10 points (about every 10 seconds)
+                    if (pdrCount % 10 == 0) {
+                        Log.e("ServerDebug", "PDR 1Hz sample: t=" + pdrTime + " x=" + x + " y=" + y + " count=" + pdrCount);
+                    }
+                }
+
+
 
                 // Record Barometric Pressure
                 if (barometerSensor != null && barometerSensor.values != null) {
                     trajectory.addPressureData(Traj.BarometerReading.newBuilder()
+                            .setRelativeTimestamp(relativeTime) // timestamp for server duration
                             .setPressure(barometerSensor.values[0])
                             .build());
                 }
@@ -1092,6 +1295,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // Record Ambient Light
                 if (lightSensor != null && lightSensor.values != null) {
                     trajectory.addLightData(Traj.LightReading.newBuilder()
+                            .setRelativeTimestamp(relativeTime) // timestamp for server duration
                             .setLight(lightSensor.values[0])
                             .build());
                 }
@@ -1100,11 +1304,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                 if (latitude != 0 && longitude != 0) {
                     trajectory.addGnssData(Traj.GNSSReading.newBuilder()
                             .setPosition(Traj.GNSSPosition.newBuilder()
+                                    .setRelativeTimestamp(relativeTime) // timestamp for server duration alignment
                                     .setLatitude(latitude)
                                     .setLongitude(longitude)
                                     .setAltitude(elevation)
                                     .build())
                             .build());
+
                 }
 
                 // Sub-cycle for WiFi AP Data (Every 5s approx)
@@ -1112,20 +1318,52 @@ public class SensorFusion implements SensorEventListener, Observer {
                     secondCounter = 0;
 
                     if (wifiList != null && !wifiList.isEmpty()) {
-                        for (Wifi wifi : wifiList) {
-                            Traj.WiFiAPData.Builder wifiBuilder = Traj.WiFiAPData.newBuilder()
-                                    .setMac(wifi.getBssid())
-                                    .setSsid(wifi.getSsid())
-                                    .setFrequency(wifi.getFrequency());
-                            if (wifi.getRttFlag()) {
-                                wifiBuilder.setRttEnabled(true);
+
+                        // Build Fingerprint (wifi_fingerprints type in Traj)
+                        Traj.Fingerprint.Builder fpBuilder = Traj.Fingerprint.newBuilder()
+                                .setRelativeTimestamp(relativeTime);
+
+                        // Log WiFi count for this sample
+                        Log.d("REC", "[DBG] wifiList size=" + wifiList.size() + " relativeTime=" + relativeTime);
+
+                        synchronized (trajectory) {
+                            for (Wifi wifi : wifiList) {
+
+                                // Keep existing aps_data
+                                Traj.WiFiAPData.Builder wifiBuilder = Traj.WiFiAPData.newBuilder()
+                                        .setMac(wifi.getBssid())
+                                        .setSsid(wifi.getSsid())
+                                        .setFrequency(wifi.getFrequency());
+                                if (wifi.getRttFlag()) {
+                                    wifiBuilder.setRttEnabled(true);
+                                }
+                                trajectory.addApsData(wifiBuilder.build());
+
+                                // Write rf_scans -> wifi_fingerprints
+                                Traj.RFScan.Builder scanBuilder = Traj.RFScan.newBuilder()
+                                        .setRelativeTimestamp(relativeTime)
+                                        .setMac(wifi.getBssid())
+                                        .setRssi(wifi.getLevel());
+                                fpBuilder.addRfScans(scanBuilder.build());
                             }
-                            trajectory.addApsData(wifiBuilder.build());
+
+                            if (fpBuilder.getRfScansCount() > 0) {
+                                trajectory.addWifiFingerprints(fpBuilder.build());
+                            }
+
+                            Log.d("REC", "[DBG] after wifi write: wifi_fingerprints="
+                                    + trajectory.getWifiFingerprintsCount()
+                                    + " aps_data=" + trajectory.getApsDataCount());
                         }
+
+                    } else {
+                        Log.d("REC", "[DBG] wifiList is empty or null at relativeTime=" + relativeTime);
                     }
+
                 } else {
                     secondCounter++;
                 }
+
             } else {
                 counter++;
             }

@@ -1,28 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/trajectory_map_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- The actual map container -->
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/trajectoryMap"
         android:name="com.google.android.gms.maps.SupportMapFragment"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
-    <!-- Overlaid controls for map visualization -->
     <com.google.android.material.card.MaterialCardView
+        android:id="@+id/mapControlCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="10dp"
-        android:padding="18dp"
+        android:layout_margin="12dp"
         app:cardBackgroundColor="@color/md_theme_surfaceContainer"
-        app:cardElevation="4dp"
-        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
-        app:layout_anchor="@id/trajectoryMap"
-        app:layout_anchorGravity="top|start">
+        app:cardElevation="6dp"
+        app:cardCornerRadius="12dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -35,65 +38,88 @@
                 android:id="@+id/gnssSwitch"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch" />
+                android:text="@string/gnssSwitch"
+                android:textSize="12sp" />
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/autoFloor"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/auto_floor" />
+                android:text="@string/auto_floor"
+                android:textSize="12sp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/lineColorButton"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@color/md_theme_onPrimary"
+                android:layout_height="36dp"
+                android:backgroundTint="@android:color/holo_red_dark"
+                android:textColor="@android:color/white"
                 android:text="@string/color"
-                app:elevation="5dp"/>
+                android:textSize="12sp"
+                android:padding="0dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp" />
 
             <Spinner
                 android:id="@+id/mapSwitchSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="0dp"
-                android:layout_marginTop="8dp"
-                android:background="@android:color/white"
-                android:spinnerMode="dropdown"
-                app:layout_constraintTop_toTopOf="parent"
-                android:elevation="5dp"/>
+                android:layout_width="100dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="4dp"
+                android:spinnerMode="dropdown" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Floating action buttons for floor control, properly spaced -->
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/floorControlCard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
+        app:cardElevation="6dp"
+        app:cardCornerRadius="12dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/floorDownButton"
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:src="@android:drawable/arrow_down_float"
-            app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:contentDescription="@string/floor_down" />
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:gravity="center_horizontal">
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/floorUpButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:src="@android:drawable/arrow_up_float"
-            app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
-            app:layout_constraintBottom_toTopOf="@id/floorDownButton"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:contentDescription="@string/floor_up" />
-    </androidx.constraintlayout.widget.ConstraintLayout>
+            <TextView
+                android:id="@+id/currentFloorIndicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Floor: 0"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:textColor="@color/md_theme_onSurface"
+                android:layout_marginBottom="4dp" />
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/floorUpButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/arrow_up_float"
+                app:fabSize="mini"
+                app:backgroundTint="@color/md_theme_primary"
+                app:tint="@color/md_theme_onPrimary"
+                android:contentDescription="Floor up"
+                android:layout_marginBottom="8dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/floorDownButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/arrow_down_float"
+                app:fabSize="mini"
+                app:backgroundTint="@color/md_theme_primary"
+                app:tint="@color/md_theme_onPrimary"
+                android:contentDescription="Floor down" />
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

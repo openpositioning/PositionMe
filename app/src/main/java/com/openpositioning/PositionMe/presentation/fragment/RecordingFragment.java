@@ -29,37 +29,15 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
-
-
-/**
- * Fragment responsible for managing the recording process of trajectory data.
- * <p>
- * The RecordingFragment serves as the interface for users to initiate, monitor, and
- * complete trajectory recording. It integrates sensor fusion data to track user movement
- * and updates a map view in real time. Additionally, it provides UI controls to cancel,
- * stop, and monitor recording progress.
- * <p>
- * Features:
- * - Starts and stops trajectory recording.
- * - Displays real-time sensor data such as elevation and distance traveled.
- * - Provides UI controls to cancel or complete recording.
- * - Uses {@link TrajectoryMapFragment} to visualize recorded paths.
- * - Manages GNSS tracking and error display.
- *
- * @see TrajectoryMapFragment The map fragment displaying the recorded trajectory.
- * @see RecordingActivity The activity managing the recording workflow.
- * @see SensorFusion Handles sensor data collection.
- * @see SensorTypes Enumeration of available sensor types.
- *
- * @author Shu Gu
- */
 
 public class RecordingFragment extends Fragment {
 
     // UI elements
     private MaterialButton completeButton, cancelButton,addTagButton;
+    private PathView pathView;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
@@ -116,7 +94,6 @@ public class RecordingFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        // Inflate only the "recording" UI parts (no map)
         return inflater.inflate(R.layout.fragment_recording, container, false);
     }
 
@@ -125,21 +102,16 @@ public class RecordingFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Reset test-point state at the beginning of a new recording session
-        testPoints.clear();        // clear local list
-        tagCount = 0;              // reset label counter
-        startTimestampMs = System.currentTimeMillis();  // reset start time
+        testPoints.clear();
+        tagCount = 0;
+        startTimestampMs = System.currentTimeMillis();
 
-        // Also reset SensorFusion copies
         sensorFusion.setTestPoints(testPoints);
         sensorFusion.setStartTimestampMs(startTimestampMs);
 
-        // Child Fragment: the container in fragment_recording.xml
-        // where TrajectoryMapFragment is placed
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
 
-        // If not present, create it
         if (trajectoryMapFragment == null) {
             trajectoryMapFragment = new TrajectoryMapFragment();
             getChildFragmentManager()
@@ -148,11 +120,10 @@ public class RecordingFragment extends Fragment {
                     .commit();
         }
 
-        // Initialize UI references
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
-
+        pathView = view.findViewById(R.id.pathView);
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
         addTagButton = view.findViewById(R.id.addTagButton);
@@ -161,56 +132,41 @@ public class RecordingFragment extends Fragment {
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
 
-        // Hide or initialize default values
         gnssError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
-        // Buttons
         completeButton.setOnClickListener(v -> {
-            // Pass the start time and testPoints to SensorFusion
             sensorFusion.setStartTimestampMs(startTimestampMs);
             sensorFusion.setTestPoints(testPoints);
 
-            //Debug - verify test points are passed into SensorFusion before stopRecording().
-            android.util.Log.d("TestPoints", "Before stop: local testPoints size = " + testPoints.size());
-            android.util.Log.d("TestPoints", "Before stop: sensorFusion testPoints size = " + sensorFusion.getTestPoints().size());
-
-            // Stop recording & go to correction
             if (autoStop != null) autoStop.cancel();
             sensorFusion.stopRecording();
-            // Show Correction screen
             ((RecordingActivity) requireActivity()).showCorrectionScreen();
         });
 
-
-        // Cancel button with confirmation dialog
         cancelButton.setOnClickListener(v -> {
             AlertDialog dialog = new AlertDialog.Builder(requireActivity())
                     .setTitle("Confirm Cancel")
                     .setMessage("Are you sure you want to cancel the recording? Your progress will be lost permanently!")
                     .setNegativeButton("Yes", (dialogInterface, which) -> {
-                        // User confirmed cancellation
                         sensorFusion.stopRecording();
                         if (autoStop != null) autoStop.cancel();
                         requireActivity().onBackPressed();
                     })
                     .setPositiveButton("No", (dialogInterface, which) -> {
-                        // User cancelled the dialog. Do nothing.
                         dialogInterface.dismiss();
                     })
-                    .create(); // Create the dialog but do not show it yet
+                    .create();
 
-            // Show the dialog and change the button color
             dialog.setOnShowListener(dialogInterface -> {
                 Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-                negativeButton.setTextColor(Color.RED); // Set "Yes" button color to red
+                negativeButton.setTextColor(Color.RED);
             });
 
-            dialog.show(); // Finally, show the dialog
+            dialog.show();
         });
 
-        // Button Click Listener
         addTagButton.setOnClickListener(v -> {
             tagCount++;
 
@@ -220,13 +176,10 @@ public class RecordingFragment extends Fragment {
             }
 
             if (current != null && trajectoryMapFragment != null) {
-                // 1) Map displaying numbered points
                 trajectoryMapFragment.addTagPoint(current, tagCount);
 
-                // 2) Calculate relative timestamp (ms)
                 long relativeTs = System.currentTimeMillis() - startTimestampMs;
 
-                // 3) Assemble a protobuf 'GNSSPosition'(the element type of `test_points`)
                 com.openpositioning.PositionMe.Traj.GNSSPosition p =
                         com.openpositioning.PositionMe.Traj.GNSSPosition.newBuilder()
                                 .setRelativeTimestamp(relativeTs)
@@ -236,23 +189,12 @@ public class RecordingFragment extends Fragment {
                                 .build();
 
                 testPoints.add(p);
-
-                android.util.Log.d("TestPoints",
-                        "Saved test point #" + tagCount +
-                                " ts=" + relativeTs +
-                                " lat=" + current.latitude +
-                                " lon=" + current.longitude);
-            } else {
-                android.util.Log.d("TestPoints", "Add Tag clicked but current location is null");
             }
         });
 
-        // The blinking effect for recIcon
         blinkingRecordingIcon();
 
-        // Start the timed or indefinite UI refresh
         if (this.settings.getBoolean("split_trajectory", false)) {
-            // A maximum recording time is set
             long limit = this.settings.getInt("split_duration", 30) * 60000L;
             timeRemaining.setMax((int) (limit / 1000));
             timeRemaining.setProgress(0);
@@ -272,7 +214,6 @@ public class RecordingFragment extends Fragment {
                 }
             }.start();
         } else {
-            // No set time limit, just keep refreshing
             refreshDataHandler.post(refreshDataTask);
         }
     }
@@ -293,29 +234,29 @@ public class RecordingFragment extends Fragment {
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
+
+        if (trajectoryMapFragment != null) {
+            trajectoryMapFragment.updateElevation(elevationVal);
+        }
+
+
         // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
+            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation();
             LatLng newLocation = UtilFunctions.calculateNewPos(
                     oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
                     new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
 
-            // Pass the location + orientation to the map
             if (trajectoryMapFragment != null) {
                 trajectoryMapFragment.updateUserLocation(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
                 LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
@@ -331,14 +272,10 @@ public class RecordingFragment extends Fragment {
             }
         }
 
-        // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
     }
 
-    /**
-     * Start the blinking effect for the recording icon.
-     */
     private void blinkingRecordingIcon() {
         Animation blinking = new AlphaAnimation(1, 0);
         blinking.setDuration(800);
@@ -357,6 +294,17 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        SensorFusion sensorFusion = SensorFusion.getInstance();
+        if (this.pathView != null) {
+            sensorFusion.setPathView(this.pathView);
+        } else {
+            PathView pv = getView().findViewById(R.id.pathView);
+            if (pv != null) {
+                this.pathView = pv;
+                sensorFusion.setPathView(pv);
+            }
+        }
+        sensorFusion.resumeListening();
         if(!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }

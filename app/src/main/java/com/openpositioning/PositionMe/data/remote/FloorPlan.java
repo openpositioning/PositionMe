@@ -12,8 +12,8 @@ public class FloorPlan {
     private String imageUrl;  // Keep this for compatibility, though API might not send it
     private double[] bounds;
 
-    // 新增：存储墙体线条数据
-    // 结构：List of Lines, each Line is a List of Points [Lat, Lon]
+
+    // List of Lines, each Line is a List of Points [Lat, Lon]
     private List<List<List<Double>>> walls;
 
     public FloorPlan(String floorCode, int order, String imageUrl, double[] bounds, List<List<List<Double>>> walls) {
