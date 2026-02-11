@@ -190,8 +190,7 @@ public class FilesFragment extends Fragment implements Observer {
      * Update the RecyclerView in the FilesFragment with new data.
      * Must be called from a UI thread. Initialises a new Layout Manager, and passes it to the
      * RecyclerView. Initialises a {@link TrajDownloadListAdapter} with the input array and setting
-     * up a listener so that trajectories are downloaded when clicked, and a pop-up message is
-     * displayed to notify the user.
+     * up a listener so that trajectories are downloaded when clicked.
      *
      * @param entryList List of Maps of String to String containing metadata about the uploaded
      *                  trajectories (ID, owner ID, date).
@@ -208,16 +207,6 @@ public class FilesFragment extends Fragment implements Observer {
 
             // Pass ID and date_submitted
             serverCommunications.downloadTrajectory(position, id, dateSubmitted);
-
-//            new AlertDialog.Builder(getContext())
-//                    .setTitle("File downloaded")
-//                    .setMessage("Trajectory downloaded to local storage")
-//                    .setPositiveButton(R.string.ok, null)
-//                    .setNegativeButton(R.string.show_storage, (dialogInterface, i) -> {
-//                        startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-//                    })
-//                    .setIcon(R.drawable.ic_baseline_download_24)
-//                    .show();
         });
         filesList.setAdapter(listAdapter);
         // Force refresh RecyclerView to ensure downloadRecords changes are detected

@@ -31,6 +31,15 @@ import java.util.Map;
 public class Building {
   private static final int BUILDING_NO_FLOOR = -1;
   private static final String BUILDING_GROUND_PREFIX = "G";
+
+  /*
+   * Sort the floor names in the order:
+   * - Basement
+   * - Lower ground
+   * - Ground
+   * - Upper ground
+   * - (Upper) Floors
+   * */
   private static final String[] BUILDING_FLOOR_PREFIX_ORDER = new String[] {
     "B", "L", BUILDING_GROUND_PREFIX, "U", "F"
   };
@@ -67,15 +76,6 @@ public class Building {
     */
     this.outlinePolygonOptions = buildOutlinePolygon();
     this.floorPlanElementOptions = buildFloorPlanElements();
-
-    /*
-    * Sort the floor names in the order:
-    * - Basement
-    * - Lower ground
-    * - Ground
-    * - Upper ground
-    * - (Upper) Floors
-    * */
     this.floorNames = defineFloorNameOrder(new ArrayList<>(this.floorPlans.keySet()));
 
     // Define the floor height
@@ -145,7 +145,14 @@ public class Building {
     return floorPlanElementOptions;
   }
 
-  // Sort elements based on B -> L -> G -> U -> F order for floors
+  /**
+   * Sort the floor plan names such that the lowest index
+   * is the lowest floor. Also sets the ground floor index
+   * for future reference
+   *
+   * @param names The unsorted list of floor plan names
+   * @return The sorted floor plan names
+   * */
   private List<String> defineFloorNameOrder(List<String> names){
     List<String> orderedNames = new ArrayList<>();
     for (String floorPrefix : BUILDING_FLOOR_PREFIX_ORDER){
@@ -173,16 +180,15 @@ public class Building {
    * @return true if an indoor map is visible to the user, false otherwise
    */
   public boolean getIsInsideBuilding(){return isInsideBuilding;}
-  public void setIsPreviewingFloorPlan(boolean set){
-    isPreviewingFloorPlan = set;
-  }
   public boolean getIsPreviowingFloorPlan(){return isPreviewingFloorPlan;}
-
   public int getFloorNumber(){return floorNumber;}
   public List<String> getFloorNames(){return floorNames;}
   public Polygon getBuildingOutline(){return outlinePolygon;}
   public List<Polyline> getFloorPlanElements(String floorName){
     return floorPlanElements.get(floorName);
+  }
+  public void setIsPreviewingFloorPlan(boolean set){
+    isPreviewingFloorPlan = set;
   }
 
   /**
@@ -204,6 +210,11 @@ public class Building {
     }
   }
 
+  /**
+   * Set the fill colour of the building polygon
+   *
+   * @param colour The desired colour of the polygon
+   * */
   public void setFillColour(int colour){
     if (outlinePolygon == null){
       Log.w("Building", name + ": Outline polygon is null!");
@@ -244,6 +255,9 @@ public class Building {
 
   /**
    * Hide all available floor plans for the building
+   *
+   * @param map The GoogleMap object showing the floor plans
+   *            of the building
    * */
   public void hideFloorPlans(GoogleMap map){
     for (int i = 0; i < floorNames.size(); i++) {
@@ -260,6 +274,10 @@ public class Building {
    * <p>
    * Either add the polylines required if they have never been
    * drawn before, or toggle their visibility
+   * @param map The GoogleMap object drawing the floor plans
+   * @param floorNumber The floor being displayed or hidden
+   * @param showFloor True if the floor plan should be visible;
+   *                  false otherwise, to hide the floorplan
    * */
   public void editFloorPlan(GoogleMap map, int floorNumber, boolean showFloor){
     String floorName = floorNames.get(floorNumber);

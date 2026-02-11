@@ -1,12 +1,5 @@
 # Embedded Mobile and Wireless Systems (EWireless) 5 2025/26
 ## Coursework 1 - Group 13
-### Contributors
-- Vlad Stratulat (vlad118)
-- Stewart Alexander (sa-fx)
-- Keegan McGowan (keeegannn)
-- Alex Mackenzie (alexmac3002)
-
-# 
 
 [![Android 11](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-11.yml/badge.svg)](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-11.yml) [![Android 16](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-16.yml/badge.svg)](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-16.yml)
 

@@ -139,7 +139,7 @@
     <string name="replay_frag_play">Play</string>
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
-    <string name="button_indoorPositioning">Indoor Positioning (Coming Soon)</string>
+    <string name="button_indoorPositioning">Indoor Positioning (In Development)</string>
     <string name="text_map_type">Map Type</string>
     <string name="drop_marker">Drop Marker</string>
 

@@ -173,7 +173,8 @@ public class CorrectionFragment extends Fragment {
             public void onClick(View view) {
                 // Set campaign, and wait until upload is complete
                 sensorFusion.setCurrentBuilding(selectedCampaign);
-                while(!sensorFusion.sendTrajectoryToCloud()){}
+                boolean result = sensorFusion.sendTrajectoryToCloud();
+                while(!result){}
                 sensorFusion.setCurrentBuilding(BUILDING_NAME_OUTSIDE);
 
                 // Now, simply tell the Activity we are done:
@@ -211,7 +212,12 @@ public class CorrectionFragment extends Fragment {
             // Set item selected listener
             campaignSelect.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
                 @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                public void onItemSelected(
+                    AdapterView<?> parent,
+                    View view,
+                    int position,
+                    long id
+                ) {
                     switch (position) {
                         case 0:
                             selectedCampaign = BUILDING_NAME_M_HOUSE;
@@ -220,7 +226,8 @@ public class CorrectionFragment extends Fragment {
                             selectedCampaign = BUILDING_NAME_NUCLEUS;
                             break;
                     }
-                    Log.d("CorrectionFragment", "Selected campaign: " + selectedCampaign); // Log selection
+                    // Log selection
+                    Log.d("CorrectionFragment", "Selected campaign: " + selectedCampaign);
                 }
 
                 @Override

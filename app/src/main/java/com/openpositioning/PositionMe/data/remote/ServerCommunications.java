@@ -380,6 +380,7 @@ public class ServerCommunications implements Observable {
             .build();
 
         // Enqueue the request to be executed asynchronously and handle the response
+        Toast.makeText(context, "Local trajectory sent for upload", Toast.LENGTH_SHORT).show();
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -389,13 +390,15 @@ public class ServerCommunications implements Observable {
                 "ServerCommunications", 
                 "[" + e.getMessage() + "] UPLOAD: Failure to get response"
                 );
-                notifyObservers(OBSERVER_INDEX_MAIN);
-
-                // Show error message to users
-                infoResponse = "Upload failed: " + e.getMessage(); // Store error message
+                // Notify users
                 new Handler(Looper.getMainLooper()).post(() ->
-                    Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        "Upload failed\nServer unresponsive or unreachable",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 );
+                notifyObservers(OBSERVER_INDEX_MAIN);
             }
 
             @Override
@@ -407,7 +410,7 @@ public class ServerCommunications implements Observable {
                         assert responseBody != null;
                         String errorBody = responseBody.string();
                         Log.e("ServerCommunications", "UPLOAD unsuccessful: " + errorBody);
-                        infoResponse = "Upload failed: " + errorBody;
+                        infoResponse = "Upload failed (Error code " + response.code() + ")";
                         new Handler(Looper.getMainLooper()).post(() ->
                                 Toast.makeText(context, infoResponse, Toast.LENGTH_SHORT).show());
                         throw new IOException("UPLOAD failed with code " + response);
@@ -428,7 +431,13 @@ public class ServerCommunications implements Observable {
                     "ServerCommunications",
                     "UPLOAD SUCCESSFUL: " + responseBody.string()
                     );
-
+                    new Handler(Looper.getMainLooper()).post(() ->
+                        Toast.makeText(
+                            context,
+                            "Upload successful\nRemoving local copy...",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    );
                     // Delete local file, set success to true and notify observers
                     success = localTrajectory.delete();
                     notifyObservers(OBSERVER_INDEX_MAIN);
@@ -592,6 +601,7 @@ public class ServerCommunications implements Observable {
             .build();
 
         // Enqueue the GET request for asynchronous execution
+        Toast.makeText(context, "Request sent for recording " + id, Toast.LENGTH_SHORT).show();
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -606,6 +616,14 @@ public class ServerCommunications implements Observable {
                     );
                     Log.d("ServerCommunications", "Trajectories received.\n"
                     + "Now parsing for ID " + id + " (Position " + position + ")");
+                    new Handler(Looper.getMainLooper()).post(() ->
+                        Toast.makeText(
+                            context,
+                            "Downloaded trajectory " + id + "\n"
+                                +"Now parsing...",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    );
 
                     // Extract the nth entry from the zip
                     InputStream inputStream = responseBody.byteStream();
@@ -669,10 +687,25 @@ public class ServerCommunications implements Observable {
 
                         // Save the download record
                         saveDownloadRecord(startTimestamp, fileName, id, dateSubmitted);
+                        new Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(
+                                context,
+                                "Trajectory " + id + " is ready for replay!",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        );
                     } catch (IOException ee) {
                         Log.e(
                         "ServerCommunications",
                         "Trajectory download failed: " + ee.getMessage());
+                        new Handler(Looper.getMainLooper()).post(() ->
+                            Toast.makeText(
+                                context,
+                                "There was a problem parsing trajectory " + id + "\n"
+                                    + "Please try again later",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        );
                     } finally {
                         // Close all streams and entries to release resources
                         zipInputStream.closeEntry();
@@ -704,7 +737,6 @@ public class ServerCommunications implements Observable {
             .build();
 
         // Enqueue the GET request for asynchronous execution
-        Toast.makeText(context, "Request sent", Toast.LENGTH_SHORT).show();
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override public void onFailure(Call call, IOException e) {
                 Log.e("ServerCommunications", "Error: " + e.getMessage());
@@ -722,13 +754,6 @@ public class ServerCommunications implements Observable {
                     // Print a message in the console and notify observers
                     Log.i("ServerCommunications", "Response received; URL " + requestURL);
                     Log.i("ServerCommunications", infoResponse);
-                    new Handler(Looper.getMainLooper()).post(() ->
-                        Toast.makeText(
-                            context,
-                        "Response Received (Code " + response.code() + ")",
-                            Toast.LENGTH_SHORT)
-                        .show()
-                    );
                     notifyObservers(OBSERVER_INDEX_FILES);
                 }
             }
@@ -926,6 +951,7 @@ public class ServerCommunications implements Observable {
                 o.update(new String[] {infoResponse});
             }
             else if (index == OBSERVER_INDEX_MAIN && o instanceof MainActivity) {
+                Log.d("ServerCommunications", "Telling home!");
                 o.update(new Boolean[] {success});
             }
             else if (index == OBSERVER_INDEX_RECORDING && o instanceof RecordingFragment) {
