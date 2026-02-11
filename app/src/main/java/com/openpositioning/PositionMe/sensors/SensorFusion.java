@@ -153,6 +153,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float light;
     private float proximity;
     private float[] R;
+
+    private float initialYawRad = 0f;
     private int stepCounter;
     // Derived values
     private float elevation;
@@ -459,24 +461,28 @@ public class SensorFusion implements SensorEventListener, Observer {
                 // Extract yaw/pitch/roll (radians) from the remapped matrix
                 SensorManager.getOrientation(remappedDCM, this.orientation);
 
+                float yaw = this.orientation[0];
+
+                // --- 4) Compute a real quaternion from rotation vector and store as x,y,z,w ---
+                float[] quatWxyz = new float[4];
+                SensorManager.getQuaternionFromVector(quatWxyz, this.rotation); // [w, x, y, z]
+
+                // Keep this.rotation always length 4: [x,y,z,w]
+                this.rotation[0] = quatWxyz[1];
+                this.rotation[1] = quatWxyz[2];
+                this.rotation[2] = quatWxyz[3];
+                this.rotation[3] = quatWxyz[0];
+
+                // --- 5) Snapshot initial heading/orientation ONCE at start of recording ---
                 if (saveRecording && !initialOrientationSet) {
                     initialOrientationSet = true;
+                    initialYawRad = yaw;
 
-                    final float[] initialOrientation = new float[3];   // yaw,pitch,roll (radians)
-                    final float[] initialRotationQuat = new float[4];  // x,y,z,w
-
-                    // Snapshot yaw/pitch/roll
-                    System.arraycopy(this.orientation, 0, initialOrientation, 0, 3);
-
-                    // Snapshot quaternion
-                    System.arraycopy(this.rotation, 0, initialRotationQuat, 0, 4);
-
-                    // Write initial IMU entry (protobuf initial orientation)
                     Traj.Quaternion.Builder q0 = Traj.Quaternion.newBuilder()
-                            .setX(initialRotationQuat[0])
-                            .setY(initialRotationQuat[1])
-                            .setZ(initialRotationQuat[2])
-                            .setW(initialRotationQuat[3]);
+                            .setX(this.rotation[0])
+                            .setY(this.rotation[1])
+                            .setZ(this.rotation[2])
+                            .setW(this.rotation[3]);
 
                     trajectory.addImuData(Traj.IMUReading.newBuilder()
                             .setRelativeTimestamp(0)
@@ -484,11 +490,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                             .setStepCount(0));
                 }
 
-                // Empirical fix: some devices/activity configurations yield an azimuth that is
-                // consistently shifted by +90° relative to the map/PDR frame.
-                // App is locked to portrait and the phone is held in portrait, so we correct here
-                // so BOTH PDR updates and map marker rotation use the same corrected heading.
-                this.orientation[0] = wrapAngleRad(this.orientation[0] - (float) (1.45));
+                // If you want "heading relative to start", expose/consume this:
+                // float relativeYaw = wrapAngleRad(yaw - initialYawRad);
+
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
