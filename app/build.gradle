@@ -25,6 +25,9 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
+        manifestPlaceholders = [
+                MAPS_API_KEY: localProperties['MAPS_API_KEY'] ?: ''
+        ]
         // Example of referencing secrets (if you use secrets.properties):
         buildConfigField "String", "MAPS_API_KEY",
                 "\"${localProperties['MAPS_API_KEY'] ?: ''}\""

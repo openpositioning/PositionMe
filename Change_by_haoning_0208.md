@@ -39,7 +39,7 @@
 
 | Old Method | New Method |
 |------------|------------|
-| `addMacScans()` | `addRfScans()` |
+| `addRfScans()` | `addRfScans()` |
 | `addWifiData()` | `addWifiFingerprints()` |
 | `addPositionData()` | `addMagnetometerData()` |
 | `getPositionDataCount()` | `getMagnetometerDataCount()` |
