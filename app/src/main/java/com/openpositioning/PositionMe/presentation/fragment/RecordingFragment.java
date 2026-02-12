@@ -92,7 +92,7 @@ public class RecordingFragment extends Fragment {
     private TextView bleCountText;
     private TextView imuCountText;
     private LinearLayout trajectoryInfoContent;
-    private TextView collapseIcon;  // 使用 TextView 显示 ▼ ▶
+    private TextView collapseIcon;
     private boolean isCardExpanded = false;
 
     // Counters
@@ -181,7 +181,7 @@ public class RecordingFragment extends Fragment {
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
 
-        // Bind Trajectory Info Card (NEW - 合并后的卡片)
+        // Bind Trajectory Info Card
         trajectoryNameText = view.findViewById(R.id.trajectoryNameText);
         initialPositionText = view.findViewById(R.id.initialPositionText);
         initialOrientationText = view.findViewById(R.id.initialOrientationText);

@@ -72,65 +72,58 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <!-- Floor Down Button (Bottom-most) -->
+
+        <!-- Floor Label (Middle) -->
+
+        <!-- Floor Up Button (Top-most) -->
+
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/floorDownButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_margin="16dp"
+            android:layout_marginEnd="36dp"
+            android:layout_marginBottom="16dp"
             android:contentDescription="@string/floor_down"
             android:src="@android:drawable/arrow_down_float"
-            app:backgroundTint="@color/md_theme_primary"
+            app:backgroundTint="@android:color/white"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:tint="@color/md_theme_onPrimary" />
-
-
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/floorCard"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="12dp"
-            app:cardCornerRadius="20dp"
-            app:cardElevation="6dp"
-            app:cardBackgroundColor="@android:color/white"
-            app:strokeColor="#22000000"
-            app:strokeWidth="1dp">
-
-        </com.google.android.material.card.MaterialCardView>
-
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/floorUpButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="48dp"
-            android:contentDescription="@string/floor_up"
-            android:src="@android:drawable/arrow_up_float"
-            app:backgroundTint="@color/md_theme_primary"
-            app:layout_constraintBottom_toTopOf="@id/floorDownButton"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:tint="@color/md_theme_onPrimary" />
+            app:tint="@android:color/black" />
 
         <TextView
             android:id="@+id/floorLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="93dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="16dp"
+            android:background="@android:color/white"
             android:paddingStart="16dp"
             android:paddingTop="8dp"
             android:paddingEnd="16dp"
             android:paddingBottom="8dp"
             android:text="Floor G"
-            android:textColor="#111111"
+            android:textColor="@android:color/black"
             android:textSize="14sp"
             android:textStyle="bold"
-            app:layout_constraintBottom_toTopOf="@+id/floorUpButton"
+            app:layout_constraintBottom_toTopOf="@id/floorDownButton"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/floorUpButton"
+            android:layout_width="65dp"
+            android:layout_height="59dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="20dp"
+            android:contentDescription="@string/floor_up"
+            android:src="@android:drawable/arrow_up_float"
+            app:backgroundTint="@android:color/white"
+            app:layout_constraintBottom_toTopOf="@+id/floorLabel"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.951"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="0.914" />
+            app:tint="@android:color/black" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
+
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
