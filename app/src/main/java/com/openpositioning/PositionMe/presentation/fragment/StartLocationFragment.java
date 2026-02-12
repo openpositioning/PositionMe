@@ -42,6 +42,7 @@ public class StartLocationFragment extends Fragment {
     private SensorFusion sensorFusion = SensorFusion.getInstance();
     // Google maps LatLng object to pass location to the map
     private LatLng position;
+    private Marker startMarker;
     // Start position of the user to be stored
     private float[] startPosition = new float[2];
     // Zoom level for the Google map
@@ -111,7 +112,7 @@ public class StartLocationFragment extends Fragment {
 
                 // Add a marker at the current GPS location and move the camera
                 position = new LatLng(startPosition[0], startPosition[1]);
-                Marker startMarker = mMap.addMarker(new MarkerOptions()
+                startMarker = mMap.addMarker(new MarkerOptions()
                         .position(position)
                         .title("Start Position")
                         .draggable(true));
@@ -140,6 +141,20 @@ public class StartLocationFragment extends Fragment {
                      */
                     @Override
                     public void onMarkerDrag(Marker marker) {}
+                });
+
+                // Extra feature: tap map to move the start marker instantly.
+                mMap.setOnMapClickListener(latLng -> {
+                    startPosition[0] = (float) latLng.latitude;
+                    startPosition[1] = (float) latLng.longitude;
+                    if (startMarker != null) {
+                        startMarker.setPosition(latLng);
+                    } else {
+                        startMarker = mMap.addMarker(new MarkerOptions()
+                                .position(latLng)
+                                .title("Start Position")
+                                .draggable(true));
+                    }
                 });
             }
         });

@@ -45,7 +45,7 @@
     <string name="elevation">Elevation: %1s</string>
     <string name="averageStepLgn">Computed Avg. Step Length</string>
     <string name="correctStepLgn">unit: cm</string>
-    <string name="locationInstructions">Long press and drag the marker to your start location</string>
+    <string name="locationInstructions">Tap the map or drag the marker to set your start location</string>
     <string name="correctionInstructions">Zoom, scroll and rotate the map \n to correct the path</string>
 
     <!-- Sensor Info -->
