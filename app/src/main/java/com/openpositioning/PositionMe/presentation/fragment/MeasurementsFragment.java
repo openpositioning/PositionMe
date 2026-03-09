@@ -5,9 +5,8 @@ import android.os.Handler;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 import android.widget.ImageView;
-
+import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.cardview.widget.CardView;
@@ -15,26 +14,23 @@ import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.presentation.viewitems.BleListAdapter;
+import com.openpositioning.PositionMe.presentation.viewitems.WifiListAdapter;
 import com.openpositioning.PositionMe.sensors.BleDevice;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.sensors.Wifi;
-import com.openpositioning.PositionMe.presentation.viewitems.WifiListAdapter;
-import com.openpositioning.PositionMe.presentation.viewitems.BleListAdapter;
-
 import java.util.List;
 import java.util.Map;
 
 /**
  * A simple {@link Fragment} subclass. The measurement fragment displays the set of current sensor
- * readings. The values are refreshed periodically, but slower than their internal refresh rate.
- * The refresh time is set by a static constant.
+ * readings. The values are refreshed periodically, but slower than their internal refresh rate. The
+ * refresh time is set by a static constant.
  *
  * @see HomeFragment the previous fragment in the nav graph.
  * @see SensorFusion the source of all sensor readings.
- *
  * @author Mate Stodulka
  */
 public class MeasurementsFragment extends Fragment {
@@ -60,17 +56,14 @@ public class MeasurementsFragment extends Fragment {
     private ImageView wifiExpandIcon;
     private ImageView bleExpandIcon;
 
-    /**
-     * Public default constructor, empty.
-     */
+    /** Public default constructor, empty. */
     public MeasurementsFragment() {
         // Required empty public constructor
     }
 
     /**
-     * {@inheritDoc}
-     * Obtains the singleton Sensor Fusion instance and initialises the string prefaces for display.
-     * Creates a new handler to periodically refresh data.
+     * {@inheritDoc} Obtains the singleton Sensor Fusion instance and initialises the string
+     * prefaces for display. Creates a new handler to periodically refresh data.
      *
      * @see SensorFusion handles all sensor data.
      */
@@ -80,21 +73,20 @@ public class MeasurementsFragment extends Fragment {
         // Get sensor fusion instance
         sensorFusion = SensorFusion.getInstance();
         // Initialise string prefaces for display
-        prefaces =  new int[]{R.string.x, R.string.y, R.string.z};
-        gnssPrefaces =  new int[]{R.string.lati, R.string.longi};
+        prefaces = new int[] {R.string.x, R.string.y, R.string.z};
+        gnssPrefaces = new int[] {R.string.lati, R.string.longi};
 
         // Create new handler to refresh the UI.
         this.refreshDataHandler = new Handler();
     }
 
     /**
-     * {@inheritDoc}
-     * Sets title in the action bar to Sensor Measurements.
-     * Posts the {@link MeasurementsFragment#refreshTableTask} using the Handler.
+     * {@inheritDoc} Sets title in the action bar to Sensor Measurements. Posts the {@link
+     * MeasurementsFragment#refreshTableTask} using the Handler.
      */
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(
+            LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View rootView = inflater.inflate(R.layout.fragment_measurements, container, false);
         getActivity().setTitle("Sensor Measurements");
@@ -102,20 +94,14 @@ public class MeasurementsFragment extends Fragment {
         return rootView;
     }
 
-    /**
-     * {@inheritDoc}
-     * Pauses the data refreshing when the fragment is not in focus.
-     */
+    /** {@inheritDoc} Pauses the data refreshing when the fragment is not in focus. */
     @Override
     public void onPause() {
         refreshDataHandler.removeCallbacks(refreshTableTask);
         super.onPause();
     }
 
-    /**
-     * {@inheritDoc}
-     * Restarts the data refresh when the fragment returns to focus.
-     */
+    /** {@inheritDoc} Restarts the data refresh when the fragment returns to focus. */
     @Override
     public void onResume() {
         refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
@@ -123,14 +109,14 @@ public class MeasurementsFragment extends Fragment {
     }
 
     /**
-     * {@inheritDoc}
-     * Obtains the constraint layout holding the sensor measurement values. Initialises the Recycler
-     * View for holding WiFi data and registers its Layout Manager.
+     * {@inheritDoc} Obtains the constraint layout holding the sensor measurement values.
+     * Initialises the Recycler View for holding WiFi data and registers its Layout Manager.
      */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        sensorMeasurementList = (ConstraintLayout) getView().findViewById(R.id.sensorMeasurementList);
+        sensorMeasurementList =
+                (ConstraintLayout) getView().findViewById(R.id.sensorMeasurementList);
         wifiListView = (RecyclerView) getView().findViewById(R.id.wifiList);
         wifiListView.setLayoutManager(new LinearLayoutManager(getActivity()));
         wifiAdapter = new WifiListAdapter(getActivity(), new java.util.ArrayList<>());
@@ -153,85 +139,95 @@ public class MeasurementsFragment extends Fragment {
         wifiListView.setVisibility(View.GONE);
         bleListView.setVisibility(View.GONE);
 
-        wifiTitleCard.setOnClickListener(v -> {
-            if (wifiListView.getVisibility() == View.VISIBLE) {
-                wifiListView.setVisibility(View.GONE);
-                wifiExpandIcon.setRotation(0);
-            } else {
-                wifiListView.setVisibility(View.VISIBLE);
-                bleListView.setVisibility(View.GONE);
-                wifiExpandIcon.setRotation(180);
-                bleExpandIcon.setRotation(0);
-            }
-        });
+        wifiTitleCard.setOnClickListener(
+                v -> {
+                    if (wifiListView.getVisibility() == View.VISIBLE) {
+                        wifiListView.setVisibility(View.GONE);
+                        wifiExpandIcon.setRotation(0);
+                    } else {
+                        wifiListView.setVisibility(View.VISIBLE);
+                        bleListView.setVisibility(View.GONE);
+                        wifiExpandIcon.setRotation(180);
+                        bleExpandIcon.setRotation(0);
+                    }
+                });
 
-        bleTitleCard.setOnClickListener(v -> {
-            if (bleListView.getVisibility() == View.VISIBLE) {
-                bleListView.setVisibility(View.GONE);
-                bleExpandIcon.setRotation(0);
-            } else {
-                bleListView.setVisibility(View.VISIBLE);
-                wifiListView.setVisibility(View.GONE);
-                bleExpandIcon.setRotation(180);
-                wifiExpandIcon.setRotation(0);
-            }
-        });
+        bleTitleCard.setOnClickListener(
+                v -> {
+                    if (bleListView.getVisibility() == View.VISIBLE) {
+                        bleListView.setVisibility(View.GONE);
+                        bleExpandIcon.setRotation(0);
+                    } else {
+                        bleListView.setVisibility(View.VISIBLE);
+                        wifiListView.setVisibility(View.GONE);
+                        bleExpandIcon.setRotation(180);
+                        wifiExpandIcon.setRotation(0);
+                    }
+                });
 
         wifiTitleText.setOnClickListener(v -> wifiTitleCard.performClick());
         bleTitleText.setOnClickListener(v -> bleTitleCard.performClick());
     }
 
     /**
-     * Runnable task containing functionality to update the UI with the relevant sensor data.
-     * Must be run on the UI thread via a Handler. Obtains movement sensor values and the current
-     * WiFi networks from the {@link SensorFusion} instance and updates the UI with the new data
-     * and the string wrappers provided.
+     * Runnable task containing functionality to update the UI with the relevant sensor data. Must
+     * be run on the UI thread via a Handler. Obtains movement sensor values and the current WiFi
+     * networks from the {@link SensorFusion} instance and updates the UI with the new data and the
+     * string wrappers provided.
      *
      * @see SensorFusion class handling all sensors and data processing.
      * @see Wifi class holding network data.
      */
-    private final Runnable refreshTableTask = new Runnable() {
-        @Override
-        public void run() {
-            // Get all the values from SensorFusion
-            Map<SensorTypes, float[]> sensorValueMap = sensorFusion.getSensorValueMap();
-            // Loop through UI elements and update the values
-            for(SensorTypes st : SensorTypes.values()) {
-                CardView cardView = (CardView) sensorMeasurementList.getChildAt(st.ordinal());
-                ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
-                float[] values = sensorValueMap.get(st);
-                for (int i = 0; i < values.length; i++) {
-                    String valueString;
-                    // Set string wrapper based on data type.
-                    if(values.length == 1) {
-                        valueString = getString(R.string.level, String.format("%.2f", values[0]));
+    private final Runnable refreshTableTask =
+            new Runnable() {
+                @Override
+                public void run() {
+                    // Get all the values from SensorFusion
+                    Map<SensorTypes, float[]> sensorValueMap = sensorFusion.getSensorValueMap();
+                    // Loop through UI elements and update the values
+                    for (SensorTypes st : SensorTypes.values()) {
+                        CardView cardView =
+                                (CardView) sensorMeasurementList.getChildAt(st.ordinal());
+                        ConstraintLayout currentRow = (ConstraintLayout) cardView.getChildAt(0);
+                        float[] values = sensorValueMap.get(st);
+                        for (int i = 0; i < values.length; i++) {
+                            String valueString;
+                            // Set string wrapper based on data type.
+                            if (values.length == 1) {
+                                valueString =
+                                        getString(R.string.level, String.format("%.2f", values[0]));
+                            } else if (values.length == 2) {
+                                if (st == SensorTypes.GNSSLATLONG)
+                                    valueString =
+                                            getString(
+                                                    gnssPrefaces[i],
+                                                    String.format("%.2f", values[i]));
+                                else
+                                    valueString =
+                                            getString(
+                                                    prefaces[i], String.format("%.2f", values[i]));
+                            } else {
+                                valueString =
+                                        getString(prefaces[i], String.format("%.2f", values[i]));
+                            }
+                            ((TextView) currentRow.getChildAt(i + 1)).setText(valueString);
+                        }
                     }
-                    else if(values.length == 2){
-                        if(st == SensorTypes.GNSSLATLONG)
-                            valueString = getString(gnssPrefaces[i], String.format("%.2f", values[i]));
-                        else
-                            valueString = getString(prefaces[i], String.format("%.2f", values[i]));
+                    // Get all WiFi values - convert to list of strings
+                    List<Wifi> wifiObjects = sensorFusion.getWifiList();
+                    // If there are WiFi networks visible, update the recycler view with the data.
+                    if (wifiObjects != null) {
+                        wifiAdapter.updateData(wifiObjects);
                     }
-                    else{
-                        valueString = getString(prefaces[i], String.format("%.2f", values[i]));
+                    // Get all Bluetooth values - convert to list of strings
+                    List<BleDevice> bleObjects = sensorFusion.getBleList();
+                    // If there are Bluetooth devices visible, update the recycler view with the
+                    // data.
+                    if (bleObjects != null && !bleObjects.isEmpty()) {
+                        bleAdapter.updateData(bleObjects);
                     }
-                    ((TextView) currentRow.getChildAt(i + 1)).setText(valueString);
+                    // Restart the data updater task in REFRESH_TIME milliseconds.
+                    refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
                 }
-            }
-            // Get all WiFi values - convert to list of strings
-            List<Wifi> wifiObjects = sensorFusion.getWifiList();
-            // If there are WiFi networks visible, update the recycler view with the data.
-            if(wifiObjects != null) {
-                wifiAdapter.updateData(wifiObjects);
-            }
-            // Get all Bluetooth values - convert to list of strings
-            List<BleDevice> bleObjects = sensorFusion.getBleList();
-            // If there are Bluetooth devices visible, update the recycler view with the data.
-            if(bleObjects != null && !bleObjects.isEmpty()) {
-                bleAdapter.updateData(bleObjects);
-            }
-            // Restart the data updater task in REFRESH_TIME milliseconds.
-            refreshDataHandler.postDelayed(refreshTableTask, REFRESH_TIME);
-        }
-    };
+            };
 }

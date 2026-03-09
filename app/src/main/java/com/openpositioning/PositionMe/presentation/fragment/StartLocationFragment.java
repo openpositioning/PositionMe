@@ -8,12 +8,10 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
-
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -51,33 +49,23 @@ public class StartLocationFragment extends Fragment {
     // Dummy variable for floor index
     private int FloorNK;
 
-    /**
-     * Public Constructor for the class.
-     * Left empty as not required
-     */
+    /** Public Constructor for the class. Left empty as not required */
     public StartLocationFragment() {
         // Required empty public constructor
     }
 
     /**
-     * {@inheritDoc}
-     * The map is loaded and configured so that it displays a draggable marker for the start location
+     * {@inheritDoc} The map is loaded and configured so that it displays a draggable marker for the
+     * start location
      */
     @Override
     public View onCreateView(
-        @NonNull LayoutInflater inflater,
-        ViewGroup container,
-        Bundle savedInstanceState
-    ) {
+            @NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         AppCompatActivity activity = (AppCompatActivity) getActivity();
         if (activity != null && activity.getSupportActionBar() != null) {
             activity.getSupportActionBar().hide();
         }
-        View rootView = inflater.inflate(
-            R.layout.fragment_startlocation,
-            container,
-            false
-        );
+        View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
 
         // Get current GPS location to display as default marker position
         startPosition = sensorFusion.getGNSSLatitude(false);
@@ -89,111 +77,110 @@ public class StartLocationFragment extends Fragment {
         }
 
         // Initialize map fragment
-        SupportMapFragment supportMapFragment = (SupportMapFragment)
-            getChildFragmentManager().findFragmentById(R.id.startMap);
+        SupportMapFragment supportMapFragment =
+                (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.startMap);
 
-        supportMapFragment.getMapAsync(new OnMapReadyCallback() {
-            /**
-             * {@inheritDoc}
-             * Controls to allow scrolling, tilting, rotating and
-             * a compass view of the map are enabled.
-             * <p>
-             * A marker is added to the map with the start position, and
-             * a marker drag listener is generated to detect
-             * when the marker has moved to obtain the new location.
-             */
-            @Override
-            public void onMapReady(GoogleMap mMap) {
-                // Set map type and UI settings
-                mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-                mMap.getUiSettings().setCompassEnabled(true);
-                mMap.getUiSettings().setTiltGesturesEnabled(true);
-                mMap.getUiSettings().setRotateGesturesEnabled(true);
-                mMap.getUiSettings().setScrollGesturesEnabled(true);
-
-                // *** FIX: Clear any existing markers so the start marker isn’t duplicated ***
-                mMap.clear();
-
-                // Add a marker at the current GPS location and move the camera
-                position = new LatLng(startPosition[0], startPosition[1]);
-                mMap.addMarker(new MarkerOptions()
-                    .position(position)
-                    .title("Start Position")
-                    .draggable(true));
-                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
-
-                // Drag listener for the marker to update the start position when dragged
-                mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
+        supportMapFragment.getMapAsync(
+                new OnMapReadyCallback() {
                     /**
-                     * {@inheritDoc}
+                     * {@inheritDoc} Controls to allow scrolling, tilting, rotating and a compass
+                     * view of the map are enabled.
+                     *
+                     * <p>A marker is added to the map with the start position, and a marker drag
+                     * listener is generated to detect when the marker has moved to obtain the new
+                     * location.
                      */
                     @Override
-                    public void onMarkerDragStart(Marker marker) {}
+                    public void onMapReady(GoogleMap mMap) {
+                        // Set map type and UI settings
+                        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                        mMap.getUiSettings().setCompassEnabled(true);
+                        mMap.getUiSettings().setTiltGesturesEnabled(true);
+                        mMap.getUiSettings().setRotateGesturesEnabled(true);
+                        mMap.getUiSettings().setScrollGesturesEnabled(true);
 
-                    /**
-                     * {@inheritDoc}
-                     * Updates the start position of the user.
-                     */
-                    @Override
-                    public void onMarkerDragEnd(Marker marker) {
-                        startPosition[0] = (float) marker.getPosition().latitude;
-                        startPosition[1] = (float) marker.getPosition().longitude;
+                        // *** FIX: Clear any existing markers so the start marker isn’t duplicated
+                        // ***
+                        mMap.clear();
+
+                        // Add a marker at the current GPS location and move the camera
+                        position = new LatLng(startPosition[0], startPosition[1]);
+                        mMap.addMarker(
+                                new MarkerOptions()
+                                        .position(position)
+                                        .title("Start Position")
+                                        .draggable(true));
+                        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
+
+                        // Drag listener for the marker to update the start position when dragged
+                        mMap.setOnMarkerDragListener(
+                                new GoogleMap.OnMarkerDragListener() {
+                                    /** {@inheritDoc} */
+                                    @Override
+                                    public void onMarkerDragStart(Marker marker) {}
+
+                                    /** {@inheritDoc} Updates the start position of the user. */
+                                    @Override
+                                    public void onMarkerDragEnd(Marker marker) {
+                                        startPosition[0] = (float) marker.getPosition().latitude;
+                                        startPosition[1] = (float) marker.getPosition().longitude;
+                                    }
+
+                                    /** {@inheritDoc} */
+                                    @Override
+                                    public void onMarkerDrag(Marker marker) {}
+                                });
                     }
-
-                    /**
-                     * {@inheritDoc}
-                     */
-                    @Override
-                    public void onMarkerDrag(Marker marker) {}
                 });
-            }
-        });
 
         return rootView;
     }
 
     /**
-     * {@inheritDoc}
-     * Button onClick listener enabled to detect when to go
-     * to next fragment and start PDR recording.
+     * {@inheritDoc} Button onClick listener enabled to detect when to go to next fragment and start
+     * PDR recording.
      */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
         this.button = view.findViewById(R.id.startLocationDone);
-        this.button.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * When button clicked the PDR recording can start and the start position is stored for
-             * the {@link CorrectionFragment} to display. The {@link RecordingFragment} is loaded.
-             */
-            @Override
-            public void onClick(View view) {
-                float chosenLat = startPosition[0];
-                float chosenLon = startPosition[1];
+        this.button.setOnClickListener(
+                new View.OnClickListener() {
+                    /**
+                     * {@inheritDoc} When button clicked the PDR recording can start and the start
+                     * position is stored for the {@link CorrectionFragment} to display. The {@link
+                     * RecordingFragment} is loaded.
+                     */
+                    @Override
+                    public void onClick(View view) {
+                        float chosenLat = startPosition[0];
+                        float chosenLon = startPosition[1];
 
-                // If the Activity is RecordingActivity
-                if (requireActivity() instanceof RecordingActivity) {
-                    // Start sensor recording + set the start location
-                    sensorFusion.setStartGNSSLatitude(startPosition);
-                    sensorFusion.startRecording();
+                        // If the Activity is RecordingActivity
+                        if (requireActivity() instanceof RecordingActivity) {
+                            // Start sensor recording + set the start location
+                            sensorFusion.setStartGNSSLatitude(startPosition);
+                            sensorFusion.startRecording();
 
-                    // Now switch to the recording screen
-                    ((RecordingActivity) requireActivity()).showRecordingScreen();
+                            // Now switch to the recording screen
+                            ((RecordingActivity) requireActivity()).showRecordingScreen();
 
-                    // If the Activity is ReplayActivity
-                } else if (requireActivity() instanceof ReplayActivity) {
-                    // *Do not* cast to RecordingActivity here
-                    // Just call the Replay method
-                    ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);
+                            // If the Activity is ReplayActivity
+                        } else if (requireActivity() instanceof ReplayActivity) {
+                            // *Do not* cast to RecordingActivity here
+                            // Just call the Replay method
+                            ((ReplayActivity) requireActivity())
+                                    .onStartLocationChosen(chosenLat, chosenLon);
 
-                    // Otherwise (unexpected host)
-                } else {
-                    // Optional: log or handle error
-                    Log.e("StartLocationFragment", "Unknown host Activity: " + requireActivity());
-                }
-            }
-        });
+                            // Otherwise (unexpected host)
+                        } else {
+                            // Optional: log or handle error
+                            Log.e(
+                                    "StartLocationFragment",
+                                    "Unknown host Activity: " + requireActivity());
+                        }
+                    }
+                });
     }
 }

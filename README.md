@@ -3,7 +3,7 @@
 
 [![Android 11](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-11.yml/badge.svg)](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-11.yml) [![Android 16](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-16.yml/badge.svg)](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-16.yml)
 
-**PositionMe** is an indoor positioning data collection application initially developed for the University of Edinburgh's Embedded Wireless course. The application now includes enhanced features, including **trajectory playback**, improved UI design, and comprehensive location tracking.
+**PositionMe** is an indoor positioning data collection application initially developed for the [University of Edinburgh's Embedded Wireless course](https://www.drps.ed.ac.uk/25-26/dpt/cxelee11083.htm). The application now includes enhanced features, including **trajectory playback**, improved UI design, and comprehensive location tracking.
 
 ## Features
 
@@ -23,11 +23,19 @@
 - **Android Studio 4.2** or later
 - **Android SDK 30** or later
 
+For developers, the latest commits have been tested using the following configuration:
+- [Android Studio 2024.2.1 Patch 1 ('Ladybird')](https://developer.android.com/studio/archive)
+  - Android Gradle Plugin 8.7.3
+  - Gradle 8.10.2
+  - Google Services 4.4.2
+  - [Spotless](https://github.com/diffplug/spotless) 8.3.0
+- Android SDK 34 ('Android 14')
+
 ## Installation
 
 1. **Clone the repository.**
 2. **Open the project in Android Studio**.
-3. Add your own API key for Google Maps in AndroidManifest.xml
+3. Add your own API key for Google Maps in `AndroidManifest.xml`
 4. Set the website where you want to send your data. The application was built for use with [openpositioning.org](http://openpositioning.org/).
 5. **Build and run the project on your Android device**.
 

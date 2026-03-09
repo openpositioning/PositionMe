@@ -5,9 +5,9 @@ import com.openpositioning.PositionMe.presentation.fragment.MeasurementsFragment
 /**
  * Enum of the sensor types.
  *
- * Simplified version of default Android Sensor.TYPE, with the order matching the table layout for
- * the {@link MeasurementsFragment}. Includes virtual sensors and other
- * data providing devices as well as derived data.
+ * <p>Simplified version of default Android Sensor.TYPE, with the order matching the table layout
+ * for the {@link MeasurementsFragment}. Includes virtual sensors and other data providing devices
+ * as well as derived data.
  *
  * @author Mate Stodulka
  */

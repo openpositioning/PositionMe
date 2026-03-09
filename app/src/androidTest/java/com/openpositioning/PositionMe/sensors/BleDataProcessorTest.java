@@ -1,11 +1,13 @@
 package com.openpositioning.PositionMe.sensors;
 
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
 import android.content.Context;
-import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
 public class BleDataProcessorTest {
@@ -22,9 +24,10 @@ public class BleDataProcessorTest {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         BleDataProcessor processor = new BleDataProcessor(context);
 
-        Observer testObserver = objList -> {
-            // Test observer
-        };
+        Observer testObserver =
+                objList -> {
+                    // Test observer
+                };
 
         processor.registerObserver(testObserver);
         // If no exception, test passes

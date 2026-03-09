@@ -2,14 +2,11 @@ package com.openpositioning.PositionMe.presentation.viewitems;
 
 import android.view.View;
 import android.widget.TextView;
-
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
-
 import java.lang.ref.WeakReference;
 
 /**
@@ -17,10 +14,10 @@ import java.lang.ref.WeakReference;
  *
  * @see TrajDownloadListAdapter the corresponding list adapter.
  * @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view xml layout file
- *
  * @author Mate Stodulka
  */
-public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
+public class TrajDownloadViewHolder extends RecyclerView.ViewHolder
+        implements View.OnClickListener {
 
     private final TextView trajId;
     private final TextView trajDate;
@@ -28,8 +25,7 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
     private final WeakReference<DownloadClickListener> listenerReference;
 
     /**
-     * {@inheritDoc}
-     * Assign TextView fields corresponding to Trajectory metadata.
+     * {@inheritDoc} Assign TextView fields corresponding to Trajectory metadata.
      *
      * @param listener DownloadClickListener to enable acting on clicks on items.
      * @see FilesFragment generating the data and implementing the listener.
@@ -44,23 +40,17 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
         this.downloadButton.setOnClickListener(this);
     }
 
-    /**
-     * Public getter for trajId.
-     */
+    /** Public getter for trajId. */
     public TextView getTrajId() {
         return trajId;
     }
 
-    /**
-     * Public getter for trajDate.
-     */
+    /** Public getter for trajDate. */
     public TextView getTrajDate() {
         return trajDate;
     }
 
-    /**
-     * Calls the onPositionClick function on the listenerReference object.
-     */
+    /** Calls the onPositionClick function on the listenerReference object. */
     @Override
     public void onClick(View view) {
         listenerReference.get().onPositionClicked(getAdapterPosition());

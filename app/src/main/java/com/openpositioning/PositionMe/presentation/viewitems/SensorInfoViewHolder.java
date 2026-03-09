@@ -2,10 +2,8 @@ package com.openpositioning.PositionMe.presentation.viewitems;
 
 import android.view.View;
 import android.widget.TextView;
-
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.openpositioning.PositionMe.R;
 
 /**
@@ -13,7 +11,6 @@ import com.openpositioning.PositionMe.R;
  *
  * @see SensorInfoListAdapter the corresponding list adapter.
  * @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
- *
  * @author Mate Stodulka
  */
 public class SensorInfoViewHolder extends RecyclerView.ViewHolder {
@@ -22,8 +19,7 @@ public class SensorInfoViewHolder extends RecyclerView.ViewHolder {
     TextView name, vendor, resolution, power, version;
 
     /**
-     * {@inheritDoc}
-     * Assign TextView fields corresponding to SensorInfo attributes.
+     * {@inheritDoc} Assign TextView fields corresponding to SensorInfo attributes.
      *
      * @see com.openpositioning.PositionMe.sensors.SensorInfo the data class
      */

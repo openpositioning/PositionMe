@@ -9,7 +9,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.cardview.widget.CardView;
@@ -18,22 +17,19 @@ import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+import com.openpositioning.PositionMe.presentation.viewitems.TrajDownloadListAdapter;
 import com.openpositioning.PositionMe.presentation.viewitems.TrajDownloadViewHolder;
 import com.openpositioning.PositionMe.sensors.Observer;
-import com.openpositioning.PositionMe.presentation.viewitems.TrajDownloadListAdapter;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * A simple {@link Fragment} subclass. The files fragments displays a list of trajectories already
@@ -43,7 +39,6 @@ import java.util.Map;
  * @see UploadFragment sub-menu for uploading recordings that failed during recording.
  * @see com.openpositioning.PositionMe.Traj the data structure sent and received.
  * @see ServerCommunications the class handling communication with the server.
- *
  * @author Mate Stodulka
  */
 public class FilesFragment extends Fragment implements Observer {
@@ -56,17 +51,14 @@ public class FilesFragment extends Fragment implements Observer {
     // Class handling HTTP communication
     private ServerCommunications serverCommunications;
 
-    /**
-     * Default public constructor, empty.
-     */
+    /** Default public constructor, empty. */
     public FilesFragment() {
         // Required empty public constructor
     }
 
     /**
-     * {@inheritDoc}
-     * Initialise the server communication class and register the FilesFragment as an Observer to
-     * receive the async http responses.
+     * {@inheritDoc} Initialise the server communication class and register the FilesFragment as an
+     * Observer to receive the async http responses.
      */
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -75,13 +67,10 @@ public class FilesFragment extends Fragment implements Observer {
         serverCommunications.registerObserver(this);
     }
 
-    /**
-     * {@inheritDoc}
-     * Sets the title in the action bar.
-     */
+    /** {@inheritDoc} Sets the title in the action bar. */
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(
+            LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View rootView = inflater.inflate(R.layout.fragment_files, container, false);
         getActivity().setTitle("Trajectory recordings");
@@ -89,13 +78,13 @@ public class FilesFragment extends Fragment implements Observer {
     }
 
     /**
-     * {@inheritDoc}
-     * Initialises UI elements, including a navigation card to the {@link UploadFragment} and a
-     * RecyclerView displaying online trajectories.
+     * {@inheritDoc} Initialises UI elements, including a navigation card to the {@link
+     * UploadFragment} and a RecyclerView displaying online trajectories.
      *
      * @see TrajDownloadViewHolder the View Holder for the list.
      * @see TrajDownloadListAdapter the list adapter for displaying the recycler view.
-     * @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view the elements in the list.
+     * @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view the elements in the
+     *     list.
      */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
@@ -104,61 +93,65 @@ public class FilesFragment extends Fragment implements Observer {
         filesList = view.findViewById(R.id.filesList);
         // Get clickable card view
         uploadCard = view.findViewById(R.id.uploadCard);
-        uploadCard.setOnClickListener(new View.OnClickListener() {
-            /**
-             * {@inheritDoc}
-             * Navigates to {@link UploadFragment}.
-             */
-            @Override
-            public void onClick(View view) {
-                NavDirections action = FilesFragmentDirections.actionFilesFragmentToUploadFragment();
-                Navigation.findNavController(view).navigate(action);
-            }
-        });
+        uploadCard.setOnClickListener(
+                new View.OnClickListener() {
+                    /** {@inheritDoc} Navigates to {@link UploadFragment}. */
+                    @Override
+                    public void onClick(View view) {
+                        NavDirections action =
+                                FilesFragmentDirections.actionFilesFragmentToUploadFragment();
+                        Navigation.findNavController(view).navigate(action);
+                    }
+                });
         // Request list of uploaded trajectories from the server.
         serverCommunications.sendInfoRequest(URL_GET_USER_TRAJECTORIES);
         // Force RecyclerView refresh to ensure icon states are correct
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if (filesList.getAdapter() != null) {
-                filesList.getAdapter().notifyDataSetChanged();
-                Log.i("FilesFragment", "RecyclerView refreshed after page load.");
-            }
-        }, 500);
+        new Handler(Looper.getMainLooper())
+                .postDelayed(
+                        () -> {
+                            if (filesList.getAdapter() != null) {
+                                filesList.getAdapter().notifyDataSetChanged();
+                                Log.i("FilesFragment", "RecyclerView refreshed after page load.");
+                            }
+                        },
+                        500);
     }
 
     /**
-     * {@inheritDoc}
-     * Called by {@link ServerCommunications} when the response to the HTTP info request is received.
+     * {@inheritDoc} Called by {@link ServerCommunications} when the response to the HTTP info
+     * request is received.
      *
-     * @param singletonStringList   a single string wrapped in an object array containing the http
-     *                              response from the server.
+     * @param singletonStringList a single string wrapped in an object array containing the http
+     *     response from the server.
      */
     @Override
     public void update(Object[] singletonStringList) {
         // Cast input as a string
         String infoString = (String) singletonStringList[0];
         // Check if the string is non-null and non-empty before processing
-        if(infoString != null && !infoString.isEmpty()) {
+        if (infoString != null && !infoString.isEmpty()) {
             // Process string
             List<Map<String, String>> entryList = processInfoResponse(infoString);
             // Start a handler to be able to modify UI elements
-            new Handler(Looper.getMainLooper()).post(new Runnable() {
-                @Override
-                public void run() {
-                    // Update the RecyclerView with data from the server
-                    updateView(entryList);
-                }
-            });
+            new Handler(Looper.getMainLooper())
+                    .post(
+                            new Runnable() {
+                                @Override
+                                public void run() {
+                                    // Update the RecyclerView with data from the server
+                                    updateView(entryList);
+                                }
+                            });
         }
     }
 
     /**
-     * Parses the info response string from the HTTP communication.
-     * Process the data using the Json library and return the matching Java data structure as a
-     * List of Maps of \<String, String\>. Throws a JSONException if the data is not valid.
+     * Parses the info response string from the HTTP communication. Process the data using the Json
+     * library and return the matching Java data structure as a List of Maps of \<String, String\>.
+     * Throws a JSONException if the data is not valid.
      *
-     * @param infoString    HTTP info request response as a single string
-     * @return              List of Maps of String to String containing ID, owner ID, and date.
+     * @param infoString HTTP info request response as a single string
+     * @return List of Maps of String to String containing ID, owner ID, and date.
      */
     private List<Map<String, String>> processInfoResponse(String infoString) {
         // Initialise empty list
@@ -179,35 +172,39 @@ public class FilesFragment extends Fragment implements Observer {
             Log.e("FilesFragment", "JSON reading failed: " + e.getMessage());
         }
         // Sort the list by the ID fields of the maps
-        entryList.sort(Comparator.comparing(
-            m -> Integer.parseInt(m.get("id")),
-            Comparator.nullsLast(Comparator.naturalOrder()))
-        );
+        entryList.sort(
+                Comparator.comparing(
+                        m -> Integer.parseInt(m.get("id")),
+                        Comparator.nullsLast(Comparator.naturalOrder())));
         return entryList;
     }
 
     /**
-     * Update the RecyclerView in the FilesFragment with new data.
-     * Must be called from a UI thread. Initialises a new Layout Manager, and passes it to the
-     * RecyclerView. Initialises a {@link TrajDownloadListAdapter} with the input array and setting
-     * up a listener so that trajectories are downloaded when clicked.
+     * Update the RecyclerView in the FilesFragment with new data. Must be called from a UI thread.
+     * Initialises a new Layout Manager, and passes it to the RecyclerView. Initialises a {@link
+     * TrajDownloadListAdapter} with the input array and setting up a listener so that trajectories
+     * are downloaded when clicked.
      *
      * @param entryList List of Maps of String to String containing metadata about the uploaded
-     *                  trajectories (ID, owner ID, date).
+     *     trajectories (ID, owner ID, date).
      */
     private void updateView(List<Map<String, String>> entryList) {
         // Initialise RecyclerView with Manager and Adapter
         LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         filesList.setLayoutManager(manager);
         filesList.setHasFixedSize(true);
-        listAdapter = new TrajDownloadListAdapter(getActivity(), entryList, position -> {
-            Map<String, String> selectedItem = entryList.get(position);
-            String id = selectedItem.get("id");
-            String dateSubmitted = selectedItem.get("date_submitted");
+        listAdapter =
+                new TrajDownloadListAdapter(
+                        getActivity(),
+                        entryList,
+                        position -> {
+                            Map<String, String> selectedItem = entryList.get(position);
+                            String id = selectedItem.get("id");
+                            String dateSubmitted = selectedItem.get("date_submitted");
 
-            // Pass ID and date_submitted
-            serverCommunications.downloadTrajectory(position, id, dateSubmitted);
-        });
+                            // Pass ID and date_submitted
+                            serverCommunications.downloadTrajectory(position, id, dateSubmitted);
+                        });
         filesList.setAdapter(listAdapter);
         // Force refresh RecyclerView to ensure downloadRecords changes are detected
         listAdapter.notifyDataSetChanged();

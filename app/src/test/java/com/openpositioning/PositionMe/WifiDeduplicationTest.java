@@ -1,7 +1,9 @@
 package com.openpositioning.PositionMe;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+
 import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class WifiDeduplicationTest {
 
@@ -26,7 +28,7 @@ public class WifiDeduplicationTest {
         int[] rssis1 = {-50};
 
         long[] macs2 = {123456789L};
-        int[] rssis2 = {-55};  // Different RSSI
+        int[] rssis2 = {-55}; // Different RSSI
 
         int hash1 = calculateHash(macs1, rssis1);
         int hash2 = calculateHash(macs2, rssis2);
@@ -37,7 +39,7 @@ public class WifiDeduplicationTest {
     private int calculateHash(long[] macs, int[] rssis) {
         int hash = 0;
         for (int i = 0; i < macs.length; i++) {
-            hash = 31 * hash + (int)(macs[i] ^ (macs[i] >>> 32));
+            hash = 31 * hash + (int) (macs[i] ^ (macs[i] >>> 32));
             hash = 31 * hash + rssis[i];
         }
         return hash;

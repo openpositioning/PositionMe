@@ -1,12 +1,11 @@
 package com.openpositioning.PositionMe;
 
-import org.junit.Test;
-import org.junit.Before;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
-/**
- * Unit tests for Test Point functionality in trajectory recording.
- */
+import org.junit.Before;
+import org.junit.Test;
+
+/** Unit tests for Test Point functionality in trajectory recording. */
 public class TestPointUnitTest {
 
     private Traj.Trajectory.Builder trajectoryBuilder;
@@ -26,11 +25,12 @@ public class TestPointUnitTest {
         long timestamp = 1000L;
 
         // Act
-        trajectoryBuilder.addTestPoints(Traj.GNSSPosition.newBuilder()
-                .setRelativeTimestamp(timestamp)
-                .setLatitude(lat)
-                .setLongitude(lon)
-                .setAltitude(alt));
+        trajectoryBuilder.addTestPoints(
+                Traj.GNSSPosition.newBuilder()
+                        .setRelativeTimestamp(timestamp)
+                        .setLatitude(lat)
+                        .setLongitude(lon)
+                        .setAltitude(alt));
 
         Traj.Trajectory trajectory = trajectoryBuilder.build();
 
@@ -46,11 +46,12 @@ public class TestPointUnitTest {
     public void testAddMultipleTestPoints() {
         // Arrange & Act - Add 3 test points
         for (int i = 0; i < 3; i++) {
-            trajectoryBuilder.addTestPoints(Traj.GNSSPosition.newBuilder()
-                    .setRelativeTimestamp(i * 1000L)
-                    .setLatitude(55.9445 + i * 0.001)
-                    .setLongitude(-3.1892 + i * 0.001)
-                    .setAltitude(50.0 + i));
+            trajectoryBuilder.addTestPoints(
+                    Traj.GNSSPosition.newBuilder()
+                            .setRelativeTimestamp(i * 1000L)
+                            .setLatitude(55.9445 + i * 0.001)
+                            .setLongitude(-3.1892 + i * 0.001)
+                            .setAltitude(50.0 + i));
         }
 
         Traj.Trajectory trajectory = trajectoryBuilder.build();
@@ -62,17 +63,19 @@ public class TestPointUnitTest {
     @Test
     public void testTestPointTimestampOrder() {
         // Arrange - Add test points with different timestamps
-        trajectoryBuilder.addTestPoints(Traj.GNSSPosition.newBuilder()
-                .setRelativeTimestamp(5000L)
-                .setLatitude(55.9445)
-                .setLongitude(-3.1892)
-                .setAltitude(50.0));
+        trajectoryBuilder.addTestPoints(
+                Traj.GNSSPosition.newBuilder()
+                        .setRelativeTimestamp(5000L)
+                        .setLatitude(55.9445)
+                        .setLongitude(-3.1892)
+                        .setAltitude(50.0));
 
-        trajectoryBuilder.addTestPoints(Traj.GNSSPosition.newBuilder()
-                .setRelativeTimestamp(10000L)
-                .setLatitude(55.9446)
-                .setLongitude(-3.1893)
-                .setAltitude(51.0));
+        trajectoryBuilder.addTestPoints(
+                Traj.GNSSPosition.newBuilder()
+                        .setRelativeTimestamp(10000L)
+                        .setLatitude(55.9446)
+                        .setLongitude(-3.1893)
+                        .setAltitude(51.0));
 
         Traj.Trajectory trajectory = trajectoryBuilder.build();
 
@@ -87,7 +90,8 @@ public class TestPointUnitTest {
         Traj.Trajectory trajectory = trajectoryBuilder.build();
 
         // Assert
-        assertEquals("Empty trajectory should have 0 test points", 0, trajectory.getTestPointsCount());
+        assertEquals(
+                "Empty trajectory should have 0 test points", 0, trajectory.getTestPointsCount());
     }
 
     @Test
@@ -97,11 +101,12 @@ public class TestPointUnitTest {
         double preciseLon = -3.189208;
 
         // Act
-        trajectoryBuilder.addTestPoints(Traj.GNSSPosition.newBuilder()
-                .setRelativeTimestamp(0L)
-                .setLatitude(preciseLat)
-                .setLongitude(preciseLon)
-                .setAltitude(0.0));
+        trajectoryBuilder.addTestPoints(
+                Traj.GNSSPosition.newBuilder()
+                        .setRelativeTimestamp(0L)
+                        .setLatitude(preciseLat)
+                        .setLongitude(preciseLon)
+                        .setAltitude(0.0));
 
         Traj.Trajectory trajectory = trajectoryBuilder.build();
 

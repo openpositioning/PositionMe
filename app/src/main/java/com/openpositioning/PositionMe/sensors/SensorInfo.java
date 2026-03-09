@@ -5,7 +5,7 @@ import androidx.annotation.NonNull;
 /**
  * The Sensor Info object holds physical properties of a sensor in the device.
  *
- * It contains it's name, vendor, resolution, power, version and type, which vary across devices.
+ * <p>It contains it's name, vendor, resolution, power, version and type, which vary across devices.
  *
  * @author Virginia Cangelosi
  * @author Mate Stodulka
@@ -23,16 +23,24 @@ public class SensorInfo {
     /**
      * Public default constructor of the Sensor Info object.
      *
-     * Should be initialised with all its parameters, typically from {@link MovementSensor}.
+     * <p>Should be initialised with all its parameters, typically from {@link MovementSensor}.
      *
-     * @param name          name string of the sensor. Unique for a particular sensor type.
-     * @param vendor        vendor string of this sensor.
-     * @param resolution    resolution of the sensor in the sensor's unit.
-     * @param power         the power in mA used by this sensor while in use.
-     * @param version       version of the sensor's module.
-     * @param type          generic type of this sensor.
+     * @param name name string of the sensor. Unique for a particular sensor type.
+     * @param vendor vendor string of this sensor.
+     * @param resolution resolution of the sensor in the sensor's unit.
+     * @param power the power in mA used by this sensor while in use.
+     * @param version version of the sensor's module.
+     * @param type generic type of this sensor.
      */
-    public SensorInfo(String name, String vendor, float resolution, float power, int version, int type, float maxRange, float frequency) {
+    public SensorInfo(
+            String name,
+            String vendor,
+            float resolution,
+            float power,
+            int version,
+            int type,
+            float maxRange,
+            float frequency) {
         this.name = name;
         this.vendor = vendor;
         this.resolution = resolution;
@@ -43,8 +51,7 @@ public class SensorInfo {
         this.frequency = frequency;
     }
 
-
-    //region Getters
+    // region Getters
 
     public String getName() {
         return name;
@@ -78,22 +85,27 @@ public class SensorInfo {
         return frequency;
     }
 
-    //endregion
+    // endregion
 
-    /**
-     * {@inheritDoc}
-     * Basic string representation for debug
-     */
+    /** {@inheritDoc} Basic string representation for debug */
     @NonNull
     @Override
     public String toString() {
-        return "SensorInfo{" +
-                "name='" + name + '\'' +
-                ", vendor='" + vendor + '\'' +
-                ", resolution=" + resolution +
-                ", power=" + power +
-                ", version=" + version +
-                ", type=" + type +
-                '}';
+        return "SensorInfo{"
+                + "name='"
+                + name
+                + '\''
+                + ", vendor='"
+                + vendor
+                + '\''
+                + ", resolution="
+                + resolution
+                + ", power="
+                + power
+                + ", version="
+                + version
+                + ", type="
+                + type
+                + '}';
     }
 }

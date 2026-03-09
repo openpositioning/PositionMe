@@ -10,8 +10,7 @@ public interface DownloadClickListener {
     /**
      * Function executed when the item is clicked.
      *
-     * @param position  integer position of the item in the list.
+     * @param position integer position of the item in the list.
      */
     void onPositionClicked(int position);
-
 }

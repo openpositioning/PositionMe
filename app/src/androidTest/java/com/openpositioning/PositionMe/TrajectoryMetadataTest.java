@@ -1,7 +1,11 @@
 package com.openpositioning.PositionMe;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
 import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class TrajectoryMetadataTest {
 
@@ -10,31 +14,36 @@ public class TrajectoryMetadataTest {
         String trajectoryId = generateTrajectoryId();
 
         assertNotNull("Trajectory ID should not be null", trajectoryId);
-        assertTrue("Trajectory ID should start with 'android_'",
-                trajectoryId.startsWith("android_"));
-        assertTrue("Trajectory ID should contain device model",
+        assertTrue(
+                "Trajectory ID should start with 'android_'", trajectoryId.startsWith("android_"));
+        assertTrue(
+                "Trajectory ID should contain device model",
                 trajectoryId.contains(android.os.Build.MODEL.replaceAll("\\s+", "_")));
-        assertTrue("Trajectory ID should contain timestamp",
-                trajectoryId.length() > 20);
+        assertTrue("Trajectory ID should contain timestamp", trajectoryId.length() > 20);
     }
 
     @Test
     public void testTrajectoryVersionIsCorrect() {
-        Traj.Trajectory.Builder builder = Traj.Trajectory.newBuilder()
-                .setTrajectoryVersion(2.0f)
-                .setTrajectoryId("test_id");
+        Traj.Trajectory.Builder builder =
+                Traj.Trajectory.newBuilder().setTrajectoryVersion(2.0f).setTrajectoryId("test_id");
 
         Traj.Trajectory trajectory = builder.build();
 
-        assertEquals("Trajectory version should be 2.0",
-                2.0f, trajectory.getTrajectoryVersion(), 0.001f);
+        assertEquals(
+                "Trajectory version should be 2.0",
+                2.0f,
+                trajectory.getTrajectoryVersion(),
+                0.001f);
     }
 
     @Test
     public void testTrajectoryIdUniqueness() {
         String id1 = generateTrajectoryId();
         // Small delay to ensure different timestamp
-        try { Thread.sleep(10); } catch (InterruptedException e) {}
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+        }
         String id2 = generateTrajectoryId();
 
         assertNotEquals("Two trajectory IDs should be different", id1, id2);

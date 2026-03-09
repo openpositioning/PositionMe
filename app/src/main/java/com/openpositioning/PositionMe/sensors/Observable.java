@@ -1,8 +1,9 @@
 package com.openpositioning.PositionMe.sensors;
+
 /**
  * Interface for observable class.
  *
- * Simplified version of default Observable interface, with only the resgisterObserver and
+ * <p>Simplified version of default Observable interface, with only the resgisterObserver and
  * notifyObservers methods included see {@link java.util.Observable}.
  *
  * @author Virginia Cangelosi
@@ -17,11 +18,10 @@ public interface Observable {
     public void registerObserver(com.openpositioning.PositionMe.sensors.Observer o);
 
     /**
-     * Notify observers of changes to relevant data structures. If there are multiple data structures
-     * and not all are relevant to all observers, use the input to differentiate.
+     * Notify observers of changes to relevant data structures. If there are multiple data
+     * structures and not all are relevant to all observers, use the input to differentiate.
      *
-     * @param idx   int index signaling which data-structure was updated.
+     * @param idx int index signaling which data-structure was updated.
      */
     public void notifyObservers(int idx);
 }
-
