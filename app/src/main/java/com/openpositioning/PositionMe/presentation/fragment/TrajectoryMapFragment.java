@@ -40,7 +40,6 @@ import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * A fragment responsible for displaying a trajectory map using Google Maps.
@@ -63,6 +62,7 @@ import java.util.Map;
  * @author Mate Stodulka
  */
 public class TrajectoryMapFragment extends Fragment {
+    private static final String TAG = "TrajectoryMapFragment";
 
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
@@ -150,7 +150,7 @@ public class TrajectoryMapFragment extends Fragment {
                                 pendingCameraPosition = null;
                             }
 
-                            Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
+                            Log.d(TAG, "onMapReady: Map is ready!");
                         }
                     });
         }
@@ -193,7 +193,7 @@ public class TrajectoryMapFragment extends Fragment {
                         if (building != null) {
                             building.setCurrentFloor(building.getFloorNumber() + 1, gMap);
                         } else {
-                            Log.w("TrajectoryMapFragment", "Floor Up Button: No building!");
+                            Log.w(TAG, "Floor Up Button: No building!");
                         }
                     }
                 });
@@ -206,7 +206,7 @@ public class TrajectoryMapFragment extends Fragment {
                         if (building != null) {
                             building.setCurrentFloor(building.getFloorNumber() - 1, gMap);
                         } else {
-                            Log.w("TrajectoryMapFragment", "Floor Down Button: No building!");
+                            Log.w(TAG, "Floor Down Button: No building!");
                         }
                     }
                 });
@@ -359,6 +359,7 @@ public class TrajectoryMapFragment extends Fragment {
             for (Building building : indoorMapManager.getAllBuildings()) {
                 building.drawBuildingOutline(gMap);
                 if (building.getIsInsideBuilding()) {
+                    sensorFusion.setCurrentBuilding(building.getName());
                     setFloorControlsVisibility(View.VISIBLE);
                 } else {
                     setFloorControlsVisibility(View.GONE);
@@ -377,7 +378,7 @@ public class TrajectoryMapFragment extends Fragment {
                                 // Only show preview if floor plans are available
                                 if (building.getFloorNames().isEmpty()) {
                                     Log.w(
-                                            "TrajectoryMapFragment",
+                                            TAG,
                                             "Cannot show preview of "
                                                     + building.getName()
                                                     + " as there are no floor plans.");
@@ -417,7 +418,10 @@ public class TrajectoryMapFragment extends Fragment {
             Building building = indoorMapManager.getCurrentBuilding(currentLocation);
             if (building != null) {
                 float elevationVal = sensorFusion.getElevation();
-                int newFloor = (int) (elevationVal / building.getFloorHeight());
+                int newFloor =
+                        (int)
+                                (building.getGroundFloorIndex()
+                                        + elevationVal / building.getFloorHeight());
                 building.setCurrentFloor(newFloor, gMap);
             }
         }
@@ -570,25 +574,5 @@ public class TrajectoryMapFragment extends Fragment {
                                     .zIndex(MAP_DRAWING_PRIORITY_MAX)
                                     .add());
         }
-    }
-
-    /**
-     * Add building from the server to reference list, and set building as campaign source for
-     * recording
-     *
-     * @param name The name of the building
-     * @param outline Points representing outline of building
-     * @param floorPlans MultiPolygons (or MultiLineString) of overlays for floor plans
-     */
-    public void addBuilding(
-            String name, List<LatLng> outline, Map<String, List<Object>> floorPlans) {
-        if (!indoorMapManager.getAllBuildingNames().contains(name)) {
-            indoorMapManager.addBuilding(new Building(name, outline, floorPlans));
-        } else {
-            Log.w(
-                    "TrajectoryMapFragment",
-                    "Building " + name + " already exists. Skipping creation.");
-        }
-        sensorFusion.setCurrentBuilding(name);
     }
 }

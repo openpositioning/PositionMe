@@ -29,10 +29,10 @@ import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
-import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.Wifi;
+import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -78,12 +78,13 @@ import org.json.JSONObject;
  * @author Mate Stodulka
  */
 public class ServerCommunications implements Observable {
+    private static final String TAG = "ServerCommunications";
     public static Map<String, JSONObject> downloadRecords = new HashMap<>();
     // Application context for handling permissions and devices
 
     private static final int OBSERVER_INDEX_FILES = 0;
     private static final int OBSERVER_INDEX_MAIN = 1;
-    private static final int OBSERVER_INDEX_RECORDING = 2;
+    private static final int OBSERVER_INDEX_INDOOR_MAPS = 2;
     private static final int TRAJECTORY_REQUEST_BUFFER = 10;
 
     private final Context context;
@@ -147,7 +148,7 @@ public class ServerCommunications implements Observable {
             path = context.getFilesDir();
         }
 
-        Log.i("ServerCommunications", path.toString());
+        Log.i(TAG, path.toString());
 
         // Format the file name according to date
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yy-HH-mm-ss");
@@ -159,20 +160,16 @@ public class ServerCommunications implements Observable {
             FileOutputStream stream = new FileOutputStream(file);
             stream.write(binaryTrajectory);
             stream.close();
-            Log.i(
-                    "ServerCommunications",
-                    "Recorded binary trajectory for debugging stored in: " + path);
+            Log.i(TAG, "Recorded binary trajectory for debugging stored in: " + path);
         } catch (IOException e) {
             // Catch and print if writing to the file fails
-            Log.e(
-                    "ServerCommunications",
-                    "Storing of recorded binary trajectory failed: " + e.getMessage());
+            Log.e(TAG, "Storing of recorded binary trajectory failed: " + e.getMessage());
         }
 
         // Only proceed if campaign is valid
         if (campaign.isBlank() || campaign.equals(BUILDING_NAME_OUTSIDE)) {
             String message = "Invalid campaign ('" + campaign + "') - Cancelling upload";
-            Log.w("ServerCommunications", message);
+            Log.w(TAG, message);
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
             return;
         }
@@ -216,9 +213,7 @@ public class ServerCommunications implements Observable {
                                 // Handle failure to get response from the server
                                 @Override
                                 public void onFailure(Call call, IOException e) {
-                                    Log.e(
-                                            "ServerCommunications",
-                                            "Failure to get response: " + e.getMessage());
+                                    Log.e(TAG, "Failure to get response: " + e.getMessage());
                                     success = false;
                                     notifyObservers(OBSERVER_INDEX_MAIN);
                                 }
@@ -255,7 +250,7 @@ public class ServerCommunications implements Observable {
                                                                             .show());
 
                                             Log.e(
-                                                    "ServerCommunications",
+                                                    TAG,
                                                     "POST error (Code "
                                                             + response.code()
                                                             + ")\n"
@@ -271,20 +266,18 @@ public class ServerCommunications implements Observable {
                                                 i < size;
                                                 i++) {
                                             Log.i(
-                                                    "ServerCommunications",
+                                                    TAG,
                                                     responseHeaders.name(i)
                                                             + ": "
                                                             + responseHeaders.value(i));
                                         }
                                         // Print a confirmation of a successful POST to API
-                                        Log.i("ServerCommunications", "Successful post response");
+                                        Log.i(TAG, "Successful post response");
 
-                                        Log.i(
-                                                "ServerCommunications",
-                                                "Get file: " + file.getName());
+                                        Log.i(TAG, "Get file: " + file.getName());
                                         String originalPath = file.getAbsolutePath();
                                         Log.i(
-                                                "ServerCommunications",
+                                                TAG,
                                                 "Original trajectory file saved at: "
                                                         + originalPath);
 
@@ -296,12 +289,12 @@ public class ServerCommunications implements Observable {
                                         try {
                                             copyFile(file, downloadFile);
                                             Log.i(
-                                                    "ServerCommunications",
+                                                    TAG,
                                                     "Trajectory file copied to Downloads: "
                                                             + downloadFile.getAbsolutePath());
                                         } catch (IOException e) {
                                             Log.e(
-                                                    "ServerCommunications",
+                                                    TAG,
                                                     "Failed to copy file to Downloads: "
                                                             + e.getMessage());
                                         }
@@ -316,7 +309,7 @@ public class ServerCommunications implements Observable {
             // If the device is not connected to network or allowed to send,
             // do not send trajectory and notify observers and user
             String message = "No uploading allowed right now!";
-            Log.e("ServerCommunications", message);
+            Log.e(TAG, message);
             new Handler(Looper.getMainLooper())
                     .post(() -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show());
             success = false;
@@ -335,7 +328,7 @@ public class ServerCommunications implements Observable {
         // Only proceed if campaign is valid
         if (campaign.isBlank() || campaign.equals(BUILDING_NAME_OUTSIDE)) {
             String message = "Invalid campaign ('" + campaign + "') - Cancelling upload";
-            Log.w("ServerCommunications", message);
+            Log.w(TAG, message);
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
             return;
         }
@@ -350,7 +343,7 @@ public class ServerCommunications implements Observable {
                 byte[] fileBytes = Files.readAllBytes(localTrajectory.toPath());
                 fileRequestBody = RequestBody.create(MediaType.parse("text/plain"), fileBytes);
             } catch (IOException e) {
-                Log.e("ServerCommunications", "Error: " + e.getMessage());
+                Log.e(TAG, "Error: " + e.getMessage());
                 // if failed, use File object to construct RequestBody
                 fileRequestBody =
                         RequestBody.create(MediaType.parse("text/plain"), localTrajectory);
@@ -386,7 +379,7 @@ public class ServerCommunications implements Observable {
                                 // Set success to false and notify observers
                                 success = false;
                                 Log.e(
-                                        "ServerCommunications",
+                                        TAG,
                                         "[" + e.getMessage() + "] UPLOAD: Failure to get response");
                                 // Notify users
                                 new Handler(Looper.getMainLooper())
@@ -411,9 +404,7 @@ public class ServerCommunications implements Observable {
                                         notifyObservers(OBSERVER_INDEX_MAIN);
                                         assert responseBody != null;
                                         String errorBody = responseBody.string();
-                                        Log.e(
-                                                "ServerCommunications",
-                                                "UPLOAD unsuccessful: " + errorBody);
+                                        Log.e(TAG, "UPLOAD unsuccessful: " + errorBody);
                                         infoResponse =
                                                 "Upload failed (Error code "
                                                         + response.code()
@@ -434,7 +425,7 @@ public class ServerCommunications implements Observable {
                                     Headers responseHeaders = response.headers();
                                     for (int i = 0, size = responseHeaders.size(); i < size; i++) {
                                         Log.i(
-                                                "ServerCommunications",
+                                                TAG,
                                                 responseHeaders.name(i)
                                                         + ": "
                                                         + responseHeaders.value(i));
@@ -442,9 +433,7 @@ public class ServerCommunications implements Observable {
 
                                     // Print a confirmation of a successful POST to API
                                     assert responseBody != null;
-                                    Log.i(
-                                            "ServerCommunications",
-                                            "UPLOAD SUCCESSFUL: " + responseBody.string());
+                                    Log.i(TAG, "UPLOAD SUCCESSFUL: " + responseBody.string());
                                     new Handler(Looper.getMainLooper())
                                             .post(
                                                     () ->
@@ -489,20 +478,18 @@ public class ServerCommunications implements Observable {
                         downloadRecords.put(id, record);
                     } catch (Exception e) {
                         Log.e(
-                                "ServerCommunications",
+                                TAG,
                                 "[" + e.getMessage() + "] Error loading record with key: " + key);
                     }
                 }
 
-                Log.i("ServerCommunications", "Loaded downloadRecords: " + downloadRecords);
+                Log.i(TAG, "Loaded downloadRecords: " + downloadRecords);
 
             } catch (Exception e) {
-                Log.e("ServerCommunications", "Error: " + e.getMessage());
+                Log.e(TAG, "Error: " + e.getMessage());
             }
         } else {
-            Log.i(
-                    "ServerCommunications",
-                    "Download_records.json not found in app-specific directory.");
+            Log.i(TAG, "Download_records.json not found in app-specific directory.");
         }
     }
 
@@ -532,9 +519,7 @@ public class ServerCommunications implements Observable {
                 if (recordsFile.createNewFile()) {
                     jsonObject = new JSONObject();
                 } else {
-                    Log.e(
-                            "ServerCommunications",
-                            "Failed to create file: " + recordsFile.getAbsolutePath());
+                    Log.e(TAG, "Failed to create file: " + recordsFile.getAbsolutePath());
                     return;
                 }
             } else {
@@ -569,12 +554,10 @@ public class ServerCommunications implements Observable {
                 writer.flush();
             }
 
-            Log.i(
-                    "ServerCommunications",
-                    "Download record saved successfully at: " + recordsFile.getAbsolutePath());
+            Log.i(TAG, "Download record saved successfully at: " + recordsFile.getAbsolutePath());
 
         } catch (Exception e) {
-            Log.e("ServerCommunications", "Error saving download record: " + e.getMessage());
+            Log.e(TAG, "Error saving download record: " + e.getMessage());
         }
     }
 
@@ -614,9 +597,7 @@ public class ServerCommunications implements Observable {
                         new okhttp3.Callback() {
                             @Override
                             public void onFailure(Call call, IOException e) {
-                                Log.e(
-                                        "ServerCommunications",
-                                        "GET request error: " + e.getMessage());
+                                Log.e(TAG, "GET request error: " + e.getMessage());
                             }
 
                             @Override
@@ -629,7 +610,7 @@ public class ServerCommunications implements Observable {
                                                         + response.code()
                                                         + ")");
                                     Log.d(
-                                            "ServerCommunications",
+                                            TAG,
                                             "Trajectories received.\n"
                                                     + "Now parsing for ID "
                                                     + id
@@ -677,16 +658,14 @@ public class ServerCommunications implements Observable {
 
                                     // Convert the byte array to protobuf
                                     byte[] byteArray = byteArrayOutputStream.toByteArray();
-                                    Log.d(
-                                            "ServerCommunications",
-                                            "byteArray = " + Arrays.toString(byteArray));
+                                    Log.d(TAG, "byteArray = " + Arrays.toString(byteArray));
                                     Traj.Trajectory receivedTrajectory =
                                             Traj.Trajectory.parseFrom(byteArray);
 
                                     // Print a message in the console
                                     long startTimestamp = receivedTrajectory.getStartTimestamp();
                                     String fileName = "trajectory_" + dateSubmitted + ".txt";
-                                    Log.i("ServerCommunications", fileName + " received");
+                                    Log.i(TAG, fileName + " received");
 
                                     // Inspect the size of the received trajectory
                                     logDataSize(receivedTrajectory);
@@ -697,9 +676,7 @@ public class ServerCommunications implements Observable {
                                                     Environment.DIRECTORY_DOWNLOADS);
                                     if (appSpecificDownloads != null
                                             && !appSpecificDownloads.exists()) {
-                                        Log.d(
-                                                "ServerCommunications",
-                                                "Creating downloads directory...");
+                                        Log.d(TAG, "Creating downloads directory...");
                                         appSpecificDownloads.mkdirs();
                                     }
 
@@ -710,7 +687,7 @@ public class ServerCommunications implements Observable {
                                         fileWriter.write(receivedTrajectoryString);
                                         fileWriter.flush();
                                         Log.i(
-                                                "ServerCommunications",
+                                                TAG,
                                                 "Received trajectory stored in: "
                                                         + file.getAbsolutePath());
 
@@ -730,7 +707,7 @@ public class ServerCommunications implements Observable {
                                                                         .show());
                                     } catch (IOException ee) {
                                         Log.e(
-                                                "ServerCommunications",
+                                                TAG,
                                                 "Trajectory download failed: " + ee.getMessage());
                                         new Handler(Looper.getMainLooper())
                                                 .post(
@@ -784,7 +761,7 @@ public class ServerCommunications implements Observable {
                         new okhttp3.Callback() {
                             @Override
                             public void onFailure(Call call, IOException e) {
-                                Log.e("ServerCommunications", "Error: " + e.getMessage());
+                                Log.e(TAG, "Error: " + e.getMessage());
                             }
 
                             @Override
@@ -802,10 +779,8 @@ public class ServerCommunications implements Observable {
                                     // it in a string
                                     infoResponse = responseBody.string();
                                     // Print a message in the console and notify observers
-                                    Log.i(
-                                            "ServerCommunications",
-                                            "Response received; URL " + requestURL);
-                                    Log.i("ServerCommunications", infoResponse);
+                                    Log.i(TAG, "Response received; URL " + requestURL);
+                                    Log.i(TAG, infoResponse);
                                     notifyObservers(OBSERVER_INDEX_FILES);
                                 }
                             }
@@ -872,9 +847,7 @@ public class ServerCommunications implements Observable {
                                     if (!response.isSuccessful()) {
                                         assert responseBody != null;
                                         String errorBody = responseBody.string();
-                                        Log.e(
-                                                "ServerCommunications",
-                                                "UPLOAD unsuccessful: " + errorBody);
+                                        Log.e(TAG, "UPLOAD unsuccessful: " + errorBody);
                                         infoResponse =
                                                 "Upload Error (Error Code " + response.code() + ")";
                                         new Handler(Looper.getMainLooper())
@@ -892,7 +865,7 @@ public class ServerCommunications implements Observable {
                                     Headers responseHeaders = response.headers();
                                     for (int i = 0, size = responseHeaders.size(); i < size; i++) {
                                         Log.d(
-                                                "ServerCommunications",
+                                                TAG,
                                                 responseHeaders.name(i)
                                                         + ": "
                                                         + responseHeaders.value(i));
@@ -900,15 +873,15 @@ public class ServerCommunications implements Observable {
 
                                     assert responseBody != null;
                                     infoResponse = responseBody.string();
-                                    Log.i("ServerCommunications", "Floor plans received!");
-                                    notifyObservers(OBSERVER_INDEX_RECORDING);
+                                    Log.i(TAG, "Floor plans received!");
+                                    notifyObservers(OBSERVER_INDEX_INDOOR_MAPS);
                                 }
                             }
 
                             @Override
                             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                                 Log.e(
-                                        "ServerCommunications",
+                                        TAG,
                                         "[" + e.getMessage() + "] UPLOAD: Failure to get response");
 
                                 // Show error message to users
@@ -921,7 +894,7 @@ public class ServerCommunications implements Observable {
                                                                         infoResponse,
                                                                         Toast.LENGTH_SHORT)
                                                                 .show());
-                                notifyObservers(OBSERVER_INDEX_RECORDING);
+                                notifyObservers(OBSERVER_INDEX_INDOOR_MAPS);
                             }
                         });
     }
@@ -961,16 +934,14 @@ public class ServerCommunications implements Observable {
     }
 
     private void logDataSize(Traj.Trajectory trajectory) {
-        Log.i("ServerCommunications", "IMU Data size: " + trajectory.getImuDataCount());
-        Log.i(
-                "ServerCommunications",
-                "Position Data size: " + trajectory.getMagnetometerDataCount());
-        Log.i("ServerCommunications", "Pressure Data size: " + trajectory.getPressureDataCount());
-        Log.i("ServerCommunications", "Light Data size: " + trajectory.getLightDataCount());
-        Log.i("ServerCommunications", "GNSS Data size: " + trajectory.getGnssDataCount());
-        Log.i("ServerCommunications", "WiFi Data size: " + trajectory.getWifiFingerprintsCount());
-        Log.i("ServerCommunications", "APS Data size: " + trajectory.getApsDataCount());
-        Log.i("ServerCommunications", "PDR Data size: " + trajectory.getPdrDataCount());
+        Log.i(TAG, "IMU Data size: " + trajectory.getImuDataCount());
+        Log.i(TAG, "Position Data size: " + trajectory.getMagnetometerDataCount());
+        Log.i(TAG, "Pressure Data size: " + trajectory.getPressureDataCount());
+        Log.i(TAG, "Light Data size: " + trajectory.getLightDataCount());
+        Log.i(TAG, "GNSS Data size: " + trajectory.getGnssDataCount());
+        Log.i(TAG, "WiFi Data size: " + trajectory.getWifiFingerprintsCount());
+        Log.i(TAG, "APS Data size: " + trajectory.getApsDataCount());
+        Log.i(TAG, "PDR Data size: " + trajectory.getPdrDataCount());
     }
 
     /**
@@ -984,7 +955,7 @@ public class ServerCommunications implements Observable {
     @Override
     public void registerObserver(Observer o) {
         this.observers.add(o);
-        Log.i("ServerCommunications", "Added observer of type " + o.getClass());
+        Log.i(TAG, "Added observer of type " + o.getClass());
     }
 
     /**
@@ -1001,12 +972,16 @@ public class ServerCommunications implements Observable {
             if (index == OBSERVER_INDEX_FILES && o instanceof FilesFragment) {
                 o.update(new String[] {infoResponse});
             } else if (index == OBSERVER_INDEX_MAIN && o instanceof MainActivity) {
-                Log.d("ServerCommunications", "Telling home!");
                 o.update(new Boolean[] {success});
-            } else if (index == OBSERVER_INDEX_RECORDING && o instanceof RecordingFragment) {
+            } else if (index == OBSERVER_INDEX_INDOOR_MAPS && o instanceof IndoorMapManager) {
                 o.update(new String[] {infoResponse});
             } else {
-                Log.w("ServerCommunications", "No observer with index " + index);
+                Log.w(
+                        TAG,
+                        "Observer type "
+                                + o.getClass().getSimpleName()
+                                + " does not match observer index "
+                                + index);
             }
         }
     }

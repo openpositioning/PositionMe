@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.stream.Collectors;
@@ -56,6 +57,7 @@ import org.json.JSONObject;
  * @author Virginia Cangelosi
  */
 public class SensorFusion implements SensorEventListener, Observer {
+    private static final String TAG = "SensorFusion";
 
     // Store the last event timestamps for each sensor type
     private HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -335,7 +337,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                 gravity[2] = sensorEvent.values[2];
 
                 // Possibly log gravity values if needed
-                // Log.v("SensorFusion", "Gravity: " + Arrays.toString(gravity));
+                // Log.v(TAG, "Gravity: " + Arrays.toString(gravity));
 
                 elevator = pdrProcessing.estimateElevator(gravity, filteredAcc);
                 break;
@@ -366,7 +368,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                 if (currentTime - lastStepTime < SENSOR_POLL_TIME_MS) {
                     Log.e(
-                            "SensorFusion",
+                            TAG,
                             "Ignoring step event, too soon after last step event:"
                                     + (currentTime - lastStepTime)
                                     + " ms");
@@ -377,12 +379,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // Log if accelMagnitude is empty
                     if (accelMagnitude.isEmpty()) {
                         Log.e(
-                                "SensorFusion",
+                                TAG,
                                 "stepDetection triggered, but accelMagnitude is empty! This can"
                                         + " cause updatePdr(...) to fail or return bad results.");
                     } else {
                         Log.d(
-                                "SensorFusion",
+                                TAG,
                                 "stepDetection triggered, accelMagnitude size = "
                                         + accelMagnitude.size());
                     }
@@ -415,9 +417,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public void logSensorFrequencies() {
         for (int sensorType : eventCounts.keySet()) {
-            Log.d(
-                    "SensorFusion",
-                    "Sensor " + sensorType + " | Event Count: " + eventCounts.get(sensorType));
+            Log.d(TAG, "Sensor " + sensorType + " | Event Count: " + eventCounts.get(sensorType));
         }
     }
 
@@ -1256,8 +1256,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     public void setCurrentBuilding(String currentBuilding) {
-        this.currentBuilding = currentBuilding;
-        Log.i("SensorFusion", "Route now associated with " + this.currentBuilding);
+        if (!Objects.equals(this.currentBuilding, currentBuilding)) {
+            this.currentBuilding = currentBuilding;
+            Log.i(TAG, "Route now associated with " + this.currentBuilding);
+        }
     }
 
     public String getCurrentBuilding() {
