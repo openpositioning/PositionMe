@@ -8,8 +8,8 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
  * Top-level fusion class that manages corrected position estimation.
  *
  * <p>Wraps a {@link ParticleFilter} and exposes a simplified interface for the rest of the
- * application. PDR updates are forwarded to the particle filter, and the best position
- * estimate is derived from the weighted particle population.
+ * application. PDR updates are forwarded to the particle filter, and the best position estimate is
+ * derived from the weighted particle population.
  *
  * @see ParticleFilter for the underlying sequential Monte Carlo implementation.
  * @see SensorFusion for the caller that drives PDR and WiFi updates.
@@ -25,7 +25,7 @@ public class Fusion {
     private final ParticleFilter particleFilter;
     private PdrProcessing pdrProcessing;
 
-    public Fusion(){
+    public Fusion() {
         this.particleFilter = new ParticleFilter();
     }
 
@@ -35,14 +35,12 @@ public class Fusion {
      * @param dx easting displacement in metres.
      * @param dy northing displacement in metres.
      */
-    public void filterPDRUpdate(float dx, float dy){
+    public void filterPDRUpdate(float dx, float dy) {
         this.particleFilter.updateWithPDR(dx, dy);
     }
 
-    /**
-     * Stops the fusion system and releases the particle filter resources.
-     */
-    public void stop(){
+    /** Stops the fusion system and releases the particle filter resources. */
+    public void stop() {
         this.particleFilter.stop();
         isActive = false;
     }
@@ -52,7 +50,7 @@ public class Fusion {
      *
      * @param initial_pos starting position in WGS84 coordinates.
      */
-    public void start(LatLng initial_pos, PdrProcessing pdrProcessing){
+    public void start(LatLng initial_pos, PdrProcessing pdrProcessing) {
         isActive = true;
         this.BestEstimate = initial_pos;
         this.particleFilter.start(initial_pos);

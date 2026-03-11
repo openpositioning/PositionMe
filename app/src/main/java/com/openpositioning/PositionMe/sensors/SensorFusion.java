@@ -1085,7 +1085,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                                             .setW(rotation[3]))
                             .setStepCount(0));
             // start fusion predictions
-            this.fusion.start(new LatLng(startLocation[0], startLocation[1]), pdrProcessing); //Start fusion predictions
+            this.fusion.start(
+                    new LatLng(startLocation[0], startLocation[1]),
+                    pdrProcessing); // Start fusion predictions
         }
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
@@ -1197,7 +1199,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Divide timer with a counter for storing data every 1 second
             if (counter == 99) {
                 counter = 0;
-                //store fusion corrected estimated point to the trajectory at 1 sec intervals
+                // store fusion corrected estimated point to the trajectory at 1 sec intervals
                 /*
                 if (this.fusion.isActive()){
                     LatLng fused = this.fusion.getBestEstimate()
