@@ -48,12 +48,14 @@ public class Fusion {
     /**
      * Initialises the fusion system and seeds the particle filter around the given position.
      *
-     * @param initial_pos starting position in WGS84 coordinates.
+     * @param initial_estimate is a place holder for the starting position in WGS84 coordinates.
+     * - TODO we should probably use our own start location estimate as this could be crucial for accuracy of the remainder of the recording.
      */
-    public void start(LatLng initial_pos, PdrProcessing pdrProcessing) {
+    public void start(LatLng initial_estimate, PdrProcessing pdrProcessing) {
+
         isActive = true;
-        this.BestEstimate = initial_pos;
-        this.particleFilter.start(initial_pos);
+        this.BestEstimate = getStartLocation(initial_estimate);
+        this.particleFilter.start(this.BestEstimate);
     }
 
     /**
@@ -64,6 +66,15 @@ public class Fusion {
     public LatLng getBestEstimate() {
         LatLng particleFilterEstimate = particleFilter.getEstimated_position();
         return BestEstimate;
+    }
+    /**
+     * - TODO
+     * Returns a uniquely fused starting position estimate.
+     *
+     * @return {@link LatLng} of the best start position estimate.
+     */
+    public LatLng getStartLocation(LatLng initial_estimate){
+        return initial_estimate;
     }
 
     public int getEstimatedFloor() {
