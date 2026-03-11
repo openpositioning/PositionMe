@@ -26,6 +26,7 @@ import org.geojson.MultiLineString;
 import org.geojson.MultiPolygon;
 
 public class Building {
+    private static final String TAG = "Building";
     private static final int BUILDING_NO_FLOOR = -1;
     private static final String BUILDING_GROUND_PREFIX = "G";
 
@@ -76,7 +77,7 @@ public class Building {
         } else {
             floorHeight = FLOOR_HEIGHT_DEFAULT;
         }
-        Log.d("Building", "Created new building: " + this.name);
+        Log.d(TAG, "Created new building: " + this.name);
     }
 
     /**
@@ -100,26 +101,34 @@ public class Building {
      *
      * @return Map of floor plan elements indexed by name
      */
+    // TODO - Revise implementation to work with walls, stairs, and lifts
     private Map<String, List<PolylineOptions>> buildFloorPlanElements() {
         Map<String, List<PolylineOptions>> floorPlanElementOptions = new HashMap<>();
         List<String> floorNames = new ArrayList<>(this.floorPlans.keySet());
         for (String floorName : floorNames) {
-            List<Object> plan = floorPlans.get(floorName);
+            List<Object> floorPlan = floorPlans.get(floorName);
             List<PolylineOptions> floorElements = new ArrayList<>();
 
-            // Most building floor plans will be MultiPolygon
-            // Nucleus will use MultiLineString
-            for (Object multipolygon : plan) {
-                List<List<LngLatAlt>> allCoordinates;
-                if (multipolygon instanceof MultiPolygon) {
-                    allCoordinates = ((MultiPolygon) multipolygon).getCoordinates().get(0);
-                } else if (multipolygon instanceof MultiLineString) {
-                    allCoordinates = ((MultiLineString) multipolygon).getCoordinates();
+            // Most building floor plans will be a list of MultiPolygon objects
+            // Nucleus will use a list of MultiLineString objects
+            for (Object element : floorPlan) {
+                // Initialise empty, for use when floor plan is invalid
+                List<List<LngLatAlt>> allCoordinates = new ArrayList<>();
+                if (element instanceof MultiPolygon multiPolygon) {
+                    if (multiPolygon.getCoordinates().size() <= 0) {
+                        continue;
+                    }
+                    allCoordinates = multiPolygon.getCoordinates().get(0);
+                } else if (element instanceof MultiLineString multiLineString) {
+                    // TODO - Confirm with industry contact if MultiLineString can be removed
+                    allCoordinates = multiLineString.getCoordinates();
                 } else {
-                    // Initialise as empty if no valid plans available
-                    allCoordinates = new ArrayList<>();
-                    allCoordinates.add(new ArrayList<>());
-                    Log.w("Building", name + ": Invalid floorplan during construction!");
+                    Log.w(
+                            TAG,
+                            name
+                                    + ": Invalid floorplan for floor "
+                                    + floorName
+                                    + " during construction!");
                 }
                 for (List<LngLatAlt> elementCoordinates : allCoordinates) {
                     List<LatLng> floorElement = new ArrayList<>();
@@ -222,9 +231,9 @@ public class Building {
                             ? COLOUR_BUILDING_WITH_FLOOR_MAPS
                             : COLOUR_BUILDING_WITHOUT_FLOOR_MAPS;
             this.outlinePolygon = map.addPolygon(outlinePolygonOptions.strokeColor(strokeColour));
-            Log.i("Building", name + ": Building outline drawn");
+            Log.d(TAG, name + ": Building outline drawn");
         } else {
-            Log.i("Building", name + ": Outline already visible");
+            Log.d(TAG, name + ": Outline already visible");
         }
     }
 
@@ -235,7 +244,7 @@ public class Building {
      */
     public void setFillColour(int colour) {
         if (outlinePolygon == null) {
-            Log.w("Building", name + ": Outline polygon is null!");
+            Log.w(TAG, name + ": Outline polygon is null!");
         } else {
             outlinePolygon.setFillColor(colour);
         }
@@ -250,7 +259,7 @@ public class Building {
     public void setCurrentFloor(int newFloor, GoogleMap gMap) {
         if (newFloor < 0 || newFloor >= floorNames.size()) {
             Log.w(
-                    "Building",
+                    TAG,
                     name
                             + ": Suggested floor "
                             + newFloor
@@ -260,7 +269,7 @@ public class Building {
         } else if (newFloor == floorNumber) {
             // Redraw the floor plan elements
             editFloorPlan(gMap, floorNumber, true);
-            Log.w("Building", name + ": Already on floor " + newFloor);
+            Log.d(TAG, name + ": Already on floor " + newFloor);
         } else {
             // Floor number initialises to -1, so reinitialise if required
             if (floorNumber == BUILDING_NO_FLOOR) {
@@ -271,7 +280,7 @@ public class Building {
                 floorNumber = newFloor;
             }
             editFloorPlan(gMap, floorNumber, true);
-            Log.i("Building", name + ": Floor set to " + floorNumber);
+            Log.d(TAG, name + ": Floor set to " + floorNumber);
         }
     }
 
@@ -311,7 +320,7 @@ public class Building {
         } else {
             // Continue only if floor plan elements can be created
             if (!floorPlanElementOptions.containsKey(floorName)) {
-                Log.w("Building", name + ": Floor " + floorNumber + " has no floor plan!");
+                Log.w(TAG, name + ": Floor " + floorNumber + " has no floor plan!");
                 return;
             }
             // Create the PolyLine objects for the first time
@@ -321,14 +330,14 @@ public class Building {
                 elements.add(floorElement);
             }
             floorPlanElements.put(floorName, elements);
-            Log.i("Building", name + " floor " + floorNumber + " added to list");
+            Log.d(TAG, name + " floor " + floorNumber + " added to list");
         }
 
         // With all elements gathered, set their visibility as required
         for (Polyline element : elements) {
             element.setVisible(showFloor);
         }
-        Log.i("Building", name + " floor " + floorNumber + " visibility set to " + showFloor);
+        Log.d(TAG, name + " floor " + floorNumber + " visibility set to " + showFloor);
     }
 
     /**

@@ -26,27 +26,10 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.openpositioning.PositionMe.R;
-import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
-import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import org.geojson.Feature;
-import org.geojson.FeatureCollection;
-import org.geojson.GeoJsonObject;
-import org.geojson.LngLatAlt;
-import org.geojson.MultiLineString;
-import org.geojson.MultiPolygon;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Fragment responsible for managing the recording process of trajectory data.
@@ -65,10 +48,9 @@ import tools.jackson.databind.ObjectMapper;
  * @see RecordingActivity The activity managing the recording workflow.
  * @see SensorFusion Handles sensor data collection.
  * @see SensorTypes Enumeration of available sensor types.
- * @see Observer Interface for handling server responses
  * @author Shu Gu
  */
-public class RecordingFragment extends Fragment implements Observer {
+public class RecordingFragment extends Fragment {
 
     // UI elements
     private MaterialButton completeButton, cancelButton;
@@ -112,7 +94,6 @@ public class RecordingFragment extends Fragment implements Observer {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         this.sensorFusion = SensorFusion.getInstance();
-        this.sensorFusion.registerForServerUpdate(this);
         Context context = requireActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.refreshDataHandler = new Handler();
@@ -347,130 +328,5 @@ public class RecordingFragment extends Fragment implements Observer {
         if (!this.settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
-    }
-
-    /**
-     * {@inheritDoc} Called by {@link ServerCommunications} when the response to the HTTP info
-     * request is received.
-     *
-     * @param singletonStringList A single string wrapped in an object array containing the HTTP
-     *     response from the server.
-     */
-    @Override
-    public void update(Object[] singletonStringList) {
-        if (singletonStringList != null && singletonStringList.length > 0) {
-            String response = singletonStringList[0].toString();
-            Log.d("RecordingFragment", "Received response: " + response);
-            try {
-                // Parse the JSON, and draw all possible buildings
-                List<Map<String, Object>> entryList = processPOSTResponse(response);
-                for (Map<String, Object> building : entryList) {
-
-                    String name = (String) building.get("name");
-                    @SuppressWarnings("unchecked")
-                    List<LatLng> outline = (List<LatLng>) building.get("outline");
-                    @SuppressWarnings("unchecked")
-                    Map<String, List<Object>> mapShapes =
-                            (Map<String, List<Object>>) building.get("map_shapes");
-
-                    trajectoryMapFragment.addBuilding(name, outline, mapShapes);
-                }
-            } catch (RuntimeException e) {
-                Log.e("RecordingFragment", "Error processing server response: " + e.getMessage());
-            }
-        }
-    }
-
-    /**
-     * Parses the GeoJSON response for floor plans
-     *
-     * @param response The raw JSON string response from the server
-     * @return A list of maps containing the data associated with every building contained with the
-     *     response
-     */
-    private List<Map<String, Object>> processPOSTResponse(String response) throws RuntimeException {
-        List<Map<String, Object>> entryList = new ArrayList<>();
-
-        try {
-            JSONArray jsonArray = new JSONArray(response);
-
-            for (int i = 0; i < jsonArray.length(); i++) {
-                JSONObject buildingEntry = jsonArray.getJSONObject(i);
-                Map<String, Object> entryMap = new HashMap<>();
-
-                // Part 1 - Building Name
-                String name = buildingEntry.getString("name");
-
-                // Part 2 - Building Outline
-                FeatureCollection featureCollection =
-                        new ObjectMapper()
-                                .readValue(
-                                        buildingEntry.getString("outline"),
-                                        FeatureCollection.class);
-
-                /*
-                 * For every feature in the collection, extract the geometry,
-                 * extract the coordinates, and reconstruct the outline as
-                 * a list of LatLng points (ie, without the Alt, which is
-                 * always NaN)
-                 * */
-                List<Feature> featuresOutline = featureCollection.getFeatures();
-                List<LatLng> coordinates = new ArrayList<>();
-                for (Feature feature : featuresOutline) {
-                    GeoJsonObject geometry = feature.getGeometry();
-                    if (geometry instanceof MultiPolygon multiPolygon) {
-                        List<List<List<LngLatAlt>>> coordinatesLngLatAlt =
-                                multiPolygon.getCoordinates();
-                        for (LngLatAlt point : coordinatesLngLatAlt.get(0).get(0)) {
-                            coordinates.add(new LatLng(point.getLatitude(), point.getLongitude()));
-                        }
-                    }
-                }
-
-                // Part 3 - Floor plans
-                Map<String, Object> floorplansJSON =
-                        new ObjectMapper()
-                                .readValue(
-                                        buildingEntry.getString("map_shapes"),
-                                        new TypeReference<>() {});
-
-                // Map to index floor plans by floor name
-                Map<String, List<Object>> floorplans = new HashMap<>();
-
-                for (String floorname : floorplansJSON.keySet()) {
-                    Object floor = floorplansJSON.get(floorname);
-                    FeatureCollection fc =
-                            new ObjectMapper().convertValue(floor, FeatureCollection.class);
-
-                    List<Feature> feats = fc.getFeatures();
-                    List<Object> floorPolys = new ArrayList<>();
-                    for (Feature feat : feats) {
-                        GeoJsonObject geometry = feat.getGeometry();
-                        // Check for MultiLineString is for Nucleus only
-                        if (geometry instanceof MultiPolygon multiPolygon) {
-                            floorPolys.add(multiPolygon);
-                            Log.d("RecordingFragment", name + ": geometry MultiPolygon");
-                        } else if (geometry instanceof MultiLineString multiLineString) {
-                            floorPolys.add(multiLineString);
-                            Log.d("RecordingFragment", name + ": geometry MultiLineString");
-                        } else {
-                            Log.w("RecordingFragment", name + " has no floorplans!");
-                        }
-                    }
-                    floorplans.put(floorname, floorPolys);
-                }
-
-                entryMap.put("name", name);
-                entryMap.put("outline", coordinates);
-                entryMap.put("map_shapes", floorplans);
-
-                entryList.add(entryMap);
-                Log.d("RecordingFragment", "Building '" + name + "' parsed");
-            }
-            Log.d("RecordingFragment", entryList.size() + " buildings parsed");
-        } catch (JSONException e) {
-            Log.e("RecordingFragment", "JSON Parse Failed: " + e.getMessage());
-        }
-        return entryList;
     }
 }
