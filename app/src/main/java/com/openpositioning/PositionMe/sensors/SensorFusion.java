@@ -18,6 +18,7 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.Fusion.Fusion;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
@@ -166,6 +167,8 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
+    // Fusion used for corrected positioning
+    public Fusion fusion = new Fusion();
 
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion. Initialises
@@ -390,6 +393,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                     float[] newCords =
                             this.pdrProcessing.updatePdr(
                                     stepTime, this.accelMagnitude, this.orientation[0]);
+
+                    this.fusion.filterPDRUpdate(newCords[2], newCords[3]);
 
                     // Clear the accelMagnitude after using it
                     // CAUTION - This line never runs!
@@ -1079,8 +1084,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                                             .setZ(rotation[2])
                                             .setW(rotation[3]))
                             .setStepCount(0));
+            // start fusion predictions
+            this.fusion.start(new LatLng(startLocation[0], startLocation[1]), pdrProcessing); //Start fusion predictions
         }
-
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
         this.pdrProcessing.resetPDR();
@@ -1108,6 +1114,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         }
         if (wakeLock.isHeld()) {
             this.wakeLock.release();
+        }
+        if (fusion.isActive()) {
+            this.fusion.stop();
         }
     }
 
@@ -1188,6 +1197,21 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Divide timer with a counter for storing data every 1 second
             if (counter == 99) {
                 counter = 0;
+                //store fusion corrected estimated point to the trajectory at 1 sec intervals
+                /*
+                if (this.fusion.isActive()){
+                    LatLng fused = this.fusion.getBestEstimate()
+                    if (fused != null){
+                        trajectory.addCorrectedPositions(
+                            Traj.GNSSPosition.newBuilder()
+                                .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                                .setLatitude(fused.latitude)
+                                .setLongitude(fused.longitude)
+                                .setAltitude(elevation)
+                                .setFloor(fusion.getEstimatedFloor)
+                        }
+                    }
+                 */
                 // Store pressure and light data
                 if (barometerSensor.sensor != null) {
                     trajectory

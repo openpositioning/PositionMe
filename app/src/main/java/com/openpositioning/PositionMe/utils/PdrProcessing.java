@@ -178,8 +178,8 @@ public class PdrProcessing {
         this.positionX += x;
         this.positionY += y;
 
-        // return current position
-        return new float[] {this.positionX, this.positionY};
+        // return current position and delta values
+        return new float[] {this.positionX, this.positionY, x, y};
     }
 
     /**
@@ -269,8 +269,7 @@ public class PdrProcessing {
      * @return float array of size 2, with the X and Y coordinates respectively.
      */
     public float[] getPDRMovement() {
-        float[] pdrPosition = new float[] {positionX, positionY};
-        return pdrPosition;
+        return new float[] {positionX, positionY};
     }
 
     /**
