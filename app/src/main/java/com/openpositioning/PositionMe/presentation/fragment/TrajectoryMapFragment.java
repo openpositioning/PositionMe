@@ -360,6 +360,7 @@ public class TrajectoryMapFragment extends Fragment {
                     currentFloor = building.getFloorName();
                 } else {
                     setFloorUIVisibility(View.GONE);
+                    isInsideBuilding = false;
                 }
                 // Preview floor plan by clicking on building, and associate route
                 gMap.setOnPolygonClickListener(
