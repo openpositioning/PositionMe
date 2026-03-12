@@ -16,7 +16,7 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
  */
 public class Fusion {
     // Current best position estimate in WGS84
-    private LatLng BestEstimate;
+    private LatLng bestEstimate;
     // Estimated floor level
     private int EstimatedFloor;
     // Whether the fusion system is actively tracking
@@ -48,14 +48,15 @@ public class Fusion {
     /**
      * Initialises the fusion system and seeds the particle filter around the given position.
      *
-     * @param initial_estimate is a place holder for the starting position in WGS84 coordinates.
-     * - TODO we should probably use our own start location estimate as this could be crucial for accuracy of the remainder of the recording.
+     * @param initial_estimate is a place holder for the starting position in WGS84 coordinates. -
+     *     TODO we should probably use our own start location estimate as this could be crucial for
+     *     accuracy of the remainder of the recording.
      */
     public void start(LatLng initial_estimate, PdrProcessing pdrProcessing) {
-
         isActive = true;
-        this.BestEstimate = getStartLocation(initial_estimate);
-        this.particleFilter.start(this.BestEstimate);
+        this.pdrProcessing = pdrProcessing;
+        this.bestEstimate = getStartLocation(initial_estimate);
+        this.particleFilter.start(this.bestEstimate);
     }
 
     /**
@@ -65,15 +66,16 @@ public class Fusion {
      */
     public LatLng getBestEstimate() {
         LatLng particleFilterEstimate = particleFilter.getEstimated_position();
-        return BestEstimate;
+        bestEstimate = particleFilterEstimate;
+        return bestEstimate;
     }
+
     /**
-     * - TODO
-     * Returns a uniquely fused starting position estimate.
+     * - TODO Returns a uniquely fused starting position estimate.
      *
      * @return {@link LatLng} of the best start position estimate.
      */
-    public LatLng getStartLocation(LatLng initial_estimate){
+    public LatLng getStartLocation(LatLng initial_estimate) {
         return initial_estimate;
     }
 

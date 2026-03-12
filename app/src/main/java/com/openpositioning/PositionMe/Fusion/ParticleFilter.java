@@ -54,11 +54,11 @@ public class ParticleFilter {
      * @param initial_pos starting position in WGS84 coordinates.
      */
     public void start(LatLng initial_pos) {
-        this.rand = new Random();
-        this.refLat = initial_pos.latitude;
-        this.refLng = initial_pos.longitude;
-        this.active = true;
-        this.estimated_position = initial_pos;
+        rand = new Random();
+        refLat = initial_pos.latitude;
+        refLng = initial_pos.longitude;
+        active = true;
+        estimated_position = initial_pos;
         double[] east_north = latLngToEN(initial_pos.latitude, initial_pos.longitude);
         particles = new ArrayList<>(PARTICLE_COUNT);
         for (int i = 0; i < PARTICLE_COUNT; i++) {
@@ -80,6 +80,7 @@ public class ParticleFilter {
      * @param dy northing displacement in metres from the PDR step.
      */
     public void updateWithPDR(double dx, double dy) {
+        if (!active || particles == null) return;
         // Propagate each particle with PDR step + stochastic process noise
         for (Particle particle : particles) {
             particle.easting += dx + rand.nextGaussian() * PDR_NOISE_STDDEV;
@@ -146,7 +147,7 @@ public class ParticleFilter {
             sum_n += particle.northing * particle.weight;
             sum_w += particle.weight;
         }
-        this.estimated_position = enToLatLng(sum_e / sum_w, sum_n / sum_w);
+        estimated_position = enToLatLng(sum_e / sum_w, sum_n / sum_w);
     }
 
     /**
@@ -160,6 +161,15 @@ public class ParticleFilter {
      */
     public void repopulate() {
         ArrayList<Particle> newParticles = new ArrayList<>(PARTICLE_COUNT);
+
+        // normalise weights
+        double totalWeight = 0;
+        for (Particle p : particles) {
+            totalWeight += p.weight;
+        }
+        for (Particle p : particles) {
+            p.weight /= totalWeight;
+        }
 
         // Build cumulative weight distribution
         double[] cumulative = new double[particles.size()];
@@ -190,6 +200,6 @@ public class ParticleFilter {
     }
 
     public LatLng getEstimated_position() {
-        return this.estimated_position;
+        return estimated_position;
     }
 }
