@@ -86,43 +86,102 @@
         android:id="@+id/controlLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center"
         android:orientation="vertical"
         android:padding="12dp"
-        android:gravity="center"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
 
         <!-- Drop Marker Button (icon-only) ABOVE progress bar -->
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/dropMarkerButton"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginBottom="12dp"
-            android:layout_gravity="end"
-            app:srcCompat="@drawable/ic_baseline_add_timed_marker"
-            app:backgroundTint="@color/red"
-            app:tint="@color/md_theme_onPrimary"
-            android:contentDescription="@string/drop_marker" />
-
 
 
         <!-- Progress Bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="312dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/textViewCampaignTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Current Campaign"
+                    android:textAlignment="center"
+                    android:textSize="20sp"
+                    android:textStyle="italic" />
+
+                <TextView
+                    android:id="@+id/textViewCampaignField"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:autoText="true"
+                    android:text="campaign"
+                    android:textAlignment="center"
+                    android:textSize="16sp"
+                    android:textStyle="italic" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="301dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/textViewFloorTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Floor Level"
+                    android:textAlignment="center"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/textFloorNumber"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="no_floor"
+                    android:textAlignment="center"
+                    android:textSize="20sp" />
+            </LinearLayout>
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/dropMarkerButton"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_gravity="end"
+                android:layout_marginBottom="12dp"
+                android:contentDescription="@string/drop_marker"
+                app:backgroundTint="@color/red"
+                app:srcCompat="@drawable/ic_baseline_add_timed_marker"
+                app:tint="@color/md_theme_onPrimary" />
+
+        </LinearLayout>
+
         <com.google.android.material.progressindicator.LinearProgressIndicator
             android:id="@+id/timeRemainingBar"
             style="@style/Widget.Material3.LinearProgressIndicator"
             android:layout_width="match_parent"
             android:layout_height="20dp"
+            android:layout_marginBottom="12dp"
             android:max="1800"
-            android:progress="0"
-            android:layout_marginBottom="12dp" />
+            android:progress="0" />
 
         <!-- Buttons Container -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
+            android:gravity="center"
+            android:orientation="horizontal">
 
             <!-- Cancel Button -->
             <com.google.android.material.button.MaterialButton
@@ -131,14 +190,14 @@
                 android:layout_width="160dp"
                 android:layout_height="56dp"
                 android:layout_marginEnd="16dp"
-                app:icon="@drawable/ic_unavailable"
                 android:text="@string/cancel"
                 android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onError"
                 app:backgroundTint="@color/md_theme_error"
-                app:cornerRadius="16dp" />
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_unavailable"
+                app:iconGravity="textStart"
+                app:iconSize="24dp"
+                app:iconTint="@color/md_theme_onError" />
 
             <!-- Stop Button -->
             <com.google.android.material.button.MaterialButton
@@ -146,14 +205,15 @@
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="160dp"
                 android:layout_height="56dp"
-                app:icon="@drawable/ic_baseline_assignment_turned_in_24"
                 android:text="@string/stop"
                 android:textSize="16sp"
-                app:iconSize="24dp"
-                app:iconGravity="textStart"
-                app:iconTint="@color/md_theme_onPrimary"
                 app:backgroundTint="@color/md_theme_primary"
-                app:cornerRadius="16dp" />
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_baseline_assignment_turned_in_24"
+                app:iconGravity="textStart"
+                app:iconSize="24dp"
+                app:iconTint="@color/md_theme_onPrimary" />
         </LinearLayout>
+
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

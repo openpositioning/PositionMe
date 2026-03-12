@@ -71,7 +71,6 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isColourEnabled = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
-
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
@@ -85,6 +84,9 @@ public class TrajectoryMapFragment extends Fragment {
     private Spinner switchMapSpinner;
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
+    private SwitchMaterial autopanSwitch;
+    private boolean isInsideBuilding = false;
+    private String currentFloor = "no_floor";
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton,
             floorDownButton;
@@ -117,6 +119,7 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Grab references to UI controls
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
+        autopanSwitch = view.findViewById(R.id.switchAutopan);
         gnssSwitch = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         floorUpButton = view.findViewById(R.id.floorUpButton);
@@ -126,7 +129,7 @@ public class TrajectoryMapFragment extends Fragment {
         sensorFusion = SensorFusion.getInstance();
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
-        setFloorControlsVisibility(View.GONE);
+        setFloorUIVisibility(View.GONE);
 
         // Initialize the map asynchronously
         SupportMapFragment mapFragment =
@@ -175,12 +178,11 @@ public class TrajectoryMapFragment extends Fragment {
                         if (isColourEnabled) {
                             switchColorButton.setBackgroundColor(COLOUR_PATH_MONOCHROME);
                             polyline.setColor(COLOUR_PATH_MONOCHROME);
-                            isColourEnabled = false;
                         } else {
                             switchColorButton.setBackgroundColor(COLOUR_PATH_COLOUR);
                             polyline.setColor(COLOUR_PATH_COLOUR);
-                            isColourEnabled = true;
                         }
+                        isColourEnabled = !isColourEnabled;
                     }
                 });
 
@@ -332,18 +334,11 @@ public class TrajectoryMapFragment extends Fragment {
                                                             requireContext(),
                                                             R.drawable
                                                                     .ic_baseline_navigation_24))));
-            // Refocus the camera to current position
-            // (Currently runs once at start of recording)
-            // TODO - Implement UI toggle for this feature
-            if (oldLocation == null) {
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, ZOOM_LEVEL_DEFAULT));
-            }
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, ZOOM_LEVEL_DEFAULT));
         } else {
             // Update marker position + orientation
             orientationMarker.setPosition(newLocation);
             orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            //            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
         }
 
         // Extend polyline if movement occurred
@@ -360,9 +355,11 @@ public class TrajectoryMapFragment extends Fragment {
                 building.drawBuildingOutline(gMap);
                 if (building.getIsInsideBuilding()) {
                     sensorFusion.setCurrentBuilding(building.getName());
-                    setFloorControlsVisibility(View.VISIBLE);
+                    setFloorUIVisibility(View.VISIBLE);
+                    isInsideBuilding = true;
+                    currentFloor = building.getFloorName();
                 } else {
-                    setFloorControlsVisibility(View.GONE);
+                    setFloorUIVisibility(View.GONE);
                 }
                 // Preview floor plan by clicking on building, and associate route
                 gMap.setOnPolygonClickListener(
@@ -424,6 +421,10 @@ public class TrajectoryMapFragment extends Fragment {
                                         + elevationVal / building.getFloorHeight());
                 building.setCurrentFloor(newFloor, gMap);
             }
+        }
+
+        if (autopanSwitch.isChecked()) {
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, ZOOM_LEVEL_DEFAULT));
         }
     }
 
@@ -526,7 +527,15 @@ public class TrajectoryMapFragment extends Fragment {
         return isGnssOn;
     }
 
-    private void setFloorControlsVisibility(int visibility) {
+    public boolean getIsInsideBuilding() {
+        return isInsideBuilding;
+    }
+
+    public String getFloorName() {
+        return currentFloor;
+    }
+
+    private void setFloorUIVisibility(int visibility) {
         floorUpButton.setVisibility(visibility);
         floorDownButton.setVisibility(visibility);
 

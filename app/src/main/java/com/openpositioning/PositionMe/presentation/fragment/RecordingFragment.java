@@ -58,6 +58,7 @@ public class RecordingFragment extends Fragment {
     private ImageView recIcon;
     private ProgressBar timeRemaining;
     private TextView elevation, distanceTravelled, gnssError;
+    private TextView textCampaignName, textFloorNumberTitle, textFloorNumber;
 
     // App settings
     private SharedPreferences settings;
@@ -120,6 +121,10 @@ public class RecordingFragment extends Fragment {
                         getChildFragmentManager()
                                 .findFragmentById(R.id.trajectoryMapFragmentContainer);
 
+        textCampaignName = view.findViewById(R.id.textViewCampaignField);
+        textFloorNumber = view.findViewById(R.id.textFloorNumber);
+        textFloorNumberTitle = view.findViewById(R.id.textViewFloorTitle);
+
         // If not present, create it
         if (trajectoryMapFragment == null) {
             trajectoryMapFragment = new TrajectoryMapFragment();
@@ -142,6 +147,8 @@ public class RecordingFragment extends Fragment {
 
         // Hide or initialize default values
         gnssError.setVisibility(View.GONE);
+        textFloorNumberTitle.setVisibility(View.GONE);
+        textFloorNumber.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
@@ -304,6 +311,17 @@ public class RecordingFragment extends Fragment {
         // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
+
+        // Building UI
+        textCampaignName.setText(sensorFusion.getCurrentBuilding());
+        if (trajectoryMapFragment != null && trajectoryMapFragment.getIsInsideBuilding()) {
+            textFloorNumberTitle.setVisibility(View.VISIBLE);
+            textFloorNumber.setVisibility(View.VISIBLE);
+            textFloorNumber.setText(trajectoryMapFragment.getFloorName());
+        } else {
+            textFloorNumberTitle.setVisibility(View.GONE);
+            textFloorNumber.setVisibility(View.GONE);
+        }
     }
 
     /** Start the blinking effect for the recording icon. */
