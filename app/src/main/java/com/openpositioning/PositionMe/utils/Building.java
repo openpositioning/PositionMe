@@ -202,6 +202,10 @@ public class Building {
         return floorNumber;
     }
 
+    public String getFloorName() {
+        return floorNames.get(floorNumber);
+    }
+
     public List<String> getFloorNames() {
         return floorNames;
     }
