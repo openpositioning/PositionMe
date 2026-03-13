@@ -50,7 +50,7 @@ public class UtilConstants {
     public static final String PROTOCOL_MULTIPART = "multipart/form-data";
     public static final String PROTOCOL_APP_JSON = "application/json";
 
-    // Expected performances from floorplans API requesr
+    // Expected performances from floor plans API request
     public static final String BUILDING_NAME_NUCLEUS = "nucleus_building";
     public static final String BUILDING_NAME_M_HOUSE = "murchison_house";
     public static final String BUILDING_NAME_OUTSIDE = "outside";

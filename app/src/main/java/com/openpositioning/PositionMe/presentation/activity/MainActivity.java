@@ -5,6 +5,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
@@ -30,6 +32,8 @@ import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.PermissionManager;
 import java.util.Objects;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * The Main Activity of the application, handling setup, permissions and starting all other
@@ -54,6 +58,7 @@ import java.util.Objects;
  * @author Virginia Cangelosi
  */
 public class MainActivity extends AppCompatActivity implements Observer {
+    private static final String TAG = "MainActivity";
 
     // region Instance variables
     private NavController navController;
@@ -63,6 +68,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private SharedPreferences settings;
     private SensorFusion sensorFusion;
     private Handler httpResponseHandler;
+    private String httpFailureMessage = "";
 
     private PermissionManager permissionManager;
 
@@ -324,18 +330,52 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
     }
 
-    // endregion
-
-    // region Global toasts
-
-    /** {@inheritDoc} Calls the corresponding handler that runs a toast on the Main UI thread. */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Calls the corresponding handler that runs a toast on the Main UI thread.
+     */
     @Override
     public void update(Object[] objList) {
-        assert objList[0] instanceof Boolean;
-        if ((Boolean) objList[0]) {
+        boolean success = (boolean) objList[0];
+        String response = objList[1].toString();
+
+        if (success) {
             this.httpResponseHandler.post(displayToastTaskSuccess);
         } else {
-            this.httpResponseHandler.post(displayToastTaskFailure);
+            try {
+                JSONObject jsonObject = new JSONObject(response);
+
+                Log.d(TAG, jsonObject.toString());
+                String cause = jsonObject.getString("detail");
+                String[] causeElements = cause.split(":");
+                String causeSource = causeElements[0].strip();
+                String causeMessage = causeElements[1].strip();
+
+                new Handler(Looper.getMainLooper())
+                        .post(
+                                () ->
+                                        new AlertDialog.Builder(this)
+                                                .setTitle("Trajectory Upload Failed")
+                                                .setMessage(
+                                                        "The server has declined the last recorded"
+                                                            + " trajectory. The response is shown"
+                                                            + " below:\n\n"
+                                                                + causeSource
+                                                                + "\n"
+                                                                + causeMessage)
+                                                .setPositiveButton(
+                                                        "Okay",
+                                                        (dialog, which) -> {
+                                                            dialog.dismiss();
+                                                        })
+                                                .create()
+                                                .show());
+
+            } catch (JSONException e) {
+                httpFailureMessage = "Upload failed - Unknown error";
+                this.httpResponseHandler.post(displayToastTaskFailure);
+            }
         }
     }
 
@@ -354,9 +394,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
      */
     private final Runnable displayToastTaskFailure =
             () -> {
-                //            Toast.makeText(MainActivity.this, "Failed to complete trajectory
-                // upload", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, httpFailureMessage, Toast.LENGTH_SHORT).show();
             };
-
-    // endregion
 }
