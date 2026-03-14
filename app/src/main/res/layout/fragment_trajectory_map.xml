@@ -4,158 +4,171 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/trajectory_map_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    tools:context=".presentation.fragment.TrajectoryMapFragment">
 
+    <!-- Google Map container -->
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/trajectoryMap"
         android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <LinearLayout
-        android:layout_width="wrap_content"
+    <!-- Top-left control card -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/mapControlCard"
+        android:layout_width="220dp"
         android:layout_height="wrap_content"
-        android:layout_margin="10dp"
-        android:gravity="top"
-        android:orientation="vertical"
+        android:layout_margin="12dp"
+        app:cardBackgroundColor="@android:color/white"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="5dp"
         app:layout_anchor="@id/trajectoryMap"
         app:layout_anchorGravity="top|start">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="top"
-            android:orientation="horizontal">
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                app:cardBackgroundColor="#F7FFFFFF"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="6dp">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="10dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Map Controls"
-                        android:textColor="@android:color/black"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
-
-                    <LinearLayout
-                        android:id="@+id/mapControlsContent"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="center"
-                        android:orientation="vertical">
-
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/gnssSwitch"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:checked="true"
-                            android:text="Show GNSS" />
-
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/autoFloor"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/auto_floor" />
-
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/showWifiSwitch"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:checked="true"
-                            android:text="Show WiFi" />
-
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/showPdrSwitch"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:checked="true"
-                            android:text="Show PDR" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/lineColorButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Red"
-                            android:textColor="@android:color/white"
-                            app:backgroundTint="@android:color/holo_red_dark"
-                            app:elevation="5dp" />
-
-                        <Spinner
-                            android:id="@+id/mapSwitchSpinner"
-                            android:layout_width="wrap_content"
-                            android:layout_height="48dp"
-                            android:layout_marginTop="8dp"
-                            android:background="@android:color/white"
-                            android:spinnerMode="dropdown" />
-                    </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+            android:orientation="vertical"
+            android:padding="12dp">
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
+                <TextView
+                    android:id="@+id/mapControlTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Map controls"
+                    android:textColor="@android:color/black"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnToggleControls"
+                    android:id="@+id/btnToggleMapControls"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
                     android:minWidth="0dp"
                     android:text="Hide"
                     android:textAllCaps="false"
+                    android:textSize="12sp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:insetLeft="12dp"
+                    android:insetRight="12dp"
+                    app:backgroundTint="?attr/colorPrimary"
+                    app:cornerRadius="10dp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="8dp" />
+
+            <LinearLayout
+                android:id="@+id/mapControlContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/gnssSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:minHeight="40dp"
+                    android:text="@string/gnssSwitch"
+                    android:textColor="@android:color/black"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/autoFloor"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="40dp"
+                    android:text="@string/auto_floor"
+                    android:textColor="@android:color/black"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/showWifiSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:minHeight="40dp"
+                    android:text="@string/show_wifi"
+                    android:textColor="@android:color/black"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/showPdrSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:minHeight="40dp"
+                    android:text="@string/show_pdr"
+                    android:textColor="@android:color/black"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/lineColorButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/color"
+                    android:textAllCaps="false"
                     android:textColor="@android:color/white"
-                    app:backgroundTint="#546E7A" />
+                    android:textSize="13sp"
+                    app:backgroundTint="@color/red"
+                    app:cornerRadius="12dp"
+                    app:elevation="0dp" />
+
+                <Spinner
+                    android:id="@+id/mapSwitchSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="8dp"
+                    android:background="@android:color/transparent"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:spinnerMode="dropdown" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnToggleLog"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="36dp"
-                    android:layout_marginStart="8dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
+                    android:layout_marginTop="8dp"
                     android:minWidth="0dp"
-                    android:text="Log"
+                    android:text="Show Log"
                     android:textAllCaps="false"
                     android:textColor="@android:color/white"
-                    app:backgroundTint="#455A64" />
+                    android:textSize="12sp"
+                    app:backgroundTint="#455A64"
+                    app:cornerRadius="10dp" />
 
+                <TextView
+                    android:id="@+id/debugStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="#DD263238"
+                    android:paddingStart="10dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="8dp"
+                    android:text="Waiting for updates"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
             </LinearLayout>
-
         </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
-        <TextView
-            android:id="@+id/debugStatusText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="#DD263238"
-            android:paddingStart="10dp"
-            android:paddingTop="8dp"
-            android:paddingEnd="10dp"
-            android:paddingBottom="8dp"
-            android:text="abs:none  src:idle&#10;floor d/c/m: -/-/-&#10;vertical: steady Δ0.00m&#10;correction: NONE&#10;Waiting for updates"
-            android:textColor="@android:color/white"
-            android:textSize="12sp"
-            android:visibility="gone"
-            tools:visibility="visible" />
-
-    </LinearLayout>
-
+    <!-- Bottom/side controls -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
@@ -164,9 +177,9 @@
             android:id="@+id/mapActionButtons"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
             android:layout_marginStart="16dp"
             android:layout_marginBottom="16dp"
+            android:orientation="vertical"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent">
 
@@ -174,85 +187,95 @@
                 android:id="@+id/selectedVenueText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:background="#CCFFFFFF"
+                android:padding="8dp"
                 android:text="Tap a blue building outline to select a building"
-                android:background="#B3FFFFFF"
                 android:textColor="@android:color/black"
-                android:padding="6dp"
-                android:layout_marginBottom="8dp" />
+                android:textSize="13sp" />
 
             <com.google.android.material.progressindicator.CircularProgressIndicator
                 android:id="@+id/indoorLoadingIndicator"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
                 android:indeterminate="true"
-                android:visibility="gone"
-                android:layout_marginBottom="8dp" />
+                android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnFindActualMap"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Display Actual Maps"
                 android:layout_marginBottom="8dp"
-                app:backgroundTint="?attr/colorPrimary" />
+                android:text="Display Actual Maps"
+                android:textSize="14sp"
+                app:backgroundTint="?attr/colorPrimary"
+                app:cornerRadius="10dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnToggleAdjustMap"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Adjust Map"
-                android:visibility="gone"
                 android:layout_marginBottom="8dp"
-                app:backgroundTint="#546E7A" />
+                android:text="Adjust Map"
+                android:textSize="14sp"
+                android:visibility="gone"
+                app:backgroundTint="#607D8B"
+                app:cornerRadius="10dp" />
 
             <LinearLayout
                 android:id="@+id/calibrationPanel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:background="#EFFFFFFF"
                 android:orientation="vertical"
-                android:background="#CCFFFFFF"
-                android:padding="8dp"
-                android:visibility="gone"
-                android:layout_marginBottom="8dp">
+                android:padding="10dp"
+                android:visibility="gone">
 
                 <TextView
                     android:id="@+id/calibrationTargetText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
                     android:text="Target:"
                     android:textColor="@android:color/black"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="4dp" />
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/calibrationValueText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
                     android:text="x=0.000 y=0.000 w=1.000 h=1.000"
                     android:textColor="@android:color/black"
-                    android:layout_marginBottom="6dp" />
+                    android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCalibrationTarget"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Switch Target"
-                    android:visibility="gone"
                     android:layout_marginBottom="6dp"
-                    app:backgroundTint="#607D8B" />
+                    android:text="Switch Target"
+                    android:textSize="13sp"
+                    android:visibility="gone"
+                    app:backgroundTint="#607D8B"
+                    app:cornerRadius="10dp" />
 
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginBottom="4dp">
+                    android:layout_marginBottom="4dp"
+                    android:orientation="horizontal">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnCalibrateUp"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Up"
                         android:minWidth="0dp"
+                        android:text="Up"
+                        android:textSize="12sp"
                         android:insetLeft="0dp"
                         android:insetRight="0dp" />
 
@@ -260,45 +283,49 @@
                         android:id="@+id/btnCalibrateDown"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Down"
+                        android:layout_marginStart="4dp"
                         android:minWidth="0dp"
+                        android:text="Down"
+                        android:textSize="12sp"
                         android:insetLeft="0dp"
-                        android:insetRight="0dp"
-                        android:layout_marginStart="4dp" />
+                        android:insetRight="0dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnCalibrateLeft"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Left"
+                        android:layout_marginStart="4dp"
                         android:minWidth="0dp"
+                        android:text="Left"
+                        android:textSize="12sp"
                         android:insetLeft="0dp"
-                        android:insetRight="0dp"
-                        android:layout_marginStart="4dp" />
+                        android:insetRight="0dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnCalibrateRight"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Right"
+                        android:layout_marginStart="4dp"
                         android:minWidth="0dp"
+                        android:text="Right"
+                        android:textSize="12sp"
                         android:insetLeft="0dp"
-                        android:insetRight="0dp"
-                        android:layout_marginStart="4dp" />
+                        android:insetRight="0dp" />
                 </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginBottom="4dp">
+                    android:layout_marginBottom="4dp"
+                    android:orientation="horizontal">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnWidthMinus"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="W-"
                         android:minWidth="0dp"
+                        android:text="W-"
+                        android:textSize="12sp"
                         android:insetLeft="0dp"
                         android:insetRight="0dp" />
 
@@ -306,31 +333,34 @@
                         android:id="@+id/btnWidthPlus"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="W+"
+                        android:layout_marginStart="4dp"
                         android:minWidth="0dp"
+                        android:text="W+"
+                        android:textSize="12sp"
                         android:insetLeft="0dp"
-                        android:insetRight="0dp"
-                        android:layout_marginStart="4dp" />
+                        android:insetRight="0dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnHeightMinus"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="H-"
+                        android:layout_marginStart="4dp"
                         android:minWidth="0dp"
+                        android:text="H-"
+                        android:textSize="12sp"
                         android:insetLeft="0dp"
-                        android:insetRight="0dp"
-                        android:layout_marginStart="4dp" />
+                        android:insetRight="0dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnHeightPlus"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="H+"
+                        android:layout_marginStart="4dp"
                         android:minWidth="0dp"
+                        android:text="H+"
+                        android:textSize="12sp"
                         android:insetLeft="0dp"
-                        android:insetRight="0dp"
-                        android:layout_marginStart="4dp" />
+                        android:insetRight="0dp" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -342,24 +372,27 @@
                         android:id="@+id/btnSaveCalibration"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Save"
                         android:minWidth="0dp"
+                        android:text="Save"
+                        android:textSize="12sp"
                         android:insetLeft="0dp"
                         android:insetRight="0dp"
-                        app:backgroundTint="#2E7D32" />
+                        app:backgroundTint="#2E7D32"
+                        app:cornerRadius="10dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnResetCalibration"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Reset"
+                        android:layout_marginStart="4dp"
                         android:minWidth="0dp"
+                        android:text="Reset"
+                        android:textSize="12sp"
                         android:insetLeft="0dp"
                         android:insetRight="0dp"
-                        android:layout_marginStart="4dp"
-                        app:backgroundTint="#C62828" />
+                        app:backgroundTint="#C62828"
+                        app:cornerRadius="10dp" />
                 </LinearLayout>
-
             </LinearLayout>
 
             <com.google.android.material.button.MaterialButton
@@ -367,7 +400,42 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Find Indoor Maps"
-                app:backgroundTint="?attr/colorPrimary" />
+                android:textSize="14sp"
+                app:backgroundTint="?attr/colorPrimary"
+                app:cornerRadius="10dp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="#CCFFFFFF"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/debugHeading"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="θ: 0.00 rad"
+                    android:textColor="@android:color/black"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/debugAdaptedHeading"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Adapted: 0.00 rad"
+                    android:textColor="@android:color/black"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/debugCosSin"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="cos: 0.00 | sin: 0.00"
+                    android:textColor="@android:color/black"
+                    android:textSize="12sp" />
+            </LinearLayout>
         </LinearLayout>
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -377,9 +445,9 @@
             android:layout_margin="16dp"
             android:src="@android:drawable/arrow_down_float"
             app:backgroundTint="?attr/colorPrimary"
-            app:tint="@android:color/white"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent"
+            app:tint="@android:color/white" />
 
         <TextView
             android:id="@+id/floorLabel"
@@ -407,10 +475,9 @@
             android:layout_marginBottom="28dp"
             android:src="@android:drawable/arrow_up_float"
             app:backgroundTint="?attr/colorPrimary"
-            app:tint="@android:color/white"
-            app:layout_constraintBottom_toTopOf="@+id/floorLabel"
-            app:layout_constraintEnd_toEndOf="parent" />
-
+            app:layout_constraintBottom_toTopOf="@id/floorLabel"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:tint="@android:color/white" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

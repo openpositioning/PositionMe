@@ -7,10 +7,11 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.LinearInterpolator;
@@ -18,81 +19,101 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import com.google.android.material.button.MaterialButton;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.fusion.FusedPose;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.utils.TcpClient;
+import com.openpositioning.PositionMe.utils.TcpPacketSender;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
-import com.google.android.gms.maps.model.LatLng;
 
+import java.io.File;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-
-import android.widget.Toast;
-
-
-
+import java.util.Locale;
 
 /**
  * Fragment responsible for managing the recording process of trajectory data.
- * <p>
- * The RecordingFragment serves as the interface for users to initiate, monitor, and
- * complete trajectory recording. It integrates sensor fusion data to track user movement
- * and updates a map view in real time. Additionally, it provides UI controls to cancel,
- * stop, and monitor recording progress.
- * <p>
- * Features:
- * - Starts and stops trajectory recording.
- * - Displays real-time sensor data such as elevation and distance traveled.
- * - Provides UI controls to cancel or complete recording.
- * - Uses {@link TrajectoryMapFragment} to visualize recorded paths.
- * - Manages GNSS tracking and error display.
  *
- * @see TrajectoryMapFragment The map fragment displaying the recorded trajectory.
- * @see RecordingActivity The activity managing the recording workflow.
- * @see SensorFusion Handles sensor data collection.
- * @see SensorTypes Enumeration of available sensor types.
+ * <p>The RecordingFragment serves as the interface for users to initiate, monitor,
+ * and complete trajectory recording. It integrates sensor fusion data to track user
+ * movement and updates a map view in real time. Additionally, it provides UI controls
+ * to cancel, stop, and monitor recording progress.
  *
- * @author Shu Gu
+ * <p>Features:
+ * <ul>
+ *     <li>Starts and stops trajectory recording.</li>
+ *     <li>Displays real-time sensor data such as elevation and distance traveled.</li>
+ *     <li>Provides UI controls to cancel or complete recording.</li>
+ *     <li>Uses {@link TrajectoryMapFragment} to visualize recorded paths.</li>
+ *     <li>Manages GNSS tracking and error display.</li>
+ * </ul>
  */
-
 public class RecordingFragment extends Fragment {
 
+    private static final String TAG = "RecordingFragment";
+
     // UI elements
-    private MaterialButton completeButton, cancelButton;
+    private MaterialButton completeButton;
+    private MaterialButton cancelButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
-    private TextView elevation, distanceTravelled, gnssError;
+    private TextView elevation;
+    private TextView distanceTravelled;
+    private TextView gnssError;
 
     // App settings
     private SharedPreferences settings;
 
-    // Sensor & data logic
+    // Sensor and data logic
     private SensorFusion sensorFusion;
     private Handler refreshDataHandler;
     private CountDownTimer autoStop;
 
-    // Distance tracking
+    // Distance tracking from raw PDR only
     private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
 
-    // References to the child map fragment
+    // Child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
+    private boolean initialCameraPositionSet = false;
 
+    // TCP streaming to desktop GUI
+    private TcpClient tcpClient;
+    private TcpPacketSender tcpPacketSender;
+    private final Handler tcpHandler = new Handler(Looper.getMainLooper());
+    private boolean tcpStreamingEnabled = false;
+
+    // Autonomous initial map anchoring
+    private LatLng autonomousInitialLocation = null;
+    private boolean initialMapLocationSeeded = false;
+
+
+    // Test point handling
+    private int testPointIndex = 0;
+    private final List<TestPoint> testPoints = new ArrayList<>();
+
+    /**
+     * Runnable used to periodically refresh UI and live map data.
+     */
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
             updateUIandPosition();
-            // Loop again
-            refreshDataHandler.postDelayed(refreshDataTask, 200);
+            refreshDataHandler.postDelayed(this, 200);
         }
     };
 
@@ -103,10 +124,10 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        this.sensorFusion = SensorFusion.getInstance();
+        sensorFusion = SensorFusion.getInstance();
         Context context = requireActivity();
-        this.settings = PreferenceManager.getDefaultSharedPreferences(context);
-        this.refreshDataHandler = new Handler();
+        settings = PreferenceManager.getDefaultSharedPreferences(context);
+        refreshDataHandler = new Handler();
     }
 
     @Nullable
@@ -114,7 +135,6 @@ public class RecordingFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        // Inflate only the "recording" UI parts (no map)
         return inflater.inflate(R.layout.fragment_recording, container, false);
     }
 
@@ -123,21 +143,23 @@ public class RecordingFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Child Fragment: the container in fragment_recording.xml
-        // where TrajectoryMapFragment is placed
+        // Child fragment containing the trajectory map.
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.trajectoryMapFragmentContainer);
 
-        // If not present, create it
         if (trajectoryMapFragment == null) {
             trajectoryMapFragment = new TrajectoryMapFragment();
             getChildFragmentManager()
                     .beginTransaction()
                     .replace(R.id.trajectoryMapFragmentContainer, trajectoryMapFragment)
-                    .commit();
+                    .commitNow();
         }
 
-        // Initialize UI references
+        // Try to seed the initial location immediately. If not available yet,
+        // updateUIandPosition() will keep retrying.
+        seedInitialMapLocation();
+
+        // UI references
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
@@ -146,23 +168,75 @@ public class RecordingFragment extends Fragment {
         cancelButton = view.findViewById(R.id.cancelButton);
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
-        view.findViewById(R.id.btn_test_point).setOnClickListener(v -> onAddTestPoint());
 
+        View testPointButton = view.findViewById(R.id.btn_test_point);
+        if (testPointButton != null) {
+            testPointButton.setOnClickListener(v -> onAddTestPoint());
+        }
 
-        // Hide or initialize default values
+        // Default UI state
         gnssError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
 
-        // Buttons
+        // Stop / complete recording
         completeButton.setOnClickListener(v -> {
-            // Stop recording & go to correction
-            if (autoStop != null) autoStop.cancel();
+            if (autoStop != null) {
+                autoStop.cancel();
+            }
+            refreshDataHandler.removeCallbacks(refreshDataTask);
+            stopTcpStreaming();
             sensorFusion.stopRecording();
-            // Show Correction screen
-            ((RecordingActivity) requireActivity()).showCorrectionScreen();
-        });
 
+            new AlertDialog.Builder(requireActivity())
+                    .setTitle("Save trajectory?")
+                    .setMessage("Do you want to save trajectory into JSON locally?")
+                    .setPositiveButton("Save", (dialog, which) -> {
+                        try {
+                            File dir = new File(requireContext().getExternalFilesDir(null), "trajectories");
+                            if (!dir.exists()) {
+                                dir.mkdirs();
+                            }
+
+                            String timestamp = new SimpleDateFormat(
+                                    "yyyyMMdd_HHmmss", Locale.UK).format(new Date());
+
+                            String trajName = sensorFusion.getTrajectoryId();
+                            if (trajName == null || trajName.trim().isEmpty()) {
+                                trajName = "traj";
+                            }
+
+                            trajName = trajName.replaceAll("[^a-zA-Z0-9_\\-]", "_");
+                            String baseName = trajName + "_" + timestamp;
+
+                            File jsonFile = new File(dir, baseName + ".json");
+                            File csvFile = new File(dir, baseName + ".csv");
+
+                            sensorFusion.saveTestPointToCSV(csvFile);
+                            sensorFusion.saveRecordingToJSON(jsonFile);
+
+                            Toast.makeText(
+                                    requireContext(),
+                                    "Saved to /trajectories folder",
+                                    Toast.LENGTH_SHORT
+                            ).show();
+
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            Toast.makeText(
+                                    requireContext(),
+                                    "Save failed: " + e.getMessage(),
+                                    Toast.LENGTH_LONG
+                            ).show();
+                        }
+
+                        ((RecordingActivity) requireActivity()).showCorrectionScreen();
+                    })
+                    .setNegativeButton("Don't save", (dialog, which) ->
+                            ((RecordingActivity) requireActivity()).showCorrectionScreen())
+                    .setCancelable(false)
+                    .show();
+        });
 
         // Cancel button with confirmation dialog
         cancelButton.setOnClickListener(v -> {
@@ -170,33 +244,29 @@ public class RecordingFragment extends Fragment {
                     .setTitle("Confirm Cancel")
                     .setMessage("Are you sure you want to cancel the recording? Your progress will be lost permanently!")
                     .setNegativeButton("Yes", (dialogInterface, which) -> {
-                        // User confirmed cancellation
+                        stopTcpStreaming();
                         sensorFusion.stopRecording();
-                        if (autoStop != null) autoStop.cancel();
+                        if (autoStop != null) {
+                            autoStop.cancel();
+                        }
                         requireActivity().onBackPressed();
                     })
-                    .setPositiveButton("No", (dialogInterface, which) -> {
-                        // User cancelled the dialog. Do nothing.
-                        dialogInterface.dismiss();
-                    })
-                    .create(); // Create the dialog but do not show it yet
+                    .setPositiveButton("No", (dialogInterface, which) -> dialogInterface.dismiss())
+                    .create();
 
-            // Show the dialog and change the button color
             dialog.setOnShowListener(dialogInterface -> {
                 Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-                negativeButton.setTextColor(Color.RED); // Set "Yes" button color to red
+                negativeButton.setTextColor(Color.RED);
             });
 
-            dialog.show(); // Finally, show the dialog
+            dialog.show();
         });
 
-        // The blinking effect for recIcon
         blinkingRecordingIcon();
+        startTcpStreaming();
 
-        // Start the timed or indefinite UI refresh
-        if (this.settings.getBoolean("split_trajectory", false)) {
-            // A maximum recording time is set
-            long limit = this.settings.getInt("split_duration", 30) * 60000L;
+        if (settings.getBoolean("split_trajectory", false)) {
+            long limit = settings.getInt("split_duration", 30) * 60000L;
             timeRemaining.setMax((int) (limit / 1000));
             timeRemaining.setProgress(0);
             timeRemaining.setScaleY(3f);
@@ -210,106 +280,256 @@ public class RecordingFragment extends Fragment {
 
                 @Override
                 public void onFinish() {
+                    stopTcpStreaming();
                     sensorFusion.stopRecording();
                     ((RecordingActivity) requireActivity()).showCorrectionScreen();
                 }
             }.start();
         } else {
-            // No set time limit, just keep refreshing
             refreshDataHandler.post(refreshDataTask);
         }
     }
 
+    /**
+     * Add a numbered test point marker at the current displayed trajectory position.
+     */
     private void onAddTestPoint() {
-        // 1) Ensure the map fragment is ready
-        if (trajectoryMapFragment == null) return;
-
-        // 2) Read current track position (must lie on the current path)
-        LatLng cur = trajectoryMapFragment.getCurrentLocation();
-        if (cur == null) {
-            Toast.makeText(requireContext(), "" +
-                            "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
-                    Toast.LENGTH_SHORT).show();
+        if (trajectoryMapFragment == null) {
             return;
         }
 
-        // 3) Generate index + timestamp (satisfies "save timestamp")
+        LatLng cur = trajectoryMapFragment.getCurrentLocation();
+        if (cur == null) {
+            Toast.makeText(
+                    requireContext(),
+                    "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        if (!testPoints.isEmpty()) {
+            TestPoint last = testPoints.get(testPoints.size() - 1);
+            LatLng lastLatLng = new LatLng(last.lat, last.lng);
+            double dist = UtilFunctions.distanceBetweenPoints(lastLatLng, cur);
+
+            if (dist < 0.5) {
+                Toast.makeText(
+                        requireContext(),
+                        "Test point not added because the location has not changed enough.",
+                        Toast.LENGTH_SHORT
+                ).show();
+                return;
+            }
+        }
+
         int idx = ++testPointIndex;
         long ts = System.currentTimeMillis();
 
-        // 4) Keep a local copy for in-session tracking
         testPoints.add(new TestPoint(idx, ts, cur.latitude, cur.longitude));
-
-        // Write test point into protobuf payload
         sensorFusion.addTestPointToProto(ts, cur.latitude, cur.longitude);
 
-        // 5) Draw numbered marker on map (satisfies "leave numbered marker")
         trajectoryMapFragment.addTestPointMarker(idx, ts, cur);
+
+        Log.d(TAG, String.format(
+                Locale.UK,
+                "TEST_POINT added idx=%d ts=%d lat=%.6f lon=%.6f",
+                idx,
+                ts,
+                cur.latitude,
+                cur.longitude
+        ));
     }
 
-
     /**
-     * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
+     * Refreshes the recording UI and updates the live map.
+     *
+     * Initialisation behaviour:
+     * - keep waiting until WiFi or GNSS provides the first usable absolute fix
+     * - use that fix as the autonomous session anchor
+     *
+     * Tracking behaviour after initialisation:
+     * - PDR remains the primary motion source
+     * - PF mode can replace the displayed trajectory with fused output
+     * - WiFi and GNSS remain overlays / references
+     *
+     * Note:
+     * distance is intentionally accumulated from raw PDR increments, because
+     * fused absolute corrections may introduce jumps that would distort the
+     * travelled-distance metric.
      */
     private void updateUIandPosition() {
-        float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
-        if (pdrValues == null) return;
-
-        // Distance
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
-                + Math.pow(pdrValues[1] - previousPosY, 2));
-        distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
-
-        // Elevation
-        float elevationVal = sensorFusion.getElevation();
-        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
-
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
-
-            // Pass the location + orientation to the map
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
-            }
+        // Keep retrying until the first autonomous WiFi/GNSS fix arrives.
+        if (!initialMapLocationSeeded) {
+            seedInitialMapLocation();
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
+        float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
+        if (pdrValues == null || trajectoryMapFragment == null) {
+            return;
+        }
+
+        // Capture previous raw PDR values before updating them.
+        float prevX = previousPosX;
+        float prevY = previousPosY;
+
+        // Distance accumulation from raw PDR only.
+        distance += Math.sqrt(
+                Math.pow(pdrValues[0] - prevX, 2) +
+                        Math.pow(pdrValues[1] - prevY, 2)
+        );
+        distanceTravelled.setText(
+                getString(R.string.meter, String.format(Locale.UK, "%.2f", distance))
+        );
+
+        // Elevation display
+        float elevationVal = sensorFusion.getElevation();
+        elevation.setText(
+                getString(R.string.elevation, String.format(Locale.UK, "%.1f", elevationVal))
+        );
+
+        // Main trajectory display mode
+        if (sensorFusion.isParticleFilterTrajectoryMode()) {
+            Log.d(TAG, String.format(
+                    Locale.UK,
+                    "LIVE_MODE=PF pdr=(%.3f, %.3f) dist=%.3f elev=%.2f",
+                    pdrValues[0],
+                    pdrValues[1],
+                    distance,
+                    elevationVal
+            ));
+            updateLiveMapWithParticleFilter(pdrValues);
+        } else {
+            Log.d(TAG, String.format(
+                    Locale.UK,
+                    "LIVE_MODE=PDR pdr=(%.3f, %.3f) dist=%.3f elev=%.2f",
+                    pdrValues[0],
+                    pdrValues[1],
+                    distance,
+                    elevationVal
+            ));
+            updateLiveMapWithStandardPdr(pdrValues);
+        }
+
+        // WiFi overlay
+        LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
+        if (wifiLatLng != null && trajectoryMapFragment.isWifiEnabled()) {
+            trajectoryMapFragment.updateWifi(wifiLatLng);
+        }
+
+        // GNSS overlay and GNSS error display
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-        if (trajectoryMapFragment != null) {
-            if (gnss != null) {
-                LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
-                if (trajectoryMapFragment.isGnssEnabled()) {
-                    LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
-                    if (currentLoc != null) {
-                        double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
-                        gnssError.setVisibility(View.VISIBLE);
-                        gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
-                    } else {
-                        gnssError.setVisibility(View.GONE);
-                    }
-                } else {
-                    gnssError.setVisibility(View.GONE);
-                }
-                trajectoryMapFragment.updateGNSS(gnssLocation);
+        if (gnss != null && trajectoryMapFragment.isGnssEnabled()) {
+            LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
+            LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+
+            if (currentLoc != null) {
+                double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
+                gnssError.setVisibility(View.VISIBLE);
+                gnssError.setText(String.format(
+                        Locale.UK,
+                        getString(R.string.gnss_error) + "%.2fm",
+                        errorDist
+                ));
             } else {
                 gnssError.setVisibility(View.GONE);
-                trajectoryMapFragment.clearGNSS();
             }
+
+            trajectoryMapFragment.updateGNSS(gnssLocation);
+        } else {
+            gnssError.setVisibility(View.GONE);
+            trajectoryMapFragment.clearGNSS();
         }
 
-        // Update previous
+        // Update raw PDR history once, at the end of the cycle.
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
+    }
+
+    /**
+     * Updates the map using standard PDR.
+     *
+     * The local PDR path is anchored to the first valid autonomous WiFi/GNSS fix
+     * captured at the start of recording.
+     */
+    private void updateLiveMapWithStandardPdr(@Nullable float[] pdrValues) {
+        if (trajectoryMapFragment == null || pdrValues == null) {
+            return;
+        }
+
+        if (autonomousInitialLocation == null) {
+            Log.d(TAG, "PDR_BRANCH waiting for autonomous initial location");
+            return;
+        }
+
+        LatLng currentPdrLocation = UtilFunctions.calculateNewPos(autonomousInitialLocation, pdrValues);
+
+        Log.d(TAG, String.format(
+                Locale.UK,
+                "PDR_BRANCH using anchored PDR lat=%.6f lon=%.6f headingDeg=%.2f",
+                currentPdrLocation.latitude,
+                currentPdrLocation.longitude,
+                Math.toDegrees(sensorFusion.passOrientation())
+        ));
+
+        trajectoryMapFragment.updateUserLocation(
+                currentPdrLocation,
+                (float) Math.toDegrees(sensorFusion.passOrientation())
+        );
+        trajectoryMapFragment.updateDebugInfo(sensorFusion.passOrientation());
+
+        if (!initialCameraPositionSet) {
+            trajectoryMapFragment.setInitialCameraPosition(currentPdrLocation);
+            initialCameraPositionSet = true;
+            Log.d(TAG, "PDR_BRANCH initial camera position set from anchored PDR");
+        }
+    }
+
+    /**
+     * Updates the map using the latest fused PF estimate.
+     *
+     * If the PF has not yet initialised, this deliberately falls back
+     * to standard PDR so the user still sees a live trajectory.
+     */
+    private void updateLiveMapWithParticleFilter(@Nullable float[] pdrValues) {
+        FusedPose fusedPose = sensorFusion.getLatestFusedPose();
+
+        if (fusedPose == null) {
+            Log.d(TAG, "PF_BRANCH fused pose is null -> falling back to standard PDR");
+            updateLiveMapWithStandardPdr(pdrValues);
+            return;
+        }
+
+        LatLng fusedLatLng = fusedPose.getLatLng();
+        float fusedHeadingDeg = (float) Math.toDegrees(fusedPose.getHeadingRad());
+
+        Log.d(TAG, String.format(
+                Locale.UK,
+                "PF_BRANCH using fused pose lat=%.6f lon=%.6f floor=%d conf=%.3f headingDeg=%.2f",
+                fusedLatLng.latitude,
+                fusedLatLng.longitude,
+                fusedPose.getFloor(),
+                fusedPose.getConfidence(),
+                fusedHeadingDeg
+        ));
+
+        if (trajectoryMapFragment != null) {
+            trajectoryMapFragment.updateUserLocation(
+                    fusedLatLng,
+                    fusedHeadingDeg
+            );
+
+            trajectoryMapFragment.updateDisplayedFloor(fusedPose.getFloor());
+
+            // Keep debug info visible for quick validation.
+            trajectoryMapFragment.updateDebugInfo((float) fusedPose.getHeadingRad());
+
+            if (!initialCameraPositionSet) {
+                trajectoryMapFragment.setInitialCameraPosition(fusedLatLng);
+                initialCameraPositionSet = true;
+                Log.d(TAG, "PF_BRANCH initial camera position set from fused pose");
+            }
+        }
     }
 
     /**
@@ -324,6 +544,149 @@ public class RecordingFragment extends Fragment {
         recIcon.startAnimation(blinking);
     }
 
+    /**
+     * Starts TCP streaming of live JSON packets to the desktop Python GUI.
+     */
+    private void startTcpStreaming() {
+        if (tcpStreamingEnabled) {
+            return;
+        }
+
+        // Replace with your PC IP address on the same network.
+        String serverIp = "172.20.10.3";
+        int serverPort = 6000;
+
+        tcpClient = new TcpClient(serverIp, serverPort);
+        tcpPacketSender = new TcpPacketSender(sensorFusion, tcpClient);
+        tcpStreamingEnabled = true;
+
+        tcpHandler.postDelayed(tcpStreamRunnable, 1000);
+    }
+
+    /**
+     * Stops TCP streaming and closes the client socket.
+     */
+    private void stopTcpStreaming() {
+        tcpStreamingEnabled = false;
+        tcpHandler.removeCallbacks(tcpStreamRunnable);
+
+        if (tcpClient != null) {
+            tcpClient.stopClient();
+            tcpClient = null;
+        }
+
+        tcpPacketSender = null;
+    }
+
+    /**
+     * Seeds the session using the first valid autonomous absolute fix.
+     *
+     * Required behaviour:
+     * - never use a user-selected marker as the initial position
+     * - wait for live WiFi or GNSS positioning
+     * - lock the first usable fix as the recording anchor
+     */
+    private void seedInitialMapLocation() {
+        if (trajectoryMapFragment == null || initialMapLocationSeeded) {
+            return;
+        }
+
+        LatLng initialFix = resolveAutonomousInitialLocation();
+
+        if (initialFix == null) {
+            Log.d(TAG, "Waiting for initial autonomous GNSS/WiFi position before seeding map.");
+            return;
+        }
+
+        autonomousInitialLocation = initialFix;
+        initialMapLocationSeeded = true;
+
+        sensorFusion.setStartGNSSLatitude(new float[]{
+                (float) initialFix.latitude,
+                (float) initialFix.longitude
+        });
+
+        sensorFusion.writeInitialMetadata();
+
+        trajectoryMapFragment.setInitialCameraPosition(initialFix);
+        initialCameraPositionSet = true;
+
+        trajectoryMapFragment.updateUserLocation(
+                initialFix,
+                (float) Math.toDegrees(sensorFusion.passOrientation())
+        );
+
+        Log.d(TAG,
+                "Seeded initial map location from autonomous fix at "
+                        + initialFix.latitude + ", " + initialFix.longitude);
+    }
+
+    /**
+     * Resolves the first usable autonomous absolute position.
+     *
+     * Current policy:
+     * - prefer WiFi if already available
+     * - otherwise use GNSS
+     */
+    @Nullable
+    private LatLng resolveAutonomousInitialLocation() {
+        // Prefer GNSS for the initial anchor
+        float[] gnssLatLng = sensorFusion.getGNSSLatitude(false);
+        if (gnssLatLng != null
+                && gnssLatLng.length >= 2
+                && !(Math.abs(gnssLatLng[0]) < 1e-6 && Math.abs(gnssLatLng[1]) < 1e-6)) {
+            Log.d(TAG, String.format(
+                    Locale.UK,
+                    "INITIAL_ANCHOR using GNSS lat=%.6f lon=%.6f",
+                    gnssLatLng[0],
+                    gnssLatLng[1]
+            ));
+            return new LatLng(gnssLatLng[0], gnssLatLng[1]);
+        }
+
+        // Optional fallback to WiFi only if GNSS is unavailable
+        LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
+        if (isValidLatLng(wifiLatLng)) {
+            Log.d(TAG, String.format(
+                    Locale.UK,
+                    "INITIAL_ANCHOR fallback to WiFi lat=%.6f lon=%.6f",
+                    wifiLatLng.latitude,
+                    wifiLatLng.longitude
+            ));
+            return wifiLatLng;
+        }
+
+        return null;
+    }
+
+    /**
+     * Returns true only when the LatLng contains a meaningful absolute position.
+     * In this codebase, (0,0) is treated as "not initialised yet".
+     */
+    private boolean isValidLatLng(@Nullable LatLng latLng) {
+        if (latLng == null) {
+            return false;
+        }
+        return !(Math.abs(latLng.latitude) < 1e-6 && Math.abs(latLng.longitude) < 1e-6);
+    }
+
+    /**
+     * Periodically sends the latest sensor packet to the desktop TCP server.
+     */
+    private final Runnable tcpStreamRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!tcpStreamingEnabled || tcpPacketSender == null) {
+                return;
+            }
+
+            tcpPacketSender.sendLatestPacket();
+
+            // 5 Hz
+            tcpHandler.postDelayed(this, 200);
+        }
+    };
+
     @Override
     public void onPause() {
         super.onPause();
@@ -333,13 +696,21 @@ public class RecordingFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if(!this.settings.getBoolean("split_trajectory", false)) {
+        if (!settings.getBoolean("split_trajectory", false)) {
             refreshDataHandler.postDelayed(refreshDataTask, 500);
         }
     }
 
-    private int testPointIndex = 0;
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        stopTcpStreaming();
+        refreshDataHandler.removeCallbacks(refreshDataTask);
+    }
 
+    /**
+     * Simple in-session test point record.
+     */
     private static class TestPoint {
         final int index;
         final long timestampMs;
@@ -353,8 +724,4 @@ public class RecordingFragment extends Fragment {
             this.lng = lng;
         }
     }
-
-    private final List<TestPoint> testPoints = new ArrayList<>();
-
-
 }

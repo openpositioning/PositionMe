@@ -7,6 +7,7 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
 
+import com.google.protobuf.util.JsonFormat;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
@@ -14,6 +15,9 @@ import com.openpositioning.PositionMe.utils.TrajectoryValidator;
 
 import com.google.protobuf.ByteString;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -573,6 +577,53 @@ public class TrajectoryRecorder {
                 }
             }
         }
+    }
+
+    /**
+     * Saves the recorded trajectory to a JSON file.
+     *
+     * @param file File Path
+     * @throws IOException if writing fails
+     */
+    public void saveTrajectoryToJson(File file) throws IOException {
+        if (trajectory == null) return;
+
+        Traj.Trajectory built = trajectory.build();
+
+        String json = JsonFormat.printer()
+                .includingDefaultValueFields()
+                .print(built);
+
+        FileWriter writer = new FileWriter(file);
+        writer.write(json);
+        writer.flush();
+        writer.close();
+    }
+
+    /**
+     * Saves the recorded test points to a CSV file.
+     *
+     * @param file File Path
+     * @throws IOException if writing fails
+     */
+    public void saveTestPointToCsv(File file) throws IOException {
+        if (trajectory == null) return;
+
+        Traj.Trajectory built = trajectory.build();
+        FileWriter writer = new FileWriter(file);
+        // Header
+        writer.append("type,timestamp,Latitude,Longitude,Altitude\n");
+
+        // TEST POINTS
+        for (Traj.GNSSPosition tp : built.getTestPointsList()) {
+            writer.append("TEST_POINT,")
+                    .append(String.valueOf(tp.getRelativeTimestamp())).append(",")
+                    .append(String.valueOf(tp.getLatitude())).append(",")
+                    .append(String.valueOf(tp.getLongitude())).append(",")
+                    .append(String.valueOf(tp.getAltitude())).append(",\n");
+        }
+        writer.flush();
+        writer.close();
     }
 
     //endregion

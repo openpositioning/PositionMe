@@ -33,16 +33,16 @@
 
 
     <!-- Misc -->
-    <string name="x">X: %1s</string>
-    <string name="y">Y: %1s</string>
-    <string name="z">Z: %1s</string>
-    <string name="level">Level: %1s</string>
-    <string name="lati">Lat: %1s</string>
-    <string name="longi">Long: %1s</string>
+    <string name="x">X: %1$s</string>
+    <string name="y">Y: %1$s</string>
+    <string name="z">Z: %1$s</string>
+    <string name="level">Level: %1$s</string>
+    <string name="lati">Lat: %1$s</string>
+    <string name="longi">Long: %1$s</string>
     <string name="position">PDR Position</string>
     <string name="id">ID</string>
     <string name="datetime">Date&amp;Time</string>
-    <string name="elevation">Elevation: %1s</string>
+    <string name="elevation">Elevation: %1$s</string>
     <string name="averageStepLgn">Computed Avg. Step Length</string>
     <string name="correctStepLgn">unit: cm</string>
     <string name="locationInstructions">Long press and drag the marker to your start location</string>
@@ -113,11 +113,11 @@
     <string name="building_def_title">Default building assumptions</string>
     <string name="floor_height">Floor height in meters</string>
     <string name="color">Color</string>
-    <string name="gnssSwitch">🛰 Show GNSS </string>
+    <string name="gnssSwitch">🛰️ Show GNSS</string>
     <string name="floor_down_button">Floor Down button</string>
     <string name="floor_up_button">Floor Up button</string>
     <string name="choose_map">Choose Map</string>
-    <string name="auto_floor">❇️ Auto Floor </string>
+    <string name="auto_floor">🛗 Auto Floor</string>
     <string name="gnss_error">GNSS error:</string>
     <string name="satellite">Satellite</string>
     <string name="normal">Normal</string>
@@ -149,5 +149,32 @@
     <string name="validation_warning_message">The trajectory has minor quality issues:\n\n%1$s\n\nDo you still want to upload?</string>
     <string name="upload_anyway">Upload Anyway</string>
     <string name="cancel_upload">Cancel</string>
+
+    <!-- Trajectory map UI -->
+    <string name="map_controls">Map controls</string>
+    <string name="hide">Hide</string>
+    <string name="show">Show</string>
+    <string name="show_log">Show Log</string>
+    <string name="show_wifi">🛜 Show WiFi</string>
+    <string name="show_pdr">🚶🏻 Show PDR</string>
+    <string name="display_actual_maps">Display Actual Maps</string>
+    <string name="hide_actual_maps">Hide Actual Maps</string>
+    <string name="adjust_map">Adjust Map</string>
+    <string name="hide_adjust_map">Hide Adjust Map</string>
+    <string name="switch_target">Switch Target</string>
+    <string name="find_indoor_maps">Find Indoor Maps</string>
+    <string name="save">Save</string>
+    <string name="reset">Reset</string>
+    <string name="up">Up</string>
+    <string name="down">Down</string>
+    <string name="left">Left</string>
+    <string name="right">Right</string>
+    <string name="width_minus">W-</string>
+    <string name="width_plus">W+</string>
+    <string name="height_minus">H-</string>
+    <string name="height_plus">H+</string>
+    <string name="tap_building_to_select">Tap a blue building outline to select a building</string>
+    <string name="waiting_for_updates">Waiting for updates</string>
+    <string name="map_target_prefix">Target:</string>
 
 </resources>

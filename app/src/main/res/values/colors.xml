@@ -12,7 +12,7 @@
     <color name="lightLogoBlue">#FF00A1FF</color>
     <color name="darkLogoBlue">#FF001080</color>
     <color name="primaryBlue">#FF001080</color>
-    <color name="red">#FE0000</color>
+    <color name="red">#F44336</color>
 
     <!-- Light Theme Colors -->
     <color name="md_theme_light_primary">#6750A4</color>

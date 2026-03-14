@@ -26,6 +26,18 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private EditTextPreference accelFilter;
     private EditTextPreference wifiInterval;
 
+    //Parameters for particle filter tuning
+    private EditTextPreference pfParticleCount;
+    private EditTextPreference pfSigmaStep;
+    private EditTextPreference pfSigmaThetaDeg;
+    private EditTextPreference pfSigmaWifi;
+    private EditTextPreference pfSigmaGnss;
+    private EditTextPreference pfInitPosStd;
+    private EditTextPreference pfInitHeadingDeg;
+    private EditTextPreference pfResampleRatio;
+    private EditTextPreference pfSigmaRegPos;
+    private EditTextPreference pfSigmaRegThetaDeg;
+
     /**
      * {@inheritDoc}
      * Sets the relevant numeric type for the preferences that should not take string values.
@@ -52,6 +64,47 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         wifiInterval = findPreference("wifi_interval");
         wifiInterval.setOnBindEditTextListener(editText -> editText.setInputType(
                 InputType.TYPE_CLASS_NUMBER));
+
+        //Added sections for particle filter fine tuning
+        pfParticleCount = findPreference("pf_particle_count");
+        pfParticleCount.setOnBindEditTextListener(editText ->
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER));
+
+        pfSigmaStep = findPreference("pf_sigma_step");
+        pfSigmaStep.setOnBindEditTextListener(editText ->
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
+        pfSigmaThetaDeg = findPreference("pf_sigma_theta_deg");
+        pfSigmaThetaDeg.setOnBindEditTextListener(editText ->
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
+        pfSigmaWifi = findPreference("pf_sigma_wifi");
+        pfSigmaWifi.setOnBindEditTextListener(editText ->
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
+        pfSigmaGnss = findPreference("pf_sigma_gnss");
+        pfSigmaGnss.setOnBindEditTextListener(editText ->
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
+        pfInitPosStd = findPreference("pf_init_pos_std");
+        pfInitPosStd.setOnBindEditTextListener(editText ->
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
+        pfInitHeadingDeg = findPreference("pf_init_heading_deg");
+        pfInitHeadingDeg.setOnBindEditTextListener(editText ->
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
+        pfResampleRatio = findPreference("pf_resample_ratio");
+        pfResampleRatio.setOnBindEditTextListener(editText ->
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
+        pfSigmaRegPos = findPreference("pf_sigma_reg_pos");
+        pfSigmaRegPos.setOnBindEditTextListener(editText ->
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
+
+        pfSigmaRegThetaDeg = findPreference("pf_sigma_reg_theta_deg");
+        pfSigmaRegThetaDeg.setOnBindEditTextListener(editText ->
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL));
 
     }
 }

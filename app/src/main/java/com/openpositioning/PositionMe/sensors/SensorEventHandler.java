@@ -13,6 +13,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import com.openpositioning.PositionMe.fusion.ParticleFilterManager;
+import com.openpositioning.PositionMe.fusion.FusedPose;
+
 /**
  * Handles sensor event dispatching for all registered movement sensors.
  *
@@ -39,6 +42,8 @@ public class SensorEventHandler {
     // Acceleration magnitude buffer between steps
     private final List<Double> accelMagnitude = new ArrayList<>();
 
+    private final ParticleFilterManager particleFilterManager;
+
     /**
      * Creates a new SensorEventHandler.
      *
@@ -50,11 +55,13 @@ public class SensorEventHandler {
      */
     public SensorEventHandler(SensorState state, PdrProcessing pdrProcessing,
                               PathView pathView, TrajectoryRecorder recorder,
+                              ParticleFilterManager particleFilterManager,
                               long bootTime) {
         this.state = state;
         this.pdrProcessing = pdrProcessing;
         this.pathView = pathView;
         this.recorder = recorder;
+        this.particleFilterManager = particleFilterManager;
         this.bootTime = bootTime;
     }
 
@@ -147,14 +154,16 @@ public class SensorEventHandler {
 
             case Sensor.TYPE_STEP_DETECTOR:
                 long stepTime = SystemClock.uptimeMillis() - bootTime;
-
+                // Debounce very closely spaced step-detector events.
+                // This protects the PDR/PF pipeline from duplicate triggers.
                 if (currentTime - lastStepTime < 20) {
                     Log.e("SensorFusion", "Ignoring step event, too soon after last step event:"
                             + (currentTime - lastStepTime) + " ms");
                     break;
                 } else {
                     lastStepTime = currentTime;
-
+                    // PdrProcessing expects a buffer of acceleration magnitudes collected
+                    // since the previous detected step. Log if the buffer is unexpectedly empty.
                     if (accelMagnitude.isEmpty()) {
                         Log.e("SensorFusion",
                                 "stepDetection triggered, but accelMagnitude is empty! " +
@@ -164,21 +173,52 @@ public class SensorEventHandler {
                                 "stepDetection triggered, accelMagnitude size = "
                                         + accelMagnitude.size());
                     }
-
+                    // Always update the raw PDR state first.
+                    //
+                    // This remains true even in particle-filter mode because:
+                    // - PF prediction still uses PDR as its motion input
+                    // - the raw PDR output is the baseline fallback if PF has not initialised yet
                     float[] newCords = this.pdrProcessing.updatePdr(
                             stepTime,
                             this.accelMagnitude,
                             state.orientation[0]
                     );
-
+                    // Acceleration samples have now been consumed for this step.
                     this.accelMagnitude.clear();
 
+                    if (particleFilterManager != null) {
+                        particleFilterManager.step();
+                    }
+
                     if (recorder.isRecording()) {
-                        this.pathView.drawTrajectory(newCords);
+                        // Default behaviour: store and draw the raw PDR local position.
+                        float[] pointToStoreAndDraw = newCords;
+                        // If PF mode is enabled and a fused pose is already available,
+                        // override the saved/drawn point with fused local x/y.
+                        //
+                        // Important:
+                        // - PDR still drives motion prediction internally
+                        // - only the exported/displayed trajectory switches to fused output
+                        if (particleFilterManager != null && particleFilterManager.isEnabled()) {
+                            FusedPose fusedPose = particleFilterManager.getLatestFusedPose();
+
+                            if (fusedPose != null) {
+                                pointToStoreAndDraw = new float[]{
+                                        (float) fusedPose.getXMeters(),
+                                        (float) fusedPose.getYMeters()
+                                };
+                            }
+                        }
+                        // Draw exactly the same point that will be written to the trajectory payload,
+                        // keeping the live view consistent with the saved result.
+                        this.pathView.drawTrajectory(pointToStoreAndDraw);
                         state.stepCounter++;
+
                         recorder.addPdrData(
                                 SystemClock.uptimeMillis() - bootTime,
-                                newCords[0], newCords[1]);
+                                pointToStoreAndDraw[0],
+                                pointToStoreAndDraw[1]
+                        );
                     }
                     break;
                 }

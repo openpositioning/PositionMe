@@ -17,6 +17,7 @@ import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.service.SensorCollectionService;
@@ -25,12 +26,18 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.utils.TrajectoryValidator;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import com.openpositioning.PositionMe.fusion.FusedPose;
+import com.openpositioning.PositionMe.fusion.ParticleFilterManager;
+import android.util.Log;
 
 /**
  * The SensorFusion class is the main data gathering and processing class of the application.
@@ -63,6 +70,7 @@ public class SensorFusion implements SensorEventListener {
     private SensorEventHandler eventHandler;
     private TrajectoryRecorder recorder;
     private WifiPositionManager wifiPositionManager;
+    private ParticleFilterManager particleFilterManager; //For fused live positioning
 
     // Movement sensor instances (lifecycle managed here)
     private MovementSensor accelerometerSensor;
@@ -104,6 +112,7 @@ public class SensorFusion implements SensorEventListener {
     private SensorFusion() {
         this.locationListener = new MyLocationListener();
     }
+    private int recordingTrajectoryMode = TRAJECTORY_MODE_PDR;
 
     /**
      * Static function to access singleton instance of SensorFusion.
@@ -112,6 +121,46 @@ public class SensorFusion implements SensorEventListener {
      */
     public static SensorFusion getInstance() {
         return sensorFusion;
+    }
+    public static final int TRAJECTORY_MODE_PDR = 0;
+    public static final int TRAJECTORY_MODE_PARTICLE_FILTER = 1;
+    private static final String TAG = "RecordingMode";
+
+    /**
+     * Returns the latest PDR position estimate in local meters relative to the recording start.
+     *
+     * @return float array of size 2 containing x and y position in meters
+     */
+    public float[] getLatestPdrMovement() {
+        return pdrProcessing.getPDRMovement();
+    }
+
+    /**
+     * Advances the particle filter by one update step using the most recent motion and
+     * absolute observations.
+     */
+    public void stepParticleFilter() {
+        if (particleFilterManager != null && isParticleFilterTrajectoryMode()) {
+            particleFilterManager.step();
+        }
+    }
+
+    /**
+     * Returns the latest fused pose estimate produced by the particle filter.
+     *
+     * @return fused pose estimate, or null if the filter has not been initialised yet
+     */
+    public FusedPose getLatestFusedPose() {
+        if (!isParticleFilterTrajectoryMode()) {
+            return null;
+        }
+        return particleFilterManager != null ? particleFilterManager.getLatestFusedPose() : null;
+    }
+    public FusedPose getLatestRawFusedPose() {
+        if (!isParticleFilterTrajectoryMode()) {
+            return null;
+        }
+        return particleFilterManager != null ? particleFilterManager.getLatestRawPose() : null;
     }
 
     /**
@@ -160,9 +209,13 @@ public class SensorFusion implements SensorEventListener {
 
         this.wifiPositionManager = new WifiPositionManager(wiFiPositioning, recorder);
 
+        //Initialise the particle filter manager after core modules are ready
+        this.particleFilterManager = new ParticleFilterManager(sensorFusion,context);
+        this.particleFilterManager.setEnabled(isParticleFilterTrajectoryMode());
+
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
-                state, pdrProcessing, pathView, recorder, bootTime);
+                state, pdrProcessing, pathView, recorder, particleFilterManager, bootTime);
 
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
@@ -197,6 +250,11 @@ public class SensorFusion implements SensorEventListener {
 
     //endregion
 
+    public void resetParticleFilterForRecording(){
+        if (particleFilterManager != null){
+            particleFilterManager.reset();
+        }
+    }
     //region SensorEventListener
 
     /**
@@ -329,12 +387,44 @@ public class SensorFusion implements SensorEventListener {
         recorder.startRecording(pdrProcessing);
         eventHandler.resetBootTime(recorder.getBootTime());
 
-        // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
+        if (isParticleFilterTrajectoryMode()) {
+            resetParticleFilterForRecording();
+        }
+
         stopWirelessCollectors();
 
         if (appContext != null) {
             SensorCollectionService.start(appContext);
         }
+    }
+
+    public void setRecordingTrajectoryMode(int mode) {
+        if (mode != TRAJECTORY_MODE_PARTICLE_FILTER) {
+            mode = TRAJECTORY_MODE_PDR;
+        }
+
+        this.recordingTrajectoryMode = mode;
+
+        Log.d(TAG, "SensorFusion mode set = "
+                + (mode == TRAJECTORY_MODE_PARTICLE_FILTER
+                ? "PARTICLE_FILTER"
+                : "STANDARD_PDR"));
+
+        if (particleFilterManager != null) {
+            boolean enableParticleFilter = (mode == TRAJECTORY_MODE_PARTICLE_FILTER);
+            particleFilterManager.setEnabled(enableParticleFilter);
+            if (!enableParticleFilter) {
+                particleFilterManager.reset();
+            }
+        }
+    }
+
+    public int getRecordingTrajectoryMode() {
+        return recordingTrajectoryMode;
+    }
+
+    public boolean isParticleFilterTrajectoryMode() {
+        return recordingTrajectoryMode == TRAJECTORY_MODE_PARTICLE_FILTER;
     }
 
     /**
@@ -386,6 +476,16 @@ public class SensorFusion implements SensorEventListener {
      */
     public String getTrajectoryId() {
         return recorder.getTrajectoryId();
+    }
+
+    /** save test point to csv files */
+    public void saveTestPointToCSV(File file) throws IOException {
+        recorder.saveTestPointToCsv(file);
+    }
+
+    /** save the entire recording protobuf into a json file*/
+    public void saveRecordingToJSON(File file) throws IOException {
+        recorder.saveTrajectoryToJson(file);
     }
 
     /**
@@ -606,21 +706,21 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Returns the user position obtained using WiFi positioning.
+     * Returns the latest Wi-Fi based geographic position.
      *
-     * @return {@link LatLng} corresponding to user's position.
+     * @return latest Wi-Fi LatLng, or null if unavailable
      */
     public LatLng getLatLngWifiPositioning() {
-        return wifiPositionManager.getLatLngWifiPositioning();
+        return wifiPositionManager != null ? wifiPositionManager.getLatLngWifiPositioning() : null;
     }
 
     /**
-     * Returns the current floor the user is on, obtained using WiFi positioning.
+     * Returns the latest Wi-Fi based floor estimate.
      *
-     * @return current floor number.
+     * @return latest Wi-Fi floor estimate
      */
     public int getWifiFloor() {
-        return wifiPositionManager.getWifiFloor();
+        return wifiPositionManager != null ? wifiPositionManager.getWifiFloor() : 0;
     }
 
     /**
@@ -631,6 +731,10 @@ public class SensorFusion implements SensorEventListener {
     }
 
     //endregion
+
+    public Context getContext(){
+        return appContext;
+    }
 
     //region Location listener
 

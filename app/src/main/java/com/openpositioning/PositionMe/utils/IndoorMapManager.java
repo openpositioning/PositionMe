@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.utils;
 
 import android.graphics.Color;
 import android.util.Log;
+import androidx.annotation.Nullable;
 
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.LatLng;
@@ -113,6 +114,42 @@ public class IndoorMapManager {
         }
 
         return clampFloorIndex(logicalFloor + getAutoFloorBias());
+    }
+
+    public int indexToLogicalFloor(int floorIndex) {
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) {
+            return floorIndex;
+        }
+
+        int clampedIndex = clampFloorIndex(floorIndex);
+        if (clampedIndex < 0 || clampedIndex >= currentFloorShapes.size()) {
+            return floorIndex;
+        }
+
+        String displayName = currentFloorShapes.get(clampedIndex).getDisplayName();
+        String canonical = canonicalFloorLabel(displayName);
+
+        switch (canonical) {
+            case "LG":
+                return -1;
+            case "G":
+                return 0;
+            case "1":
+                return 1;
+            case "2":
+                return 2;
+            case "3":
+                return 3;
+            default:
+                return clampedIndex - getAutoFloorBias();
+        }
+    }
+
+    public int indexToLogicalFloor(@Nullable Integer floorIndex) {
+        if (floorIndex == null) {
+            return 0;
+        }
+        return indexToLogicalFloor(floorIndex.intValue());
     }
 
     public int clampFloorIndex(int floorIndex) {

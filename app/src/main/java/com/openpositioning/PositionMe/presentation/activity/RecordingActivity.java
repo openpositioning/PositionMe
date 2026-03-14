@@ -2,20 +2,31 @@ package com.openpositioning.PositionMe.presentation.activity;
 
 import android.os.Bundle;
 import android.text.InputType;
+import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.FragmentTransaction;
 
+import com.google.android.material.switchmaterial.SwitchMaterial;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
+import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
+import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.service.SensorCollectionService;
-import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
-import com.openpositioning.PositionMe.presentation.fragment.RecordingFragment;
-import com.openpositioning.PositionMe.presentation.fragment.CorrectionFragment;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import android.util.Log;
 
 
 /**
@@ -52,7 +63,7 @@ public class RecordingActivity extends AppCompatActivity {
 
         if (savedInstanceState == null) {
             // Show trajectory name input dialog before proceeding to start location
-            showTrajectoryNameDialog();
+            showTrajectorySetupDialog();
         }
 
         // Keep screen on
@@ -86,42 +97,177 @@ public class RecordingActivity extends AppCompatActivity {
     }
 
     /**
-     * Shows an AlertDialog prompting the user to enter a trajectory name.
-     * The name is stored in SensorFusion as trajectory_id and later written to the protobuf.
-     * After input, proceeds to StartLocationFragment.
+     * Shows the per-session recording setup dialog.
+     *
+     * This dialog now configures two things before the user enters the normal
+     * start-location flow:
+     * 1. the trajectory name to be stored in the recording payload
+     * 2. the trajectory engine for this session:
+     *    - Standard PDR
+     *    - Particle filter fusion
+     *
+     * Design intent:
+     * the choice is session-scoped, so the user can run one recording in normal PDR
+     * and the next one in PF mode without changing the app's persistent settings page.
      */
-    private void showTrajectoryNameDialog() {
-        EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setHint("e.g. Nucleus_Walk_01");
-        input.setPadding(48, 24, 48, 24);
+    private void showTrajectorySetupDialog() {
+        final int outerPadding = dp(24);
+        final int sectionSpacing = dp(16);
 
-        new AlertDialog.Builder(this)
-                .setTitle("Trajectory Name")
-                .setMessage("Enter a name for this recording session:")
-                .setView(input)
+        ScrollView scrollView = new ScrollView(this);
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(outerPadding, outerPadding, outerPadding, outerPadding / 2);
+        scrollView.addView(container,
+                new ScrollView.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView intro = new TextView(this);
+        intro.setText("Set up this recording before selecting the start location.");
+        intro.setTextSize(15f);
+        container.addView(intro);
+
+        TextInputLayout nameLayout = new TextInputLayout(this);
+        nameLayout.setHint("Trajectory name");
+
+        LinearLayout.LayoutParams nameLayoutParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        nameLayoutParams.topMargin = sectionSpacing;
+        container.addView(nameLayout, nameLayoutParams);
+
+        TextInputEditText nameInput = new TextInputEditText(this);
+        nameInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        nameInput.setHint("e.g. Nucleus_Walk_01");
+        nameInput.setSingleLine(true);
+        nameInput.setText(generateDefaultTrajectoryName());
+
+        LinearLayout.LayoutParams editTextParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        nameLayout.addView(nameInput, editTextParams);
+
+        TextView modeTitle = new TextView(this);
+        modeTitle.setText("Trajectory engine");
+        modeTitle.setTextSize(16f);
+        LinearLayout.LayoutParams modeTitleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        modeTitleParams.topMargin = sectionSpacing;
+        container.addView(modeTitle, modeTitleParams);
+
+        TextView modeSubtitle = new TextView(this);
+        modeSubtitle.setText("Choose how the live trajectory is drawn and saved during this session.");
+        modeSubtitle.setTextSize(14f);
+        container.addView(modeSubtitle);
+
+        // Session mode toggle:
+        // OFF -> standard PDR
+        // ON  -> particle filter fusion
+        //
+        // We seed the switch from the current SensorFusion session state so reopening
+        // the dialog during development/testing reflects the latest chosen mode.
+        SwitchMaterial particleFilterSwitch = new SwitchMaterial(this);
+        particleFilterSwitch.setText("Use particle filter fusion");
+        particleFilterSwitch.setChecked(SensorFusion.getInstance().isParticleFilterTrajectoryMode());
+        LinearLayout.LayoutParams switchParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        switchParams.topMargin = dp(8);
+        container.addView(particleFilterSwitch, switchParams);
+
+        TextView modeDescription = new TextView(this);
+        modeDescription.setTextSize(13f);
+        modeDescription.setPadding(0, dp(4), 0, 0);
+        container.addView(modeDescription);
+
+        // Keep the explanation text in sync with the selected mode so the user
+        // understands that this changes both the live path and the saved trajectory.
+        Runnable updateModeDescription = () -> {
+            if (particleFilterSwitch.isChecked()) {
+                modeDescription.setText(
+                        "Particle filter mode: uses your fused positioning pipeline for the live path and saved trajectory. " +
+                                "This is useful when you want the path to follow WiFi/GNSS-assisted fusion rather than raw PDR only.");
+            } else {
+                modeDescription.setText(
+                        "Standard PDR mode: uses the normal pedestrian dead reckoning path directly for both display and saved trajectory.");
+            }
+        };
+        updateModeDescription.run();
+        particleFilterSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> updateModeDescription.run());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("New Recording")
+                .setView(scrollView)
                 .setCancelable(false)
-                .setPositiveButton("Save", (dialog, which) -> {
-                    String name = input.getText().toString().trim();
-                    if (name.isEmpty()) {
-                        // Default name based on timestamp
-                        name = "traj_" + System.currentTimeMillis();
-                    }
-                    SensorFusion.getInstance().setTrajectoryId(name);
-                    showStartLocationScreen();
-                })
-                .setNegativeButton("Skip", (dialog, which) -> {
-                    // Use default name
-                    SensorFusion.getInstance().setTrajectoryId(
-                            "traj_" + System.currentTimeMillis());
-                    showStartLocationScreen();
-                })
-                .show();
+                .setPositiveButton("Continue", null)
+                .setNegativeButton("Use Auto Name", null)
+                .create();
+
+        dialog.setOnShowListener(dialogInterface -> {
+            // Keep the user-selected engine mode, but replace the name with an auto-generated one.
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String name = nameInput.getText() == null ? "" : nameInput.getText().toString().trim();
+                if (name.isEmpty()) {
+                    name = generateDefaultTrajectoryName();
+                }
+
+                applyTrajectorySetupAndContinue(name, particleFilterSwitch.isChecked());
+                dialog.dismiss();
+            });
+
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
+                applyTrajectorySetupAndContinue(
+                        generateDefaultTrajectoryName(),
+                        particleFilterSwitch.isChecked());
+                dialog.dismiss();
+            });
+        });
+
+        dialog.show();
     }
 
     /**
-     * Show the StartLocationFragment (beginning of flow).
+     * Commits the session choices from the setup dialog into SensorFusion,
+     * then continues into the normal start-location flow.
+     *
+     * This is the bridge between the UI choice and the downstream runtime behaviour:
+     * - RecordingFragment will render the selected trajectory mode
+     * - SensorEventHandler will save the selected trajectory mode
      */
+    private static final String TAG = "RecordingActivity";
+    private void applyTrajectorySetupAndContinue(String trajectoryName, boolean useParticleFilter) {
+        SensorFusion sensorFusion = SensorFusion.getInstance();
+        sensorFusion.setTrajectoryId(trajectoryName);
+        sensorFusion.setRecordingTrajectoryMode(
+                useParticleFilter
+                        ? SensorFusion.TRAJECTORY_MODE_PARTICLE_FILTER
+                        : SensorFusion.TRAJECTORY_MODE_PDR);
+
+        Log.d(TAG, "New recording setup:"
+                + " name=" + trajectoryName
+                + ", mode=" + (useParticleFilter ? "PARTICLE_FILTER" : "STANDARD_PDR"));
+
+        showStartLocationScreen();
+    }
+
+    /**
+     * Generates a simple timestamp-based fallback name for the recording.
+     *
+     * Using a deterministic auto-name avoids empty trajectory IDs and makes quick
+     * field testing easier when the user does not want to type a custom name.
+     */
+    private String generateDefaultTrajectoryName() {
+        return "traj_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.UK).format(new Date());
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
     public void showStartLocationScreen() {
         FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
         ft.replace(R.id.mainFragmentContainer, new StartLocationFragment());
