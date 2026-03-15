@@ -1,8 +1,6 @@
 package com.openpositioning.PositionMe.presentation.activity;
 
-import android.Manifest;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -10,8 +8,6 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -60,10 +56,7 @@ import org.json.JSONObject;
 public class MainActivity extends AppCompatActivity implements Observer {
     private static final String TAG = "MainActivity";
 
-    // region Instance variables
     private NavController navController;
-    private ActivityResultLauncher<String> locationPermissionLauncher;
-    private ActivityResultLauncher<String[]> multiplePermissionsLauncher;
 
     private SharedPreferences settings;
     private SensorFusion sensorFusion;
@@ -71,12 +64,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
     private String httpFailureMessage = "";
 
     private PermissionManager permissionManager;
-
-    private static final int PERMISSION_REQUEST_CODE = 100;
-
-    // endregion
-
-    // region Activity Lifecycle
 
     /**
      * {@inheritDoc} Forces light mode, sets up the navigation graph, initialises the toolbar with
@@ -86,7 +73,10 @@ public class MainActivity extends AppCompatActivity implements Observer {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+        if (AppCompatDelegate.getDefaultNightMode() != AppCompatDelegate.MODE_NIGHT_NO) {
+            Log.d(TAG, "Forcing light mode");
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+        }
         setContentView(R.layout.activity_main);
 
         // Set up navigation and fragments
@@ -117,31 +107,23 @@ public class MainActivity extends AppCompatActivity implements Observer {
         this.sensorFusion = SensorFusion.getInstance();
         this.sensorFusion.setContext(getApplicationContext());
 
-        // Register multiple permissions launcher
-        multiplePermissionsLauncher =
-                registerForActivityResult(
-                        new ActivityResultContracts.RequestMultiplePermissions(),
-                        result -> {
-                            boolean locationGranted =
-                                    result.getOrDefault(
-                                            Manifest.permission.ACCESS_FINE_LOCATION, false);
-                            boolean activityGranted =
-                                    result.getOrDefault(
-                                            Manifest.permission.ACTIVITY_RECOGNITION, false);
-
-                            if (locationGranted && activityGranted) {
-                                // Both permissions granted
-                                allPermissionsObtained();
+        permissionManager =
+                new PermissionManager(
+                        this,
+                        this,
+                        ((allPermissionsGranted, deniedPermissions) -> {
+                            if (isActivityVisible()) {
+                                if (allPermissionsGranted) {
+                                    allPermissionsObtained();
+                                } else {
+                                    Log.d(TAG, "Missing permissions!");
+                                    permissionManager.confirmDeniedPermissions(deniedPermissions);
+                                }
                             } else {
-                                // Permission denied
-                                Toast.makeText(
-                                                this,
-                                                "Location or Physical Activity permission denied."
-                                                        + " Some features may not work.",
-                                                Toast.LENGTH_LONG)
-                                        .show();
+                                Log.d(TAG, "Activity not visible; skipping permission check");
                             }
-                        });
+                        }));
+        permissionManager.checkAndRequestPermissions();
 
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();
@@ -173,42 +155,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
             getSupportActionBar().show();
         }
 
-        // Delay permission check slightly to ensure the Activity is in the foreground
-        new Handler()
-                .postDelayed(
-                        () -> {
-                            if (isActivityVisible()) {
-                                // Check if both permissions are granted
-                                boolean locationGranted =
-                                        ContextCompat.checkSelfPermission(
-                                                        this,
-                                                        Manifest.permission.ACCESS_FINE_LOCATION)
-                                                == PackageManager.PERMISSION_GRANTED;
-
-                                boolean activityGranted =
-                                        ContextCompat.checkSelfPermission(
-                                                        this,
-                                                        Manifest.permission.ACTIVITY_RECOGNITION)
-                                                == PackageManager.PERMISSION_GRANTED;
-
-                                if (!locationGranted || !activityGranted) {
-                                    // Request both permissions using ActivityResultLauncher
-                                    multiplePermissionsLauncher.launch(
-                                            new String[] {
-                                                Manifest.permission.ACCESS_FINE_LOCATION
-                                            });
-                                    multiplePermissionsLauncher.launch(
-                                            new String[] {
-                                                Manifest.permission.ACTIVITY_RECOGNITION
-                                            });
-                                } else {
-                                    // Both permissions are already granted
-                                    allPermissionsObtained();
-                                }
-                            }
-                        },
-                        300); // Delay ensures activity is fully visible before requesting
-        // permissions
+        permissionManager.checkMissingPermissions();
 
         if (sensorFusion != null) {
             sensorFusion.resumeListening();
@@ -232,12 +179,9 @@ public class MainActivity extends AppCompatActivity implements Observer {
             // with
             //                                             a locked screen or cross activity
         }
+        Log.d(TAG, "MainActivity being destroyed");
         super.onDestroy();
     }
-
-    // endregion
-
-    // region Permissions
 
     /**
      * Prepares global resources when all permissions are granted. Resets the permissions tracking
@@ -259,10 +203,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
         sensorFusion.registerForServerUpdate(this);
     }
-
-    // endregion
-
-    // region Navigation
 
     /**
      * {@inheritDoc} Sets desired animations and navigates to {@link SettingsFragment} when the

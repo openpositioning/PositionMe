@@ -27,10 +27,12 @@
     <!-- Physical activity / Step detection (Android 10+ requires runtime permission) -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
 
-    <!-- Wi-Fi and network state (note that setWifiEnabled() no longer works on Android 10+ if you target 29+) -->
+    <!-- Wi-Fi and network state -->
+    <!-- (note that setWifiEnabled() no longer works on Android 10+ if you target 29+) -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"/>
 
     <!-- Location -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
