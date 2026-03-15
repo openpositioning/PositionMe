@@ -288,7 +288,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
 
                 Log.d(TAG, jsonObject.toString());
                 String cause = jsonObject.getString("detail");
-                String[] causeElements = cause.split(":");
+                String[] causeElements = cause.split(":", 2);
                 String causeSource = causeElements[0].strip();
                 String causeMessage = causeElements[1].strip();
 
