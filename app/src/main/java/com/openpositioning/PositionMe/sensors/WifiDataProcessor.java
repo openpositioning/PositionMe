@@ -11,6 +11,14 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
+import android.net.wifi.rtt.RangingRequest;
+import android.net.wifi.rtt.RangingResult;
+import android.net.wifi.rtt.RangingResultCallback;
+import android.net.wifi.rtt.WifiRttManager;
+import android.annotation.SuppressLint;
+import androidx.annotation.RequiresApi;
+import android.os.Build;
+import java.util.concurrent.Executor;
 import android.provider.Settings;
 import android.widget.Toast;
 
@@ -49,6 +57,18 @@ public class WifiDataProcessor implements Observable {
     // Locations manager to enable access to Wifi data via the android system
     private final WifiManager wifiManager;
 
+    // WiFi RTT manager for distance measurement (API 28+)
+    private final WifiRttManager wifiRttManager;
+
+    // Listener to deliver RTT results back to SensorFusion
+    private RttResultListener rttResultListener;
+
+    // Interface for RTT result callbacks
+    public interface RttResultListener {
+    void onRttResults(List<RangingResult> results, List<ScanResult> associatedScans);
+    }
+
+
     //List of nearby networks
     private Wifi[] wifiData;
 
@@ -84,11 +104,24 @@ public class WifiDataProcessor implements Observable {
 
         this.context = context.getApplicationContext();
         this.wifiManager = (WifiManager) this.context.getSystemService(Context.WIFI_SERVICE);
+        this.wifiRttManager = (WifiRttManager) this.context.getSystemService(Context.WIFI_RTT_RANGING_SERVICE);
         this.scanWifiDataTimer = new Timer();
         this.observers = new ArrayList<>();
         this.wifiData = new Wifi[0];
     }
 
+    /**
+    * Set the listener that will receive WiFi RTT ranging results.
+    * Called by SensorFusion to receive RTT data for trajectory recording.
+    *
+    * @param listener  Callback to receive RTT results
+    */
+   @RequiresApi(api = Build.VERSION_CODES.P)
+    public void setRttResultListener(RttResultListener listener) {
+        this.rttResultListener = listener;
+    }
+
+    @SuppressLint("MissingPermission")
     public void startListening() {
 
         if (!checkWifiPermissions()) {
@@ -131,6 +164,9 @@ public class WifiDataProcessor implements Observable {
 
         Log.d("WifiDataProcessor",
                 "Processed scan results, BSSIDs=" + lastObservedBssids.size());
+
+        // Attempt RTT ranging for APs that support it
+        performRttRanging(wifiScanList);
 
         notifyObservers(0);
     }
@@ -306,6 +342,64 @@ public class WifiDataProcessor implements Observable {
         }
     }
 
+
+    /**
+     * Checks which APs in the scan list support WiFi RTT (802.11mc),
+     * then initiates a ranging request for those APs.
+     * Results are delivered asynchronously via RttResultListener.
+     * Requires Android API 28+ and CHANGE_WIFI_STATE permission.
+     *
+     * @param scanResults   The current list of scanned WiFi access points
+     */
+    @RequiresApi(api = Build.VERSION_CODES.P)
+    @SuppressLint("MissingPermission")
+    private void performRttRanging(List<ScanResult> scanResults) {
+        // RTT requires Android P (API 28) or higher
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            return;
+        }
+        // Check device supports RTT
+        if (wifiRttManager == null || !wifiRttManager.isAvailable()) {
+            Log.d("WifiDataProcessor", "WiFi RTT not available on this device");
+            return;
+        }
+        // Filter to APs that advertise 802.11mc support
+        List<ScanResult> rttCapableAps = new ArrayList<>();
+        for (ScanResult result : scanResults) {
+            if (result.is80211mcResponder()) {
+                rttCapableAps.add(result);
+            }
+        }
+        if (rttCapableAps.isEmpty()) {
+            Log.d("WifiDataProcessor", "No RTT-capable APs found in scan");
+            return;
+        }
+        Log.d("WifiDataProcessor", "Starting RTT ranging for " + rttCapableAps.size() + " APs");
+        // Build ranging request for all RTT-capable APs
+        RangingRequest request = new RangingRequest.Builder()
+                .addAccessPoints(rttCapableAps)
+                .build();
+        // Store reference for use inside callback
+        final List<ScanResult> scansForCallback = rttCapableAps;
+        // Execute ranging on main thread executor
+        Executor executor = context.getMainExecutor();
+        wifiRttManager.startRanging(request, executor, new RangingResultCallback() {
+            @Override
+            public void onRangingFailure(int code) {
+                Log.w("WifiDataProcessor", "RTT ranging failed, code=" + code);
+            }
+            @Override
+            public void onRangingResults(List<RangingResult> results) {
+                Log.d("WifiDataProcessor", "RTT ranging results received: " + results.size());
+                // Deliver results to SensorFusion via listener
+                if (rttResultListener != null) {
+                    rttResultListener.onRttResults(results, scansForCallback);
+                }
+            }
+        });
+    }
+
+
     /**
      * Implement default method from Observable Interface to add new observers to the class.
      *
@@ -335,6 +429,7 @@ public class WifiDataProcessor implements Observable {
      * calling wifi scans every 5 seconds.
      */
     private class scheduledWifiScan extends TimerTask {
+        @SuppressLint("MissingPermission")
         @Override
         public void run() {
 
@@ -344,7 +439,7 @@ public class WifiDataProcessor implements Observable {
             List<ScanResult> cached = wifiManager.getScanResults();
             processScanResults(cached);
 
-            // Best-effort request a new scan (may be throttled)
+            // Best-effort request a new scan (maybe throttled)
             boolean ok = wifiManager.startScan();
             Log.d("WifiDataProcessor", "startScan() returned=" + ok);
         }

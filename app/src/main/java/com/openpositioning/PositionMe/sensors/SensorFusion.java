@@ -14,7 +14,11 @@ import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.preference.PreferenceManager;
+
+import android.net.wifi.ScanResult;
+import android.net.wifi.rtt.RangingResult;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
@@ -315,6 +319,13 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.wifiProcessor = new WifiDataProcessor(context);
 
         wifiProcessor.registerObserver(this);
+        // Register RTT result listener to receive ranging data from WiFi RTT
+        wifiProcessor.setRttResultListener((results, associatedScans) -> {
+            if (saveRecording) {
+                recordRttResults(results, associatedScans);
+            }
+        });
+
         this.bleProcessor = new BleDataProcessor(context);
         bleProcessor.registerObserver(this);
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
@@ -610,6 +621,67 @@ public class SensorFusion implements SensorEventListener, Observer {
                 (wifiList == null ? 0 : wifiList.length));
 
 
+    }
+
+    /**
+     * Records WiFi RTT ranging results and AP metadata into the trajectory protobuf.
+     * Called by the RttResultListener when new ranging results arrive.
+     *
+     * WiFiAPData stores per-AP metadata including the rtt_enabled flag.
+     * WiFiRTTReading stores the actual measured distance for each RTT-capable AP.
+     *
+     * @param results         List of RTT ranging results from WifiRttManager
+     * @param associatedScans List of ScanResults corresponding to the ranging request
+     */
+    private void recordRttResults(List<RangingResult> results,
+                                  List<ScanResult> associatedScans) {
+        long relativeTimestamp = SystemClock.uptimeMillis() - bootTime;
+
+        for (RangingResult result : results) {
+            // Convert MAC address to long integer (same format as BSSID elsewhere)
+            String macString = result.getMacAddress().toString();
+            long macLong = bssidStringToLong(macString);
+
+            // Record AP metadata with rtt_enabled = true (these are RTT-capable APs)
+            Traj.WiFiAPData apData = Traj.WiFiAPData.newBuilder()
+                    .setMac(macLong)
+                    .setRttEnabled(true)
+                    .build();
+            this.trajectory.addApsData(apData);
+
+            // Only record distance measurement if ranging succeeded
+            if (result.getStatus() == RangingResult.STATUS_SUCCESS) {
+                Traj.WiFiRTTReading rttReading = Traj.WiFiRTTReading.newBuilder()
+                        .setRelativeTimestamp(relativeTimestamp)
+                        .setMac(macLong)
+                        .setDistance(result.getDistanceMm())         // distance in mm
+                        .setDistanceStd(result.getDistanceStdDevMm()) // std deviation in mm
+                        .setRssi(result.getRssi())
+                        .build();
+                this.trajectory.addWifiRttData(rttReading);
+                Log.i("SensorFusion", "RTT result: mac=" + macString
+                        + " dist=" + result.getDistanceMm() + "mm");
+            } else {
+                Log.d("SensorFusion", "RTT ranging failed for AP: " + macString
+                        + " status=" + result.getStatus());
+            }
+        }
+    }
+
+    /**
+     * Converts a MAC address string (e.g. "aa:bb:cc:dd:ee:ff") to a long integer.
+     * Replicates the same conversion logic used for WiFi BSSID in WifiDataProcessor.
+     *
+     * @param mac   MAC address string with colon separators
+     * @return      Long integer representation of the MAC address
+     */
+    private long bssidStringToLong(String mac) {
+        try {
+            return Long.parseLong(mac.replace(":", ""), 16);
+        } catch (NumberFormatException e) {
+            Log.w("SensorFusion", "Failed to convert MAC: " + mac);
+            return 0L;
+        }
     }
 
     // BLE update logic
