@@ -199,6 +199,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float prevPdrX = 0f;
     private float prevPdrY = 0f;
 
+    // Last raw position from each individual source, for colour-coded display
+    private double[] lastGnssLatLon   = null;   // {lat, lon}
+    private double[] lastWifiLatLon   = null;   // {lat, lon}
+    private double[] lastPdrLatLon    = null;   // {lat, lon}
+
     private final List<TestPoint> testPoints = new ArrayList<>();
 
 
@@ -513,6 +518,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                         particleFilter.predict(dx, dy);
                         prevPdrX = newCords[0];
                         prevPdrY = newCords[1];
+                        if (coordinateConverter != null) {
+                            lastPdrLatLon = coordinateConverter.toLatLon(prevPdrX, prevPdrY);
+                        }
                     }
 
                     // Clear the accelMagnitude after using it
@@ -577,6 +585,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     float[] enu = coordinateConverter.toEnu(
                             location.getLatitude(), location.getLongitude());
                     particleFilter.updateWithGnss(enu[0], enu[1]);
+                    lastGnssLatLon = new double[]{location.getLatitude(), location.getLongitude()};
                 }
             }
             if(saveRecording) {
@@ -955,6 +964,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         float[] enu = coordinateConverter.toEnu(
                                 wifiLocation.latitude, wifiLocation.longitude);
                         particleFilter.updateWithWifi(enu[0], enu[1]);
+                        lastWifiLatLon = new double[]{wifiLocation.latitude, wifiLocation.longitude};
                     }
                 }
 
@@ -992,6 +1002,21 @@ public class SensorFusion implements SensorEventListener, Observer {
             return coordinateConverter.toLatLon(enu[0], enu[1]);
         }
         return null;
+    }
+
+    /** Last raw GNSS fix. Returns null before first GPS signal. */
+    public double[] getLastGnssLatLon() {
+        return lastGnssLatLon;
+    }
+
+    /** Last raw WiFi positioning fix. Returns null before first WiFi scan result. */
+    public double[] getLastWifiLatLon() {
+        return lastWifiLatLon;
+    }
+
+    /** Last PDR-derived position as lat/lon. Returns null before first step is detected. */
+    public double[] getLastPdrLatLon() {
+        return lastPdrLatLon;
     }
 
 
@@ -1402,6 +1427,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Reset particle filter state for new recording session
         particleFilter = new ParticleFilter();
         coordinateConverter = null;
+        lastGnssLatLon = null;
+        lastWifiLatLon = null;
+        lastPdrLatLon  = null;
         prevPdrX = 0f;
         prevPdrY = 0f;
         if(settings.getBoolean("overwrite_constants", false)) {
