@@ -569,10 +569,10 @@ public class SensorFusion implements SensorEventListener, Observer {
             float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
-            // Initialize coordinate converter and particle filter on first GNSS fix during recording
+            // Initialize coordinate converter and particle filter on first GNSS position during recording
             if (saveRecording) {
                 if (!particleFilter.isInitialized()) {
-                    // First fix: set East-North origin, spread particles around (0,0)
+                    // First position: set East-North origin, spread particles around (0,0)
                     coordinateConverter = new CoordinateConverter(
                             location.getLatitude(), location.getLongitude());
                     particleFilter.initParticles(0f, 0f, Math.max(accuracy, 5f));
@@ -581,7 +581,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     Log.i("SensorFusion", "ParticleFilter initialised at lat="
                             + latitude + " lon=" + longitude);
                 } else {
-                    // Subsequent fixes: convert to East-North space and update particle weights
+                    // Subsequent positions: convert to East-North space and update particle weights
                     float[] enu = coordinateConverter.toEnu(
                             location.getLatitude(), location.getLongitude());
                     particleFilter.updateWithGnss(enu[0], enu[1]);
@@ -958,13 +958,23 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Update particle filter with WiFi position observation
-                    if (saveRecording && particleFilter.isInitialized()
-                            && coordinateConverter != null) {
+                    lastWifiLatLon = new double[]{wifiLocation.latitude, wifiLocation.longitude};
+                    if (!saveRecording) return;
+
+                    if (!particleFilter.isInitialized()) {
+                        // if GNSS not available — launch with first WiFi position
+                        coordinateConverter = new CoordinateConverter(
+                                wifiLocation.latitude, wifiLocation.longitude);
+                        particleFilter.initParticles(0f, 0f, 20f);
+                        prevPdrX = 0f;
+                        prevPdrY = 0f;
+                        Log.i("SensorFusion", "ParticleFilter launch with WiFi at lat="
+                                + wifiLocation.latitude + " lon=" + wifiLocation.longitude);
+                    } else {
+                        // Normal update
                         float[] enu = coordinateConverter.toEnu(
                                 wifiLocation.latitude, wifiLocation.longitude);
                         particleFilter.updateWithWifi(enu[0], enu[1]);
-                        lastWifiLatLon = new double[]{wifiLocation.latitude, wifiLocation.longitude};
                     }
                 }
 
@@ -1004,12 +1014,12 @@ public class SensorFusion implements SensorEventListener, Observer {
         return null;
     }
 
-    /** Last raw GNSS fix. Returns null before first GPS signal. */
+    /** Last raw GNSS position. Returns null before first GPS signal. */
     public double[] getLastGnssLatLon() {
         return lastGnssLatLon;
     }
 
-    /** Last raw WiFi positioning fix. Returns null before first WiFi scan result. */
+    /** Last raw WiFi position. Returns null before first WiFi scan result. */
     public double[] getLastWifiLatLon() {
         return lastWifiLatLon;
     }
@@ -1017,6 +1027,17 @@ public class SensorFusion implements SensorEventListener, Observer {
     /** Last PDR-derived position as lat/lon. Returns null before first step is detected. */
     public double[] getLastPdrLatLon() {
         return lastPdrLatLon;
+    }
+
+    /**
+     * Returns the spread of the particle cloud in metres.
+     * Use this to draw an uncertainty circle around the fused position marker.
+     *
+     * @return RMS particle spread in metres.
+     */
+    public double getPositionUncertainty() {
+        if (particleFilter == null) return -1.0;
+        return particleFilter.getSigmaMetres();
     }
 
 

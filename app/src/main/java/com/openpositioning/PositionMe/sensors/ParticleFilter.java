@@ -83,16 +83,21 @@ public class ParticleFilter {
      * Prediction step: translates every particle by the PDR displacement and
      * adds Gaussian noise to model uncertainty in step length and heading.
      *
+     * When the device is stationary, using a reduced noise to lower the drifting of particle cloud.
+     *
      * @param dx  PDR displacement in East  direction (metres) since last call
      * @param dy  PDR displacement in North direction (metres) since last call
      */
     public void predict(float dx, float dy) {
         if (!initialized) return;
+        float movementMagnitude = (float) Math.sqrt(dx * dx + dy * dy);
+        float noise = (movementMagnitude < 0.05f) ? MOTION_NOISE_STD * 0.1f : MOTION_NOISE_STD;
         for (int i = 0; i < NUM_PARTICLES; i++) {
-            particlesX[i] += dx + (float) (random.nextGaussian() * MOTION_NOISE_STD);
-            particlesY[i] += dy + (float) (random.nextGaussian() * MOTION_NOISE_STD);
+            particlesX[i] += dx + (float) (random.nextGaussian() * noise);
+            particlesY[i] += dy + (float) (random.nextGaussian() * noise);
         }
     }
+
 
     /**
      * Update step using a GNSS position observation.
@@ -135,6 +140,26 @@ public class ParticleFilter {
             y += weights[i] * particlesY[i];
         }
         return new float[]{x, y};
+    }
+
+    /**
+     * Returns the spread of the particle cloud as a single scalar (metres).
+     * Computed as the RMS of the weighted standard deviations in East and North.
+     * A larger value means more uncertain.
+     *
+     * @return spread radius in metres (if not initialized,return -1).
+     */
+    public double getSigmaMetres() {
+        if (!initialized) return -1.0;
+        float[] mean = getBestEstimate();
+        double varX = 0.0, varY = 0.0;
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            double dx = particlesX[i] - mean[0];
+            double dy = particlesY[i] - mean[1];
+            varX += weights[i] * dx * dx;
+            varY += weights[i] * dy * dy;
+        }
+        return Math.sqrt(varX + varY);
     }
 
     public boolean isInitialized() {
