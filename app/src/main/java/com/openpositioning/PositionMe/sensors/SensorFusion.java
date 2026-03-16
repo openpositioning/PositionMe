@@ -40,10 +40,10 @@ import java.util.TimerTask;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import java.util.ArrayList;
-import java.util.List;
 import com.openpositioning.PositionMe.sensors.model.TestPoint;
 
+import com.openpositioning.PositionMe.sensors.ParticleFilter;
+import com.openpositioning.PositionMe.utils.CoordinateConverter;
 
 /**
  * The SensorFusion class is the main data gathering and processing class of the application.
@@ -188,6 +188,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     private PathView pathView;
     // WiFi positioning object
     private WiFiPositioning wiFiPositioning;
+
+    // Particle filter for sensor fusion positioning
+    private ParticleFilter particleFilter;
+
+    // Coordinate converter for WGS84 ↔ East-North transformation
+    private CoordinateConverter coordinateConverter;
+
+    // Previous PDR cumulative position, used to compute per-step displacement
+    private float prevPdrX = 0f;
+    private float prevPdrY = 0f;
 
     private final List<TestPoint> testPoints = new ArrayList<>();
 
@@ -340,6 +350,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         // Other initialisations...
         this.accelMagnitude = new ArrayList<>();
         this.pdrProcessing = new PdrProcessing(context);
+        this.particleFilter = new ParticleFilter();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.pathView = new PathView(context, null);
         this.wiFiPositioning = new WiFiPositioning(context);
@@ -495,6 +506,15 @@ public class SensorFusion implements SensorEventListener, Observer {
                             this.orientation[0]
                     );
 
+                    // Feed PDR displacement to particle filter
+                    if (particleFilter.isInitialized()) {
+                        float dx = newCords[0] - prevPdrX;
+                        float dy = newCords[1] - prevPdrY;
+                        particleFilter.predict(dx, dy);
+                        prevPdrX = newCords[0];
+                        prevPdrY = newCords[1];
+                    }
+
                     // Clear the accelMagnitude after using it
                     this.accelMagnitude.clear();
 
@@ -541,6 +561,24 @@ public class SensorFusion implements SensorEventListener, Observer {
             float accuracy = (float) location.getAccuracy();
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
+            // Initialize coordinate converter and particle filter on first GNSS fix during recording
+            if (saveRecording) {
+                if (!particleFilter.isInitialized()) {
+                    // First fix: set East-North origin, spread particles around (0,0)
+                    coordinateConverter = new CoordinateConverter(
+                            location.getLatitude(), location.getLongitude());
+                    particleFilter.initParticles(0f, 0f, Math.max(accuracy, 5f));
+                    prevPdrX = 0f;
+                    prevPdrY = 0f;
+                    Log.i("SensorFusion", "ParticleFilter initialised at lat="
+                            + latitude + " lon=" + longitude);
+                } else {
+                    // Subsequent fixes: convert to East-North space and update particle weights
+                    float[] enu = coordinateConverter.toEnu(
+                            location.getLatitude(), location.getLongitude());
+                    particleFilter.updateWithGnss(enu[0], enu[1]);
+                }
+            }
             if(saveRecording) {
                 trajectory.addGnssData(Traj.GNSSReading.newBuilder()
                         .setPosition(Traj.GNSSPosition.newBuilder()
@@ -616,7 +654,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
         }
 
-        createWifiPositioningRequest();
+        createWifiPositionRequestCallback();
         Log.d("SensorFusion", "wifiList length = " +
                 (wifiList == null ? 0 : wifiList.length));
 
@@ -911,8 +949,15 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
-                    // Handle the success response
+                    // Update particle filter with WiFi position observation
+                    if (saveRecording && particleFilter.isInitialized()
+                            && coordinateConverter != null) {
+                        float[] enu = coordinateConverter.toEnu(
+                                wifiLocation.latitude, wifiLocation.longitude);
+                        particleFilter.updateWithWifi(enu[0], enu[1]);
+                    }
                 }
+
 
                 @Override
                 public void onError(String message) {
@@ -933,6 +978,22 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return {@link LatLng} corresponding to user's position.
      */
     public LatLng getLatLngWifiPositioning(){return this.wiFiPositioning.getWifiLocation();}
+
+    /**
+     * Returns the particle filter's best estimated position in WGS84 coordinates.
+     * Used by the map display fragment to show the fused position marker.
+     *
+     * @return double[]{latitude, longitude}, or null(if filter is not initialized)
+     */
+    public double[] getFusedLatLon() {
+        if (particleFilter != null && particleFilter.isInitialized()
+                && coordinateConverter != null) {
+            float[] enu = particleFilter.getBestEstimate();
+            return coordinateConverter.toLatLon(enu[0], enu[1]);
+        }
+        return null;
+    }
+
 
     /**
      * Method to get current floor the user is at, obtained using WiFiPositioning
@@ -1338,6 +1399,11 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.storeTrajectoryTimer = new Timer();
         this.storeTrajectoryTimer.schedule(new storeDataInTrajectory(), 0, TIME_CONST);
         this.pdrProcessing.resetPDR();
+        // Reset particle filter state for new recording session
+        particleFilter = new ParticleFilter();
+        coordinateConverter = null;
+        prevPdrX = 0f;
+        prevPdrY = 0f;
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
