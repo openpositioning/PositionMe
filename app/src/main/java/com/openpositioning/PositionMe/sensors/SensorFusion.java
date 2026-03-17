@@ -1040,6 +1040,18 @@ public class SensorFusion implements SensorEventListener, Observer {
         return particleFilter.getSigmaMetres();
     }
 
+    /**
+     * Returns a copy of all particle positions in local East-North metres.
+     *
+     * Used for map matching wall-constraint filter.
+     *
+     * @return float[300][2] particle array, or float[0][2] if uninitialised.
+     */
+    public float[][] getParticles() {
+        if (particleFilter == null) return new float[0][2];
+        return particleFilter.getParticles();
+    }
+
 
     /**
      * Method to get current floor the user is at, obtained using WiFiPositioning

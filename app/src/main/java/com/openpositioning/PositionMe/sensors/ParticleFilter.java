@@ -162,6 +162,24 @@ public class ParticleFilter {
         return Math.sqrt(varX + varY);
     }
 
+    /**
+     * Returns a copy of all particle positions in local East-North coordinates (metres).
+     * Each row is one particle: {east, north}.
+     * Used for map matching wall-constraint filter.
+     *
+     * @return float[NUM_PARTICLES][2] array, or empty array if not initialized.
+     */
+    public float[][] getParticles() {
+        if (!initialized) return new float[0][2];
+        float[][] result = new float[NUM_PARTICLES][2];
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            result[i][0] = particlesX[i];
+            result[i][1] = particlesY[i];
+        }
+        return result;
+    }
+
+
     public boolean isInitialized() {
         return initialized;
     }
