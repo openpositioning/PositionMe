@@ -199,6 +199,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float prevPdrX = 0f;
     private float prevPdrY = 0f;
 
+    // Floor change detection for particle reset
+    private int lastKnownFloor = 0;
+
+
     // Last raw position from each individual source, for colour-coded display
     private double[] lastGnssLatLon   = null;   // {lat, lon}
     private double[] lastWifiLatLon   = null;   // {lat, lon}
@@ -586,6 +590,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                             location.getLatitude(), location.getLongitude());
                     particleFilter.updateWithGnss(enu[0], enu[1]);
                     lastGnssLatLon = new double[]{location.getLatitude(), location.getLongitude()};
+                    // Detect floor change and reset particle cloud if needed
+                    int currentFloor = pdrProcessing.getCurrentFloor();
+                    if (currentFloor != lastKnownFloor) {
+                        float[] best = particleFilter.getBestEstimate();
+                        particleFilter.resetAroundPosition(best[0], best[1], 8f);
+                        lastKnownFloor = currentFloor;
+                        Log.i("SensorFusion", "Floor change detected: " + lastKnownFloor
+                                + " → " + currentFloor + ", particles reset");
+                    }
+
                 }
             }
             if(saveRecording) {
@@ -1463,6 +1477,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastGnssLatLon = null;
         lastWifiLatLon = null;
         lastPdrLatLon  = null;
+        lastKnownFloor = 0;
         prevPdrX = 0f;
         prevPdrY = 0f;
         if(settings.getBoolean("overwrite_constants", false)) {

@@ -179,6 +179,25 @@ public class ParticleFilter {
         return result;
     }
 
+    /**
+     * Resets the particle cloud around a new position with increased uncertainty.
+     * Called when a floor change is detected, to prevent particles from remaining on the wrong floor.
+     * Horizontal position is still preserved as the best estimate, but spread is widened.
+     *
+     * @param centreX     East  position to re-centre particles around (metres)
+     * @param centreY     North position to re-centre particles around (metres)
+     * @param uncertainty Spread radius for the new particle cloud (metres)
+     */
+    public void resetAroundPosition(float centreX, float centreY, float uncertainty) {
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            particlesX[i] = centreX + (float) (random.nextGaussian() * uncertainty);
+            particlesY[i] = centreY + (float) (random.nextGaussian() * uncertainty);
+            weights[i]    = 1.0f / NUM_PARTICLES;
+        }
+        Log.i(TAG, "Particles reset around (" + centreX + ", " + centreY
+                + ") ± " + uncertainty + " m after floor change");
+    }
+
 
     public boolean isInitialized() {
         return initialized;
