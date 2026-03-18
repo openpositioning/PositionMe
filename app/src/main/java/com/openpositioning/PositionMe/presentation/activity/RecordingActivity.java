@@ -27,7 +27,7 @@ import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragmen
  * interruptions. It also provides fragment transactions for seamless navigation between different
  * stages of the workflow.
  *
- * <p>This class is referenced in various fragments such as HomeFragment, StartLocationFragment,
+ * <p>This class is referenced in various fragments such as LoginFragment, StartLocationFragment,
  * RecordingFragment, and CorrectionFragment to control navigation through the recording flow.
  *
  * @see StartLocationFragment The first step in the recording process where users select their

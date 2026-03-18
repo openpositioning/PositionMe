@@ -32,6 +32,9 @@
     <string name="wifi">WiFi Networks</string>
     <string name="bluetooth">Bluetooth Devices</string>
 
+    <!-- Network -->
+    <string name="errorCodeNoServerResponse">000</string>
+    <string name="errorMessageNoServerResponse">Server unavailable or unreachable</string>
 
     <!-- Misc -->
     <string name="x">X: %1s</string>

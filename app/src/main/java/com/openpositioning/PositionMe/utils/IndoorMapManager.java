@@ -122,15 +122,15 @@ public class IndoorMapManager implements Observer {
     public void update(Object[] objList) {
         boolean success = (boolean) objList[0];
         String response = objList[1].toString();
+        Log.d(TAG, "Received response: " + response);
         if (!success) return;
 
-        Log.d(TAG, "Received response: " + response);
         try {
             // Parse the JSON, and draw all possible buildings
             List<Map<String, Object>> entryList = processPOSTResponse(response);
             for (Map<String, Object> building : entryList) {
 
-                String name = (String) building.get("name");
+                String name = building.get("name").toString();
                 @SuppressWarnings("unchecked")
                 List<LatLng> outline = (List<LatLng>) building.get("outline");
                 @SuppressWarnings("unchecked")

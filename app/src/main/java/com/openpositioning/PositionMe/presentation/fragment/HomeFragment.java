@@ -30,12 +30,12 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.data.remote.LoginManager;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 
 /**
- * A simple {@link Fragment} subclass. The home fragment is the start screen of the application. The
- * home fragment acts as a hub for all other fragments, with buttons and icons for navigation. The
- * default screen when opening the application
+ * A simple {@link Fragment} subclass. The home fragment is the main screen of the application,
+ * acting as a hub for all other fragments with buttons and icons for navigation.
  *
  * @see RecordingFragment
  * @see FilesFragment
@@ -57,6 +57,9 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private GoogleMap mMap;
     private SupportMapFragment mapFragment;
 
+    // For getting user information
+    private LoginManager loginManager;
+
     public HomeFragment() {
         // Required empty public constructor
     }
@@ -64,6 +67,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        loginManager = LoginManager.getInstance();
     }
 
     /**
@@ -75,7 +79,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         ((AppCompatActivity) getActivity()).getSupportActionBar().show();
         View rootView = inflater.inflate(R.layout.fragment_home, container, false);
-        getActivity().setTitle("Home");
+        getActivity().setTitle("Home - " + loginManager.getUsername());
         return rootView;
     }
 

@@ -1,7 +1,8 @@
 package com.openpositioning.PositionMe.data.remote;
 
 import static com.openpositioning.PositionMe.utils.UtilConstants.API_KEY_MASTER;
-import static com.openpositioning.PositionMe.utils.UtilConstants.API_KEY_USER;
+import static com.openpositioning.PositionMe.utils.UtilConstants.API_POST_LOGIN;
+import static com.openpositioning.PositionMe.utils.UtilConstants.API_POST_SIGN_UP;
 import static com.openpositioning.PositionMe.utils.UtilConstants.API_POST_TRAJECTORIES;
 import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_OUTSIDE;
 import static com.openpositioning.PositionMe.utils.UtilConstants.FLOOR_PLAN_POLL_TIME_MS;
@@ -26,9 +27,12 @@ import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.protobuf.util.JsonFormat;
+import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
+import com.openpositioning.PositionMe.presentation.fragment.LoginFragment;
+import com.openpositioning.PositionMe.presentation.fragment.RegisterFragment;
 import com.openpositioning.PositionMe.sensors.Observable;
 import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.Wifi;
@@ -93,6 +97,8 @@ public class ServerCommunications implements Observable {
     private static final int OBSERVER_INDEX_FILES = 0;
     private static final int OBSERVER_INDEX_MAIN = 1;
     private static final int OBSERVER_INDEX_INDOOR_MAPS = 2;
+    private static final int OBSERVER_INDEX_LOGIN = 3;
+    private static final int OBSERVER_INDEX_REGISTER = 4;
     private static final int TRAJECTORY_REQUEST_BUFFER = 10;
 
     private final Context context;
@@ -102,6 +108,7 @@ public class ServerCommunications implements Observable {
     private boolean isWifiConn;
     private boolean isMobileConn;
     private SharedPreferences settings;
+    private LoginManager loginManager;
 
     private String infoResponse;
     private boolean success;
@@ -119,6 +126,9 @@ public class ServerCommunications implements Observable {
         POST_LOG_IN
     }
 
+    private String ERROR_CODE_NO_SERVER;
+    private String ERROR_MESSAGE_NO_SERVER;
+
     /**
      * Public default constructor of {@link ServerCommunications}. The constructor saves context,
      * initialises a {@link ConnectivityManager}, {@link Observer}, and gets the user preferences.
@@ -134,8 +144,13 @@ public class ServerCommunications implements Observable {
         this.isMobileConn = false;
         checkNetworkStatus();
 
+        ERROR_CODE_NO_SERVER = context.getString(R.string.errorCodeNoServerResponse);
+        ERROR_MESSAGE_NO_SERVER = context.getString(R.string.errorMessageNoServerResponse);
         this.observers = new LinkedHashSet<>();
+        loginManager = LoginManager.getInstance();
     }
+
+    //////////////////////////////////////////////////////////////////////////////
 
     //////////////////////////////////////////////////////////////////////////////
 
@@ -160,16 +175,29 @@ public class ServerCommunications implements Observable {
                             @Override
                             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                                 // Notify users
+                                Log.w(TAG, "Error: " + e.getMessage());
+                                String errorMessage = ERROR_MESSAGE_NO_SERVER;
+                                success = false;
                                 new Handler(Looper.getMainLooper())
                                         .post(
-                                                () ->
-                                                        Toast.makeText(
-                                                                        context,
-                                                                        "Upload failed\n"
-                                                                            + "Server unresponsive"
-                                                                            + " or unreachable",
-                                                                        Toast.LENGTH_SHORT)
-                                                                .show());
+                                                () -> {
+                                                    Toast.makeText(
+                                                                    context,
+                                                                    errorMessage,
+                                                                    Toast.LENGTH_SHORT)
+                                                            .show();
+                                                });
+                                infoResponse = ERROR_CODE_NO_SERVER + ":" + errorMessage;
+
+                                switch (requestType) {
+                                    case GET_TRAJECTORIES_LIST:
+                                        notifyObservers(OBSERVER_INDEX_FILES);
+                                        return;
+                                    case GET_TRAJECTORY_SINGLE:
+                                        return;
+                                    default:
+                                        return;
+                                }
                             }
 
                             @Override
@@ -181,15 +209,17 @@ public class ServerCommunications implements Observable {
 
                                     if (!response.isSuccessful()) {
                                         String errorBody = responseBody.string();
-                                        infoResponse = errorBody;
                                         Log.w(TAG, "Error: " + errorBody);
+                                        infoResponse = responseCode + ":" + errorBody;
                                         success = false;
 
                                         switch (requestType) {
                                             case GET_TRAJECTORIES_LIST:
+                                                parseErrorResponse(infoResponse);
                                                 notifyObservers(OBSERVER_INDEX_FILES);
                                                 return;
                                             case GET_TRAJECTORY_SINGLE:
+                                                parseErrorResponse(infoResponse);
                                                 return;
                                             default:
                                                 return;
@@ -200,15 +230,16 @@ public class ServerCommunications implements Observable {
                                         case GET_TRAJECTORIES_LIST:
                                             // Save the requested information from the response body
                                             infoResponse = responseBody.string();
+                                            success = true;
                                             notifyObservers(OBSERVER_INDEX_FILES);
                                             return;
                                         case GET_TRAJECTORY_SINGLE:
                                             @SuppressWarnings("unchecked")
                                             List<Object> data = (List<Object>) additionalData;
 
-                                            String id = (String) data.get(0);
+                                            String id = data.get(0).toString();
                                             int position = (int) data.get(1);
-                                            String dateSubmitted = (String) data.get(2);
+                                            String dateSubmitted = data.get(2).toString();
 
                                             processDownloadedTrajectory(
                                                     responseBody, id, position, dateSubmitted);
@@ -255,22 +286,26 @@ public class ServerCommunications implements Observable {
                             /** When the attempt to send the request has failed, notify the user. */
                             @Override
                             public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                                Log.w(TAG, "Error: " + e.getMessage());
+                                String errorMessage = ERROR_MESSAGE_NO_SERVER;
+                                success = false;
                                 new Handler(Looper.getMainLooper())
                                         .post(
-                                                () ->
-                                                        Toast.makeText(
-                                                                        context,
-                                                                        "Upload failed\n"
-                                                                            + "Server unresponsive"
-                                                                            + " or unreachable",
-                                                                        Toast.LENGTH_SHORT)
-                                                                .show());
-                                success = false;
-                                infoResponse = "000";
+                                                () -> {
+                                                    Toast.makeText(
+                                                                    context,
+                                                                    errorMessage,
+                                                                    Toast.LENGTH_SHORT)
+                                                            .show();
+                                                });
+                                infoResponse = ERROR_CODE_NO_SERVER + ":" + errorMessage;
+
                                 switch (requestType) {
                                     case POST_LOG_IN:
+                                        notifyObservers(OBSERVER_INDEX_LOGIN);
                                         return;
                                     case POST_SIGN_UP:
+                                        notifyObservers(OBSERVER_INDEX_REGISTER);
                                         return;
                                     case POST_TRAJECTORY_RECORDED:
                                     case POST_TRAJECTORY_LOCAL:
@@ -302,25 +337,34 @@ public class ServerCommunications implements Observable {
 
                                     if (!response.isSuccessful()) {
                                         String errorBody = responseBody.string();
-                                        infoResponse = errorBody;
                                         Log.w(TAG, "Error: " + errorBody);
+                                        infoResponse = responseCode + ":" + errorBody;
                                         success = false;
 
                                         switch (requestType) {
                                             case POST_LOG_IN:
+                                                parseErrorResponse(infoResponse);
+                                                notifyObservers(OBSERVER_INDEX_LOGIN);
                                                 return;
                                             case POST_SIGN_UP:
+                                                parseErrorResponse(infoResponse);
+                                                notifyObservers(OBSERVER_INDEX_REGISTER);
                                                 return;
                                             case POST_TRAJECTORY_RECORDED:
-                                                // Invalid trajectories should not be saved
-                                                File badTrajectory = (File) additionalData;
-                                                badTrajectory.delete();
-                                                notifyObservers(OBSERVER_INDEX_MAIN);
-                                                return;
                                             case POST_TRAJECTORY_LOCAL:
+                                                // Invalid trajectories should not be saved
+                                                File badTrajectoryLocal = (File) additionalData;
+                                                badTrajectoryLocal.delete();
+                                                Log.d(
+                                                        TAG,
+                                                        "Trajectory "
+                                                                + badTrajectoryLocal.getName()
+                                                                + " deleted");
+                                                Log.d(TAG, "Sending " + errorBody);
                                                 notifyObservers(OBSERVER_INDEX_MAIN);
                                                 return;
                                             case POST_FLOOR_PLANS:
+                                                parseErrorResponse(infoResponse);
                                                 notifyObservers(OBSERVER_INDEX_INDOOR_MAPS);
                                                 return;
                                             default:
@@ -329,16 +373,24 @@ public class ServerCommunications implements Observable {
                                     }
                                     switch (requestType) {
                                         case POST_LOG_IN:
+                                            infoResponse = responseBody.string();
+                                            success = true;
+                                            notifyObservers(OBSERVER_INDEX_LOGIN);
                                             return;
                                         case POST_SIGN_UP:
+                                            infoResponse = responseBody.string();
+                                            success = true;
+                                            notifyObservers(OBSERVER_INDEX_REGISTER);
                                             return;
                                         case POST_TRAJECTORY_RECORDED:
                                             File originalFile = (File) additionalData;
+                                            infoResponse = responseBody.string();
                                             success = processTrajectoryResponse(originalFile);
                                             notifyObservers(OBSERVER_INDEX_MAIN);
                                             return;
                                         case POST_TRAJECTORY_LOCAL:
                                             File localFile = (File) additionalData;
+                                            infoResponse = responseBody.string();
                                             success = localFile.delete();
                                             notifyObservers(OBSERVER_INDEX_MAIN);
                                             return;
@@ -352,6 +404,65 @@ public class ServerCommunications implements Observable {
                                     }
                                 }
                             }
+                        });
+    }
+
+    /**
+     * Error responses from the server share the same output format, so this function will parse
+     * that response and produce a user-friendly {@link Toast} explaining the problem.
+     *
+     * @param infoString String formatted as "errorCode:JSONResponse"
+     */
+    private void parseErrorResponse(String infoString) {
+        String[] errorElements = infoString.split(":", 2);
+        String errorCode = errorElements[0];
+        String errorCause = errorElements[1];
+
+        // Only perform JSON data extraction if response is in JSON format
+        if (!errorCause.contains("{")) {
+            Log.i(TAG, "\"" + errorCause + "\" is not a JSON response");
+        } else {
+            try {
+                JSONObject jsonObject = new JSONObject(errorCause);
+                JSONArray detailArray = jsonObject.optJSONArray("detail");
+                if (detailArray != null) {
+                    for (int i = 0; i < detailArray.length(); i++) {
+                        JSONObject problem = detailArray.getJSONObject(i);
+                        String type = problem.getString("type");
+                        if (type.contains("value_error")) {
+                            String badValue = type.split("\\.", 2)[1];
+                            if (badValue.equals("missing")) {
+                                badValue = problem.getJSONArray("loc").getString(1);
+                                badValue =
+                                        badValue.substring(0, 1).toUpperCase()
+                                                + badValue.substring(1);
+                                errorCause = badValue + " " + problem.getString("msg");
+                            } else {
+                                badValue =
+                                        badValue.substring(0, 1).toUpperCase()
+                                                + badValue.substring(1);
+                                errorCause =
+                                        badValue + " " + problem.getString("msg").split(" ", 2)[1];
+                            }
+                        } else {
+                            errorCause = problem.getString("msg");
+                        }
+                    }
+                } else {
+                    // If error response is not JSON format, print as-is
+                    errorCause = jsonObject.getString("detail");
+                }
+            } catch (JSONException e) {
+                Log.w(TAG, e.getMessage());
+                errorCause = "Unknown error";
+            }
+        }
+
+        String errorMessage = errorCause + " (HTTP Error " + errorCode + ")";
+        new Handler(Looper.getMainLooper())
+                .post(
+                        () -> {
+                            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show();
                         });
     }
 
@@ -407,11 +518,15 @@ public class ServerCommunications implements Observable {
      * @param campaign The building associated with the route
      */
     public void sendTrajectory(Traj.Trajectory trajectory, String campaign) {
-        Toast.makeText(
-                        context,
-                        "Now uploading '" + campaign + "' trajectory...",
-                        Toast.LENGTH_SHORT)
-                .show();
+        new Handler(Looper.getMainLooper())
+                .post(
+                        () -> {
+                            Toast.makeText(
+                                            context,
+                                            "Now uploading '" + campaign + "' trajectory...",
+                                            Toast.LENGTH_SHORT)
+                                    .show();
+                        });
         logDataSize(trajectory);
 
         File file = convertTrajectoryToFile(trajectory);
@@ -420,7 +535,11 @@ public class ServerCommunications implements Observable {
         if (campaign.isBlank() || campaign.equals(BUILDING_NAME_OUTSIDE)) {
             String message = "Invalid campaign ('" + campaign + "') - Cancelling upload";
             Log.w(TAG, message);
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+            new Handler(Looper.getMainLooper())
+                    .post(
+                            () -> {
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+                            });
             return;
         }
 
@@ -435,11 +554,15 @@ public class ServerCommunications implements Observable {
         if (!this.isWifiConn && !(enableMobileData && isMobileConn)) {
             // If the device is not connected to network or allowed to send,
             // do not send trajectory and notify observers and user
-            String message = "No uploading allowed right now!";
-            Log.e(TAG, message);
-            new Handler(Looper.getMainLooper())
-                    .post(() -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show());
+            String errorMessage = "No uploading allowed right now!";
+            infoResponse = ERROR_CODE_NO_SERVER + ":" + errorMessage;
+            Log.w(TAG, infoResponse);
             success = false;
+            new Handler(Looper.getMainLooper())
+                    .post(
+                            () -> {
+                                Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show();
+                            });
             notifyObservers(OBSERVER_INDEX_MAIN);
             return;
         }
@@ -522,7 +645,26 @@ public class ServerCommunications implements Observable {
         if (campaign.isBlank() || campaign.equals(BUILDING_NAME_OUTSIDE)) {
             String message = "Invalid campaign ('" + campaign + "') - Cancelling upload";
             Log.w(TAG, message);
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+            new Handler(Looper.getMainLooper())
+                    .post(
+                            () -> {
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+                            });
+            return;
+        }
+
+        if (!localTrajectory.exists()) {
+            Log.e(TAG, "Unable to use file!");
+            new Handler(Looper.getMainLooper())
+                    .post(
+                            () -> {
+                                Toast.makeText(
+                                                context,
+                                                "Trajectory has been deleted. Please refresh the"
+                                                        + " view.",
+                                                Toast.LENGTH_SHORT)
+                                        .show();
+                            });
             return;
         }
 
@@ -557,7 +699,7 @@ public class ServerCommunications implements Observable {
                 requestBody,
                 PROTOCOL_APP_JSON,
                 PROTOCOL_MULTIPART,
-                REQUEST.POST_TRAJECTORY_RECORDED,
+                REQUEST.POST_TRAJECTORY_LOCAL,
                 localTrajectory);
     }
 
@@ -686,6 +828,9 @@ public class ServerCommunications implements Observable {
 
         String url =
                 URL_GET_TRAJECTORIES_HEAD
+                        + "/"
+                        + loginManager.getUserKey()
+                        + "?skip=0&limit="
                         + (position + TRAJECTORY_REQUEST_BUFFER)
                         + URL_GET_TRAJECTORIES_TAIL;
 
@@ -696,7 +841,15 @@ public class ServerCommunications implements Observable {
 
         // Enqueue the GET request for asynchronous execution
         sendRequestGET(url, PROTOCOL_APP_JSON, REQUEST.GET_TRAJECTORY_SINGLE, additionalData);
-        Toast.makeText(context, "Request sent for Trajectory " + id, Toast.LENGTH_SHORT).show();
+        new Handler(Looper.getMainLooper())
+                .post(
+                        () -> {
+                            Toast.makeText(
+                                            context,
+                                            "Request sent for Trajectory " + id,
+                                            Toast.LENGTH_SHORT)
+                                    .show();
+                        });
     }
 
     /**
@@ -820,9 +973,10 @@ public class ServerCommunications implements Observable {
      *
      * <p>
      *
-     * @param requestURL The URL of the API GET request
+     * @param baseURL The URL of the API GET request
      */
-    public void requestPathsFromServer(String requestURL) {
+    public void requestPathsFromServer(String baseURL) {
+        String requestURL = baseURL + "/" + loginManager.getUserKey() + "?key=" + API_KEY_MASTER;
         sendRequestGET(requestURL, PROTOCOL_APP_JSON, REQUEST.GET_TRAJECTORIES_LIST, null);
     }
 
@@ -840,6 +994,9 @@ public class ServerCommunications implements Observable {
         } else {
             lastTime = currentTime;
         }
+
+        String url =
+                URL_POST_FLOORPLANS + "/" + loginManager.getUserKey() + "?key=" + API_KEY_MASTER;
 
         // Generate list of AP MAC addresses
         List<String> aps = new ArrayList<>();
@@ -860,12 +1017,50 @@ public class ServerCommunications implements Observable {
         RequestBody requestBody = RequestBody.create(payload.toString(), JSON);
 
         sendRequestPOST(
-                URL_POST_FLOORPLANS,
+                url,
                 requestBody,
                 PROTOCOL_APP_JSON,
                 PROTOCOL_APP_JSON,
                 REQUEST.POST_FLOOR_PLANS,
                 null);
+    }
+
+    public void registerUserDetails(String username, String email, String password) {
+        String url = URL_API + API_POST_SIGN_UP;
+
+        // Construct payload for request
+        MediaType JSON = MediaType.get(PROTOCOL_APP_JSON + "; charset=utf-8");
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("username", username);
+            payload.put("email", email);
+            payload.put("password", password);
+        } catch (JSONException ignore) {
+            return;
+        }
+        RequestBody requestBody = RequestBody.create(payload.toString(), JSON);
+
+        sendRequestPOST(
+                url, requestBody, PROTOCOL_APP_JSON, PROTOCOL_APP_JSON, REQUEST.POST_SIGN_UP, null);
+    }
+
+    public void logInUser(String email, String password) {
+        String url = URL_API + API_POST_LOGIN;
+
+        // Construct payload for request
+        MediaType JSON = MediaType.get(PROTOCOL_APP_JSON + "; charset=utf-8");
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("email", email);
+            payload.put("password", password);
+        } catch (JSONException ignore) {
+            return;
+        }
+
+        RequestBody requestBody = RequestBody.create(payload.toString(), JSON);
+
+        sendRequestPOST(
+                url, requestBody, PROTOCOL_APP_JSON, PROTOCOL_APP_JSON, REQUEST.POST_LOG_IN, null);
     }
 
     /**
@@ -898,7 +1093,7 @@ public class ServerCommunications implements Observable {
                 + "/"
                 + campaign
                 + "/"
-                + API_KEY_USER
+                + loginManager.getUserKey()
                 + "/?key="
                 + API_KEY_MASTER;
     }
@@ -933,11 +1128,19 @@ public class ServerCommunications implements Observable {
      */
     @Override
     public void registerObserver(Observer o) {
+        for (Observer obs : observers) {
+            if (obs.getClass().getSimpleName().equals(o.getClass().getSimpleName())) {
+                observers.remove(obs);
+            }
+        }
+
         if (observers.add(o)) {
             Log.i(TAG, "Added observer of type " + o.getClass().getSimpleName());
         } else {
-            Log.w(TAG, "Observer of type " + o.getClass().getSimpleName() + " already registered!");
+            Log.w(TAG, "Failed to add Observer of type " + o.getClass().getSimpleName());
         }
+        Log.d(TAG, "Observers currently in list:");
+        observers.forEach(observer -> Log.d(TAG, " " + observer.getClass().getSimpleName()));
     }
 
     /**
@@ -950,12 +1153,20 @@ public class ServerCommunications implements Observable {
      */
     @Override
     public void notifyObservers(int index) {
+        if (observers.isEmpty()) {
+            Log.w(TAG, "No observers registered! Update will be lost.");
+            return;
+        }
         for (Observer o : observers) {
             if (index == OBSERVER_INDEX_FILES && o instanceof FilesFragment) {
                 o.update(new Object[] {success, infoResponse});
             } else if (index == OBSERVER_INDEX_MAIN && o instanceof MainActivity) {
                 o.update(new Object[] {success, infoResponse});
             } else if (index == OBSERVER_INDEX_INDOOR_MAPS && o instanceof IndoorMapManager) {
+                o.update(new Object[] {success, infoResponse});
+            } else if (index == OBSERVER_INDEX_LOGIN && o instanceof LoginFragment) {
+                o.update(new Object[] {success, infoResponse});
+            } else if (index == OBSERVER_INDEX_REGISTER && o instanceof RegisterFragment) {
                 o.update(new Object[] {success, infoResponse});
             } else {
                 Log.w(
