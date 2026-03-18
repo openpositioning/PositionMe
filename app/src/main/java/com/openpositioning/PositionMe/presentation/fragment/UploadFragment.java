@@ -15,7 +15,9 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.data.remote.LoginManager;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.presentation.viewitems.DownloadClickListener;
 import com.openpositioning.PositionMe.presentation.viewitems.UploadListAdapter;
 import com.openpositioning.PositionMe.presentation.viewitems.UploadViewHolder;
@@ -32,6 +34,7 @@ import java.util.stream.Stream;
  * @author Mate Stodulka
  */
 public class UploadFragment extends Fragment {
+    private static final String TAG = "UploadFragment";
 
     // UI elements
     private TextView emptyNotice;
@@ -43,6 +46,7 @@ public class UploadFragment extends Fragment {
 
     // List of files saved locally
     private List<File> localTrajectories;
+    private LoginManager loginManager;
 
     /** Public default constructor, empty. */
     public UploadFragment() {
@@ -58,6 +62,8 @@ public class UploadFragment extends Fragment {
         super.onCreate(savedInstanceState);
         // Get communication class
         serverCommunications = new ServerCommunications(getActivity());
+        serverCommunications.registerObserver((MainActivity) getActivity());
+        loginManager = LoginManager.getInstance();
 
         // Determine the directory to load trajectory files from.
         File trajectoriesDir = null;
@@ -86,7 +92,7 @@ public class UploadFragment extends Fragment {
     @Override
     public View onCreateView(
             LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        getActivity().setTitle("Upload");
+        getActivity().setTitle("Upload - " + loginManager.getUsername());
         // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_upload, container, false);
     }
@@ -138,8 +144,8 @@ public class UploadFragment extends Fragment {
                                     // TODO - Replace static test value with dynamic building name
                                     serverCommunications.uploadLocalTrajectory(
                                             trajectory, BUILDING_NAME_M_HOUSE);
-                                    //                    localTrajectories.remove(position);
-                                    //                    listAdapter.notifyItemRemoved(position);
+                                    localTrajectories.remove(position);
+                                    listAdapter.notifyItemRemoved(position);
                                 }
                             });
             uploadList.setAdapter(listAdapter);

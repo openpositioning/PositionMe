@@ -1,6 +1,8 @@
 package com.openpositioning.PositionMe.presentation.viewitems;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 import android.widget.Toast;
@@ -88,9 +90,25 @@ public class UploadListAdapter extends RecyclerView.Adapter<UploadViewHolder> {
                 uploadItems.remove(position);
                 notifyItemRemoved(position);
                 notifyItemRangeChanged(position, uploadItems.size()); // Update subsequent items
-                Toast.makeText(context, "File deleted successfully", Toast.LENGTH_SHORT).show();
+                new Handler(Looper.getMainLooper())
+                        .post(
+                                () -> {
+                                    Toast.makeText(
+                                                    context,
+                                                    "File deleted successfully",
+                                                    Toast.LENGTH_SHORT)
+                                            .show();
+                                });
             } else {
-                Toast.makeText(context, "Failed to delete file", Toast.LENGTH_SHORT).show();
+                new Handler(Looper.getMainLooper())
+                        .post(
+                                () -> {
+                                    Toast.makeText(
+                                                    context,
+                                                    "Failed to delete file",
+                                                    Toast.LENGTH_SHORT)
+                                            .show();
+                                });
             }
         }
     }

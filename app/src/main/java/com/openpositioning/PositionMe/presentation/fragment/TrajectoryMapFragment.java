@@ -214,6 +214,12 @@ public class TrajectoryMapFragment extends Fragment {
                 });
     }
 
+    @Override
+    public void onDestroy() {
+        Log.d(TAG, "Destroying " + getClass().getSimpleName());
+        super.onDestroy();
+    }
+
     /**
      * Initialize the map settings with the provided GoogleMap instance.
      *

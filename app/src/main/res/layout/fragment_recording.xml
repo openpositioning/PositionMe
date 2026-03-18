@@ -115,7 +115,7 @@
                     android:layout_weight="1"
                     android:text="Current Campaign"
                     android:textAlignment="center"
-                    android:textSize="20sp"
+                    android:textSize="18sp"
                     android:textStyle="italic" />
 
                 <TextView

@@ -18,6 +18,7 @@ import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.data.remote.LoginManager;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.presentation.viewitems.TrajDownloadListAdapter;
 import com.openpositioning.PositionMe.presentation.viewitems.TrajDownloadViewHolder;
@@ -42,7 +43,7 @@ import org.json.JSONObject;
  * @author Mate Stodulka
  */
 public class FilesFragment extends Fragment implements Observer {
-
+    private static final String TAG = "FilesFragment";
     // UI elements
     private RecyclerView filesList;
     private TrajDownloadListAdapter listAdapter;
@@ -50,6 +51,7 @@ public class FilesFragment extends Fragment implements Observer {
 
     // Class handling HTTP communication
     private ServerCommunications serverCommunications;
+    private LoginManager loginManager;
 
     /** Default public constructor, empty. */
     public FilesFragment() {
@@ -65,6 +67,20 @@ public class FilesFragment extends Fragment implements Observer {
         super.onCreate(savedInstanceState);
         serverCommunications = new ServerCommunications(getActivity());
         serverCommunications.registerObserver(this);
+        loginManager = LoginManager.getInstance();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (serverCommunications == null) {
+            serverCommunications = new ServerCommunications(getActivity());
+        }
+        serverCommunications.registerObserver(this);
+
+        if (loginManager == null) {
+            loginManager = LoginManager.getInstance();
+        }
     }
 
     /** {@inheritDoc} Sets the title in the action bar. */
@@ -73,7 +89,7 @@ public class FilesFragment extends Fragment implements Observer {
             LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View rootView = inflater.inflate(R.layout.fragment_files, container, false);
-        getActivity().setTitle("Trajectory recordings");
+        getActivity().setTitle("Trajectory Recordings - " + loginManager.getUsername());
         return rootView;
     }
 
@@ -128,9 +144,9 @@ public class FilesFragment extends Fragment implements Observer {
      */
     @Override
     public void update(Object[] objList) {
-        Boolean result = (boolean) objList[0];
-        // Cast input as a string
-        String infoString = (String) objList[1];
+        Boolean success = (boolean) objList[0];
+        String infoString = objList[1].toString();
+
         // Check if the string is non-null and non-empty before processing
         if (infoString != null && !infoString.isEmpty()) {
             // Process string
@@ -166,7 +182,7 @@ public class FilesFragment extends Fragment implements Observer {
                 JSONObject trajectoryEntry = jsonArray.getJSONObject(i);
                 Map<String, String> entryMap = new HashMap<>();
                 entryMap.put("owner_id", String.valueOf(trajectoryEntry.get("owner_id")));
-                entryMap.put("date_submitted", (String) trajectoryEntry.get("date_submitted"));
+                entryMap.put("date_submitted", trajectoryEntry.get("date_submitted").toString());
                 entryMap.put("id", String.valueOf(trajectoryEntry.get("id")));
                 // Add decoded map to list of entries
                 entryList.add(entryMap);

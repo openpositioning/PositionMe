@@ -5,6 +5,7 @@ import android.text.InputType;
 import androidx.preference.EditTextPreference;
 import androidx.preference.PreferenceFragmentCompat;
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.data.remote.LoginManager;
 
 /**
  * SettingsFragment that inflates and displays the preferences (settings). Sets type for numeric
@@ -22,6 +23,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private EditTextPreference epsilon;
     private EditTextPreference accelFilter;
     private EditTextPreference wifiInterval;
+    private LoginManager loginManager;
 
     /**
      * {@inheritDoc} Sets the relevant numeric type for the preferences that should not take string
@@ -30,7 +32,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.root_preferences, rootKey);
-        getActivity().setTitle("Settings");
+        loginManager = LoginManager.getInstance();
+        getActivity().setTitle("Settings - " + loginManager.getUsername());
         weibergK = findPreference("weiberg_k");
         weibergK.setOnBindEditTextListener(
                 editText ->
