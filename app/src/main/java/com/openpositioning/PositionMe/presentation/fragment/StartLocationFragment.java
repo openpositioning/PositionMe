@@ -37,6 +37,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
+
 /**
  * Fragment for selecting the start location before recording begins.
  * Displays a Google Map with building outlines fetched from the floorplan API.
@@ -49,6 +53,17 @@ import java.util.Map;
  * @see FloorplanApiClient the API client for fetching building data
  */
 public class StartLocationFragment extends Fragment {
+    // --- 新增变量 ---
+    // --- 新增变量 ---
+    private Button btnFindIndoorMap;
+    private Button btnFindActualMap;
+    private boolean useActualMap = false; // 核心状态：判断显示哪种地图
+    private com.google.android.gms.maps.model.GroundOverlay realMapOverlay;
+
+    private final Handler retryHandler = new Handler(Looper.getMainLooper());
+    private int requestRetryCount = 0;
+    private static final int MAX_REQUEST_RETRIES = 10;
+    private static final long RETRY_DELAY_MS = 2000;
 
     private static final String TAG = "StartLocationFragment";
 
@@ -77,6 +92,9 @@ public class StartLocationFragment extends Fragment {
     // Vector shapes drawn as floor plan preview (cleared when switching buildings)
     private final List<Polygon> previewPolygons = new ArrayList<>();
     private final List<Polyline> previewPolylines = new ArrayList<>();
+
+    // 【新增这一行】：用于存储白色蒙版以便清除
+    private Polygon whiteMaskPolygon;
 
     // Building outline colours (ARGB)
     private static final int FILL_COLOR_DEFAULT = Color.argb(60, 33, 150, 243);
@@ -126,11 +144,62 @@ public class StartLocationFragment extends Fragment {
             public void onMapReady(GoogleMap googleMap) {
                 mMap = googleMap;
                 setupMap();
-                requestBuildingData();
+                //requestBuildingData();
             }
         });
 
         return rootView;
+    }
+    /**
+     * 清理所有地图上的覆盖物（矢量图、白板、真实贴图）
+     */
+    private void resetMapOverlays() {
+        for (Polygon p : previewPolygons) p.remove();
+        for (Polyline p : previewPolylines) p.remove();
+        previewPolygons.clear();
+        previewPolylines.clear();
+
+        if (whiteMaskPolygon != null) {
+            whiteMaskPolygon.remove();
+            whiteMaskPolygon = null;
+        }
+
+        if (realMapOverlay != null) {
+            realMapOverlay.remove();
+            realMapOverlay = null;
+        }
+    }
+    private void requestBuildingDataWhenReady() {
+        float[] gnss = sensorFusion.getGNSSLatitude(false);
+        startPosition[0] = gnss[0];
+        startPosition[1] = gnss[1];
+
+        boolean gnssReady = !(startPosition[0] == 0f && startPosition[1] == 0f);
+
+        if (!gnssReady) {
+            if (requestRetryCount < MAX_REQUEST_RETRIES) {
+                requestRetryCount++;
+                Log.d(TAG, "GNSS not ready, retry floorplan request: " + requestRetryCount);
+                retryHandler.postDelayed(this::requestBuildingDataWhenReady, RETRY_DELAY_MS);
+            } else {
+                Log.w(TAG, "GNSS still not ready after retries, requesting floorplan anyway");
+                requestBuildingData();
+                return;
+            }
+
+        }
+
+        LatLng current = new LatLng(startPosition[0], startPosition[1]);
+
+        if (startMarker != null) {
+            startMarker.setPosition(current);
+        }
+
+        if (mMap != null) {
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(current, zoom));
+        }
+
+        requestBuildingData();
     }
 
     /**
@@ -161,6 +230,32 @@ public class StartLocationFragment extends Fragment {
             public void onMarkerDragEnd(Marker marker) {
                 startPosition[0] = (float) marker.getPosition().latitude;
                 startPosition[1] = (float) marker.getPosition().longitude;
+
+                floorplanBuildingMap.clear();
+
+                for (Polygon p : buildingPolygons) {
+                    p.remove();
+                }
+                buildingPolygons.clear();
+
+                for (Polygon p : previewPolygons) {
+                    p.remove();
+                }
+                previewPolygons.clear();
+
+                for (Polyline p : previewPolylines) {
+                    p.remove();
+                }
+                previewPolylines.clear();
+// 【新增这段】：清除上一层的白色蒙版
+                if (whiteMaskPolygon != null) {
+                    whiteMaskPolygon.remove();
+                    whiteMaskPolygon = null;
+                }
+                selectedPolygon = null;
+                selectedBuildingId = null;
+
+                requestBuildingData();
             }
 
             @Override
@@ -310,15 +405,53 @@ public class StartLocationFragment extends Fragment {
         // Zoom to the building
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(center, 20f));
 
-        // Show floor plan overlay for the selected building
-        showFloorPlanOverlay(buildingName);
+        // ================= 【核心逻辑修改】 =================
+        // 点击建筑后，先清理屏幕上已有的图层
+        resetMapOverlays();
 
-        // Update UI with building name
-        updateBuildingInfoDisplay(buildingName);
+        // 根据当前用户选中的模式，展示不同的地图
+        if (useActualMap) {
+            updateRealMapOverlay(buildingName, true); // 只有点击蓝框后，才贴上 drawable 里的真实图片
+        } else {
+            showFloorPlanOverlay(buildingName);       // 只有点击蓝框后，才弹出白板并画上黑色矢量线
+        }
+        // ==================================================
 
-        Log.d(TAG, "Building selected: " + buildingName);
+        Log.d(TAG, "Building selected: " + buildingName + ", Mode: " + (useActualMap ? "Actual" : "Vector"));
     }
+    /**
+     * 【新增方法】：用于在地图上覆盖你 drawable 文件夹中的实际室内地图图片
+     */
+    private void updateRealMapOverlay(String buildingName, boolean show) {
+        // 先移除旧的图片蒙版
+        if (realMapOverlay != null) {
+            realMapOverlay.remove();
+            realMapOverlay = null;
+        }
 
+        if (!show || buildingName == null) return;
+
+        int drawableResId = 0;
+        LatLngBounds bounds = null;
+
+        // 根据建筑名称匹配图片和对应的真实经纬度边界
+        if (buildingName.equals("nucleus_building")) {
+            drawableResId = R.drawable.nucleus1;
+            // 使用项目中已有的 BuildingPolygon 边界数据
+            bounds = new LatLngBounds(
+                    com.openpositioning.PositionMe.utils.BuildingPolygon.NUCLEUS_SW,
+                    com.openpositioning.PositionMe.utils.BuildingPolygon.NUCLEUS_NE);
+        }
+
+        if (drawableResId != 0 && bounds != null) {
+            // 将实际图片贴在地图上
+            realMapOverlay = mMap.addGroundOverlay(new com.google.android.gms.maps.model.GroundOverlayOptions()
+                    .image(com.google.android.gms.maps.model.BitmapDescriptorFactory.fromResource(drawableResId))
+                    .positionFromBounds(bounds)
+                    // zIndex设为 15，确保它显示在白色半透明蒙版(zIndex=10)上方，如果希望在黑线之上可改大
+                    .zIndex(15));
+        }
+    }
     /**
      * Shows a vector floor plan preview for the selected building using the
      * map_shapes data from the API. Draws the ground floor shapes (walls, rooms).
@@ -332,6 +465,18 @@ public class StartLocationFragment extends Fragment {
         for (Polyline p : previewPolylines) p.remove();
         previewPolygons.clear();
         previewPolylines.clear();
+
+        // 【新增这段】：清除旧蒙版并绘制全新的全屏高透明度白色蒙版
+        if (whiteMaskPolygon != null) {
+            whiteMaskPolygon.remove();
+            whiteMaskPolygon = null;
+        }
+        PolygonOptions whiteMask = new PolygonOptions()
+                .add(new LatLng(85, -180), new LatLng(85, 180), new LatLng(-85, 180), new LatLng(-85, -180))
+                .fillColor(0xD9FFFFFF) // 约 85% 透明度的白色
+                .strokeWidth(0)
+                .zIndex(5);            // 蒙版在底层 (层级5)
+        whiteMaskPolygon = mMap.addPolygon(whiteMask);
 
         FloorplanApiClient.BuildingInfo building = floorplanBuildingMap.get(buildingName);
         if (building == null) return;
@@ -357,7 +502,8 @@ public class StartLocationFragment extends Fragment {
                             .addAll(ring)
                             .strokeColor(getPreviewStrokeColor(indoorType))
                             .strokeWidth(2f)
-                            .fillColor(getPreviewFillColor(indoorType)));
+                            .fillColor(getPreviewFillColor(indoorType))
+                            .zIndex(10)); // 【新增】：层级设为10，确保浮在白板上方
                     previewPolygons.add(p);
                 }
             } else if ("MultiLineString".equals(geoType)
@@ -367,20 +513,21 @@ public class StartLocationFragment extends Fragment {
                     Polyline pl = mMap.addPolyline(new PolylineOptions()
                             .addAll(line)
                             .color(getPreviewStrokeColor(indoorType))
-                            .width(3f));
+                            .width(4f)    // 【修改】：稍微加粗至4f使其更明显
+                            .zIndex(10)); // 【新增】：层级设为10，确保浮在白板上方
                     previewPolylines.add(pl);
                 }
             }
         }
     }
-
     /**
      * Returns the stroke colour for a preview indoor feature.
      */
     private int getPreviewStrokeColor(String indoorType) {
-        if ("wall".equals(indoorType)) return Color.argb(200, 80, 80, 80);
-        if ("room".equals(indoorType)) return Color.argb(180, 33, 150, 243);
-        return Color.argb(150, 100, 100, 100);
+        // 【修改】：全部换为更深的黑/深灰色
+        if ("wall".equals(indoorType)) return Color.argb(255, 34, 34, 34);
+        if ("room".equals(indoorType)) return Color.argb(255, 60, 60, 60);
+        return Color.argb(255, 50, 50, 50);
     }
 
     /**
@@ -445,19 +592,37 @@ public class StartLocationFragment extends Fragment {
         return new LatLng(latSum / count, lonSum / count);
     }
 
-    /**
-     * {@inheritDoc}
-     * Sets up button click listeners and view references after the view is created.
-     */
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
         this.button = view.findViewById(R.id.startLocationDone);
         this.instructionText = view.findViewById(R.id.correctionInfoView);
-        this.buildingInfoCard = view.findViewById(R.id.buildingInfoCard);
-        this.buildingNameText = view.findViewById(R.id.buildingNameText);
 
+        // 绑定两个 Find 按钮
+        this.btnFindIndoorMap = view.findViewById(R.id.btnFindIndoorMap);
+        this.btnFindActualMap = view.findViewById(R.id.btnFindActualMap);
+
+        if (this.btnFindIndoorMap != null) {
+            this.btnFindIndoorMap.setOnClickListener(v -> {
+                useActualMap = false;   // 模式设为：矢量地图
+                resetMapOverlays();     // 清理之前的图层
+                requestBuildingData();  // 请求画蓝框
+                Toast.makeText(getContext(), "模式：矢量地图。请点击蓝色建筑", Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        if (this.btnFindActualMap != null) {
+            this.btnFindActualMap.setOnClickListener(v -> {
+                useActualMap = true;    // 模式设为：真实贴图
+                resetMapOverlays();     // 清理之前的图层
+                requestBuildingData();  // 请求画蓝框
+                Toast.makeText(getContext(), "模式：实际地图。请点击蓝色建筑", Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        // 下方保留你原本的 this.button.setOnClickListener (Start/Set Location) 逻辑...
+        // 下方保留你原本的 this.button.setOnClickListener (Start/Set Location) 逻辑
         this.button.setOnClickListener(v -> {
             float chosenLat = startPosition[0];
             float chosenLon = startPosition[1];
@@ -483,4 +648,11 @@ public class StartLocationFragment extends Fragment {
             }
         });
     }
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        retryHandler.removeCallbacksAndMessages(null);
+    }
+
 }
+

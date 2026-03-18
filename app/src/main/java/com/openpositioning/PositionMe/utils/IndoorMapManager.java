@@ -15,187 +15,254 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Manages indoor floor map display for all supported buildings
- * (Nucleus, Library, Murchison). Uses vector shape data from the floorplan API
- * to dynamically draw walls, rooms, and other indoor features on the Google Map.
- * Provides unified floor indexing, floor switching, and building detection.
- *
- * @see BuildingPolygon Describes the bounds of buildings and the methods to check if a point is
- *                      within a building
- * @see FloorplanApiClient.FloorShapes Per-floor vector shape data
- */
 public class IndoorMapManager {
 
     private static final String TAG = "IndoorMapManager";
 
-    /** Building identifiers for tracking which building the user is in. */
     public static final int BUILDING_NONE = 0;
     public static final int BUILDING_NUCLEUS = 1;
     public static final int BUILDING_LIBRARY = 2;
     public static final int BUILDING_MURCHISON = 3;
 
-    private GoogleMap gMap;
+    private final GoogleMap gMap;
     private LatLng currentLocation;
     private boolean isIndoorMapSet = false;
-    private int currentFloor;
+    private int currentFloor = 0;
     private int currentBuilding = BUILDING_NONE;
     private float floorHeight;
 
-    // Vector shapes currently drawn on the map (cleared on floor switch or exit)
     private final List<Polygon> drawnPolygons = new ArrayList<>();
     private final List<Polyline> drawnPolylines = new ArrayList<>();
-
-    // Per-floor vector shape data for the current building
     private List<FloorplanApiClient.FloorShapes> currentFloorShapes;
+    private boolean vectorBaseplateEnabled = true;
 
-    // Average floor heights per building (meters), used for barometric auto-floor
     public static final float NUCLEUS_FLOOR_HEIGHT = 4.2F;
     public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
     public static final float MURCHISON_FLOOR_HEIGHT = 4.0F;
 
-    // Colours for different indoor feature types
-    private static final int WALL_STROKE = Color.argb(200, 80, 80, 80);
-    private static final int ROOM_STROKE = Color.argb(180, 33, 150, 243);
-    private static final int ROOM_FILL = Color.argb(40, 33, 150, 243);
-    private static final int DEFAULT_STROKE = Color.argb(150, 100, 100, 100);
+    private static final int WALL_STROKE = Color.argb(255, 34, 34, 34);
+    private static final int ROOM_STROKE = Color.argb(255, 60, 60, 60);
+    private static final int ROOM_FILL = Color.argb(40, 0, 0, 0);
+    private static final int DEFAULT_STROKE = Color.argb(255, 50, 50, 50);
 
-    /**
-     * Constructor to set the map instance.
-     *
-     * @param map the map on which the indoor floor map shapes are drawn
-     */
     public IndoorMapManager(GoogleMap map) {
         this.gMap = map;
     }
 
-    /**
-     * Updates the current location of the user and displays the indoor map
-     * if the user is in a building with indoor maps available.
-     *
-     * @param currentLocation new location of user
-     */
     public void setCurrentLocation(LatLng currentLocation) {
         this.currentLocation = currentLocation;
-        setBuildingOverlay();
     }
 
-    /**
-     * Returns the current building's floor height.
-     *
-     * @return the floor height of the current building the user is in
-     */
     public float getFloorHeight() {
         return floorHeight;
     }
 
-    /**
-     * Returns whether an indoor floor map is currently being displayed.
-     *
-     * @return true if an indoor map is visible to the user, false otherwise
-     */
     public boolean getIsIndoorMapSet() {
         return isIndoorMapSet;
     }
 
-    /**
-     * Returns the identifier of the building the user is currently in.
-     *
-     * @return one of {@link #BUILDING_NONE}, {@link #BUILDING_NUCLEUS},
-     *         {@link #BUILDING_LIBRARY}, or {@link #BUILDING_MURCHISON}
-     */
     public int getCurrentBuilding() {
         return currentBuilding;
     }
 
-    /**
-     * Returns the current floor index being displayed.
-     *
-     * @return the current floor index in the active building's floor list
-     */
     public int getCurrentFloor() {
         return currentFloor;
     }
 
-    /**
-     * Returns the display name for the current floor (e.g. "LG", "G", "1").
-     * Falls back to the numeric index if no display name is available.
-     *
-     * @return human-readable floor label
-     */
     public String getCurrentFloorDisplayName() {
         if (currentFloorShapes != null
                 && currentFloor >= 0
                 && currentFloor < currentFloorShapes.size()) {
-            return currentFloorShapes.get(currentFloor).getDisplayName();
+            String displayName = currentFloorShapes.get(currentFloor).getDisplayName();
+            if (displayName == null || displayName.isEmpty()) {
+                return String.valueOf(currentFloor);
+            }
+            return formatFloorLabelForDisplay(displayName);
         }
         return String.valueOf(currentFloor);
     }
 
-    /**
-     * Returns the auto-floor bias for the current building. Buildings with a
-     * lower-ground floor at index 0 need a +1 bias so that WiFi/barometric
-     * floor 0 (ground) maps to the correct floor index.
-     *
-     * @return the floor index offset for auto-floor conversion
-     */
     public int getAutoFloorBias() {
         switch (currentBuilding) {
             case BUILDING_NUCLEUS:
             case BUILDING_MURCHISON:
-                return 1; // LG at index 0, so G = index 1
+                return 1;
             case BUILDING_LIBRARY:
             default:
-                return 0; // G at index 0
+                return 0;
         }
     }
 
-    /**
-     * Sets the floor to display. When called from auto-floor, the floor number
-     * is a logical floor (0=G, -1=LG, 1=Floor 1, etc.) and the building bias
-     * is applied. When called manually, the floor number is the direct index.
-     *
-     * @param newFloor  the floor the user is at
-     * @param autoFloor true if called by auto-floor feature
-     */
-    public void setCurrentFloor(int newFloor, boolean autoFloor) {
-        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) return;
-
-        if (autoFloor) {
-            newFloor += getAutoFloorBias();
+    public int logicalFloorToIndex(int logicalFloor) {
+        String targetFloorLabel;
+        if (logicalFloor <= -1) {
+            targetFloorLabel = "LG";
+        } else if (logicalFloor == 0) {
+            targetFloorLabel = "G";
+        } else {
+            targetFloorLabel = String.valueOf(logicalFloor);
         }
 
-        if (newFloor >= 0 && newFloor < currentFloorShapes.size()
-                && newFloor != this.currentFloor) {
+        int matchingIndex = findFloorIndexByCanonicalLabel(targetFloorLabel);
+        if (matchingIndex >= 0) {
+            return matchingIndex;
+        }
+
+        return clampFloorIndex(logicalFloor + getAutoFloorBias());
+    }
+
+    public int clampFloorIndex(int floorIndex) {
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) {
+            return 0;
+        }
+        return Math.max(0, Math.min(floorIndex, currentFloorShapes.size() - 1));
+    }
+
+    public void setVectorBaseplateEnabled(boolean enabled) {
+        if (this.vectorBaseplateEnabled != enabled) {
+            this.vectorBaseplateEnabled = enabled;
+            if (isIndoorMapSet && currentFloorShapes != null && currentFloor >= 0 && currentFloor < currentFloorShapes.size()) {
+                drawFloorShapes(currentFloor);
+            }
+        }
+    }
+
+    public void setSelectedBuilding(FloorplanApiClient.BuildingInfo building) {
+        clearDrawnShapes();
+
+        if (building == null) {
+            clearIndoorMap();
+            return;
+        }
+
+        currentBuilding = resolveBuildingType(building.getName());
+        currentFloorShapes = building.getFloorShapesList();
+        currentFloor = -1;
+        isIndoorMapSet = currentFloorShapes != null && !currentFloorShapes.isEmpty();
+
+        switch (currentBuilding) {
+            case BUILDING_NUCLEUS:
+                floorHeight = NUCLEUS_FLOOR_HEIGHT;
+                break;
+            case BUILDING_LIBRARY:
+                floorHeight = LIBRARY_FLOOR_HEIGHT;
+                break;
+            case BUILDING_MURCHISON:
+                floorHeight = MURCHISON_FLOOR_HEIGHT;
+                break;
+            default:
+                floorHeight = 0f;
+                break;
+        }
+    }
+
+    public void clearIndoorMap() {
+        clearDrawnShapes();
+        isIndoorMapSet = false;
+        currentBuilding = BUILDING_NONE;
+        currentFloor = 0;
+        currentFloorShapes = null;
+        floorHeight = 0f;
+    }
+
+    public void setCurrentFloor(int newFloor, boolean autoFloor) {
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) {
+            return;
+        }
+
+        if (autoFloor) {
+            newFloor = logicalFloorToIndex(newFloor);
+        } else {
+            newFloor = clampFloorIndex(newFloor);
+        }
+
+        if (newFloor != this.currentFloor || (drawnPolygons.isEmpty() && drawnPolylines.isEmpty())) {
             this.currentFloor = newFloor;
             drawFloorShapes(newFloor);
         }
     }
 
-    /**
-     * Increments the current floor and changes to a higher floor's map
-     * (if a higher floor exists).
-     */
     public void increaseFloor() {
-        this.setCurrentFloor(currentFloor + 1, false);
+        setCurrentFloor(currentFloor + 1, false);
     }
 
-    /**
-     * Decrements the current floor and changes to the lower floor's map
-     * (if a lower floor exists).
-     */
     public void decreaseFloor() {
-        this.setCurrentFloor(currentFloor - 1, false);
+        setCurrentFloor(currentFloor - 1, false);
     }
 
-    /**
-     * Sets the map overlay for the building if the user's current location is
-     * inside a building and the overlay is not already set. Removes the overlay
-     * if the user leaves all buildings.
-     *
-     * <p>Detection priority: floorplan API real polygon outlines first,
-     * then legacy hard-coded rectangular boundaries as fallback.</p>
-     */
+
+    private int findFloorIndexByCanonicalLabel(String targetFloorLabel) {
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) {
+            return -1;
+        }
+
+        String canonicalTarget = canonicalFloorLabel(targetFloorLabel);
+        for (int i = 0; i < currentFloorShapes.size(); i++) {
+            String candidateDisplayName = currentFloorShapes.get(i).getDisplayName();
+            if (canonicalTarget.equals(canonicalFloorLabel(candidateDisplayName))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private String formatFloorLabelForDisplay(String rawFloorLabel) {
+        String canonicalFloor = canonicalFloorLabel(rawFloorLabel);
+        switch (canonicalFloor) {
+            case "LG":
+                return "LG";
+            case "G":
+                return "G";
+            case "1":
+                return "F1";
+            case "2":
+                return "F2";
+            case "3":
+                return "F3";
+            default:
+                return rawFloorLabel == null ? "" : rawFloorLabel;
+        }
+    }
+
+    private String canonicalFloorLabel(String rawFloorLabel) {
+        if (rawFloorLabel == null) {
+            return "";
+        }
+
+        String normalized = rawFloorLabel.trim().toUpperCase().replace(" ", "");
+        switch (normalized) {
+            case "LG":
+            case "LOWERGROUND":
+            case "LOWERG":
+            case "B1":
+            case "BASEMENT1":
+                return "LG";
+            case "G":
+            case "GF":
+            case "GROUND":
+            case "GROUNDFLOOR":
+            case "0":
+                return "G";
+            case "1":
+            case "F1":
+            case "FIRST":
+            case "FIRSTFLOOR":
+                return "1";
+            case "2":
+            case "F2":
+            case "SECOND":
+            case "SECONDFLOOR":
+                return "2";
+            case "3":
+            case "F3":
+            case "THIRD":
+            case "THIRDFLOOR":
+                return "3";
+            default:
+                return normalized;
+        }
+    }
+
     private void setBuildingOverlay() {
         try {
             int detected = detectCurrentBuilding();
@@ -225,7 +292,6 @@ public class IndoorMapManager {
                         return;
                 }
 
-                // Load floor shapes from cached API data
                 FloorplanApiClient.BuildingInfo building =
                         SensorFusion.getInstance().getFloorplanBuilding(apiName);
                 if (building != null) {
@@ -238,28 +304,19 @@ public class IndoorMapManager {
                 }
 
             } else if (!inAnyBuilding && isIndoorMapSet) {
-                clearDrawnShapes();
-                isIndoorMapSet = false;
-                currentBuilding = BUILDING_NONE;
-                currentFloor = 0;
-                currentFloorShapes = null;
+                clearIndoorMap();
             }
         } catch (Exception ex) {
-            Log.e(TAG, "Error with overlay: " + ex.toString());
+            Log.e(TAG, "Error with overlay: " + ex);
         }
     }
 
-    /**
-     * Draws all vector shapes for the given floor index on the Google Map.
-     * Clears any previously drawn shapes before drawing the new floor.
-     *
-     * @param floorIndex the floor index (0-based, matching FloorShapes list order)
-     */
     private void drawFloorShapes(int floorIndex) {
         clearDrawnShapes();
 
-        if (currentFloorShapes == null || floorIndex < 0
-                || floorIndex >= currentFloorShapes.size()) return;
+        if (currentFloorShapes == null || floorIndex < 0 || floorIndex >= currentFloorShapes.size()) {
+            return;
+        }
 
         FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(floorIndex);
         for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
@@ -268,133 +325,155 @@ public class IndoorMapManager {
 
             if ("MultiPolygon".equals(geoType) || "Polygon".equals(geoType)) {
                 for (List<LatLng> ring : feature.getParts()) {
-                    if (ring.size() < 3) continue;
+                    if (ring.size() < 3) {
+                        continue;
+                    }
+                    if (vectorBaseplateEnabled) {
+                        Polygon underlay = gMap.addPolygon(new PolygonOptions()
+                                .addAll(ring)
+                                .strokeColor(Color.argb(145, 255, 255, 255))
+                                .strokeWidth(9f)
+                                .fillColor(Color.argb(125, 255, 255, 255))
+                                .zIndex(6f));
+                        drawnPolygons.add(underlay);
+                    }
                     Polygon p = gMap.addPolygon(new PolygonOptions()
                             .addAll(ring)
                             .strokeColor(getStrokeColor(indoorType))
                             .strokeWidth(5f)
-                            .fillColor(getFillColor(indoorType)));
+                            .fillColor(getFillColor(indoorType))
+                            .zIndex(10f));
                     drawnPolygons.add(p);
                 }
-            } else if ("MultiLineString".equals(geoType)
-                    || "LineString".equals(geoType)) {
+            } else if ("MultiLineString".equals(geoType) || "LineString".equals(geoType)) {
                 for (List<LatLng> line : feature.getParts()) {
-                    if (line.size() < 2) continue;
+                    if (line.size() < 2) {
+                        continue;
+                    }
+                    if (vectorBaseplateEnabled) {
+                        Polyline underlay = gMap.addPolyline(new PolylineOptions()
+                                .addAll(line)
+                                .color(Color.argb(170, 255, 255, 255))
+                                .width(10f)
+                                .zIndex(6f));
+                        drawnPolylines.add(underlay);
+                    }
                     Polyline pl = gMap.addPolyline(new PolylineOptions()
                             .addAll(line)
                             .color(getStrokeColor(indoorType))
-                            .width(6f));
+                            .width(6f)
+                            .zIndex(10f));
                     drawnPolylines.add(pl);
                 }
             }
         }
     }
 
-    /**
-     * Removes all vector shapes currently drawn on the map.
-     */
     private void clearDrawnShapes() {
-        for (Polygon p : drawnPolygons) p.remove();
-        for (Polyline p : drawnPolylines) p.remove();
+        for (Polygon p : drawnPolygons) {
+            p.remove();
+        }
+        for (Polyline p : drawnPolylines) {
+            p.remove();
+        }
         drawnPolygons.clear();
         drawnPolylines.clear();
     }
 
-    /**
-     * Returns the stroke colour for a given indoor feature type.
-     *
-     * @param indoorType the indoor_type property value
-     * @return ARGB colour value
-     */
     private int getStrokeColor(String indoorType) {
-        if ("wall".equals(indoorType)) return WALL_STROKE;
-        if ("room".equals(indoorType)) return ROOM_STROKE;
+        if ("wall".equals(indoorType)) {
+            return WALL_STROKE;
+        }
+        if ("room".equals(indoorType)) {
+            return ROOM_STROKE;
+        }
         return DEFAULT_STROKE;
     }
 
-    /**
-     * Returns the fill colour for a given indoor feature type.
-     *
-     * @param indoorType the indoor_type property value
-     * @return ARGB colour value
-     */
     private int getFillColor(String indoorType) {
-        if ("room".equals(indoorType)) return ROOM_FILL;
+        if ("room".equals(indoorType)) {
+            return ROOM_FILL;
+        }
         return Color.TRANSPARENT;
     }
 
-    /**
-     * Detects which building the user is currently in.
-     * Checks floorplan API outline polygons first; falls back to legacy
-     * hard-coded rectangular boundaries if no API match is found.
-     *
-     * @return building type constant, or {@link #BUILDING_NONE}
-     */
     private int detectCurrentBuilding() {
-        // Phase 1: API real polygon outlines
-        List<FloorplanApiClient.BuildingInfo> apiBuildings =
-                SensorFusion.getInstance().getFloorplanBuildings();
-        for (FloorplanApiClient.BuildingInfo building : apiBuildings) {
-            List<LatLng> outline = building.getOutlinePolygon();
-            if (outline != null && outline.size() >= 3
-                    && BuildingPolygon.pointInPolygon(currentLocation, outline)) {
-                int type = resolveBuildingType(building.getName());
-                if (type != BUILDING_NONE) return type;
+        List<FloorplanApiClient.BuildingInfo> apiBuildings = SensorFusion.getInstance().getFloorplanBuildings();
+
+        if (apiBuildings != null) {
+            for (FloorplanApiClient.BuildingInfo building : apiBuildings) {
+                List<LatLng> outline = building.getOutlinePolygon();
+                if (outline != null && outline.size() >= 3
+                        && BuildingPolygon.pointInPolygon(currentLocation, outline)) {
+                    int type = resolveBuildingType(building.getName());
+                    if (type != BUILDING_NONE) {
+                        return type;
+                    }
+                }
             }
         }
 
-        // Phase 2: legacy hard-coded fallback
-        if (BuildingPolygon.inNucleus(currentLocation)) return BUILDING_NUCLEUS;
-        if (BuildingPolygon.inLibrary(currentLocation)) return BUILDING_LIBRARY;
-        if (BuildingPolygon.inMurchison(currentLocation)) return BUILDING_MURCHISON;
+        if (BuildingPolygon.inNucleus(currentLocation)) {
+            return BUILDING_NUCLEUS;
+        }
+        if (BuildingPolygon.inLibrary(currentLocation)) {
+            return BUILDING_LIBRARY;
+        }
+        if (BuildingPolygon.inMurchison(currentLocation)) {
+            return BUILDING_MURCHISON;
+        }
 
         return BUILDING_NONE;
     }
 
-    /**
-     * Maps a floorplan API building name to a building type constant.
-     *
-     * @param apiName building name from API (e.g. "nucleus_building")
-     * @return building type constant, or {@link #BUILDING_NONE} if unrecognised
-     */
     private int resolveBuildingType(String apiName) {
-        if (apiName == null) return BUILDING_NONE;
+        if (apiName == null) {
+            return BUILDING_NONE;
+        }
         switch (apiName) {
-            case "nucleus_building": return BUILDING_NUCLEUS;
-            case "murchison_house":  return BUILDING_MURCHISON;
-            case "library":          return BUILDING_LIBRARY;
-            default:                 return BUILDING_NONE;
+            case "nucleus_building":
+                return BUILDING_NUCLEUS;
+            case "murchison_house":
+                return BUILDING_MURCHISON;
+            case "library":
+                return BUILDING_LIBRARY;
+            default:
+                return BUILDING_NONE;
         }
     }
 
-    /**
-     * Draws green polyline indicators around all buildings with available
-     * indoor floor maps. Uses floorplan API outlines when available,
-     * falls back to legacy hard-coded polygons otherwise.
-     */
     public void setIndicationOfIndoorMap() {
-        List<FloorplanApiClient.BuildingInfo> apiBuildings =
-                SensorFusion.getInstance().getFloorplanBuildings();
+        List<FloorplanApiClient.BuildingInfo> apiBuildings = SensorFusion.getInstance().getFloorplanBuildings();
 
-        boolean nucleusDrawn = false, libraryDrawn = false, murchisonDrawn = false;
+        boolean nucleusDrawn = false;
+        boolean libraryDrawn = false;
+        boolean murchisonDrawn = false;
 
-        // Phase 1: draw API outlines
-        for (FloorplanApiClient.BuildingInfo building : apiBuildings) {
-            List<LatLng> outline = building.getOutlinePolygon();
-            if (outline == null || outline.size() < 3) continue;
+        if (apiBuildings != null) {
+            for (FloorplanApiClient.BuildingInfo building : apiBuildings) {
+                List<LatLng> outline = building.getOutlinePolygon();
+                if (outline == null || outline.size() < 3) {
+                    continue;
+                }
 
-            List<LatLng> closed = new ArrayList<>(outline);
-            closed.add(closed.get(0));
-            gMap.addPolyline(new PolylineOptions().color(Color.GREEN).addAll(closed));
+                List<LatLng> closed = new ArrayList<>(outline);
+                closed.add(closed.get(0));
+                gMap.addPolyline(new PolylineOptions().color(Color.GREEN).addAll(closed));
 
-            switch (building.getName()) {
-                case "nucleus_building": nucleusDrawn = true; break;
-                case "library":          libraryDrawn = true; break;
-                case "murchison_house":  murchisonDrawn = true; break;
+                switch (building.getName()) {
+                    case "nucleus_building":
+                        nucleusDrawn = true;
+                        break;
+                    case "library":
+                        libraryDrawn = true;
+                        break;
+                    case "murchison_house":
+                        murchisonDrawn = true;
+                        break;
+                }
             }
         }
 
-        // Phase 2: fallback for buildings not covered by API
         if (!nucleusDrawn) {
             List<LatLng> pts = new ArrayList<>(BuildingPolygon.NUCLEUS_POLYGON);
             pts.add(pts.get(0));

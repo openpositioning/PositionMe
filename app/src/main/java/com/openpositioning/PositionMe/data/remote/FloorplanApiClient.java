@@ -192,6 +192,9 @@ public class FloorplanApiClient {
      */
     public void requestFloorplan(double lat, double lon, List<String> macs,
                                   FloorplanCallback callback) {
+        Log.d(TAG, "userKey length = " + (BuildConfig.OPENPOSITIONING_API_KEY == null ? -1 : BuildConfig.OPENPOSITIONING_API_KEY.length()));
+        Log.d(TAG, "masterKey = " + BuildConfig.OPENPOSITIONING_MASTER_KEY);
+
         String url = BASE_URL + userKey + "?key=" + masterKey;
 
         // Build JSON request body
