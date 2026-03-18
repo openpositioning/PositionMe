@@ -110,39 +110,42 @@ public class IndoorMapManager implements Observer {
     }
 
     /**
-     * {@inheritDoc} Called by {@link ServerCommunications} when the response to the HTTP info
-     * request is received.
+     * {@inheritDoc}
      *
-     * @param singletonStringList A single string wrapped in an object array containing the HTTP
-     *     response from the server.
+     * <p>Called by {@link ServerCommunications} when the response to the HTTP info request is
+     * received.
+     *
+     * @param objList The response from the server, including a {@link Boolean} value of success and
+     *     the server's response as a string.
      */
     @Override
-    public void update(Object[] singletonStringList) {
-        if (singletonStringList != null && singletonStringList.length > 0) {
-            String response = singletonStringList[0].toString();
-            Log.d(TAG, "Received response: " + response);
-            try {
-                // Parse the JSON, and draw all possible buildings
-                List<Map<String, Object>> entryList = processPOSTResponse(response);
-                for (Map<String, Object> building : entryList) {
+    public void update(Object[] objList) {
+        boolean success = (boolean) objList[0];
+        String response = objList[1].toString();
+        if (!success) return;
 
-                    String name = (String) building.get("name");
-                    @SuppressWarnings("unchecked")
-                    List<LatLng> outline = (List<LatLng>) building.get("outline");
-                    @SuppressWarnings("unchecked")
-                    Map<String, List<Object>> mapShapes =
-                            (Map<String, List<Object>>) building.get("map_shapes");
+        Log.d(TAG, "Received response: " + response);
+        try {
+            // Parse the JSON, and draw all possible buildings
+            List<Map<String, Object>> entryList = processPOSTResponse(response);
+            for (Map<String, Object> building : entryList) {
 
-                    // Add building to list of known buildings
-                    if (!this.getAllBuildingNames().contains(name)) {
-                        this.addBuilding(new Building(name, outline, mapShapes));
-                    } else {
-                        Log.w(TAG, "Building " + name + " already exists. Skipping creation.");
-                    }
+                String name = (String) building.get("name");
+                @SuppressWarnings("unchecked")
+                List<LatLng> outline = (List<LatLng>) building.get("outline");
+                @SuppressWarnings("unchecked")
+                Map<String, List<Object>> mapShapes =
+                        (Map<String, List<Object>>) building.get("map_shapes");
+
+                // Add building to list of known buildings
+                if (!this.getAllBuildingNames().contains(name)) {
+                    this.addBuilding(new Building(name, outline, mapShapes));
+                } else {
+                    Log.w(TAG, "Building " + name + " already exists. Skipping creation.");
                 }
-            } catch (RuntimeException e) {
-                Log.e(TAG, "Error processing server response: " + e.getMessage());
             }
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Error processing server response: " + e.getMessage());
         }
     }
 

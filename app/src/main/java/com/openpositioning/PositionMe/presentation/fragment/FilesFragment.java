@@ -103,8 +103,10 @@ public class FilesFragment extends Fragment implements Observer {
                         Navigation.findNavController(view).navigate(action);
                     }
                 });
+
         // Request list of uploaded trajectories from the server.
-        serverCommunications.sendInfoRequest(URL_GET_USER_TRAJECTORIES);
+        serverCommunications.requestPathsFromServer(URL_GET_USER_TRAJECTORIES);
+
         // Force RecyclerView refresh to ensure icon states are correct
         new Handler(Looper.getMainLooper())
                 .postDelayed(
@@ -121,13 +123,14 @@ public class FilesFragment extends Fragment implements Observer {
      * {@inheritDoc} Called by {@link ServerCommunications} when the response to the HTTP info
      * request is received.
      *
-     * @param singletonStringList a single string wrapped in an object array containing the http
-     *     response from the server.
+     * @param objList The response from the server, including a {@link Boolean} value of success and
+     *     the server's response as a string.
      */
     @Override
-    public void update(Object[] singletonStringList) {
+    public void update(Object[] objList) {
+        Boolean result = (boolean) objList[0];
         // Cast input as a string
-        String infoString = (String) singletonStringList[0];
+        String infoString = (String) objList[1];
         // Check if the string is non-null and non-empty before processing
         if (infoString != null && !infoString.isEmpty()) {
             // Process string
@@ -206,6 +209,7 @@ public class FilesFragment extends Fragment implements Observer {
                             serverCommunications.downloadTrajectory(position, id, dateSubmitted);
                         });
         filesList.setAdapter(listAdapter);
+
         // Force refresh RecyclerView to ensure downloadRecords changes are detected
         listAdapter.notifyDataSetChanged();
     }

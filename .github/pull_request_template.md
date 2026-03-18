@@ -11,6 +11,9 @@ If this closes an issue, include the phrase: Closes (hashtag-issue_number)
 
 ## Action Items
 
+- [ ] Test
+  - [ ] Minimum SDK (Android 9)
+  - [ ] Latest SDK
 - [ ] If there are any other outstanding items to be completed before merging, put them here
   - Remember to request at least one code review! (You don't need to list this as an item here, as GitHub will already track code reviews for you)
 

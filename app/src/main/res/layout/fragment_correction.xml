@@ -133,12 +133,12 @@
         android:id="@+id/cardView2"
         android:layout_width="380dp"
         android:layout_height="70dp"
-        android:layout_marginStart="16dp"
         android:layout_marginBottom="220dp"
         android:backgroundTint="@color/md_theme_light_primary"
         app:cardCornerRadius="12dp"
         app:cardElevation="4dp"
         app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:strokeColor="@android:color/transparent">
 
@@ -167,7 +167,11 @@
                 android:layout_height="38dp"
                 android:layout_marginStart="228dp"
                 android:layout_marginTop="8dp"
+                android:layout_marginEnd="2dp"
+                android:layout_marginBottom="16dp"
                 android:background="@android:color/white"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 

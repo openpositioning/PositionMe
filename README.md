@@ -1,7 +1,7 @@
 # Embedded Mobile and Wireless Systems (EWireless) 5 2025/26
 ## Coursework 2 - Group 13
 
-[![Android 11](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-11.yml/badge.svg)](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-11.yml) [![Android 16](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-16.yml/badge.svg)](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-16.yml)
+[![Android 9](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-9.yml/badge.svg)](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-9.yml) [![Android 16](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-16.yml/badge.svg)](https://github.com/sa-fx/ENG-EMWSE5/actions/workflows/android-16.yml)
 
 **PositionMe** is an indoor positioning data collection application initially developed for the [University of Edinburgh's Embedded Wireless course](https://www.drps.ed.ac.uk/25-26/dpt/cxelee11083.htm). The application now includes enhanced features, including **trajectory playback**, improved UI design, and comprehensive location tracking.
 
@@ -38,7 +38,7 @@
 ## Requirements
 
 - **Android Studio 4.2** or later
-- **Android SDK 30** or later
+- **Android SDK 28** or later
 
 For developers, the latest commits have been tested using the following configuration:
 - [Android Studio 2024.2.1 Patch 1 ('Ladybird')](https://developer.android.com/studio/archive)
@@ -46,7 +46,7 @@ For developers, the latest commits have been tested using the following configur
   - Gradle 8.10.2
   - Google Services 4.4.2
   - [Spotless](https://github.com/diffplug/spotless) 8.3.0
-- Android SDK 34 ('Android 14')
+- Android SDK 28 ('Android 9')
 
 ## Installation
 

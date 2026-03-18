@@ -1,15 +1,13 @@
 package com.openpositioning.PositionMe.presentation.activity;
 
-import android.Manifest;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -30,6 +28,8 @@ import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.PermissionManager;
 import java.util.Objects;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * The Main Activity of the application, handling setup, permissions and starting all other
@@ -54,23 +54,16 @@ import java.util.Objects;
  * @author Virginia Cangelosi
  */
 public class MainActivity extends AppCompatActivity implements Observer {
+    private static final String TAG = "MainActivity";
 
-    // region Instance variables
     private NavController navController;
-    private ActivityResultLauncher<String> locationPermissionLauncher;
-    private ActivityResultLauncher<String[]> multiplePermissionsLauncher;
 
     private SharedPreferences settings;
     private SensorFusion sensorFusion;
     private Handler httpResponseHandler;
+    private String httpFailureMessage = "";
 
     private PermissionManager permissionManager;
-
-    private static final int PERMISSION_REQUEST_CODE = 100;
-
-    // endregion
-
-    // region Activity Lifecycle
 
     /**
      * {@inheritDoc} Forces light mode, sets up the navigation graph, initialises the toolbar with
@@ -80,7 +73,10 @@ public class MainActivity extends AppCompatActivity implements Observer {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+        if (AppCompatDelegate.getDefaultNightMode() != AppCompatDelegate.MODE_NIGHT_NO) {
+            Log.d(TAG, "Forcing light mode");
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+        }
         setContentView(R.layout.activity_main);
 
         // Set up navigation and fragments
@@ -111,31 +107,23 @@ public class MainActivity extends AppCompatActivity implements Observer {
         this.sensorFusion = SensorFusion.getInstance();
         this.sensorFusion.setContext(getApplicationContext());
 
-        // Register multiple permissions launcher
-        multiplePermissionsLauncher =
-                registerForActivityResult(
-                        new ActivityResultContracts.RequestMultiplePermissions(),
-                        result -> {
-                            boolean locationGranted =
-                                    result.getOrDefault(
-                                            Manifest.permission.ACCESS_FINE_LOCATION, false);
-                            boolean activityGranted =
-                                    result.getOrDefault(
-                                            Manifest.permission.ACTIVITY_RECOGNITION, false);
-
-                            if (locationGranted && activityGranted) {
-                                // Both permissions granted
-                                allPermissionsObtained();
+        permissionManager =
+                new PermissionManager(
+                        this,
+                        this,
+                        ((allPermissionsGranted, deniedPermissions) -> {
+                            if (isActivityVisible()) {
+                                if (allPermissionsGranted) {
+                                    allPermissionsObtained();
+                                } else {
+                                    Log.d(TAG, "Missing permissions!");
+                                    permissionManager.confirmDeniedPermissions(deniedPermissions);
+                                }
                             } else {
-                                // Permission denied
-                                Toast.makeText(
-                                                this,
-                                                "Location or Physical Activity permission denied."
-                                                        + " Some features may not work.",
-                                                Toast.LENGTH_LONG)
-                                        .show();
+                                Log.d(TAG, "Activity not visible; skipping permission check");
                             }
-                        });
+                        }));
+        permissionManager.checkAndRequestPermissions();
 
         // Handler for global toasts and popups from other classes
         this.httpResponseHandler = new Handler();
@@ -167,42 +155,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
             getSupportActionBar().show();
         }
 
-        // Delay permission check slightly to ensure the Activity is in the foreground
-        new Handler()
-                .postDelayed(
-                        () -> {
-                            if (isActivityVisible()) {
-                                // Check if both permissions are granted
-                                boolean locationGranted =
-                                        ContextCompat.checkSelfPermission(
-                                                        this,
-                                                        Manifest.permission.ACCESS_FINE_LOCATION)
-                                                == PackageManager.PERMISSION_GRANTED;
-
-                                boolean activityGranted =
-                                        ContextCompat.checkSelfPermission(
-                                                        this,
-                                                        Manifest.permission.ACTIVITY_RECOGNITION)
-                                                == PackageManager.PERMISSION_GRANTED;
-
-                                if (!locationGranted || !activityGranted) {
-                                    // Request both permissions using ActivityResultLauncher
-                                    multiplePermissionsLauncher.launch(
-                                            new String[] {
-                                                Manifest.permission.ACCESS_FINE_LOCATION
-                                            });
-                                    multiplePermissionsLauncher.launch(
-                                            new String[] {
-                                                Manifest.permission.ACTIVITY_RECOGNITION
-                                            });
-                                } else {
-                                    // Both permissions are already granted
-                                    allPermissionsObtained();
-                                }
-                            }
-                        },
-                        300); // Delay ensures activity is fully visible before requesting
-        // permissions
+        permissionManager.checkMissingPermissions();
 
         if (sensorFusion != null) {
             sensorFusion.resumeListening();
@@ -226,12 +179,9 @@ public class MainActivity extends AppCompatActivity implements Observer {
             // with
             //                                             a locked screen or cross activity
         }
+        Log.d(TAG, "MainActivity being destroyed");
         super.onDestroy();
     }
-
-    // endregion
-
-    // region Permissions
 
     /**
      * Prepares global resources when all permissions are granted. Resets the permissions tracking
@@ -253,10 +203,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
         sensorFusion.registerForServerUpdate(this);
     }
-
-    // endregion
-
-    // region Navigation
 
     /**
      * {@inheritDoc} Sets desired animations and navigates to {@link SettingsFragment} when the
@@ -324,18 +270,52 @@ public class MainActivity extends AppCompatActivity implements Observer {
         }
     }
 
-    // endregion
-
-    // region Global toasts
-
-    /** {@inheritDoc} Calls the corresponding handler that runs a toast on the Main UI thread. */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Calls the corresponding handler that runs a toast on the Main UI thread.
+     */
     @Override
     public void update(Object[] objList) {
-        assert objList[0] instanceof Boolean;
-        if ((Boolean) objList[0]) {
+        boolean success = (boolean) objList[0];
+        String response = objList[1].toString();
+
+        if (success) {
             this.httpResponseHandler.post(displayToastTaskSuccess);
         } else {
-            this.httpResponseHandler.post(displayToastTaskFailure);
+            try {
+                JSONObject jsonObject = new JSONObject(response);
+
+                Log.d(TAG, jsonObject.toString());
+                String cause = jsonObject.getString("detail");
+                String[] causeElements = cause.split(":", 2);
+                String causeSource = causeElements[0].strip();
+                String causeMessage = causeElements[1].strip();
+
+                new Handler(Looper.getMainLooper())
+                        .post(
+                                () ->
+                                        new AlertDialog.Builder(this)
+                                                .setTitle("Trajectory Upload Failed")
+                                                .setMessage(
+                                                        "The server has declined the last recorded"
+                                                            + " trajectory. The response is shown"
+                                                            + " below:\n\n"
+                                                                + causeSource
+                                                                + "\n"
+                                                                + causeMessage)
+                                                .setPositiveButton(
+                                                        "Okay",
+                                                        (dialog, which) -> {
+                                                            dialog.dismiss();
+                                                        })
+                                                .create()
+                                                .show());
+
+            } catch (JSONException e) {
+                httpFailureMessage = "Upload failed - Unknown error";
+                this.httpResponseHandler.post(displayToastTaskFailure);
+            }
         }
     }
 
@@ -354,9 +334,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
      */
     private final Runnable displayToastTaskFailure =
             () -> {
-                //            Toast.makeText(MainActivity.this, "Failed to complete trajectory
-                // upload", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, httpFailureMessage, Toast.LENGTH_SHORT).show();
             };
-
-    // endregion
 }

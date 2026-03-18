@@ -11,7 +11,7 @@ import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.ParcelUuid;
-import android.widget.Toast;
+import android.util.Log;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
@@ -26,6 +26,7 @@ import java.util.TimerTask;
  * @author Vlad Stratulat
  */
 public class BleDataProcessor implements Observable {
+    public static final String TAG = "BleDataProcessor";
 
     // Time over which a new scan will be initiated (same as WiFi)
     private static final long SCAN_INTERVAL = 5000;
@@ -46,11 +47,7 @@ public class BleDataProcessor implements Observable {
         this.observers = new ArrayList<>();
 
         if (!hasPermission()) {
-            Toast.makeText(
-                            context,
-                            "Enable Nearby Devices / Location Permission",
-                            Toast.LENGTH_LONG)
-                    .show();
+            Log.w(TAG, "Bluetooth lacks required permissions to work!");
             return;
         }
 
@@ -72,7 +69,9 @@ public class BleDataProcessor implements Observable {
     }
 
     private boolean hasPermission() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        int buildSDK = android.os.Build.VERSION.SDK_INT;
+        Log.d(TAG, "Checking permission for Android version " + buildSDK);
+        if (buildSDK >= android.os.Build.VERSION_CODES.S) {
             return (context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)
                             == PackageManager.PERMISSION_GRANTED
                     && context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)

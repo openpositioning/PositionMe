@@ -147,7 +147,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float longitude;
     private float[] startLocation;
     // Wifi values
-    private List<Wifi> wifiList;
+    private List<Wifi> wifiList = new ArrayList<>();
     // BLE values
     private List<BleDevice> bleList;
     // Track seen APs to avoid duplicates

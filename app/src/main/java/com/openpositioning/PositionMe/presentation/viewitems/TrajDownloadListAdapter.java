@@ -9,6 +9,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
@@ -261,6 +262,17 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
                                     ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, finalFilePath);
                             context.startActivity(intent);
                         }
+                    } else if (downloadingTrajIds.contains(id)) {
+                        new Handler(Looper.getMainLooper())
+                                .post(
+                                        () -> {
+                                            Toast.makeText(
+                                                            context,
+                                                            "This trajectory is already being"
+                                                                    + " processed",
+                                                            Toast.LENGTH_SHORT)
+                                                    .show();
+                                        });
                     } else {
                         // If the item is not downloaded, trigger the download action.
                         listener.onPositionClicked(position);

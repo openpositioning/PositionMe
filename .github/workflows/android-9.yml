@@ -1,4 +1,4 @@
-name: Android 11 Build
+name: Android 9 Build
 
 on:
   push:
@@ -27,10 +27,10 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Setup Android 11.0 SDK
+      - name: Setup Android 9.0 SDK
         uses: android-actions/setup-android@v3.2.2
         with:
-          cmdline-tools-version: 10406996
+          cmdline-tools-version: 9477386
 
       - name: gradle build
         run: ./gradlew --no-daemon --parallel build
