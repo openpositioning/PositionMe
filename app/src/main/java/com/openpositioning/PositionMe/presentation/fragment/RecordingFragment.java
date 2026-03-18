@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -65,6 +66,8 @@ import android.widget.Toast;
 
 public class RecordingFragment extends Fragment {
 
+    private static final String TAG = "RecordingFragment";
+
     // UI elements
     private MaterialButton completeButton, cancelButton;
     private ImageView recIcon;
@@ -86,6 +89,8 @@ public class RecordingFragment extends Fragment {
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
+    private LatLng rawTrajectoryLocation;
+    private boolean initialCameraPositionSet = false;
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
@@ -228,7 +233,7 @@ public class RecordingFragment extends Fragment {
         LatLng cur = trajectoryMapFragment.getCurrentLocation();
         if (cur == null) {
             Toast.makeText(requireContext(), "" +
-                    "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
+                            "I haven't gotten my current location yet, let me take a couple of steps/wait for the map to load.",
                     Toast.LENGTH_SHORT).show();
             return;
         }
@@ -264,21 +269,43 @@ public class RecordingFragment extends Fragment {
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
+        // Current raw PDR location (kept separate from matched/displayed location)
         float[] latLngArray = sensorFusion.getGNSSLatitude(true);
         if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
+            if (rawTrajectoryLocation == null) {
+                rawTrajectoryLocation = new LatLng(latLngArray[0], latLngArray[1]);
+                Log.d(TAG, String.format(java.util.Locale.US,
+                        "RAW_PDR initFromGnss=(%.6f, %.6f)",
+                        rawTrajectoryLocation.latitude,
+                        rawTrajectoryLocation.longitude));
+            }
 
-            // Pass the location + orientation to the map
+            if (trajectoryMapFragment != null && !initialCameraPositionSet) {
+                trajectoryMapFragment.setInitialCameraPosition(rawTrajectoryLocation);
+                initialCameraPositionSet = true;
+                Log.d(TAG, "RAW_PDR initial camera position set");
+            }
+
+            float deltaPdrX = pdrValues[0] - previousPosX;
+            float deltaPdrY = pdrValues[1] - previousPosY;
+            LatLng newRawLocation = UtilFunctions.calculateNewPos(
+                    rawTrajectoryLocation,
+                    new float[]{deltaPdrX, deltaPdrY}
+            );
+            Log.d(TAG, String.format(java.util.Locale.US,
+                    "RAW_PDR prev=(%.6f, %.6f) new=(%.6f, %.6f) deltaPdr=(%.3f, %.3f) orientationDeg=%.1f elevation=%.2f",
+                    rawTrajectoryLocation.latitude,
+                    rawTrajectoryLocation.longitude,
+                    newRawLocation.latitude,
+                    newRawLocation.longitude,
+                    deltaPdrX,
+                    deltaPdrY,
+                    Math.toDegrees(sensorFusion.passOrientation()),
+                    elevationVal));
+            rawTrajectoryLocation = newRawLocation;
+
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
+                trajectoryMapFragment.updateUserLocation(newRawLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
         }
@@ -286,7 +313,6 @@ public class RecordingFragment extends Fragment {
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
             if (trajectoryMapFragment.isGnssEnabled()) {
                 LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
@@ -302,7 +328,6 @@ public class RecordingFragment extends Fragment {
             }
         }
 
-        // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
     }
