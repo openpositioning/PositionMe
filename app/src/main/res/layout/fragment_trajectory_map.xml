@@ -12,53 +12,90 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <com.google.android.material.card.MaterialCardView
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="10dp"
-        app:cardBackgroundColor="#FFFFFF"
-        app:cardElevation="4dp"
-        app:cardCornerRadius="8dp"
+        android:gravity="top"
+        android:orientation="horizontal"
         app:layout_anchor="@id/trajectoryMap"
         app:layout_anchorGravity="top|start">
 
-        <LinearLayout
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="12dp"
-            android:gravity="center">
+            app:cardBackgroundColor="#F7FFFFFF"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="6dp">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/gnssSwitch"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/gnssSwitch" />
+                android:orientation="vertical"
+                android:padding="10dp">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/autoFloor"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/auto_floor" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Map Controls"
+                    android:textColor="@android:color/black"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/lineColorButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:backgroundTint="@color/red"
-                android:textColor="@android:color/white"
-                android:text="@string/color"
-                app:elevation="5dp"/>
+                <LinearLayout
+                    android:id="@+id/mapControlsContent"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:orientation="vertical">
 
-            <Spinner
-                android:id="@+id/mapSwitchSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginTop="8dp"
-                android:background="@android:color/white"
-                android:spinnerMode="dropdown" />
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/gnssSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/gnssSwitch" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/autoFloor"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/auto_floor" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/lineColorButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Red"
+                        android:textColor="@android:color/white"
+                        app:backgroundTint="@android:color/holo_red_dark"
+                        app:elevation="5dp" />
+
+                    <Spinner
+                        android:id="@+id/mapSwitchSpinner"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="8dp"
+                        android:background="@android:color/white"
+                        android:spinnerMode="dropdown" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnToggleControls"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:text="Hide"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            app:backgroundTint="#546E7A" />
+
+    </LinearLayout>
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"

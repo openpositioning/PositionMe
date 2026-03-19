@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -34,19 +35,16 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
+import com.google.android.gms.maps.model.JointType;
 import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.RoundCap;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.progressindicator.CircularProgressIndicator;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
-import com.openpositioning.PositionMe.mapmatching.CandidatePose;
 import com.openpositioning.PositionMe.mapmatching.CorrectionType;
-import com.openpositioning.PositionMe.mapmatching.MapMatchingInput;
 import com.openpositioning.PositionMe.mapmatching.MapMatchingResult;
-import com.openpositioning.PositionMe.mapmatching.MapMatchingService;
-import com.openpositioning.PositionMe.mapmatching.MotionDelta;
-import com.openpositioning.PositionMe.mapmatching.VerticalTransitionHint;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.BuildingPolygon;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
@@ -61,13 +59,18 @@ import java.util.Map;
 public class TrajectoryMapFragment extends Fragment {
 
     private static final String TAG = "TrajectoryMapFragment";
+    private static final String TEST_LOG_TAG = "MAP_MATCH_TEST";
     private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000;
     private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000;
     private static final String CALIBRATION_PREFS_NAME = "actual_map_calibration";
     private static final float CALIBRATION_SHIFT_STEP = 0.005f;
     private static final float CALIBRATION_SCALE_STEP = 0.005f;
-    private static final double HEIGHT_CHANGE_THRESHOLD_METERS = 0.9d;
-    private static final long MAP_MATCH_LOG_INTERVAL_MS = 0L;
+    private static final float AUTO_SELECT_BUILDING_MAX_DISTANCE_METERS = 60f;
+    private static final int TRAJECTORY_MAIN_COLOR = Color.RED;
+    private static final int TRAJECTORY_OUTLINE_COLOR = Color.WHITE;
+    private static final float TRAJECTORY_WIDTH_MAIN_PX = 7f;
+    private static final float TRAJECTORY_WIDTH_OUTLINE_PX = 18f;
+    private static final float TRAJECTORY_Z_INDEX = 1000f;
 
     private enum HorizontalAnchor {
         LEFT,
@@ -178,6 +181,7 @@ public class TrajectoryMapFragment extends Fragment {
     private boolean hasFetchedNearbyBuildings = false;
     private boolean hasAttemptedInitialBuildingFetch = false;
     private boolean isIndoorRequestInFlight = false;
+    private boolean hasAutoSelectedIndoorMap = false;
     private int currentFloorIndex = 0;
 
     private final List<GroundOverlay> realMapOverlays = new ArrayList<>();
@@ -187,6 +191,7 @@ public class TrajectoryMapFragment extends Fragment {
     private Marker orientationMarker;
     private Marker gnssMarker;
     private final List<Marker> testPointMarkers = new ArrayList<>();
+    private Polyline polylineOutline;
     private Polyline polyline;
     private boolean isRed = true;
     private boolean isGnssOn = false;
@@ -203,14 +208,6 @@ public class TrajectoryMapFragment extends Fragment {
     private FloorplanApiClient.BuildingInfo selectedFloorplanBuilding;
     private Polygon selectedFloorplanPolygon;
     private final FloorplanApiClient floorplanApiClient = new FloorplanApiClient();
-    private final MapMatchingService mapMatchingService = new MapMatchingService();
-
-    private CandidatePose previousMatchedPose;
-    private MapMatchingResult lastMapMatchingResult;
-    private float previousElevation = Float.NaN;
-    private int latestCandidateLogicalFloor = Integer.MIN_VALUE;
-    private long lastMapMatchLogTime = 0L;
-    private long lastAutoFloorLogTime = 0L;
 
     private Handler autoFloorHandler;
     private Runnable autoFloorTask;
@@ -223,6 +220,9 @@ public class TrajectoryMapFragment extends Fragment {
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private TextView floorLabel;
     private Button switchColorButton;
+    private View mapControlsContent;
+    private Button btnToggleControls;
+    private boolean areMapControlsExpanded = true;
 
     public TrajectoryMapFragment() {
     }
@@ -244,6 +244,8 @@ public class TrajectoryMapFragment extends Fragment {
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel = view.findViewById(R.id.floorLabel);
         switchColorButton = view.findViewById(R.id.lineColorButton);
+        mapControlsContent = view.findViewById(R.id.mapControlsContent);
+        btnToggleControls = view.findViewById(R.id.btnToggleControls);
 
         btnFindIndoorMap = view.findViewById(R.id.btnFindIndoorMap);
         btnFindActualMap = view.findViewById(R.id.btnFindActualMap);
@@ -278,6 +280,8 @@ public class TrajectoryMapFragment extends Fragment {
             btnToggleAdjustMap.setVisibility(View.GONE);
         }
         setFloorControlsVisibility(View.GONE);
+        initMapControlsToggle();
+        applyTrajectoryColorButtonState();
 
         SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.trajectoryMap);
         if (mapFragment != null) {
@@ -307,14 +311,15 @@ public class TrajectoryMapFragment extends Fragment {
         switchColorButton.setOnClickListener(v -> {
             if (polyline != null) {
                 if (isRed) {
-                    switchColorButton.setBackgroundColor(Color.BLACK);
                     polyline.setColor(Color.BLACK);
+                    if (polylineOutline != null) polylineOutline.setColor(Color.argb(210, 235, 235, 235));
                     isRed = false;
                 } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
+                    polyline.setColor(TRAJECTORY_MAIN_COLOR);
+                    if (polylineOutline != null) polylineOutline.setColor(TRAJECTORY_OUTLINE_COLOR);
                     isRed = true;
                 }
+                applyTrajectoryColorButtonState();
             }
         });
 
@@ -410,6 +415,105 @@ public class TrajectoryMapFragment extends Fragment {
         }
         hasAttemptedInitialBuildingFetch = true;
         requestNearbyIndoorMaps(false);
+    }
+
+    private void maybeAutoSelectIndoorMap(List<FloorplanApiClient.BuildingInfo> buildings) {
+        if (hasAutoSelectedIndoorMap || selectedFloorplanBuilding != null || currentLocation == null || indoorMapManager == null) {
+            return;
+        }
+        if (buildings == null || buildings.isEmpty()) {
+            return;
+        }
+
+        FloorplanApiClient.BuildingInfo candidate = findBestBuildingForAutoSelection(buildings, currentLocation);
+        if (candidate == null) {
+            return;
+        }
+
+        Polygon candidatePolygon = null;
+        for (Map.Entry<Polygon, FloorplanApiClient.BuildingInfo> entry : polygonToBuilding.entrySet()) {
+            if (entry.getValue() == candidate) {
+                candidatePolygon = entry.getKey();
+                break;
+            }
+        }
+
+        onFloorplanBuildingSelected(candidate, candidatePolygon);
+        indoorMapVisible = true;
+        actualMapVisible = false;
+        indoorMapManager.setSelectedBuilding(candidate);
+        setFloor(currentFloorIndex);
+        hasAutoSelectedIndoorMap = true;
+
+        if (selectedVenueText != null) {
+            selectedVenueText.setText("Replay auto-selected indoor map for " + prettyBuildingName(candidate.getName()));
+        }
+    }
+
+    @Nullable
+    private FloorplanApiClient.BuildingInfo findBestBuildingForAutoSelection(List<FloorplanApiClient.BuildingInfo> buildings, @NonNull LatLng location) {
+        FloorplanApiClient.BuildingInfo insideCandidate = null;
+        FloorplanApiClient.BuildingInfo nearestCandidate = null;
+        float nearestDistanceMeters = Float.MAX_VALUE;
+
+        for (FloorplanApiClient.BuildingInfo building : buildings) {
+            if (building == null) {
+                continue;
+            }
+
+            List<LatLng> outline = building.getOutlinePolygon();
+            if (outline != null && outline.size() >= 3 && isPointInsidePolygon(location, outline)) {
+                insideCandidate = building;
+                break;
+            }
+
+            LatLng center = building.getCenter();
+            if (center == null) {
+                center = computeOutlineCentroid(outline);
+            }
+            if (center == null) {
+                continue;
+            }
+
+            float distanceMeters = distanceBetweenMeters(location, center);
+            if (distanceMeters < nearestDistanceMeters) {
+                nearestDistanceMeters = distanceMeters;
+                nearestCandidate = building;
+            }
+        }
+
+        if (insideCandidate != null) {
+            return insideCandidate;
+        }
+        if (nearestCandidate != null && nearestDistanceMeters <= AUTO_SELECT_BUILDING_MAX_DISTANCE_METERS) {
+            return nearestCandidate;
+        }
+        return null;
+    }
+
+    private boolean isPointInsidePolygon(@NonNull LatLng point, @NonNull List<LatLng> polygon) {
+        boolean inside = false;
+        int count = polygon.size();
+        for (int i = 0, j = count - 1; i < count; j = i++) {
+            LatLng pi = polygon.get(i);
+            LatLng pj = polygon.get(j);
+            if (pi == null || pj == null) {
+                continue;
+            }
+            boolean intersects = ((pi.longitude > point.longitude) != (pj.longitude > point.longitude))
+                    && (point.latitude < (pj.latitude - pi.latitude) * (point.longitude - pi.longitude)
+                    / ((pj.longitude - pi.longitude) == 0 ? 1e-12 : (pj.longitude - pi.longitude)) + pi.latitude);
+            if (intersects) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    private float distanceBetweenMeters(@NonNull LatLng a, @NonNull LatLng b) {
+        float[] result = new float[1];
+        Location.distanceBetween(a.latitude, a.longitude, b.latitude, b.longitude, result);
+        return result[0];
     }
 
     private void setFloor(int newFloorIndex) {
@@ -1034,8 +1138,6 @@ public class TrajectoryMapFragment extends Fragment {
         indoorMapVisible = false;
         actualMapVisible = false;
         currentFloorIndex = getDefaultFloorIndex(building);
-        previousMatchedPose = null;
-        lastMapMatchingResult = null;
 
         if (polygon != null) {
             polygon.setZIndex(1f);
@@ -1193,6 +1295,7 @@ public class TrajectoryMapFragment extends Fragment {
         List<FloorplanApiClient.BuildingInfo> cached = SensorFusion.getInstance().getFloorplanBuildings();
         if (cached != null && !cached.isEmpty()) {
             drawFloorplanBuildings(cached);
+            maybeAutoSelectIndoorMap(cached);
             lastFetchedBuildings.clear();
             lastFetchedBuildings.addAll(cached);
             hasFetchedNearbyBuildings = true;
@@ -1280,6 +1383,7 @@ public class TrajectoryMapFragment extends Fragment {
 
                         SensorFusion.getInstance().setFloorplanBuildings(buildings);
                         drawFloorplanBuildings(buildings);
+                        maybeAutoSelectIndoorMap(buildings);
 
                         if (selectedVenueText != null) {
                             if (buildings == null || buildings.isEmpty()) {
@@ -1348,6 +1452,57 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    private PolylineOptions buildTrajectoryOutlineOptions() {
+        return new PolylineOptions()
+                .color(TRAJECTORY_OUTLINE_COLOR)
+                .width(TRAJECTORY_WIDTH_OUTLINE_PX)
+                .startCap(new RoundCap())
+                .endCap(new RoundCap())
+                .jointType(JointType.ROUND)
+                .zIndex(TRAJECTORY_Z_INDEX - 1f)
+                .add();
+    }
+
+    private PolylineOptions buildTrajectoryMainOptions() {
+        return new PolylineOptions()
+                .color(TRAJECTORY_MAIN_COLOR)
+                .width(TRAJECTORY_WIDTH_MAIN_PX)
+                .startCap(new RoundCap())
+                .endCap(new RoundCap())
+                .jointType(JointType.ROUND)
+                .zIndex(TRAJECTORY_Z_INDEX)
+                .add();
+    }
+
+    private void ensureTrajectoryStyling() {
+        if (polylineOutline != null) {
+            polylineOutline.setWidth(TRAJECTORY_WIDTH_OUTLINE_PX);
+            polylineOutline.setColor(TRAJECTORY_OUTLINE_COLOR);
+            polylineOutline.setZIndex(TRAJECTORY_Z_INDEX - 1f);
+            polylineOutline.setStartCap(new RoundCap());
+            polylineOutline.setEndCap(new RoundCap());
+            polylineOutline.setJointType(JointType.ROUND);
+        }
+        if (polyline != null) {
+            polyline.setWidth(TRAJECTORY_WIDTH_MAIN_PX);
+            polyline.setColor(TRAJECTORY_MAIN_COLOR);
+            polyline.setZIndex(TRAJECTORY_Z_INDEX);
+            polyline.setStartCap(new RoundCap());
+            polyline.setEndCap(new RoundCap());
+            polyline.setJointType(JointType.ROUND);
+        }
+    }
+
+    private void syncTrajectoryPolylinePoints(@NonNull List<LatLng> points) {
+        if (polylineOutline != null) {
+            polylineOutline.setPoints(points);
+        }
+        if (polyline != null) {
+            polyline.setPoints(points);
+        }
+        ensureTrajectoryStyling();
+    }
+
     private void initMapSettings(GoogleMap map) {
         map.getUiSettings().setCompassEnabled(true);
         map.getUiSettings().setTiltGesturesEnabled(true);
@@ -1364,8 +1519,10 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        polyline = map.addPolyline(new PolylineOptions().color(Color.RED).width(5f).add());
-        gnssPolyline = map.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).add());
+        polylineOutline = map.addPolyline(buildTrajectoryOutlineOptions());
+        polyline = map.addPolyline(buildTrajectoryMainOptions());
+        gnssPolyline = map.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).zIndex(TRAJECTORY_Z_INDEX - 2f).add());
+        ensureTrajectoryStyling();
     }
 
     private String prettyBuildingName(String raw) {
@@ -1425,260 +1582,86 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap == null) {
             return;
         }
-
-        LatLng previousDisplayedLocation = this.currentLocation;
-        LatLng previousReferenceLocation = previousMatchedPose != null
-                ? previousMatchedPose.getLatLng()
-                : previousDisplayedLocation;
-
-        MotionDelta motionDelta = buildMotionDelta(previousReferenceLocation, newLocation, orientation);
-        VerticalTransitionHint verticalHint = buildVerticalHint();
-        int candidateLogicalFloor = getCandidateLogicalFloorForMatching();
-        CandidatePose currentCandidatePose = new CandidatePose(
-                newLocation,
-                candidateLogicalFloor,
-                System.currentTimeMillis(),
-                "RAW_PDR"
-        );
-
-        int geometryLogicalFloor = previousMatchedPose != null
-                ? previousMatchedPose.getFloor()
-                : getCurrentVisibleLogicalFloor();
-        FloorplanApiClient.FloorShapes activeFloorShapes = getFloorShapesForLogicalFloor(geometryLogicalFloor);
-
-        MapMatchingInput input = new MapMatchingInput(
-                previousMatchedPose,
-                currentCandidatePose,
-                motionDelta,
-                verticalHint,
-                activeFloorShapes,
-                selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : null
-        );
-
-        logMapMatchingInput(newLocation, previousReferenceLocation, candidateLogicalFloor,
-                geometryLogicalFloor, motionDelta, verticalHint, activeFloorShapes, orientation);
-
-        MapMatchingResult result = mapMatchingService.match(input);
-        lastMapMatchingResult = result;
-
-        LatLng matchedLocation = result.getCorrectedLatLng() != null
-                ? result.getCorrectedLatLng()
-                : newLocation;
-        int matchedLogicalFloor = result.getCorrectedFloor();
-
-        this.currentLocation = matchedLocation;
-        previousMatchedPose = new CandidatePose(
-                matchedLocation,
-                matchedLogicalFloor,
-                currentCandidatePose.getTimestampMs(),
-                "MAP_MATCHED"
-        );
-        if (sensorFusion != null) {
-            previousElevation = sensorFusion.getElevation();
-        }
-
-        if (autoFloorSwitch != null && autoFloorSwitch.isChecked()) {
-            applyMatchedFloor(matchedLogicalFloor);
-        }
+        LatLng oldLocation = this.currentLocation;
+        this.currentLocation = newLocation;
 
         boolean shouldFollowCamera = !(indoorMapVisible || actualMapVisible);
         if (orientationMarker == null) {
             orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(matchedLocation)
+                    .position(newLocation)
                     .flat(true)
-                    .rotation(orientation)
                     .title("Current Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(UtilFunctions.getBitmapFromVector(requireContext(), R.drawable.ic_baseline_navigation_24))));
             if (shouldFollowCamera) {
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(matchedLocation, 19f));
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
             }
         } else {
-            orientationMarker.setPosition(matchedLocation);
+            orientationMarker.setPosition(newLocation);
             orientationMarker.setRotation(orientation);
             if (shouldFollowCamera) {
-                gMap.moveCamera(CameraUpdateFactory.newLatLng(matchedLocation));
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
             }
         }
 
         if (polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            if (previousDisplayedLocation == null || !previousDisplayedLocation.equals(matchedLocation)) {
-                points.add(matchedLocation);
-                polyline.setPoints(points);
+            if (oldLocation == null || !oldLocation.equals(newLocation)) {
+                points.add(newLocation);
+                syncTrajectoryPolylinePoints(points);
+            } else {
+                ensureTrajectoryStyling();
             }
         }
 
         if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(matchedLocation);
+            indoorMapManager.setCurrentLocation(newLocation);
         }
 
-        logMapMatchingResult(newLocation, result);
         maybeFetchNearbyBuildingsOnFirstLocation();
-    }
-
-    private MotionDelta buildMotionDelta(@Nullable LatLng previousLocation,
-                                         @NonNull LatLng currentLocation,
-                                         float orientation) {
-        if (previousLocation == null) {
-            return new MotionDelta(0d, 0d, 0d, orientation);
+        if (!hasAutoSelectedIndoorMap && !lastFetchedBuildings.isEmpty()) {
+            maybeAutoSelectIndoorMap(lastFetchedBuildings);
         }
-
-        double metersPerDegLat = 111320.0d;
-        double metersPerDegLon = 111320.0d * Math.cos(Math.toRadians(currentLocation.latitude));
-        double deltaX = (currentLocation.longitude - previousLocation.longitude) * metersPerDegLon;
-        double deltaY = (currentLocation.latitude - previousLocation.latitude) * metersPerDegLat;
-        double stepDistance = Math.hypot(deltaX, deltaY);
-        return new MotionDelta(deltaX, deltaY, stepDistance, orientation);
-    }
-
-    @Nullable
-    private VerticalTransitionHint buildVerticalHint() {
-        if (sensorFusion == null) {
-            return null;
-        }
-
-        float currentElevation = sensorFusion.getElevation();
-        double deltaHeight = Float.isNaN(previousElevation) ? 0d : (currentElevation - previousElevation);
-        boolean heightChanged = !Float.isNaN(previousElevation)
-                && Math.abs(deltaHeight) >= HEIGHT_CHANGE_THRESHOLD_METERS;
-        return new VerticalTransitionHint(currentElevation, deltaHeight, heightChanged);
-    }
-
-    private int getCandidateLogicalFloorForMatching() {
-        if (autoFloorSwitch != null && autoFloorSwitch.isChecked()) {
-            if (latestCandidateLogicalFloor != Integer.MIN_VALUE) {
-                return latestCandidateLogicalFloor;
-            }
-            return resolveCandidateLogicalFloor();
-        }
-        return getCurrentVisibleLogicalFloor();
-    }
-
-    private int getCurrentVisibleLogicalFloor() {
-        if (selectedFloorplanBuilding == null) {
-            return 0;
-        }
-        return floorIndexToLogicalFloor(currentFloorIndex);
-    }
-
-    private int floorIndexToLogicalFloor(int floorIndex) {
-        if (selectedFloorplanBuilding == null || selectedFloorplanBuilding.getFloorShapesList() == null
-                || floorIndex < 0 || floorIndex >= selectedFloorplanBuilding.getFloorShapesList().size()) {
-            return 0;
-        }
-
-        String canonical = canonicalFloorLabel(getFloorDisplayName(selectedFloorplanBuilding, floorIndex));
-        if ("LG".equals(canonical)) {
-            return -1;
-        }
-        if ("G".equals(canonical) || canonical.isEmpty()) {
-            return 0;
-        }
-
-        try {
-            return Integer.parseInt(canonical);
-        } catch (NumberFormatException ignore) {
-            return 0;
-        }
-    }
-
-    private int resolveCandidateLogicalFloor() {
-        if (sensorFusion == null) {
-            return getCurrentVisibleLogicalFloor();
-        }
-
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            return sensorFusion.getWifiFloor();
-        }
-
-        if (indoorMapManager != null) {
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight > 0f) {
-                return Math.round(sensorFusion.getElevation() / floorHeight);
-            }
-        }
-
-        return getCurrentVisibleLogicalFloor();
     }
 
     @NonNull
-    private String describeCandidateFloorSource() {
-        if (sensorFusion == null) {
-            return "NO_SENSOR_FUSION";
+    private String classifyMapMatchingScenario(@Nullable MapMatchingResult result) {
+        if (result == null) {
+            return "UNKNOWN";
         }
 
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            return "WIFI";
-        }
+        String reason = result.getDebugReason() == null ? "" : result.getDebugReason().toLowerCase(Locale.US);
+        CorrectionType correctionType = result.getCorrectionType();
 
-        if (indoorMapManager != null) {
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight > 0f) {
-                return "BAROMETER_OVER_FLOOR_HEIGHT";
-            }
+        if (correctionType == CorrectionType.THROUGH_WALL || result.isCrossedWall()) {
+            return "03_cross_wall_reject";
         }
-
-        return "VISIBLE_FLOOR_FALLBACK";
+        if (correctionType == CorrectionType.INVALID_FLOOR_CHANGE) {
+            return "04_false_floor_change_reject";
+        }
+        if (result.isFloorChangeAllowed() && result.isNearStairs() && !result.isNearLift()) {
+            return "05_stairs_floor_change_allow";
+        }
+        if (result.isFloorChangeAllowed() && result.isNearLift() && !result.isNearStairs()) {
+            return "06_lift_floor_change_allow";
+        }
+        if (reason.contains("step distance too small")) {
+            return "02_small_step_skip_wall_check";
+        }
+        return "01_same_floor_accept";
     }
 
-    @Nullable
-    private FloorplanApiClient.FloorShapes getFloorShapesForLogicalFloor(int logicalFloor) {
-        if (selectedFloorplanBuilding == null || selectedFloorplanBuilding.getFloorShapesList() == null
-                || selectedFloorplanBuilding.getFloorShapesList().isEmpty()) {
-            return null;
-        }
-
-        int floorIndex;
-        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
-            floorIndex = indoorMapManager.logicalFloorToIndex(logicalFloor);
-        } else {
-            floorIndex = Math.max(0, Math.min(logicalFloor, selectedFloorplanBuilding.getFloorShapesList().size() - 1));
-        }
-
-        if (floorIndex < 0 || floorIndex >= selectedFloorplanBuilding.getFloorShapesList().size()) {
-            return null;
-        }
-        return selectedFloorplanBuilding.getFloorShapesList().get(floorIndex);
-    }
-
-    private void applyMatchedFloor(int matchedLogicalFloor) {
-        if (selectedFloorplanBuilding == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
-            Log.d(TAG, "FLOOR_APPLY skipped: building/map not ready");
-            return;
-        }
-
-        int targetFloorIndex = indoorMapManager.logicalFloorToIndex(matchedLogicalFloor);
-        Log.d(TAG, String.format(Locale.US,
-                "FLOOR_APPLY visibleLogical=%d currentIndex=%d targetLogical=%d targetIndex=%d building=%s",
-                getCurrentVisibleLogicalFloor(),
-                currentFloorIndex,
-                matchedLogicalFloor,
-                targetFloorIndex,
-                selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : "null"));
-        if (targetFloorIndex != currentFloorIndex) {
-            setFloor(targetFloorIndex);
-        }
-    }
-
-    private void logMapMatchingResult(@NonNull LatLng rawLocation, @Nullable MapMatchingResult result) {
+    private void logFeatureValidation(@NonNull LatLng rawLocation, @Nullable MapMatchingResult result) {
         if (result == null) {
             return;
         }
 
-        long now = SystemClock.elapsedRealtime();
-        if (now - lastMapMatchLogTime < MAP_MATCH_LOG_INTERVAL_MS) {
-            return;
-        }
-        lastMapMatchLogTime = now;
-
         LatLng matched = result.getCorrectedLatLng() != null ? result.getCorrectedLatLng() : rawLocation;
-        Log.d(TAG, String.format(Locale.US,
-                "MAP_MATCH raw=(%.6f, %.6f) matched=(%.6f, %.6f) candidateFloor=%d matchedFloor=%d crossedWall=%s nearStairs=%s nearLift=%s floorAllowed=%s correction=%s reason=%s",
-                rawLocation.latitude,
-                rawLocation.longitude,
-                matched.latitude,
-                matched.longitude,
-                getCandidateLogicalFloorForMatching(),
+        String scenario = classifyMapMatchingScenario(result);
+        Log.d(TEST_LOG_TAG, String.format(Locale.US,
+                "SCENARIO=%s raw=(%.6f, %.6f) matched=(%.6f, %.6f) matchedFloor=%d crossedWall=%s nearStairs=%s nearLift=%s floorAllowed=%s correction=%s reason=%s",
+                scenario,
+                rawLocation.latitude, rawLocation.longitude,
+                matched.latitude, matched.longitude,
                 result.getCorrectedFloor(),
                 String.valueOf(result.isCrossedWall()),
                 String.valueOf(result.isNearStairs()),
@@ -1686,105 +1669,6 @@ public class TrajectoryMapFragment extends Fragment {
                 String.valueOf(result.isFloorChangeAllowed()),
                 result.getCorrectionType() != null ? result.getCorrectionType().name() : CorrectionType.NONE.name(),
                 result.getDebugReason()));
-    }
-
-
-    private void logMapMatchingInput(@NonNull LatLng rawLocation,
-                                     @Nullable LatLng previousReferenceLocation,
-                                     int candidateLogicalFloor,
-                                     int geometryLogicalFloor,
-                                     @Nullable MotionDelta motionDelta,
-                                     @Nullable VerticalTransitionHint verticalHint,
-                                     @Nullable FloorplanApiClient.FloorShapes activeFloorShapes,
-                                     float orientation) {
-        String shapesSummary = describeFloorShapes(activeFloorShapes);
-        String previousLocationText = previousReferenceLocation == null
-                ? "null"
-                : String.format(Locale.US, "(%.6f, %.6f)", previousReferenceLocation.latitude, previousReferenceLocation.longitude);
-        String motionSummary = motionDelta == null
-                ? "null"
-                : String.format(Locale.US, "dx=%.2f dy=%.2f dist=%.2f heading=%.1f",
-                motionDelta.getDeltaX(), motionDelta.getDeltaY(), motionDelta.getStepDistance(), motionDelta.getHeadingDeg());
-        String verticalSummary = verticalHint == null
-                ? "null"
-                : String.format(Locale.US, "elev=%.2f delta=%.2f changed=%s threshold=%.2f",
-                verticalHint.getCurrentElevation(), verticalHint.getDeltaHeight(),
-                String.valueOf(verticalHint.isHeightChanged()), HEIGHT_CHANGE_THRESHOLD_METERS);
-
-        Log.d(TAG, String.format(Locale.US,
-                "MAP_MATCH_INPUT raw=(%.6f, %.6f) prev=%s candidateFloor=%d visibleFloor=%d geometryFloor=%d source=%s orientation=%.1f motion={%s} vertical={%s} shapes={%s}",
-                rawLocation.latitude,
-                rawLocation.longitude,
-                previousLocationText,
-                candidateLogicalFloor,
-                getCurrentVisibleLogicalFloor(),
-                geometryLogicalFloor,
-                describeCandidateFloorSource(),
-                orientation,
-                motionSummary,
-                verticalSummary,
-                shapesSummary));
-    }
-
-    private void logAutoFloorState(@NonNull String phase, int candidateFloor, @NonNull String source) {
-        long now = SystemClock.elapsedRealtime();
-        if (now - lastAutoFloorLogTime < 0L) {
-            return;
-        }
-        lastAutoFloorLogTime = now;
-
-        float elevationValue = sensorFusion != null ? sensorFusion.getElevation() : Float.NaN;
-        int wifiFloor = sensorFusion != null ? sensorFusion.getWifiFloor() : Integer.MIN_VALUE;
-        boolean hasWifiLocation = sensorFusion != null && sensorFusion.getLatLngWifiPositioning() != null;
-        float floorHeight = indoorMapManager != null ? indoorMapManager.getFloorHeight() : Float.NaN;
-        Log.d(TAG, String.format(Locale.US,
-                "AUTO_FLOOR phase=%s source=%s candidate=%d visible=%d latestCandidate=%d lastCandidate=%d elapsedSinceCandidate=%d wifiAvailable=%s wifiFloor=%d elevation=%.2f floorHeight=%.2f building=%s indoorVisible=%s",
-                phase,
-                source,
-                candidateFloor,
-                getCurrentVisibleLogicalFloor(),
-                latestCandidateLogicalFloor,
-                lastCandidateFloor,
-                lastCandidateTime == 0 ? -1 : (now - lastCandidateTime),
-                String.valueOf(hasWifiLocation),
-                wifiFloor,
-                elevationValue,
-                floorHeight,
-                selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : "null",
-                String.valueOf(indoorMapVisible)));
-    }
-
-    @NonNull
-    private String describeFloorShapes(@Nullable FloorplanApiClient.FloorShapes floorShapes) {
-        if (floorShapes == null) {
-            return "none";
-        }
-        List<FloorplanApiClient.MapShapeFeature> features = floorShapes.getFeatures();
-        if (features == null || features.isEmpty()) {
-            return String.format(Locale.US, "display=%s features=0", floorShapes.getDisplayName());
-        }
-
-        int walls = 0;
-        int stairs = 0;
-        int lifts = 0;
-        int others = 0;
-        for (FloorplanApiClient.MapShapeFeature feature : features) {
-            String indoorType = feature != null ? feature.getIndoorType() : null;
-            if (indoorType == null) {
-                others++;
-            } else if ("wall".equalsIgnoreCase(indoorType)) {
-                walls++;
-            } else if ("stairs".equalsIgnoreCase(indoorType)) {
-                stairs++;
-            } else if ("lift".equalsIgnoreCase(indoorType)) {
-                lifts++;
-            } else {
-                others++;
-            }
-        }
-        return String.format(Locale.US,
-                "display=%s total=%d wall=%d stairs=%d lift=%d other=%d",
-                floorShapes.getDisplayName(), features.size(), walls, stairs, lifts, others);
     }
 
     public void setInitialCameraPosition(@NonNull LatLng startLocation) {
@@ -2167,6 +2051,10 @@ public class TrajectoryMapFragment extends Fragment {
         if (autoFloorSwitch != null) {
             autoFloorSwitch.setChecked(false);
         }
+        if (polylineOutline != null) {
+            polylineOutline.remove();
+            polylineOutline = null;
+        }
         if (polyline != null) {
             polyline.remove();
             polyline = null;
@@ -2185,11 +2073,6 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastGnssLocation = null;
         currentLocation = null;
-        previousMatchedPose = null;
-        lastMapMatchingResult = null;
-        previousElevation = Float.NaN;
-        latestCandidateLogicalFloor = Integer.MIN_VALUE;
-        lastMapMatchLogTime = 0L;
 
         for (Marker m : testPointMarkers) {
             m.remove();
@@ -2197,8 +2080,10 @@ public class TrajectoryMapFragment extends Fragment {
         testPointMarkers.clear();
 
         if (gMap != null) {
-            polyline = gMap.addPolyline(new PolylineOptions().color(Color.RED).width(5f).add());
-            gnssPolyline = gMap.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).add());
+            polylineOutline = gMap.addPolyline(buildTrajectoryOutlineOptions());
+            polyline = gMap.addPolyline(buildTrajectoryMainOptions());
+            gnssPolyline = gMap.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).zIndex(TRAJECTORY_Z_INDEX - 2f).add());
+            ensureTrajectoryStyling();
         }
         for (Polygon p : floorplanPolygons) {
             p.remove();
@@ -2212,6 +2097,7 @@ public class TrajectoryMapFragment extends Fragment {
         actualMapVisible = false;
         hasFetchedNearbyBuildings = false;
         hasAttemptedInitialBuildingFetch = false;
+        hasAutoSelectedIndoorMap = false;
 
         resetMapOverlays();
         if (indoorMapManager != null) {
@@ -2248,51 +2134,87 @@ public class TrajectoryMapFragment extends Fragment {
 
     private void applyImmediateFloor() {
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
-            Log.d(TAG, "AUTO_FLOOR applyImmediate skipped: map not ready");
             return;
         }
-        int candidateFloor = resolveCandidateLogicalFloor();
-        latestCandidateLogicalFloor = candidateFloor;
+        int candidateFloor;
+        if (sensorFusion.getLatLngWifiPositioning() != null) {
+            candidateFloor = sensorFusion.getWifiFloor();
+        } else {
+            float elevation = sensorFusion.getElevation();
+            float floorHeight = indoorMapManager.getFloorHeight();
+            if (floorHeight <= 0) {
+                return;
+            }
+            candidateFloor = Math.round(elevation / floorHeight);
+        }
+        setFloor(indoorMapManager.logicalFloorToIndex(candidateFloor));
         lastCandidateFloor = candidateFloor;
         lastCandidateTime = SystemClock.elapsedRealtime();
-        logAutoFloorState("applyImmediate", candidateFloor, describeCandidateFloorSource());
     }
 
     private void stopAutoFloor() {
         if (autoFloorHandler != null && autoFloorTask != null) {
             autoFloorHandler.removeCallbacks(autoFloorTask);
         }
-        Log.d(TAG, String.format(Locale.US,
-                "AUTO_FLOOR stop visibleLogical=%d lastCandidate=%d latestCandidate=%d",
-                getCurrentVisibleLogicalFloor(), lastCandidateFloor, latestCandidateLogicalFloor));
         lastCandidateFloor = Integer.MIN_VALUE;
         lastCandidateTime = 0;
-        latestCandidateLogicalFloor = Integer.MIN_VALUE;
     }
 
     private void evaluateAutoFloor() {
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
-            Log.d(TAG, "AUTO_FLOOR evaluate skipped: map not ready");
             return;
         }
-
-        int candidateFloor = resolveCandidateLogicalFloor();
-        String source = describeCandidateFloorSource();
-        latestCandidateLogicalFloor = candidateFloor;
+        int candidateFloor;
+        if (sensorFusion.getLatLngWifiPositioning() != null) {
+            candidateFloor = sensorFusion.getWifiFloor();
+        } else {
+            float elevation = sensorFusion.getElevation();
+            float floorHeight = indoorMapManager.getFloorHeight();
+            if (floorHeight <= 0) {
+                return;
+            }
+            candidateFloor = Math.round(elevation / floorHeight);
+        }
 
         long now = SystemClock.elapsedRealtime();
         if (candidateFloor != lastCandidateFloor) {
-            logAutoFloorState("candidate_changed", candidateFloor, source);
             lastCandidateFloor = candidateFloor;
             lastCandidateTime = now;
             return;
         }
-
         if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
-            logAutoFloorState("candidate_stable", candidateFloor, source);
+            setFloor(indoorMapManager.logicalFloorToIndex(candidateFloor));
             lastCandidateTime = now;
-        } else {
-            logAutoFloorState("candidate_waiting", candidateFloor, source);
         }
     }
+    private void initMapControlsToggle() {
+        if (btnToggleControls != null) {
+            btnToggleControls.setOnClickListener(v -> toggleMapControlsPanel());
+        }
+        updateMapControlsPanelUi();
+    }
+
+    private void toggleMapControlsPanel() {
+        areMapControlsExpanded = !areMapControlsExpanded;
+        updateMapControlsPanelUi();
+    }
+
+    private void updateMapControlsPanelUi() {
+        if (mapControlsContent != null) {
+            mapControlsContent.setVisibility(areMapControlsExpanded ? View.VISIBLE : View.GONE);
+        }
+        if (btnToggleControls != null) {
+            btnToggleControls.setText(areMapControlsExpanded ? "Hide" : "Show");
+        }
+    }
+
+    private void applyTrajectoryColorButtonState() {
+        if (switchColorButton == null) {
+            return;
+        }
+        switchColorButton.setText(isRed ? "Red" : "Black");
+        switchColorButton.setBackgroundColor(isRed ? TRAJECTORY_MAIN_COLOR : Color.BLACK);
+        switchColorButton.setTextColor(Color.WHITE);
+    }
+
 }
