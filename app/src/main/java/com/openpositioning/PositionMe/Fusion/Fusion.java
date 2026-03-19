@@ -43,7 +43,7 @@ public class Fusion {
     // Converts GNSS from WGS84 to local EN metres and queues as a particle filter observation
     // accuracyMetres comes from location.getAccuracy()
     public void onGnssUpdate(LatLng pos, float accuracyMetres) {
-        if (!particleFilter.isActive()) return;
+        if (particleFilter.isNotActive()) return;
         double[] en = particleFilter.latLngToEN(pos.latitude, pos.longitude);
         particleFilter.addObservation(en[0], en[1], accuracyMetres);
     }
@@ -52,7 +52,7 @@ public class Fusion {
     // observation
     // sigma is fixed at 10.0 m - arbitrary for now
     public void onWifiUpdate(LatLng pos, double sigmaMetres) {
-        if (!particleFilter.isActive()) return;
+        if (particleFilter.isNotActive()) return;
         double[] en = particleFilter.latLngToEN(pos.latitude, pos.longitude);
         particleFilter.addObservation(en[0], en[1], sigmaMetres);
     }

@@ -8,6 +8,8 @@ import static com.openpositioning.PositionMe.Fusion.FusionConstants.PARTICLE_FIL
 import static com.openpositioning.PositionMe.Fusion.FusionConstants.PDR_NOISE_STDDEV;
 import static com.openpositioning.PositionMe.Fusion.FusionConstants.RESAMPLE_JITTER;
 
+import android.util.Log;
+
 import com.google.android.gms.maps.model.LatLng;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,8 +36,8 @@ public class ParticleFilter {
     private LatLng estimated_position;
 
     // set to active when particlefilter.start() has been called in Fusion.java
-    public boolean isActive() {
-        return active;
+    public boolean isNotActive() {
+        return !active;
     }
 
     /** Internal representation of a single particle with 2D position and weight. */
@@ -95,7 +97,11 @@ public class ParticleFilter {
      * @param dy northing displacement in metres from the PDR step.
      */
     public void updateWithPDR(double dx, double dy) {
-        if (!active || particles == null) return;
+        if (!active || particles == null) {
+            Log.w("ParticleFilter", "updateWithPDR called while inactive or particles null"
+                    + " | active=" + active + " particles=" + particles);
+            return;
+        }
         // Propagate each particle with PDR step + stochastic process noise
         for (Particle particle : particles) {
             particle.easting += dx + rand.nextGaussian() * PDR_NOISE_STDDEV;

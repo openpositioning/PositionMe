@@ -396,7 +396,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                             this.pdrProcessing.updatePdr(
                                     stepTime, this.accelMagnitude, this.orientation[0]);
 
-                    this.fusion.filterPDRUpdate(newCords[2], newCords[3]);
+                    float dx = newCords[2];
+                    float dy = newCords[3];
+                    this.fusion.filterPDRUpdate(dx, dy);
 
                     // Clear the accelMagnitude after using it
                     // CAUTION - This line never runs!

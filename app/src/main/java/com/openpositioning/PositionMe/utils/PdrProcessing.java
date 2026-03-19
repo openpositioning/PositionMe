@@ -171,15 +171,15 @@ public class PdrProcessing {
         stepCount++;
 
         // Translate to cartesian coordinate system
-        float x = (float) (stepLength * Math.cos(adaptedHeading));
-        float y = (float) (stepLength * Math.sin(adaptedHeading));
+        float dx = (float) (stepLength * Math.cos(adaptedHeading));
+        float dy = (float) (stepLength * Math.sin(adaptedHeading));
 
         // Update position values
-        this.positionX += x;
-        this.positionY += y;
+        this.positionX += dx;
+        this.positionY += dy;
 
         // return current position and delta values
-        return new float[] {this.positionX, this.positionY, x, y};
+        return new float[] {this.positionX, this.positionY, dx, dy};
     }
 
     /**
