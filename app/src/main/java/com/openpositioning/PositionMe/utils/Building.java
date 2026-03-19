@@ -1,14 +1,20 @@
 package com.openpositioning.PositionMe.utils;
 
+import static com.openpositioning.PositionMe.utils.BuildingConstants.BUILDING_ELEMENT_LIFT;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.BUILDING_ELEMENT_STAIRS;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.BUILDING_ELEMENT_WALL;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_BUILDING_WITHOUT_FLOOR_MAPS;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_BUILDING_WITH_FLOOR_MAPS;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_ELEMENTS_DEFAULT;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_ELEMENTS_LIFT;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_ELEMENTS_STAIRS;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_ELEMENTS_WALL;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_FILL_TRANSPARENT;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.FLOOR_HEIGHT_DEFAULT;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.FLOOR_HEIGHT_NUCLEUS;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.LINE_WEIGHT_FLOOR_PLAN;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.LINE_WEIGHT_OUTLINE;
 import static com.openpositioning.PositionMe.utils.UtilConstants.BUILDING_NAME_NUCLEUS;
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_BUILDING_WITHOUT_FLOOR_MAPS;
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_BUILDING_WITH_FLOOR_MAPS;
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_FLOOR_PLAN_ELEMENTS;
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_FLOOR_PLAN_FILL_TRANSPARENT;
-import static com.openpositioning.PositionMe.utils.UtilConstants.FLOOR_HEIGHT_DEFAULT;
-import static com.openpositioning.PositionMe.utils.UtilConstants.FLOOR_HEIGHT_NUCLEUS;
-import static com.openpositioning.PositionMe.utils.UtilConstants.LINE_WEIGHT_FLOOR_PLAN;
-import static com.openpositioning.PositionMe.utils.UtilConstants.LINE_WEIGHT_OUTLINE;
 
 import android.util.Log;
 import com.google.android.gms.maps.GoogleMap;
@@ -25,6 +31,13 @@ import org.geojson.LngLatAlt;
 import org.geojson.MultiLineString;
 import org.geojson.MultiPolygon;
 
+/**
+ * This class defines all buildings retrieved from the OpenPosition API. Buildings have a name, an
+ * outline, and multiple floor plans. These are drawn onto Google Map objects in {@link
+ * IndoorMapManager}.
+ *
+ * @see IndoorMapManager
+ */
 public class Building {
     private static final String TAG = "Building";
     private static final int BUILDING_NO_FLOOR = -1;
@@ -43,23 +56,28 @@ public class Building {
 
     private List<LatLng> outlinePoints;
     private String name;
-    private Map<String, List<Object>> floorPlans;
+    private Map<String, List<Map<String, Object>>> floorPlans;
     private List<String> floorNames;
     private float floorHeight;
     private int floorNumber = BUILDING_NO_FLOOR;
     private int groundFloorIndex = 0;
     private boolean isInsideBuilding = false;
     private boolean isPreviewingFloorPlan = false;
-    private Map<String, List<PolylineOptions>> floorPlanElementOptions;
+    private Map<String, List<Object>> floorPlanElementOptions;
     private Map<String, List<Polyline>> floorPlanElements;
+    private Map<String, List<Polygon>> floorPlanPolygons;
     private PolygonOptions outlinePolygonOptions;
     private Polygon outlinePolygon;
 
-    public Building(String name, List<LatLng> outlinePoints, Map<String, List<Object>> floorPlans) {
+    public Building(
+            String name,
+            List<LatLng> outlinePoints,
+            Map<String, List<Map<String, Object>>> floorPlans) {
         this.name = name;
         this.floorPlans = floorPlans;
         this.outlinePoints = outlinePoints;
         this.floorPlanElements = new HashMap<>();
+        this.floorPlanPolygons = new HashMap<>();
 
         /*
          Build the building outline, and all floor plan elements.
@@ -101,26 +119,26 @@ public class Building {
      *
      * @return Map of floor plan elements indexed by name
      */
-    // TODO - Revise implementation to work with walls, stairs, and lifts
-    private Map<String, List<PolylineOptions>> buildFloorPlanElements() {
-        Map<String, List<PolylineOptions>> floorPlanElementOptions = new HashMap<>();
+    private Map<String, List<Object>> buildFloorPlanElements() {
+        Map<String, List<Object>> floorPlanElementOptions = new HashMap<>();
         List<String> floorNames = new ArrayList<>(this.floorPlans.keySet());
         for (String floorName : floorNames) {
-            List<Object> floorPlan = floorPlans.get(floorName);
-            List<PolylineOptions> floorElements = new ArrayList<>();
+            List<Map<String, Object>> floorPlan = floorPlans.get(floorName);
+            List<Object> floorElements = new ArrayList<>();
 
             // Most building floor plans will be a list of MultiPolygon objects
             // Nucleus will use a list of MultiLineString objects
-            for (Object element : floorPlan) {
+            for (Map<String, Object> element : floorPlan) {
+                String elementType = (String) element.keySet().toArray()[0];
+                Object elementInfo = element.get(elementType);
                 // Initialise empty, for use when floor plan is invalid
                 List<List<LngLatAlt>> allCoordinates = new ArrayList<>();
-                if (element instanceof MultiPolygon multiPolygon) {
+                if (elementInfo instanceof MultiPolygon multiPolygon) {
                     if (multiPolygon.getCoordinates().size() <= 0) {
                         continue;
                     }
                     allCoordinates = multiPolygon.getCoordinates().get(0);
-                } else if (element instanceof MultiLineString multiLineString) {
-                    // TODO - Confirm with industry contact if MultiLineString can be removed
+                } else if (elementInfo instanceof MultiLineString multiLineString) {
                     allCoordinates = multiLineString.getCoordinates();
                 } else {
                     Log.w(
@@ -135,12 +153,43 @@ public class Building {
                     for (LngLatAlt point : elementCoordinates) {
                         floorElement.add(new LatLng(point.getLatitude(), point.getLongitude()));
                     }
-                    floorElements.add(
-                            new PolylineOptions()
-                                    .width(LINE_WEIGHT_FLOOR_PLAN)
-                                    .color(COLOUR_FLOOR_PLAN_ELEMENTS)
-                                    .zIndex(1)
-                                    .addAll(floorElement));
+                    switch (elementType) {
+                        case BUILDING_ELEMENT_WALL:
+                            floorElements.add(
+                                    new PolylineOptions()
+                                            .width(LINE_WEIGHT_FLOOR_PLAN)
+                                            .color(COLOUR_FLOOR_PLAN_ELEMENTS_WALL)
+                                            .zIndex(1)
+                                            .addAll(floorElement));
+                            break;
+                        case BUILDING_ELEMENT_STAIRS:
+                            floorElements.add(
+                                    new PolygonOptions()
+                                            .strokeWidth(LINE_WEIGHT_FLOOR_PLAN)
+                                            .strokeColor(COLOUR_FLOOR_PLAN_ELEMENTS_STAIRS)
+                                            .fillColor(COLOUR_FLOOR_PLAN_ELEMENTS_STAIRS)
+                                            .zIndex(1)
+                                            .addAll(floorElement));
+                            break;
+                        case BUILDING_ELEMENT_LIFT:
+                            floorElements.add(
+                                    new PolygonOptions()
+                                            .strokeWidth(LINE_WEIGHT_FLOOR_PLAN)
+                                            .strokeColor(COLOUR_FLOOR_PLAN_ELEMENTS_LIFT)
+                                            .fillColor(COLOUR_FLOOR_PLAN_ELEMENTS_LIFT)
+                                            .zIndex(1)
+                                            .addAll(floorElement));
+                            break;
+                        default:
+                            Log.w(TAG, "Unknown element type \"" + elementType + "\"");
+                            floorElements.add(
+                                    new PolylineOptions()
+                                            .width(LINE_WEIGHT_FLOOR_PLAN)
+                                            .color(COLOUR_FLOOR_PLAN_ELEMENTS_DEFAULT)
+                                            .zIndex(1)
+                                            .addAll(floorElement));
+                            break;
+                    }
                 }
             }
             floorPlanElementOptions.put(floorName, floorElements);
@@ -164,6 +213,15 @@ public class Building {
                 }
             }
         }
+
+        // Add floor names with unexpected/unknown prefixes to end of floor plan list
+        for (String name : names) {
+            if (!orderedNames.contains(name)) {
+                Log.w(TAG, "Unexpected floor name \"" + name + "\"; adding to end of list");
+                orderedNames.add(name);
+            }
+        }
+
         // Set the index of the ground floor, for future reference
         for (String name : orderedNames) {
             if (name.toUpperCase().startsWith(BUILDING_GROUND_PREFIX)) {
@@ -316,29 +374,41 @@ public class Building {
      */
     public void editFloorPlan(GoogleMap map, int floorNumber, boolean showFloor) {
         String floorName = floorNames.get(floorNumber);
-        List<Polyline> elements;
+        List<Polyline> elementsPolyline;
+        List<Polygon> elementsPolygon;
 
         // Use pre-existing floor plan elements if possible
         if (floorPlanElements.containsKey(floorName)) {
-            elements = floorPlanElements.get(floorName);
+            elementsPolyline = floorPlanElements.get(floorName);
+            elementsPolygon = floorPlanPolygons.get(floorName);
         } else {
             // Continue only if floor plan elements can be created
             if (!floorPlanElementOptions.containsKey(floorName)) {
                 Log.w(TAG, name + ": Floor " + floorNumber + " has no floor plan!");
                 return;
             }
-            // Create the PolyLine objects for the first time
-            elements = new ArrayList<>();
-            for (PolylineOptions options : floorPlanElementOptions.get(floorName)) {
-                Polyline floorElement = map.addPolyline(options);
-                elements.add(floorElement);
+            // Create the Polyline/Polygon objects for the first time
+            elementsPolyline = new ArrayList<>();
+            elementsPolygon = new ArrayList<>();
+            for (Object options : floorPlanElementOptions.get(floorName)) {
+                if (options instanceof PolylineOptions polylineOptions) {
+                    Polyline floorElement = map.addPolyline(polylineOptions);
+                    elementsPolyline.add(floorElement);
+                } else if (options instanceof PolygonOptions polygonOptions) {
+                    Polygon floorElement = map.addPolygon(polygonOptions);
+                    elementsPolygon.add(floorElement);
+                }
             }
-            floorPlanElements.put(floorName, elements);
+            floorPlanElements.put(floorName, elementsPolyline);
+            floorPlanPolygons.put(floorName, elementsPolygon);
             Log.d(TAG, name + " floor " + floorNumber + " added to list");
         }
 
         // With all elements gathered, set their visibility as required
-        for (Polyline element : elements) {
+        for (Polyline element : elementsPolyline) {
+            element.setVisible(showFloor);
+        }
+        for (Polygon element : elementsPolygon) {
             element.setVisible(showFloor);
         }
         Log.d(TAG, name + " floor " + floorNumber + " visibility set to " + showFloor);

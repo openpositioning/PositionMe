@@ -1,7 +1,7 @@
 package com.openpositioning.PositionMe.utils;
 
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_FLOOR_PLAN_FILL_INSIDE;
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_FLOOR_PLAN_FILL_TRANSPARENT;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_FILL_INSIDE;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_FILL_TRANSPARENT;
 
 import android.util.Log;
 import com.google.android.gms.maps.GoogleMap;
@@ -134,8 +134,8 @@ public class IndoorMapManager implements Observer {
                 @SuppressWarnings("unchecked")
                 List<LatLng> outline = (List<LatLng>) building.get("outline");
                 @SuppressWarnings("unchecked")
-                Map<String, List<Object>> mapShapes =
-                        (Map<String, List<Object>>) building.get("map_shapes");
+                Map<String, List<Map<String, Object>>> mapShapes =
+                        (Map<String, List<Map<String, Object>>>) building.get("map_shapes");
 
                 // Add building to list of known buildings
                 if (!this.getAllBuildingNames().contains(name)) {
@@ -203,18 +203,25 @@ public class IndoorMapManager implements Observer {
                                         new TypeReference<>() {});
 
                 // Map to index floor plans by floor name
-                Map<String, List<Object>> floorplans = new HashMap<>();
+                Map<String, List<Map<String, Object>>> floorplans = new HashMap<>();
 
                 for (String floorname : floorplansJSON.keySet()) {
                     Object floor = floorplansJSON.get(floorname);
                     FeatureCollection fc =
                             new ObjectMapper().convertValue(floor, FeatureCollection.class);
 
+                    // Every element in the floor plan will be assigned it's element type
                     List<Feature> features = fc.getFeatures();
-                    List<Object> floorElements = new ArrayList<>();
+                    List<Map<String, Object>> floorElements = new ArrayList<>();
                     for (Feature feature : features) {
                         GeoJsonObject floorElement = feature.getGeometry();
-                        floorElements.add(floorElement);
+
+                        // String elementType = "wall";
+                        String elementType = (String) feature.getProperties().get("indoor_type");
+                        Map<String, Object> element = new HashMap<>();
+                        element.put(elementType, floorElement);
+
+                        floorElements.add(element);
                     }
                     floorplans.put(floorname, floorElements);
                 }
