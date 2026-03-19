@@ -1,12 +1,12 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_FLOOR_PLAN_FILL_PREVIEW;
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_FLOOR_PLAN_FILL_TRANSPARENT;
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_PATH_COLOUR;
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_PATH_GNSS;
-import static com.openpositioning.PositionMe.utils.UtilConstants.COLOUR_PATH_MONOCHROME;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_FILL_PREVIEW;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_FLOOR_PLAN_FILL_TRANSPARENT;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_PATH_COLOUR;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_PATH_GNSS;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.COLOUR_PATH_MONOCHROME;
+import static com.openpositioning.PositionMe.utils.BuildingConstants.MAP_DRAWING_PRIORITY_MAX;
 import static com.openpositioning.PositionMe.utils.UtilConstants.LINE_WEIGHT_PATH;
-import static com.openpositioning.PositionMe.utils.UtilConstants.MAP_DRAWING_PRIORITY_MAX;
 import static com.openpositioning.PositionMe.utils.UtilConstants.ZOOM_LEVEL_DEFAULT;
 
 import android.os.Bundle;
