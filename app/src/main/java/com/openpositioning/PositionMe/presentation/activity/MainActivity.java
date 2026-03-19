@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.presentation.activity;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
@@ -244,22 +245,24 @@ public class MainActivity extends AppCompatActivity implements Observer {
     }
 
     /**
-     * {@inheritDoc} Handles the back button press. If the current fragment is the HomeFragment, a
+     * {@inheritDoc} Handles the back button press. If the current fragment is the LoginFragment, a
      * dialog is displayed to confirm the exit. If not, the default back navigation is performed.
      */
     @Override
     public void onBackPressed() {
-        // Check if the current destination is HomeFragment (assumed to be the root)
+        // Check if the current destination is LoginFragment (assumed to be the root)
         if (navController.getCurrentDestination() != null
                 && navController.getCurrentDestination().getId() == R.id.homeFragment) {
             new AlertDialog.Builder(this)
                     .setTitle("Confirm Exit")
-                    .setMessage("Are you sure you want to exit the app?")
+                    .setMessage("Are you sure you want to log out?")
                     .setPositiveButton(
                             "Yes",
                             (dialog, which) -> {
                                 dialog.dismiss();
-                                finish(); // Close the activity (exit the app)
+                                Intent intent = new Intent(this, LoginActivity.class);
+                                startActivity(intent);
+                                finish();
                             })
                     .setNegativeButton("No", (dialog, which) -> dialog.dismiss())
                     .create()
@@ -279,42 +282,51 @@ public class MainActivity extends AppCompatActivity implements Observer {
     public void update(Object[] objList) {
         boolean success = (boolean) objList[0];
         String response = objList[1].toString();
+        Log.i(TAG, response);
 
         if (success) {
-            this.httpResponseHandler.post(displayToastTaskSuccess);
+            httpResponseHandler.post(displayToastTaskSuccess);
         } else {
             try {
-                JSONObject jsonObject = new JSONObject(response);
+                String errorCode = response.split(":", 2)[0];
+                if (errorCode.equals(getString(R.string.errorCodeNoServerResponse))) return;
 
-                Log.d(TAG, jsonObject.toString());
-                String cause = jsonObject.getString("detail");
-                String[] causeElements = cause.split(":", 2);
-                String causeSource = causeElements[0].strip();
-                String causeMessage = causeElements[1].strip();
+                String errorMessage = response.split(":", 2)[1];
+                if (errorMessage.contains("{")) {
+                    JSONObject jsonObject = new JSONObject(errorMessage);
 
-                new Handler(Looper.getMainLooper())
-                        .post(
-                                () ->
-                                        new AlertDialog.Builder(this)
-                                                .setTitle("Trajectory Upload Failed")
-                                                .setMessage(
-                                                        "The server has declined the last recorded"
-                                                            + " trajectory. The response is shown"
-                                                            + " below:\n\n"
-                                                                + causeSource
-                                                                + "\n"
-                                                                + causeMessage)
-                                                .setPositiveButton(
-                                                        "Okay",
-                                                        (dialog, which) -> {
-                                                            dialog.dismiss();
-                                                        })
-                                                .create()
-                                                .show());
+                    String cause = jsonObject.getString("detail");
+                    String[] causeElements = cause.split(":", 2);
+                    String causeSource = causeElements[0].strip();
+                    String causeMessage = causeElements[1].strip();
 
+                    new Handler(Looper.getMainLooper())
+                            .post(
+                                    () ->
+                                            new AlertDialog.Builder(this)
+                                                    .setTitle("Trajectory Upload Failed")
+                                                    .setMessage(
+                                                            "The server has declined this"
+                                                                    + " trajectory. The response is"
+                                                                    + " shown below:\n\n"
+                                                                    + causeSource
+                                                                    + "\n"
+                                                                    + causeMessage)
+                                                    .setPositiveButton(
+                                                            "Okay",
+                                                            (dialog, which) -> {
+                                                                dialog.dismiss();
+                                                            })
+                                                    .create()
+                                                    .show());
+                } else {
+                    httpFailureMessage = errorMessage;
+                    httpResponseHandler.post(displayToastTaskFailure);
+                }
             } catch (JSONException e) {
-                httpFailureMessage = "Upload failed - Unknown error";
-                this.httpResponseHandler.post(displayToastTaskFailure);
+                Log.w(TAG, e.getMessage());
+                httpFailureMessage = response.split(":", 2)[1];
+                httpResponseHandler.post(displayToastTaskFailure);
             }
         }
     }

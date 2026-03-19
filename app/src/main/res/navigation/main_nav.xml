@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+<navigation
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main_nav"
@@ -10,7 +11,6 @@
         android:name="com.openpositioning.PositionMe.presentation.fragment.HomeFragment"
         android:label="HomeFragment"
         tools:layout="@layout/fragment_home" >
-        <!-- Removed the action to startLocationFragment because the recording flow is now in RecordingActivity. -->
         <action
             android:id="@+id/action_homeFragment_to_infoFragment"
             app:destination="@id/infoFragment"
@@ -32,6 +32,9 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right"/>
+        <action
+            android:id="@+id/action_home_to_login"
+            app:destination="@+id/loginFragment" />
     </fragment>
 
     <fragment
@@ -41,9 +44,10 @@
         <action
             android:id="@+id/action_settingsFragment_to_homeFragment"
             app:destination="@id/homeFragment" />
+        <action
+            android:id="@+id/action_settings_to_login"
+            app:destination="@+id/loginFragment" />
     </fragment>
-
-    <!-- The recording flow fragments have been removed since RecordingActivity now handles them. -->
 
     <fragment
         android:id="@+id/infoFragment"

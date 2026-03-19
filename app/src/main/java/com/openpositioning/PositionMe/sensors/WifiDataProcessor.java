@@ -10,6 +10,8 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
@@ -271,7 +273,15 @@ public class WifiDataProcessor implements Observable {
 
             if (isThrottled) {
                 // Inform user to disable wifi throttling
-                Toast.makeText(context, "Disable Wi-Fi Throttling", Toast.LENGTH_SHORT).show();
+                new Handler(Looper.getMainLooper())
+                        .post(
+                                () -> {
+                                    Toast.makeText(
+                                                    context,
+                                                    "Disable Wi-Fi Throttling",
+                                                    Toast.LENGTH_SHORT)
+                                            .show();
+                                });
             }
         } catch (Settings.SettingNotFoundException e) {
             e.printStackTrace();

@@ -29,28 +29,31 @@ public class UtilConstants {
 
     public static final float ZOOM_LEVEL_DEFAULT = 19f;
 
+    // Credentials
+    public static final String CREDENTIALS_FILE_NAME = "login_details";
+    public static final String CREDENTIALS_KEY_EMAIL = "email";
+    public static final String CREDENTIALS_KEY_PASSWORD = "password";
+
     // Source: https://openpositioning.org/docs
-    public static final String API_KEY_USER = BuildConfig.OPENPOSITIONING_API_KEY;
     public static final String API_KEY_MASTER = BuildConfig.OPENPOSITIONING_MASTER_KEY;
     public static final String URL_API = "https://openpositioning.org/api";
     public static final String API_GET_USER_TRAJECTORIES = "/live/users/trajectories";
     public static final String API_GET_TRAJECTORIES = "/live/trajectory/download";
     public static final String API_POST_TRAJECTORIES = "/live/trajectory/upload";
     public static final String API_POST_FLOORPLANS = "/live/floorplan/request";
+    public static final String API_POST_SIGN_UP = "/users/signup";
+    public static final String API_POST_LOGIN = "/users/login";
 
-    public static final String URL_GET_USER_TRAJECTORIES =
-            URL_API + API_GET_USER_TRAJECTORIES + "/" + API_KEY_USER + "?key=" + API_KEY_MASTER;
+    public static final String URL_GET_USER_TRAJECTORIES = URL_API + API_GET_USER_TRAJECTORIES;
 
     // URL is in two parts as user variable is inserted for number of entries to retrieve
-    public static final String URL_GET_TRAJECTORIES_HEAD =
-            URL_API + API_GET_TRAJECTORIES + "/" + API_KEY_USER + "?skip=0&limit=";
+    public static final String URL_GET_TRAJECTORIES_HEAD = URL_API + API_GET_TRAJECTORIES;
     public static final String URL_GET_TRAJECTORIES_TAIL = "&key=" + API_KEY_MASTER;
-    public static final String URL_POST_FLOORPLANS =
-            URL_API + API_POST_FLOORPLANS + "/" + API_KEY_USER + "?key=" + API_KEY_MASTER;
+    public static final String URL_POST_FLOORPLANS = URL_API + API_POST_FLOORPLANS;
     public static final String PROTOCOL_MULTIPART = "multipart/form-data";
     public static final String PROTOCOL_APP_JSON = "application/json";
 
-    // Expected performances from floor plans API request
+    // Expected responses from floor plan API request
     public static final String BUILDING_NAME_NUCLEUS = "nucleus_building";
     public static final String BUILDING_NAME_M_HOUSE = "murchison_house";
     public static final String BUILDING_NAME_OUTSIDE = "outside";

@@ -6,6 +6,8 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Handler;
+import android.os.Looper;
 import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 
@@ -53,10 +55,19 @@ public class GNSSDataProcessor {
 
         // Turn on gps if it is currently disabled
         if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            Toast.makeText(context, "Open GPS", Toast.LENGTH_SHORT).show();
+            new Handler(Looper.getMainLooper())
+                    .post(
+                            () -> {
+                                Toast.makeText(context, "Open GPS", Toast.LENGTH_SHORT).show();
+                            });
         }
         if (!locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-            Toast.makeText(context, "Enable Cellular", Toast.LENGTH_SHORT).show();
+            new Handler(Looper.getMainLooper())
+                    .post(
+                            () -> {
+                                Toast.makeText(context, "Enable Cellular", Toast.LENGTH_SHORT)
+                                        .show();
+                            });
         }
         // Start location updates
         if (permissionsGranted) {
@@ -109,10 +120,18 @@ public class GNSSDataProcessor {
                     LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
         } else if (permissionGranted
                 && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            Toast.makeText(context, "Open GPS", Toast.LENGTH_LONG).show();
+            new Handler(Looper.getMainLooper())
+                    .post(
+                            () -> {
+                                Toast.makeText(context, "Open GPS", Toast.LENGTH_LONG).show();
+                            });
         } else if (permissionGranted
                 && !locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-            Toast.makeText(context, "Turn on WiFi", Toast.LENGTH_LONG).show();
+            new Handler(Looper.getMainLooper())
+                    .post(
+                            () -> {
+                                Toast.makeText(context, "Turn on WiFi", Toast.LENGTH_LONG).show();
+                            });
         }
     }
 
