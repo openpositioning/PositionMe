@@ -153,6 +153,10 @@ public class WiFiPositioning {
      * @param callback callback function to allow user to use location when ready
      */
     public void request(JSONObject jsonWifiFeatures, final VolleyCallback callback) {
+
+        Log.d("WiFiPositioning", "Request URL: " + url);
+        Log.d("WiFiPositioning", "Request Body: " + jsonWifiFeatures.toString());
+
         // Creating the POST request using WiFi fingerprint (a JSON object)
         JsonObjectRequest jsonObjectRequest =
                 new JsonObjectRequest(
@@ -161,53 +165,62 @@ public class WiFiPositioning {
                         jsonWifiFeatures,
                         response -> {
                             try {
-                                Log.d("jsonObject", response.toString());
+                                Log.d("WiFiPositioning", "Response: " + response.toString());
+
                                 wifiLocation =
                                         new LatLng(
                                                 response.getDouble("lat"),
                                                 response.getDouble("lon"));
+
                                 floor = response.getInt("floor");
+
                                 callback.onSuccess(wifiLocation, floor);
+
                             } catch (JSONException e) {
+
                                 Log.e(
-                                        "jsonErrors",
+                                        "WiFiPositioning",
                                         "Error parsing response: "
                                                 + e.getMessage()
                                                 + " "
                                                 + response);
+
                                 callback.onError("Error parsing response: " + e.getMessage());
                             }
                         },
                         error -> {
-                            // Validation Error
-                            if (error.networkResponse != null
-                                    && error.networkResponse.statusCode == 422) {
-                                Log.e("WiFiPositioning", "Validation Error " + error.getMessage());
-                                callback.onError("Validation Error (422): " + error.getMessage());
-                            }
-                            // Other Errors
-                            else {
-                                // When Response code is available
-                                if (error.networkResponse != null) {
+                            if (error.networkResponse != null) {
+
+                                int statusCode = error.networkResponse.statusCode;
+
+                                String responseBody = "";
+
+                                try {
+                                    if (error.networkResponse.data != null) {
+                                        responseBody =
+                                                new String(error.networkResponse.data, "UTF-8");
+                                    }
+                                } catch (Exception e) {
                                     Log.e(
                                             "WiFiPositioning",
-                                            "Response Code: "
-                                                    + error.networkResponse.statusCode
-                                                    + ", "
-                                                    + error.getMessage());
-                                    callback.onError(
-                                            "Response Code: "
-                                                    + error.networkResponse.statusCode
-                                                    + ", "
-                                                    + error.getMessage());
-                                } else {
-                                    Log.e(
-                                            "WiFiPositioning",
-                                            "Error message: " + error.getMessage());
-                                    callback.onError("Error message: " + error.getMessage());
+                                            "Error reading response body: " + e.getMessage());
                                 }
+
+                                Log.e(
+                                        "WiFiPositioning",
+                                        "HTTP " + statusCode + " Response Body: " + responseBody);
+
+                                callback.onError(
+                                        "HTTP " + statusCode + " Response Body: " + responseBody);
+
+                            } else {
+
+                                Log.e("WiFiPositioning", "Network error: " + error.getMessage());
+
+                                callback.onError("Network error: " + error.getMessage());
                             }
                         });
+
         // Adds the request to the request queue
         requestQueue.add(jsonObjectRequest);
     }

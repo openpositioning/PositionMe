@@ -445,6 +445,17 @@ public class SensorFusion implements SensorEventListener, Observer {
             float speed = (float) location.getSpeed();
             float bearing = (float) location.getBearing();
             String provider = location.getProvider();
+
+            Log.d(
+                    TAG,
+                    "GNSS fix: lat=" + latitude + " lng=" + longitude + " acc=" + accuracy + "m");
+
+            // Forward the GNSS fix to the particle filter as a position observation
+            // Queued until the next PDR step, where it will be used to update particle weights
+            if (fusion.isActive()) {
+                fusion.onGnssUpdate(new LatLng(latitude, longitude), accuracy);
+            }
+
             if (saveRecording) {
                 trajectory.addGnssData(
                         Traj.GNSSReading.newBuilder()
@@ -531,7 +542,9 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Add to trajectory
             this.trajectory.addWifiFingerprints(wifiFingerprint);
         }
-        createWifiPositioningRequest();
+        // Changed to createWifiPositionRequestCallback since this function was updated with
+        // onSuccess/onError update
+        createWifiPositionRequestCallback();
     }
 
     // Handle BLE updates
@@ -651,14 +664,28 @@ public class SensorFusion implements SensorEventListener, Observer {
             this.wiFiPositioning.request(
                     wifiFingerPrint,
                     new WiFiPositioning.VolleyCallback() {
+                        // Logic added for onSuccess and onError cases
+                        // Wifilocation now updates
+                        // Sigma set to 10 as a guess for now
                         @Override
                         public void onSuccess(LatLng wifiLocation, int floor) {
-                            // Handle the success response
+                            Log.d(
+                                    "WiFiFusionDebug",
+                                    "WiFi position received -> lat="
+                                            + wifiLocation.latitude
+                                            + " lon="
+                                            + wifiLocation.longitude
+                                            + " floor="
+                                            + floor);
+
+                            if (fusion.isActive() && wifiLocation != null) {
+                                fusion.onWifiUpdate(wifiLocation, 10.0);
+                            }
                         }
 
                         @Override
                         public void onError(String message) {
-                            // Handle the error response
+                            Log.e(TAG, "WiFi positioning failed: " + message);
                         }
                     });
         } catch (JSONException e) {
@@ -1163,6 +1190,8 @@ public class SensorFusion implements SensorEventListener, Observer {
      * destroyed in {@link SensorFusion#stopRecording()}.
      */
     private class storeDataInTrajectory extends TimerTask {
+        // private Fusion fusion;
+
         public void run() {
             // Store IMU data in Trajectory class
             trajectory.addImuData(
@@ -1199,21 +1228,33 @@ public class SensorFusion implements SensorEventListener, Observer {
             // Divide timer with a counter for storing data every 1 second
             if (counter == 99) {
                 counter = 0;
+                Log.d(
+                        "Fusion",
+                        "1 second timer fired, fusion active="
+                                + (fusion != null && fusion.isActive()));
                 // store fusion corrected estimated point to the trajectory at 1 sec intervals
-                /*
-                if (this.fusion.isActive()){
-                    LatLng fused = this.fusion.getBestEstimate()
-                    if (fused != null){
+                // Pre-existing code that has been uncommented to implement fusion corrections to
+                // trajectory
+                // Floor is not yet implemented — see fusion.getEstimatedFloor().
+                if (SensorFusion.this.fusion != null && SensorFusion.this.fusion.isActive()) {
+                    LatLng fused = SensorFusion.this.fusion.getBestEstimate();
+                    if (fused != null) {
+                        Log.d(
+                                "Fusion",
+                                "Corrected position stored: "
+                                        + fused.latitude
+                                        + ", "
+                                        + fused.longitude);
                         trajectory.addCorrectedPositions(
-                            Traj.GNSSPosition.newBuilder()
-                                .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
-                                .setLatitude(fused.latitude)
-                                .setLongitude(fused.longitude)
-                                .setAltitude(elevation)
-                                .setFloor(fusion.getEstimatedFloor)
-                        }
+                                Traj.GNSSPosition.newBuilder()
+                                        .setRelativeTimestamp(SystemClock.uptimeMillis() - bootTime)
+                                        .setLatitude(fused.latitude)
+                                        .setLongitude(fused.longitude)
+                                        .setAltitude(elevation));
+                        // .setFloor(fusion.getEstimatedFloor));
                     }
-                 */
+                }
+
                 // Store pressure and light data
                 if (barometerSensor.sensor != null) {
                     trajectory
