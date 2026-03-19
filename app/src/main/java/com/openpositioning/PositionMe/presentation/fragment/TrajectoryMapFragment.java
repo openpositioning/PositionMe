@@ -43,8 +43,13 @@ import com.google.android.material.progressindicator.CircularProgressIndicator;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
+import com.openpositioning.PositionMe.mapmatching.CandidatePose;
 import com.openpositioning.PositionMe.mapmatching.CorrectionType;
+import com.openpositioning.PositionMe.mapmatching.MapMatchingInput;
 import com.openpositioning.PositionMe.mapmatching.MapMatchingResult;
+import com.openpositioning.PositionMe.mapmatching.MapMatchingService;
+import com.openpositioning.PositionMe.mapmatching.MotionDelta;
+import com.openpositioning.PositionMe.mapmatching.VerticalTransitionHint;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.BuildingPolygon;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
@@ -193,6 +198,7 @@ public class TrajectoryMapFragment extends Fragment {
     private final List<Marker> testPointMarkers = new ArrayList<>();
     private Polyline polylineOutline;
     private Polyline polyline;
+    private Polyline rawReplayPolyline;
     private boolean isRed = true;
     private boolean isGnssOn = false;
     private Polyline gnssPolyline;
@@ -208,6 +214,9 @@ public class TrajectoryMapFragment extends Fragment {
     private FloorplanApiClient.BuildingInfo selectedFloorplanBuilding;
     private Polygon selectedFloorplanPolygon;
     private final FloorplanApiClient floorplanApiClient = new FloorplanApiClient();
+    private final MapMatchingService mapMatchingService = new MapMatchingService();
+    @Nullable
+    private CandidatePose previousMatchedPose;
 
     private Handler autoFloorHandler;
     private Runnable autoFloorTask;
@@ -1493,6 +1502,30 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    @NonNull
+    private PolylineOptions buildRawReplayPolylineOptions() {
+        return new PolylineOptions()
+                .color(Color.argb(170, 30, 136, 229))
+                .width(5f)
+                .jointType(JointType.ROUND)
+                .startCap(new RoundCap())
+                .endCap(new RoundCap())
+                .zIndex(TRAJECTORY_Z_INDEX - 1f)
+                .add();
+    }
+
+    private void appendRawReplayPoint(@NonNull LatLng rawLocation) {
+        if (rawReplayPolyline == null) {
+            return;
+        }
+
+        List<LatLng> rawPoints = new ArrayList<>(rawReplayPolyline.getPoints());
+        if (rawPoints.isEmpty() || !rawPoints.get(rawPoints.size() - 1).equals(rawLocation)) {
+            rawPoints.add(rawLocation);
+            rawReplayPolyline.setPoints(rawPoints);
+        }
+    }
+
     private void syncTrajectoryPolylinePoints(@NonNull List<LatLng> points) {
         if (polylineOutline != null) {
             polylineOutline.setPoints(points);
@@ -1521,6 +1554,7 @@ public class TrajectoryMapFragment extends Fragment {
 
         polylineOutline = map.addPolyline(buildTrajectoryOutlineOptions());
         polyline = map.addPolyline(buildTrajectoryMainOptions());
+        rawReplayPolyline = map.addPolyline(buildRawReplayPolylineOptions());
         gnssPolyline = map.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).zIndex(TRAJECTORY_Z_INDEX - 2f).add());
         ensureTrajectoryStyling();
     }
@@ -1582,31 +1616,84 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap == null) {
             return;
         }
+
+        LatLng rawLocation = newLocation;
+        appendRawReplayPoint(rawLocation);
+
+        FloorplanApiClient.FloorShapes activeFloorShapes = getActiveFloorShapesForMatching();
+        long timestampMs = SystemClock.elapsedRealtime();
+        CandidatePose currentCandidatePose = new CandidatePose(
+                rawLocation,
+                currentFloorIndex,
+                timestampMs,
+                "replay_pdr"
+        );
+
+        MotionDelta motionDelta = buildMotionDelta(previousMatchedPose, rawLocation, orientation);
+        VerticalTransitionHint verticalHint = buildReplayVerticalHint();
+        String activeBuildingId = selectedFloorplanBuilding != null
+                ? resolveKnownBuildingKey(selectedFloorplanBuilding, selectedFloorplanBuilding.getName())
+                : null;
+
+        MapMatchingInput matchingInput = new MapMatchingInput(
+                previousMatchedPose,
+                currentCandidatePose,
+                motionDelta,
+                verticalHint,
+                activeFloorShapes,
+                activeBuildingId
+        );
+
+        MapMatchingResult matchingResult = mapMatchingService.match(matchingInput);
+        LatLng matchedLocation = matchingResult.getCorrectedLatLng() != null
+                ? matchingResult.getCorrectedLatLng()
+                : rawLocation;
+        int matchedFloor = matchingResult.getCorrectedFloor();
+
+        logFeatureValidation(rawLocation, matchingResult);
+        Log.d(TEST_LOG_TAG, String.format(Locale.US,
+                "raw=(%.6f, %.6f) matched=(%.6f, %.6f) floor=%d correction=%s reason=%s",
+                rawLocation.latitude,
+                rawLocation.longitude,
+                matchedLocation.latitude,
+                matchedLocation.longitude,
+                matchedFloor,
+                matchingResult.getCorrectionType() != null
+                        ? matchingResult.getCorrectionType().name()
+                        : CorrectionType.NONE.name(),
+                matchingResult.getDebugReason()));
+
         LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
+        this.currentLocation = matchedLocation;
+        this.previousMatchedPose = new CandidatePose(
+                matchedLocation,
+                matchedFloor,
+                timestampMs,
+                "map_matched"
+        );
 
         boolean shouldFollowCamera = !(indoorMapVisible || actualMapVisible);
         if (orientationMarker == null) {
             orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
+                    .position(matchedLocation)
                     .flat(true)
                     .title("Current Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(UtilFunctions.getBitmapFromVector(requireContext(), R.drawable.ic_baseline_navigation_24))));
             if (shouldFollowCamera) {
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(matchedLocation, 19f));
             }
         } else {
-            orientationMarker.setPosition(newLocation);
+            orientationMarker.setPosition(matchedLocation);
             orientationMarker.setRotation(orientation);
             if (shouldFollowCamera) {
-                gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(matchedLocation));
             }
         }
 
         if (polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            if (oldLocation == null || !oldLocation.equals(newLocation)) {
-                points.add(newLocation);
+            if (oldLocation == null || !oldLocation.equals(matchedLocation)) {
+                points.add(matchedLocation);
                 syncTrajectoryPolylinePoints(points);
             } else {
                 ensureTrajectoryStyling();
@@ -1614,12 +1701,58 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         if (indoorMapManager != null) {
-            indoorMapManager.setCurrentLocation(newLocation);
+            indoorMapManager.setCurrentLocation(matchedLocation);
         }
 
         maybeFetchNearbyBuildingsOnFirstLocation();
         if (!hasAutoSelectedIndoorMap && !lastFetchedBuildings.isEmpty()) {
             maybeAutoSelectIndoorMap(lastFetchedBuildings);
+        }
+    }
+
+    @Nullable
+    private FloorplanApiClient.FloorShapes getActiveFloorShapesForMatching() {
+        if (selectedFloorplanBuilding == null
+                || selectedFloorplanBuilding.getFloorShapesList() == null
+                || selectedFloorplanBuilding.getFloorShapesList().isEmpty()) {
+            return null;
+        }
+
+        int safeFloorIndex = Math.max(0, Math.min(currentFloorIndex, selectedFloorplanBuilding.getFloorShapesList().size() - 1));
+        return selectedFloorplanBuilding.getFloorShapesList().get(safeFloorIndex);
+    }
+
+    @Nullable
+    private MotionDelta buildMotionDelta(@Nullable CandidatePose previousPose,
+                                         @NonNull LatLng rawLocation,
+                                         float orientation) {
+        if (previousPose == null) {
+            return null;
+        }
+
+        float[] results = new float[1];
+        Location.distanceBetween(
+                previousPose.getLatLng().latitude,
+                previousPose.getLatLng().longitude,
+                rawLocation.latitude,
+                rawLocation.longitude,
+                results
+        );
+
+        double deltaX = rawLocation.longitude - previousPose.getLatLng().longitude;
+        double deltaY = rawLocation.latitude - previousPose.getLatLng().latitude;
+        return new MotionDelta(deltaX, deltaY, results[0], orientation);
+    }
+
+    @Nullable
+    private VerticalTransitionHint buildReplayVerticalHint() {
+        return null;
+    }
+
+    private void resetMapMatchingState() {
+        previousMatchedPose = null;
+        if (rawReplayPolyline != null) {
+            rawReplayPolyline.setPoints(new ArrayList<>());
         }
     }
 
@@ -2059,6 +2192,10 @@ public class TrajectoryMapFragment extends Fragment {
             polyline.remove();
             polyline = null;
         }
+        if (rawReplayPolyline != null) {
+            rawReplayPolyline.remove();
+            rawReplayPolyline = null;
+        }
         if (gnssPolyline != null) {
             gnssPolyline.remove();
             gnssPolyline = null;
@@ -2073,6 +2210,7 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastGnssLocation = null;
         currentLocation = null;
+        resetMapMatchingState();
 
         for (Marker m : testPointMarkers) {
             m.remove();
@@ -2082,6 +2220,7 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap != null) {
             polylineOutline = gMap.addPolyline(buildTrajectoryOutlineOptions());
             polyline = gMap.addPolyline(buildTrajectoryMainOptions());
+            rawReplayPolyline = gMap.addPolyline(buildRawReplayPolylineOptions());
             gnssPolyline = gMap.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).zIndex(TRAJECTORY_Z_INDEX - 2f).add());
             ensureTrajectoryStyling();
         }

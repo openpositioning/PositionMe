@@ -1,0 +1,3444 @@
+{
+  "androidVersion": 16,
+  "trajectoryVersion": "2.1",
+  "trajectoryId": "synthetic_lift_up",
+  "startTimestamp": 1773874615392,
+  "imuData": [
+    {
+      "relativeTimestamp": "0",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 0
+    },
+    {
+      "relativeTimestamp": "1000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "1100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "1200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "1300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "1400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "1500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "1600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "1700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "1800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "1900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 1
+    },
+    {
+      "relativeTimestamp": "2000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "2100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "2200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "2300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "2400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "2500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "2600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "2700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "2800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "2900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 2
+    },
+    {
+      "relativeTimestamp": "3000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "3100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "3200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "3300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "3400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "3500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "3600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "3700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "3800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "3900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 3
+    },
+    {
+      "relativeTimestamp": "4000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "4100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "4200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "4300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "4400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "4500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "4600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "4700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "4800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "4900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 4
+    },
+    {
+      "relativeTimestamp": "5000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "5100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "5200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "5300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "5400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "5500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "5600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "5700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "5800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "5900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 5
+    },
+    {
+      "relativeTimestamp": "6000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "6100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "6200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "6300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "6400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "6500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "6600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "6700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "6800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "6900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 6
+    },
+    {
+      "relativeTimestamp": "7000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "7100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "7200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "7300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "7400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "7500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "7600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "7700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "7800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "7900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 7
+    },
+    {
+      "relativeTimestamp": "8000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "8100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "8200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "8300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "8400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "8500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "8600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "8700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "8800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "8900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 8
+    },
+    {
+      "relativeTimestamp": "9000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "9100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "9200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "9300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "9400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "9500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "9600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "9700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "9800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "9900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 9
+    },
+    {
+      "relativeTimestamp": "10000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "10100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "10200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "10300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "10400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "10500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "10600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "10700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "10800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "10900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 10
+    },
+    {
+      "relativeTimestamp": "11000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "11100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "11200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "11300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "11400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "11500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "11600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "11700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "11800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "11900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 11
+    },
+    {
+      "relativeTimestamp": "12000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "12100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "12200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "12300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "12400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "12500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "12600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "12700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "12800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "12900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 12
+    },
+    {
+      "relativeTimestamp": "13000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "13100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "13200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "13300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "13400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "13500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "13600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "13700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "13800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "13900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 13
+    },
+    {
+      "relativeTimestamp": "14000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "14100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "14200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "14300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "14400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "14500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "14600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "14700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "14800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "14900",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 14
+    },
+    {
+      "relativeTimestamp": "15000",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 15
+    },
+    {
+      "relativeTimestamp": "15100",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 15
+    },
+    {
+      "relativeTimestamp": "15200",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 15
+    },
+    {
+      "relativeTimestamp": "15300",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 15
+    },
+    {
+      "relativeTimestamp": "15400",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 15
+    },
+    {
+      "relativeTimestamp": "15500",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 15
+    },
+    {
+      "relativeTimestamp": "15600",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 15
+    },
+    {
+      "relativeTimestamp": "15700",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 15
+    },
+    {
+      "relativeTimestamp": "15800",
+      "acc": {
+        "x": -0.2,
+        "y": 0.3,
+        "z": 9.81
+      },
+      "gyr": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotationVector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 1.0
+      },
+      "stepCount": 15
+    }
+  ],
+  "pdrData": [
+    {
+      "relativeTimestamp": "0",
+      "x": 0.0,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "500",
+      "x": 1.4,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "1000",
+      "x": 2.8,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "1500",
+      "x": 4.2,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "2000",
+      "x": 5.6,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "2500",
+      "x": 7.0,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "3000",
+      "x": 8.4,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "3500",
+      "x": 9.8,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "4000",
+      "x": 11.2,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "4500",
+      "x": 12.6,
+      "y": 0.0,
+      "currentElevation": 0.0,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "5000",
+      "x": 14.15,
+      "y": 0.05,
+      "currentElevation": 0.8,
+      "deltaHeight": 0.8,
+      "heightChanged": true,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "5700",
+      "x": 14.25,
+      "y": 0.1,
+      "currentElevation": 1.7,
+      "deltaHeight": 0.9,
+      "heightChanged": true,
+      "syntheticFloor": 0
+    },
+    {
+      "relativeTimestamp": "6400",
+      "x": 14.3,
+      "y": 0.15,
+      "currentElevation": 2.5,
+      "deltaHeight": 0.8,
+      "heightChanged": true,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "7100",
+      "x": 14.35,
+      "y": 0.15,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.7,
+      "heightChanged": true,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "7800",
+      "x": 15.8,
+      "y": 0.17,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "8300",
+      "x": 17.25,
+      "y": 0.19,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "8800",
+      "x": 18.7,
+      "y": 0.21,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "9300",
+      "x": 20.15,
+      "y": 0.23,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "9800",
+      "x": 21.6,
+      "y": 0.25,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "10300",
+      "x": 23.05,
+      "y": 0.27,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "10800",
+      "x": 24.5,
+      "y": 0.29,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "11300",
+      "x": 25.95,
+      "y": 0.31,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "11800",
+      "x": 27.4,
+      "y": 0.33,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "12300",
+      "x": 28.85,
+      "y": 0.35,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "12800",
+      "x": 30.3,
+      "y": 0.37,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "13300",
+      "x": 31.75,
+      "y": 0.39,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "13800",
+      "x": 33.2,
+      "y": 0.41,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    },
+    {
+      "relativeTimestamp": "14300",
+      "x": 34.65,
+      "y": 0.43,
+      "currentElevation": 3.2,
+      "deltaHeight": 0.0,
+      "heightChanged": false,
+      "syntheticFloor": 1
+    }
+  ],
+  "gnssData": [],
+  "magnetometerData": []
+}
