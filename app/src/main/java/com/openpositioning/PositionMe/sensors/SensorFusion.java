@@ -202,6 +202,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Floor change detection for particle reset
     private int lastKnownFloor = 0;
 
+    private ExtendedKalmanFilter ekfPositioning;
+    // true = use EKF output, false = use Particle Filter output
+    private boolean useEKF = false;
+
+
 
     // Last raw position from each individual source, for colour-coded display
     private double[] lastGnssLatLon   = null;   // {lat, lon}
@@ -361,6 +366,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.pdrProcessing = new PdrProcessing(context);
         this.particleFilter = new ParticleFilter();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
+        this.ekfPositioning = new ExtendedKalmanFilter();
+        this.useEKF = settings.getBoolean("use_ekf", false);
         this.pathView = new PathView(context, null);
         this.wiFiPositioning = new WiFiPositioning(context);
 
@@ -520,6 +527,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         float dx = newCords[0] - prevPdrX;
                         float dy = newCords[1] - prevPdrY;
                         particleFilter.predict(dx, dy);
+                        ekfPositioning.predict(dx, dy);
                         prevPdrX = newCords[0];
                         prevPdrY = newCords[1];
                         if (coordinateConverter != null) {
@@ -580,6 +588,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     coordinateConverter = new CoordinateConverter(
                             location.getLatitude(), location.getLongitude());
                     particleFilter.initParticles(0f, 0f, Math.max(accuracy, 5f));
+                    ekfPositioning.initParticles(0f, 0f, Math.max(accuracy, 5f));
                     prevPdrX = 0f;
                     prevPdrY = 0f;
                     Log.i("SensorFusion", "ParticleFilter initialised at lat="
@@ -589,12 +598,14 @@ public class SensorFusion implements SensorEventListener, Observer {
                     float[] enu = coordinateConverter.toEnu(
                             location.getLatitude(), location.getLongitude());
                     particleFilter.updateWithGnss(enu[0], enu[1]);
+                    ekfPositioning.updateWithGnss(enu[0], enu[1]);
                     lastGnssLatLon = new double[]{location.getLatitude(), location.getLongitude()};
                     // Detect floor change and reset particle cloud if needed
                     int currentFloor = pdrProcessing.getCurrentFloor();
                     if (currentFloor != lastKnownFloor) {
                         float[] best = particleFilter.getBestEstimate();
                         particleFilter.resetAroundPosition(best[0], best[1], 8f);
+                        ekfPositioning.resetAroundPosition(best[0], best[1], 8f);
                         lastKnownFloor = currentFloor;
                         Log.i("SensorFusion", "Floor change detected: " + lastKnownFloor
                                 + " → " + currentFloor + ", particles reset");
@@ -989,6 +1000,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                         float[] enu = coordinateConverter.toEnu(
                                 wifiLocation.latitude, wifiLocation.longitude);
                         particleFilter.updateWithWifi(enu[0], enu[1]);
+                        ekfPositioning.updateWithWifi(enu[0], enu[1]);
+
                     }
                 }
 
@@ -1020,13 +1033,16 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return double[]{latitude, longitude}, or null(if filter is not initialized)
      */
     public double[] getFusedLatLon() {
-        if (particleFilter != null && particleFilter.isInitialized()
-                && coordinateConverter != null) {
-            float[] enu = particleFilter.getBestEstimate();
+        boolean ekfReady = useEKF && ekfPositioning != null && ekfPositioning.isInitialized();
+        boolean pfReady  = !useEKF && particleFilter != null && particleFilter.isInitialized();
+        if ((ekfReady || pfReady) && coordinateConverter != null) {
+            float[] enu = useEKF ? ekfPositioning.getBestEstimate()
+                    : particleFilter.getBestEstimate();
             return coordinateConverter.toLatLon(enu[0], enu[1]);
         }
         return null;
     }
+
 
     /** Last raw GNSS position. Returns null before first GPS signal. */
     public double[] getLastGnssLatLon() {
@@ -1050,9 +1066,12 @@ public class SensorFusion implements SensorEventListener, Observer {
      * @return RMS particle spread in metres.
      */
     public double getPositionUncertainty() {
-        if (particleFilter == null) return -1.0;
-        return particleFilter.getSigmaMetres();
+        if (useEKF) {
+            return ekfPositioning == null ? -1.0 : ekfPositioning.getSigmaMetres();
+        }
+        return particleFilter == null ? -1.0 : particleFilter.getSigmaMetres();
     }
+
 
     /**
      * Returns a copy of all particle positions in local East-North metres.
@@ -1473,6 +1492,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         this.pdrProcessing.resetPDR();
         // Reset particle filter state for new recording session
         particleFilter = new ParticleFilter();
+        ekfPositioning = new ExtendedKalmanFilter();
+        useEKF = settings.getBoolean("use_ekf", false);
         coordinateConverter = null;
         lastGnssLatLon = null;
         lastWifiLatLon = null;
