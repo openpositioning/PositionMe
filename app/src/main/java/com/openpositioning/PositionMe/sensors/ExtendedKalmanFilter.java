@@ -3,15 +3,17 @@ package com.openpositioning.PositionMe.sensors;
 import android.util.Log;
 
 /**
- * Extended Kalman Filter for indoor positioning.
+ * The filter maintains a state estimate [east, north] in the local East-North coordinate frame.
  *
- * State vector: [east, north] in local East-North metres.
- * Process model: constant velocity, state advances by PDR displacement.
- * Observation model: direct position measurement.
+ * Two-step cycle:
+ *   1. predict()          — advance state by PDR displacement, grow covariance by process noise
+ *   2. updateWithGnss()   — correct state using GNSS observation via Kalman gain
+ *      updateWithWifi()   — correct state using WiFi observation via Kalman gain
  *
  * @author Haoning Huang
  */
-public class EKFPositioning {
+
+public class ExtendedKalmanFilter {
 
     private static final String TAG = "EKFPositioning";
 
@@ -80,7 +82,7 @@ public class EKFPositioning {
         // Innovation covariance S = P + R*I
         float s00 = p00 + r,  s01 = p01;
         float s10 = p10,       s11 = p11 + r;
-        // S inverse (explicit 2x2)
+        // S inverse
         float det = s00 * s11 - s01 * s10;
         if (Math.abs(det) < 1e-10f) return;
         float id  = 1f / det;
@@ -132,17 +134,14 @@ public class EKFPositioning {
     /**
      * Returns position uncertainty as the RMS of the covariance diagonal.
      *
-     * @return 1-sigma uncertainty in metres, or -1 if not initialised.
+     * @return 1-sigma uncertainty in metres (-1 if not initialized)
      */
     public double getSigmaMetres() {
         if (!initialized) return -1.0;
         return Math.sqrt(p00 + p11);
     }
 
-    /**
-     * Resets state around a new position with increased uncertainty.
-     * Used after a floor change.
-     */
+
     public void resetAroundPosition(float centreX, float centreY, float uncertainty) {
         stateX = centreX;
         stateY = centreY;
