@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.Fusion;
 
+import android.util.Log;
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
@@ -39,8 +40,26 @@ public class Fusion {
         this.particleFilter.updateWithPDR(dx, dy);
     }
 
+    // Converts GNSS from WGS84 to local EN metres and queues as a particle filter observation
+    // accuracyMetres comes from location.getAccuracy()
+    public void onGnssUpdate(LatLng pos, float accuracyMetres) {
+        if (!particleFilter.isActive()) return;
+        double[] en = particleFilter.latLngToEN(pos.latitude, pos.longitude);
+        particleFilter.addObservation(en[0], en[1], accuracyMetres);
+    }
+
+    // Converts WiFi position from WGS84 to local EN metres and queues as a particle filter
+    // observation
+    // sigma is fixed at 10.0 m - arbitrary for now
+    public void onWifiUpdate(LatLng pos, double sigmaMetres) {
+        if (!particleFilter.isActive()) return;
+        double[] en = particleFilter.latLngToEN(pos.latitude, pos.longitude);
+        particleFilter.addObservation(en[0], en[1], sigmaMetres);
+    }
+
     /** Stops the fusion system and releases the particle filter resources. */
     public void stop() {
+        Log.d("Fusion", "Fusion stopped", new Exception("stop() call stack"));
         this.particleFilter.stop();
         isActive = false;
     }
@@ -54,6 +73,7 @@ public class Fusion {
      */
     public void start(LatLng initial_estimate, PdrProcessing pdrProcessing) {
         isActive = true;
+        Log.d("Fusion", "Fusion started at: " + initial_estimate);
         this.pdrProcessing = pdrProcessing;
         this.bestEstimate = getStartLocation(initial_estimate);
         this.particleFilter.start(this.bestEstimate);

@@ -10,6 +10,7 @@ import static com.openpositioning.PositionMe.Fusion.FusionConstants.RESAMPLE_JIT
 
 import com.google.android.gms.maps.model.LatLng;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -32,6 +33,11 @@ public class ParticleFilter {
     // Current best position estimate
     private LatLng estimated_position;
 
+    // set to active when particlefilter.start() has been called in Fusion.java
+    public boolean isActive() {
+        return active;
+    }
+
     /** Internal representation of a single particle with 2D position and weight. */
     private class Particle {
         double easting;
@@ -43,6 +49,15 @@ public class ParticleFilter {
             this.northing = northing;
             this.weight = weight;
         }
+    }
+
+    // List of position observations from different sensor readings
+    // Queued observations from GNSS and WiFi, waiting to be applied on the next PDR step
+    // Each entry is {easting (m), northing (m), sigma (m)} in the local Easting/Northing frame
+    private List<double[]> pendingObs = new ArrayList<>();
+
+    public void addObservation(double easting, double northing, double sigma) {
+        pendingObs.add(new double[] {easting, northing, sigma});
     }
 
     /**
@@ -86,8 +101,8 @@ public class ParticleFilter {
             particle.easting += dx + rand.nextGaussian() * PDR_NOISE_STDDEV;
             particle.northing += dy + rand.nextGaussian() * PDR_NOISE_STDDEV;
         }
-        double max_weight = updateWeights();
-        if (max_weight > PARTICLE_FILTER_THRESHOLD) {
+        double maxWeight = updateWeights();
+        if (maxWeight > PARTICLE_FILTER_THRESHOLD) {
             repopulate();
         }
         updateEstimatedPosition();
@@ -136,7 +151,37 @@ public class ParticleFilter {
      * @return the maximum particle weight after normalisation.
      */
     public double updateWeights() {
-        return 0;
+        if (pendingObs.isEmpty() || particles == null) return 0.0;
+
+        double weightSum = 0.0;
+        // Iterates through each particle and calculates difference between PDR data and recorded
+        // observation data
+        // Maybe want to change observation logic to only use most recent reading!
+        for (Particle p : particles) {
+            for (double[] obs : pendingObs) {
+                // Squared distance between this particle and the observation from sensors
+                double de = p.easting - obs[0];
+                double dn = p.northing - obs[1];
+                double distSq = de * de + dn * dn;
+
+                // Gaussian likelihood: exp(-d² / 2σ²)
+                // Particles close to the observation get weight near 1.0,
+                // particles far away get weight near 0.0
+                double twoSigmaSq = 2.0 * obs[2] * obs[2];
+                p.weight *= Math.exp(-distSq / twoSigmaSq);
+            }
+            weightSum += p.weight;
+        }
+        // Clear queue for next PDR cycle
+        pendingObs.clear();
+
+        // Normalise so all weights sum to 1
+        double maxWeight = 0.0;
+        for (Particle p : particles) {
+            p.weight /= weightSum;
+            if (p.weight > maxWeight) maxWeight = p.weight;
+        }
+        return maxWeight;
     }
 
     /** Computes the weighted mean of the particle population as the current position estimate. */
