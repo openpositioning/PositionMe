@@ -156,7 +156,7 @@ public class ParticleFilter {
     }
 
     /**
-     * Update step: assigns weights to particles based on observation likelihood. -TODO
+     * Update step: assigns weights to particles based on observation likelihood.
      *
      * @return the maximum particle weight after normalisation.
      */

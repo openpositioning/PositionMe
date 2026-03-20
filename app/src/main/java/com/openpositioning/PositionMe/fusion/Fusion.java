@@ -68,8 +68,6 @@ public class Fusion {
      * Initialises the fusion system and seeds the particle filter around the given position.
      *
      * @param initial_estimate is a place holder for the starting position in WGS84 coordinates. -
-     *     TODO we should probably use our own start location estimate as this could be crucial for
-     *     accuracy of the remainder of the recording.
      */
     public void start(LatLng initial_estimate, PdrProcessing pdrProcessing) {
         isActive = true;
