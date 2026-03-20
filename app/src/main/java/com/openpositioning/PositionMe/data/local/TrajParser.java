@@ -65,22 +65,42 @@ public class TrajParser {
         public float orientation;   // Orientation in degrees
         public float speed;         // Speed in meters per second
         public long timestamp;      // Relative timestamp
+        public Integer syntheticFloor; // Logical floor from replay JSON, if available
+        public Double currentElevation; // Elevation hint from replay JSON, if available
+        public Double deltaHeight; // Delta height hint from replay JSON, if available
+        public boolean heightChanged; // Whether replay JSON indicates a vertical transition
 
         /**
          * Constructs a ReplayPoint.
          *
-         * @param pdrLocation  The pedestrian dead reckoning (PDR) location.
-         * @param gnssLocation The GNSS location, or null if unavailable.
-         * @param orientation  The orientation angle in degrees.
-         * @param speed        The speed in meters per second.
-         * @param timestamp    The timestamp associated with this point.
+         * @param pdrLocation       The pedestrian dead reckoning (PDR) location.
+         * @param gnssLocation      The GNSS location, or null if unavailable.
+         * @param orientation       The orientation angle in degrees.
+         * @param speed             The speed in meters per second.
+         * @param timestamp         The timestamp associated with this point.
+         * @param syntheticFloor    Logical floor carried by the replay JSON, if available.
+         * @param currentElevation  Elevation hint carried by the replay JSON, if available.
+         * @param deltaHeight       Delta height hint carried by the replay JSON, if available.
+         * @param heightChanged     Whether replay JSON marks this point as a vertical transition.
          */
-        public ReplayPoint(LatLng pdrLocation, LatLng gnssLocation, float orientation, float speed, long timestamp) {
+        public ReplayPoint(LatLng pdrLocation,
+                           LatLng gnssLocation,
+                           float orientation,
+                           float speed,
+                           long timestamp,
+                           Integer syntheticFloor,
+                           Double currentElevation,
+                           Double deltaHeight,
+                           boolean heightChanged) {
             this.pdrLocation = pdrLocation;
             this.gnssLocation = gnssLocation;
             this.orientation = orientation;
             this.speed = speed;
             this.timestamp = timestamp;
+            this.syntheticFloor = syntheticFloor;
+            this.currentElevation = currentElevation;
+            this.deltaHeight = deltaHeight;
+            this.heightChanged = heightChanged;
         }
     }
 
@@ -96,6 +116,10 @@ public class TrajParser {
     private static class PdrRecord {
         public long relativeTimestamp;
         public float x, y; // Position relative to the starting point
+        public Integer syntheticFloor;
+        public Double currentElevation;
+        public Double deltaHeight;
+        public Boolean heightChanged;
     }
 
     /** Represents a GNSS (Global Navigation Satellite System) data record with latitude/longitude. */
@@ -185,8 +209,17 @@ public class TrajParser {
                 LatLng gnssLocation = closestGnss != null ?
                         new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
 
-                result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
-                        0f, pdr.relativeTimestamp));
+                result.add(new ReplayPoint(
+                        pdrLocation,
+                        gnssLocation,
+                        orientationDeg,
+                        speed,
+                        pdr.relativeTimestamp,
+                        pdr.syntheticFloor,
+                        pdr.currentElevation,
+                        pdr.deltaHeight,
+                        Boolean.TRUE.equals(pdr.heightChanged)
+                ));
             }
 
             Collections.sort(result, Comparator.comparingLong(rp -> rp.timestamp));
@@ -199,58 +232,58 @@ public class TrajParser {
 
         return result;
     }
-/** Parses IMU data from JSON. */
-private static List<ImuRecord> parseImuData(JsonArray imuArray) {
-    List<ImuRecord> imuList = new ArrayList<>();
-    if (imuArray == null) return imuList;
-    Gson gson = new Gson();
-    for (int i = 0; i < imuArray.size(); i++) {
-        ImuRecord record = gson.fromJson(imuArray.get(i), ImuRecord.class);
-        imuList.add(record);
+    /** Parses IMU data from JSON. */
+    private static List<ImuRecord> parseImuData(JsonArray imuArray) {
+        List<ImuRecord> imuList = new ArrayList<>();
+        if (imuArray == null) return imuList;
+        Gson gson = new Gson();
+        for (int i = 0; i < imuArray.size(); i++) {
+            ImuRecord record = gson.fromJson(imuArray.get(i), ImuRecord.class);
+            imuList.add(record);
+        }
+        return imuList;
+    }/** Parses PDR data from JSON. */
+    private static List<PdrRecord> parsePdrData(JsonArray pdrArray) {
+        List<PdrRecord> pdrList = new ArrayList<>();
+        if (pdrArray == null) return pdrList;
+        Gson gson = new Gson();
+        for (int i = 0; i < pdrArray.size(); i++) {
+            PdrRecord record = gson.fromJson(pdrArray.get(i), PdrRecord.class);
+            pdrList.add(record);
+        }
+        return pdrList;
+    }/** Parses GNSS data from JSON. */
+    private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
+        List<GnssRecord> gnssList = new ArrayList<>();
+        if (gnssArray == null) return gnssList;
+        Gson gson = new Gson();
+        for (int i = 0; i < gnssArray.size(); i++) {
+            GnssRecord record = gson.fromJson(gnssArray.get(i), GnssRecord.class);
+            gnssList.add(record);
+        }
+        return gnssList;
+    }/** Finds the closest IMU record to the given timestamp. */
+    private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {
+        return imuList.stream().min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp)))
+                .orElse(null);
+
+    }/** Finds the closest GNSS record to the given timestamp. */
+    private static GnssRecord findClosestGnssRecord(List<GnssRecord> gnssList, long targetTimestamp) {
+        return gnssList.stream().min(Comparator.comparingLong(gnss -> Math.abs(gnss.relativeTimestamp - targetTimestamp)))
+                .orElse(null);
+
+    }/** Computes the orientation from a rotation vector. */
+    private static float computeOrientationFromRotationVector(float rx, float ry, float rz, float rw, Context context) {
+        float[] rotationVector = new float[]{rx, ry, rz, rw};
+        float[] rotationMatrix = new float[9];
+        float[] orientationAngles = new float[3];
+
+        SensorManager sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+        SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVector);
+        SensorManager.getOrientation(rotationMatrix, orientationAngles);
+
+        float azimuthDeg = (float) Math.toDegrees(orientationAngles[0]);
+        return azimuthDeg < 0 ? azimuthDeg + 360.0f : azimuthDeg;
     }
-    return imuList;
-}/** Parses PDR data from JSON. */
-private static List<PdrRecord> parsePdrData(JsonArray pdrArray) {
-    List<PdrRecord> pdrList = new ArrayList<>();
-    if (pdrArray == null) return pdrList;
-    Gson gson = new Gson();
-    for (int i = 0; i < pdrArray.size(); i++) {
-        PdrRecord record = gson.fromJson(pdrArray.get(i), PdrRecord.class);
-        pdrList.add(record);
-    }
-    return pdrList;
-}/** Parses GNSS data from JSON. */
-private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
-    List<GnssRecord> gnssList = new ArrayList<>();
-    if (gnssArray == null) return gnssList;
-    Gson gson = new Gson();
-    for (int i = 0; i < gnssArray.size(); i++) {
-        GnssRecord record = gson.fromJson(gnssArray.get(i), GnssRecord.class);
-        gnssList.add(record);
-    }
-    return gnssList;
-}/** Finds the closest IMU record to the given timestamp. */
-private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {
-    return imuList.stream().min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp)))
-            .orElse(null);
-
-}/** Finds the closest GNSS record to the given timestamp. */
-private static GnssRecord findClosestGnssRecord(List<GnssRecord> gnssList, long targetTimestamp) {
-    return gnssList.stream().min(Comparator.comparingLong(gnss -> Math.abs(gnss.relativeTimestamp - targetTimestamp)))
-            .orElse(null);
-
-}/** Computes the orientation from a rotation vector. */
-private static float computeOrientationFromRotationVector(float rx, float ry, float rz, float rw, Context context) {
-    float[] rotationVector = new float[]{rx, ry, rz, rw};
-    float[] rotationMatrix = new float[9];
-    float[] orientationAngles = new float[3];
-
-    SensorManager sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
-    SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVector);
-    SensorManager.getOrientation(rotationMatrix, orientationAngles);
-
-    float azimuthDeg = (float) Math.toDegrees(orientationAngles[0]);
-    return azimuthDeg < 0 ? azimuthDeg + 360.0f : azimuthDeg;
-}
 
 }

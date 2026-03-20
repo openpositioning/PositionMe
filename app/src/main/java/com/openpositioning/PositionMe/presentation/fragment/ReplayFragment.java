@@ -130,8 +130,7 @@ public class ReplayFragment extends Fragment {
                     .replace(R.id.replayMapFragmentContainer, trajectoryMapFragment)
                     .commit();
         }
-
-
+        trajectoryMapFragment.setReplayModeEnabled(true);
 
         // 1) Check if the file contains any GNSS data
         boolean gnssExists = hasAnyGnssData(replayData);
@@ -272,7 +271,7 @@ public class ReplayFragment extends Fragment {
     }
 
     private void setupInitialMapPosition(float latitude, float longitude) {
-        LatLng startPoint = new LatLng(initialLat, initialLon);
+        LatLng startPoint = new LatLng(latitude, longitude);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
         trajectoryMapFragment.setInitialCameraPosition(startPoint);
     }
@@ -333,6 +332,12 @@ public class ReplayFragment extends Fragment {
             trajectoryMapFragment.clearMapAndReset();
             for (int i = 0; i <= newIndex; i++) {
                 TrajParser.ReplayPoint p = replayData.get(i);
+                trajectoryMapFragment.setReplayFrameContext(
+                        p.syntheticFloor,
+                        p.currentElevation,
+                        p.deltaHeight,
+                        p.heightChanged
+                );
                 trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
                 if (p.gnssLocation != null) {
                     trajectoryMapFragment.updateGNSS(p.gnssLocation);
@@ -341,6 +346,12 @@ public class ReplayFragment extends Fragment {
         } else {
             // Normal sequential forward step: add just the new point
             TrajParser.ReplayPoint p = replayData.get(newIndex);
+            trajectoryMapFragment.setReplayFrameContext(
+                    p.syntheticFloor,
+                    p.currentElevation,
+                    p.deltaHeight,
+                    p.heightChanged
+            );
             trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
             if (p.gnssLocation != null) {
                 trajectoryMapFragment.updateGNSS(p.gnssLocation);

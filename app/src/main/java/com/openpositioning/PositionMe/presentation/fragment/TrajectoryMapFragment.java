@@ -218,6 +218,15 @@ public class TrajectoryMapFragment extends Fragment {
     @Nullable
     private CandidatePose previousMatchedPose;
 
+    private boolean replayModeEnabled = false;
+    @Nullable
+    private Integer replaySyntheticFloor;
+    @Nullable
+    private Double replayCurrentElevation;
+    @Nullable
+    private Double replayDeltaHeight;
+    private boolean replayHeightChanged = false;
+
     private Handler autoFloorHandler;
     private Runnable autoFloorTask;
     private int lastCandidateFloor = Integer.MIN_VALUE;
@@ -1612,6 +1621,56 @@ public class TrajectoryMapFragment extends Fragment {
         });
     }
 
+    public void setReplayModeEnabled(boolean enabled) {
+        replayModeEnabled = enabled;
+        if (enabled) {
+            stopAutoFloor();
+        }
+        if (autoFloorSwitch != null) {
+            autoFloorSwitch.setChecked(false);
+            autoFloorSwitch.setEnabled(!enabled);
+            autoFloorSwitch.setAlpha(enabled ? 0.45f : 1f);
+        }
+    }
+
+    public void setReplayFrameContext(@Nullable Integer syntheticFloor,
+                                      @Nullable Double currentElevation,
+                                      @Nullable Double deltaHeight,
+                                      boolean heightChanged) {
+        setReplayModeEnabled(true);
+        replaySyntheticFloor = syntheticFloor;
+        replayCurrentElevation = currentElevation;
+        replayDeltaHeight = deltaHeight;
+        replayHeightChanged = heightChanged;
+    }
+
+    private int resolveReplayCandidateFloorIndex() {
+        if (!replayModeEnabled || replaySyntheticFloor == null) {
+            return currentFloorIndex;
+        }
+        if (selectedFloorplanBuilding == null || indoorMapManager == null) {
+            return currentFloorIndex;
+        }
+
+        indoorMapManager.setSelectedBuilding(selectedFloorplanBuilding);
+        int mappedFloorIndex = indoorMapManager.logicalFloorToIndex(replaySyntheticFloor);
+        int maxFloor = Math.max(0, selectedFloorplanBuilding.getFloorShapesList().size() - 1);
+        return Math.max(0, Math.min(mappedFloorIndex, maxFloor));
+    }
+
+    private void applyReplayMatchedFloorIfNeeded(int matchedFloorIndex) {
+        if (selectedFloorplanBuilding == null || indoorMapManager == null) {
+            return;
+        }
+        int maxFloor = Math.max(0, selectedFloorplanBuilding.getFloorShapesList().size() - 1);
+        int clampedFloor = Math.max(0, Math.min(matchedFloorIndex, maxFloor));
+        if (clampedFloor == currentFloorIndex) {
+            return;
+        }
+        indoorMapManager.setSelectedBuilding(selectedFloorplanBuilding);
+        setFloor(clampedFloor);
+    }
+
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) {
             return;
@@ -1622,9 +1681,10 @@ public class TrajectoryMapFragment extends Fragment {
 
         FloorplanApiClient.FloorShapes activeFloorShapes = getActiveFloorShapesForMatching();
         long timestampMs = SystemClock.elapsedRealtime();
+        int replayCandidateFloorIndex = resolveReplayCandidateFloorIndex();
         CandidatePose currentCandidatePose = new CandidatePose(
                 rawLocation,
-                currentFloorIndex,
+                replayCandidateFloorIndex,
                 timestampMs,
                 "replay_pdr"
         );
@@ -1671,6 +1731,7 @@ public class TrajectoryMapFragment extends Fragment {
                 timestampMs,
                 "map_matched"
         );
+        applyReplayMatchedFloorIfNeeded(matchedFloor);
 
         boolean shouldFollowCamera = !(indoorMapVisible || actualMapVisible);
         if (orientationMarker == null) {
@@ -1746,7 +1807,16 @@ public class TrajectoryMapFragment extends Fragment {
 
     @Nullable
     private VerticalTransitionHint buildReplayVerticalHint() {
-        return null;
+        if (!replayModeEnabled) {
+            return null;
+        }
+        if (replayCurrentElevation == null && replayDeltaHeight == null && !replayHeightChanged) {
+            return null;
+        }
+
+        double currentElevation = replayCurrentElevation != null ? replayCurrentElevation : 0d;
+        double deltaHeight = replayDeltaHeight != null ? replayDeltaHeight : 0d;
+        return new VerticalTransitionHint(currentElevation, deltaHeight, replayHeightChanged);
     }
 
     private void resetMapMatchingState() {
@@ -2210,6 +2280,10 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastGnssLocation = null;
         currentLocation = null;
+        replaySyntheticFloor = null;
+        replayCurrentElevation = null;
+        replayDeltaHeight = null;
+        replayHeightChanged = false;
         resetMapMatchingState();
 
         for (Marker m : testPointMarkers) {
@@ -2254,6 +2328,12 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     private void startAutoFloor() {
+        if (replayModeEnabled) {
+            if (autoFloorSwitch != null) {
+                autoFloorSwitch.setChecked(false);
+            }
+            return;
+        }
         if (autoFloorHandler == null) {
             autoFloorHandler = new Handler(Looper.getMainLooper());
         }
@@ -2272,6 +2352,9 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     private void applyImmediateFloor() {
+        if (replayModeEnabled) {
+            return;
+        }
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             return;
         }
@@ -2300,6 +2383,9 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     private void evaluateAutoFloor() {
+        if (replayModeEnabled) {
+            return;
+        }
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             return;
         }

@@ -1,7 +1,10 @@
 package com.openpositioning.PositionMe.presentation.fragment;
 
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -18,6 +21,9 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.GroundOverlay;
+import com.google.android.gms.maps.model.GroundOverlayOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
@@ -26,185 +32,196 @@ import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.BuildingPolygon;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import android.os.Handler;
-import android.os.Looper;
-import android.widget.Toast;
-
-/**
- * Fragment for selecting the start location before recording begins.
- * Displays a Google Map with building outlines fetched from the floorplan API.
- * Users can tap a building outline to select it, which shows the indoor floor plan
- * and places a draggable marker at the building center. The selected building ID
- * is saved for use during trajectory upload.
- *
- * @see RecordingFragment the next fragment in the recording flow
- * @see SensorFusion the class containing sensors and recording
- * @see FloorplanApiClient the API client for fetching building data
- */
 public class StartLocationFragment extends Fragment {
-    // --- 新增变量 ---
-    // --- 新增变量 ---
-    private Button btnFindIndoorMap;
-    private Button btnFindActualMap;
-    private boolean useActualMap = false; // 核心状态：判断显示哪种地图
-    private com.google.android.gms.maps.model.GroundOverlay realMapOverlay;
-
-    private final Handler retryHandler = new Handler(Looper.getMainLooper());
-    private int requestRetryCount = 0;
-    private static final int MAX_REQUEST_RETRIES = 10;
-    private static final long RETRY_DELAY_MS = 2000;
-
     private static final String TAG = "StartLocationFragment";
-
-    // UI elements
-    private Button button;
-    private TextView instructionText;
-    private View buildingInfoCard;
-    private TextView buildingNameText;
-
-    // Singleton SensorFusion class which stores data from all sensors
-    private SensorFusion sensorFusion = SensorFusion.getInstance();
-
-    // Map and position state
-    private GoogleMap mMap;
-    private LatLng position;
-    private float[] startPosition = new float[2];
-    private float zoom = 19f;
-    private Marker startMarker;
-
-    // Building selection state
-    private String selectedBuildingId;
-    private final List<Polygon> buildingPolygons = new ArrayList<>();
-    private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingMap = new HashMap<>();
-    private Polygon selectedPolygon;
-
-    // Vector shapes drawn as floor plan preview (cleared when switching buildings)
-    private final List<Polygon> previewPolygons = new ArrayList<>();
-    private final List<Polyline> previewPolylines = new ArrayList<>();
-
-    // 【新增这一行】：用于存储白色蒙版以便清除
-    private Polygon whiteMaskPolygon;
-
-    // Building outline colours (ARGB)
     private static final int FILL_COLOR_DEFAULT = Color.argb(60, 33, 150, 243);
     private static final int STROKE_COLOR_DEFAULT = Color.argb(200, 33, 150, 243);
     private static final int FILL_COLOR_SELECTED = Color.argb(100, 33, 150, 243);
     private static final int STROKE_COLOR_SELECTED = Color.argb(255, 25, 118, 210);
+    private static final int MAX_REQUEST_RETRIES = 10;
+    private static final long RETRY_DELAY_MS = 2000;
 
-    /**
-     * Public Constructor for the class.
-     * Left empty as not required
-     */
-    public StartLocationFragment() {
-        // Required empty public constructor
+    private enum HorizontalAnchor { LEFT, RIGHT, CENTER }
+
+    private static final class ActualMapAlignmentConfig {
+        final HorizontalAnchor horizontalAnchor;
+        final double northInsetRatio;
+        final double southInsetRatio;
+        final double horizontalInsetRatio;
+        final double widthScale;
+        final double topVisibleInsetRatio;
+        final double bottomVisibleInsetRatio;
+        final double rightVisibleInsetRatio;
+        final double leftVisibleInsetRatio;
+
+        ActualMapAlignmentConfig(HorizontalAnchor horizontalAnchor,
+                                 double northInsetRatio,
+                                 double southInsetRatio,
+                                 double horizontalInsetRatio,
+                                 double widthScale,
+                                 double topVisibleInsetRatio,
+                                 double bottomVisibleInsetRatio,
+                                 double rightVisibleInsetRatio,
+                                 double leftVisibleInsetRatio) {
+            this.horizontalAnchor = horizontalAnchor;
+            this.northInsetRatio = northInsetRatio;
+            this.southInsetRatio = southInsetRatio;
+            this.horizontalInsetRatio = horizontalInsetRatio;
+            this.widthScale = widthScale;
+            this.topVisibleInsetRatio = topVisibleInsetRatio;
+            this.bottomVisibleInsetRatio = bottomVisibleInsetRatio;
+            this.rightVisibleInsetRatio = rightVisibleInsetRatio;
+            this.leftVisibleInsetRatio = leftVisibleInsetRatio;
+        }
     }
 
-    /**
-     * {@inheritDoc}
-     * Inflates the layout, initialises the map, and requests building data from the API.
-     */
+    private static final class DrawableContentInsets {
+        final double leftFraction;
+        final double topFraction;
+        final double rightFraction;
+        final double bottomFraction;
+
+        DrawableContentInsets(double leftFraction, double topFraction, double rightFraction, double bottomFraction) {
+            this.leftFraction = clamp01(leftFraction);
+            this.topFraction = clamp01(topFraction);
+            this.rightFraction = clamp01(rightFraction);
+            this.bottomFraction = clamp01(bottomFraction);
+        }
+
+        double contentWidthFraction() {
+            return Math.max(0.01d, 1d - leftFraction - rightFraction);
+        }
+
+        double contentHeightFraction() {
+            return Math.max(0.01d, 1d - topFraction - bottomFraction);
+        }
+    }
+
+    private static final class OverlayCalibration {
+        final float shiftLatRatio;
+        final float shiftLngRatio;
+        final float widthScale;
+        final float heightScale;
+
+        OverlayCalibration(float shiftLatRatio, float shiftLngRatio, float widthScale, float heightScale) {
+            this.shiftLatRatio = shiftLatRatio;
+            this.shiftLngRatio = shiftLngRatio;
+            this.widthScale = widthScale;
+            this.heightScale = heightScale;
+        }
+
+        static OverlayCalibration identity() {
+            return new OverlayCalibration(0f, 0f, 1f, 1f);
+        }
+    }
+
+    private Button button;
+    private TextView instructionText;
+    private View buildingInfoCard;
+    private TextView buildingNameText;
+    private FloatingActionButton floorUpButton;
+    private FloatingActionButton floorDownButton;
+    private TextView floorLabel;
+
+    private final SensorFusion sensorFusion = SensorFusion.getInstance();
+    private final Handler retryHandler = new Handler(Looper.getMainLooper());
+    private final FloorplanApiClient floorplanApiClient = new FloorplanApiClient();
+
+    private GoogleMap mMap;
+    private float[] startPosition = new float[2];
+    private float zoom = 19f;
+    private Marker startMarker;
+    private String selectedBuildingId;
+    private int currentFloorIndex = 0;
+    private boolean showActualMapOverlays = true;
+    private boolean isMarkerDraggedSelection = false;
+    private boolean hasInitialCameraPositioned = false;
+
+    private final List<Polygon> buildingPolygons = new ArrayList<>();
+    private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingMap = new HashMap<>();
+    private final List<GroundOverlay> realMapOverlays = new ArrayList<>();
+    private final List<Polygon> previewPolygons = new ArrayList<>();
+    private final List<Polyline> previewPolylines = new ArrayList<>();
+    private Polygon whiteMaskPolygon;
+    private Polygon selectedPolygon;
+    private FloorplanApiClient.BuildingInfo selectedFloorplanBuilding;
+    private int requestRetryCount = 0;
+
+    public StartLocationFragment() {}
+
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         AppCompatActivity activity = (AppCompatActivity) getActivity();
         if (activity != null && activity.getSupportActionBar() != null) {
             activity.getSupportActionBar().hide();
         }
         View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
 
-        // Obtain the start position from GPS data
         startPosition = sensorFusion.getGNSSLatitude(false);
-        if (startPosition[0] == 0 && startPosition[1] == 0) {
-            zoom = 1f;
-        } else {
-            zoom = 19f;
+        zoom = (startPosition[0] == 0 && startPosition[1] == 0) ? 1f : 19f;
+
+        SupportMapFragment supportMapFragment = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.startMap);
+        if (supportMapFragment != null) {
+            supportMapFragment.getMapAsync(new OnMapReadyCallback() {
+                @Override
+                public void onMapReady(GoogleMap googleMap) {
+                    mMap = googleMap;
+                    setupMap();
+                    requestBuildingDataWhenReady();
+                }
+            });
         }
-
-        // Initialize map fragment
-        SupportMapFragment supportMapFragment = (SupportMapFragment)
-                getChildFragmentManager().findFragmentById(R.id.startMap);
-
-        supportMapFragment.getMapAsync(new OnMapReadyCallback() {
-            /**
-             * {@inheritDoc}
-             * Sets up the map, adds the initial marker, and fetches building outlines.
-             */
-            @Override
-            public void onMapReady(GoogleMap googleMap) {
-                mMap = googleMap;
-                setupMap();
-                //requestBuildingData();
-            }
-        });
-
         return rootView;
     }
-    /**
-     * 清理所有地图上的覆盖物（矢量图、白板、真实贴图）
-     */
-    private void resetMapOverlays() {
-        for (Polygon p : previewPolygons) p.remove();
-        for (Polyline p : previewPolylines) p.remove();
-        previewPolygons.clear();
-        previewPolylines.clear();
 
-        if (whiteMaskPolygon != null) {
-            whiteMaskPolygon.remove();
-            whiteMaskPolygon = null;
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        button = view.findViewById(R.id.startLocationDone);
+        instructionText = view.findViewById(R.id.correctionInfoView);
+        floorUpButton = view.findViewById(R.id.floorUpButton);
+        floorDownButton = view.findViewById(R.id.floorDownButton);
+        floorLabel = view.findViewById(R.id.floorLabel);
+
+        setFloorControlsVisibility(View.GONE);
+
+        if (floorUpButton != null) {
+            floorUpButton.setOnClickListener(v -> moveFloor(true));
+        }
+        if (floorDownButton != null) {
+            floorDownButton.setOnClickListener(v -> moveFloor(false));
         }
 
-        if (realMapOverlay != null) {
-            realMapOverlay.remove();
-            realMapOverlay = null;
-        }
-    }
-    private void requestBuildingDataWhenReady() {
-        float[] gnss = sensorFusion.getGNSSLatitude(false);
-        startPosition[0] = gnss[0];
-        startPosition[1] = gnss[1];
-
-        boolean gnssReady = !(startPosition[0] == 0f && startPosition[1] == 0f);
-
-        if (!gnssReady) {
-            if (requestRetryCount < MAX_REQUEST_RETRIES) {
-                requestRetryCount++;
-                Log.d(TAG, "GNSS not ready, retry floorplan request: " + requestRetryCount);
-                retryHandler.postDelayed(this::requestBuildingDataWhenReady, RETRY_DELAY_MS);
-            } else {
-                Log.w(TAG, "GNSS still not ready after retries, requesting floorplan anyway");
-                requestBuildingData();
-                return;
+        button.setOnClickListener(v -> {
+            float chosenLat = startPosition[0];
+            float chosenLon = startPosition[1];
+            if (selectedBuildingId != null) {
+                sensorFusion.setSelectedBuildingId(selectedBuildingId);
             }
-
-        }
-
-        LatLng current = new LatLng(startPosition[0], startPosition[1]);
-
-        if (startMarker != null) {
-            startMarker.setPosition(current);
-        }
-
-        if (mMap != null) {
-            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(current, zoom));
-        }
-
-        requestBuildingData();
+            if (requireActivity() instanceof RecordingActivity) {
+                sensorFusion.startRecording();
+                sensorFusion.setStartGNSSLatitude(startPosition);
+                sensorFusion.writeInitialMetadata();
+                ((RecordingActivity) requireActivity()).showRecordingScreen();
+            } else if (requireActivity() instanceof ReplayActivity) {
+                ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);
+            }
+        });
     }
 
-    /**
-     * Configures the Google Map with initial settings, draggable marker, and listeners.
-     */
     private void setupMap() {
         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
         mMap.getUiSettings().setCompassEnabled(true);
@@ -213,56 +230,26 @@ public class StartLocationFragment extends Fragment {
         mMap.getUiSettings().setScrollGesturesEnabled(true);
         mMap.clear();
 
-        // Add initial marker at GPS position
-        position = new LatLng(startPosition[0], startPosition[1]);
-        startMarker = mMap.addMarker(new MarkerOptions()
-                .position(position)
-                .title("Start Position")
-                .draggable(true));
-        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
+        LatLng position = new LatLng(startPosition[0], startPosition[1]);
+        startMarker = mMap.addMarker(new MarkerOptions().position(position).title("Start Position").draggable(true));
+        if (!hasInitialCameraPositioned) {
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
+            hasInitialCameraPositioned = true;
+        }
 
-        // Marker drag listener to update the start position when dragged
         mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
-            @Override
-            public void onMarkerDragStart(Marker marker) {}
-
+            @Override public void onMarkerDragStart(Marker marker) {}
+            @Override public void onMarkerDrag(Marker marker) {}
             @Override
             public void onMarkerDragEnd(Marker marker) {
+                isMarkerDraggedSelection = true;
                 startPosition[0] = (float) marker.getPosition().latitude;
                 startPosition[1] = (float) marker.getPosition().longitude;
-
-                floorplanBuildingMap.clear();
-
-                for (Polygon p : buildingPolygons) {
-                    p.remove();
-                }
-                buildingPolygons.clear();
-
-                for (Polygon p : previewPolygons) {
-                    p.remove();
-                }
-                previewPolygons.clear();
-
-                for (Polyline p : previewPolylines) {
-                    p.remove();
-                }
-                previewPolylines.clear();
-// 【新增这段】：清除上一层的白色蒙版
-                if (whiteMaskPolygon != null) {
-                    whiteMaskPolygon.remove();
-                    whiteMaskPolygon = null;
-                }
-                selectedPolygon = null;
-                selectedBuildingId = null;
-
+                clearBuildingPolygonsOnly();
                 requestBuildingData();
             }
-
-            @Override
-            public void onMarkerDrag(Marker marker) {}
         });
 
-        // Polygon click listener for building selection
         mMap.setOnPolygonClickListener(polygon -> {
             String buildingName = (String) polygon.getTag();
             if (buildingName != null) {
@@ -271,230 +258,685 @@ public class StartLocationFragment extends Fragment {
         });
     }
 
-    /**
-     * Requests building data from the floorplan API using the current GPS position.
-     * On success, draws building outlines on the map. On failure, falls back to
-     * the standard drag-marker interaction.
-     */
-    private void requestBuildingData() {
-        FloorplanApiClient apiClient = new FloorplanApiClient();
-
-        // Collect observed WiFi AP MAC addresses from latest scan
-        List<String> observedMacs = new ArrayList<>();
-        List<com.openpositioning.PositionMe.sensors.Wifi> wifiList =
-                sensorFusion.getWifiList();
-        if (wifiList != null) {
-            for (com.openpositioning.PositionMe.sensors.Wifi wifi : wifiList) {
-                String mac = wifi.getBssidString();
-                if (mac != null && !mac.isEmpty()) {
-                    observedMacs.add(mac);
-                }
+    private void requestBuildingDataWhenReady() {
+        if (!isMarkerDraggedSelection) {
+            float[] gnss = sensorFusion.getGNSSLatitude(false);
+            startPosition[0] = gnss[0];
+            startPosition[1] = gnss[1];
+        }
+        boolean gnssReady = !(startPosition[0] == 0f && startPosition[1] == 0f);
+        if (!gnssReady) {
+            if (requestRetryCount < MAX_REQUEST_RETRIES) {
+                requestRetryCount++;
+                retryHandler.postDelayed(this::requestBuildingDataWhenReady, RETRY_DELAY_MS);
+                return;
             }
         }
 
-        apiClient.requestFloorplan(startPosition[0], startPosition[1], observedMacs,
+        LatLng current = new LatLng(startPosition[0], startPosition[1]);
+        if (startMarker != null) startMarker.setPosition(current);
+        if (mMap != null && !hasInitialCameraPositioned) {
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(current, zoom));
+            hasInitialCameraPositioned = true;
+        }
+        requestBuildingData();
+    }
+
+    private void requestBuildingData() {
+        List<String> observedMacs = new ArrayList<>();
+        List<com.openpositioning.PositionMe.sensors.Wifi> wifiList = sensorFusion.getWifiList();
+        if (wifiList != null) {
+            for (com.openpositioning.PositionMe.sensors.Wifi wifi : wifiList) {
+                String mac = wifi.getBssidString();
+                if (mac != null && !mac.isEmpty()) observedMacs.add(mac);
+            }
+        }
+
+        floorplanApiClient.requestFloorplan(startPosition[0], startPosition[1], observedMacs,
                 new FloorplanApiClient.FloorplanCallback() {
                     @Override
                     public void onSuccess(List<FloorplanApiClient.BuildingInfo> buildings) {
                         if (!isAdded() || mMap == null) return;
-
                         sensorFusion.setFloorplanBuildings(buildings);
                         floorplanBuildingMap.clear();
                         for (FloorplanApiClient.BuildingInfo building : buildings) {
                             floorplanBuildingMap.put(building.getName(), building);
                         }
-
-                        if (buildings.isEmpty()) {
-                            Log.d(TAG, "No buildings returned by API");
-                            if (instructionText != null) {
-                                instructionText.setText(R.string.noBuildingsFound);
-                            }
-                            return;
-                        }
-
                         drawBuildingOutlines(buildings);
                     }
 
                     @Override
                     public void onFailure(String error) {
                         if (!isAdded()) return;
-                        sensorFusion.setFloorplanBuildings(new ArrayList<>());
-                        floorplanBuildingMap.clear();
                         Log.e(TAG, "Floorplan API failed: " + error);
                     }
                 });
     }
 
-    /**
-     * Draws building outlines on the map as clickable coloured polygons.
-     *
-     * @param buildings list of building info objects containing outline polygons
-     */
     private void drawBuildingOutlines(List<FloorplanApiClient.BuildingInfo> buildings) {
+        for (Polygon p : buildingPolygons) p.remove();
+        buildingPolygons.clear();
+
         for (FloorplanApiClient.BuildingInfo building : buildings) {
             List<LatLng> outlinePoints = building.getOutlinePolygon();
-            if (outlinePoints == null || outlinePoints.size() < 3) {
-                Log.w(TAG, "Skipping building with insufficient outline points: "
-                        + building.getName());
-                continue;
-            }
-
-            PolygonOptions options = new PolygonOptions()
+            if (outlinePoints == null || outlinePoints.size() < 3) continue;
+            Polygon polygon = mMap.addPolygon(new PolygonOptions()
                     .addAll(outlinePoints)
                     .strokeColor(STROKE_COLOR_DEFAULT)
                     .strokeWidth(4f)
                     .fillColor(FILL_COLOR_DEFAULT)
-                    .clickable(true);
-
-            Polygon polygon = mMap.addPolygon(options);
+                    .clickable(true));
             polygon.setTag(building.getName());
             buildingPolygons.add(polygon);
         }
 
-        // Auto-zoom to include building(s) and current position
-        if (!buildingPolygons.isEmpty()) {
-            LatLngBounds.Builder boundsBuilder = new LatLngBounds.Builder();
-            boundsBuilder.include(new LatLng(startPosition[0], startPosition[1]));
-            for (Polygon p : buildingPolygons) {
-                for (LatLng point : p.getPoints()) {
-                    boundsBuilder.include(point);
-                }
-            }
-            try {
-                mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(
-                        boundsBuilder.build(), 100));
-            } catch (Exception e) {
-                Log.w(TAG, "Could not fit bounds", e);
-            }
-        }
+        // Keep the current camera fixed. We only refresh the outlines and do not auto-zoom.
     }
 
-    /**
-     * Handles building selection when user taps a building polygon.
-     * Highlights the polygon, shows the floor plan overlay, moves the marker,
-     * and stores the building identifier.
-     *
-     * @param buildingName the name/ID of the selected building (e.g. "nucleus_building")
-     * @param polygon      the tapped polygon on the map
-     */
     private void onBuildingSelected(String buildingName, Polygon polygon) {
-        // Reset previous selection colour
         if (selectedPolygon != null) {
             selectedPolygon.setFillColor(FILL_COLOR_DEFAULT);
             selectedPolygon.setStrokeColor(STROKE_COLOR_DEFAULT);
         }
-
-        // Highlight selected polygon
         selectedPolygon = polygon;
         polygon.setFillColor(FILL_COLOR_SELECTED);
         polygon.setStrokeColor(STROKE_COLOR_SELECTED);
-
-        // Store building selection
         selectedBuildingId = buildingName;
+        selectedFloorplanBuilding = floorplanBuildingMap.get(buildingName);
+        currentFloorIndex = getDefaultFloorIndex(selectedFloorplanBuilding);
 
-        // Compute building centre from polygon points
         LatLng center = computePolygonCenter(polygon);
-
-        // Move the marker to building centre
-        if (startMarker != null) {
-            startMarker.setPosition(center);
-        }
+        if (startMarker != null) startMarker.setPosition(center);
         startPosition[0] = (float) center.latitude;
         startPosition[1] = (float) center.longitude;
+        // Keep the current camera fixed when a building is selected.
 
-        // Zoom to the building
-        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(center, 20f));
+        updateBuildingInfoDisplay(buildingName);
+        redrawSelectedBuildingOverlay();
+    }
 
-        // ================= 【核心逻辑修改】 =================
-        // 点击建筑后，先清理屏幕上已有的图层
+    private void redrawSelectedBuildingOverlay() {
         resetMapOverlays();
-
-        // 根据当前用户选中的模式，展示不同的地图
-        if (useActualMap) {
-            updateRealMapOverlay(buildingName, true); // 只有点击蓝框后，才贴上 drawable 里的真实图片
-        } else {
-            showFloorPlanOverlay(buildingName);       // 只有点击蓝框后，才弹出白板并画上黑色矢量线
+        if (selectedFloorplanBuilding == null || selectedBuildingId == null) {
+            setFloorControlsVisibility(View.GONE);
+            return;
         }
-        // ==================================================
-
-        Log.d(TAG, "Building selected: " + buildingName + ", Mode: " + (useActualMap ? "Actual" : "Vector"));
+        updateRealMapOverlay(selectedBuildingId, currentFloorIndex, true);
+        setFloorControlsVisibility(View.VISIBLE);
+        updateFloorLabel();
     }
-    /**
-     * 【新增方法】：用于在地图上覆盖你 drawable 文件夹中的实际室内地图图片
-     */
-    private void updateRealMapOverlay(String buildingName, boolean show) {
-        // 先移除旧的图片蒙版
-        if (realMapOverlay != null) {
-            realMapOverlay.remove();
-            realMapOverlay = null;
-        }
 
-        if (!show || buildingName == null) return;
-
-        int drawableResId = 0;
-        LatLngBounds bounds = null;
-
-        // 根据建筑名称匹配图片和对应的真实经纬度边界
-        if (buildingName.equals("nucleus_building")) {
-            drawableResId = R.drawable.nucleus1;
-            // 使用项目中已有的 BuildingPolygon 边界数据
-            bounds = new LatLngBounds(
-                    com.openpositioning.PositionMe.utils.BuildingPolygon.NUCLEUS_SW,
-                    com.openpositioning.PositionMe.utils.BuildingPolygon.NUCLEUS_NE);
-        }
-
-        if (drawableResId != 0 && bounds != null) {
-            // 将实际图片贴在地图上
-            realMapOverlay = mMap.addGroundOverlay(new com.google.android.gms.maps.model.GroundOverlayOptions()
-                    .image(com.google.android.gms.maps.model.BitmapDescriptorFactory.fromResource(drawableResId))
-                    .positionFromBounds(bounds)
-                    // zIndex设为 15，确保它显示在白色半透明蒙版(zIndex=10)上方，如果希望在黑线之上可改大
-                    .zIndex(15));
-        }
+    private void moveFloor(boolean moveUp) {
+        if (selectedFloorplanBuilding == null) return;
+        int next = getAdjacentFloorIndex(selectedFloorplanBuilding, currentFloorIndex, moveUp);
+        if (next == currentFloorIndex) return;
+        currentFloorIndex = next;
+        redrawSelectedBuildingOverlay();
     }
-    /**
-     * Shows a vector floor plan preview for the selected building using the
-     * map_shapes data from the API. Draws the ground floor shapes (walls, rooms).
-     * Removes any previously drawn preview shapes.
-     *
-     * @param buildingName the building identifier
-     */
-    private void showFloorPlanOverlay(String buildingName) {
-        // Clear previous preview shapes
+
+
+    private void setFloorControlsVisibility(int visibility) {
+        if (floorUpButton != null) floorUpButton.setVisibility(visibility);
+        if (floorDownButton != null) floorDownButton.setVisibility(visibility);
+        if (floorLabel != null) floorLabel.setVisibility(visibility);
+    }
+
+    private void updateFloorLabel() {
+        if (floorLabel == null || selectedFloorplanBuilding == null) return;
+        floorLabel.setText(formatFloorLabelForUi(getFloorDisplayName(selectedFloorplanBuilding, currentFloorIndex)));
+    }
+
+    private void resetMapOverlays() {
         for (Polygon p : previewPolygons) p.remove();
         for (Polyline p : previewPolylines) p.remove();
         previewPolygons.clear();
         previewPolylines.clear();
+        if (whiteMaskPolygon != null) {
+            whiteMaskPolygon.remove();
+            whiteMaskPolygon = null;
+        }
+        for (GroundOverlay overlay : realMapOverlays) {
+            if (overlay != null) overlay.remove();
+        }
+        realMapOverlays.clear();
+    }
 
-        // 【新增这段】：清除旧蒙版并绘制全新的全屏高透明度白色蒙版
+    private void clearBuildingPolygonsOnly() {
+        floorplanBuildingMap.clear();
+        for (Polygon p : buildingPolygons) p.remove();
+        buildingPolygons.clear();
+        selectedPolygon = null;
+    }
+
+    private void clearBuildingSelectionAndOverlays() {
+        floorplanBuildingMap.clear();
+        resetMapOverlays();
+        for (Polygon p : buildingPolygons) p.remove();
+        buildingPolygons.clear();
+        if (selectedPolygon != null) {
+            selectedPolygon.remove();
+            selectedPolygon = null;
+        }
+        selectedBuildingId = null;
+        selectedFloorplanBuilding = null;
+        if (buildingInfoCard != null) buildingInfoCard.setVisibility(View.GONE);
+        setFloorControlsVisibility(View.GONE);
+    }
+
+    private void updateRealMapOverlay(String buildingName, int floorIndex, boolean show) {
+        if (!show || mMap == null || selectedFloorplanBuilding == null) return;
+
+        String selectedBuildingKey = resolveKnownBuildingKey(selectedFloorplanBuilding, buildingName);
+        String selectedFloorDisplayName = normalizeFloorLabel(getFloorDisplayName(selectedFloorplanBuilding, floorIndex));
+        addActualMapOverlayForBuilding(selectedFloorplanBuilding, selectedBuildingKey, selectedFloorDisplayName, floorIndex);
+
+        if (shouldShowLinkedLibraryAndNucleus(selectedBuildingKey)) {
+            String linkedBuildingKey = "library".equals(selectedBuildingKey) ? "nucleus_building" : "library";
+            FloorplanApiClient.BuildingInfo linkedBuilding = findBuildingByKnownKey(linkedBuildingKey);
+            int linkedFloorIndex = linkedBuilding != null
+                    ? findMatchingFloorIndex(linkedBuilding, selectedFloorDisplayName, floorIndex)
+                    : resolveFallbackFloorIndexForKey(linkedBuildingKey, selectedFloorDisplayName, floorIndex);
+            addActualMapOverlayForBuilding(linkedBuilding, linkedBuildingKey, selectedFloorDisplayName, linkedFloorIndex);
+        }
+    }
+
+    private void addActualMapOverlayForBuilding(FloorplanApiClient.BuildingInfo building,
+                                                String buildingKey,
+                                                String requestedFloorDisplayName,
+                                                int requestedFloorIndex) {
+        if (mMap == null) return;
+        String normalizedBuildingKey = normalizeBuildingKey(buildingKey);
+        String requestedCanonicalFloor = canonicalFloorLabel(requestedFloorDisplayName);
+        if ("library".equals(normalizedBuildingKey) && "LG".equals(requestedCanonicalFloor)) return;
+
+        int resolvedFloorIndex = building != null
+                ? findMatchingFloorIndex(building, requestedFloorDisplayName, requestedFloorIndex)
+                : resolveFallbackFloorIndexForKey(normalizedBuildingKey, requestedFloorDisplayName, requestedFloorIndex);
+        String resolvedFloorDisplayName = building != null
+                ? normalizeFloorLabel(getFloorDisplayName(building, resolvedFloorIndex))
+                : normalizeFloorLabel(requestedFloorDisplayName);
+        String drawableFloorDisplayName = "library".equals(normalizedBuildingKey)
+                ? requestedCanonicalFloor
+                : resolvedFloorDisplayName;
+        int drawableResId = resolveActualMapDrawable(normalizedBuildingKey, drawableFloorDisplayName, resolvedFloorIndex);
+        LatLngBounds bounds = computeActualMapBounds(building, normalizedBuildingKey, drawableResId, drawableFloorDisplayName);
+        if (drawableResId != 0 && bounds != null) {
+            GroundOverlay overlay = mMap.addGroundOverlay(new GroundOverlayOptions()
+                    .image(BitmapDescriptorFactory.fromResource(drawableResId))
+                    .positionFromBounds(bounds)
+                    .transparency(0.18f)
+                    .zIndex(15f));
+            if (overlay != null) realMapOverlays.add(overlay);
+        }
+    }
+
+    private boolean shouldShowLinkedLibraryAndNucleus(String buildingKey) {
+        return "library".equals(buildingKey) || "nucleus_building".equals(buildingKey);
+    }
+
+    private FloorplanApiClient.BuildingInfo findBuildingByKnownKey(String knownKey) {
+        if (knownKey == null || knownKey.isEmpty()) return null;
+        if (selectedFloorplanBuilding != null) {
+            String selectedKey = resolveKnownBuildingKey(selectedFloorplanBuilding, selectedFloorplanBuilding.getName());
+            if (knownKey.equals(selectedKey)) return selectedFloorplanBuilding;
+        }
+        for (FloorplanApiClient.BuildingInfo building : floorplanBuildingMap.values()) {
+            String candidateKey = resolveKnownBuildingKey(building, building != null ? building.getName() : null);
+            if (knownKey.equals(candidateKey)) return building;
+        }
+        List<FloorplanApiClient.BuildingInfo> cachedBuildings = SensorFusion.getInstance().getFloorplanBuildings();
+        if (cachedBuildings != null) {
+            for (FloorplanApiClient.BuildingInfo building : cachedBuildings) {
+                String candidateKey = resolveKnownBuildingKey(building, building != null ? building.getName() : null);
+                if (knownKey.equals(candidateKey)) return building;
+            }
+        }
+        return null;
+    }
+
+    private int findMatchingFloorIndex(FloorplanApiClient.BuildingInfo building, String requestedFloorDisplayName, int fallbackFloorIndex) {
+        if (building == null || building.getFloorShapesList() == null || building.getFloorShapesList().isEmpty()) return 0;
+        String normalizedRequestedFloor = normalizeFloorLabel(requestedFloorDisplayName);
+        if (!normalizedRequestedFloor.isEmpty()) {
+            for (int i = 0; i < building.getFloorShapesList().size(); i++) {
+                String candidateLabel = normalizeFloorLabel(building.getFloorShapesList().get(i).getDisplayName());
+                if (areEquivalentFloorLabels(normalizedRequestedFloor, candidateLabel)) return i;
+            }
+        }
+        return Math.max(0, Math.min(fallbackFloorIndex, building.getFloorShapesList().size() - 1));
+    }
+
+    private boolean areEquivalentFloorLabels(String requestedFloorLabel, String candidateFloorLabel) {
+        if (requestedFloorLabel == null || candidateFloorLabel == null) return false;
+        if (requestedFloorLabel.equals(candidateFloorLabel)) return true;
+        String requested = canonicalFloorLabel(requestedFloorLabel);
+        String candidate = canonicalFloorLabel(candidateFloorLabel);
+        return !requested.isEmpty() && requested.equals(candidate);
+    }
+
+    private int resolveFallbackFloorIndexForKey(String buildingKey, String requestedFloorDisplayName, int requestedFloorIndex) {
+        String normalizedKey = normalizeBuildingKey(buildingKey);
+        String canonicalFloor = canonicalFloorLabel(requestedFloorDisplayName);
+        if ("nucleus_building".equals(normalizedKey)) {
+            switch (canonicalFloor) {
+                case "LG": return 0;
+                case "G": return 1;
+                case "1": return 2;
+                case "2": return 3;
+                case "3": return 4;
+                default: return Math.max(0, Math.min(requestedFloorIndex, 4));
+            }
+        }
+        if ("library".equals(normalizedKey)) {
+            switch (canonicalFloor) {
+                case "G": return 0;
+                case "1": return 1;
+                case "2": return 2;
+                case "3": return 3;
+                default: return Math.max(0, Math.min(requestedFloorIndex, 3));
+            }
+        }
+        return Math.max(0, requestedFloorIndex);
+    }
+
+    private int resolveActualMapDrawable(String buildingName, String floorDisplayName, int floorIndex) {
+        buildingName = normalizeBuildingKey(buildingName);
+        String canonicalFloor = canonicalFloorLabel(floorDisplayName);
+        if ("nucleus_building".equals(buildingName)) {
+            if ("LG".equals(canonicalFloor)) return R.drawable.nucleuslg;
+            if ("G".equals(canonicalFloor)) return R.drawable.nucleusg;
+            if ("1".equals(canonicalFloor)) return R.drawable.nucleus1;
+            if ("2".equals(canonicalFloor)) return R.drawable.nucleus2;
+            if ("3".equals(canonicalFloor)) return R.drawable.nucleus3;
+            switch (floorIndex) {
+                case 0: return R.drawable.nucleuslg;
+                case 1: return R.drawable.nucleusg;
+                case 2: return R.drawable.nucleus1;
+                case 3: return R.drawable.nucleus2;
+                case 4: return R.drawable.nucleus3;
+                default: return R.drawable.nucleusg;
+            }
+        }
+        if ("library".equals(buildingName)) {
+            if ("LG".equals(canonicalFloor)) return 0;
+            if ("G".equals(canonicalFloor)) return R.drawable.libraryg;
+            if ("1".equals(canonicalFloor)) return R.drawable.library1;
+            if ("2".equals(canonicalFloor)) return R.drawable.library2;
+            if ("3".equals(canonicalFloor)) return R.drawable.library3;
+            switch (floorIndex) {
+                case 0: return 0;
+                case 1: return R.drawable.libraryg;
+                case 2: return R.drawable.library1;
+                case 3: return R.drawable.library2;
+                case 4: return R.drawable.library3;
+                default: return R.drawable.libraryg;
+            }
+        }
+        return 0;
+    }
+
+    private LatLngBounds computeActualMapBounds(FloorplanApiClient.BuildingInfo building, String buildingName, int drawableResId, String floorDisplayName) {
+        buildingName = normalizeBuildingKey(buildingName);
+        ActualMapAlignmentConfig config = getActualMapAlignmentConfig(buildingName);
+        LatLngBounds bounds = null;
+        if ("library".equals(buildingName)) {
+            bounds = computeFixedActualMapBounds(buildingName, drawableResId);
+        } else if (building != null) {
+            bounds = computeThreeEdgeAlignedBounds(building, drawableResId, config);
+        } else {
+            bounds = computeFixedActualMapBounds(buildingName, drawableResId);
+        }
+        if (bounds == null) bounds = getFallbackBuildingBounds(buildingName);
+        if (bounds != null) bounds = applyDefaultCalibration(bounds, buildingName, floorDisplayName);
+        return bounds;
+    }
+
+    private LatLngBounds computeFixedActualMapBounds(String buildingName, int drawableResId) {
+        buildingName = normalizeBuildingKey(buildingName);
+        if ("library".equals(buildingName)) {
+            double widthScale = getLibraryFixedWidthScale(drawableResId);
+            return buildRightAnchoredRectBounds(BuildingPolygon.LIBRARY_SW, BuildingPolygon.LIBRARY_NE, widthScale, 1.0, 0.008, 0.0);
+        }
+        return null;
+    }
+
+    private double getLibraryFixedWidthScale(int drawableResId) {
+        return 1.000;
+    }
+
+    private LatLngBounds buildRightAnchoredRectBounds(LatLng southWest, LatLng northEast,
+                                                      double widthScale, double heightScale,
+                                                      double eastShiftRatio, double northShiftRatio) {
+        if (southWest == null || northEast == null) return null;
+        double rectWidth = northEast.longitude - southWest.longitude;
+        double rectHeight = northEast.latitude - southWest.latitude;
+        if (rectWidth <= 0d || rectHeight <= 0d) return null;
+        double overlayWidth = rectWidth * widthScale;
+        double overlayHeight = rectHeight * heightScale;
+        double east = northEast.longitude + rectWidth * eastShiftRatio;
+        double west = east - overlayWidth;
+        double north = northEast.latitude + rectHeight * northShiftRatio;
+        double south = north - overlayHeight;
+        return new LatLngBounds(new LatLng(south, west), new LatLng(north, east));
+    }
+
+    private LatLngBounds computeThreeEdgeAlignedBounds(FloorplanApiClient.BuildingInfo building, int drawableResId, ActualMapAlignmentConfig config) {
+        if (building == null || config == null) return null;
+        List<LatLng> outline = building.getOutlinePolygon();
+        if (outline == null || outline.size() < 3) return null;
+
+        double minLat = Double.POSITIVE_INFINITY;
+        double maxLat = Double.NEGATIVE_INFINITY;
+        double minLng = Double.POSITIVE_INFINITY;
+        double maxLng = Double.NEGATIVE_INFINITY;
+        for (LatLng point : outline) {
+            if (point == null) continue;
+            minLat = Math.min(minLat, point.latitude);
+            maxLat = Math.max(maxLat, point.latitude);
+            minLng = Math.min(minLng, point.longitude);
+            maxLng = Math.max(maxLng, point.longitude);
+        }
+        if (!Double.isFinite(minLat) || !Double.isFinite(maxLat) || !Double.isFinite(minLng) || !Double.isFinite(maxLng)
+                || maxLat <= minLat || maxLng <= minLng) return null;
+
+        double latSpan = maxLat - minLat;
+        double lngSpan = maxLng - minLng;
+        double visibleNorth = maxLat - latSpan * config.northInsetRatio;
+        double visibleSouth = minLat + latSpan * config.southInsetRatio;
+        if (visibleSouth >= visibleNorth) return null;
+
+        double fullAspectRatio = getDrawableAspectRatio(drawableResId);
+        if (fullAspectRatio <= 0d) return null;
+
+        DrawableContentInsets contentInsets = getDrawableContentInsets(drawableResId, config);
+        double visibleContentHeightFraction = contentInsets.contentHeightFraction();
+        double visibleContentWidthFraction = contentInsets.contentWidthFraction();
+        if (visibleContentHeightFraction <= 0d || visibleContentWidthFraction <= 0d) return null;
+
+        double visibleHeightDeg = visibleNorth - visibleSouth;
+        double totalHeightDeg = visibleHeightDeg / visibleContentHeightFraction;
+        double overlayNorth = visibleNorth + totalHeightDeg * contentInsets.topFraction;
+        double overlaySouth = overlayNorth - totalHeightDeg;
+
+        double midLatitudeRadians = Math.toRadians((visibleNorth + visibleSouth) / 2.0);
+        double metersPerDegreeLng = Math.max(111320.0 * Math.cos(midLatitudeRadians), 1.0);
+        double totalHeightMeters = totalHeightDeg * 111320.0;
+        double totalWidthMeters = (totalHeightMeters / fullAspectRatio) * config.widthScale;
+        double totalWidthLng = totalWidthMeters / metersPerDegreeLng;
+        double visibleContentWidthLng = totalWidthLng * visibleContentWidthFraction;
+
+        double visibleEast;
+        double visibleWest;
+        switch (config.horizontalAnchor) {
+            case RIGHT:
+                visibleEast = maxLng - lngSpan * config.horizontalInsetRatio;
+                visibleWest = visibleEast - visibleContentWidthLng;
+                break;
+            case LEFT:
+                visibleWest = minLng + lngSpan * config.horizontalInsetRatio;
+                visibleEast = visibleWest + visibleContentWidthLng;
+                break;
+            case CENTER:
+            default:
+                double centerLng = ((minLng + maxLng) / 2.0) + (lngSpan * (config.leftVisibleInsetRatio - config.rightVisibleInsetRatio) * 0.5);
+                visibleWest = centerLng - visibleContentWidthLng / 2.0;
+                visibleEast = centerLng + visibleContentWidthLng / 2.0;
+                break;
+        }
+
+        double overlayWest = visibleWest - totalWidthLng * contentInsets.leftFraction;
+        double overlayEast = overlayWest + totalWidthLng;
+        return new LatLngBounds(new LatLng(overlaySouth, overlayWest), new LatLng(overlayNorth, overlayEast));
+    }
+
+    private DrawableContentInsets getDrawableContentInsets(int drawableResId, ActualMapAlignmentConfig config) {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeResource(getResources(), drawableResId, bounds);
+        return new DrawableContentInsets(config.leftVisibleInsetRatio, config.topVisibleInsetRatio,
+                config.rightVisibleInsetRatio, config.bottomVisibleInsetRatio);
+    }
+
+    private double getDrawableAspectRatio(int drawableResId) {
+        try {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeResource(getResources(), drawableResId, options);
+            if (options.outWidth > 0 && options.outHeight > 0) {
+                return (double) options.outHeight / (double) options.outWidth;
+            }
+        } catch (Exception ignored) {
+        }
+        return 1d;
+    }
+
+    private LatLngBounds getFallbackBuildingBounds(String buildingName) {
+        buildingName = normalizeBuildingKey(buildingName);
+        if ("nucleus_building".equals(buildingName)) return new LatLngBounds(BuildingPolygon.NUCLEUS_SW, BuildingPolygon.NUCLEUS_NE);
+        if ("library".equals(buildingName)) return new LatLngBounds(BuildingPolygon.LIBRARY_SW, BuildingPolygon.LIBRARY_NE);
+        if ("murchison_house".equals(buildingName)) return new LatLngBounds(BuildingPolygon.MURCHISON_SW, BuildingPolygon.MURCHISON_NE);
+        return null;
+    }
+
+    private ActualMapAlignmentConfig getActualMapAlignmentConfig(String buildingName) {
+        buildingName = normalizeBuildingKey(buildingName);
+        if ("nucleus_building".equals(buildingName)) {
+            return new ActualMapAlignmentConfig(HorizontalAnchor.RIGHT, 0.0, 0.0, 0.0, 0.99, 0.0, 0.0, 0.0, 0.0);
+        }
+        if ("library".equals(buildingName)) {
+            return new ActualMapAlignmentConfig(HorizontalAnchor.RIGHT, 0.0, 0.0, 0.0, 0.985, 0.0, 0.0, 0.0, 0.0);
+        }
+        if ("murchison_house".equals(buildingName)) {
+            return new ActualMapAlignmentConfig(HorizontalAnchor.CENTER, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0);
+        }
+        return new ActualMapAlignmentConfig(HorizontalAnchor.RIGHT, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0);
+    }
+
+    private LatLngBounds applyDefaultCalibration(LatLngBounds baseBounds, String buildingKey, String floorDisplayName) {
+        if (baseBounds == null) return null;
+        OverlayCalibration calibration = getHardcodedCalibrationDefault(buildingKey, floorDisplayName);
+        double baseNorth = baseBounds.northeast.latitude;
+        double baseSouth = baseBounds.southwest.latitude;
+        double baseEast = baseBounds.northeast.longitude;
+        double baseWest = baseBounds.southwest.longitude;
+        double latSpan = baseNorth - baseSouth;
+        double lngSpan = baseEast - baseWest;
+        if (latSpan <= 0d || lngSpan <= 0d) return baseBounds;
+        double centerLat = ((baseNorth + baseSouth) / 2d) + latSpan * calibration.shiftLatRatio;
+        double centerLng = ((baseEast + baseWest) / 2d) + lngSpan * calibration.shiftLngRatio;
+        double adjustedLatSpan = latSpan * calibration.heightScale;
+        double adjustedLngSpan = lngSpan * calibration.widthScale;
+        double north = centerLat + adjustedLatSpan / 2d;
+        double south = centerLat - adjustedLatSpan / 2d;
+        double east = centerLng + adjustedLngSpan / 2d;
+        double west = centerLng - adjustedLngSpan / 2d;
+        return new LatLngBounds(new LatLng(south, west), new LatLng(north, east));
+    }
+
+    private OverlayCalibration getHardcodedCalibrationDefault(String buildingKey, String floorDisplayName) {
+        String normalizedBuilding = normalizeBuildingKey(buildingKey);
+        String normalizedFloor = canonicalFloorLabel(floorDisplayName);
+        if ("nucleus_building".equals(normalizedBuilding)) {
+            switch (normalizedFloor) {
+                case "LG": return new OverlayCalibration(0.012f, -0.022f, 0.967f, 0.986f);
+                case "G": return new OverlayCalibration(0.029f, -0.052f, 0.958f, 0.942f);
+                case "1": return new OverlayCalibration(0.004f, 0.000f, 1.000f, 0.981f);
+                case "2": return new OverlayCalibration(0.005f, -0.005f, 1.000f, 1.000f);
+                case "3": return new OverlayCalibration(0.005f, 0.005f, 1.015f, 0.990f);
+                default: return OverlayCalibration.identity();
+            }
+        }
+        if ("library".equals(normalizedBuilding)) {
+            switch (normalizedFloor) {
+                case "G": return new OverlayCalibration(-0.072f, 0.018f, 0.965f, 1.098f);
+                case "1": return new OverlayCalibration(-0.053f, 0.019f, 0.945f, 1.050f);
+                case "2": return new OverlayCalibration(-0.075f, 0.025f, 0.950f, 1.070f);
+                case "3": return new OverlayCalibration(-0.070f, 0.025f, 0.960f, 1.065f);
+                default: return OverlayCalibration.identity();
+            }
+        }
+        return OverlayCalibration.identity();
+    }
+
+    private static double clamp01(double value) {
+        return Math.max(0d, Math.min(1d, value));
+    }
+
+    private String normalizeFloorLabel(String floorDisplayName) {
+        if (floorDisplayName == null) return "";
+        return floorDisplayName.trim().toUpperCase().replace(" ", "");
+    }
+
+    private String canonicalFloorLabel(String floorLabel) {
+        String normalized = normalizeFloorLabel(floorLabel);
+        switch (normalized) {
+            case "LG":
+            case "LOWERGROUND":
+            case "LOWERG":
+            case "B1":
+            case "BASEMENT1":
+                return "LG";
+            case "G":
+            case "GF":
+            case "GROUND":
+            case "GROUNDFLOOR":
+            case "0":
+                return "G";
+            case "1":
+            case "F1":
+            case "FIRST":
+            case "FIRSTFLOOR":
+                return "1";
+            case "2":
+            case "F2":
+            case "SECOND":
+            case "SECONDFLOOR":
+                return "2";
+            case "3":
+            case "F3":
+            case "THIRD":
+            case "THIRDFLOOR":
+                return "3";
+            default:
+                return normalized;
+        }
+    }
+
+    private String normalizeBuildingKey(String buildingName) {
+        if (buildingName == null) return "";
+        String key = buildingName.trim().toLowerCase();
+        if (key.contains("nucleus") || key.contains("nuclear")) return "nucleus_building";
+        if (key.contains("library") || key.contains("kenneth") || key.contains("murray")) return "library";
+        if (key.contains("murchison")) return "murchison_house";
+        return key;
+    }
+
+    private String resolveKnownBuildingKey(FloorplanApiClient.BuildingInfo building, String buildingName) {
+        String normalized = normalizeBuildingKey(buildingName);
+        if ("nucleus_building".equals(normalized) || "library".equals(normalized) || "murchison_house".equals(normalized)) {
+            return normalized;
+        }
+        LatLng center = building != null ? building.getCenter() : null;
+        if (center != null) {
+            if (BuildingPolygon.inLibrary(center)) return "library";
+            if (BuildingPolygon.inNucleus(center)) return "nucleus_building";
+            if (BuildingPolygon.inMurchison(center)) return "murchison_house";
+        }
+        return normalized;
+    }
+
+    private int getDefaultFloorIndex(FloorplanApiClient.BuildingInfo building) {
+        if (building == null || building.getFloorShapesList() == null || building.getFloorShapesList().isEmpty()) return 0;
+        for (int i = 0; i < building.getFloorShapesList().size(); i++) {
+            String displayName = building.getFloorShapesList().get(i).getDisplayName();
+            if ("G".equals(canonicalFloorLabel(displayName))) return i;
+        }
+        List<Integer> orderedFloorIndices = getOrderedFloorIndices(building);
+        return orderedFloorIndices.isEmpty() ? 0 : orderedFloorIndices.get(0);
+    }
+
+    private String getFloorDisplayName(FloorplanApiClient.BuildingInfo building, int floorIndex) {
+        if (building == null || building.getFloorShapesList() == null || floorIndex < 0 || floorIndex >= building.getFloorShapesList().size()) {
+            return "";
+        }
+        String displayName = building.getFloorShapesList().get(floorIndex).getDisplayName();
+        return displayName == null ? "" : displayName.trim().toUpperCase();
+    }
+
+    private int getAdjacentFloorIndex(FloorplanApiClient.BuildingInfo building, int currentIndex, boolean moveUp) {
+        List<Integer> orderedFloorIndices = getOrderedFloorIndices(building);
+        if (orderedFloorIndices.isEmpty()) return currentIndex;
+        int currentOrderedPosition = orderedFloorIndices.indexOf(currentIndex);
+        if (currentOrderedPosition < 0) {
+            currentOrderedPosition = 0;
+            for (int i = 0; i < orderedFloorIndices.size(); i++) {
+                if (orderedFloorIndices.get(i) >= currentIndex) {
+                    currentOrderedPosition = i;
+                    break;
+                }
+            }
+        }
+        int nextOrderedPosition = moveUp ? currentOrderedPosition + 1 : currentOrderedPosition - 1;
+        if (nextOrderedPosition < 0 || nextOrderedPosition >= orderedFloorIndices.size()) return currentIndex;
+        return orderedFloorIndices.get(nextOrderedPosition);
+    }
+
+    private List<Integer> getOrderedFloorIndices(FloorplanApiClient.BuildingInfo building) {
+        List<Integer> ordered = new ArrayList<>();
+        if (building == null || building.getFloorShapesList() == null || building.getFloorShapesList().isEmpty()) return ordered;
+        List<Integer> fallback = new ArrayList<>();
+        for (int i = 0; i < building.getFloorShapesList().size(); i++) fallback.add(i);
+        String[] desiredOrder = new String[]{"LG", "G", "1", "2", "3"};
+        for (String desiredFloor : desiredOrder) {
+            for (int i = 0; i < building.getFloorShapesList().size(); i++) {
+                if (ordered.contains(i)) continue;
+                String candidateFloor = canonicalFloorLabel(building.getFloorShapesList().get(i).getDisplayName());
+                if (desiredFloor.equals(candidateFloor)) {
+                    ordered.add(i);
+                    break;
+                }
+            }
+        }
+        for (Integer index : fallback) if (!ordered.contains(index)) ordered.add(index);
+        return ordered;
+    }
+
+    private String formatFloorLabelForUi(String rawFloorLabel) {
+        String canonicalFloor = canonicalFloorLabel(rawFloorLabel);
+        switch (canonicalFloor) {
+            case "LG": return "LG";
+            case "G": return "G";
+            case "1": return "1";
+            case "2": return "2";
+            case "3": return "3";
+            default: return rawFloorLabel == null ? "" : rawFloorLabel;
+        }
+    }
+
+    private void showFloorPlanOverlay(String buildingName) {
+        for (Polygon p : previewPolygons) p.remove();
+        for (Polyline p : previewPolylines) p.remove();
+        previewPolygons.clear();
+        previewPolylines.clear();
         if (whiteMaskPolygon != null) {
             whiteMaskPolygon.remove();
             whiteMaskPolygon = null;
         }
         PolygonOptions whiteMask = new PolygonOptions()
                 .add(new LatLng(85, -180), new LatLng(85, 180), new LatLng(-85, 180), new LatLng(-85, -180))
-                .fillColor(0xD9FFFFFF) // 约 85% 透明度的白色
+                .fillColor(0xD9FFFFFF)
                 .strokeWidth(0)
-                .zIndex(5);            // 蒙版在底层 (层级5)
+                .zIndex(5);
         whiteMaskPolygon = mMap.addPolygon(whiteMask);
 
         FloorplanApiClient.BuildingInfo building = floorplanBuildingMap.get(buildingName);
         if (building == null) return;
-
         List<FloorplanApiClient.FloorShapes> floors = building.getFloorShapesList();
-        if (floors == null || floors.isEmpty()) {
-            Log.d(TAG, "No floor shape data available for: " + buildingName);
-            return;
-        }
-
-        // Pick the default floor to preview (ground floor)
-        int defaultFloor = Math.min(1, floors.size() - 1);
-        FloorplanApiClient.FloorShapes floor = floors.get(defaultFloor);
-
+        if (floors == null || floors.isEmpty()) return;
+        FloorplanApiClient.FloorShapes floor = floors.get(Math.max(0, Math.min(currentFloorIndex, floors.size() - 1)));
         for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
             String geoType = feature.getGeometryType();
             String indoorType = feature.getIndoorType();
-
             if ("MultiPolygon".equals(geoType) || "Polygon".equals(geoType)) {
                 for (List<LatLng> ring : feature.getParts()) {
                     if (ring.size() < 3) continue;
@@ -503,61 +945,38 @@ public class StartLocationFragment extends Fragment {
                             .strokeColor(getPreviewStrokeColor(indoorType))
                             .strokeWidth(2f)
                             .fillColor(getPreviewFillColor(indoorType))
-                            .zIndex(10)); // 【新增】：层级设为10，确保浮在白板上方
+                            .zIndex(10));
                     previewPolygons.add(p);
                 }
-            } else if ("MultiLineString".equals(geoType)
-                    || "LineString".equals(geoType)) {
+            } else if ("MultiLineString".equals(geoType) || "LineString".equals(geoType)) {
                 for (List<LatLng> line : feature.getParts()) {
                     if (line.size() < 2) continue;
                     Polyline pl = mMap.addPolyline(new PolylineOptions()
                             .addAll(line)
                             .color(getPreviewStrokeColor(indoorType))
-                            .width(4f)    // 【修改】：稍微加粗至4f使其更明显
-                            .zIndex(10)); // 【新增】：层级设为10，确保浮在白板上方
+                            .width(4f)
+                            .zIndex(10));
                     previewPolylines.add(pl);
                 }
             }
         }
     }
-    /**
-     * Returns the stroke colour for a preview indoor feature.
-     */
+
     private int getPreviewStrokeColor(String indoorType) {
-        // 【修改】：全部换为更深的黑/深灰色
         if ("wall".equals(indoorType)) return Color.argb(255, 34, 34, 34);
         if ("room".equals(indoorType)) return Color.argb(255, 60, 60, 60);
         return Color.argb(255, 50, 50, 50);
     }
 
-    /**
-     * Returns the fill colour for a preview indoor feature.
-     */
     private int getPreviewFillColor(String indoorType) {
         if ("room".equals(indoorType)) return Color.argb(40, 33, 150, 243);
         return Color.TRANSPARENT;
     }
 
-    /**
-     * Updates the building info card to show the selected building name.
-     *
-     * @param buildingName the raw building name from the API
-     */
     private void updateBuildingInfoDisplay(String buildingName) {
-        if (buildingInfoCard == null || buildingNameText == null) return;
-
-        String displayName = formatBuildingName(buildingName);
-        buildingNameText.setText(getString(R.string.buildingSelected, displayName));
-        buildingInfoCard.setVisibility(View.VISIBLE);
+        if (buildingInfoCard != null) buildingInfoCard.setVisibility(View.GONE);
     }
 
-    /**
-     * Formats a building API name into a user-friendly display name.
-     * Converts underscores to spaces and capitalises each word.
-     *
-     * @param apiName the API building name (e.g. "nucleus_building")
-     * @return formatted name (e.g. "Nucleus Building")
-     */
     private String formatBuildingName(String apiName) {
         if (apiName == null || apiName.isEmpty()) return "";
         String[] parts = apiName.split("_");
@@ -566,19 +985,11 @@ public class StartLocationFragment extends Fragment {
             if (part.isEmpty()) continue;
             if (sb.length() > 0) sb.append(" ");
             sb.append(Character.toUpperCase(part.charAt(0)));
-            if (part.length() > 1) {
-                sb.append(part.substring(1));
-            }
+            if (part.length() > 1) sb.append(part.substring(1));
         }
         return sb.toString();
     }
 
-    /**
-     * Computes the centroid of a Google Maps Polygon by averaging all vertices.
-     *
-     * @param polygon the polygon whose centre is to be computed
-     * @return the centroid LatLng
-     */
     private LatLng computePolygonCenter(Polygon polygon) {
         List<LatLng> points = polygon.getPoints();
         double latSum = 0, lonSum = 0;
@@ -593,66 +1004,8 @@ public class StartLocationFragment extends Fragment {
     }
 
     @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-
-        this.button = view.findViewById(R.id.startLocationDone);
-        this.instructionText = view.findViewById(R.id.correctionInfoView);
-
-        // 绑定两个 Find 按钮
-        this.btnFindIndoorMap = view.findViewById(R.id.btnFindIndoorMap);
-        this.btnFindActualMap = view.findViewById(R.id.btnFindActualMap);
-
-        if (this.btnFindIndoorMap != null) {
-            this.btnFindIndoorMap.setOnClickListener(v -> {
-                useActualMap = false;   // 模式设为：矢量地图
-                resetMapOverlays();     // 清理之前的图层
-                requestBuildingData();  // 请求画蓝框
-                Toast.makeText(getContext(), "模式：矢量地图。请点击蓝色建筑", Toast.LENGTH_SHORT).show();
-            });
-        }
-
-        if (this.btnFindActualMap != null) {
-            this.btnFindActualMap.setOnClickListener(v -> {
-                useActualMap = true;    // 模式设为：真实贴图
-                resetMapOverlays();     // 清理之前的图层
-                requestBuildingData();  // 请求画蓝框
-                Toast.makeText(getContext(), "模式：实际地图。请点击蓝色建筑", Toast.LENGTH_SHORT).show();
-            });
-        }
-
-        // 下方保留你原本的 this.button.setOnClickListener (Start/Set Location) 逻辑...
-        // 下方保留你原本的 this.button.setOnClickListener (Start/Set Location) 逻辑
-        this.button.setOnClickListener(v -> {
-            float chosenLat = startPosition[0];
-            float chosenLon = startPosition[1];
-
-            // Save the building selection for campaign binding during upload
-            if (selectedBuildingId != null) {
-                sensorFusion.setSelectedBuildingId(selectedBuildingId);
-            }
-
-            if (requireActivity() instanceof RecordingActivity) {
-                // Start sensor recording + set the start location
-                sensorFusion.startRecording();
-                sensorFusion.setStartGNSSLatitude(startPosition);
-                // Write trajectory_id, initial_position and initial heading to protobuf
-                sensorFusion.writeInitialMetadata();
-
-                // Switch to the recording screen
-                ((RecordingActivity) requireActivity()).showRecordingScreen();
-
-            } else if (requireActivity() instanceof ReplayActivity) {
-                ((ReplayActivity) requireActivity())
-                        .onStartLocationChosen(chosenLat, chosenLon);
-            }
-        });
-    }
-    @Override
     public void onDestroyView() {
         super.onDestroyView();
         retryHandler.removeCallbacksAndMessages(null);
     }
-
 }
-
