@@ -38,7 +38,7 @@ public class ReplayActivity extends AppCompatActivity {
     /**
      * Asset file to replay. Put this file under app/src/main/assets/replay/.
      */
-    private static final String FORCED_ASSET_PATH = "replay/trajectory_long_same_floor.json";
+    private static final String FORCED_ASSET_PATH = "replay/trajectory_reasonable_false_floor_change_reject.json";
 //修改验证的 asset里的 json文件
     private String filePath;
 

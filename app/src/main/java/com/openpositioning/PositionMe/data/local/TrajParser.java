@@ -69,6 +69,7 @@ public class TrajParser {
         public Double currentElevation; // Elevation hint from replay JSON, if available
         public Double deltaHeight; // Delta height hint from replay JSON, if available
         public boolean heightChanged; // Whether replay JSON indicates a vertical transition
+        public Integer initialFloor; // Absolute initial logical floor for replay, if available
 
         /**
          * Constructs a ReplayPoint.
@@ -91,7 +92,8 @@ public class TrajParser {
                            Integer syntheticFloor,
                            Double currentElevation,
                            Double deltaHeight,
-                           boolean heightChanged) {
+                           boolean heightChanged,
+                           Integer initialFloor) {
             this.pdrLocation = pdrLocation;
             this.gnssLocation = gnssLocation;
             this.orientation = orientation;
@@ -101,6 +103,7 @@ public class TrajParser {
             this.currentElevation = currentElevation;
             this.deltaHeight = deltaHeight;
             this.heightChanged = heightChanged;
+            this.initialFloor = initialFloor;
         }
     }
 
@@ -170,6 +173,9 @@ public class TrajParser {
             Log.i(TAG, "Successfully read trajectory file: " + filePath);
 
             long startTimestamp = root.has("startTimestamp") ? root.get("startTimestamp").getAsLong() : 0;
+            Integer initialFloor = root.has("initialFloor") && !root.get("initialFloor").isJsonNull()
+                    ? root.get("initialFloor").getAsInt()
+                    : null;
 
             List<ImuRecord> imuList = parseImuData(root.getAsJsonArray("imuData"));
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
@@ -218,7 +224,8 @@ public class TrajParser {
                         pdr.syntheticFloor,
                         pdr.currentElevation,
                         pdr.deltaHeight,
-                        Boolean.TRUE.equals(pdr.heightChanged)
+                        Boolean.TRUE.equals(pdr.heightChanged),
+                        initialFloor
                 ));
             }
 

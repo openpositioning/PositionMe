@@ -336,7 +336,8 @@ public class ReplayFragment extends Fragment {
                         p.syntheticFloor,
                         p.currentElevation,
                         p.deltaHeight,
-                        p.heightChanged
+                        p.heightChanged,
+                        p.initialFloor
                 );
                 trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
                 if (p.gnssLocation != null) {
@@ -350,7 +351,8 @@ public class ReplayFragment extends Fragment {
                     p.syntheticFloor,
                     p.currentElevation,
                     p.deltaHeight,
-                    p.heightChanged
+                    p.heightChanged,
+                    p.initialFloor
             );
             trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
             if (p.gnssLocation != null) {

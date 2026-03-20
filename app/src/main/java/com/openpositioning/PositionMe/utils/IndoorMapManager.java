@@ -34,7 +34,7 @@ public class IndoorMapManager {
     private final List<Polygon> drawnPolygons = new ArrayList<>();
     private final List<Polyline> drawnPolylines = new ArrayList<>();
     private List<FloorplanApiClient.FloorShapes> currentFloorShapes;
-    private boolean vectorBaseplateEnabled = true;
+    private boolean vectorBaseplateEnabled = false;
 
     public static final float NUCLEUS_FLOOR_HEIGHT = 4.2F;
     public static final float LIBRARY_FLOOR_HEIGHT = 3.6F;
@@ -42,7 +42,11 @@ public class IndoorMapManager {
 
     private static final int WALL_STROKE = Color.argb(255, 34, 34, 34);
     private static final int ROOM_STROKE = Color.argb(255, 60, 60, 60);
-    private static final int ROOM_FILL = Color.argb(40, 0, 0, 0);
+    private static final int ROOM_FILL = Color.argb(18, 0, 0, 0);
+    private static final int STAIRS_STROKE = Color.argb(255, 220, 20, 60);
+    private static final int STAIRS_FILL = Color.argb(90, 255, 0, 0);
+    private static final int LIFT_STROKE = Color.argb(255, 200, 0, 0);
+    private static final int LIFT_FILL = Color.argb(70, 255, 0, 0);
     private static final int DEFAULT_STROKE = Color.argb(255, 50, 50, 50);
 
     public IndoorMapManager(GoogleMap map) {
@@ -331,16 +335,16 @@ public class IndoorMapManager {
                     if (vectorBaseplateEnabled) {
                         Polygon underlay = gMap.addPolygon(new PolygonOptions()
                                 .addAll(ring)
-                                .strokeColor(Color.argb(145, 255, 255, 255))
-                                .strokeWidth(9f)
-                                .fillColor(Color.argb(125, 255, 255, 255))
+                                .strokeColor(Color.argb(0, 255, 255, 255))
+                                .strokeWidth(0f)
+                                .fillColor(Color.argb(0, 255, 255, 255))
                                 .zIndex(6f));
                         drawnPolygons.add(underlay);
                     }
                     Polygon p = gMap.addPolygon(new PolygonOptions()
                             .addAll(ring)
                             .strokeColor(getStrokeColor(indoorType))
-                            .strokeWidth(5f)
+                            .strokeWidth(4f)
                             .fillColor(getFillColor(indoorType))
                             .zIndex(10f));
                     drawnPolygons.add(p);
@@ -353,15 +357,15 @@ public class IndoorMapManager {
                     if (vectorBaseplateEnabled) {
                         Polyline underlay = gMap.addPolyline(new PolylineOptions()
                                 .addAll(line)
-                                .color(Color.argb(170, 255, 255, 255))
-                                .width(10f)
+                                .color(Color.argb(0, 255, 255, 255))
+                                .width(0f)
                                 .zIndex(6f));
                         drawnPolylines.add(underlay);
                     }
                     Polyline pl = gMap.addPolyline(new PolylineOptions()
                             .addAll(line)
                             .color(getStrokeColor(indoorType))
-                            .width(6f)
+                            .width(4.5f)
                             .zIndex(10f));
                     drawnPolylines.add(pl);
                 }
@@ -387,12 +391,24 @@ public class IndoorMapManager {
         if ("room".equals(indoorType)) {
             return ROOM_STROKE;
         }
+        if ("stairs".equals(indoorType)) {
+            return STAIRS_STROKE;
+        }
+        if ("lift".equals(indoorType)) {
+            return LIFT_STROKE;
+        }
         return DEFAULT_STROKE;
     }
 
     private int getFillColor(String indoorType) {
         if ("room".equals(indoorType)) {
             return ROOM_FILL;
+        }
+        if ("stairs".equals(indoorType)) {
+            return STAIRS_FILL;
+        }
+        if ("lift".equals(indoorType)) {
+            return LIFT_FILL;
         }
         return Color.TRANSPARENT;
     }

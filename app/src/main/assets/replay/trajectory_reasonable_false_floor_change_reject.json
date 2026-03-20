@@ -821,5 +821,6 @@
     }
   ],
   "gnssData": [],
-  "magnetometerData": []
+  "magnetometerData": [],
+  "initialFloor": 2
 }
