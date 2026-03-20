@@ -1,15 +1,14 @@
-package com.openpositioning.PositionMe.Fusion;
+package com.openpositioning.PositionMe.fusion;
 
-import static com.openpositioning.PositionMe.Fusion.FusionConstants.INITIAL_UNCERTAINTY_M;
-import static com.openpositioning.PositionMe.Fusion.FusionConstants.METRES_PER_DEG_LAT;
-import static com.openpositioning.PositionMe.Fusion.FusionConstants.METRES_PER_DEG_LNG_AT_EQUATOR;
-import static com.openpositioning.PositionMe.Fusion.FusionConstants.PARTICLE_COUNT;
-import static com.openpositioning.PositionMe.Fusion.FusionConstants.PARTICLE_FILTER_THRESHOLD;
-import static com.openpositioning.PositionMe.Fusion.FusionConstants.PDR_NOISE_STDDEV;
-import static com.openpositioning.PositionMe.Fusion.FusionConstants.RESAMPLE_JITTER;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.INITIAL_UNCERTAINTY_M;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.METRES_PER_DEG_LAT;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.METRES_PER_DEG_LNG_AT_EQUATOR;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.PARTICLE_COUNT;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.PARTICLE_FILTER_THRESHOLD;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.PDR_NOISE_STDDEV;
+import static com.openpositioning.PositionMe.fusion.FusionConstants.RESAMPLE_JITTER;
 
 import android.util.Log;
-
 import com.google.android.gms.maps.model.LatLng;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,8 +97,13 @@ public class ParticleFilter {
      */
     public void updateWithPDR(double dx, double dy) {
         if (!active || particles == null) {
-            Log.w("ParticleFilter", "updateWithPDR called while inactive or particles null"
-                    + " | active=" + active + " particles=" + particles);
+            Log.w(
+                    "ParticleFilter",
+                    "updateWithPDR called while inactive or particles null"
+                            + " | active="
+                            + active
+                            + " particles="
+                            + particles);
             return;
         }
         // Propagate each particle with PDR step + stochastic process noise

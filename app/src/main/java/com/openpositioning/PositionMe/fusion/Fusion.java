@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.Fusion;
+package com.openpositioning.PositionMe.fusion;
 
 import android.util.Log;
 import com.google.android.gms.maps.model.LatLng;

@@ -1,4 +1,4 @@
-package com.openpositioning.PositionMe.Fusion;
+package com.openpositioning.PositionMe.fusion;
 
 public final class FusionConstants {
     private FusionConstants() {} // prevent instantiation
