@@ -10,21 +10,20 @@ import com.android.volley.RequestQueue;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 import com.google.android.gms.maps.model.LatLng;
+import java.nio.charset.StandardCharsets;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Class for creating and handling POST requests for obtaining the current position using WiFi
- * positioning API from OpenPositioning
- *
- * <p>The class creates POST requests based on WiFi fingerprints and obtains the user's location
+ * The class creates POST requests based on WiFi fingerprints and obtains the user's location
  *
  * <p>The request are handled asynchronously using using {@link
  * WiFiPositioning#request(JSONObject)}. The WiFi position coordinates and floor are updated when
  * the response of the POST request is obtained.
  *
  * <p>TODO - This entire class should be replaced with using {@link
- * com.openpositioning.PositionMe.data.remote.ServerCommunications} for API calls
+ * com.openpositioning.PositionMe.data.remote.ServerCommunications ServerCommunications} for API
+ * calls
  *
  * @author Arun Gopalakrishnan
  */
@@ -71,6 +70,7 @@ public class WiFiPositioning {
         this.requestQueue = Volley.newRequestQueue(context.getApplicationContext());
     }
 
+    // TODO - Reduce these two functions into a single function (code duplication)
     /**
      * Creates a POST request using the WiFi fingerprint to obtain user's location. The POST request
      * is issued to the OpenPositioning API with the Wi-Fi fingerprint passed as the parameter.
@@ -96,8 +96,6 @@ public class WiFiPositioning {
                                                 response.getDouble("lon"));
                                 floor = response.getInt("floor");
                             } catch (JSONException e) {
-                                // Error log to keep record of errors (for secure programming and
-                                // maintainability)
                                 Log.e(
                                         TAG,
                                         "Error parsing response: "
@@ -108,14 +106,32 @@ public class WiFiPositioning {
                         },
                         error -> {
                             if (error.networkResponse != null) {
-                                Log.e(
-                                        TAG,
-                                        "Error Response: HTTP "
-                                                + error.networkResponse.statusCode
-                                                + ", "
-                                                + error.getMessage());
+
+                                int statusCode = error.networkResponse.statusCode;
+                                String responseBody = "";
+
+                                try {
+                                    if (error.networkResponse.data != null) {
+                                        responseBody =
+                                                new String(
+                                                        error.networkResponse.data,
+                                                        StandardCharsets.UTF_8);
+                                    }
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Error reading response body: " + e.getMessage());
+                                }
+                                try {
+                                    JSONObject jsonObject = new JSONObject(responseBody);
+                                    String errorCause =
+                                            jsonObject.optString("detail", "Unknown cause");
+                                    String errorBody = "[HTTP " + statusCode + "] " + errorCause;
+                                    Log.e(TAG, errorBody);
+                                } catch (JSONException e) {
+                                    Log.w(TAG, "Unable to parse error response");
+                                }
                             } else {
-                                Log.e(TAG, "Error message: " + error.getMessage());
+                                String errorBody = "Network error: " + error.getMessage();
+                                Log.e(TAG, errorBody);
                             }
                         });
         // Adds the request to the request queue
@@ -172,16 +188,24 @@ public class WiFiPositioning {
                                 try {
                                     if (error.networkResponse.data != null) {
                                         responseBody =
-                                                new String(error.networkResponse.data, "UTF-8");
+                                                new String(
+                                                        error.networkResponse.data,
+                                                        StandardCharsets.UTF_8);
                                     }
                                 } catch (Exception e) {
                                     Log.e(TAG, "Error reading response body: " + e.getMessage());
                                 }
-                                String errorBody =
-                                        "HTTP " + statusCode + " Response Body: " + responseBody;
-                                Log.e(TAG, errorBody);
-                                callback.onError(errorBody);
-
+                                try {
+                                    JSONObject jsonObject = new JSONObject(responseBody);
+                                    String errorCause =
+                                            jsonObject.optString("detail", "Unknown cause");
+                                    String errorBody = "[HTTP " + statusCode + "] " + errorCause;
+                                    Log.e(TAG, errorBody);
+                                    callback.onError(errorBody);
+                                } catch (JSONException e) {
+                                    Log.w(TAG, "Unable to parse error response");
+                                    callback.onError(error.getMessage());
+                                }
                             } else {
                                 String errorBody = "Network error: " + error.getMessage();
                                 Log.e(TAG, errorBody);
