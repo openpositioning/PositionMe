@@ -107,11 +107,35 @@ public class MapMatchingService {
                 );
 
                 if (crossedWall) {
-                    correctedLatLng = previousPose.getLatLng();
-                    correctedFloor = previousPose.getFloor();
-                    correctionType = CorrectionType.THROUGH_WALL;
-                    debugReason = "Trajectory crossed wall. Reverted to previous pose.";
-                    validPosition = false;
+                    // 【高级优化：沿墙滑动策略 (Sliding against the wall)】
+                    // 将用户的移动意图拆解为纬度(Y)和经度(X)两个独立分量
+                    LatLng latOnlyPoint = new LatLng(candidateLatLng.latitude, previousPose.getLatLng().longitude);
+                    LatLng lngOnlyPoint = new LatLng(previousPose.getLatLng().latitude, candidateLatLng.longitude);
+
+                    // 分别测试仅在单一坐标轴上移动是否会穿墙
+                    boolean canMoveLat = !MapGeometryUtils.crossesWall(previousPose.getLatLng(), latOnlyPoint, floorShapes);
+                    boolean canMoveLng = !MapGeometryUtils.crossesWall(previousPose.getLatLng(), lngOnlyPoint, floorShapes);
+
+                    if (canMoveLat && !canMoveLng) {
+                        // 经度(东西)被墙挡住，但纬度(南北)畅通 -> 允许沿南北方向贴墙滑动
+                        correctedLatLng = latOnlyPoint;
+                        correctionType = CorrectionType.THROUGH_WALL;
+                        debugReason = "Crossed wall. Sliding along Latitude (N/S).";
+                        validPosition = true;
+                    } else if (!canMoveLat && canMoveLng) {
+                        // 纬度(南北)被墙挡住，但经度(东西)畅通 -> 允许沿东西方向贴墙滑动
+                        correctedLatLng = lngOnlyPoint;
+                        correctionType = CorrectionType.THROUGH_WALL;
+                        debugReason = "Crossed wall. Sliding along Longitude (E/W).";
+                        validPosition = true;
+                    } else {
+                        // 两个方向都被挡住（比如走进了直角死胡同），退回最安全的“原地罚站”策略
+                        correctedLatLng = previousPose.getLatLng();
+                        correctedFloor = previousPose.getFloor();
+                        correctionType = CorrectionType.THROUGH_WALL;
+                        debugReason = "Crossed wall. Stuck in corner, reverted to previous pose.";
+                        validPosition = false;
+                    }
                 }
             } else {
                 debugReason = "Step distance too small for wall check. Candidate pose accepted.";

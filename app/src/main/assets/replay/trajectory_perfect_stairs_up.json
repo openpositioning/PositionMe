@@ -1,0 +1,20 @@
+
+
+{
+  "androidVersion": "synthetic-test-data",
+  "trajectoryVersion": "replay_v2_reasonable",
+  "trajectoryId": "trajectory_perfect_stairs_up",
+  "startTimestamp": 0,
+  "notes": "Perfect straight stair climb with step distance > 1.5m to pass the likelyLiftMotion check in MapMatchingService.",
+  "imuData": [
+    { "relativeTimestamp": "0", "x": 0.0, "y": 0.0, "currentElevation": 0.0, "deltaHeight": 0.0, "heightChanged": false, "syntheticFloor": 0, "acc": {"x":0,"y":0,"z":9.81}, "gyr": {"x":0,"y":0,"z":0}, "rotationVector": {"x":0,"y":0,"z":0,"w":1}, "stepCount": 0 },
+    { "relativeTimestamp": "1000", "x": 0.0, "y": 1.6, "currentElevation": 0.0, "deltaHeight": 0.0, "heightChanged": false, "syntheticFloor": 0, "acc": {"x":0,"y":0,"z":9.81}, "gyr": {"x":0,"y":0,"z":0}, "rotationVector": {"x":0,"y":0,"z":0,"w":1}, "stepCount": 2 },
+    { "relativeTimestamp": "2000", "x": 0.0, "y": 3.2, "currentElevation": 0.0, "deltaHeight": 0.0, "heightChanged": false, "syntheticFloor": 0, "acc": {"x":0,"y":0,"z":9.81}, "gyr": {"x":0,"y":0,"z":0}, "rotationVector": {"x":0,"y":0,"z":0,"w":1}, "stepCount": 4 },
+    { "relativeTimestamp": "3000", "x": 0.0, "y": 4.8, "currentElevation": 0.0, "deltaHeight": 0.0, "heightChanged": false, "syntheticFloor": 0, "acc": {"x":0,"y":0,"z":9.81}, "gyr": {"x":0,"y":0,"z":0}, "rotationVector": {"x":0,"y":0,"z":0,"w":1}, "stepCount": 6 },
+    { "relativeTimestamp": "4000", "x": 0.0, "y": 6.4, "currentElevation": 1.5, "deltaHeight": 1.5, "heightChanged": false, "syntheticFloor": 0, "acc": {"x":0,"y":0,"z":9.81}, "gyr": {"x":0,"y":0,"z":0}, "rotationVector": {"x":0,"y":0,"z":0,"w":1}, "stepCount": 8 },
+    { "relativeTimestamp": "5000", "x": 0.0, "y": 8.0, "currentElevation": 3.0, "deltaHeight": 1.5, "heightChanged": false, "syntheticFloor": 0, "acc": {"x":0,"y":0,"z":9.81}, "gyr": {"x":0,"y":0,"z":0}, "rotationVector": {"x":0,"y":0,"z":0,"w":1}, "stepCount": 10 },
+    { "relativeTimestamp": "6000", "x": 0.0, "y": 9.6, "currentElevation": 4.0, "deltaHeight": 1.0, "heightChanged": true, "syntheticFloor": 1, "acc": {"x":0,"y":0,"z":9.81}, "gyr": {"x":0,"y":0,"z":0}, "rotationVector": {"x":0,"y":0,"z":0,"w":1}, "stepCount": 12 },
+    { "relativeTimestamp": "7000", "x": 0.0, "y": 11.2, "currentElevation": 4.0, "deltaHeight": 0.0, "heightChanged": true, "syntheticFloor": 1, "acc": {"x":0,"y":0,"z":9.81}, "gyr": {"x":0,"y":0,"z":0}, "rotationVector": {"x":0,"y":0,"z":0,"w":1}, "stepCount": 14 },
+    { "relativeTimestamp": "8000", "x": 0.0, "y": 12.8, "currentElevation": 4.0, "deltaHeight": 0.0, "heightChanged": true, "syntheticFloor": 1, "acc": {"x":0,"y":0,"z":9.81}, "gyr": {"x":0,"y":0,"z":0}, "rotationVector": {"x":0,"y":0,"z":0,"w":1}, "stepCount": 16 }
+  ]
+}
