@@ -16,6 +16,7 @@ import com.openpositioning.PositionMe.utils.PdrProcessing;
  * @see SensorFusion for the caller that drives PDR and WiFi updates.
  */
 public class Fusion {
+    private static final String TAG = "Fusion";
     // Current best position estimate in WGS84
     private LatLng bestEstimate;
     // Estimated floor level
@@ -59,7 +60,7 @@ public class Fusion {
 
     /** Stops the fusion system and releases the particle filter resources. */
     public void stop() {
-        Log.d("Fusion", "Fusion stopped", new Exception("stop() call stack"));
+        Log.d(TAG, "Fusion stopped", new Exception("stop() call stack"));
         this.particleFilter.stop();
         isActive = false;
     }
@@ -73,7 +74,7 @@ public class Fusion {
      */
     public void start(LatLng initial_estimate, PdrProcessing pdrProcessing) {
         isActive = true;
-        Log.d("Fusion", "Fusion started at: " + initial_estimate);
+        Log.d(TAG, "Fusion started at: " + initial_estimate);
         this.pdrProcessing = pdrProcessing;
         this.bestEstimate = getStartLocation(initial_estimate);
         this.particleFilter.start(this.bestEstimate);

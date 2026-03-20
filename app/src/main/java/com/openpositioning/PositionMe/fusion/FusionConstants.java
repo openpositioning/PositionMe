@@ -1,8 +1,6 @@
 package com.openpositioning.PositionMe.fusion;
 
 public final class FusionConstants {
-    private FusionConstants() {} // prevent instantiation
-
     // Particle filter
     public static final int PARTICLE_COUNT = 100;
     public static final double INITIAL_UNCERTAINTY_M = 5.0;

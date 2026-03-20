@@ -25,6 +25,7 @@ import java.util.Random;
  * @see FusionConstants for tuning parameters.
  */
 public class ParticleFilter {
+    private static final String TAG = "ParticleFilter";
     // WGS84 reference point for local EN coordinate conversion
     private double refLng, refLat;
     // Particle population
@@ -98,7 +99,7 @@ public class ParticleFilter {
     public void updateWithPDR(double dx, double dy) {
         if (!active || particles == null) {
             Log.w(
-                    "ParticleFilter",
+                    TAG,
                     "updateWithPDR called while inactive or particles null"
                             + " | active="
                             + active

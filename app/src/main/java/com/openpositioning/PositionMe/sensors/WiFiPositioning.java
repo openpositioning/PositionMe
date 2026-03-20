@@ -30,6 +30,7 @@ import org.json.JSONObject;
  * @author Arun Gopalakrishnan
  */
 public class WiFiPositioning {
+    private static final String TAG = "WiFiPositioning";
     // Queue for storing the POST requests made
     private RequestQueue requestQueue;
     // URL for WiFi positioning API
@@ -115,22 +116,20 @@ public class WiFiPositioning {
                             // Validation Error
                             if (error.networkResponse != null
                                     && error.networkResponse.statusCode == 422) {
-                                Log.e("WiFiPositioning", "Validation Error " + error.getMessage());
+                                Log.e(TAG, "Validation Error " + error.getMessage());
                             }
                             // Other Errors
                             else {
                                 // When Response code is available
                                 if (error.networkResponse != null) {
                                     Log.e(
-                                            "WiFiPositioning",
+                                            TAG,
                                             "Response Code: "
                                                     + error.networkResponse.statusCode
                                                     + ", "
                                                     + error.getMessage());
                                 } else {
-                                    Log.e(
-                                            "WiFiPositioning",
-                                            "Error message: " + error.getMessage());
+                                    Log.e(TAG, "Error message: " + error.getMessage());
                                 }
                             }
                         });
@@ -154,8 +153,8 @@ public class WiFiPositioning {
      */
     public void request(JSONObject jsonWifiFeatures, final VolleyCallback callback) {
 
-        Log.d("WiFiPositioning", "Request URL: " + url);
-        Log.d("WiFiPositioning", "Request Body: " + jsonWifiFeatures.toString());
+        Log.d(TAG, "Request URL: " + url);
+        Log.d(TAG, "Request Body: " + jsonWifiFeatures.toString());
 
         // Creating the POST request using WiFi fingerprint (a JSON object)
         JsonObjectRequest jsonObjectRequest =
@@ -165,7 +164,7 @@ public class WiFiPositioning {
                         jsonWifiFeatures,
                         response -> {
                             try {
-                                Log.d("WiFiPositioning", "Response: " + response.toString());
+                                Log.d(TAG, "Response: " + response.toString());
 
                                 wifiLocation =
                                         new LatLng(
@@ -179,7 +178,7 @@ public class WiFiPositioning {
                             } catch (JSONException e) {
 
                                 Log.e(
-                                        "WiFiPositioning",
+                                        TAG,
                                         "Error parsing response: "
                                                 + e.getMessage()
                                                 + " "
@@ -201,13 +200,11 @@ public class WiFiPositioning {
                                                 new String(error.networkResponse.data, "UTF-8");
                                     }
                                 } catch (Exception e) {
-                                    Log.e(
-                                            "WiFiPositioning",
-                                            "Error reading response body: " + e.getMessage());
+                                    Log.e(TAG, "Error reading response body: " + e.getMessage());
                                 }
 
                                 Log.e(
-                                        "WiFiPositioning",
+                                        TAG,
                                         "HTTP " + statusCode + " Response Body: " + responseBody);
 
                                 callback.onError(
@@ -215,7 +212,7 @@ public class WiFiPositioning {
 
                             } else {
 
-                                Log.e("WiFiPositioning", "Network error: " + error.getMessage());
+                                Log.e(TAG, "Network error: " + error.getMessage());
 
                                 callback.onError("Network error: " + error.getMessage());
                             }
