@@ -381,7 +381,16 @@ public class RecordingFragment extends Fragment {
                 mapFrag.updateObservedMacs(macs);
 
 //                trajectoryMapFragment.updateObservedMacs(sensorFusion.getLatestBssids());
-                mapFrag.updateUserLocation(newLocation,
+                float[][] particles = sensorFusion.getParticles();
+
+                LatLng matchedLocation = IndoorMapManager.getMapMatchedLocationFromParticles(
+                        particles,
+                        oldLocation,
+                        heightChange,
+                        newLocation
+                );
+
+                mapFrag.updateUserLocation(matchedLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
         }

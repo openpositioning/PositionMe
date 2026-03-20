@@ -27,6 +27,7 @@ import org.json.JSONObject;
 
 import java.util.Map;
 import java.util.HashMap;
+import static java.lang.Math.*;
 /**
  * Class used to manage indoor floor map overlays
  * Currently used by RecordingFragment
@@ -67,6 +68,9 @@ public class IndoorMapManager {
     // List of currently drawn indoor floor polygons
     private final List<Polygon> activeFloorPolygons = new ArrayList<>();
 
+    final double floorDistThresh = 5.0;
+    final double liftDistThresh = 3.0;
+
 
     /**
      * Venue model used for storing API floorplan data
@@ -79,6 +83,14 @@ public class IndoorMapManager {
 
         // Raw GeoJSON floor data from API
         public String rawMapShapes;
+        public Map<String, FloorFeatures> floorFeatures = new HashMap<>();
+
+        public static class FloorFeatures {
+            public List<List<LatLng>> wallPolygons = new ArrayList<>();
+            public List<LatLng> wallPolylines = new ArrayList<>(); // if your walls are lines
+            public List<LatLng> stairsCenters = new ArrayList<>(); // or polygons if provided
+            public List<LatLng> liftCenters = new ArrayList<>();
+        }
     }
 
 
@@ -164,6 +176,231 @@ public class IndoorMapManager {
         }
     }
 
+    //checks orientation using three points: 0= points on same line, 1 & 2 = points on either side
+    private static int orientation(LatLng a, LatLng b, LatLng c) {
+
+        double val =
+                (b.longitude - a.longitude) * (c.latitude - a.latitude) -
+                        (b.latitude - a.latitude) * (c.longitude - a.longitude);
+
+        double eps = 1e-12;
+
+        if (Math.abs(val) < eps) {
+            return 0;      // collinear
+        }
+
+        return (val > 0) ? 1 : 2;
+    }
+
+    /*
+    takes endpoints of two segments and determines whether they intersect
+     */
+    private static boolean segmentsIntersect(LatLng a, LatLng b, LatLng c, LatLng d) {
+
+        int o1 = orientation(a, b, c);
+        int o2 = orientation(a, b, d);
+        int o3 = orientation(c, d, a);
+        int o4 = orientation(c, d, b);
+
+        // Proper intersection
+        if (o1 != o2 && o3 != o4) {
+            return true;
+        }
+
+        // Special cases (collinear)
+        if (o1 == 0 && onSegment(a, c, b)) return true;
+        if (o2 == 0 && onSegment(a, d, b)) return true;
+        if (o3 == 0 && onSegment(c, a, d)) return true;
+        if (o4 == 0 && onSegment(c, b, d)) return true;
+
+        return false;
+    }
+
+    private static boolean onSegment(LatLng a, LatLng p, LatLng b) {
+        return p.latitude <= Math.max(a.latitude, b.latitude) &&
+                p.latitude >= Math.min(a.latitude, b.latitude) &&
+                p.longitude <= Math.max(a.longitude, b.longitude) &&
+                p.longitude >= Math.min(a.longitude, b.longitude);
+    }
+
+    /// height change = sensorfusion.getelevation
+    public LatLng indoorLocationCorrection(LatLng oldLocation, LatLng predictedLocation, float heightChange) {
+        if (currentVenue == null || currentFloorKey == null || oldLocation == null || predictedLocation == null) {
+            return predictedLocation;
+        }
+
+        LatLng correctedLocation = predictedLocation;
+        boolean hitWall = false;
+
+        IndoorVenue.FloorFeatures floorFeatures = currentVenue.floorFeatures.get(currentFloorKey);
+        if (floorFeatures == null) {
+            return predictedLocation;
+        }
+
+        List<List<LatLng>> wallPolygons = floorFeatures.wallPolygons;
+
+        for (int k = 0; k < wallPolygons.size() && !hitWall; k++) {
+            List<LatLng> polygon = wallPolygons.get(k);
+
+            for (int i = 0; i < polygon.size(); i++) {
+                LatLng edgeStart = polygon.get(i);
+                LatLng edgeEnd = polygon.get((i + 1) % polygon.size());
+
+                if (segmentsIntersect(oldLocation, predictedLocation, edgeStart, edgeEnd)) {
+                    correctedLocation = adjustPositionToNearestValidLocation(
+                            oldLocation,
+                            predictedLocation,
+                            polygon
+                    );
+                    hitWall = true;
+                    break;
+                }
+            }
+        }
+
+        //floor adjustment
+        // if abs(heightChange) > heightThreshold:
+        ////
+        ////        if distance(correctedLocation, nearest stairs or lift) < proximityThreshold:
+        ////
+        ////        accept floor change
+        ////
+        ////        if horizontalMovement < horizontalThreshold:
+        ////        mode = lift
+        ////            else:
+        ////        mode = stairs
+        ////
+        ////        else:
+        ////        reject floor change
+        ////        keep same floor
+
+        return correctedLocation;
+    }
+
+    //find nearest valid point that doesn't intersect walls
+//loop through points on segment just traversed starting from predicted location back towards prev location
+//use dx and dy
+//once we find point that doesn't intersect wall
+//corrected position = point
+//break
+
+    public String acceptFloorChange(LatLng correctedLocation, LatLng oldLocation, float heightChangeMeters) {
+        if (currentVenue == null || currentFloorKey == null || correctedLocation == null || oldLocation == null) {
+            return currentFloorKey;
+        }
+
+        // Require meaningful vertical movement first
+        double heightThresholdMeters = 2.5;
+        if (Math.abs(heightChangeMeters) < heightThresholdMeters) {
+            return currentFloorKey;
+        }
+
+        IndoorVenue.FloorFeatures floorFeatures = currentVenue.floorFeatures.get(currentFloorKey);
+        if (floorFeatures == null) {
+            return currentFloorKey;
+        }
+
+        double stairsThresholdMeters = 5.0;
+        double liftThresholdMeters = 4.0;
+        double liftHorizontalThresholdMeters = 2.0;
+
+        boolean nearStairs = isNearAnyPoint(correctedLocation, floorFeatures.stairsCenters, stairsThresholdMeters);
+        boolean nearLift = isNearAnyPoint(correctedLocation, floorFeatures.liftCenters, liftThresholdMeters);
+
+        if (!nearStairs && !nearLift) {
+            return currentFloorKey;
+        }
+
+        double horizontalDisplacement = distanceMeters(oldLocation, correctedLocation);
+
+        boolean usedLift = nearLift && horizontalDisplacement < liftHorizontalThresholdMeters;
+        boolean usedStairs = nearStairs && horizontalDisplacement >= liftHorizontalThresholdMeters;
+
+        if (!usedLift && !usedStairs) {
+            return currentFloorKey;
+        }
+
+        String nextFloorKey = getAdjacentFloorKey(currentFloorKey, heightChangeMeters > 0);
+        if (nextFloorKey == null || !currentVenue.floorFeatures.containsKey(nextFloorKey)) {
+            return currentFloorKey;
+        }
+        if (!nextFloorKey.equals(currentFloorKey)) {
+            currentFloorKey = nextFloorKey;
+            switchFloor(Integer.parseInt(currentFloorKey));
+        }
+
+        return currentFloorKey;
+    }
+
+    private String getAdjacentFloorKey(String floorKey, boolean goingUp) {
+        try {
+            int floor = Integer.parseInt(floorKey);
+            int next = goingUp ? floor + 1 : floor - 1;
+            return String.valueOf(next);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private double distanceMeters(LatLng a, LatLng b) {
+        float[] result = new float[1];
+        android.location.Location.distanceBetween(
+                a.latitude, a.longitude,
+                b.latitude, b.longitude,
+                result
+        );
+        return result[0];
+    }
+
+    private boolean isNearAnyPoint(LatLng location, List<LatLng> centers, double thresholdMeters) {
+
+        if (location == null || centers == null || centers.isEmpty()) {
+            return false;
+        }
+
+        double result;
+        for (LatLng center : centers) {
+            result = distanceMeters(location, center);
+            if (result <= thresholdMeters) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public LatLng adjustPositionToNearestValidLocation(LatLng oldLocation, LatLng predictedLocation, List<LatLng> polygon) {
+
+        LatLng corrected = oldLocation;
+
+        double dx = predictedLocation.latitude - oldLocation.latitude;
+        double dy = predictedLocation.longitude - oldLocation.longitude;
+
+        for (double t = 1.0; t >= 0.0; t -= 0.05) {
+            double lat = oldLocation.latitude + t * dx;
+            double lon = oldLocation.longitude + t * dy;
+            LatLng candidate = new LatLng(lat, lon);
+
+            boolean intersectsWall = false;
+
+            for (int i = 0; i < polygon.size(); i++) {
+                LatLng wallStart = polygon.get(i);
+                LatLng wallEnd = polygon.get((i + 1) % polygon.size());
+
+                if (segmentsIntersect(oldLocation, candidate, wallStart, wallEnd)) {
+                    intersectsWall = true;
+                    break;
+                }
+            }
+
+            if (!intersectsWall) {
+                corrected = candidate;
+                return corrected;
+            }
+        }
+
+        return corrected;
+    }
 
     /**
      * Increase floor within the current venue.

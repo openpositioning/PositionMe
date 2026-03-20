@@ -94,6 +94,8 @@ public class TrajectoryMapFragment extends Fragment {
     private SensorFusion sensorFusion;
     private TextView floorLabel;
 
+    private float lastElevation = Float.NaN; //To compute height change between old and current position
+
 
 
 
@@ -471,7 +473,47 @@ public class TrajectoryMapFragment extends Fragment {
 
         // Keep track of current location
         LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
+        LatLng correctedLocation = newLocation;
+        float heightChange = 0f;
+        float[][] particles = sensorFusion.getParticles();
+        if (sensorFusion != null) {
+            float currentElevation = sensorFusion.getElevation();
+
+
+
+            if (!Float.isNaN(lastElevation)) {
+                heightChange = currentElevation - lastElevation;
+            }
+
+
+            lastElevation = currentElevation;
+        }
+
+        if (oldLocation != null && indoorMapManager != null) {
+            correctedLocation = indoorMapManager.indoorLocationCorrection(
+                    oldLocation,
+                    newLocation,
+                    heightChange
+            );
+
+            indoorMapManager.acceptFloorChange(
+                    correctedLocation,
+                    oldLocation,
+                    heightChange
+            );
+        }
+
+        this.currentLocation = correctedLocation;
+        newLocation = correctedLocation;
+        Log.d("IndoorTest", "oldLocation = " + oldLocation);
+        Log.d("IndoorTest", "newLocation = " + newLocation);
+        Log.d("IndoorTest", "heightChange = " + heightChange);
+
+//        if indoor map is active and current venue is known:
+//        send oldLocation, newLocation, current floor, and maybe barometer info to IndoorMapManager
+//        get back corrected position/floor
+//        then update marker/polyline using that corrected result
+
 
         // If no marker, create it
         if (orientationMarker == null) {
