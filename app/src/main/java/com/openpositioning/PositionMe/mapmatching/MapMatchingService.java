@@ -129,11 +129,17 @@ public class MapMatchingService {
                         debugReason = "Crossed wall. Sliding along Longitude (E/W).";
                         validPosition = true;
                     } else {
-                        // 两个方向都被挡住（比如走进了直角死胡同），退回最安全的“原地罚站”策略
+                        // 两个方向都被挡住（比如走进了直角死胡同），退回最安全的“原地罚站”XY坐标
                         correctedLatLng = previousPose.getLatLng();
-                        correctedFloor = previousPose.getFloor();
+
+                        // ★ 核心修复：解绑楼层和平面！如果当前正好触发了合法的电梯/楼梯换层，
+                        // 就保留新楼层，绝不强行撤销楼层！
+                        if (!floorChangeAllowed) {
+                            correctedFloor = previousPose.getFloor();
+                        }
+
                         correctionType = CorrectionType.THROUGH_WALL;
-                        debugReason = "Crossed wall. Stuck in corner, reverted to previous pose.";
+                        debugReason = "Crossed wall. Stuck in corner, reverted to previous XY pose.";
                         validPosition = false;
                     }
                 }
