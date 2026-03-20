@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
  */
 public class PdrProcessing {
 
-    // region Static variables
     // Weiberg algorithm coefficient for stride calculations
     private static final float K = 0.364f;
     // Number of samples (seconds) to keep as memory for elevation calculation
@@ -35,9 +34,7 @@ public class PdrProcessing {
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
     private static final int MIN_REQUIRED_SAMPLES = 2;
-    // endregion
 
-    // region Instance variables
     // Settings for accessing shared variables
     private SharedPreferences settings;
 
@@ -68,8 +65,6 @@ public class PdrProcessing {
     // Step sum and length aggregation variables
     private float sumStepLength = 0;
     private int stepCount = 0;
-
-    // endregion
 
     /**
      * Public constructor for the PDR class. Takes context for variable access. Sets initial values
@@ -146,7 +141,7 @@ public class PdrProcessing {
             return new float[] {
                 this.positionX, this.positionY
             }; // Return current position without update
-            // - TODO - temporary solution of the empty list issue
+            // TODO - temporary solution of the empty list issue
         }
 
         // Change angle so zero rad is east

@@ -622,9 +622,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         return Long.parseLong(cleanMac, 16);
     }
 
-    /** Function to create a request to obtain a wifi location for the obtained wifi fingerprint */
+    /** Create a request to obtain a Wi-Fi location for the obtained Wi-Fi fingerprint */
     private void createWifiPositioningRequest() {
-        // Try catch block to catch any errors and prevent app crashing
         try {
             // Creating a JSON object to store the WiFi access points
             JSONObject wifiAccessPoints = new JSONObject();
@@ -635,17 +634,14 @@ public class SensorFusion implements SensorEventListener, Observer {
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
 
-            Log.d("WiFiPositioning", "Sending: " + wifiFingerPrint.toString());
+            Log.d(TAG, "Sending: " + wifiFingerPrint);
 
             this.wiFiPositioning.request(wifiFingerPrint);
         } catch (JSONException e) {
-            // Catching error while making JSON object, to prevent crashes
-            // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors", "Error creating json object" + e.toString());
+            Log.e(TAG, "Error creating json object" + e);
         }
     }
 
-    // Callback Example Function
     /**
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      * using Volley Callback
@@ -661,7 +657,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
 
-            Log.d("WiFiPositioning", "Sending: " + wifiFingerPrint.toString());
+            Log.d(TAG, "Sending: " + wifiFingerPrint);
 
             this.wiFiPositioning.request(
                     wifiFingerPrint,
@@ -672,7 +668,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         @Override
                         public void onSuccess(LatLng wifiLocation, int floor) {
                             Log.d(
-                                    "WiFiFusionDebug",
+                                    TAG,
                                     "WiFi position received -> lat="
                                             + wifiLocation.latitude
                                             + " lon="
@@ -691,9 +687,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         }
                     });
         } catch (JSONException e) {
-            // Catching error while making JSON object, to prevent crashes
-            // Error log to keep record of errors (for secure programming and maintainability)
-            Log.e("jsonErrors", "Error creating json object" + e.toString());
+            Log.e(TAG, "Error creating json object" + e);
         }
     }
 
@@ -1231,7 +1225,7 @@ public class SensorFusion implements SensorEventListener, Observer {
             if (counter == 99) {
                 counter = 0;
                 Log.d(
-                        "Fusion",
+                        TAG,
                         "1 second timer fired, fusion active="
                                 + (fusion != null && fusion.isActive()));
                 // store fusion corrected estimated point to the trajectory at 1 sec intervals
@@ -1242,7 +1236,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     LatLng fused = SensorFusion.this.fusion.getBestEstimate();
                     if (fused != null) {
                         Log.d(
-                                "Fusion",
+                                TAG,
                                 "Corrected position stored: "
                                         + fused.latitude
                                         + ", "

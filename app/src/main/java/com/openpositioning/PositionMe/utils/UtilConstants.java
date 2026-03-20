@@ -22,6 +22,8 @@ public class UtilConstants {
     public static final String API_POST_FLOORPLANS = "/live/floorplan/request";
     public static final String API_POST_SIGN_UP = "/users/signup";
     public static final String API_POST_LOGIN = "/users/login";
+    public static final String API_POST_WIFI_COARSE = "/position/coarse";
+    public static final String API_POST_WIFI_FINE = "/position/fine";
 
     public static final String URL_GET_USER_TRAJECTORIES = URL_API + API_GET_USER_TRAJECTORIES;
 
