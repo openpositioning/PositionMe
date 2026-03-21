@@ -165,7 +165,7 @@ public class IndoorMapManager {
 
             // Default to first floor
             currentFloorKey = keys.next();
-            drawFloor(floorsObj.getJSONObject(currentFloorKey));
+            drawFloor(floorsObj.getJSONObject(currentFloorKey), currentFloorKey);
 
             isIndoorMapSet = true;
 
@@ -174,6 +174,74 @@ public class IndoorMapManager {
         } catch (JSONException e) {
             Log.e("IndoorMapManager", "Failed parsing floor GeoJSON", e);
         }
+    }
+
+    /**
+     * For each particle, zero its weight if the step from prev to current
+     * position crosses a wall. Called by ParticleFilter after predict(),
+     * before resample().
+     *
+     * @param prevEast   previous East positions, metres (length 300)
+     * @param prevNorth  previous North positions, metres (length 300)
+     * @param currEast   current East positions after predict() (length 300)
+     * @param currNorth  current North positions after predict() (length 300)
+     * @param weights    weight array — modified in-place
+     * @param converter  to convert East-North → LatLng for wall geometry check
+     */
+    public void applyWallConstraints(
+            float[] prevEast, float[] prevNorth,
+            float[] currEast, float[] currNorth,
+            float[] weights,
+            CoordinateConverter converter) {
+
+        if (currentVenue == null || currentFloorKey == null) return;
+        IndoorVenue.FloorFeatures floor =
+                currentVenue.floorFeatures.get(currentFloorKey);
+        if (floor == null || floor.wallPolygons.isEmpty()) return;
+
+        for (int i = 0; i < weights.length; i++) {
+            if (weights[i] == 0f) continue; // already dead, skip
+
+            LatLng prev = toLatLng(prevEast[i], prevNorth[i], converter);
+            LatLng curr = toLatLng(currEast[i], currNorth[i], converter);
+            if (crossesAnyWall(prev, curr, floor.wallPolygons)) {
+                LatLng snapped = adjustPositionToNearestValidLocation(
+                        prev, curr, getNearestWallPolygon(prev, curr, floor.wallPolygons));
+                float[] enu = converter.toEnu(snapped.latitude, snapped.longitude);
+                currEast[i] = enu[0];
+                currNorth[i] = enu[1];
+                weights[i] *= 0.1f;
+            }
+            }
+
+        }
+    private List<LatLng> getNearestWallPolygon(LatLng from, LatLng to,
+                                               List<List<LatLng>> wallPolygons) {
+        for (List<LatLng> polygon : wallPolygons) {
+            for (int i = 0; i < polygon.size(); i++) {
+                LatLng wallA = polygon.get(i);
+                LatLng wallB = polygon.get((i + 1) % polygon.size());
+                if (segmentsIntersect(from, to, wallA, wallB)) return polygon;
+            }
+        }
+        return wallPolygons.get(0); // fallback, shouldn't reach here
+    }
+
+    private boolean crossesAnyWall(LatLng from, LatLng to,
+                                   List<List<LatLng>> wallPolygons) {
+        for (List<LatLng> polygon : wallPolygons) {
+            for (int i = 0; i < polygon.size(); i++) {
+                LatLng wallA = polygon.get(i);
+                LatLng wallB = polygon.get((i + 1) % polygon.size());
+                if (segmentsIntersect(from, to, wallA, wallB)) return true;
+            }
+        }
+        return false;
+    }
+
+    private LatLng toLatLng(float eastM, float northM, CoordinateConverter c) {
+        double[] ll = c.toLatLon(eastM, northM);
+        return new LatLng(ll[0], ll[1]);
     }
 
     //checks orientation using three points: 0= points on same line, 1 & 2 = points on either side
@@ -326,7 +394,8 @@ public class IndoorMapManager {
         }
         if (!nextFloorKey.equals(currentFloorKey)) {
             currentFloorKey = nextFloorKey;
-            switchFloor(Integer.parseInt(currentFloorKey));
+            boolean goingUp = heightChangeMeters > 0;
+            switchFloor(goingUp ? +1 : -1);
         }
 
         return currentFloorKey;
@@ -422,29 +491,21 @@ public class IndoorMapManager {
      * Switch floor based on direction (+1 or -1)
      */
     private void switchFloor(int direction) {
-
         if (currentVenue == null || currentVenue.rawMapShapes == null) return;
 
         try {
             JSONObject floorsObj = new JSONObject(currentVenue.rawMapShapes);
-            List<String> floorKeys = getSortedFloorKeys(floorsObj);
-            Iterator<String> keys = floorsObj.keys();
-            while (keys.hasNext()) {
-                floorKeys.add(keys.next());
-            }
+            List<String> floorKeys = getSortedFloorKeys(floorsObj); // already has all keys
 
             int idx = floorKeys.indexOf(currentFloorKey);
             if (idx < 0) return;
 
             int next = idx + direction;
             if (next >= 0 && next < floorKeys.size()) {
-
                 currentFloorKey = floorKeys.get(next);
-
                 clearIndoorFloor();
-                drawFloor(floorsObj.getJSONObject(currentFloorKey));
+                drawFloor(floorsObj.getJSONObject(currentFloorKey), currentFloorKey);
                 isIndoorMapSet = true;
-
                 Log.d("IndoorMapManager", "Switched to floor: " + currentFloorKey);
             }
 
@@ -452,21 +513,20 @@ public class IndoorMapManager {
             Log.e("IndoorMapManager", "Floor switch failed", e);
         }
     }
-
-
+    
     /**
      * Draw a single floor from GeoJSON FeatureCollection.
      */
-    private void drawFloor(JSONObject floorGeoJson) throws JSONException {
+    private void drawFloor(JSONObject floorGeoJson, String floorKey) throws JSONException {
 
-        JSONArray features = floorGeoJson.getJSONArray("features");
+        IndoorVenue.FloorFeatures features = new IndoorVenue.FloorFeatures();
 
+        JSONArray featuresArray = floorGeoJson.getJSONArray("features");
 
-        for (int i = 0; i < features.length(); i++) {
+        for (int i = 0; i < featuresArray.length(); i++) {
 
-            JSONObject feature = features.getJSONObject(i);
+            JSONObject feature = featuresArray.getJSONObject(i);
 
-            // ----- Read indoor_type for styling -----
             JSONObject props = feature.optJSONObject("properties");
             String indoorType = props != null ? props.optString("indoor_type", "") : "";
             String t = indoorType == null ? "" : indoorType.toLowerCase();
@@ -479,42 +539,46 @@ public class IndoorMapManager {
             JSONArray multiPoly = geometry.getJSONArray("coordinates");
 
             // Style defaults
-            int strokeColor = Color.argb(220, 20, 20, 20);     // dark grey
-            int fillColor   = Color.argb(25,  60, 130, 255);   // subtle blue-ish
+            int strokeColor = Color.argb(220, 20, 20, 20);
+            int fillColor   = Color.argb(25,  60, 130, 255);
             float strokeWidth = 2.0f;
 
-            // Style by indoor_type
             if (t.contains("wall")) {
-                fillColor = Color.argb(0, 0, 0, 0);           // no fill
+                fillColor = Color.argb(0, 0, 0, 0);
                 strokeWidth = 3.5f;
             } else if (t.contains("door")) {
                 fillColor = Color.argb(0, 0, 0, 0);
                 strokeWidth = 4.5f;
             } else if (t.contains("corridor") || t.contains("hall")) {
-                fillColor = Color.argb(35,  60, 130, 255);
+                fillColor = Color.argb(35, 60, 130, 255);
                 strokeWidth = 1.5f;
             } else if (t.contains("room") || t.contains("area")) {
-                fillColor = Color.argb(30,  60, 130, 255);
+                fillColor = Color.argb(30, 60, 130, 255);
                 strokeWidth = 1.2f;
             } else {
-                // keep unknown types subtle
-                fillColor = Color.argb(15,  60, 130, 255);
+                fillColor = Color.argb(15, 60, 130, 255);
                 strokeWidth = 1.0f;
             }
 
             for (int j = 0; j < multiPoly.length(); j++) {
 
-                // MultiPolygon -> polygon -> rings
                 JSONArray polygon = multiPoly.getJSONArray(j);
                 if (polygon.length() == 0) continue;
 
-                // ---- outer ring ----
                 JSONArray outerRing = polygon.getJSONArray(0);
                 List<LatLng> outerPoints = toLatLngList(outerRing);
 
-                // Optional: skip tiny polygons (reduces clutter)
                 if (outerPoints.size() < 3) continue;
                 if (isTiny(outerPoints)) continue;
+
+                // Store by type for map matching
+                if (t.contains("wall")) {
+                    features.wallPolygons.add(outerPoints);
+                } else if (t.contains("stair")) {
+                    features.stairsCenters.add(centroidOf(outerPoints));
+                } else if (t.contains("lift") || t.contains("elevator")) {
+                    features.liftCenters.add(centroidOf(outerPoints));
+                }
 
                 PolygonOptions opts = new PolygonOptions()
                         .addAll(outerPoints)
@@ -522,7 +586,6 @@ public class IndoorMapManager {
                         .strokeWidth(strokeWidth)
                         .fillColor(fillColor);
 
-                // ---- holes (rings 1..n) ----
                 for (int k = 1; k < polygon.length(); k++) {
                     JSONArray holeRing = polygon.getJSONArray(k);
                     List<LatLng> holePoints = toLatLngList(holeRing);
@@ -533,16 +596,22 @@ public class IndoorMapManager {
 
                 Polygon polyObj = gMap.addPolygon(opts);
                 activeFloorPolygons.add(polyObj);
-//                JSONObject props = feature.optJSONObject("properties");
+
                 if (props != null) {
-//                    String indoorType = props.optString("indoor_type", "NONE");
                     Log.d("IndoorTypes", "Found indoor_type=" + indoorType);
                 }
-
             }
         }
-    }
 
+        // Store features on current venue
+        if (currentVenue != null) {
+            currentVenue.floorFeatures.put(floorKey, features);
+            Log.d("IndoorMapManager", "Floor " + floorKey +
+                    " walls="  + features.wallPolygons.size() +
+                    " stairs=" + features.stairsCenters.size() +
+                    " lifts="  + features.liftCenters.size());
+        }
+    }
     /**
      * Convert a GeoJSON ring ([[lon,lat], ...]) into List<LatLng>.
      * GeoJSON uses [lon,lat] order.
@@ -556,6 +625,12 @@ public class IndoorMapManager {
             points.add(new LatLng(lat, lon));
         }
         return points;
+    }
+
+    private LatLng centroidOf(List<LatLng> pts) {
+        double lat = 0, lon = 0;
+        for (LatLng p : pts) { lat += p.latitude; lon += p.longitude; }
+        return new LatLng(lat / pts.size(), lon / pts.size());
     }
 
     /**
@@ -645,6 +720,13 @@ public class IndoorMapManager {
 
     public String getCurrentFloorKey() {
         return currentFloorKey;
+    }
+
+    public IndoorVenue getCurrentVenue() { return currentVenue; }
+
+    public IndoorVenue.FloorFeatures getCurrentFloorFeatures() {
+        if (currentVenue == null || currentFloorKey == null) return null;
+        return currentVenue.floorFeatures.get(currentFloorKey);
     }
 
 

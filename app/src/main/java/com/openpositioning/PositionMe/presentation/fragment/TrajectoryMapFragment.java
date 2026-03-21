@@ -786,6 +786,10 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+    public IndoorMapManager getIndoorMapManager() {
+        return indoorMapManager;
+    }
+
 
 
 
