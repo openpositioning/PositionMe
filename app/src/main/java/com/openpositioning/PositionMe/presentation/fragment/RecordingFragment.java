@@ -390,8 +390,8 @@ public class RecordingFragment extends Fragment {
 //                        newLocation
 //                );
 //
-//                mapFrag.updateUserLocation(matchedLocation,
-//                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+                mapFrag.updateUserLocation(newLocation,
+                        (float) Math.toDegrees(sensorFusion.passOrientation()));
             }
         }
 

@@ -120,6 +120,8 @@ public class IndoorMapManager {
         polygonToVenue.clear();
 
         for (IndoorVenue venue : venues) {
+            Log.d("IndoorMapManager", "Adding venue outline: " + venue.name +
+                    " points=" + venue.outline.size());
             Polygon poly = gMap.addPolygon(
                     new PolygonOptions()
                             .addAll(venue.outline)

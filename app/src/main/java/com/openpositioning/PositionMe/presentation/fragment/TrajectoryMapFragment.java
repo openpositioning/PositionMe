@@ -356,6 +356,7 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     private void maybeRequestNearbyVenues(@NonNull LatLng loc) {
+        Log.d("MapDebug", "maybeRequestNearbyVenues called, timeSinceLast=" + (System.currentTimeMillis() - lastVenueQueryMs) + " loc=" + loc);
         if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) return;
 
         long now = System.currentTimeMillis();
@@ -370,6 +371,7 @@ public class TrajectoryMapFragment extends Fragment {
         List<String> macs = getObservedMacsOrEmpty();
         Log.d("TrajectoryMapFragment", "maybeRequestNearbyVenues instance=" + System.identityHashCode(this)
                 + " observedMacs=" + macs.size());
+
 
         if (macs.isEmpty()) {
             Log.d("TrajectoryMapFragment", "Skipping floorplan request: no MACs yet");
@@ -469,13 +471,16 @@ public class TrajectoryMapFragment extends Fragment {
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+        Log.d("MapDebug", "updateUserLocation called, gMap=" + gMap + " sensorFusion=" + sensorFusion);
         if (gMap == null) return;
+        if (sensorFusion == null) sensorFusion = SensorFusion.getInstance();
+
 
         // Keep track of current location
         LatLng oldLocation = this.currentLocation;
         LatLng correctedLocation = newLocation;
         float heightChange = 0f;
-        float[][] particles = sensorFusion.getParticles();
+//        float[][] particles = sensorFusion.getParticles();
         if (sensorFusion != null) {
             float currentElevation = sensorFusion.getElevation();
 

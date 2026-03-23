@@ -28,6 +28,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -35,11 +36,17 @@ public class VenueMapper {
 
     public static List<IndoorMapManager.IndoorVenue> toIndoorVenues(List<FloorPlanData.VenueDto> dtos) {
         List<IndoorMapManager.IndoorVenue> out = new ArrayList<>();
+        Log.d("VenueMapper", "toIndoorVenues called, dtos=" + dtos.size());
 
         for (FloorPlanData.VenueDto dto : dtos) {
+            Log.d("VenueMapper", "Processing dto name=" + dto.name +
+                    " outline length=" + (dto.outline == null ? "null" : dto.outline.length()) +
+                    " mapShapes length=" + (dto.mapShapes == null ? "null" : dto.mapShapes.length()));
             try {
                 List<LatLng> outline = parseOutlineGeoJson(dto.outline);
+                Log.d("VenueMapper", "Parsed outline points=" + outline.size());
                 if (outline.isEmpty()) continue;
+                // rest unchanged
 
                 IndoorMapManager.IndoorVenue v = new IndoorMapManager.IndoorVenue();
                 v.name = dto.name;
@@ -111,72 +118,101 @@ public class VenueMapper {
             return floors;
         }
 
-        JSONArray shapesArray = new JSONArray(shapes);
+        JSONObject floorsObj = new JSONObject(shapes);
+        Iterator<String> floorKeys = floorsObj.keys();
 
-        for (int k = 0; k < shapesArray.length(); k++) {
-            JSONObject shape = shapesArray.getJSONObject(k);
+        while (floorKeys.hasNext()) {
+            String floorKey = floorKeys.next();
 
-            String floor = String.valueOf(shape.getInt("floor"));
-            String type = shape.getString("indoor_type");
+            JSONObject floorGeoJson = floorsObj.getJSONObject(floorKey);
+            JSONArray features = floorGeoJson.optJSONArray("features");
 
-            IndoorMapManager.IndoorVenue.FloorFeatures f = floors.get(floor);
-            //if floor doesn't already exist in indoorvenue.floorfeatures, add it
-            if (f == null) {
-                f = new IndoorMapManager.IndoorVenue.FloorFeatures();
-                floors.put(floor, f);
+            IndoorMapManager.IndoorVenue.FloorFeatures floorFeatures =
+                    new IndoorMapManager.IndoorVenue.FloorFeatures();
+
+            if (features == null) {
+                floors.put(floorKey, floorFeatures);
+                continue;
             }
 
-            JSONObject geometry = shape.getJSONObject("geometry");
+            for (int i = 0; i < features.length(); i++) {
+                JSONObject feature = features.getJSONObject(i);
 
-            //if wall, parse and add it to list of walls, if stairs, add to stairs, if lift, add to lifts
-            if (type.equals("wall")) {
-                String geomType = geometry.optString("type", "");
+                JSONObject properties = feature.optJSONObject("properties");
+                JSONObject geometry = feature.optJSONObject("geometry");
 
-                if ("Polygon".equalsIgnoreCase(geomType) ||
-                        "MultiPolygon".equalsIgnoreCase(geomType)) {
+                if (properties == null || geometry == null) {
+                    continue;
+                }
+
+                String indoorType = properties.optString("indoor_type", "");
+
+                if ("wall".equalsIgnoreCase(indoorType)) {
                     List<LatLng> poly = parsePolygon(geometry);
                     if (!poly.isEmpty()) {
-                        f.wallPolygons.add(poly);
+                        floorFeatures.wallPolygons.add(poly);
                     }
-                } else if ("LineString".equalsIgnoreCase(geomType)) {
-                    List<LatLng> line = parseLineString(geometry);
-                    f.wallPolylines.addAll(line);
-                }
-
-            } else if (type.equals("stairs")) {
-                LatLng p = parsePointOrCenter(geometry);
-                if (p != null) {
-                    f.stairsCenters.add(p);
-                }
-
-            } else if (type.equals("lift")) {
-                LatLng p = parsePointOrCenter(geometry);
-                if (p != null) {
-                    f.liftCenters.add(p);
+                } else if ("stairs".equalsIgnoreCase(indoorType)) {
+                    LatLng p = parsePointOrCenter(geometry);
+                    if (p != null) {
+                        floorFeatures.stairsCenters.add(p);
+                    }
+                } else if ("lift".equalsIgnoreCase(indoorType)) {
+                    LatLng p = parsePointOrCenter(geometry);
+                    if (p != null) {
+                        floorFeatures.liftCenters.add(p);
+                    }
                 }
             }
+
+            floors.put(floorKey, floorFeatures);
         }
 
         return floors;
     }
-
     private static List<LatLng> parsePolygon(JSONObject geometry) throws Exception {
         List<LatLng> pts = new ArrayList<>();
 
+        if (geometry == null) {
+            return pts;
+        }
+
         String type = geometry.optString("type", "");
-        JSONArray coordinates = geometry.getJSONArray("coordinates");
-        JSONArray ring;
+        JSONArray coords = geometry.optJSONArray("coordinates");
+
+        if (coords == null || coords.length() == 0) {
+            return pts;
+        }
+
+        JSONArray ring = null;
 
         if ("MultiPolygon".equalsIgnoreCase(type)) {
-            ring = coordinates.getJSONArray(0).getJSONArray(0);
+            JSONArray polygon = coords.optJSONArray(0);
+            if (polygon == null || polygon.length() == 0) {
+                return pts;
+            }
+
+            ring = polygon.optJSONArray(0);
+            if (ring == null || ring.length() == 0) {
+                return pts;
+            }
+
         } else if ("Polygon".equalsIgnoreCase(type)) {
-            ring = coordinates.getJSONArray(0);
+            ring = coords.optJSONArray(0);
+            if (ring == null || ring.length() == 0) {
+                return pts;
+            }
+
         } else {
             return pts;
         }
 
         for (int i = 0; i < ring.length(); i++) {
-            JSONArray p = ring.getJSONArray(i);
+            JSONArray p = ring.optJSONArray(i);
+            if (p == null || p.length() < 2) {
+                continue;
+            }
+
             double lon = p.getDouble(0);
             double lat = p.getDouble(1);
             pts.add(new LatLng(lat, lon));
@@ -184,6 +220,8 @@ public class VenueMapper {
 
         return pts;
     }
+
+
 
     private static List<LatLng> parseLineString(JSONObject geometry) throws Exception {
         List<LatLng> pts = new ArrayList<>();
