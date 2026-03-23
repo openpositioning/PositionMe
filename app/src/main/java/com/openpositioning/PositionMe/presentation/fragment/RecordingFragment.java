@@ -78,6 +78,14 @@ public class RecordingFragment extends Fragment {
         return observedMacs == null ? new ArrayList<>() : new ArrayList<>(observedMacs);
     }
 
+    /** Throttle WiFi debug toast to once every 5 seconds. */
+    private long lastWifiToastMs = 0;
+
+
+
+
+
+
     // UI elements
     private MaterialButton completeButton, cancelButton, markTestPointButton;
     private ImageView recIcon;
@@ -345,6 +353,15 @@ public class RecordingFragment extends Fragment {
     /**
      * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
      */
+    /**
+     * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
+     * Called every ~200 ms by refreshDataTask.
+     *
+     * Passes three types of position to the map:
+     *  - PDR position  → updateUserLocation()  → red/purple polyline + green dot
+     *  - GNSS position → updateGNSS()          → blue polyline + blue dot
+     *  - WiFi position → updateWifiPosition()  → amber dot
+     */
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
@@ -383,27 +400,116 @@ public class RecordingFragment extends Fragment {
 //                trajectoryMapFragment.updateObservedMacs(sensorFusion.getLatestBssids());
                 mapFrag.updateUserLocation(newLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
+
+//                Added- must be updated to
+                // --- WiFi position → amber dot ---
+//                Remove
+//                LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+//                if (wifiLocation != null
+//                        && wifiLocation.latitude != 0.0
+//                        && wifiLocation.longitude != 0.0) {
+//                    mapFrag.updateWifiPosition(wifiLocation);
+//                }
+                // Drive the arrow marker and purple polyline with the fused position
+                double[] fused = sensorFusion.getFusedLatLon();
+                if (fused != null) {
+                    mapFrag.updateFusedPosition(new LatLng(fused[0], fused[1]));
+                }
+                // Amber WiFi observation dot — raw WiFi fix from OpenPositioning API
+//                double[] wifi = sensorFusion.getLastWifiLatLon();
+//                if (wifi != null) {
+//                    mapFrag.updateWifiPosition(new LatLng(wifi[0], wifi[1]));
+//                }
+                double[] wifi = sensorFusion.getLastWifiLatLon();
+                if (wifi != null) {
+                    mapFrag.updateWifiPosition(new LatLng(wifi[0], wifi[1]));
+                    if (System.currentTimeMillis() - lastWifiToastMs > 5000) {
+                        lastWifiToastMs = System.currentTimeMillis();
+                        Toast.makeText(requireContext(),
+                                "WiFi fix: " + String.format("%.5f, %.5f", wifi[0], wifi[1]),
+                                Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    if (System.currentTimeMillis() - lastWifiToastMs > 5000) {
+                        lastWifiToastMs = System.currentTimeMillis();
+                        Toast.makeText(requireContext(),
+                                "WiFi: no fix yet",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                // Green PDR observation dot — raw PDR position from step counting
+//                double[] pdr = sensorFusion.getLastPdrLatLon();
+//                if (pdr != null) {
+//                    mapFrag.updatePdrPosition(new LatLng(pdr[0], pdr[1]));
+//                }
+
+//                changed
+                // Green PDR observation dot — same position as the red polyline
+                mapFrag.updatePdrPosition(newLocation);
             }
         }
 
+
         // GNSS logic if you want to show GNSS error, etc.
-        float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-        if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
+//        float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+//        if (gnss != null && trajectoryMapFragment != null) {
+//            // If user toggles showing GNSS in the map, call e.g.
+//            if (trajectoryMapFragment.isGnssEnabled()) {
+//                LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
+//                LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+//                if (currentLoc != null) {
+//                    double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
+//                    gnssError.setVisibility(View.VISIBLE);
+//                    gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
+//                }
+//                trajectoryMapFragment.updateGNSS(gnssLocation);
+//            } else {
+//                gnssError.setVisibility(View.GONE);
+//                trajectoryMapFragment.clearGNSS();
+//            }
+//        }
+
+//        changed to-
+//        double[] gnssRaw = sensorFusion.getLastGnssLatLon();
+//        if (gnssRaw != null && trajectoryMapFragment != null) {
+//            if (trajectoryMapFragment.isGnssEnabled()) {
+//                LatLng gnssLocation = new LatLng(gnssRaw[0], gnssRaw[1]);
+//                LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
+//                if (currentLoc != null) {
+//                    double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
+//                    gnssError.setVisibility(View.VISIBLE);
+//                    gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
+//                }
+//                trajectoryMapFragment.updateGNSS(gnssLocation);
+//            } else {
+//                gnssError.setVisibility(View.GONE);
+//                trajectoryMapFragment.clearGNSS();
+//            }
+//        }
+//        changed to-
+        double[] gnssRaw = sensorFusion.getLastGnssLatLon();
+        if (gnssRaw != null && trajectoryMapFragment != null) {
+            LatLng gnssLocation = new LatLng(gnssRaw[0], gnssRaw[1]);
+
+            // Always call updateGNSS — the fragment decides internally what to show
+            // based on isGnssOn (marker/path) and showGnssDots (dots)
+            trajectoryMapFragment.updateGNSS(gnssLocation);
+
+            // Show GNSS error distance only when GNSS switch is on
             if (trajectoryMapFragment.isGnssEnabled()) {
-                LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
                 if (currentLoc != null) {
                     double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
                     gnssError.setVisibility(View.VISIBLE);
                     gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
                 }
-                trajectoryMapFragment.updateGNSS(gnssLocation);
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
             }
         }
+
         RecordingActivity act = (RecordingActivity) requireActivity();
         String v = act.getSelectedVenueIdOrName();
         selectedVenueText.setText("Venue: " + (v == null ? "none" : v));

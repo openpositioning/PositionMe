@@ -11,7 +11,7 @@ import android.util.Log;
  *
  * @author Haoning Huang
  */
-public class EKFPositioning {
+public class ExtendedKalmanFilter {
 
     private static final String TAG = "EKFPositioning";
 
