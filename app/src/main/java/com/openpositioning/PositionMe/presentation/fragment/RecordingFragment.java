@@ -264,22 +264,27 @@ public class RecordingFragment extends Fragment {
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
-
-            // Pass the location + orientation to the map
+        // Current location: use fused estimate when available, otherwise keep PDR dead-reckoning fallback.
+        LatLng fusedLocation = sensorFusion.getFusedLatLng();
+        if (fusedLocation != null) {
             if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
+                trajectoryMapFragment.updateUserLocation(
+                        fusedLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation()));
+            }
+        } else {
+            float[] latLngArray = sensorFusion.getGNSSLatitude(true);
+            if (latLngArray != null) {
+                LatLng oldLocation = trajectoryMapFragment.getCurrentLocation();
+                LatLng newLocation = UtilFunctions.calculateNewPos(
+                        oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
+                        new float[]{pdrValues[0] - previousPosX, pdrValues[1] - previousPosY}
+                );
+
+                if (trajectoryMapFragment != null) {
+                    trajectoryMapFragment.updateUserLocation(newLocation,
+                            (float) Math.toDegrees(sensorFusion.passOrientation()));
+                }
             }
         }
 

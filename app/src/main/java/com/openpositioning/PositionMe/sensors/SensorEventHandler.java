@@ -22,6 +22,10 @@ import java.util.List;
  */
 public class SensorEventHandler {
 
+    public interface PdrStepListener {
+        void onPdrStep(float dxEastMeters, float dyNorthMeters, long relativeTimestampMs);
+    }
+
     private static final float ALPHA = 0.8f;
     private static final long LARGE_GAP_THRESHOLD_MS = 500;
 
@@ -29,6 +33,7 @@ public class SensorEventHandler {
     private final PdrProcessing pdrProcessing;
     private final PathView pathView;
     private final TrajectoryRecorder recorder;
+    private final PdrStepListener pdrStepListener;
 
     // Timestamp tracking
     private final HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -38,6 +43,9 @@ public class SensorEventHandler {
 
     // Acceleration magnitude buffer between steps
     private final List<Double> accelMagnitude = new ArrayList<>();
+    private float lastPdrX = 0f;
+    private float lastPdrY = 0f;
+    private boolean hasPdrReference = false;
 
     /**
      * Creates a new SensorEventHandler.
@@ -50,12 +58,14 @@ public class SensorEventHandler {
      */
     public SensorEventHandler(SensorState state, PdrProcessing pdrProcessing,
                               PathView pathView, TrajectoryRecorder recorder,
-                              long bootTime) {
+                              long bootTime,
+                              PdrStepListener pdrStepListener) {
         this.state = state;
         this.pdrProcessing = pdrProcessing;
         this.pathView = pathView;
         this.recorder = recorder;
         this.bootTime = bootTime;
+        this.pdrStepListener = pdrStepListener;
     }
 
     /**
@@ -171,6 +181,20 @@ public class SensorEventHandler {
                             state.orientation[0]
                     );
 
+                    float dx = 0f;
+                    float dy = 0f;
+                    if (hasPdrReference) {
+                        dx = newCords[0] - lastPdrX;
+                        dy = newCords[1] - lastPdrY;
+                    }
+                    lastPdrX = newCords[0];
+                    lastPdrY = newCords[1];
+                    hasPdrReference = true;
+
+                    if (pdrStepListener != null && hasPdrReference) {
+                        pdrStepListener.onPdrStep(dx, dy, stepTime);
+                    }
+
                     this.accelMagnitude.clear();
 
                     if (recorder.isRecording()) {
@@ -203,5 +227,8 @@ public class SensorEventHandler {
      */
     void resetBootTime(long newBootTime) {
         this.bootTime = newBootTime;
+        this.hasPdrReference = false;
+        this.lastPdrX = 0f;
+        this.lastPdrY = 0f;
     }
 }

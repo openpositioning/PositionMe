@@ -22,11 +22,16 @@ import java.util.stream.Stream;
  */
 public class WifiPositionManager implements Observer {
 
+    public interface WifiFixListener {
+        void onWifiFix(LatLng wifiLocation, int floor);
+    }
+
     private static final String WIFI_FINGERPRINT = "wf";
 
     private final WiFiPositioning wiFiPositioning;
     private final TrajectoryRecorder recorder;
     private List<Wifi> wifiList;
+    private WifiFixListener wifiFixListener;
 
     /**
      * Creates a new WifiPositionManager.
@@ -65,7 +70,19 @@ public class WifiPositionManager implements Observer {
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
-            this.wiFiPositioning.request(wifiFingerPrint);
+            this.wiFiPositioning.request(wifiFingerPrint, new WiFiPositioning.VolleyCallback() {
+                @Override
+                public void onSuccess(LatLng wifiLocation, int floor) {
+                    if (wifiFixListener != null && wifiLocation != null) {
+                        wifiFixListener.onWifiFix(wifiLocation, floor);
+                    }
+                }
+
+                @Override
+                public void onError(String message) {
+                    Log.e("WifiPositionManager", "WiFi positioning request failed: " + message);
+                }
+            });
         } catch (JSONException e) {
             Log.e("jsonErrors", "Error creating json object" + e.toString());
         }
@@ -123,5 +140,12 @@ public class WifiPositionManager implements Observer {
      */
     public List<Wifi> getWifiList() {
         return this.wifiList;
+    }
+
+    /**
+     * Registers a listener receiving WiFi absolute fixes for downstream fusion.
+     */
+    public void setWifiFixListener(WifiFixListener wifiFixListener) {
+        this.wifiFixListener = wifiFixListener;
     }
 }

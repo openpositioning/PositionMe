@@ -37,6 +37,12 @@ public class SensorState {
     public volatile float longitude;
     public final float[] startLocation = new float[2];
 
+    // Fused position estimate
+    public volatile float fusedLatitude;
+    public volatile float fusedLongitude;
+    public volatile int fusedFloor;
+    public volatile boolean fusedAvailable;
+
     // Step counting
     public volatile int stepCounter;
 }

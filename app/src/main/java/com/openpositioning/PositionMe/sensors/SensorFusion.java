@@ -63,6 +63,7 @@ public class SensorFusion implements SensorEventListener {
     private SensorEventHandler eventHandler;
     private TrajectoryRecorder recorder;
     private WifiPositionManager wifiPositionManager;
+    private PositionFusionEngine fusionEngine;
 
     // Movement sensor instances (lifecycle managed here)
     private MovementSensor accelerometerSensor;
@@ -151,6 +152,7 @@ public class SensorFusion implements SensorEventListener {
         this.pdrProcessing = new PdrProcessing(context);
         this.pathView = new PathView(context, null);
         WiFiPositioning wiFiPositioning = new WiFiPositioning(context);
+        this.fusionEngine = new PositionFusionEngine(settings.getInt("floor_height", 4));
 
         // Create internal modules
         this.recorder = new TrajectoryRecorder(appContext, state, serverCommunications, settings);
@@ -162,7 +164,17 @@ public class SensorFusion implements SensorEventListener {
 
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
-                state, pdrProcessing, pathView, recorder, bootTime);
+                state, pdrProcessing, pathView, recorder, bootTime,
+                (dxEastMeters, dyNorthMeters, relativeTimestampMs) -> {
+                    fusionEngine.updatePdrDisplacement(dxEastMeters, dyNorthMeters);
+                    fusionEngine.updateElevation(state.elevation);
+                    updateFusedState();
+                });
+
+        this.wifiPositionManager.setWifiFixListener((wifiLocation, floor) -> {
+            fusionEngine.updateWifi(wifiLocation.latitude, wifiLocation.longitude, floor);
+            updateFusedState();
+        });
 
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
@@ -490,6 +502,10 @@ public class SensorFusion implements SensorEventListener {
     public void setStartGNSSLatitude(float[] startPosition) {
         state.startLocation[0] = startPosition[0];
         state.startLocation[1] = startPosition[1];
+        if (fusionEngine != null) {
+            fusionEngine.reset(startPosition[0], startPosition[1], 0);
+            updateFusedState();
+        }
     }
 
     /**
@@ -615,6 +631,23 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Returns the best fused location estimate, if available.
+     */
+    public LatLng getFusedLatLng() {
+        if (!state.fusedAvailable) {
+            return null;
+        }
+        return new LatLng(state.fusedLatitude, state.fusedLongitude);
+    }
+
+    /**
+     * Returns the current fused floor estimate.
+     */
+    public int getFusedFloor() {
+        return state.fusedFloor;
+    }
+
+    /**
      * Returns the current floor the user is on, obtained using WiFi positioning.
      *
      * @return current floor number.
@@ -644,8 +677,31 @@ public class SensorFusion implements SensorEventListener {
         public void onLocationChanged(@NonNull Location location) {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
+            if (fusionEngine != null) {
+                fusionEngine.updateGnss(
+                        location.getLatitude(),
+                        location.getLongitude(),
+                        location.getAccuracy());
+                updateFusedState();
+            }
             recorder.addGnssData(location);
         }
+    }
+
+    private void updateFusedState() {
+        if (fusionEngine == null) {
+            return;
+        }
+        PositionFusionEstimate estimate = fusionEngine.getEstimate();
+        if (!estimate.isAvailable() || estimate.getLatLng() == null) {
+            state.fusedAvailable = false;
+            return;
+        }
+
+        state.fusedLatitude = (float) estimate.getLatLng().latitude;
+        state.fusedLongitude = (float) estimate.getLatLng().longitude;
+        state.fusedFloor = estimate.getFloor();
+        state.fusedAvailable = true;
     }
 
     //endregion
