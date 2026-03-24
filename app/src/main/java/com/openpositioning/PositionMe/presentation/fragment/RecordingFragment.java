@@ -83,6 +83,7 @@ public class RecordingFragment extends Fragment {
     private float distance = 0f;
     private float previousPosX = 0f;
     private float previousPosY = 0f;
+    private LatLng lastWifiObservation;
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
@@ -304,6 +305,23 @@ public class RecordingFragment extends Fragment {
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();
+            }
+        }
+
+        if (trajectoryMapFragment != null) {
+            LatLng wifiLocation = sensorFusion.getLatLngWifiPositioning();
+            if (wifiLocation != null && (lastWifiObservation == null
+                    || !lastWifiObservation.equals(wifiLocation))) {
+                trajectoryMapFragment.updateWiFiObservation(wifiLocation);
+                lastWifiObservation = wifiLocation;
+            }
+
+            float[] startLatLng = sensorFusion.getGNSSLatitude(true);
+            if (startLatLng != null && !(startLatLng[0] == 0f && startLatLng[1] == 0f)) {
+                LatLng pdrAbsolute = UtilFunctions.calculateNewPos(
+                        new LatLng(startLatLng[0], startLatLng[1]),
+                        new float[]{pdrValues[0], pdrValues[1]});
+                trajectoryMapFragment.updatePdrObservation(pdrAbsolute);
             }
         }
 
