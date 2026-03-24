@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.sensors;
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,6 +33,8 @@ public class PositionFusionEngine {
     private static final double ROUGHEN_STD_M = 0.15;
     private static final double WIFI_SIGMA_M = 8.0;
     private static final double EPS = 1e-300;
+    private static final double CONNECTOR_RADIUS_M = 3.0;
+    private static final double LIFT_HORIZONTAL_MAX_M = 0.50;
 
     private final float floorHeightMeters;
     private final Random random = new Random();
@@ -44,12 +47,41 @@ public class PositionFusionEngine {
     private final List<Particle> particles = new ArrayList<>(PARTICLE_COUNT);
     private int fallbackFloor;
     private long updateCounter;
+    private String activeBuildingName;
+    private final Map<Integer, FloorConstraint> floorConstraints = new HashMap<>();
+    private double recentStepMotionMeters;
 
     private static final class Particle {
         double xEast;
         double yNorth;
         int floor;
         double weight;
+    }
+
+    private static final class Point2D {
+        final double x;
+        final double y;
+
+        Point2D(double x, double y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    private static final class Segment {
+        final Point2D a;
+        final Point2D b;
+
+        Segment(Point2D a, Point2D b) {
+            this.a = a;
+            this.b = b;
+        }
+    }
+
+    private static final class FloorConstraint {
+        final List<Segment> walls = new ArrayList<>();
+        final List<Point2D> stairs = new ArrayList<>();
+        final List<Point2D> lifts = new ArrayList<>();
     }
 
     public PositionFusionEngine(float floorHeightMeters) {
@@ -75,15 +107,28 @@ public class PositionFusionEngine {
             return;
         }
 
+        recentStepMotionMeters = Math.hypot(dxEastMeters, dyNorthMeters);
+        int blockedByWall = 0;
+
         for (Particle p : particles) {
-            p.xEast += dxEastMeters + random.nextGaussian() * PDR_NOISE_STD_M;
-            p.yNorth += dyNorthMeters + random.nextGaussian() * PDR_NOISE_STD_M;
+            double oldX = p.xEast;
+            double oldY = p.yNorth;
+            double candidateX = oldX + dxEastMeters + random.nextGaussian() * PDR_NOISE_STD_M;
+            double candidateY = oldY + dyNorthMeters + random.nextGaussian() * PDR_NOISE_STD_M;
+
+            if (crossesWall(p.floor, oldX, oldY, candidateX, candidateY)) {
+                blockedByWall++;
+                continue;
+            }
+
+            p.xEast = candidateX;
+            p.yNorth = candidateY;
         }
 
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
-                    "Predict dPDR=(%.2fE, %.2fN) noiseStd=%.2f",
-                    dxEastMeters, dyNorthMeters, PDR_NOISE_STD_M));
+                    "Predict dPDR=(%.2fE, %.2fN) noiseStd=%.2f blockedByWall=%d",
+                    dxEastMeters, dyNorthMeters, PDR_NOISE_STD_M, blockedByWall));
         }
     }
 
@@ -106,13 +151,103 @@ public class PositionFusionEngine {
         applyAbsoluteFix(latDeg, lonDeg, WIFI_SIGMA_M, wifiFloor);
     }
 
-    public synchronized void updateElevation(float elevationMeters) {
+    public synchronized void updateElevation(float elevationMeters, boolean elevatorLikely) {
         int floorFromBarometer = Math.round(elevationMeters / floorHeightMeters);
         fallbackFloor = floorFromBarometer;
         if (!particles.isEmpty()) {
             for (Particle p : particles) {
-                p.floor = floorFromBarometer;
+                if (p.floor == floorFromBarometer) {
+                    continue;
+                }
+
+                int step = floorFromBarometer > p.floor ? 1 : -1;
+                int nextFloor = p.floor + step;
+                if (canUseConnector(p.floor, p.xEast, p.yNorth, elevatorLikely)) {
+                    p.floor = nextFloor;
+                }
             }
+        }
+    }
+
+    public synchronized void updateMapMatchingContext(
+            double currentLatDeg,
+            double currentLonDeg,
+            List<FloorplanApiClient.BuildingInfo> buildings) {
+        if (!hasAnchor || buildings == null || buildings.isEmpty()) {
+            floorConstraints.clear();
+            activeBuildingName = null;
+            return;
+        }
+
+        FloorplanApiClient.BuildingInfo containing = null;
+        LatLng current = new LatLng(currentLatDeg, currentLonDeg);
+        for (FloorplanApiClient.BuildingInfo b : buildings) {
+            List<LatLng> outline = b.getOutlinePolygon();
+            if (outline != null && outline.size() >= 3 && pointInPolygon(current, outline)) {
+                containing = b;
+                break;
+            }
+        }
+
+        if (containing == null) {
+            floorConstraints.clear();
+            activeBuildingName = null;
+            return;
+        }
+
+        if (containing.getName().equals(activeBuildingName) && !floorConstraints.isEmpty()) {
+            return;
+        }
+
+        Map<Integer, FloorConstraint> parsed = new HashMap<>();
+        List<FloorplanApiClient.FloorShapes> floorShapes = containing.getFloorShapesList();
+        for (int i = 0; i < floorShapes.size(); i++) {
+            FloorplanApiClient.FloorShapes floor = floorShapes.get(i);
+            Integer logicalFloor = parseLogicalFloor(floor, i);
+            if (logicalFloor == null) {
+                continue;
+            }
+            FloorConstraint constraint = parsed.get(logicalFloor);
+            if (constraint == null) {
+                constraint = new FloorConstraint();
+                parsed.put(logicalFloor, constraint);
+            }
+
+            for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
+                String type = feature.getIndoorType();
+                List<List<LatLng>> parts = feature.getParts();
+                if (parts == null || parts.isEmpty()) {
+                    continue;
+                }
+
+                if ("wall".equals(type)) {
+                    for (List<LatLng> part : parts) {
+                        addWallSegments(part, constraint.walls);
+                    }
+                } else if ("stairs".equals(type) || "lift".equals(type)) {
+                    for (List<LatLng> part : parts) {
+                        Point2D center = toLocalCentroid(part);
+                        if (center == null) {
+                            continue;
+                        }
+                        if ("stairs".equals(type)) {
+                            constraint.stairs.add(center);
+                        } else {
+                            constraint.lifts.add(center);
+                        }
+                    }
+                }
+            }
+        }
+
+        floorConstraints.clear();
+        floorConstraints.putAll(parsed);
+        activeBuildingName = containing.getName();
+        if (DEBUG_LOGS) {
+            Log.i(TAG, String.format(Locale.US,
+                    "Map matching enabled for building=%s floors=%d",
+                    activeBuildingName,
+                    floorConstraints.size()));
         }
     }
 
@@ -307,6 +442,173 @@ public class PositionFusionEngine {
         double lon = anchorLonDeg + Math.toDegrees(dLon);
 
         return new LatLng(lat, lon);
+    }
+
+    private boolean crossesWall(int floor, double x0, double y0, double x1, double y1) {
+        FloorConstraint fc = floorConstraints.get(floor);
+        if (fc == null || fc.walls.isEmpty()) {
+            return false;
+        }
+
+        Point2D a = new Point2D(x0, y0);
+        Point2D b = new Point2D(x1, y1);
+        for (Segment wall : fc.walls) {
+            if (segmentsIntersect(a, b, wall.a, wall.b)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean canUseConnector(int floor, double x, double y, boolean elevatorLikely) {
+        if (floorConstraints.isEmpty()) {
+            return true;
+        }
+
+        FloorConstraint fc = floorConstraints.get(floor);
+        if (fc == null) {
+            return true;
+        }
+
+        if (elevatorLikely && recentStepMotionMeters <= LIFT_HORIZONTAL_MAX_M) {
+            if (!fc.lifts.isEmpty()) {
+                return isNearAny(fc.lifts, x, y, CONNECTOR_RADIUS_M);
+            }
+            return false;
+        }
+
+        if (!fc.stairs.isEmpty()) {
+            return isNearAny(fc.stairs, x, y, CONNECTOR_RADIUS_M);
+        }
+
+        // If stairs are not mapped for this floor, do not hard-block transitions.
+        return true;
+    }
+
+    private boolean isNearAny(List<Point2D> points, double x, double y, double radius) {
+        double r2 = radius * radius;
+        for (Point2D p : points) {
+            double dx = p.x - x;
+            double dy = p.y - y;
+            if (dx * dx + dy * dy <= r2) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void addWallSegments(List<LatLng> points, List<Segment> out) {
+        if (points == null || points.size() < 2) {
+            return;
+        }
+        for (int i = 0; i < points.size() - 1; i++) {
+            Point2D a = toLocalPoint(points.get(i));
+            Point2D b = toLocalPoint(points.get(i + 1));
+            if (a != null && b != null) {
+                out.add(new Segment(a, b));
+            }
+        }
+    }
+
+    private Point2D toLocalPoint(LatLng latLng) {
+        if (latLng == null) {
+            return null;
+        }
+        double[] local = toLocal(latLng.latitude, latLng.longitude);
+        return new Point2D(local[0], local[1]);
+    }
+
+    private Point2D toLocalCentroid(List<LatLng> points) {
+        if (points == null || points.isEmpty()) {
+            return null;
+        }
+
+        double sx = 0.0;
+        double sy = 0.0;
+        int count = 0;
+        for (LatLng latLng : points) {
+            Point2D p = toLocalPoint(latLng);
+            if (p == null) {
+                continue;
+            }
+            sx += p.x;
+            sy += p.y;
+            count++;
+        }
+
+        if (count == 0) {
+            return null;
+        }
+        return new Point2D(sx / count, sy / count);
+    }
+
+    private Integer parseLogicalFloor(FloorplanApiClient.FloorShapes floor, int index) {
+        if (floor == null) {
+            return null;
+        }
+
+        String display = floor.getDisplayName() == null ? "" : floor.getDisplayName().trim();
+        String upper = display.toUpperCase(Locale.US);
+
+        if ("LG".equals(upper) || "L".equals(upper)) {
+            return -1;
+        }
+        if ("G".equals(upper) || "GROUND".equals(upper)) {
+            return 0;
+        }
+
+        try {
+            return Integer.parseInt(display);
+        } catch (Exception ignored) {
+            // Fall back to index mapping when display name is not numeric.
+        }
+
+        return index;
+    }
+
+    private boolean pointInPolygon(LatLng point, List<LatLng> polygon) {
+        boolean inside = false;
+        for (int i = 0, j = polygon.size() - 1; i < polygon.size(); j = i++) {
+            double xi = polygon.get(i).longitude;
+            double yi = polygon.get(i).latitude;
+            double xj = polygon.get(j).longitude;
+            double yj = polygon.get(j).latitude;
+
+            boolean intersect = ((yi > point.latitude) != (yj > point.latitude))
+                    && (point.longitude
+                    < (xj - xi) * (point.latitude - yi) / (yj - yi + 1e-12) + xi);
+            if (intersect) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    private boolean segmentsIntersect(Point2D p1, Point2D p2, Point2D q1, Point2D q2) {
+        double o1 = orientation(p1, p2, q1);
+        double o2 = orientation(p1, p2, q2);
+        double o3 = orientation(q1, q2, p1);
+        double o4 = orientation(q1, q2, p2);
+
+        if ((o1 > 0) != (o2 > 0) && (o3 > 0) != (o4 > 0)) {
+            return true;
+        }
+
+        return (Math.abs(o1) < 1e-9 && onSegment(p1, q1, p2))
+                || (Math.abs(o2) < 1e-9 && onSegment(p1, q2, p2))
+                || (Math.abs(o3) < 1e-9 && onSegment(q1, p1, q2))
+                || (Math.abs(o4) < 1e-9 && onSegment(q1, p2, q2));
+    }
+
+    private double orientation(Point2D a, Point2D b, Point2D c) {
+        return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    }
+
+    private boolean onSegment(Point2D a, Point2D b, Point2D c) {
+        return b.x >= Math.min(a.x, c.x) - 1e-9
+                && b.x <= Math.max(a.x, c.x) + 1e-9
+                && b.y >= Math.min(a.y, c.y) - 1e-9
+                && b.y <= Math.max(a.y, c.y) + 1e-9;
     }
 
     private void logUpdateSummary(double zEast, double zNorth,

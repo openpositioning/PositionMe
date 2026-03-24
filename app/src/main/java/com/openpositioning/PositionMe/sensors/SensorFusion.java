@@ -167,7 +167,7 @@ public class SensorFusion implements SensorEventListener {
                 state, pdrProcessing, pathView, recorder, bootTime,
                 (dxEastMeters, dyNorthMeters, relativeTimestampMs) -> {
                     fusionEngine.updatePdrDisplacement(dxEastMeters, dyNorthMeters);
-                    fusionEngine.updateElevation(state.elevation);
+                    fusionEngine.updateElevation(state.elevation, state.elevator);
                     updateFusedState();
                 });
 
@@ -434,6 +434,13 @@ public class SensorFusion implements SensorEventListener {
             }
             floorplanBuildingCache.put(building.getName(), building);
         }
+
+        if (fusionEngine != null) {
+            fusionEngine.updateMapMatchingContext(
+                    state.latitude,
+                    state.longitude,
+                    getFloorplanBuildings());
+        }
     }
 
     /**
@@ -678,6 +685,10 @@ public class SensorFusion implements SensorEventListener {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
             if (fusionEngine != null) {
+                fusionEngine.updateMapMatchingContext(
+                        location.getLatitude(),
+                        location.getLongitude(),
+                        getFloorplanBuildings());
                 fusionEngine.updateGnss(
                         location.getLatitude(),
                         location.getLongitude(),
