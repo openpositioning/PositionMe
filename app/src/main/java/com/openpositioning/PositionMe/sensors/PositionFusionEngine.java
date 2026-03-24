@@ -1,10 +1,13 @@
 package com.openpositioning.PositionMe.sensors;
 
+import android.util.Log;
+
 import com.google.android.gms.maps.model.LatLng;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 
@@ -16,6 +19,9 @@ import java.util.Random;
  * the effective particle count falls below a threshold.</p>
  */
 public class PositionFusionEngine {
+
+    private static final String TAG = "PositionFusionPF";
+    private static final boolean DEBUG_LOGS = true;
 
     private static final double EARTH_RADIUS_M = 6378137.0;
 
@@ -37,6 +43,7 @@ public class PositionFusionEngine {
 
     private final List<Particle> particles = new ArrayList<>(PARTICLE_COUNT);
     private int fallbackFloor;
+    private long updateCounter;
 
     private static final class Particle {
         double xEast;
@@ -56,6 +63,11 @@ public class PositionFusionEngine {
 
         fallbackFloor = initialFloor;
         initParticlesAtOrigin(initialFloor);
+        if (DEBUG_LOGS) {
+            Log.i(TAG, String.format(Locale.US,
+                    "Reset anchor=(%.7f, %.7f) floor=%d particles=%d",
+                    latDeg, lonDeg, initialFloor, PARTICLE_COUNT));
+        }
     }
 
     public synchronized void updatePdrDisplacement(float dxEastMeters, float dyNorthMeters) {
@@ -67,14 +79,30 @@ public class PositionFusionEngine {
             p.xEast += dxEastMeters + random.nextGaussian() * PDR_NOISE_STD_M;
             p.yNorth += dyNorthMeters + random.nextGaussian() * PDR_NOISE_STD_M;
         }
+
+        if (DEBUG_LOGS) {
+            Log.d(TAG, String.format(Locale.US,
+                    "Predict dPDR=(%.2fE, %.2fN) noiseStd=%.2f",
+                    dxEastMeters, dyNorthMeters, PDR_NOISE_STD_M));
+        }
     }
 
     public synchronized void updateGnss(double latDeg, double lonDeg, float accuracyMeters) {
         double sigma = Math.max(accuracyMeters, 3.0f);
+        if (DEBUG_LOGS) {
+            Log.d(TAG, String.format(Locale.US,
+                    "GNSS update lat=%.7f lon=%.7f acc=%.2f sigma=%.2f",
+                    latDeg, lonDeg, accuracyMeters, sigma));
+        }
         applyAbsoluteFix(latDeg, lonDeg, sigma, null);
     }
 
     public synchronized void updateWifi(double latDeg, double lonDeg, int wifiFloor) {
+        if (DEBUG_LOGS) {
+            Log.d(TAG, String.format(Locale.US,
+                    "WiFi update lat=%.7f lon=%.7f floor=%d sigma=%.2f",
+                    latDeg, lonDeg, wifiFloor, WIFI_SIGMA_M));
+        }
         applyAbsoluteFix(latDeg, lonDeg, WIFI_SIGMA_M, wifiFloor);
     }
 
@@ -127,6 +155,7 @@ public class PositionFusionEngine {
         }
 
         double[] z = toLocal(latDeg, lonDeg);
+    double effectiveBefore = computeEffectiveSampleSize();
 
         double sigma2 = sigmaMeters * sigmaMeters;
         double maxLogWeight = Double.NEGATIVE_INFINITY;
@@ -172,10 +201,15 @@ public class PositionFusionEngine {
         }
 
         double effectiveN = computeEffectiveSampleSize();
+        boolean resampled = false;
         if (effectiveN < PARTICLE_COUNT * RESAMPLE_RATIO) {
             resampleSystematic();
             roughenParticles();
+            resampled = true;
         }
+
+        updateCounter++;
+        logUpdateSummary(z[0], z[1], sigmaMeters, floorHint, effectiveBefore, effectiveN, resampled);
     }
 
     private void initParticlesAtOrigin(int initialFloor) {
@@ -273,5 +307,74 @@ public class PositionFusionEngine {
         double lon = anchorLonDeg + Math.toDegrees(dLon);
 
         return new LatLng(lat, lon);
+    }
+
+    private void logUpdateSummary(double zEast, double zNorth,
+                                  double sigmaMeters,
+                                  Integer floorHint,
+                                  double effectiveBefore,
+                                  double effectiveAfter,
+                                  boolean resampled) {
+        if (!DEBUG_LOGS || particles.isEmpty()) {
+            return;
+        }
+
+        double minW = Double.POSITIVE_INFINITY;
+        double maxW = 0.0;
+        double entropy = 0.0;
+        double meanX = 0.0;
+        double meanY = 0.0;
+        int bestFloor = fallbackFloor;
+        Map<Integer, Double> floorWeights = new HashMap<>();
+
+        Particle bestParticle = particles.get(0);
+        for (Particle p : particles) {
+            minW = Math.min(minW, p.weight);
+            maxW = Math.max(maxW, p.weight);
+            if (p.weight > bestParticle.weight) {
+                bestParticle = p;
+            }
+
+            if (p.weight > 0.0) {
+                entropy -= p.weight * Math.log(p.weight);
+            }
+
+            meanX += p.weight * p.xEast;
+            meanY += p.weight * p.yNorth;
+            floorWeights.put(p.floor, floorWeights.getOrDefault(p.floor, 0.0) + p.weight);
+        }
+
+        double bestFloorWeight = -1.0;
+        for (Map.Entry<Integer, Double> entry : floorWeights.entrySet()) {
+            if (entry.getValue() > bestFloorWeight) {
+                bestFloorWeight = entry.getValue();
+                bestFloor = entry.getKey();
+            }
+        }
+
+        double entropyNorm = entropy / Math.log(PARTICLE_COUNT);
+        String source = floorHint == null ? "GNSS" : "WiFi";
+        Log.i(TAG, String.format(Locale.US,
+                "u=%d src=%s z=(%.2fE,%.2fN) sigma=%.2f floorHint=%s Neff=%.1f->%.1f resampled=%s w[min=%.5f max=%.5f Hn=%.3f] mean=(%.2fE,%.2fN) bestP=(%.2fE,%.2fN,f=%d,w=%.5f) bestFloor=%d(%.3f)",
+                updateCounter,
+                source,
+                zEast,
+                zNorth,
+                sigmaMeters,
+                floorHint == null ? "-" : String.valueOf(floorHint),
+                effectiveBefore,
+                effectiveAfter,
+                String.valueOf(resampled),
+                minW,
+                maxW,
+                entropyNorm,
+                meanX,
+                meanY,
+                bestParticle.xEast,
+                bestParticle.yNorth,
+                bestParticle.floor,
+                bestParticle.weight,
+                bestFloor,
+                bestFloorWeight));
     }
 }
