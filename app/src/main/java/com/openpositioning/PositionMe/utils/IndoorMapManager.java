@@ -161,14 +161,27 @@ public class IndoorMapManager {
     public void setCurrentFloor(int newFloor, boolean autoFloor) {
         if (currentFloorShapes == null || currentFloorShapes.isEmpty()) return;
 
+        int requestedFloor = newFloor;
+        int bias = getAutoFloorBias();
+
         if (autoFloor) {
-            newFloor += getAutoFloorBias();
+            newFloor += bias;
+            Log.d(TAG, "Auto-floor request logical=" + requestedFloor
+                    + " bias=" + bias + " -> index=" + newFloor);
         }
 
         if (newFloor >= 0 && newFloor < currentFloorShapes.size()
                 && newFloor != this.currentFloor) {
             this.currentFloor = newFloor;
+            Log.i(TAG, "Set floor index=" + newFloor
+                    + " display=" + getCurrentFloorDisplayName()
+                    + " totalFloors=" + currentFloorShapes.size());
             drawFloorShapes(newFloor);
+        } else {
+            Log.d(TAG, "Ignored floor change request requested=" + requestedFloor
+                    + " mappedIndex=" + newFloor
+                    + " current=" + this.currentFloor
+                    + " totalFloors=" + currentFloorShapes.size());
         }
     }
 
@@ -230,11 +243,23 @@ public class IndoorMapManager {
                         SensorFusion.getInstance().getFloorplanBuilding(apiName);
                 if (building != null) {
                     currentFloorShapes = building.getFloorShapesList();
+                    Log.i(TAG, "Loaded floorplan building=" + apiName
+                            + " floors=" + (currentFloorShapes == null ? 0 : currentFloorShapes.size()));
+                    if (currentFloorShapes != null) {
+                        for (int i = 0; i < currentFloorShapes.size(); i++) {
+                            FloorplanApiClient.FloorShapes floorShapes = currentFloorShapes.get(i);
+                            Log.d(TAG, "Floor index=" + i + " display=" + floorShapes.getDisplayName()
+                                    + " features=" + floorShapes.getFeatures().size());
+                        }
+                    }
                 }
 
                 if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
                     drawFloorShapes(currentFloor);
                     isIndoorMapSet = true;
+                    Log.i(TAG, "Indoor overlay enabled building=" + apiName
+                            + " startFloorIndex=" + currentFloor
+                            + " display=" + getCurrentFloorDisplayName());
                 }
 
             } else if (!inAnyBuilding && isIndoorMapSet) {
@@ -243,6 +268,7 @@ public class IndoorMapManager {
                 currentBuilding = BUILDING_NONE;
                 currentFloor = 0;
                 currentFloorShapes = null;
+                Log.i(TAG, "Indoor overlay disabled (left mapped buildings)");
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error with overlay: " + ex.toString());
@@ -262,6 +288,8 @@ public class IndoorMapManager {
                 || floorIndex >= currentFloorShapes.size()) return;
 
         FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(floorIndex);
+        Log.d(TAG, "Draw floor index=" + floorIndex + " display=" + floor.getDisplayName()
+            + " featureCount=" + floor.getFeatures().size());
         for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
             String geoType = feature.getGeometryType();
             String indoorType = feature.getIndoorType();

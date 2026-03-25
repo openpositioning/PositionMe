@@ -26,12 +26,17 @@ public class PositionFusionEngine {
 
     private static final double EARTH_RADIUS_M = 6378137.0;
 
-    private static final int PARTICLE_COUNT = 220;
+    private static final int PARTICLE_COUNT = 300;
     private static final double RESAMPLE_RATIO = 0.5;
-    private static final double PDR_NOISE_STD_M = 0.45;
+    private static final double PDR_NOISE_STD_M = 0.55;
     private static final double INIT_STD_M = 2.0;
     private static final double ROUGHEN_STD_M = 0.15;
-    private static final double WIFI_SIGMA_M = 8.0;
+    private static final double WIFI_SIGMA_M = 5.5;
+    private static final double INDOOR_GNSS_SIGMA_MULTIPLIER = 2.0;
+    private static final double INDOOR_GNSS_MIN_SIGMA_M = 10.0;
+    private static final double FLOOR_HINT_MIN_SUPPORT = 0.08;
+    private static final double FLOOR_HINT_INJECTION_FRACTION = 0.25;
+    private static final double FLOOR_HINT_INJECTION_STD_M = 1.2;
     private static final double EPS = 1e-300;
     private static final double CONNECTOR_RADIUS_M = 3.0;
     private static final double LIFT_HORIZONTAL_MAX_M = 0.50;
@@ -134,10 +139,14 @@ public class PositionFusionEngine {
 
     public synchronized void updateGnss(double latDeg, double lonDeg, float accuracyMeters) {
         double sigma = Math.max(accuracyMeters, 3.0f);
+        boolean indoors = activeBuildingName != null && !activeBuildingName.isEmpty();
+        if (indoors) {
+            sigma = Math.max(sigma * INDOOR_GNSS_SIGMA_MULTIPLIER, INDOOR_GNSS_MIN_SIGMA_M);
+        }
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
-                    "GNSS update lat=%.7f lon=%.7f acc=%.2f sigma=%.2f",
-                    latDeg, lonDeg, accuracyMeters, sigma));
+                    "GNSS update lat=%.7f lon=%.7f acc=%.2f sigma=%.2f indoors=%s",
+                    latDeg, lonDeg, accuracyMeters, sigma, String.valueOf(indoors)));
         }
         applyAbsoluteFix(latDeg, lonDeg, sigma, null);
     }
@@ -154,6 +163,8 @@ public class PositionFusionEngine {
     public synchronized void updateElevation(float elevationMeters, boolean elevatorLikely) {
         int floorFromBarometer = Math.round(elevationMeters / floorHeightMeters);
         fallbackFloor = floorFromBarometer;
+        int blockedTransitions = 0;
+        int allowedTransitions = 0;
         if (!particles.isEmpty()) {
             for (Particle p : particles) {
                 if (p.floor == floorFromBarometer) {
@@ -164,8 +175,20 @@ public class PositionFusionEngine {
                 int nextFloor = p.floor + step;
                 if (canUseConnector(p.floor, p.xEast, p.yNorth, elevatorLikely)) {
                     p.floor = nextFloor;
+                    allowedTransitions++;
+                } else {
+                    blockedTransitions++;
                 }
             }
+        }
+
+        if (DEBUG_LOGS && (allowedTransitions > 0 || blockedTransitions > 0)) {
+            Log.d(TAG, String.format(Locale.US,
+                    "Elevation floor target=%d elevator=%s transitions allowed=%d blocked=%d",
+                    floorFromBarometer,
+                    String.valueOf(elevatorLikely),
+                    allowedTransitions,
+                    blockedTransitions));
         }
     }
 
@@ -238,6 +261,18 @@ public class PositionFusionEngine {
                     }
                 }
             }
+
+            if (DEBUG_LOGS) {
+                Log.d(TAG, String.format(Locale.US,
+                        "Map floor parsed building=%s idx=%d display=%s logical=%d walls=%d stairs=%d lifts=%d",
+                        containing.getName(),
+                        i,
+                        floor.getDisplayName(),
+                        logicalFloor,
+                        constraint.walls.size(),
+                        constraint.stairs.size(),
+                        constraint.lifts.size()));
+            }
         }
 
         floorConstraints.clear();
@@ -290,7 +325,10 @@ public class PositionFusionEngine {
         }
 
         double[] z = toLocal(latDeg, lonDeg);
-    double effectiveBefore = computeEffectiveSampleSize();
+        if (floorHint != null) {
+            injectFloorSupportIfNeeded(floorHint, z[0], z[1]);
+        }
+        double effectiveBefore = computeEffectiveSampleSize();
 
         double sigma2 = sigmaMeters * sigmaMeters;
         double maxLogWeight = Double.NEGATIVE_INFINITY;
@@ -345,6 +383,46 @@ public class PositionFusionEngine {
 
         updateCounter++;
         logUpdateSummary(z[0], z[1], sigmaMeters, floorHint, effectiveBefore, effectiveN, resampled);
+    }
+
+    private void injectFloorSupportIfNeeded(int floorHint, double zEast, double zNorth) {
+        double floorSupport = floorSupportWeight(floorHint);
+        if (floorSupport >= FLOOR_HINT_MIN_SUPPORT) {
+            return;
+        }
+
+        int injectCount = Math.max(1,
+                (int) Math.round(PARTICLE_COUNT * FLOOR_HINT_INJECTION_FRACTION));
+        List<Integer> indices = new ArrayList<>(particles.size());
+        for (int i = 0; i < particles.size(); i++) {
+            indices.add(i);
+        }
+        indices.sort((a, b) -> Double.compare(particles.get(a).weight, particles.get(b).weight));
+
+        for (int i = 0; i < injectCount && i < indices.size(); i++) {
+            Particle p = particles.get(indices.get(i));
+            p.floor = floorHint;
+            p.xEast = zEast + random.nextGaussian() * FLOOR_HINT_INJECTION_STD_M;
+            p.yNorth = zNorth + random.nextGaussian() * FLOOR_HINT_INJECTION_STD_M;
+        }
+
+        if (DEBUG_LOGS) {
+            Log.i(TAG, String.format(Locale.US,
+                    "Floor support injection hint=%d supportBefore=%.3f injectCount=%d",
+                    floorHint,
+                    floorSupport,
+                    injectCount));
+        }
+    }
+
+    private double floorSupportWeight(int floor) {
+        double sum = 0.0;
+        for (Particle p : particles) {
+            if (p.floor == floor) {
+                sum += p.weight;
+            }
+        }
+        return sum;
     }
 
     private void initParticlesAtOrigin(int initialFloor) {

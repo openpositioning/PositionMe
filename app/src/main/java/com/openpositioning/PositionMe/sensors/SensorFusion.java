@@ -11,6 +11,7 @@ import android.location.LocationListener;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -51,6 +52,7 @@ public class SensorFusion implements SensorEventListener {
 
     //region Static variables
     private static final SensorFusion sensorFusion = new SensorFusion();
+    private static final String TAG = "SensorFusion";
     //endregion
 
     //region Instance variables
@@ -433,6 +435,16 @@ public class SensorFusion implements SensorEventListener {
                 continue;
             }
             floorplanBuildingCache.put(building.getName(), building);
+
+                List<FloorplanApiClient.FloorShapes> floors = building.getFloorShapesList();
+                Log.i(TAG, "Floorplan cache building=" + building.getName()
+                    + " floors=" + floors.size());
+                for (int i = 0; i < floors.size(); i++) {
+                FloorplanApiClient.FloorShapes floor = floors.get(i);
+                Log.d(TAG, "Floorplan floor index=" + i
+                    + " display=" + floor.getDisplayName()
+                    + " features=" + floor.getFeatures().size());
+                }
         }
 
         if (fusionEngine != null) {
