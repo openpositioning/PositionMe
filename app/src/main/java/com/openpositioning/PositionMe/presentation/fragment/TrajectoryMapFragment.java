@@ -60,7 +60,7 @@ public class TrajectoryMapFragment extends Fragment {
     private static final int MAX_OBSERVATION_MARKERS = 20;
     private static final long TRAJECTORY_APPEND_MIN_INTERVAL_MS = 1000;
     private static final double TRAJECTORY_APPEND_MIN_METERS = 0.60;
-    private static final double SMOOTHING_ALPHA = 0.30;
+    private static final double OBSERVATION_CIRCLE_RADIUS_M = 1.4;
 
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
@@ -68,18 +68,15 @@ public class TrajectoryMapFragment extends Fragment {
     private Marker gnssMarker; // GNSS position marker
     // Keep test point markers so they can be cleared when recording ends
     private final List<Marker> testPointMarkers = new ArrayList<>();
-    private final List<Marker> gnssObservationMarkers = new ArrayList<>();
-    private final List<Marker> wifiObservationMarkers = new ArrayList<>();
-    private final List<Marker> pdrObservationMarkers = new ArrayList<>();
+    private final List<Circle> gnssObservationCircles = new ArrayList<>();
+    private final List<Circle> wifiObservationCircles = new ArrayList<>();
+    private final List<Circle> pdrObservationCircles = new ArrayList<>();
 
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
     private boolean isGnssOn = false; // Tracks if GNSS tracking is enabled
-    private boolean isSmoothingOn = false;
-    private boolean showObservationMarkers = true;
     private long lastTrajectoryAppendMs = 0L;
     private LatLng lastTrajectoryPoint;
-    private LatLng smoothedLocation;
 
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
@@ -104,8 +101,6 @@ public class TrajectoryMapFragment extends Fragment {
 
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
-    private SwitchMaterial smoothingSwitch;
-    private SwitchMaterial observationsSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private TextView floorLabel;
@@ -135,8 +130,6 @@ public class TrajectoryMapFragment extends Fragment {
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
-        smoothingSwitch = view.findViewById(R.id.smoothingSwitch);
-        observationsSwitch = view.findViewById(R.id.observationsSwitch);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel      = view.findViewById(R.id.floorLabel);
@@ -184,22 +177,6 @@ public class TrajectoryMapFragment extends Fragment {
                 gnssMarker = null;
             }
         });
-
-        if (smoothingSwitch != null) {
-            smoothingSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                isSmoothingOn = isChecked;
-                smoothedLocation = null;
-            });
-        }
-
-        if (observationsSwitch != null) {
-            observationsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                showObservationMarkers = isChecked;
-                if (!isChecked) {
-                    clearObservationMarkers();
-                }
-            });
-        }
 
         // Color switch
         switchColorButton.setOnClickListener(v -> {
@@ -344,16 +321,6 @@ public class TrajectoryMapFragment extends Fragment {
         if (gMap == null) return;
 
         LatLng displayLocation = newLocation;
-        if (isSmoothingOn) {
-            if (smoothedLocation == null) {
-                smoothedLocation = newLocation;
-            } else {
-                smoothedLocation = smoothLocation(smoothedLocation, newLocation);
-            }
-            displayLocation = smoothedLocation;
-        } else {
-            smoothedLocation = null;
-        }
 
         // Keep track of current location
         LatLng oldLocation = this.currentLocation;
@@ -454,10 +421,10 @@ public class TrajectoryMapFragment extends Fragment {
         if (!isGnssOn) return;
 
         addObservationMarker(
-                gnssObservationMarkers,
+            gnssObservationCircles,
                 gnssLocation,
-                BitmapDescriptorFactory.HUE_AZURE,
-                "GNSS",
+            Color.argb(220, 33, 150, 243),
+            Color.argb(80, 33, 150, 243),
                 true);
 
         if (gnssMarker == null) {
@@ -487,10 +454,10 @@ public class TrajectoryMapFragment extends Fragment {
      */
     public void updateWiFiObservation(@NonNull LatLng wifiLocation) {
         addObservationMarker(
-                wifiObservationMarkers,
+            wifiObservationCircles,
                 wifiLocation,
-                BitmapDescriptorFactory.HUE_GREEN,
-                "WiFi",
+            Color.argb(220, 67, 160, 71),
+            Color.argb(80, 67, 160, 71),
                 false);
     }
 
@@ -499,10 +466,10 @@ public class TrajectoryMapFragment extends Fragment {
      */
     public void updatePdrObservation(@NonNull LatLng pdrLocation) {
         addObservationMarker(
-                pdrObservationMarkers,
+            pdrObservationCircles,
                 pdrLocation,
-                BitmapDescriptorFactory.HUE_ORANGE,
-                "PDR",
+            Color.argb(220, 251, 140, 0),
+            Color.argb(80, 251, 140, 0),
                 false);
     }
 
@@ -566,7 +533,6 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastGnssLocation = null;
         currentLocation  = null;
-        smoothedLocation = null;
         lastTrajectoryPoint = null;
         lastTrajectoryAppendMs = 0L;
 
@@ -620,50 +586,46 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
-    private LatLng smoothLocation(@NonNull LatLng prev, @NonNull LatLng cur) {
-        double lat = prev.latitude + SMOOTHING_ALPHA * (cur.latitude - prev.latitude);
-        double lon = prev.longitude + SMOOTHING_ALPHA * (cur.longitude - prev.longitude);
-        return new LatLng(lat, lon);
-    }
-
-    private void addObservationMarker(@NonNull List<Marker> bucket,
+    private void addObservationMarker(@NonNull List<Circle> bucket,
                                       @NonNull LatLng location,
-                                      float hue,
-                                      @NonNull String title,
+                                      int strokeColor,
+                                      int fillColor,
                                       boolean respectGnssSwitch) {
-        if (gMap == null || !showObservationMarkers) {
+        if (gMap == null) {
             return;
         }
         if (respectGnssSwitch && !isGnssOn) {
             return;
         }
 
-        Marker marker = gMap.addMarker(new MarkerOptions()
-                .position(location)
-                .title(title)
-                .icon(BitmapDescriptorFactory.defaultMarker(hue))
-                .alpha(0.65f));
+        Circle circle = gMap.addCircle(new CircleOptions()
+            .center(location)
+                .radius(OBSERVATION_CIRCLE_RADIUS_M)
+                .strokeWidth(2f)
+                .strokeColor(strokeColor)
+                .fillColor(fillColor)
+                .zIndex(3f));
 
-        if (marker == null) {
+        if (circle == null) {
             return;
         }
 
-        bucket.add(marker);
+        bucket.add(circle);
         while (bucket.size() > MAX_OBSERVATION_MARKERS) {
-            Marker stale = bucket.remove(0);
+            Circle stale = bucket.remove(0);
             stale.remove();
         }
     }
 
     private void clearObservationMarkers() {
-        clearMarkerBucket(gnssObservationMarkers);
-        clearMarkerBucket(wifiObservationMarkers);
-        clearMarkerBucket(pdrObservationMarkers);
+        clearObservationCircles(gnssObservationCircles);
+        clearObservationCircles(wifiObservationCircles);
+        clearObservationCircles(pdrObservationCircles);
     }
 
-    private void clearMarkerBucket(@NonNull List<Marker> bucket) {
-        for (Marker m : bucket) {
-            m.remove();
+    private void clearObservationCircles(@NonNull List<Circle> bucket) {
+        for (Circle c : bucket) {
+            c.remove();
         }
         bucket.clear();
     }

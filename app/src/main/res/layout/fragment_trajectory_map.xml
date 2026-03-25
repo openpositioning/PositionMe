@@ -43,19 +43,6 @@
                 android:layout_height="wrap_content"
                 android:text="@string/auto_floor" />
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/smoothingSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/smoothing_switch" />
-
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/observationsSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="@string/observation_switch" />
-
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/lineColorButton"
                 android:layout_width="wrap_content"
