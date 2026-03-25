@@ -12,6 +12,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.LinearLayout;
 
 import com.google.android.material.switchmaterial.SwitchMaterial;
 
@@ -187,7 +188,11 @@ public class TrajectoryMapFragment extends Fragment {
     /** If true, the arrow marker follows the fused (particle filter) position.
      *  If false, it follows the raw PDR position.
      *  Controlled by the fusedPdrSwitch toggle. */
-    private boolean useFusedPosition = true;
+//    private boolean useFusedPosition = true;
+
+    /** If true, the raw PDR trajectory (red line) is visible.
+     *  Controlled by showPdrPathSwitch. Arrow marker always follows fused position. */
+    private boolean showPdrPath = true;
 
     /** LPF-smoothed fused trajectory — teal, visible only when smoothing toggle is ON. */
     private Polyline lpfPolyline;
@@ -207,9 +212,12 @@ public class TrajectoryMapFragment extends Fragment {
     /** Whether particle cloud overlay is enabled — toggled by UI switch. */
     private boolean showParticleCloud = false;
 
+    private LinearLayout controlCardContent;
+    private TextView controlCardCollapseIcon;
+    private boolean isControlCardExpanded = false;
 
-
-
+    /** Most recent device heading in degrees, from passOrientation(). */
+    private float lastOrientation = 0f;
 
 
 
@@ -229,7 +237,8 @@ public class TrajectoryMapFragment extends Fragment {
     private SwitchMaterial pdrDotSwitch;
 
 //    Added
-    private SwitchMaterial fusedPdrSwitch;
+//    private SwitchMaterial fusedPdrSwitch;
+private SwitchMaterial showPdrPathSwitch;
     // ── Fused trajectory display ──────────────────────────────────────────────
 
     /** Handler that drives the 1-second periodic polyline redraw. */
@@ -294,11 +303,13 @@ public class TrajectoryMapFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         // Grab references to UI controls
+        controlCardContent = view.findViewById(R.id.controlCardContent);
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
         smoothingSwitch   = view.findViewById(R.id.smoothingSwitch);
-        fusedPdrSwitch = view.findViewById(R.id.fusedPdrSwitch);
+//        fusedPdrSwitch = view.findViewById(R.id.fusedPdrSwitch);
+        showPdrPathSwitch = view.findViewById(R.id.fusedPdrSwitch);
         particleCloudSwitch = view.findViewById(R.id.particleCloudSwitch);
         gnssDotSwitch     = view.findViewById(R.id.gnssDotSwitch);
         wifiDotSwitch     = view.findViewById(R.id.wifiDotSwitch);
@@ -378,6 +389,15 @@ public class TrajectoryMapFragment extends Fragment {
         // Map type spinner setup
         initMapTypeSpinner();
 
+        controlCardCollapseIcon = view.findViewById(R.id.controlCardCollapseIcon);
+        view.findViewById(R.id.controlCardHeader).setOnClickListener(v -> {
+            isControlCardExpanded = !isControlCardExpanded;
+            controlCardContent.setVisibility(
+                    isControlCardExpanded ? View.VISIBLE : View.GONE);
+            controlCardCollapseIcon.setText(
+                    isControlCardExpanded ? "▼" : "▶");
+        });
+
         // GNSS Switch
         gnssSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             isGnssOn = isChecked;
@@ -413,9 +433,18 @@ public class TrajectoryMapFragment extends Fragment {
             Log.d(TAG, "Smoothing toggled: " + isChecked);
         });
 
-        fusedPdrSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
-            useFusedPosition = isChecked;
-            Log.d(TAG, "Position mode: " + (isChecked ? "Fused" : "PDR"));
+//        fusedPdrSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+//            useFusedPosition = isChecked;
+//            Log.d(TAG, "Position mode: " + (isChecked ? "Fused" : "PDR"));
+//        });
+
+        showPdrPathSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+            showPdrPath = isChecked;
+            // Immediately show or hide the red PDR polyline
+            if (polyline != null) {
+                polyline.setVisible(showPdrPath);
+            }
+            Log.d(TAG, "PDR path visible: " + isChecked);
         });
 
         particleCloudSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
@@ -718,28 +747,31 @@ public class TrajectoryMapFragment extends Fragment {
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
 
+        // Store orientation for use by the fused marker
+        lastOrientation = orientation;
+
         // Keep track of current location
         LatLng oldLocation = this.currentLocation;
         this.currentLocation = newLocation;
 
         // If no marker, create it
-        if (orientationMarker == null) {
-            orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
-                    .flat(true)
-                    .title("Current Position")
-                    .icon(BitmapDescriptorFactory.fromBitmap(
-                            UtilFunctions.getBitmapFromVector(requireContext(),
-                                    R.drawable.ic_baseline_navigation_24)))
-            );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
-        } else {
-            // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
-            orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
-        }
+//        if (orientationMarker == null) {
+//            orientationMarker = gMap.addMarker(new MarkerOptions()
+//                    .position(newLocation)
+//                    .flat(true)
+//                    .title("Current Position")
+//                    .icon(BitmapDescriptorFactory.fromBitmap(
+//                            UtilFunctions.getBitmapFromVector(requireContext(),
+//                                    R.drawable.ic_baseline_navigation_24)))
+//            );
+//            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+//        } else {
+//            // Update marker position + orientation
+//            orientationMarker.setPosition(newLocation);
+//            orientationMarker.setRotation(orientation);
+//            // Move camera a bit
+//            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+//        }
 
         // Extend polyline if movement occurred
         if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
@@ -811,29 +843,74 @@ public class TrajectoryMapFragment extends Fragment {
      *
      * @param fusedLocation best position estimate from the particle filter.
      */
+//    public void updateFusedPosition(@NonNull LatLng fusedLocation) {
+//        if (gMap == null) return;
+//
+//        // Raw fused path — purple, always grows
+//        smoothedPoints.add(fusedLocation);
+//        redrawFusedTrajectory();
+//
+//        // Update uncertainty circle around the fused marker
+//        updateUncertaintyCircle(fusedLocation);
+//
+//        // Redraw particle cloud overlay (throttled to every 2s)
+//        redrawParticleCloud();
+//
+//        // LPF-smoothed fused path — teal, grows but only visible when toggle is ON
+//        LatLng lpfFiltered = applyLowPassFilter(fusedLocation);
+//        lpfPoints.add(lpfFiltered);
+//        if (lpfPolyline != null) {
+//            lpfPolyline.setPoints(new ArrayList<>(lpfPoints));
+//        }
+//
+//        // Move arrow marker if fused mode is selected
+//        if (!useFusedPosition) return;
+//
+//        if (orientationMarker == null) {
+//            orientationMarker = gMap.addMarker(new MarkerOptions()
+//                    .position(fusedLocation)
+//                    .flat(true)
+//                    .title("Current Position")
+//                    .icon(BitmapDescriptorFactory.fromBitmap(
+//                            UtilFunctions.getBitmapFromVector(requireContext(),
+//                                    R.drawable.ic_baseline_navigation_24))));
+//            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 19f));
+//        } else {
+//            orientationMarker.setPosition(fusedLocation);
+//            gMap.moveCamera(CameraUpdateFactory.newLatLng(fusedLocation));
+//        }
+//    }
+
+    /**
+     * Updates the arrow marker using the particle filter's fused position.
+     * The arrow ALWAYS follows the fused position — there is no toggle for this.
+     *
+     * Also grows the purple fused trajectory polyline and the teal LPF polyline,
+     * and updates the uncertainty circle.
+     *
+     * @param fusedLocation best position estimate from the particle filter.
+     */
     public void updateFusedPosition(@NonNull LatLng fusedLocation) {
         if (gMap == null) return;
 
-        // Raw fused path — purple, always grows
+        // Purple fused path — always grows
         smoothedPoints.add(fusedLocation);
         redrawFusedTrajectory();
 
-        // Update uncertainty circle around the fused marker
-        updateUncertaintyCircle(fusedLocation);
-
-        // Redraw particle cloud overlay (throttled to every 2s)
-        redrawParticleCloud();
-
-        // LPF-smoothed fused path — teal, grows but only visible when toggle is ON
+        // Teal LPF path — grows but only visible when smoothing toggle is ON
         LatLng lpfFiltered = applyLowPassFilter(fusedLocation);
         lpfPoints.add(lpfFiltered);
         if (lpfPolyline != null) {
             lpfPolyline.setPoints(new ArrayList<>(lpfPoints));
         }
 
-        // Move arrow marker if fused mode is selected
-        if (!useFusedPosition) return;
+        // Uncertainty circle — shrinks/grows with filter confidence
+        updateUncertaintyCircle(fusedLocation);
 
+        // Particle cloud overlay — throttled to every 2 seconds
+        redrawParticleCloud();
+
+        // Arrow marker always follows fused position
         if (orientationMarker == null) {
             orientationMarker = gMap.addMarker(new MarkerOptions()
                     .position(fusedLocation)
@@ -845,6 +922,8 @@ public class TrajectoryMapFragment extends Fragment {
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 19f));
         } else {
             orientationMarker.setPosition(fusedLocation);
+//            Added
+            orientationMarker.setRotation(lastOrientation);
             gMap.moveCamera(CameraUpdateFactory.newLatLng(fusedLocation));
         }
     }
