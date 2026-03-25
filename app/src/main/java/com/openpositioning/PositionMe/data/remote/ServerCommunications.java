@@ -169,6 +169,7 @@ public class ServerCommunications implements Observable {
         OkHttpClient client = new OkHttpClient();
         Request request =
                 new Request.Builder().url(url).addHeader("accept", headerAccept).get().build();
+        Log.d(TAG, "GET Request:\n" + url + "\n" + request.headers());
         client.newCall(request)
                 .enqueue(
                         new Callback() {
@@ -279,6 +280,7 @@ public class ServerCommunications implements Observable {
                         .addHeader("accept", headerAccept)
                         .addHeader("Content-Type", headerContentType)
                         .build();
+        Log.d(TAG, "POST Request:\n" + url + "\n" + request.headers());
         client.newCall(request)
                 .enqueue(
                         new Callback() {
