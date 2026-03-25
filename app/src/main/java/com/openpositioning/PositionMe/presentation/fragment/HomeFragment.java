@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -31,6 +32,7 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.material.button.MaterialButton;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.data.remote.LoginManager;
+import com.openpositioning.PositionMe.presentation.activity.LoginActivity;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 
 /**
@@ -44,6 +46,7 @@ import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
  * @author Mate Stodulka
  */
 public class HomeFragment extends Fragment implements OnMapReadyCallback {
+    private final String TAG = "HomeFragment";
 
     // Interactive UI elements to navigate to other fragments
     private MaterialButton goToInfo;
@@ -68,6 +71,14 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         loginManager = LoginManager.getInstance();
+
+        // Do not proceed if user is not logged in
+        if (!loginManager.checkLoginStatus()) {
+            Log.w(TAG, "User is not logged in! Sending user to LoginActivity");
+            Intent intent = new Intent(requireContext(), LoginActivity.class);
+            startActivity(intent);
+            requireActivity().finish();
+        }
     }
 
     /**
@@ -159,6 +170,14 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     public void onResume() {
         super.onResume();
         checkAndUpdatePermissions();
+    }
+
+    /** Log users out when the fragment is destroyed */
+    @Override
+    public void onDestroy() {
+        Log.d(TAG, "Logging out onDestroy()");
+        loginManager.endLoginSession();
+        super.onDestroy();
     }
 
     /** Checks if GNSS/Location is enabled on the device. */

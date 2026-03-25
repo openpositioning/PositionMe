@@ -27,6 +27,8 @@ import java.util.Map;
 public class LoginManager {
     private final String TAG = "LoginManager";
 
+    private boolean isLoggedIn;
+
     private String username;
     private String userKey;
 
@@ -36,7 +38,9 @@ public class LoginManager {
     // Singleton Class
     private static final LoginManager loginManager = new LoginManager();
 
-    private LoginManager() {}
+    private LoginManager() {
+        this.isLoggedIn = false;
+    }
 
     public static LoginManager getInstance() {
         return loginManager;
@@ -65,12 +69,41 @@ public class LoginManager {
     }
 
     /**
-     * Save the provided credentials to the persistent storage
+     * Saves user's name and API key to this instance of the {@link LoginManager}. These details
+     * will be cleared upon {@link LoginManager#endLoginSession() logging out} or closing the app.
+     *
+     * @param username The user's username, for UI elements
+     * @param userKey The user's API key, for network requests
+     */
+    public void startLoginSession(String username, String userKey) {
+        this.username = username;
+        this.userKey = userKey;
+        this.isLoggedIn = true;
+        Log.d(
+                TAG,
+                "Login session for \""
+                        + username
+                        + "\" started. API key will be used for future requests");
+    }
+
+    /** Clears the user's details from app session storage */
+    public void endLoginSession() {
+        this.username = null;
+        this.userKey = null;
+        this.isLoggedIn = false;
+        Log.d(TAG, "Login session ended. User will need to log in again");
+    }
+
+    /**
+     * Save the provided credentials to the persistent storage.
+     *
+     * <p>Unlike {@link LoginManager#startLoginSession(String, String) startLoginSession()}, these
+     * credentials are saved to disk and can be retrieved between app launches.
      *
      * @param email The user's email address
      * @param password The user's password
      */
-    public void saveLoginDetails(String email, String password) {
+    public void saveLoginToDevice(String email, String password) {
         credentialStore
                 .edit()
                 .putString(CREDENTIALS_KEY_EMAIL, email)
@@ -95,12 +128,8 @@ public class LoginManager {
         }
     }
 
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public void setUserKey(String key) {
-        userKey = key;
+    public boolean checkLoginStatus() {
+        return isLoggedIn;
     }
 
     public String getUsername() {

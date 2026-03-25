@@ -134,7 +134,7 @@ public class LoginFragment extends Fragment implements Observer {
         }
 
         if (checkboxSavePassword.isChecked()) {
-            loginManager.saveLoginDetails(email, password);
+            loginManager.saveLoginToDevice(email, password);
         }
 
         serverCommunications.logInUser(email, password);
@@ -146,18 +146,16 @@ public class LoginFragment extends Fragment implements Observer {
      */
     private void finaliseLogin(String username, String key) {
         // Save for future reference
-        loginManager.setUsername(username);
-        loginManager.setUserKey(key);
+        loginManager.startLoginSession(username, key);
 
         new Handler(Looper.getMainLooper())
                 .post(
-                        () -> {
-                            Toast.makeText(
-                                            this.getContext(),
-                                            "Login Successful - Welcome " + username + "!",
-                                            Toast.LENGTH_SHORT)
-                                    .show();
-                        });
+                        () ->
+                                Toast.makeText(
+                                                this.getContext(),
+                                                "Login Successful - Welcome " + username + "!",
+                                                Toast.LENGTH_SHORT)
+                                        .show());
 
         Intent intent = new Intent(requireContext(), MainActivity.class);
         startActivity(intent);
@@ -189,10 +187,9 @@ public class LoginFragment extends Fragment implements Observer {
             String message = "Bad response from server. Login halted";
             new Handler(Looper.getMainLooper())
                     .post(
-                            () -> {
-                                Toast.makeText(this.getContext(), message, Toast.LENGTH_SHORT)
-                                        .show();
-                            });
+                            () ->
+                                    Toast.makeText(this.getContext(), message, Toast.LENGTH_SHORT)
+                                            .show());
             Log.w(TAG, message);
         }
     }
