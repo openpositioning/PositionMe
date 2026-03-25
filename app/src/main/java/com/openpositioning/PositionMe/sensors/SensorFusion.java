@@ -22,6 +22,7 @@ import android.net.wifi.rtt.RangingResult;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
+import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
@@ -215,6 +216,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private final List<TestPoint> testPoints = new ArrayList<>();
 
+    private IndoorMapManager indoorMapManager;
 
     //region Initialisation
     /**
@@ -264,6 +266,10 @@ public class SensorFusion implements SensorEventListener, Observer {
      */
     public Traj.Trajectory.Builder getTrajectory() {
         return this.trajectory;
+    }
+
+    public void setIndoorMapManager(IndoorMapManager indoorMapManager) {
+        this.indoorMapManager = indoorMapManager;
     }
 
 
@@ -497,15 +503,13 @@ public class SensorFusion implements SensorEventListener, Observer {
             case Sensor.TYPE_STEP_DETECTOR:
                 long stepTime = SystemClock.uptimeMillis() - bootTime;
 
-
                 if (currentTime - lastStepTime < 20) {
                     Log.e("SensorFusion", "Ignoring step event, too soon after last step event:" + (currentTime - lastStepTime) + " ms");
                     // Ignore rapid successive step events
                     break;
-                }
-
-                else {
+                } else {
                     lastStepTime = currentTime;
+
                     // Log if accelMagnitude is empty
                     if (accelMagnitude.isEmpty()) {
                         Log.e("SensorFusion",
@@ -526,10 +530,43 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (particleFilter.isInitialized()) {
                         float dx = newCords[0] - prevPdrX;
                         float dy = newCords[1] - prevPdrY;
+
+                        // Save particle positions BEFORE prediction
+                        float[][] prevParticles = particleFilter.getParticlesCopy();
+
+                        // Predict particle motion
                         particleFilter.predict(dx, dy);
                         ekfPositioning.predict(dx, dy);
+
+                        // Apply wall constraints AFTER prediction
+                        if (coordinateConverter != null && indoorMapManager != null) {
+                            float[] currEast = particleFilter.getParticlesXRef();
+                            float[] currNorth = particleFilter.getParticlesYRef();
+                            float[] liveWeights = particleFilter.getWeightsRef();
+
+                            float[] prevEast = new float[prevParticles.length];
+                            float[] prevNorth = new float[prevParticles.length];
+
+                            for (int i = 0; i < prevParticles.length; i++) {
+                                prevEast[i] = prevParticles[i][0];
+                                prevNorth[i] = prevParticles[i][1];
+                            }
+
+                            indoorMapManager.applyWallConstraints(
+                                    prevEast,
+                                    prevNorth,
+                                    currEast,
+                                    currNorth,
+                                    liveWeights,
+                                    coordinateConverter
+                            );
+
+                            Log.d("SensorFusion", "Applied wall constraints to particle cloud");
+                        }
+
                         prevPdrX = newCords[0];
                         prevPdrY = newCords[1];
+
                         if (coordinateConverter != null) {
                             lastPdrLatLon = coordinateConverter.toLatLon(prevPdrX, prevPdrY);
                         }
@@ -537,7 +574,6 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     // Clear the accelMagnitude after using it
                     this.accelMagnitude.clear();
-
 
                     if (saveRecording) {
                         this.pathView.drawTrajectory(newCords);
@@ -549,7 +585,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                     }
                     break;
                 }
-
         }
     }
 
@@ -1086,6 +1121,12 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
 
+
+
+
+
+
+
     /**
      * Method to get current floor the user is at, obtained using WiFiPositioning
      * @see WiFiPositioning for WiFi positioning
@@ -1132,6 +1173,17 @@ public class SensorFusion implements SensorEventListener, Observer {
         float[] resultMatrix = matrixMultiplication(xM, yM);
         resultMatrix = matrixMultiplication(zM, resultMatrix);
         return resultMatrix;
+    }
+
+    public CoordinateConverter getCoordinateConverter() {
+        return coordinateConverter;
+    }
+
+    public float[] getBestParticleEstimate() {
+        if (particleFilter == null || !particleFilter.isInitialized()) {
+            return new float[]{0f, 0f};
+        }
+        return particleFilter.getBestEstimate();
     }
 
     /**

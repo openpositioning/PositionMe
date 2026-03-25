@@ -36,6 +36,7 @@ import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.utils.CoordinateConverter;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 import java.util.ArrayList;
@@ -382,16 +383,22 @@ public class RecordingFragment extends Fragment {
 
 //                trajectoryMapFragment.updateObservedMacs(sensorFusion.getLatestBssids());
                 float[][] particles = sensorFusion.getParticles();
+                float[] bestEnu = sensorFusion.getBestParticleEstimate();
+                CoordinateConverter converter = sensorFusion.getCoordinateConverter();
 
-//                LatLng matchedLocation = IndoorMapManager.getMapMatchedLocationFromParticles(
-//                        particles,
-//                        oldLocation,
-//                        heightChange,
-//                        newLocation
-//                );
-//
-                mapFrag.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+                LatLng displayLocation;
+
+                if (converter != null) {
+                    double[] latLon = converter.toLatLon(bestEnu[0], bestEnu[1]);
+                    displayLocation = new LatLng(latLon[0], latLon[1]);
+                } else {
+                    displayLocation = newLocation; // fallback
+                }
+
+                mapFrag.updateUserLocation(
+                        displayLocation,
+                        (float) Math.toDegrees(sensorFusion.passOrientation())
+                );
             }
         }
 

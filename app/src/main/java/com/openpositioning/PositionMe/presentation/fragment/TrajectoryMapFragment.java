@@ -180,6 +180,8 @@ public class TrajectoryMapFragment extends Fragment {
 
 //                    drawBuildingPolygon();
                     indoorMapManager = new IndoorMapManager(gMap);
+                    sensorFusion = SensorFusion.getInstance();
+                    sensorFusion.setIndoorMapManager(indoorMapManager);
                     // 1) Handle user clicking a venue outline polygon
                     gMap.setOnPolygonClickListener(polygon -> {
                         IndoorMapManager.IndoorVenue v = indoorMapManager.getVenueForPolygon(polygon);

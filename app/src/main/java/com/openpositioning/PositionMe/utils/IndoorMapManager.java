@@ -298,6 +298,8 @@ public class IndoorMapManager {
         if (currentVenue == null || currentFloorKey == null || oldLocation == null || predictedLocation == null) {
             return predictedLocation;
         }
+        Log.d("MapMatch", "Checking movement from " + oldLocation + " to " + predictedLocation +
+                " on floor " + currentFloorKey);
 
         LatLng correctedLocation = predictedLocation;
         boolean hitWall = false;
@@ -323,6 +325,8 @@ public class IndoorMapManager {
                             polygon
                     );
                     hitWall = true;
+                    Log.d("MapMatch", "Wall intersection detected");
+                    Log.d("MapMatch", "Corrected location = " + correctedLocation);
                     break;
                 }
             }
@@ -385,6 +389,11 @@ public class IndoorMapManager {
 
         boolean usedLift = nearLift && horizontalDisplacement < liftHorizontalThresholdMeters;
         boolean usedStairs = nearStairs && horizontalDisplacement >= liftHorizontalThresholdMeters;
+        Log.d("MapMatch", "heightChange=" + heightChangeMeters +
+                ", floor=" + currentFloorKey);
+        Log.d("MapMatch", "nearStairs=" + nearStairs +
+                ", nearLift=" + nearLift);
+        Log.d("MapMatch", "horizontalDisplacement=" + horizontalDisplacement);
 
         if (!usedLift && !usedStairs) {
             return currentFloorKey;

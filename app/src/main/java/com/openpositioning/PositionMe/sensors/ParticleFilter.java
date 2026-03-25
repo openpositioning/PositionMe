@@ -180,6 +180,44 @@ public class ParticleFilter {
     }
 
     /**
+     * Returns a deep copy of all particle positions in local East-North coordinates.
+     * Each row is one particle: {east, north}.
+     */
+    public float[][] getParticlesCopy() {
+        if (!initialized) return new float[0][2];
+
+        float[][] copy = new float[NUM_PARTICLES][2];
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            copy[i][0] = particlesX[i];
+            copy[i][1] = particlesY[i];
+        }
+        return copy;
+    }
+
+    /**
+     * Returns a copy of the particle weights.
+     */
+    public float[] getWeights() {
+        if (!initialized) return new float[0];
+
+        float[] copy = new float[NUM_PARTICLES];
+        System.arraycopy(weights, 0, copy, 0, NUM_PARTICLES);
+        return copy;
+    }
+
+    public float[] getParticlesXRef() {
+        return particlesX;
+    }
+
+    public float[] getParticlesYRef() {
+        return particlesY;
+    }
+
+    public float[] getWeightsRef() {
+        return weights;
+    }
+
+    /**
      * Resets the particle cloud around a new position with increased uncertainty.
      * Called when a floor change is detected, to prevent particles from remaining on the wrong floor.
      * Horizontal position is still preserved as the best estimate, but spread is widened.

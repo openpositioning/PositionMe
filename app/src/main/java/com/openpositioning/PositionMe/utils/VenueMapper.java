@@ -56,6 +56,10 @@ public class VenueMapper {
                 v.rawMapShapes = dto.mapShapes;
                 Log.d("VenueMapper", "mapShapes example: " + dto.mapShapes);
                 v.floorFeatures = parseFloorFeatures(dto.mapShapes);
+//                Log.d("VenueMapper", "Floor " + v.floorKey +
+//                        " walls=" + v.floorFeatures.wallPolygons.size() +
+//                        " stairs=" + v.floorFeatures.stairsCenters.size() +
+//                        " lifts=" + v.floorFeatures.liftCenters.size());
 
                 out.add(v);
 
@@ -164,6 +168,10 @@ public class VenueMapper {
                     }
                 }
             }
+            Log.d("VenueMapper", "Floor " + floorKey +
+                    " walls=" + floorFeatures.wallPolygons.size() +
+                    " stairs=" + floorFeatures.stairsCenters.size() +
+                    " lifts=" + floorFeatures.liftCenters.size());
 
             floors.put(floorKey, floorFeatures);
         }
