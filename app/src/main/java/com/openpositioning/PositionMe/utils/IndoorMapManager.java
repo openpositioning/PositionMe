@@ -55,10 +55,10 @@ public class IndoorMapManager {
     public static final float MURCHISON_FLOOR_HEIGHT = 4.0F;
 
     // Colours for different indoor feature types
-    private static final int WALL_STROKE = Color.argb(200, 80, 80, 80);
-    private static final int ROOM_STROKE = Color.argb(180, 33, 150, 243);
-    private static final int ROOM_FILL = Color.argb(40, 33, 150, 243);
-    private static final int DEFAULT_STROKE = Color.argb(150, 100, 100, 100);
+    private static final int WALL_STROKE = Color.argb(220, 25, 118, 210);
+    private static final int ROOM_STROKE = Color.argb(210, 33, 150, 243);
+    private static final int ROOM_FILL = Color.argb(60, 33, 150, 243);
+    private static final int DEFAULT_STROKE = Color.argb(170, 66, 165, 245);
 
     /**
      * Constructor to set the map instance.
