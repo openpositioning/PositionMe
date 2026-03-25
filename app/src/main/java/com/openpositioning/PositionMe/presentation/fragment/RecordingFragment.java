@@ -292,16 +292,17 @@ public class RecordingFragment extends Fragment {
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
         if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
+            LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
+            // Always forward GNSS observations so GNSS circles are shown regardless of toggle.
+            trajectoryMapFragment.updateGNSS(gnssLocation);
+
             if (trajectoryMapFragment.isGnssEnabled()) {
-                LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
                 if (currentLoc != null) {
                     double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
                     gnssError.setVisibility(View.VISIBLE);
                     gnssError.setText(String.format(getString(R.string.gnss_error) + "%.2fm", errorDist));
                 }
-                trajectoryMapFragment.updateGNSS(gnssLocation);
             } else {
                 gnssError.setVisibility(View.GONE);
                 trajectoryMapFragment.clearGNSS();

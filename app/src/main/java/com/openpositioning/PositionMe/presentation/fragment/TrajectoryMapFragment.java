@@ -418,14 +418,15 @@ public class TrajectoryMapFragment extends Fragment {
      */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;
-        if (!isGnssOn) return;
 
         addObservationMarker(
             gnssObservationCircles,
                 gnssLocation,
             Color.argb(220, 33, 150, 243),
             Color.argb(80, 33, 150, 243),
-                true);
+                false);
+
+        if (!isGnssOn) return;
 
         if (gnssMarker == null) {
             // Create the GNSS marker for the first time
