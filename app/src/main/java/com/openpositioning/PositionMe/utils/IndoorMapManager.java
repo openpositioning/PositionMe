@@ -212,9 +212,10 @@ public class IndoorMapManager {
                 LatLng snapped = adjustPositionToNearestValidLocation(
                         prev, curr, getNearestWallPolygon(prev, curr, floor.wallPolygons));
                 float[] enu = converter.toEnu(snapped.latitude, snapped.longitude);
+                //directly change currEast, currNorth, and weights arrays
                 currEast[i] = enu[0];
                 currNorth[i] = enu[1];
-                weights[i] *= 0.1f;
+                weights[i] *= 0;
             }
             }
         Log.e("IndoorMapManager", "applied wall constraints!");

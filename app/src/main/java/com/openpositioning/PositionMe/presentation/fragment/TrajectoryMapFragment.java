@@ -863,6 +863,8 @@ private SwitchMaterial showPdrPathSwitch;
         // call api
         if (floorplanRemote != null) {
             maybeRequestNearbyVenues(newLocation);
+//            IndoorMapManager IMMM = new IndoorMapManager();
+//            IMMM.initializeFloorFromLocation(newLocation);
         }
     }
 

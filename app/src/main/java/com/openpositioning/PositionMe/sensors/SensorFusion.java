@@ -538,7 +538,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         particleFilter.predict(dx, dy);
                         ekfPositioning.predict(dx, dy);
 
-                        // Apply wall constraints AFTER prediction
+                        // Apply wall constraints after prediction
                         if (coordinateConverter != null && indoorMapManager != null) {
                             float[] currEast = particleFilter.getParticlesXRef();
                             float[] currNorth = particleFilter.getParticlesYRef();
