@@ -921,6 +921,7 @@ private SwitchMaterial showPdrPathSwitch;
                                     R.drawable.ic_baseline_navigation_24))));
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 19f));
         } else {
+
             orientationMarker.setPosition(fusedLocation);
 //            Added
             orientationMarker.setRotation(lastOrientation);
