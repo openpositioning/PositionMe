@@ -982,7 +982,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      * Function to create a request to obtain a wifi location for the obtained wifi fingerprint
      *
      */
-    private void createWifiPositioningRequest(){
+    private void PositioningRequest(){
         // Try catch block to catch any errors and prevent app crashing
         try {
             // Creating a JSON object to store the WiFi access points
@@ -1700,7 +1700,18 @@ public class SensorFusion implements SensorEventListener, Observer {
         return macs;
     }
 
-
+    /**
+     * Converts a local ENU position to WGS84 lat/lon.
+     * Returns null if coordinate converter is not yet initialised.
+     *
+     * @param east  metres east from the reference point
+     * @param north metres north from the reference point
+     * @return double[]{latitude, longitude} or null
+     */
+    public double[] enuToLatLon(float east, float north) {
+        if (coordinateConverter == null) return null;
+        return coordinateConverter.toLatLon(east, north);
+    }
 
     //endregion
 
