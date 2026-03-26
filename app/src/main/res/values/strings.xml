@@ -137,5 +137,7 @@
     <string name="replay_frag_end">End</string>
     <string name="replay_frag_exit">Exit</string>
     <string name="markPoint">Mark Point</string>
+    <string name="smooth">Smooth Path</string>
+    <string name="floor_default">Floor G</string>
 
 </resources>

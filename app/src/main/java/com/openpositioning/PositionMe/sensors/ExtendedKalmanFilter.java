@@ -3,12 +3,11 @@ package com.openpositioning.PositionMe.sensors;
 import android.util.Log;
 
 /**
- * The filter maintains a state estimate [east, north] in the local East-North coordinate frame.
+ * Extended Kalman Filter for indoor positioning.
  *
- * Two-step cycle:
- *   1. predict()          — advance state by PDR displacement, grow covariance by process noise
- *   2. updateWithGnss()   — correct state using GNSS observation via Kalman gain
- *      updateWithWifi()   — correct state using WiFi observation via Kalman gain
+ * State vector: [east, north] in local East-North metres.
+ * Process model: constant velocity, state advances by PDR displacement.
+ * Observation model: direct position measurement.
  *
  * @author Haoning Huang
  */
@@ -141,7 +140,10 @@ public class ExtendedKalmanFilter {
         return Math.sqrt(p00 + p11);
     }
 
-
+    /**
+     * Resets state around a new position with increased uncertainty.
+     * Used after a floor change.
+     */
     public void resetAroundPosition(float centreX, float centreY, float uncertainty) {
         stateX = centreX;
         stateY = centreY;
