@@ -305,6 +305,7 @@ public class TrajectoryMapFragment extends Fragment {
         setFloorControlsVisibility(View.GONE);
         initMapControlsToggle();
         applyTrajectoryColorButtonState();
+        updateActualMapButtonState();
 
         SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.trajectoryMap);
         if (mapFragment != null) {
@@ -410,9 +411,10 @@ public class TrajectoryMapFragment extends Fragment {
                 setFloor(currentFloorIndex);
 
                 if (selectedVenueText != null) {
-                    selectedVenueText.setText("Showing indoor map for " + prettyBuildingName(selectedFloorplanBuilding.getName()));
+                    selectedVenueText.setText("Showing indoor vector map for " + prettyBuildingName(selectedFloorplanBuilding.getName()));
                 }
                 updateCalibrationUi();
+                updateActualMapButtonState();
             });
         }
 
@@ -436,12 +438,13 @@ public class TrajectoryMapFragment extends Fragment {
 
                 if (selectedVenueText != null) {
                     if (actualMapVisible) {
-                        selectedVenueText.setText("Displaying actual map for " + prettyBuildingName(selectedFloorplanBuilding.getName()));
+                        selectedVenueText.setText("Displaying actual map under indoor overlay for " + prettyBuildingName(selectedFloorplanBuilding.getName()));
                     } else {
                         selectedVenueText.setText("Actual map hidden for " + prettyBuildingName(selectedFloorplanBuilding.getName()));
                     }
                 }
                 updateCalibrationUi();
+                updateActualMapButtonState();
             });
         }
     }
@@ -643,8 +646,8 @@ public class TrajectoryMapFragment extends Fragment {
             GroundOverlay overlay = gMap.addGroundOverlay(new GroundOverlayOptions()
                     .image(BitmapDescriptorFactory.fromResource(drawableResId))
                     .positionFromBounds(bounds)
-                    .transparency(0.18f)
-                    .zIndex(8f));
+                    .transparency(0.32f)
+                    .zIndex(5f));
             if (overlay != null) {
                 realMapOverlays.add(overlay);
             }
@@ -1186,6 +1189,7 @@ public class TrajectoryMapFragment extends Fragment {
         selectedFloorplanBuilding = building;
         indoorMapVisible = false;
         actualMapVisible = false;
+        updateActualMapButtonState();
         currentFloorIndex = getDefaultFloorIndex(building);
         replayBaseFloorIndex = null;
         replayDisplayFloorInitialized = false;
@@ -2377,7 +2381,15 @@ public class TrajectoryMapFragment extends Fragment {
         return canonicalFloor;
     }
 
+    private void updateActualMapButtonState() {
+        if (btnFindActualMap == null) {
+            return;
+        }
+        btnFindActualMap.setText(actualMapVisible ? "Hide Actual Maps" : "Display Actual Maps");
+    }
+
     private void updateCalibrationUi() {
+        updateActualMapButtonState();
         boolean canAdjust = actualMapVisible && selectedFloorplanBuilding != null;
         if (btnToggleAdjustMap != null) {
             btnToggleAdjustMap.setVisibility(canAdjust ? View.VISIBLE : View.GONE);
@@ -2486,6 +2498,7 @@ public class TrajectoryMapFragment extends Fragment {
         selectedFloorplanBuilding = null;
         indoorMapVisible = false;
         actualMapVisible = false;
+        updateActualMapButtonState();
         hasFetchedNearbyBuildings = false;
         hasAttemptedInitialBuildingFetch = false;
         hasAutoSelectedIndoorMap = false;

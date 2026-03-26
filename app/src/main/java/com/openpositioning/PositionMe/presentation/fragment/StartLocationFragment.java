@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -15,6 +16,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -129,6 +131,7 @@ public class StartLocationFragment extends Fragment {
     }
 
     private Button button;
+    private Button backToCurrentLocationButton;
     private TextView instructionText;
     private View buildingInfoCard;
     private TextView buildingNameText;
@@ -144,11 +147,22 @@ public class StartLocationFragment extends Fragment {
     private float[] startPosition = new float[2];
     private float zoom = 19f;
     private Marker startMarker;
+    private Marker currentLocationMarker;
     private String selectedBuildingId;
     private int currentFloorIndex = 0;
     private boolean showActualMapOverlays = true;
     private boolean isMarkerDraggedSelection = false;
     private boolean hasInitialCameraPositioned = false;
+    private boolean followCurrentLocationWithStartMarker = true;
+
+    private final Handler liveLocationHandler = new Handler(Looper.getMainLooper());
+    private final Runnable liveLocationRunnable = new Runnable() {
+        @Override
+        public void run() {
+            updateLiveLocation(false);
+            liveLocationHandler.postDelayed(this, 1000L);
+        }
+    };
 
     private final List<Polygon> buildingPolygons = new ArrayList<>();
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingMap = new HashMap<>();
@@ -193,6 +207,7 @@ public class StartLocationFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         button = view.findViewById(R.id.startLocationDone);
         instructionText = view.findViewById(R.id.correctionInfoView);
+        ensureBackToCurrentLocationButton(view);
         floorUpButton = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel = view.findViewById(R.id.floorLabel);
@@ -216,6 +231,8 @@ public class StartLocationFragment extends Fragment {
                 getContext().getSharedPreferences("MapCameraState", android.content.Context.MODE_PRIVATE)
                         .edit()
                         .putFloat("user_selected_zoom", userChosenZoom)
+                        .putFloat("user_start_lat", chosenLat)
+                        .putFloat("user_start_lon", chosenLon)
                         .apply();
             }
 
@@ -233,6 +250,18 @@ public class StartLocationFragment extends Fragment {
         });
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        startLiveLocationUpdates();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        stopLiveLocationUpdates();
+    }
+
     private void setupMap() {
         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
         mMap.getUiSettings().setCompassEnabled(true);
@@ -242,7 +271,17 @@ public class StartLocationFragment extends Fragment {
         mMap.clear();
 
         LatLng position = new LatLng(startPosition[0], startPosition[1]);
-        startMarker = mMap.addMarker(new MarkerOptions().position(position).title("Start Position").draggable(true));
+        currentLocationMarker = mMap.addMarker(new MarkerOptions()
+                .position(position)
+                .title("Current Location")
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
+                .zIndex(21f));
+        startMarker = mMap.addMarker(new MarkerOptions()
+                .position(position)
+                .title("Selected Start")
+                .draggable(true)
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
+                .zIndex(22f));
 
         // 【修复2】判断是否有真实定位。如果是 0.0，说明还在搜星，先不要急着锁定相机视角
         boolean gnssReady = !(startPosition[0] == 0f && startPosition[1] == 0f);
@@ -257,10 +296,14 @@ public class StartLocationFragment extends Fragment {
             @Override public void onMarkerDrag(Marker marker) {}
             @Override
             public void onMarkerDragEnd(Marker marker) {
+                if (marker == null || startMarker == null || !marker.equals(startMarker)) {
+                    return;
+                }
                 isMarkerDraggedSelection = true;
+                followCurrentLocationWithStartMarker = false;
                 startPosition[0] = (float) marker.getPosition().latitude;
                 startPosition[1] = (float) marker.getPosition().longitude;
-                clearBuildingPolygonsOnly();
+                clearBuildingSelectionAndOverlays();
                 requestBuildingData();
             }
         });
@@ -289,7 +332,8 @@ public class StartLocationFragment extends Fragment {
         }
 
         LatLng current = new LatLng(startPosition[0], startPosition[1]);
-        if (startMarker != null) startMarker.setPosition(current);
+        if (currentLocationMarker != null) currentLocationMarker.setPosition(current);
+        if (startMarker != null && followCurrentLocationWithStartMarker && !isMarkerDraggedSelection) startMarker.setPosition(current);
         // 【修复3】一旦拿到了真实定位，且还没聚焦过，立刻把镜头拉近到 19f
         if (mMap != null && gnssReady && !hasInitialCameraPositioned) {
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(current, zoom)); // zoom 已经是 19f
@@ -363,6 +407,8 @@ public class StartLocationFragment extends Fragment {
 
         LatLng center = computePolygonCenter(polygon);
         if (startMarker != null) startMarker.setPosition(center);
+        followCurrentLocationWithStartMarker = false;
+        isMarkerDraggedSelection = true;
         startPosition[0] = (float) center.latitude;
         startPosition[1] = (float) center.longitude;
         // Keep the current camera fixed when a building is selected.
@@ -1023,5 +1069,78 @@ public class StartLocationFragment extends Fragment {
     public void onDestroyView() {
         super.onDestroyView();
         retryHandler.removeCallbacksAndMessages(null);
+        stopLiveLocationUpdates();
+        mMap = null;
+        startMarker = null;
+        currentLocationMarker = null;
+    }
+
+    private void ensureBackToCurrentLocationButton(@NonNull View root) {
+        if (button == null || backToCurrentLocationButton != null) {
+            return;
+        }
+        if (!(button.getParent() instanceof ConstraintLayout)) {
+            return;
+        }
+        ConstraintLayout parent = (ConstraintLayout) button.getParent();
+        backToCurrentLocationButton = new Button(requireContext());
+        backToCurrentLocationButton.setId(View.generateViewId());
+        backToCurrentLocationButton.setText("Back to Current Location");
+        backToCurrentLocationButton.setAllCaps(false);
+
+        int marginBottomPx = Math.round(12f * root.getResources().getDisplayMetrics().density);
+        ConstraintLayout.LayoutParams params = new ConstraintLayout.LayoutParams(
+                ConstraintLayout.LayoutParams.WRAP_CONTENT,
+                ConstraintLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.bottomToTop = button.getId();
+        params.startToStart = button.getId();
+        params.endToEnd = button.getId();
+        params.bottomMargin = marginBottomPx;
+        backToCurrentLocationButton.setLayoutParams(params);
+        parent.addView(backToCurrentLocationButton);
+
+        backToCurrentLocationButton.setOnClickListener(v -> resetToCurrentLocation());
+    }
+
+    private void resetToCurrentLocation() {
+        followCurrentLocationWithStartMarker = true;
+        isMarkerDraggedSelection = false;
+        clearBuildingSelectionAndOverlays();
+        updateLiveLocation(true);
+        requestBuildingDataWhenReady();
+    }
+
+    private void startLiveLocationUpdates() {
+        liveLocationHandler.removeCallbacks(liveLocationRunnable);
+        liveLocationHandler.post(liveLocationRunnable);
+    }
+
+    private void stopLiveLocationUpdates() {
+        liveLocationHandler.removeCallbacks(liveLocationRunnable);
+    }
+
+    private void updateLiveLocation(boolean animateCamera) {
+        float[] gnss = sensorFusion.getGNSSLatitude(false);
+        if (gnss == null || gnss.length < 2) {
+            return;
+        }
+        if (gnss[0] == 0f && gnss[1] == 0f) {
+            return;
+        }
+
+        LatLng current = new LatLng(gnss[0], gnss[1]);
+        if (currentLocationMarker != null) {
+            currentLocationMarker.setPosition(current);
+        }
+        if (followCurrentLocationWithStartMarker && startMarker != null) {
+            startMarker.setPosition(current);
+            startPosition[0] = gnss[0];
+            startPosition[1] = gnss[1];
+        }
+        if (mMap != null && animateCamera) {
+            float targetZoom = Math.max(18.5f, mMap.getCameraPosition().zoom);
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(current, targetZoom));
+        }
     }
 }
