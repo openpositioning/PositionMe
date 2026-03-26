@@ -204,8 +204,10 @@ public class IndoorMapManager {
         for (int i = 0; i < weights.length; i++) {
             if (weights[i] == 0f) continue; // already dead, skip
 
+            //convert prev and curr to LatLng
             LatLng prev = toLatLng(prevEast[i], prevNorth[i], converter);
             LatLng curr = toLatLng(currEast[i], currNorth[i], converter);
+            //check if cross walls on that floor
             if (crossesAnyWall(prev, curr, floor.wallPolygons)) {
                 LatLng snapped = adjustPositionToNearestValidLocation(
                         prev, curr, getNearestWallPolygon(prev, curr, floor.wallPolygons));
@@ -215,6 +217,7 @@ public class IndoorMapManager {
                 weights[i] *= 0.1f;
             }
             }
+        Log.e("IndoorMapManager", "applied wall constraints!");
 
         }
     private List<LatLng> getNearestWallPolygon(LatLng from, LatLng to,
@@ -235,7 +238,11 @@ public class IndoorMapManager {
             for (int i = 0; i < polygon.size(); i++) {
                 LatLng wallA = polygon.get(i);
                 LatLng wallB = polygon.get((i + 1) % polygon.size());
-                if (segmentsIntersect(from, to, wallA, wallB)) return true;
+                if (segmentsIntersect(from, to, wallA, wallB)) {
+                    Log.e("IndoorMapManager", "wall detected!");
+                    return true;
+
+                }
             }
         }
         return false;
@@ -449,16 +456,25 @@ public class IndoorMapManager {
         return false;
     }
 
-    public LatLng adjustPositionToNearestValidLocation(LatLng oldLocation, LatLng predictedLocation, List<LatLng> polygon) {
+    public LatLng adjustPositionToNearestValidLocation(
+            LatLng oldLocation,
+            LatLng predictedLocation,
+            List<LatLng> polygon) {
 
-        LatLng corrected = oldLocation;
+        LatLng bestValid = oldLocation;
 
-        double dx = predictedLocation.latitude - oldLocation.latitude;
-        double dy = predictedLocation.longitude - oldLocation.longitude;
+        double low = 0.0;   // valid end
+        double high = 1.0;  // invalid end
 
-        for (double t = 1.0; t >= 0.0; t -= 0.05) {
-            double lat = oldLocation.latitude + t * dx;
-            double lon = oldLocation.longitude + t * dy;
+        //binary search
+        for (int iter = 0; iter < 20; iter++) {
+            double mid = (low + high) / 2.0;
+
+            double lat = oldLocation.latitude +
+                    mid * (predictedLocation.latitude - oldLocation.latitude);
+            double lon = oldLocation.longitude +
+                    mid * (predictedLocation.longitude - oldLocation.longitude);
+
             LatLng candidate = new LatLng(lat, lon);
 
             boolean intersectsWall = false;
@@ -473,15 +489,75 @@ public class IndoorMapManager {
                 }
             }
 
-            if (!intersectsWall) {
-                corrected = candidate;
-                return corrected;
+            if (intersectsWall) {
+                high = mid;   // candidate is invalid, search closer to oldLocation
+            } else {
+                low = mid;    // candidate is valid, search closer to predictedLocation
+                bestValid = candidate;
             }
         }
 
-        return corrected;
+        return bestValid;
     }
 
+    public void initializeFloorFromLocation(LatLng location) {
+        if (currentVenue == null) return;
+
+        double bestDist = Double.MAX_VALUE;
+        String bestFloor = null;
+
+        for (Map.Entry<String, IndoorVenue.FloorFeatures> entry : currentVenue.floorFeatures.entrySet()) {
+            String floorKey = entry.getKey();
+            IndoorVenue.FloorFeatures floor = entry.getValue();
+
+            // use centroid of walls (simple heuristic)
+            LatLng centroid = computeCentroid(floor.wallPolygons);
+            double dist = distanceMeters(location, centroid);
+
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestFloor = floorKey;
+            }
+        }
+
+        if (bestFloor != null) {
+            currentFloorKey = bestFloor;
+            Log.d("FloorInit", "Initial floor set to " + bestFloor);
+        }
+    }
+
+    public LatLng computeCentroid(List<List<LatLng>> wallPolygons) {
+        if (wallPolygons == null || wallPolygons.isEmpty()) {
+            return null;
+        }
+
+        double sumLat = 0.0;
+        double sumLon = 0.0;
+        int polyCount = 0;
+
+        for (List<LatLng> polygon : wallPolygons) {
+            if (polygon == null || polygon.isEmpty()) continue;
+
+            double polyLat = 0.0;
+            double polyLon = 0.0;
+
+            for (LatLng point : polygon) {
+                polyLat += point.latitude;
+                polyLon += point.longitude;
+            }
+
+            polyLat /= polygon.size();
+            polyLon /= polygon.size();
+
+            sumLat += polyLat;
+            sumLon += polyLon;
+            polyCount++;
+        }
+
+        if (polyCount == 0) return null;
+
+        return new LatLng(sumLat / polyCount, sumLon / polyCount);
+    }
     /**
      * Increase floor within the current venue.
      */

@@ -482,7 +482,6 @@ public class TrajectoryMapFragment extends Fragment {
         LatLng oldLocation = this.currentLocation;
         LatLng correctedLocation = newLocation;
         float heightChange = 0f;
-//        float[][] particles = sensorFusion.getParticles();
         if (sensorFusion != null) {
             float currentElevation = sensorFusion.getElevation();
 
@@ -497,11 +496,11 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         if (oldLocation != null && indoorMapManager != null) {
-            correctedLocation = indoorMapManager.indoorLocationCorrection(
-                    oldLocation,
-                    newLocation,
-                    heightChange
-            );
+//            correctedLocation = indoorMapManager.indoorLocationCorrection(
+//                    oldLocation,
+//                    newLocation,
+//                    heightChange
+//            );
 
             indoorMapManager.acceptFloorChange(
                     correctedLocation,
