@@ -48,9 +48,9 @@ public class ReplayActivity extends AppCompatActivity {
             //4.1 测试 4 - stairs-up (楼梯上楼验证)
     //private static final String FORCED_ASSET_PATH = "replay/trajectory_reasonable_stairs_up.json";
             //4.2 测试4 -直线新路径 不行 轨迹有问题 运行不了
-    //private static final String FORCED_ASSET_PATH = "replay/trajectory_perfect_stairs_up.json";
+    private static final String FORCED_ASSET_PATH = "replay/traj_2.json";
             //5. 电梯测试
-    private static final String FORCED_ASSET_PATH = "replay/trajectory_reasonable_lift_up.json";
+    //private static final String FORCED_ASSET_PATH = "replay/trajectory_reasonable_lift_up.json";
 
     private String filePath;
 

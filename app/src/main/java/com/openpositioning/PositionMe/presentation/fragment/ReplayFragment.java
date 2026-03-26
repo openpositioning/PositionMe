@@ -65,6 +65,15 @@ public class ReplayFragment extends Fragment {
     private int currentIndex = 0;
     private boolean isPlaying = false;
 
+    // 方案 B：Replay 启动时允许用户手动指定“绝对起始楼层”。
+    // 当原始 JSON 没有 initialFloor 时，就不再被默认 G 层带偏。
+    @Nullable
+    private Integer manualInitialFloorOverride = null;
+    private boolean hasPromptedReplayStartFloor = false;
+
+    private static final String[] REPLAY_START_FLOOR_LABELS = new String[]{"LG (-1)", "G (0)", "1", "2", "3", "4", "5"};
+    private static final int[] REPLAY_START_FLOOR_VALUES = new int[]{-1, 0, 1, 2, 3, 4, 5};
+
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -136,7 +145,11 @@ public class ReplayFragment extends Fragment {
         boolean gnssExists = hasAnyGnssData(replayData);
 
         if (gnssExists) {
-            showGnssChoiceDialog();
+            showGnssChoiceDialog(() -> {
+                if (!replayData.isEmpty()) {
+                    promptReplayStartFloorSelection(() -> updateMapForIndex(0));
+                }
+            });
         } else {
             // No GNSS data -> automatically use param lat/lon
             if (initialLat != 0f || initialLon != 0f) {
@@ -223,8 +236,8 @@ public class ReplayFragment extends Fragment {
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        if (!replayData.isEmpty()) {
-            updateMapForIndex(0);
+        if (!gnssExists && !replayData.isEmpty()) {
+            promptReplayStartFloorSelection(() -> updateMapForIndex(0));
         }
     }
 
@@ -248,7 +261,7 @@ public class ReplayFragment extends Fragment {
      * 1) GNSS from file
      * 2) Lat/Lon from ReplayActivity arguments
      */
-    private void showGnssChoiceDialog() {
+    private void showGnssChoiceDialog(@Nullable Runnable onChoiceComplete) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Choose Starting Location")
                 .setMessage("GNSS data is found in the file. Would you like to use the file's GNSS as the start, or the one you manually picked?")
@@ -260,10 +273,16 @@ public class ReplayFragment extends Fragment {
                         // Fallback if no valid GNSS found
                         setupInitialMapPosition(initialLat, initialLon);
                     }
+                    if (onChoiceComplete != null) {
+                        onChoiceComplete.run();
+                    }
                     dialog.dismiss();
                 })
                 .setNegativeButton("Use Manual Set", (dialog, which) -> {
                     setupInitialMapPosition(initialLat, initialLon);
+                    if (onChoiceComplete != null) {
+                        onChoiceComplete.run();
+                    }
                     dialog.dismiss();
                 })
                 .setCancelable(false)
@@ -282,10 +301,80 @@ public class ReplayFragment extends Fragment {
     private LatLng getFirstGnssLocation(List<TrajParser.ReplayPoint> data) {
         for (TrajParser.ReplayPoint point : data) {
             if (point.gnssLocation != null) {
-                return new LatLng(replayData.get(0).gnssLocation.latitude, replayData.get(0).gnssLocation.longitude);
+                return new LatLng(point.gnssLocation.latitude, point.gnssLocation.longitude);
             }
         }
         return null; // None found
+    }
+
+
+    private void promptReplayStartFloorSelection(@Nullable Runnable onSelected) {
+        if (replayData.isEmpty()) {
+            if (onSelected != null) {
+                onSelected.run();
+            }
+            return;
+        }
+
+        if (hasPromptedReplayStartFloor) {
+            if (onSelected != null) {
+                onSelected.run();
+            }
+            return;
+        }
+
+        hasPromptedReplayStartFloor = true;
+        int checkedItem = getDefaultReplayStartFloorChoiceIndex();
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Choose Replay Start Floor")
+                .setSingleChoiceItems(REPLAY_START_FLOOR_LABELS, checkedItem, (dialog, which) -> {
+                    manualInitialFloorOverride = REPLAY_START_FLOOR_VALUES[which];
+                })
+                .setPositiveButton("Use Selected Floor", (dialog, which) -> {
+                    if (manualInitialFloorOverride == null) {
+                        manualInitialFloorOverride = REPLAY_START_FLOOR_VALUES[checkedItem];
+                    }
+                    Log.i(TAG, "Replay start floor override = " + manualInitialFloorOverride);
+                    if (onSelected != null) {
+                        onSelected.run();
+                    }
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Use File Default", (dialog, which) -> {
+                    manualInitialFloorOverride = null;
+                    if (onSelected != null) {
+                        onSelected.run();
+                    }
+                    dialog.dismiss();
+                })
+                .setCancelable(false)
+                .show();
+    }
+
+    private int getDefaultReplayStartFloorChoiceIndex() {
+        Integer preferredFloor = manualInitialFloorOverride;
+        if (preferredFloor == null && !replayData.isEmpty()) {
+            preferredFloor = replayData.get(0).initialFloor;
+        }
+        if (preferredFloor == null) {
+            preferredFloor = 2;
+        }
+
+        for (int i = 0; i < REPLAY_START_FLOOR_VALUES.length; i++) {
+            if (REPLAY_START_FLOOR_VALUES[i] == preferredFloor) {
+                manualInitialFloorOverride = preferredFloor;
+                return i;
+            }
+        }
+
+        manualInitialFloorOverride = 2;
+        return 3;
+    }
+
+    @Nullable
+    private Integer resolveReplayInitialFloor(@NonNull TrajParser.ReplayPoint point) {
+        return manualInitialFloorOverride != null ? manualInitialFloorOverride : point.initialFloor;
     }
 
 
@@ -337,7 +426,7 @@ public class ReplayFragment extends Fragment {
                         p.currentElevation,
                         p.deltaHeight,
                         p.heightChanged,
-                        p.initialFloor
+                        resolveReplayInitialFloor(p)
                 );
                 trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
                 if (p.gnssLocation != null) {
@@ -352,7 +441,7 @@ public class ReplayFragment extends Fragment {
                     p.currentElevation,
                     p.deltaHeight,
                     p.heightChanged,
-                    p.initialFloor
+                    resolveReplayInitialFloor(p)
             );
             trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
             if (p.gnssLocation != null) {

@@ -311,10 +311,24 @@ public class TrajectoryMapFragment extends Fragment {
             mapFragment.getMapAsync(googleMap -> {
                 gMap = googleMap;
                 initMapSettings(gMap);
+
+                // 1. Replay 模式：使用传递进来的 pendingCameraPosition
                 if (hasPendingCameraMove && pendingCameraPosition != null) {
                     gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, 19f));
                     hasPendingCameraMove = false;
                     pendingCameraPosition = null;
+                }
+                // 2. 【核心修复2】Live（实地）模式：立刻读取 StartLocation 传过来的坐标和视角
+                else if (!replayModeEnabled && getContext() != null) {
+                    android.content.SharedPreferences prefs = getContext().getSharedPreferences("MapCameraState", Context.MODE_PRIVATE);
+                    float savedZoom = prefs.getFloat("user_selected_zoom", 19f);
+                    float savedLat = prefs.getFloat("user_start_lat", 0f);
+                    float savedLon = prefs.getFloat("user_start_lon", 0f);
+
+                    // 只要拿到了有效坐标，在任何乱七八糟的加载开始前，强行把镜头砸在这个位置！
+                    if (savedLat != 0f && savedLon != 0f) {
+                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(savedLat, savedLon), savedZoom));
+                    }
                 }
                 restoreCachedBuildingsIfAny();
                 maybeFetchNearbyBuildingsOnFirstLocation();
@@ -462,17 +476,19 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         onFloorplanBuildingSelected(candidate, candidatePolygon);
-        indoorMapVisible = true;
-        actualMapVisible = false;
-        indoorMapManager.setSelectedBuilding(candidate);
-        setFloor(currentFloorIndex);
+
+        // 【核心修复1】注释掉自动显示地图的代码，只做后台选中，等待用户主动点击按钮
+        // indoorMapVisible = true;
+        // actualMapVisible = false;
+        // indoorMapManager.setSelectedBuilding(candidate);
+        // setFloor(currentFloorIndex);
+
         hasAutoSelectedIndoorMap = true;
 
         if (selectedVenueText != null) {
-            selectedVenueText.setText("Replay auto-selected indoor map for " + prettyBuildingName(candidate.getName()));
+            selectedVenueText.setText("Auto-selected " + prettyBuildingName(candidate.getName()) + ". Tap Find Maps to show.");
         }
     }
-
     @Nullable
     private FloorplanApiClient.BuildingInfo findBestBuildingForAutoSelection(List<FloorplanApiClient.BuildingInfo> buildings, @NonNull LatLng location) {
         FloorplanApiClient.BuildingInfo insideCandidate = null;
@@ -548,24 +564,33 @@ public class TrajectoryMapFragment extends Fragment {
         currentFloorIndex = Math.max(0, Math.min(newFloorIndex, maxFloor));
         refreshSelectedPolygonAppearance();
 
-        if (!indoorMapVisible) {
+        // 【核心修复3】如果两个按钮都没开，彻底清空画面
+        if (!indoorMapVisible && !actualMapVisible) {
             indoorMapManager.clearIndoorMap();
+            resetMapOverlays();
             updateFloorLabel();
             return;
         }
 
         resetMapOverlays();
         indoorMapManager.setVectorBaseplateEnabled(false);
+
+        // 独立处理实景图层
         if (actualMapVisible) {
             updateRealMapOverlay(selectedFloorplanBuilding.getName(), currentFloorIndex, true);
         }
 
-        indoorMapManager.setCurrentFloor(currentFloorIndex, false);
+        // 独立处理红色覆盖图层
+        if (indoorMapVisible) {
+            indoorMapManager.setCurrentFloor(currentFloorIndex, false);
+        } else {
+            indoorMapManager.clearIndoorMap();
+        }
+
         setFloorControlsVisibility(View.VISIBLE);
         updateFloorLabel();
         updateCalibrationUi();
     }
-
 
 
 
@@ -618,7 +643,7 @@ public class TrajectoryMapFragment extends Fragment {
             GroundOverlay overlay = gMap.addGroundOverlay(new GroundOverlayOptions()
                     .image(BitmapDescriptorFactory.fromResource(drawableResId))
                     .positionFromBounds(bounds)
-                    .zIndex(5f));
+                    .zIndex(19f));
             if (overlay != null) {
                 realMapOverlays.add(overlay);
             }
@@ -1153,7 +1178,7 @@ public class TrajectoryMapFragment extends Fragment {
         if (selectedFloorplanPolygon != null) {
             selectedFloorplanPolygon.setFillColor(Color.argb(50, 33, 150, 243));
             selectedFloorplanPolygon.setStrokeColor(Color.argb(220, 33, 150, 243));
-            selectedFloorplanPolygon.setZIndex(1f);
+            selectedFloorplanPolygon.setZIndex(19f);
         }
 
         selectedFloorplanPolygon = polygon;
@@ -1165,7 +1190,7 @@ public class TrajectoryMapFragment extends Fragment {
         replayDisplayFloorInitialized = false;
 
         if (polygon != null) {
-            polygon.setZIndex(1f);
+            polygon.setZIndex(19f);
         }
         refreshSelectedPolygonAppearance();
 
@@ -1298,12 +1323,12 @@ public class TrajectoryMapFragment extends Fragment {
             selectedFloorplanPolygon.setFillColor(Color.argb(10, 33, 150, 243));
             selectedFloorplanPolygon.setStrokeColor(Color.argb(180, 33, 150, 243));
             selectedFloorplanPolygon.setStrokeWidth(3f);
-            selectedFloorplanPolygon.setZIndex(1f);
+            selectedFloorplanPolygon.setZIndex(19f);
         } else {
             selectedFloorplanPolygon.setFillColor(Color.argb(100, 33, 150, 243));
             selectedFloorplanPolygon.setStrokeColor(Color.argb(255, 25, 118, 210));
             selectedFloorplanPolygon.setStrokeWidth(5f);
-            selectedFloorplanPolygon.setZIndex(1f);
+            selectedFloorplanPolygon.setZIndex(19f);
         }
     }
 
@@ -1444,7 +1469,6 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         LatLngBounds.Builder boundsBuilder = new LatLngBounds.Builder();
-        boolean hasAnyPoint = false;
 
         for (FloorplanApiClient.BuildingInfo building : buildings) {
             List<LatLng> outline = building.getOutlinePolygon();
@@ -1458,25 +1482,14 @@ public class TrajectoryMapFragment extends Fragment {
                     .strokeWidth(5f)
                     .fillColor(Color.argb(50, 33, 150, 243))
                     .clickable(true)
-                    .zIndex(1f));
+                    .zIndex(19f));
 
             floorplanPolygons.add(polygon);
             polygonToBuilding.put(polygon, building);
-
-            for (LatLng point : outline) {
-                boundsBuilder.include(point);
-                hasAnyPoint = true;
-            }
         }
 
-        if (hasAnyPoint) {
-            try {
-                gMap.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 100));
-            } catch (Exception ignored) {
-            }
-        }
+        // 【修复1】这里原本会导致缩放异常的 newLatLngBounds 代码已被彻底删除！
     }
-
     private PolylineOptions buildTrajectoryOutlineOptions() {
         return new PolylineOptions()
                 .color(TRAJECTORY_OUTLINE_COLOR)
@@ -1484,7 +1497,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .startCap(new RoundCap())
                 .endCap(new RoundCap())
                 .jointType(JointType.ROUND)
-                .zIndex(TRAJECTORY_Z_INDEX - 1f)
+                .zIndex(TRAJECTORY_Z_INDEX - 19f)
                 .add();
     }
 
@@ -1503,7 +1516,7 @@ public class TrajectoryMapFragment extends Fragment {
         if (polylineOutline != null) {
             polylineOutline.setWidth(TRAJECTORY_WIDTH_OUTLINE_PX);
             polylineOutline.setColor(TRAJECTORY_OUTLINE_COLOR);
-            polylineOutline.setZIndex(TRAJECTORY_Z_INDEX - 1f);
+            polylineOutline.setZIndex(TRAJECTORY_Z_INDEX - 19f);
             polylineOutline.setStartCap(new RoundCap());
             polylineOutline.setEndCap(new RoundCap());
             polylineOutline.setJointType(JointType.ROUND);
@@ -1526,7 +1539,7 @@ public class TrajectoryMapFragment extends Fragment {
                 .jointType(JointType.ROUND)
                 .startCap(new RoundCap())
                 .endCap(new RoundCap())
-                .zIndex(TRAJECTORY_Z_INDEX - 1f)
+                .zIndex(TRAJECTORY_Z_INDEX - 19f)
                 .add();
     }
 
@@ -1571,7 +1584,7 @@ public class TrajectoryMapFragment extends Fragment {
         polylineOutline = map.addPolyline(buildTrajectoryOutlineOptions());
         polyline = map.addPolyline(buildTrajectoryMainOptions());
         rawReplayPolyline = map.addPolyline(buildRawReplayPolylineOptions());
-        gnssPolyline = map.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).zIndex(TRAJECTORY_Z_INDEX - 2f).add());
+        gnssPolyline = map.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).zIndex(TRAJECTORY_Z_INDEX - 19f).add());
         ensureTrajectoryStyling();
     }
 
@@ -1692,7 +1705,9 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         int relativeFloorOffset = 0;
-        if (replaySyntheticFloor != null && replaySyntheticFloor > 0 && hasReplayVerticalEvidence()) {
+        // Replay 里的 syntheticFloor 是“相对起始楼层的偏移”，可以是正数也可以是负数。
+        // 之前这里只接受 > 0，导致“下楼 replay”永远被忽略，轨迹会一直锁在基层。
+        if (replaySyntheticFloor != null && replaySyntheticFloor != 0 && hasReplayVerticalEvidence()) {
             relativeFloorOffset = replaySyntheticFloor;
         }
 
@@ -1780,6 +1795,13 @@ public class TrajectoryMapFragment extends Fragment {
         if (selectedFloorplanBuilding == null || indoorMapManager == null) {
             return;
         }
+
+        // 【核心修复2】在实地 Live 模式下，如果用户关闭了自动楼层开关（Auto Floor），
+        // 就不应该强制用底层算法算出的楼层去覆盖用户的屏幕！允许用户自由手动浏览。
+        if (!replayModeEnabled && (autoFloorSwitch == null || !autoFloorSwitch.isChecked())) {
+            return;
+        }
+
         int maxFloor = Math.max(0, selectedFloorplanBuilding.getFloorShapesList().size() - 1);
         int clampedFloor = Math.max(0, Math.min(matchedFloorIndex, maxFloor));
 
@@ -1800,7 +1822,6 @@ public class TrajectoryMapFragment extends Fragment {
         indoorMapManager.setSelectedBuilding(selectedFloorplanBuilding);
         setFloor(clampedFloor);
     }
-
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) {
             return;
@@ -1864,21 +1885,31 @@ public class TrajectoryMapFragment extends Fragment {
         applyReplayMatchedFloorIfNeeded(matchedFloor);
 
         boolean shouldFollowCamera = replayModeEnabled || !(indoorMapVisible || actualMapVisible);
+
         if (orientationMarker == null) {
+            // 第一次拿到位置，初始化 Marker
             orientationMarker = gMap.addMarker(new MarkerOptions()
                     .position(matchedLocation)
                     .flat(true)
                     .title("Current Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(UtilFunctions.getBitmapFromVector(requireContext(), R.drawable.ic_baseline_navigation_24))));
-            if (shouldFollowCamera) {
-                float zoom = replayModeEnabled ? gMap.getCameraPosition().zoom : 19f;
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(matchedLocation, zoom));
+
+            // 【核心修复】：继承 StartLocation 里的缩放比例
+            float savedZoom = 19f;
+            if (getContext() != null) {
+                savedZoom = getContext().getSharedPreferences("MapCameraState", Context.MODE_PRIVATE)
+                        .getFloat("user_selected_zoom", 19f);
             }
+
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(matchedLocation, savedZoom));
         } else {
+            // 后续的位置更新
             orientationMarker.setPosition(matchedLocation);
             orientationMarker.setRotation(orientation);
+
             if (shouldFollowCamera) {
-                gMap.moveCamera(CameraUpdateFactory.newLatLng(matchedLocation));
+                // 如果允许跟随，则平滑移动镜头
+                gMap.animateCamera(CameraUpdateFactory.newLatLng(matchedLocation));
             }
         }
 
@@ -2013,6 +2044,13 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     public void setInitialCameraPosition(@NonNull LatLng startLocation) {
+        // 读取刚才在 StartLocation 界面保存的缩放比例（默认给 19f）
+        float savedZoom = 19f;
+        if (getContext() != null) {
+            savedZoom = getContext().getSharedPreferences("MapCameraState", Context.MODE_PRIVATE)
+                    .getFloat("user_selected_zoom", 19f);
+        }
+
         if (gMap != null) {
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(startLocation, 19f));
         } else {
@@ -2436,7 +2474,7 @@ public class TrajectoryMapFragment extends Fragment {
             polylineOutline = gMap.addPolyline(buildTrajectoryOutlineOptions());
             polyline = gMap.addPolyline(buildTrajectoryMainOptions());
             rawReplayPolyline = gMap.addPolyline(buildRawReplayPolylineOptions());
-            gnssPolyline = gMap.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).zIndex(TRAJECTORY_Z_INDEX - 2f).add());
+            gnssPolyline = gMap.addPolyline(new PolylineOptions().color(Color.BLUE).width(5f).zIndex(TRAJECTORY_Z_INDEX - 19f).add());
             ensureTrajectoryStyling();
         }
         for (Polygon p : floorplanPolygons) {

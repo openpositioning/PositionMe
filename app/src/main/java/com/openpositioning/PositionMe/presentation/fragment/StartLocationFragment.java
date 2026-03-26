@@ -171,7 +171,8 @@ public class StartLocationFragment extends Fragment {
         View rootView = inflater.inflate(R.layout.fragment_startlocation, container, false);
 
         startPosition = sensorFusion.getGNSSLatitude(false);
-        zoom = (startPosition[0] == 0 && startPosition[1] == 0) ? 1f : 19f;
+        // 【修复1】不要再用 1f 这个高空视角了，直接默认给室内级别 19f
+        zoom = 19f;
 
         SupportMapFragment supportMapFragment = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.startMap);
         if (supportMapFragment != null) {
@@ -208,6 +209,16 @@ public class StartLocationFragment extends Fragment {
         button.setOnClickListener(v -> {
             float chosenLat = startPosition[0];
             float chosenLon = startPosition[1];
+
+// 【新增】保存用户在这个界面手动调整好的完美缩放比例
+            if (mMap != null && getContext() != null) {
+                float userChosenZoom = mMap.getCameraPosition().zoom;
+                getContext().getSharedPreferences("MapCameraState", android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .putFloat("user_selected_zoom", userChosenZoom)
+                        .apply();
+            }
+
             if (selectedBuildingId != null) {
                 sensorFusion.setSelectedBuildingId(selectedBuildingId);
             }
@@ -232,10 +243,14 @@ public class StartLocationFragment extends Fragment {
 
         LatLng position = new LatLng(startPosition[0], startPosition[1]);
         startMarker = mMap.addMarker(new MarkerOptions().position(position).title("Start Position").draggable(true));
-        if (!hasInitialCameraPositioned) {
+
+        // 【修复2】判断是否有真实定位。如果是 0.0，说明还在搜星，先不要急着锁定相机视角
+        boolean gnssReady = !(startPosition[0] == 0f && startPosition[1] == 0f);
+        if (!hasInitialCameraPositioned && gnssReady) {
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(position, zoom));
-            hasInitialCameraPositioned = true;
+            hasInitialCameraPositioned = true; // 只有真实定位聚焦后，才锁定
         }
+
 
         mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
             @Override public void onMarkerDragStart(Marker marker) {}
@@ -275,8 +290,9 @@ public class StartLocationFragment extends Fragment {
 
         LatLng current = new LatLng(startPosition[0], startPosition[1]);
         if (startMarker != null) startMarker.setPosition(current);
-        if (mMap != null && !hasInitialCameraPositioned) {
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(current, zoom));
+        // 【修复3】一旦拿到了真实定位，且还没聚焦过，立刻把镜头拉近到 19f
+        if (mMap != null && gnssReady && !hasInitialCameraPositioned) {
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(current, zoom)); // zoom 已经是 19f
             hasInitialCameraPositioned = true;
         }
         requestBuildingData();
