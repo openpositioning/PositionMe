@@ -93,7 +93,7 @@ public class ParticleFilter {
     public boolean isInitialized() { return initialized; }
 
     /**
-     * Re-scatters particles around a new position (Meld's newKNNEstimate style).
+     * Re-scatters particles around a new position when a better fix arrives.
      * Used when a better position fix arrives after initial init.
      * Preserves the existing origin for coordinate consistency.
      */
@@ -102,7 +102,7 @@ public class ParticleFilter {
         double cE = toEasting(pos.longitude);
         double cN = toNorthing(pos.latitude);
         for (int i = 0; i < N; i++) {
-            // Uniform distribution in circle (Meld's randomPointCircle)
+            // Uniform distribution in circle
             double r = radiusM * Math.sqrt(rng.nextDouble());
             double angle = rng.nextDouble() * 2 * Math.PI;
             east[i]     = cE + r * Math.cos(angle);

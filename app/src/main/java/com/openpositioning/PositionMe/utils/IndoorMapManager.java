@@ -238,11 +238,16 @@ public class IndoorMapManager {
                 }
 
             } else if (!inAnyBuilding && isIndoorMapSet) {
-                clearDrawnShapes();
-                isIndoorMapSet = false;
-                currentBuilding = BUILDING_NONE;
-                currentFloor = 0;
-                currentFloorShapes = null;
+                // Sticky logic: keep indoor map if position is within 25m of building
+                if (isWithinStickyRadius(currentLocation)) {
+                    Log.d(TAG, "Outside polygon but within sticky radius — staying indoor");
+                } else {
+                    clearDrawnShapes();
+                    isIndoorMapSet = false;
+                    currentBuilding = BUILDING_NONE;
+                    currentFloor = 0;
+                    currentFloorShapes = null;
+                }
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error with overlay: " + ex.toString());
@@ -422,6 +427,60 @@ public class IndoorMapManager {
         double dLat = (pos.latitude - cLat) * 111320.0;
         double dLng = (pos.longitude - cLng) * 111320.0 * Math.cos(Math.toRadians(cLat));
         return Math.sqrt(dLat * dLat + dLng * dLng);
+    }
+
+    // ---- Sticky radius: keep indoor map when position drifts slightly outside ----
+    private static final double STICKY_RADIUS_M = 25.0;
+
+    private boolean isWithinStickyRadius(LatLng pos) {
+        if (pos == null) return false;
+        String apiName = null;
+        switch (currentBuilding) {
+            case BUILDING_NUCLEUS:  apiName = "nucleus_building"; break;
+            case BUILDING_LIBRARY:  apiName = "library"; break;
+            case BUILDING_MURCHISON: apiName = "murchison_house"; break;
+        }
+        if (apiName != null) {
+            FloorplanApiClient.BuildingInfo building =
+                    SensorFusion.getInstance().getFloorplanBuilding(apiName);
+            if (building != null) {
+                List<LatLng> outline = building.getOutlinePolygon();
+                if (outline != null && outline.size() >= 3)
+                    return minDistToPolygon(pos, outline) < STICKY_RADIUS_M;
+            }
+        }
+        List<LatLng> poly = null;
+        switch (currentBuilding) {
+            case BUILDING_NUCLEUS:  poly = BuildingPolygon.NUCLEUS_POLYGON; break;
+            case BUILDING_LIBRARY:  poly = BuildingPolygon.LIBRARY_POLYGON; break;
+            case BUILDING_MURCHISON: poly = BuildingPolygon.MURCHISON_POLYGON; break;
+        }
+        return poly != null && minDistToPolygon(pos, poly) < STICKY_RADIUS_M;
+    }
+
+    private static double minDistToPolygon(LatLng pos, List<LatLng> polygon) {
+        double minDist = Double.MAX_VALUE;
+        for (int i = 0; i < polygon.size(); i++) {
+            LatLng a = polygon.get(i);
+            LatLng b = polygon.get((i + 1) % polygon.size());
+            double dist = distToSegment(pos, a, b);
+            if (dist < minDist) minDist = dist;
+        }
+        return minDist;
+    }
+
+    private static double distToSegment(LatLng p, LatLng a, LatLng b) {
+        double cosLat = Math.cos(Math.toRadians(p.latitude));
+        double pE = p.longitude * 111320 * cosLat, pN = p.latitude * 111320;
+        double aE = a.longitude * 111320 * cosLat, aN = a.latitude * 111320;
+        double bE = b.longitude * 111320 * cosLat, bN = b.latitude * 111320;
+        double abE = bE - aE, abN = bN - aN;
+        double apE = pE - aE, apN = pN - aN;
+        double lenSq = abE * abE + abN * abN;
+        if (lenSq < 1e-10) return Math.sqrt(apE * apE + apN * apN);
+        double t = Math.max(0, Math.min(1, (apE * abE + apN * abN) / lenSq));
+        double dE = pE - (aE + t * abE), dN = pN - (aN + t * abN);
+        return Math.sqrt(dE * dE + dN * dN);
     }
 
     /** Ray-casting point-in-polygon test. */

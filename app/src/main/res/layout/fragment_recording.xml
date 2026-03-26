@@ -94,6 +94,24 @@
         app:layout_constraintTop_toBottomOf="@id/currentPositionCard"
         app:layout_constraintBottom_toTopOf="@id/controlLayout" />
 
+    <!-- Calibration countdown overlay -->
+    <TextView
+        android:id="@+id/calibrationCountdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Calibrating... 9s\nPlease stand still"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white"
+        android:background="#CC333333"
+        android:padding="20dp"
+        android:gravity="center"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@id/trajectoryMapFragmentContainer"
+        app:layout_constraintBottom_toBottomOf="@id/trajectoryMapFragmentContainer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <!-- 🔹 Test Point Button (Floating on top of the map) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btn_test_point"

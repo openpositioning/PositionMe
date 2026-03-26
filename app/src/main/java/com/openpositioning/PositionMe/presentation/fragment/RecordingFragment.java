@@ -117,6 +117,14 @@ public class RecordingFragment extends Fragment {
     private static final float STAIR_ELEV_RATE_THRESHOLD = 0.3f; // m per 200ms tick
     private static final float STAIR_STEP_SCALE = 0.35f; // horizontal fraction on stairs
 
+    // Calibration: collect multiple KNN/WiFi samples before initializing PF
+    private static final int CALIBRATION_SAMPLES = 3;
+    private static final long CALIBRATION_TIMEOUT_MS = 9000;
+    private long calibrationStartTime = 0;
+    private final java.util.List<LatLng> calibrationPositions = new java.util.ArrayList<>();
+    private boolean calibrating = false;
+    private TextView calibrationCountdown;
+
     private final Runnable refreshDataTask = new Runnable() {
         @Override
         public void run() {
@@ -186,6 +194,13 @@ public class RecordingFragment extends Fragment {
         gnssError.setVisibility(View.GONE);
         elevation.setText(getString(R.string.elevation, "0"));
         distanceTravelled.setText(getString(R.string.meter, "0"));
+        calibrationCountdown = view.findViewById(R.id.calibrationCountdown);
+
+        // Start calibration phase
+        calibrating = true;
+        calibrationStartTime = System.currentTimeMillis();
+        calibrationPositions.clear();
+        if (calibrationCountdown != null) calibrationCountdown.setVisibility(View.VISIBLE);
 
         // Buttons
         completeButton.setOnClickListener(v -> {
@@ -314,31 +329,59 @@ public class RecordingFragment extends Fragment {
         LatLng knnPos = (knnPositioner != null && knnPositioner.isLoaded())
                 ? knnPositioner.estimatePosition() : null;
 
-        // Initialize particle filter: KNN > WiFi API > GNSS
+        // Initialize particle filter with calibration (multi-sample averaging)
         if (!pfInitialized) {
-            LatLng initPos = null;
-            String src = null;
             float gnssAcc = sensorFusion.getGNSSAccuracy();
 
-            if (knnPos != null) {
-                // Best: our own KNN fingerprints (~3m accuracy)
-                initPos = knnPos;
-                src = "KNN";
-            } else if (wifiPos != null) {
-                initPos = wifiPos;
-                src = "WiFi-API";
-            } else if (gnssPos != null) {
-                initPos = gnssPos;
-                src = "GNSS(acc=" + String.format("%.1f", gnssAcc) + "m)";
-            }
+            if (calibrating) {
+                // Collect KNN/WiFi samples during calibration
+                LatLng sample = (knnPos != null) ? knnPos : wifiPos;
+                if (sample != null && !sample.equals(lastCalibSample())) {
+                    calibrationPositions.add(sample);
+                    Log.d("PF_Init", "Calibration sample #" + calibrationPositions.size()
+                            + " at " + sample.latitude + "," + sample.longitude);
+                }
 
-            if (initPos != null) {
-                particleFilter.initialize(initPos);
-                pfInitialized = true;
-                pfInitFromGnss = (knnPos == null && wifiPos == null);
-                refreshPFWallData();
-                Log.d("PF_Init", "PF initialized from " + src
-                        + " at " + initPos.latitude + "," + initPos.longitude);
+                long elapsed = System.currentTimeMillis() - calibrationStartTime;
+                long remaining = Math.max(0, CALIBRATION_TIMEOUT_MS - elapsed);
+
+                if (calibrationCountdown != null) {
+                    int secs = (int) Math.ceil(remaining / 1000.0);
+                    calibrationCountdown.setText("Calibrating... " + secs + "s\nPlease stand still"
+                            + "\nSamples: " + calibrationPositions.size() + "/" + CALIBRATION_SAMPLES);
+                }
+
+                // Finish: enough samples or timeout
+                if (calibrationPositions.size() >= CALIBRATION_SAMPLES || remaining <= 0) {
+                    calibrating = false;
+                    if (calibrationCountdown != null) calibrationCountdown.setVisibility(View.GONE);
+
+                    LatLng initPos;
+                    String src;
+                    if (!calibrationPositions.isEmpty()) {
+                        double avgLat = 0, avgLng = 0;
+                        for (LatLng p : calibrationPositions) {
+                            avgLat += p.latitude; avgLng += p.longitude;
+                        }
+                        avgLat /= calibrationPositions.size();
+                        avgLng /= calibrationPositions.size();
+                        initPos = new LatLng(avgLat, avgLng);
+                        src = "KNN/WiFi avg(" + calibrationPositions.size() + " samples)";
+                    } else if (gnssPos != null) {
+                        initPos = gnssPos;
+                        src = "GNSS(fallback,acc=" + String.format("%.1f", gnssAcc) + "m)";
+                    } else {
+                        return;
+                    }
+
+                    particleFilter.initialize(initPos);
+                    pfInitialized = true;
+                    pfInitFromGnss = calibrationPositions.isEmpty();
+                    if (trajectoryMapFragment != null) trajectoryMapFragment.enableTrajectory();
+                    refreshPFWallData();
+                    Log.d("PF_Init", "PF initialized from " + src
+                            + " at " + initPos.latitude + "," + initPos.longitude);
+                }
             }
         }
 
@@ -565,6 +608,11 @@ public class RecordingFragment extends Fragment {
             this.lat = lat;
             this.lng = lng;
         }
+    }
+
+    private LatLng lastCalibSample() {
+        return calibrationPositions.isEmpty() ? null
+                : calibrationPositions.get(calibrationPositions.size() - 1);
     }
 
     private final List<TestPoint> testPoints = new ArrayList<>();

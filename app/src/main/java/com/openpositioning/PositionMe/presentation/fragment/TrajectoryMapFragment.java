@@ -168,7 +168,16 @@ public class TrajectoryMapFragment extends Fragment {
 
                     drawBuildingPolygon();
 
-                    // KNN collection moved to StartLocationFragment
+                    // Pause camera follow when user drags/zooms map, resume after 5s
+                    cameraResumeHandler = new Handler(Looper.getMainLooper());
+                    gMap.setOnCameraMoveStartedListener(reason -> {
+                        if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
+                            cameraFollowing = false;
+                            cameraResumeHandler.removeCallbacksAndMessages(null);
+                            cameraResumeHandler.postDelayed(() -> cameraFollowing = true,
+                                    CAMERA_RESUME_DELAY_MS);
+                        }
+                    });
 
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
                 }
@@ -357,6 +366,13 @@ public class TrajectoryMapFragment extends Fragment {
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
     private ValueAnimator markerAnimator;
+    private boolean trajectoryEnabled = false;
+    private boolean cameraFollowing = true;
+    private Handler cameraResumeHandler;
+    private static final long CAMERA_RESUME_DELAY_MS = 5000;
+
+    /** Enables trajectory drawing (call after calibration completes). */
+    public void enableTrajectory() { trajectoryEnabled = true; }
 
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
@@ -374,7 +390,9 @@ public class TrajectoryMapFragment extends Fragment {
                             UtilFunctions.getBitmapFromVector(requireContext(),
                                     R.drawable.ic_baseline_navigation_24)))
             );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+            if (cameraFollowing) {
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+            }
 
             if (polyline != null) {
                 List<LatLng> pts = new ArrayList<>(polyline.getPoints());
@@ -385,7 +403,6 @@ public class TrajectoryMapFragment extends Fragment {
             orientationMarker.setRotation(orientation);
 
             if (isSmoothOn) {
-                // Smooth animation: slide marker from old to new position
                 LatLng startPos = orientationMarker.getPosition();
                 if (markerAnimator != null) markerAnimator.cancel();
                 markerAnimator = ValueAnimator.ofFloat(0f, 1f);
@@ -398,17 +415,20 @@ public class TrajectoryMapFragment extends Fragment {
                     if (orientationMarker != null) {
                         orientationMarker.setPosition(interpolated);
                     }
-                    gMap.moveCamera(CameraUpdateFactory.newLatLng(interpolated));
+                    if (cameraFollowing) {
+                        gMap.moveCamera(CameraUpdateFactory.newLatLng(interpolated));
+                    }
                 });
                 markerAnimator.start();
             } else {
-                // No animation: instant jump
                 orientationMarker.setPosition(newLocation);
-                gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+                if (cameraFollowing) {
+                    gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+                }
             }
 
-            // Append to polyline (actual position, not interpolated)
-            if (polyline != null && oldLocation != null && !oldLocation.equals(newLocation)) {
+            // Append to polyline only after calibration
+            if (trajectoryEnabled && polyline != null && oldLocation != null && !oldLocation.equals(newLocation)) {
                 List<LatLng> pts = new ArrayList<>(polyline.getPoints());
                 pts.add(newLocation);
                 polyline.setPoints(pts);
