@@ -11,6 +11,7 @@ import android.util.Log;
  *
  * @author Haoning Huang
  */
+
 public class ExtendedKalmanFilter {
 
     private static final String TAG = "EKFPositioning";
@@ -80,7 +81,7 @@ public class ExtendedKalmanFilter {
         // Innovation covariance S = P + R*I
         float s00 = p00 + r,  s01 = p01;
         float s10 = p10,       s11 = p11 + r;
-        // S inverse (explicit 2x2)
+        // S inverse
         float det = s00 * s11 - s01 * s10;
         if (Math.abs(det) < 1e-10f) return;
         float id  = 1f / det;
@@ -132,7 +133,7 @@ public class ExtendedKalmanFilter {
     /**
      * Returns position uncertainty as the RMS of the covariance diagonal.
      *
-     * @return 1-sigma uncertainty in metres, or -1 if not initialised.
+     * @return 1-sigma uncertainty in metres (-1 if not initialized)
      */
     public double getSigmaMetres() {
         if (!initialized) return -1.0;
