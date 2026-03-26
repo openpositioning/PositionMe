@@ -38,10 +38,29 @@
                 android:text="@string/gnssSwitch" />
 
             <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/wifiSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📶 Show WiFi" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/autoFloor"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/auto_floor" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/smoothSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✨ Smooth"
+                android:checked="true" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/obsDotsSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🟡🟢🔵 Obs" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/lineColorButton"

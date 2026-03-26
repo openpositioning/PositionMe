@@ -31,6 +31,11 @@ import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.presentation.activity.ReplayActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.utils.WifiFingerprinter;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
+import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -67,6 +72,14 @@ public class StartLocationFragment extends Fragment {
     private float[] startPosition = new float[2];
     private float zoom = 19f;
     private Marker startMarker;
+
+    // WiFi fingerprint collection
+    private WifiFingerprinter wifiFingerprinter;
+    private int knnCurrentFloor = 0;
+
+    // Floor plan data for KNN collection
+    private List<FloorplanApiClient.FloorShapes> currentBuildingFloors;
+    private int currentPreviewFloorIndex = 0;
 
     // Building selection state
     private String selectedBuildingId;
@@ -165,6 +178,30 @@ public class StartLocationFragment extends Fragment {
 
             @Override
             public void onMarkerDrag(Marker marker) {}
+        });
+
+        // Long-press to record WiFi fingerprint at that position
+        // KNN WiFi fingerprint collection — long-press map to record
+        wifiFingerprinter = new WifiFingerprinter(requireContext());
+        mMap.setOnMapLongClickListener(latLng -> {
+            int aps = wifiFingerprinter.recordFingerprint(latLng, knnCurrentFloor);
+            if (aps > 0) {
+                mMap.addMarker(new MarkerOptions()
+                        .position(latLng)
+                        .title("FP #" + wifiFingerprinter.getCount() + " F" + knnCurrentFloor)
+                        .icon(com.google.android.gms.maps.model.BitmapDescriptorFactory
+                                .defaultMarker(com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_VIOLET)));
+                Toast.makeText(requireContext(),
+                        "WiFi FP #" + wifiFingerprinter.getCount()
+                                + " (" + aps + " APs) Floor=" + knnCurrentFloor,
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(requireContext(), "No WiFi data!", Toast.LENGTH_SHORT).show();
+            }
+            wifiFingerprinter.saveToFile();
+            // Update counter on screen
+            TextView fpCount = requireView().findViewById(R.id.knnFpCount);
+            if (fpCount != null) fpCount.setText("FP: " + wifiFingerprinter.getCount());
         });
 
         // Polygon click listener for building selection
@@ -327,25 +364,45 @@ public class StartLocationFragment extends Fragment {
      * @param buildingName the building identifier
      */
     private void showFloorPlanOverlay(String buildingName) {
-        // Clear previous preview shapes
+        FloorplanApiClient.BuildingInfo building = floorplanBuildingMap.get(buildingName);
+        if (building == null) return;
+
+        currentBuildingFloors = building.getFloorShapesList();
+        if (currentBuildingFloors == null || currentBuildingFloors.isEmpty()) {
+            Log.d(TAG, "No floor shape data available for: " + buildingName);
+            return;
+        }
+
+        // Default to ground floor (index 1 for Nucleus, 0 for Library)
+        currentPreviewFloorIndex = Math.min(1, currentBuildingFloors.size() - 1);
+        knnCurrentFloor = currentPreviewFloorIndex;
+        drawPreviewFloor(currentPreviewFloorIndex);
+
+        // Update floor label
+        View root = getView();
+        if (root != null) {
+            TextView label = root.findViewById(R.id.knnFloorLabel);
+            if (label != null) {
+                label.setText(currentBuildingFloors.get(currentPreviewFloorIndex).getDisplayName());
+            }
+        }
+    }
+
+    /**
+     * Returns the stroke colour for a preview indoor feature.
+     */
+    /** Draws the indoor floor plan for the given floor index. */
+    private void drawPreviewFloor(int floorIndex) {
+        // Clear previous
         for (Polygon p : previewPolygons) p.remove();
         for (Polyline p : previewPolylines) p.remove();
         previewPolygons.clear();
         previewPolylines.clear();
 
-        FloorplanApiClient.BuildingInfo building = floorplanBuildingMap.get(buildingName);
-        if (building == null) return;
+        if (currentBuildingFloors == null || floorIndex < 0
+                || floorIndex >= currentBuildingFloors.size()) return;
 
-        List<FloorplanApiClient.FloorShapes> floors = building.getFloorShapesList();
-        if (floors == null || floors.isEmpty()) {
-            Log.d(TAG, "No floor shape data available for: " + buildingName);
-            return;
-        }
-
-        // Pick the default floor to preview (ground floor)
-        int defaultFloor = Math.min(1, floors.size() - 1);
-        FloorplanApiClient.FloorShapes floor = floors.get(defaultFloor);
-
+        FloorplanApiClient.FloorShapes floor = currentBuildingFloors.get(floorIndex);
         for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
             String geoType = feature.getGeometryType();
             String indoorType = feature.getIndoorType();
@@ -374,9 +431,6 @@ public class StartLocationFragment extends Fragment {
         }
     }
 
-    /**
-     * Returns the stroke colour for a preview indoor feature.
-     */
     private int getPreviewStrokeColor(String indoorType) {
         if ("wall".equals(indoorType)) return Color.argb(200, 80, 80, 80);
         if ("room".equals(indoorType)) return Color.argb(180, 33, 150, 243);
@@ -458,28 +512,68 @@ public class StartLocationFragment extends Fragment {
         this.buildingInfoCard = view.findViewById(R.id.buildingInfoCard);
         this.buildingNameText = view.findViewById(R.id.buildingNameText);
 
-        this.button.setOnClickListener(v -> {
-            float chosenLat = startPosition[0];
-            float chosenLon = startPosition[1];
+        // Map type spinner (Hybrid / Normal / Satellite)
+        Spinner mapSpinner = view.findViewById(R.id.startMapSpinner);
+        String[] mapTypes = {"Hybrid", "Normal", "Satellite"};
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
+                android.R.layout.simple_spinner_item, mapTypes);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        mapSpinner.setAdapter(adapter);
+        mapSpinner.setSelection(1); // default Normal
+        mapSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
+                if (mMap == null) return;
+                switch (position) {
+                    case 0: mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID); break;
+                    case 1: mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL); break;
+                    case 2: mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE); break;
+                }
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
 
+        // KNN fingerprint collection — floor controls
+        TextView knnFloorLabel = view.findViewById(R.id.knnFloorLabel);
+        TextView knnFpCount = view.findViewById(R.id.knnFpCount);
+
+        view.findViewById(R.id.knnFloorUp).setOnClickListener(v -> {
+            if (currentBuildingFloors != null
+                    && currentPreviewFloorIndex < currentBuildingFloors.size() - 1) {
+                currentPreviewFloorIndex++;
+                knnCurrentFloor = currentPreviewFloorIndex;
+                drawPreviewFloor(currentPreviewFloorIndex);
+                knnFloorLabel.setText(currentBuildingFloors.get(currentPreviewFloorIndex).getDisplayName());
+            }
+        });
+        view.findViewById(R.id.knnFloorDown).setOnClickListener(v -> {
+            if (currentBuildingFloors != null && currentPreviewFloorIndex > 0) {
+                currentPreviewFloorIndex--;
+                knnCurrentFloor = currentPreviewFloorIndex;
+                drawPreviewFloor(currentPreviewFloorIndex);
+                knnFloorLabel.setText(currentBuildingFloors.get(currentPreviewFloorIndex).getDisplayName());
+            }
+        });
+
+        this.button.setOnClickListener(v -> {
             // Save the building selection for campaign binding during upload
             if (selectedBuildingId != null) {
                 sensorFusion.setSelectedBuildingId(selectedBuildingId);
             }
 
             if (requireActivity() instanceof RecordingActivity) {
-                // Start sensor recording + set the start location
+                // Start recording — initial position is set autonomously from GNSS
+                // (autoInitStartLocation inside startRecording handles this)
                 sensorFusion.startRecording();
-                sensorFusion.setStartGNSSLatitude(startPosition);
-                // Write trajectory_id, initial_position and initial heading to protobuf
-                sensorFusion.writeInitialMetadata();
 
                 // Switch to the recording screen
                 ((RecordingActivity) requireActivity()).showRecordingScreen();
 
             } else if (requireActivity() instanceof ReplayActivity) {
+                float[] gnss = sensorFusion.getGNSSLatitude(false);
                 ((ReplayActivity) requireActivity())
-                        .onStartLocationChosen(chosenLat, chosenLon);
+                        .onStartLocationChosen(gnss[0], gnss[1]);
             }
         });
     }

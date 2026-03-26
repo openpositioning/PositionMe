@@ -73,6 +73,7 @@ public class SensorFusion implements SensorEventListener {
     private MovementSensor magnetometerSensor;
     private MovementSensor stepDetectionSensor;
     private MovementSensor rotationSensor;
+    private MovementSensor gameRotationSensor;
     private MovementSensor gravitySensor;
     private MovementSensor linearAccelerationSensor;
 
@@ -94,6 +95,9 @@ public class SensorFusion implements SensorEventListener {
     // Floorplan API cache (latest result from start-location step)
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingCache =
             new HashMap<>();
+
+    // True when recording has started but no GNSS fix has been received yet for start location
+    private volatile boolean pendingAutoInit = false;
     //endregion
 
     //region Initialisation
@@ -139,6 +143,7 @@ public class SensorFusion implements SensorEventListener {
         this.magnetometerSensor = new MovementSensor(context, Sensor.TYPE_MAGNETIC_FIELD);
         this.stepDetectionSensor = new MovementSensor(context, Sensor.TYPE_STEP_DETECTOR);
         this.rotationSensor = new MovementSensor(context, Sensor.TYPE_ROTATION_VECTOR);
+        this.gameRotationSensor = new MovementSensor(context, Sensor.TYPE_GAME_ROTATION_VECTOR);
         this.gravitySensor = new MovementSensor(context, Sensor.TYPE_GRAVITY);
         this.linearAccelerationSensor = new MovementSensor(context, Sensor.TYPE_LINEAR_ACCELERATION);
 
@@ -243,6 +248,8 @@ public class SensorFusion implements SensorEventListener {
                 stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
         rotationSensor.sensorManager.registerListener(this,
                 rotationSensor.sensor, (int) 1e6);
+        gameRotationSensor.sensorManager.registerListener(this,
+                gameRotationSensor.sensor, 10000, (int) maxReportLatencyNs);
         // Foreground service owns WiFi/BLE scanning during recording.
         if (!recorder.isRecording()) {
             startWirelessCollectors();
@@ -265,6 +272,7 @@ public class SensorFusion implements SensorEventListener {
             magnetometerSensor.sensorManager.unregisterListener(this);
             stepDetectionSensor.sensorManager.unregisterListener(this);
             rotationSensor.sensorManager.unregisterListener(this);
+            gameRotationSensor.sensorManager.unregisterListener(this);
             linearAccelerationSensor.sensorManager.unregisterListener(this);
             gravitySensor.sensorManager.unregisterListener(this);
             stopWirelessCollectors();
@@ -326,6 +334,9 @@ public class SensorFusion implements SensorEventListener {
      * @see SensorCollectionService
      */
     public void startRecording() {
+        // Reset gyro heading calibration so it re-calibrates at the start of this session
+        state.headingOffset = Float.NaN;
+
         recorder.startRecording(pdrProcessing);
         eventHandler.resetBootTime(recorder.getBootTime());
 
@@ -334,6 +345,26 @@ public class SensorFusion implements SensorEventListener {
 
         if (appContext != null) {
             SensorCollectionService.start(appContext);
+        }
+
+        // Autonomous position initialisation: use current GNSS if available, or wait for first fix
+        autoInitStartLocation();
+    }
+
+    /**
+     * Automatically sets the start location from the current GNSS fix.
+     * If no GNSS fix is available yet, sets a flag so that the first fix received
+     * during recording is used instead.
+     */
+    private void autoInitStartLocation() {
+        pendingAutoInit = false;
+        if (state.latitude != 0f || state.longitude != 0f) {
+            state.startLocation[0] = state.latitude;
+            state.startLocation[1] = state.longitude;
+            recorder.writeInitialMetadata();
+        } else {
+            // No GNSS fix yet — defer until first location update
+            pendingAutoInit = true;
         }
     }
 
@@ -345,6 +376,7 @@ public class SensorFusion implements SensorEventListener {
      * @see SensorCollectionService
      */
     public void stopRecording() {
+        pendingAutoInit = false;
         recorder.stopRecording();
         if (appContext != null) {
             SensorCollectionService.stop(appContext);
@@ -493,6 +525,14 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Returns the most recent GNSS horizontal accuracy in metres.
+     * Falls back to 8 m if no fix has been received yet.
+     */
+    public float getGNSSAccuracy() {
+        return state.gnssAccuracy;
+    }
+
+    /**
      * Function to redraw path in corrections fragment.
      *
      * @param scalingRatio new size of path due to updated step length
@@ -516,7 +556,11 @@ public class SensorFusion implements SensorEventListener {
      * @return orientation of device in radians.
      */
     public float passOrientation() {
-        return state.orientation[0];
+        // Use gyro-based heading (same as PDR) to avoid indoor magnetic interference
+        if (!Float.isNaN(state.headingOffset)) {
+            return state.gameHeading + state.headingOffset;
+        }
+        return state.orientation[0]; // fallback if not calibrated
     }
 
     /**
@@ -644,7 +688,16 @@ public class SensorFusion implements SensorEventListener {
         public void onLocationChanged(@NonNull Location location) {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
+            state.gnssAccuracy = location.getAccuracy() > 0 ? location.getAccuracy() : 8.0f;
             recorder.addGnssData(location);
+
+            // If recording started before a GNSS fix was available, use the first fix now
+            if (pendingAutoInit && recorder.isRecording()) {
+                state.startLocation[0] = state.latitude;
+                state.startLocation[1] = state.longitude;
+                pendingAutoInit = false;
+                recorder.writeInitialMetadata();
+            }
         }
     }
 

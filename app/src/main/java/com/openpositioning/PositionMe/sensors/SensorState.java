@@ -35,8 +35,14 @@ public class SensorState {
     // GNSS location
     public volatile float latitude;
     public volatile float longitude;
+    public volatile float gnssAccuracy = 8.0f; // metres, from Location.getAccuracy()
     public final float[] startLocation = new float[2];
 
     // Step counting
     public volatile int stepCounter;
+
+    // Gyro-based heading (TYPE_GAME_ROTATION_VECTOR — no magnetometer, no magnetic interference)
+    // headingOffset aligns game heading to magnetic north at recording start; NaN = not calibrated
+    public volatile float gameHeading = 0f;
+    public volatile float headingOffset = Float.NaN;
 }

@@ -2,10 +2,12 @@ package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.graphics.Color;
 import android.os.Bundle;
+import android.animation.ValueAnimator;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
+import android.widget.Toast;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,6 +26,7 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
+import com.openpositioning.PositionMe.utils.WifiFingerprinter;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -61,6 +64,17 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
     private Marker gnssMarker; // GNSS position marker
+    private Marker wifiMarker; // WiFi position marker
+    private boolean isWifiOn = false;
+    private boolean isSmoothOn = true;
+    private boolean isPdrDotsOn = false;
+    private WifiFingerprinter wifiFingerprinter;
+
+    // Colour-coded observation dots (last N)
+    private static final int MAX_OBS_DOTS = 15;
+    private final java.util.LinkedList<Circle> pdrDots = new java.util.LinkedList<>();
+    private final java.util.LinkedList<Circle> wifiDots = new java.util.LinkedList<>();
+    private final java.util.LinkedList<Circle> gnssDots = new java.util.LinkedList<>();
     // Keep test point markers so they can be cleared when recording ends
     private final List<Marker> testPointMarkers = new ArrayList<>();
 
@@ -79,12 +93,17 @@ public class TrajectoryMapFragment extends Fragment {
 
     // Auto-floor state
     private static final String TAG = "TrajectoryMapFragment";
-    private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000;
+    private static final long AUTO_FLOOR_DEBOUNCE_MS = 2000;
     private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000;
     private Handler autoFloorHandler;
     private Runnable autoFloorTask;
     private int lastCandidateFloor = Integer.MIN_VALUE;
     private long lastCandidateTime = 0;
+    // WiFi-anchored floor: last absolute floor index confirmed by WiFi + elevation at that time
+    private int   wifiAnchorFloorIndex = -1;
+    private float wifiAnchorElevation  = 0f;
+    // True after the first WiFi floor has been applied — enables transition zone constraint
+    private boolean initialFloorSet = false;
 
     // UI
     private Spinner switchMapSpinner;
@@ -149,9 +168,9 @@ public class TrajectoryMapFragment extends Fragment {
 
                     drawBuildingPolygon();
 
+                    // KNN collection moved to StartLocationFragment
+
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
-
-
                 }
             });
         }
@@ -165,6 +184,34 @@ public class TrajectoryMapFragment extends Fragment {
             if (!isChecked && gnssMarker != null) {
                 gnssMarker.remove();
                 gnssMarker = null;
+            }
+        });
+
+        // WiFi Switch
+        SwitchMaterial wifiSwitch = view.findViewById(R.id.wifiSwitch);
+        wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isWifiOn = isChecked;
+            if (!isChecked && wifiMarker != null) {
+                wifiMarker.remove();
+                wifiMarker = null;
+            }
+        });
+
+        // Smooth display switch
+        SwitchMaterial smoothSwitch = view.findViewById(R.id.smoothSwitch);
+        smoothSwitch.setChecked(isSmoothOn);
+        smoothSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isSmoothOn = isChecked;
+        });
+
+        // Observation dots switch (PDR/WiFi/GNSS coloured dots)
+        SwitchMaterial obsDotsSwitch = view.findViewById(R.id.obsDotsSwitch);
+        obsDotsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isPdrDotsOn = isChecked;
+            if (!isChecked) {
+                for (Circle c : pdrDots) c.remove();   pdrDots.clear();
+                for (Circle c : wifiDots) c.remove();   wifiDots.clear();
+                for (Circle c : gnssDots) c.remove();   gnssDots.clear();
             }
         });
 
@@ -192,6 +239,8 @@ public class TrajectoryMapFragment extends Fragment {
                 stopAutoFloor();
             }
         });
+        // Default to auto-floor ON
+        autoFloorSwitch.setChecked(true);
 
         floorUpButton.setOnClickListener(v -> {
             // If user manually changes floor, turn off auto floor
@@ -228,7 +277,7 @@ public class TrajectoryMapFragment extends Fragment {
         map.getUiSettings().setTiltGesturesEnabled(true);
         map.getUiSettings().setRotateGesturesEnabled(true);
         map.getUiSettings().setScrollGesturesEnabled(true);
-        map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+        map.setMapType(GoogleMap.MAP_TYPE_NORMAL);
 
         // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
@@ -307,14 +356,15 @@ public class TrajectoryMapFragment extends Fragment {
      * @param newLocation The new location to plot.
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
+    private ValueAnimator markerAnimator;
+
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
 
-        // Keep track of current location
         LatLng oldLocation = this.currentLocation;
         this.currentLocation = newLocation;
 
-        // If no marker, create it
+        // First fix: create marker + polyline start
         if (orientationMarker == null) {
             orientationMarker = gMap.addMarker(new MarkerOptions()
                     .position(newLocation)
@@ -325,35 +375,45 @@ public class TrajectoryMapFragment extends Fragment {
                                     R.drawable.ic_baseline_navigation_24)))
             );
             gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+
+            if (polyline != null) {
+                List<LatLng> pts = new ArrayList<>(polyline.getPoints());
+                pts.add(newLocation);
+                polyline.setPoints(pts);
+            }
         } else {
-            // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
             orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
-        }
 
-        // Extend polyline if movement occurred
-        /*if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            points.add(newLocation);
-            polyline.setPoints(points);
-        }*/
-        // Extend polyline
-        if (polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
+            if (isSmoothOn) {
+                // Smooth animation: slide marker from old to new position
+                LatLng startPos = orientationMarker.getPosition();
+                if (markerAnimator != null) markerAnimator.cancel();
+                markerAnimator = ValueAnimator.ofFloat(0f, 1f);
+                markerAnimator.setDuration(180);
+                markerAnimator.addUpdateListener(anim -> {
+                    float t = (float) anim.getAnimatedValue();
+                    double lat = startPos.latitude + (newLocation.latitude - startPos.latitude) * t;
+                    double lng = startPos.longitude + (newLocation.longitude - startPos.longitude) * t;
+                    LatLng interpolated = new LatLng(lat, lng);
+                    if (orientationMarker != null) {
+                        orientationMarker.setPosition(interpolated);
+                    }
+                    gMap.moveCamera(CameraUpdateFactory.newLatLng(interpolated));
+                });
+                markerAnimator.start();
+            } else {
+                // No animation: instant jump
+                orientationMarker.setPosition(newLocation);
+                gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+            }
 
-            // First position fix: add the first polyline point
-            if (oldLocation == null) {
-                points.add(newLocation);
-                polyline.setPoints(points);
-            } else if (!oldLocation.equals(newLocation)) {
-                // Subsequent movement: append a new polyline point
-                points.add(newLocation);
-                polyline.setPoints(points);
+            // Append to polyline (actual position, not interpolated)
+            if (polyline != null && oldLocation != null && !oldLocation.equals(newLocation)) {
+                List<LatLng> pts = new ArrayList<>(polyline.getPoints());
+                pts.add(newLocation);
+                polyline.setPoints(pts);
             }
         }
-
 
         // Update indoor map overlay
         if (indoorMapManager != null) {
@@ -442,6 +502,51 @@ public class TrajectoryMapFragment extends Fragment {
         }
     }
 
+
+    /** Adds a PDR observation dot (yellow). */
+    public void addPdrDot(@NonNull LatLng pos) {
+        addObsDot(pos, Color.argb(200, 230, 180, 0), pdrDots);
+    }
+
+    /** Adds a WiFi observation dot (green). */
+    public void addWifiDot(@NonNull LatLng pos) {
+        addObsDot(pos, Color.argb(180, 0, 180, 0), wifiDots);
+    }
+
+    /** Adds a GNSS observation dot (blue). */
+    public void addGnssDot(@NonNull LatLng pos) {
+        addObsDot(pos, Color.argb(180, 33, 100, 243), gnssDots);
+    }
+
+    private void addObsDot(LatLng pos, int color, java.util.LinkedList<Circle> list) {
+        if (gMap == null || !isPdrDotsOn) return;
+        Circle c = gMap.addCircle(new CircleOptions()
+                .center(pos)
+                .radius(0.5) // 0.5 metre radius
+                .strokeWidth(0)
+                .fillColor(color));
+        list.add(c);
+        // Remove oldest if over limit
+        while (list.size() > MAX_OBS_DOTS) {
+            list.removeFirst().remove();
+        }
+    }
+
+    /**
+     * Sets or updates the WiFi position marker (green) on the map.
+     */
+    public void updateWifiMarker(@NonNull LatLng wifiLocation) {
+        if (gMap == null || !isWifiOn) return;
+        if (wifiMarker == null) {
+            wifiMarker = gMap.addMarker(new MarkerOptions()
+                    .position(wifiLocation)
+                    .title("WiFi Position")
+                    .icon(BitmapDescriptorFactory
+                            .defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+        } else {
+            wifiMarker.setPosition(wifiLocation);
+        }
+    }
 
     /**
      * Remove GNSS marker if user toggles it off
@@ -628,9 +733,8 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastCandidateFloor = Integer.MIN_VALUE;
         lastCandidateTime = 0;
-
-        // Immediately jump to the best-guess floor (skip debounce on first toggle)
-        applyImmediateFloor();
+        wifiAnchorFloorIndex = -1; // reset — wait for WiFi to establish anchor
+        initialFloorSet = false;
 
         autoFloorTask = new Runnable() {
             @Override
@@ -640,33 +744,7 @@ public class TrajectoryMapFragment extends Fragment {
             }
         };
         autoFloorHandler.post(autoFloorTask);
-        Log.d(TAG, "Auto-floor started");
-    }
-
-    /**
-     * Applies the best-guess floor immediately without debounce.
-     * Called once when auto-floor is first toggled on, so the user
-     * sees an instant correction after manually browsing wrong floors.
-     */
-    private void applyImmediateFloor() {
-        if (sensorFusion == null || indoorMapManager == null) return;
-        if (!indoorMapManager.getIsIndoorMapSet()) return;
-
-        int candidateFloor;
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
-        } else {
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) return;
-            candidateFloor = Math.round(elevation / floorHeight);
-        }
-
-        indoorMapManager.setCurrentFloor(candidateFloor, true);
-        updateFloorLabel();
-        // Seed the debounce state so subsequent checks don't re-trigger immediately
-        lastCandidateFloor = candidateFloor;
-        lastCandidateTime = SystemClock.elapsedRealtime();
+        Log.d(TAG, "Auto-floor started (waiting for WiFi anchor)");
     }
 
     /**
@@ -690,34 +768,83 @@ public class TrajectoryMapFragment extends Fragment {
         if (sensorFusion == null || indoorMapManager == null) return;
         if (!indoorMapManager.getIsIndoorMapSet()) return;
 
-        int candidateFloor;
-
-        // Priority 1: WiFi-based floor (only if WiFi positioning has returned data)
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
-        } else {
-            // Fallback: barometric elevation estimate
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) return;
-            candidateFloor = Math.round(elevation / floorHeight);
+        // Step 1: Update WiFi anchor whenever WiFi provides a NEW floor reading
+        LatLng wifiPos = sensorFusion.getLatLngWifiPositioning();
+        if (wifiPos != null) {
+            int wifiFloor = sensorFusion.getWifiFloor();
+            int wifiIndex = wifiFloor + indoorMapManager.getAutoFloorBias();
+            if (wifiIndex != wifiAnchorFloorIndex) {
+                // WiFi floor changed — update anchor
+                wifiAnchorFloorIndex = wifiIndex;
+                wifiAnchorElevation  = sensorFusion.getElevation();
+                Log.d("AutoFloor", "WiFi anchor updated: floor=" + wifiFloor
+                        + " index=" + wifiIndex + " elev=" + wifiAnchorElevation);
+            } else if (wifiAnchorFloorIndex < 0) {
+                // First WiFi fix — set anchor even if index matches default
+                wifiAnchorFloorIndex = wifiIndex;
+                wifiAnchorElevation  = sensorFusion.getElevation();
+                Log.d("AutoFloor", "WiFi anchor set: floor=" + wifiFloor
+                        + " index=" + wifiIndex + " elev=" + wifiAnchorElevation);
+            }
         }
+
+        // Step 2: No anchor yet → can't determine absolute floor
+        if (wifiAnchorFloorIndex < 0) {
+            Log.d("AutoFloor", "No WiFi anchor yet, skipping");
+            return;
+        }
+
+        // Step 3: Candidate = WiFi anchor + barometric delta
+        // This way barometric changes ALWAYS take effect for floor transitions
+        float elevation = sensorFusion.getElevation();
+        float floorHeight = indoorMapManager.getFloorHeight();
+        if (floorHeight <= 0) return;
+        int floorDelta = Math.round((elevation - wifiAnchorElevation) / floorHeight);
+        int candidateIndex = wifiAnchorFloorIndex + floorDelta;
+        String source = "anchor=" + wifiAnchorFloorIndex + " elev=" + String.format("%.2f", elevation)
+                + " anchorElev=" + String.format("%.2f", wifiAnchorElevation)
+                + " delta=" + floorDelta;
+
+        Log.d("AutoFloor", source + " candidateIndex=" + candidateIndex
+                + " currentIndex=" + indoorMapManager.getCurrentFloor()
+                + " display=" + indoorMapManager.getCurrentFloorDisplayName());
 
         // Debounce: require the same floor reading for AUTO_FLOOR_DEBOUNCE_MS
         long now = SystemClock.elapsedRealtime();
-        if (candidateFloor != lastCandidateFloor) {
-            lastCandidateFloor = candidateFloor;
+        if (candidateIndex != lastCandidateFloor) {
+            lastCandidateFloor = candidateIndex;
             lastCandidateTime = now;
             return;
         }
 
         if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
-            indoorMapManager.setCurrentFloor(candidateFloor, true);
+            if (candidateIndex != indoorMapManager.getCurrentFloor()) {
+                if (!initialFloorSet) {
+                    // First floor assignment — trust WiFi, no transition zone needed
+                    Log.d("AutoFloor", "Initial floor set — trusted (WiFi)");
+                    initialFloorSet = true;
+                } else {
+                    // After initial floor is set, require being near transition zone
+                    boolean nearZone = (currentLocation != null
+                            && indoorMapManager.isNearTransitionZone(currentLocation));
+                    if (!nearZone) {
+                        Log.d("AutoFloor", "Floor change blocked — not near stairs/lift zone");
+                        return;
+                    }
+                    String zoneType = indoorMapManager.getNearestTransitionZoneType(currentLocation);
+                    Log.d("AutoFloor", "Floor change allowed — near " + zoneType + " zone");
+                }
+            }
+            indoorMapManager.setCurrentFloor(candidateIndex, false);
             updateFloorLabel();
-            // Reset timer so we don't keep re-applying the same floor
             lastCandidateTime = now;
         }
     }
 
     //endregion
+
+    /** Returns the IndoorMapManager for the particle filter to query wall segments. */
+    public IndoorMapManager getIndoorMapManager() {
+        return indoorMapManager;
+    }
 }

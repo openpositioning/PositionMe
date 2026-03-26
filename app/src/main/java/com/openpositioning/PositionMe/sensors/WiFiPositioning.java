@@ -89,25 +89,27 @@ public class WiFiPositioning {
                     try {
                             wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
                             floor = response.getInt("floor");
+                            Log.d("WiFiFloor", "WiFi OK: lat=" + wifiLocation.latitude
+                                    + " lng=" + wifiLocation.longitude + " floor=" + floor);
                     } catch (JSONException e) {
                         // Error log to keep record of errors (for secure programming and maintainability)
-                        Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);
+                        Log.e("WiFiFloor","Error parsing response: "+e.getMessage()+" "+ response);
                     }
                 },
                 // Handles the errors obtained from the POST request
                 error -> {
                     // Validation Error
                     if (error.networkResponse!=null && error.networkResponse.statusCode==422){
-                        Log.e("WiFiPositioning", "Validation Error "+ error.getMessage());
+                        Log.e("WiFiFloor", "Validation Error "+ error.getMessage());
                     }
                     // Other Errors
                     else{
                         // When Response code is available
                         if (error.networkResponse!=null) {
-                            Log.e("WiFiPositioning","Response Code: " + error.networkResponse.statusCode + ", " + error.getMessage());
+                            Log.e("WiFiFloor","Response Code: " + error.networkResponse.statusCode + ", " + error.getMessage());
                         }
                         else{
-                            Log.e("WiFiPositioning","Error message: " + error.getMessage());
+                            Log.e("WiFiFloor","Error message: " + error.getMessage());
                         }
                     }
                 }

@@ -372,11 +372,15 @@ public class FloorplanApiClient {
             while (it.hasNext()) {
                 keys.add(it.next());
             }
-            Collections.sort(keys);
+            // Sort by physical floor order: B2,B1 → GF → F1,F2,F3...
+            // Assign numeric rank: B*→negative, GF→0, F*→positive
+            Collections.sort(keys, (a, b) -> Integer.compare(floorRank(a), floorRank(b)));
+            Log.d(TAG, "Floor keys after sort: " + keys);
 
             for (String key : keys) {
                 JSONObject floorCollection = root.getJSONObject(key);
                 String displayName = floorCollection.optString("name", key);
+                Log.d(TAG, "Floor key=" + key + " displayName=" + displayName);
                 JSONArray features = floorCollection.optJSONArray("features");
 
                 List<MapShapeFeature> shapeFeatures = new ArrayList<>();
@@ -396,6 +400,21 @@ public class FloorplanApiClient {
         }
 
         return result;
+    }
+
+    /** Maps a floor key to a numeric rank for physical ordering: B*→negative, GF→0, F*→positive. */
+    private static int floorRank(String key) {
+        if (key == null) return Integer.MAX_VALUE;
+        if (key.equalsIgnoreCase("GF")) return 0;
+        if (key.toUpperCase().startsWith("B")) {
+            try { return -Integer.parseInt(key.substring(1)); }
+            catch (NumberFormatException e) { return -1; }
+        }
+        if (key.toUpperCase().startsWith("F")) {
+            try { return Integer.parseInt(key.substring(1)); }
+            catch (NumberFormatException e) { return Integer.MAX_VALUE; }
+        }
+        return Integer.MAX_VALUE; // unknown keys go last
     }
 
     /**

@@ -301,6 +301,145 @@ public class IndoorMapManager {
     }
 
     /**
+     * Returns all wall line segments for the currently displayed floor as
+     * {lat1, lng1, lat2, lng2} arrays, ready for particle filter map matching.
+     */
+    public List<double[]> getCurrentFloorWallSegments() {
+        List<double[]> segments = new ArrayList<>();
+        if (currentFloorShapes == null || currentFloor < 0
+                || currentFloor >= currentFloorShapes.size()) {
+            return segments;
+        }
+
+        // 1) Internal walls + room boundaries
+        FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(currentFloor);
+        for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
+            String type = feature.getIndoorType();
+            if (!"wall".equals(type) && !"room".equals(type)) continue;
+            for (List<LatLng> part : feature.getParts()) {
+                for (int i = 0; i < part.size() - 1; i++) {
+                    LatLng a = part.get(i);
+                    LatLng b = part.get(i + 1);
+                    segments.add(new double[]{
+                            a.latitude, a.longitude,
+                            b.latitude, b.longitude
+                    });
+                }
+            }
+        }
+
+        // 2) Building outline as exterior wall (prevents particles leaving the building)
+        String apiName = null;
+        switch (currentBuilding) {
+            case BUILDING_NUCLEUS:  apiName = "nucleus_building"; break;
+            case BUILDING_LIBRARY:  apiName = "library"; break;
+            case BUILDING_MURCHISON: apiName = "murchison_house"; break;
+        }
+        if (apiName != null) {
+            FloorplanApiClient.BuildingInfo building =
+                    SensorFusion.getInstance().getFloorplanBuilding(apiName);
+            if (building != null) {
+                List<LatLng> outline = building.getOutlinePolygon();
+                if (outline != null && outline.size() >= 3) {
+                    for (int i = 0; i < outline.size(); i++) {
+                        LatLng a = outline.get(i);
+                        LatLng b = outline.get((i + 1) % outline.size());
+                        segments.add(new double[]{
+                                a.latitude, a.longitude,
+                                b.latitude, b.longitude
+                        });
+                    }
+                }
+            }
+        }
+
+        return segments;
+    }
+
+    /**
+     * Returns all stairs/lift polygon zones on the current floor.
+     * Each zone is a list of LatLng forming a closed polygon ring.
+     */
+    public List<List<LatLng>> getCurrentFloorTransitionZones() {
+        List<List<LatLng>> zones = new ArrayList<>();
+        if (currentFloorShapes == null || currentFloor < 0
+                || currentFloor >= currentFloorShapes.size()) {
+            return zones;
+        }
+        FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(currentFloor);
+        for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
+            String type = feature.getIndoorType();
+            if ("stairs".equals(type) || "lift".equals(type)) {
+                for (List<LatLng> ring : feature.getParts()) {
+                    if (ring.size() >= 3) zones.add(ring);
+                }
+            }
+        }
+        return zones;
+    }
+
+    private static final double TRANSITION_ZONE_RADIUS_M = 8.0;
+
+    /**
+     * Checks whether a position is near any stairs or lift zone on the current floor.
+     * Uses distance to zone centroid (within {@link #TRANSITION_ZONE_RADIUS_M} meters).
+     */
+    public boolean isNearTransitionZone(LatLng pos) {
+        if (pos == null) return false;
+        for (List<LatLng> zone : getCurrentFloorTransitionZones()) {
+            if (distanceToZone(pos, zone) < TRANSITION_ZONE_RADIUS_M) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Returns the indoor_type ("stairs" or "lift") of the nearest transition zone
+     * within range, or null if none is close enough.
+     */
+    public String getNearestTransitionZoneType(LatLng pos) {
+        if (pos == null || currentFloorShapes == null || currentFloor < 0
+                || currentFloor >= currentFloorShapes.size()) return null;
+        FloorplanApiClient.FloorShapes floor = currentFloorShapes.get(currentFloor);
+        for (FloorplanApiClient.MapShapeFeature feature : floor.getFeatures()) {
+            String type = feature.getIndoorType();
+            if ("stairs".equals(type) || "lift".equals(type)) {
+                for (List<LatLng> ring : feature.getParts()) {
+                    if (ring.size() >= 3 && distanceToZone(pos, ring) < TRANSITION_ZONE_RADIUS_M) {
+                        return type;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Approximate distance in meters from a point to the centroid of a polygon zone. */
+    private static double distanceToZone(LatLng pos, List<LatLng> zone) {
+        double cLat = 0, cLng = 0;
+        for (LatLng p : zone) { cLat += p.latitude; cLng += p.longitude; }
+        cLat /= zone.size();
+        cLng /= zone.size();
+        double dLat = (pos.latitude - cLat) * 111320.0;
+        double dLng = (pos.longitude - cLng) * 111320.0 * Math.cos(Math.toRadians(cLat));
+        return Math.sqrt(dLat * dLat + dLng * dLng);
+    }
+
+    /** Ray-casting point-in-polygon test. */
+    private static boolean pointInPolygon(LatLng point, List<LatLng> polygon) {
+        int crossings = 0;
+        int n = polygon.size();
+        for (int i = 0, j = n - 1; i < n; j = i++) {
+            double yi = polygon.get(i).latitude, xi = polygon.get(i).longitude;
+            double yj = polygon.get(j).latitude, xj = polygon.get(j).longitude;
+            if ((yi > point.latitude) != (yj > point.latitude)) {
+                double xCross = (xj - xi) * (point.latitude - yi) / (yj - yi) + xi;
+                if (point.longitude < xCross) crossings++;
+            }
+        }
+        return (crossings % 2) == 1;
+    }
+
+    /**
      * Returns the stroke colour for a given indoor feature type.
      *
      * @param indoorType the indoor_type property value

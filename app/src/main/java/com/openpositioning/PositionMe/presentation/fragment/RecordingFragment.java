@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.util.Log;
 import android.os.Handler;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -26,9 +27,12 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
 import com.openpositioning.PositionMe.R;
+import com.openpositioning.PositionMe.fusion.KnnPositioner;
+import com.openpositioning.PositionMe.fusion.ParticleFilter;
 import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 
@@ -69,7 +73,7 @@ public class RecordingFragment extends Fragment {
     private MaterialButton completeButton, cancelButton;
     private ImageView recIcon;
     private ProgressBar timeRemaining;
-    private TextView elevation, distanceTravelled, gnssError;
+    private TextView elevation, distanceTravelled, gnssError, posSourceText;
 
     // App settings
     private SharedPreferences settings;
@@ -86,6 +90,32 @@ public class RecordingFragment extends Fragment {
 
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
+
+    // Particle filter for fused position estimation
+    private final ParticleFilter particleFilter = new ParticleFilter();
+    private boolean pfInitialized = false;
+    private boolean pfInitFromGnss = false;
+    private double lastGnssLat = 0, lastGnssLng = 0;
+    private LatLng lastWifiPos = null;
+    private LatLng lastKnnPos = null;
+    private int lastPFFloor = -1, lastPFBuilding = -1;
+
+    // KNN WiFi positioning
+    private KnnPositioner knnPositioner;
+    private static final double KNN_SIGMA_M = 3.0; // KNN is more accurate than API WiFi
+
+    // Separate trackers for observation dots (avoid ordering bug with PF update vars)
+    private LatLng lastObsWifi = null;
+    private double lastObsGnssLat = 0, lastObsGnssLng = 0;
+
+    // Stuck detection: if particles don't move despite PDR input, reinitialize
+    private int stuckCounter = 0;
+    private static final int STUCK_THRESHOLD = 8; // ~1.6 seconds at 200ms ticks
+
+    // Stair detection: track elevation change to scale down PDR on stairs
+    private float lastElevation = 0f;
+    private static final float STAIR_ELEV_RATE_THRESHOLD = 0.3f; // m per 200ms tick
+    private static final float STAIR_STEP_SCALE = 0.35f; // horizontal fraction on stairs
 
     private final Runnable refreshDataTask = new Runnable() {
         @Override
@@ -106,6 +136,8 @@ public class RecordingFragment extends Fragment {
         this.sensorFusion = SensorFusion.getInstance();
         Context context = requireActivity();
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
+        this.knnPositioner = new KnnPositioner(context);
+        Log.d("PF_Init", "KNN loaded: " + knnPositioner.getTrainingSize() + " points");
         this.refreshDataHandler = new Handler();
     }
 
@@ -141,6 +173,7 @@ public class RecordingFragment extends Fragment {
         elevation = view.findViewById(R.id.currentElevation);
         distanceTravelled = view.findViewById(R.id.currentDistanceTraveled);
         gnssError = view.findViewById(R.id.gnssError);
+        posSourceText = view.findViewById(R.id.posSource);
 
         completeButton = view.findViewById(R.id.stopButton);
         cancelButton = view.findViewById(R.id.cancelButton);
@@ -173,6 +206,12 @@ public class RecordingFragment extends Fragment {
                         // User confirmed cancellation
                         sensorFusion.stopRecording();
                         if (autoStop != null) autoStop.cancel();
+                        pfInitialized = false;
+                        lastPFFloor = -1;
+                        lastPFBuilding = -1;
+                        lastWifiPos = null;
+                        lastGnssLat = 0;
+                        lastGnssLng = 0;
                         requireActivity().onBackPressed();
                     })
                     .setPositiveButton("No", (dialogInterface, which) -> {
@@ -248,47 +287,209 @@ public class RecordingFragment extends Fragment {
     }
 
 
-    /**
-     * Update the UI with sensor data and pass map updates to TrajectoryMapFragment.
-     */
     private void updateUIandPosition() {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
-        // Distance
-        distance += Math.sqrt(Math.pow(pdrValues[0] - previousPosX, 2)
-                + Math.pow(pdrValues[1] - previousPosY, 2));
+        float dxMeters = pdrValues[0] - previousPosX;
+        float dyMeters = pdrValues[1] - previousPosY;
+
+        // Update distance display
+        distance += Math.sqrt(Math.pow(dxMeters, 2) + Math.pow(dyMeters, 2));
         distanceTravelled.setText(getString(R.string.meter, String.format("%.2f", distance)));
 
-        // Elevation
+        // Update elevation display
         float elevationVal = sensorFusion.getElevation();
-        elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
+        float elevDeltaDisplay = elevationVal - lastElevation;
+        elevation.setText(String.format("Elev: %.2fm  Δ%.2fm", elevationVal, elevDeltaDisplay));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
+        // Get current sensor readings
+        float[] startArr = sensorFusion.getGNSSLatitude(true);
+        float[] gnssArr = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
+        LatLng gnssPos = (gnssArr != null && (gnssArr[0] != 0f || gnssArr[1] != 0f))
+                ? new LatLng(gnssArr[0], gnssArr[1]) : null;
+        LatLng wifiPos = sensorFusion.getLatLngWifiPositioning();
 
-            // Pass the location + orientation to the map
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
+        // KNN position estimate (from our own collected fingerprints)
+        LatLng knnPos = (knnPositioner != null && knnPositioner.isLoaded())
+                ? knnPositioner.estimatePosition() : null;
+
+        // Initialize particle filter: KNN > WiFi API > GNSS
+        if (!pfInitialized) {
+            LatLng initPos = null;
+            String src = null;
+            float gnssAcc = sensorFusion.getGNSSAccuracy();
+
+            if (knnPos != null) {
+                // Best: our own KNN fingerprints (~3m accuracy)
+                initPos = knnPos;
+                src = "KNN";
+            } else if (wifiPos != null) {
+                initPos = wifiPos;
+                src = "WiFi-API";
+            } else if (gnssPos != null) {
+                initPos = gnssPos;
+                src = "GNSS(acc=" + String.format("%.1f", gnssAcc) + "m)";
+            }
+
+            if (initPos != null) {
+                particleFilter.initialize(initPos);
+                pfInitialized = true;
+                pfInitFromGnss = (knnPos == null && wifiPos == null);
+                refreshPFWallData();
+                Log.d("PF_Init", "PF initialized from " + src
+                        + " at " + initPos.latitude + "," + initPos.longitude);
             }
         }
 
-        // GNSS logic if you want to show GNSS error, etc.
-        float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);
-        if (gnss != null && trajectoryMapFragment != null) {
-            // If user toggles showing GNSS in the map, call e.g.
+        // If PF was seeded from GNSS, re-scatter when better fix arrives
+        if (pfInitialized && pfInitFromGnss) {
+            LatLng betterPos = (knnPos != null) ? knnPos : wifiPos;
+            if (betterPos != null) {
+                particleFilter.reinitializeAround(betterPos, 5.0);
+                pfInitFromGnss = false;
+                Log.d("PF_Init", "Re-initialized around "
+                        + (knnPos != null ? "KNN" : "WiFi") + ": "
+                        + betterPos.latitude + "," + betterPos.longitude);
+            }
+        }
+
+        LatLng newLocation;
+        if (pfInitialized) {
+            // Refresh wall data if indoor floor changed
+            refreshPFWallData();
+
+            // Stair/lift detection: check both barometric change AND transition zone
+            float elevDelta = Math.abs(elevationVal - lastElevation);
+            lastElevation = elevationVal;
+            boolean elevChanging = elevDelta > STAIR_ELEV_RATE_THRESHOLD;
+
+            // Check if user is in a stairs or lift zone from the indoor map
+            IndoorMapManager mgr = (trajectoryMapFragment != null)
+                    ? trajectoryMapFragment.getIndoorMapManager() : null;
+            LatLng currentEstimate = particleFilter.getEstimate();
+            String zoneType = (mgr != null) ? mgr.getNearestTransitionZoneType(currentEstimate) : null;
+
+            float stepScale = 1.0f;
+            if ("lift".equals(zoneType) && elevChanging) {
+                // In elevator: no horizontal movement at all
+                stepScale = 0.0f;
+            } else if ("stairs".equals(zoneType) && elevChanging) {
+                // On stairs AND elevation changing: reduce horizontal step
+                stepScale = STAIR_STEP_SCALE;
+            }
+
+            // Predict step: move particles by PDR displacement (scaled on stairs/lift)
+            particleFilter.predict(dxMeters * stepScale, dyMeters * stepScale);
+
+            // GNSS update step — indoor: clamp sigma to at least 15m to reduce pull
+            if (gnssPos != null
+                    && (gnssPos.latitude != lastGnssLat || gnssPos.longitude != lastGnssLng)) {
+                float gnssAcc = sensorFusion.getGNSSAccuracy();
+                boolean indoors = (mgr != null && mgr.getIsIndoorMapSet());
+                double gnssSigma = indoors ? Math.max(gnssAcc, 15.0) : gnssAcc;
+                particleFilter.updateWithGNSS(gnssPos, gnssSigma);
+                lastGnssLat = gnssPos.latitude;
+                lastGnssLng = gnssPos.longitude;
+            }
+
+            // WiFi API update step (only on new measurement)
+            if (wifiPos != null && !wifiPos.equals(lastWifiPos)) {
+                particleFilter.updateWithWifi(wifiPos);
+                lastWifiPos = wifiPos;
+            }
+
+            // KNN update step (more accurate than WiFi API, tighter sigma)
+            if (knnPos != null && !knnPos.equals(lastKnnPos)) {
+                particleFilter.updateWithGNSS(knnPos, KNN_SIGMA_M); // reuse GNSS method with 3m sigma
+                lastKnnPos = knnPos;
+            }
+
+            // Show WiFi marker on map
+            if (wifiPos != null && trajectoryMapFragment != null) {
+                trajectoryMapFragment.updateWifiMarker(wifiPos);
+            }
+
+            // Stuck detection: if PDR says we're moving but estimate barely changes,
+            // particles are likely trapped behind walls. Reinitialize around best fix.
+            newLocation = particleFilter.getEstimate();
+            float stepDist = (float) Math.sqrt(dxMeters * dxMeters + dyMeters * dyMeters);
+            if (stepDist > 0.2f && newLocation != null && currentEstimate != null) {
+                double estMove = Math.sqrt(
+                        Math.pow((newLocation.latitude - currentEstimate.latitude) * 111320, 2) +
+                        Math.pow((newLocation.longitude - currentEstimate.longitude) * 111320
+                                * Math.cos(Math.toRadians(newLocation.latitude)), 2));
+                if (estMove < 0.1) {
+                    stuckCounter++;
+                    if (stuckCounter >= STUCK_THRESHOLD) {
+                        LatLng rescue = (knnPos != null) ? knnPos : wifiPos;
+                        if (rescue != null) {
+                            particleFilter.reinitializeAround(rescue, 5.0);
+                            Log.w("PF_Stuck", "Particles stuck — reinitialised around "
+                                    + (knnPos != null ? "KNN" : "WiFi"));
+                            stuckCounter = 0;
+                        }
+                    }
+                } else {
+                    stuckCounter = 0;
+                }
+            }
+        } else if (startArr != null && (startArr[0] != 0f || startArr[1] != 0f)) {
+            // PF not ready — fall back to plain PDR
+            LatLng old = trajectoryMapFragment.getCurrentLocation();
+            LatLng anchor = new LatLng(startArr[0], startArr[1]);
+            newLocation = UtilFunctions.calculateNewPos(
+                    old == null ? anchor : old,
+                    new float[]{dxMeters, dyMeters});
+        } else {
+            newLocation = trajectoryMapFragment.getCurrentLocation();
+        }
+
+        if (newLocation != null && trajectoryMapFragment != null) {
+            trajectoryMapFragment.updateUserLocation(newLocation,
+                    (float) Math.toDegrees(sensorFusion.passOrientation()));
+        }
+
+        // Display current positioning source
+        if (posSourceText != null) {
+            if (!pfInitialized) {
+                posSourceText.setText("...");
+            } else {
+                String src = "PDR";
+                if (knnPos != null) src = "KNN";
+                else if (wifiPos != null) src = "WiFi";
+                if (gnssPos != null) src += "+GPS";
+                posSourceText.setText(src);
+            }
+        }
+
+        // Observation dots: PDR (yellow), WiFi (green), GNSS (blue)
+        if (trajectoryMapFragment != null) {
+            // PDR dot: raw PDR position = start + accumulated displacement
+            if (startArr != null && (startArr[0] != 0f || startArr[1] != 0f)
+                    && (dxMeters != 0 || dyMeters != 0)) {
+                LatLng pdrPos = UtilFunctions.calculateNewPos(
+                        new LatLng(startArr[0], startArr[1]),
+                        new float[]{pdrValues[0], pdrValues[1]});
+                trajectoryMapFragment.addPdrDot(pdrPos);
+            }
+            // WiFi dot (compare with separate tracker to avoid ordering bug)
+            if (wifiPos != null && !wifiPos.equals(lastObsWifi)) {
+                trajectoryMapFragment.addWifiDot(wifiPos);
+                lastObsWifi = wifiPos;
+            }
+            // GNSS dot
+            if (gnssPos != null && (gnssPos.latitude != lastObsGnssLat || gnssPos.longitude != lastObsGnssLng)) {
+                trajectoryMapFragment.addGnssDot(gnssPos);
+                lastObsGnssLat = gnssPos.latitude;
+                lastObsGnssLng = gnssPos.longitude;
+            }
+        }
+
+        // GNSS display and error
+        if (gnssArr != null && trajectoryMapFragment != null) {
             if (trajectoryMapFragment.isGnssEnabled()) {
-                LatLng gnssLocation = new LatLng(gnss[0], gnss[1]);
+                LatLng gnssLocation = new LatLng(gnssArr[0], gnssArr[1]);
                 LatLng currentLoc = trajectoryMapFragment.getCurrentLocation();
                 if (currentLoc != null) {
                     double errorDist = UtilFunctions.distanceBetweenPoints(currentLoc, gnssLocation);
@@ -302,9 +503,26 @@ public class RecordingFragment extends Fragment {
             }
         }
 
-        // Update previous
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
+    }
+
+    /** Feeds current-floor wall segments into the particle filter if the floor/building changed. */
+    private void refreshPFWallData() {
+        if (trajectoryMapFragment == null) return;
+        IndoorMapManager mgr = trajectoryMapFragment.getIndoorMapManager();
+        if (mgr == null || !mgr.getIsIndoorMapSet()) return;
+
+        int floor    = mgr.getCurrentFloor();
+        int building = mgr.getCurrentBuilding();
+        if (floor == lastPFFloor && building == lastPFBuilding) return;
+
+        List<double[]> walls = mgr.getCurrentFloorWallSegments();
+        particleFilter.setWallSegments(walls);
+        lastPFFloor    = floor;
+        lastPFBuilding = building;
+        Log.d("PF_Walls", "Wall segments loaded: " + walls.size()
+                + " floor=" + floor + " building=" + building);
     }
 
     /**
