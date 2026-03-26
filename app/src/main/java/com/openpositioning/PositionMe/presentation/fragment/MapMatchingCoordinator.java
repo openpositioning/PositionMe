@@ -1,0 +1,442 @@
+package com.openpositioning.PositionMe.presentation.fragment;
+
+import android.content.Context;
+import android.location.Location;
+import android.os.SystemClock;
+import android.util.Log;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
+import com.openpositioning.PositionMe.mapmatching.CandidatePose;
+import com.openpositioning.PositionMe.mapmatching.CorrectionType;
+import com.openpositioning.PositionMe.mapmatching.MapMatchingInput;
+import com.openpositioning.PositionMe.mapmatching.MapMatchingResult;
+import com.openpositioning.PositionMe.mapmatching.MapMatchingService;
+import com.openpositioning.PositionMe.mapmatching.MotionDelta;
+import com.openpositioning.PositionMe.mapmatching.VerticalTransitionHint;
+import com.openpositioning.PositionMe.utils.IndoorMapManager;
+
+import java.util.List;
+import java.util.Locale;
+
+final class MapMatchingCoordinator {
+
+    interface Host {
+        @Nullable GoogleMap getGoogleMap();
+        @NonNull Context requireContext();
+        @NonNull TrajectoryRenderer getTrajectoryRenderer();
+        @Nullable FloorplanApiClient.BuildingInfo getSelectedFloorplanBuilding();
+        @Nullable IndoorMapManager getIndoorMapManager();
+        boolean isReplayModeEnabled();
+        int getCurrentFloorIndex();
+        void setFloor(int floorIndex);
+        boolean isAutoFloorEnabled();
+        @Nullable LatLng getCurrentLocation();
+        void setCurrentLocation(@NonNull LatLng location);
+        @NonNull String resolveKnownBuildingKey(@NonNull FloorplanApiClient.BuildingInfo building,
+                                                @Nullable String buildingName);
+        @NonNull String canonicalFloorLabel(@Nullable String floorLabel);
+        @NonNull List<Integer> getOrderedFloorIndices(@NonNull FloorplanApiClient.BuildingInfo building);
+        void maybeFetchNearbyBuildingsOnFirstLocation();
+        boolean hasAutoSelectedIndoorMap();
+        @NonNull List<FloorplanApiClient.BuildingInfo> getLastFetchedBuildings();
+        void maybeAutoSelectIndoorMap(@NonNull List<FloorplanApiClient.BuildingInfo> buildings);
+        @NonNull String getTag();
+        @NonNull String getTestLogTag();
+    }
+
+    private final Host host;
+    private final MapMatchingService mapMatchingService = new MapMatchingService();
+
+    @Nullable
+    private CandidatePose previousMatchedPose;
+    @Nullable
+    private Integer replaySyntheticFloor;
+    @Nullable
+    private Double replayCurrentElevation;
+    @Nullable
+    private Double replayDeltaHeight;
+    private boolean replayHeightChanged = false;
+    @Nullable
+    private Integer replayInitialFloor;
+    @Nullable
+    private Integer replayBaseFloorIndex;
+    private boolean replayDisplayFloorInitialized = false;
+
+    MapMatchingCoordinator(@NonNull Host host) {
+        this.host = host;
+    }
+
+    void onReplayModeChanged(boolean enabled) {
+        if (!enabled) {
+            replayBaseFloorIndex = null;
+            replayDisplayFloorInitialized = false;
+        }
+    }
+
+    void onSelectedBuildingChanged() {
+        replayBaseFloorIndex = null;
+        replayDisplayFloorInitialized = false;
+    }
+
+    void setReplayFrameContext(@Nullable Integer syntheticFloor,
+                               @Nullable Double currentElevation,
+                               @Nullable Double deltaHeight,
+                               boolean heightChanged) {
+        setReplayFrameContext(syntheticFloor, currentElevation, deltaHeight, heightChanged, null);
+    }
+
+    void setReplayFrameContext(@Nullable Integer syntheticFloor,
+                               @Nullable Double currentElevation,
+                               @Nullable Double deltaHeight,
+                               boolean heightChanged,
+                               @Nullable Integer initialFloor) {
+        replaySyntheticFloor = syntheticFloor;
+        replayCurrentElevation = currentElevation;
+        replayDeltaHeight = deltaHeight;
+        replayHeightChanged = heightChanged;
+        if (initialFloor != null && (replayInitialFloor == null || !initialFloor.equals(replayInitialFloor))) {
+            replayBaseFloorIndex = null;
+            replayDisplayFloorInitialized = false;
+        }
+        replayInitialFloor = initialFloor;
+        maybeInitializeReplayDisplayFloor();
+        Log.d(host.getTag(), String.format(Locale.US,
+                "Replay frame context initialFloor=%s syntheticFloor=%s elevation=%s deltaHeight=%s heightChanged=%s",
+                String.valueOf(initialFloor),
+                String.valueOf(syntheticFloor),
+                String.valueOf(currentElevation),
+                String.valueOf(deltaHeight),
+                String.valueOf(heightChanged)));
+    }
+
+    void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+        if (host.getGoogleMap() == null) {
+            return;
+        }
+
+        LatLng rawLocation = newLocation;
+        host.getTrajectoryRenderer().appendRawReplayPoint(rawLocation);
+
+        long timestampMs = SystemClock.elapsedRealtime();
+        int replayCandidateFloorIndex = resolveReplayCandidateFloorIndex();
+        FloorplanApiClient.FloorShapes activeFloorShapes = getActiveFloorShapesForMatching();
+        CandidatePose currentCandidatePose = new CandidatePose(
+                rawLocation,
+                replayCandidateFloorIndex,
+                timestampMs,
+                "replay_pdr"
+        );
+
+        MotionDelta motionDelta = buildMotionDelta(previousMatchedPose, rawLocation, orientation);
+        VerticalTransitionHint verticalHint = buildReplayVerticalHint();
+        FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
+        String activeBuildingId = selectedBuilding != null
+                ? host.resolveKnownBuildingKey(selectedBuilding, selectedBuilding.getName())
+                : null;
+
+        MapMatchingInput matchingInput = new MapMatchingInput(
+                previousMatchedPose,
+                currentCandidatePose,
+                motionDelta,
+                verticalHint,
+                activeFloorShapes,
+                activeBuildingId
+        );
+
+        MapMatchingResult matchingResult = mapMatchingService.match(matchingInput);
+        LatLng matchedLocation = matchingResult.getCorrectedLatLng() != null
+                ? matchingResult.getCorrectedLatLng()
+                : rawLocation;
+        int matchedFloor = matchingResult.getCorrectedFloor();
+
+        logFeatureValidation(rawLocation, matchingResult);
+        Log.d(host.getTestLogTag(), String.format(Locale.US,
+                "raw=(%.6f, %.6f) matched=(%.6f, %.6f) floor=%d correction=%s reason=%s",
+                rawLocation.latitude,
+                rawLocation.longitude,
+                matchedLocation.latitude,
+                matchedLocation.longitude,
+                matchedFloor,
+                matchingResult.getCorrectionType() != null
+                        ? matchingResult.getCorrectionType().name()
+                        : CorrectionType.NONE.name(),
+                matchingResult.getDebugReason()));
+
+        LatLng oldLocation = host.getCurrentLocation();
+        host.setCurrentLocation(matchedLocation);
+        previousMatchedPose = new CandidatePose(
+                matchedLocation,
+                matchedFloor,
+                timestampMs,
+                "map_matched"
+        );
+        applyReplayMatchedFloorIfNeeded(matchedFloor);
+
+        boolean shouldFollowCamera = host.isReplayModeEnabled();
+        float savedZoom = 19f;
+        Context context = host.requireContext();
+        savedZoom = context.getSharedPreferences("MapCameraState", Context.MODE_PRIVATE)
+                .getFloat("user_selected_zoom", 19f);
+
+        host.getTrajectoryRenderer().updateCurrentPosition(context, matchedLocation, orientation, shouldFollowCamera, savedZoom);
+        host.getTrajectoryRenderer().appendMatchedLocation(oldLocation, matchedLocation);
+
+        IndoorMapManager indoorMapManager = host.getIndoorMapManager();
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(matchedLocation);
+        }
+
+        host.maybeFetchNearbyBuildingsOnFirstLocation();
+        if (!host.hasAutoSelectedIndoorMap() && !host.getLastFetchedBuildings().isEmpty()) {
+            host.maybeAutoSelectIndoorMap(host.getLastFetchedBuildings());
+        }
+    }
+
+    void resetMapMatchingState() {
+        previousMatchedPose = null;
+        host.getTrajectoryRenderer().clearRawReplayPath();
+    }
+
+    @Nullable
+    private FloorplanApiClient.FloorShapes getActiveFloorShapesForMatching() {
+        FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
+        if (selectedBuilding == null
+                || selectedBuilding.getFloorShapesList() == null
+                || selectedBuilding.getFloorShapesList().isEmpty()) {
+            return null;
+        }
+
+        maybeInitializeReplayDisplayFloor();
+
+        int floorIndexForMatching = host.getCurrentFloorIndex();
+        if (host.isReplayModeEnabled() && replayInitialFloor != null) {
+            floorIndexForMatching = resolveReplayCandidateFloorIndex();
+        }
+
+        int safeFloorIndex = Math.max(0, Math.min(floorIndexForMatching, selectedBuilding.getFloorShapesList().size() - 1));
+        return selectedBuilding.getFloorShapesList().get(safeFloorIndex);
+    }
+
+    @Nullable
+    private MotionDelta buildMotionDelta(@Nullable CandidatePose previousPose,
+                                         @NonNull LatLng rawLocation,
+                                         float orientation) {
+        if (previousPose == null) {
+            return null;
+        }
+
+        float[] results = new float[1];
+        Location.distanceBetween(
+                previousPose.getLatLng().latitude,
+                previousPose.getLatLng().longitude,
+                rawLocation.latitude,
+                rawLocation.longitude,
+                results
+        );
+
+        double deltaX = rawLocation.longitude - previousPose.getLatLng().longitude;
+        double deltaY = rawLocation.latitude - previousPose.getLatLng().latitude;
+        return new MotionDelta(deltaX, deltaY, results[0], orientation);
+    }
+
+    @Nullable
+    private VerticalTransitionHint buildReplayVerticalHint() {
+        if (!host.isReplayModeEnabled()) {
+            return null;
+        }
+        if (replayCurrentElevation == null && replayDeltaHeight == null && !replayHeightChanged) {
+            return null;
+        }
+
+        double currentElevation = replayCurrentElevation != null ? replayCurrentElevation : 0d;
+        double deltaHeight = replayDeltaHeight != null ? replayDeltaHeight : 0d;
+        return new VerticalTransitionHint(currentElevation, deltaHeight, replayHeightChanged);
+    }
+
+    private int resolveReplayCandidateFloorIndex() {
+        Integer baseFloorIndex = resolveReplayBaseFloorIndex();
+        if (!host.isReplayModeEnabled() || baseFloorIndex == null || host.getSelectedFloorplanBuilding() == null) {
+            return host.getCurrentFloorIndex();
+        }
+
+        List<Integer> orderedFloorIndices = host.getOrderedFloorIndices(host.getSelectedFloorplanBuilding());
+        if (orderedFloorIndices.isEmpty()) {
+            return baseFloorIndex;
+        }
+
+        int basePosition = orderedFloorIndices.indexOf(baseFloorIndex);
+        if (basePosition < 0) {
+            return baseFloorIndex;
+        }
+
+        int relativeFloorOffset = 0;
+        if (replaySyntheticFloor != null && hasReplayVerticalEvidence()) {
+            relativeFloorOffset = replaySyntheticFloor;
+        }
+
+        int targetPosition = Math.max(0, Math.min(basePosition + relativeFloorOffset, orderedFloorIndices.size() - 1));
+        return orderedFloorIndices.get(targetPosition);
+    }
+
+    @Nullable
+    private Integer resolveReplayBaseFloorIndex() {
+        FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
+        if (!host.isReplayModeEnabled() || selectedBuilding == null) {
+            return null;
+        }
+        if (replayBaseFloorIndex != null) {
+            int maxFloor = Math.max(0, selectedBuilding.getFloorShapesList().size() - 1);
+            return Math.max(0, Math.min(replayBaseFloorIndex, maxFloor));
+        }
+        if (replayInitialFloor == null) {
+            replayBaseFloorIndex = host.getCurrentFloorIndex();
+            return replayBaseFloorIndex;
+        }
+
+        String desiredFloorLabel;
+        if (replayInitialFloor < 0) {
+            desiredFloorLabel = "LG";
+        } else if (replayInitialFloor == 0) {
+            desiredFloorLabel = "G";
+        } else {
+            desiredFloorLabel = String.valueOf(replayInitialFloor);
+        }
+
+        for (int i = 0; i < selectedBuilding.getFloorShapesList().size(); i++) {
+            String candidateLabel = host.canonicalFloorLabel(selectedBuilding.getFloorShapesList().get(i).getDisplayName());
+            if (desiredFloorLabel.equals(candidateLabel)) {
+                replayBaseFloorIndex = i;
+                return replayBaseFloorIndex;
+            }
+        }
+
+        replayBaseFloorIndex = host.getCurrentFloorIndex();
+        return replayBaseFloorIndex;
+    }
+
+    private boolean hasReplayVerticalEvidence() {
+        if (!host.isReplayModeEnabled()) {
+            return false;
+        }
+        if (replayHeightChanged) {
+            return true;
+        }
+        if (replayDeltaHeight != null && Math.abs(replayDeltaHeight) >= 0.35d) {
+            return true;
+        }
+        if (replayCurrentElevation != null && Math.abs(replayCurrentElevation) >= 0.35d) {
+            return true;
+        }
+        return false;
+    }
+
+    private void maybeInitializeReplayDisplayFloor() {
+        FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
+        IndoorMapManager indoorMapManager = host.getIndoorMapManager();
+        if (!host.isReplayModeEnabled() || replayDisplayFloorInitialized || selectedBuilding == null || indoorMapManager == null) {
+            return;
+        }
+        Integer baseFloorIndex = resolveReplayBaseFloorIndex();
+        if (baseFloorIndex == null) {
+            return;
+        }
+        indoorMapManager.setSelectedBuilding(selectedBuilding);
+        host.setFloor(baseFloorIndex);
+        replayDisplayFloorInitialized = true;
+        Log.d(host.getTag(), "Initialized replay display floor index=" + baseFloorIndex);
+
+        if (previousMatchedPose != null && previousMatchedPose.getFloor() != baseFloorIndex) {
+            previousMatchedPose = new CandidatePose(
+                    previousMatchedPose.getLatLng(),
+                    baseFloorIndex,
+                    previousMatchedPose.getTimestampMs(),
+                    "map_matched"
+            );
+        }
+    }
+
+    private void applyReplayMatchedFloorIfNeeded(int matchedFloorIndex) {
+        FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
+        IndoorMapManager indoorMapManager = host.getIndoorMapManager();
+        if (selectedBuilding == null || indoorMapManager == null) {
+            return;
+        }
+
+        if (!host.isReplayModeEnabled() && !host.isAutoFloorEnabled()) {
+            return;
+        }
+
+        int maxFloor = Math.max(0, selectedBuilding.getFloorShapesList().size() - 1);
+        int clampedFloor = Math.max(0, Math.min(matchedFloorIndex, maxFloor));
+
+        if (host.isReplayModeEnabled() && !hasReplayVerticalEvidence()) {
+            if (previousMatchedPose != null) {
+                clampedFloor = previousMatchedPose.getFloor();
+            } else {
+                Integer baseFloorIndex = resolveReplayBaseFloorIndex();
+                if (baseFloorIndex != null) {
+                    clampedFloor = baseFloorIndex;
+                }
+            }
+        }
+
+        if (clampedFloor == host.getCurrentFloorIndex()) {
+            return;
+        }
+        indoorMapManager.setSelectedBuilding(selectedBuilding);
+        host.setFloor(clampedFloor);
+    }
+
+    @NonNull
+    private String classifyMapMatchingScenario(@Nullable MapMatchingResult result) {
+        if (result == null) {
+            return "UNKNOWN";
+        }
+
+        String reason = result.getDebugReason() == null ? "" : result.getDebugReason().toLowerCase(Locale.US);
+        CorrectionType correctionType = result.getCorrectionType();
+
+        if (correctionType == CorrectionType.THROUGH_WALL || result.isCrossedWall()) {
+            return "03_cross_wall_reject";
+        }
+        if (correctionType == CorrectionType.INVALID_FLOOR_CHANGE) {
+            return "04_false_floor_change_reject";
+        }
+        if (result.isFloorChangeAllowed() && result.isNearStairs() && !result.isNearLift()) {
+            return "05_stairs_floor_change_allow";
+        }
+        if (result.isFloorChangeAllowed() && result.isNearLift() && !result.isNearStairs()) {
+            return "06_lift_floor_change_allow";
+        }
+        if (reason.contains("step distance too small")) {
+            return "02_small_step_skip_wall_check";
+        }
+        return "01_same_floor_accept";
+    }
+
+    private void logFeatureValidation(@NonNull LatLng rawLocation, @Nullable MapMatchingResult result) {
+        if (result == null) {
+            return;
+        }
+
+        LatLng matched = result.getCorrectedLatLng() != null ? result.getCorrectedLatLng() : rawLocation;
+        String scenario = classifyMapMatchingScenario(result);
+        Log.d(host.getTestLogTag(), String.format(Locale.US,
+                "SCENARIO=%s raw=(%.6f, %.6f) matched=(%.6f, %.6f) matchedFloor=%d crossedWall=%s nearStairs=%s nearLift=%s floorAllowed=%s correction=%s reason=%s",
+                scenario,
+                rawLocation.latitude, rawLocation.longitude,
+                matched.latitude, matched.longitude,
+                result.getCorrectedFloor(),
+                String.valueOf(result.isCrossedWall()),
+                String.valueOf(result.isNearStairs()),
+                String.valueOf(result.isNearLift()),
+                String.valueOf(result.isFloorChangeAllowed()),
+                result.getCorrectionType() != null ? result.getCorrectionType().name() : CorrectionType.NONE.name(),
+                result.getDebugReason()));
+    }
+}
