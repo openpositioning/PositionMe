@@ -107,13 +107,36 @@ public class RegisterFragment extends Fragment implements Observer {
             return;
         }
 
+        // Disable UI to prevent multiple registration attempts
+        enableUIElements(false);
+
         serverCommunications.registerUserDetails(username, email, password);
+    }
+
+    /**
+     * Enable or disable all registration UI elements to prevent users from modifying data while the
+     * server and/or app is processing it
+     *
+     * <p>This must be called from the main thread.
+     *
+     * @param state True to enable UI elements; False to disable
+     */
+    private void enableUIElements(boolean state) {
+        registerButton.setEnabled(state);
+        usernameEditText.setEnabled(state);
+        emailEditText.setEnabled(state);
+        passwordEditText.setEnabled(state);
+        passwordCheckEditText.setEnabled(state);
+        textLogInHere.setClickable(state);
     }
 
     @Override
     public void update(Object[] objList) {
         boolean success = (boolean) objList[0];
-        if (!success) return;
+        if (!success) {
+            new Handler(Looper.getMainLooper()).post(() -> enableUIElements(true));
+            return;
+        }
 
         try {
             new Handler(Looper.getMainLooper())

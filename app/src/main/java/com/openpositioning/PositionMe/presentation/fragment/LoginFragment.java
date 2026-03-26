@@ -137,6 +137,9 @@ public class LoginFragment extends Fragment implements Observer {
             loginManager.saveLoginToDevice(email, password);
         }
 
+        // Disable UI to prevent multiple login attempts
+        enableUIElements(false);
+
         serverCommunications.logInUser(email, password);
     }
 
@@ -163,6 +166,22 @@ public class LoginFragment extends Fragment implements Observer {
     }
 
     /**
+     * Enable or disable all login UI elements to prevent users from modifying data while the server
+     * and/or app is processing it
+     *
+     * <p>This must be called from the main thread.
+     *
+     * @param state True to enable UI elements; False to disable
+     */
+    private void enableUIElements(boolean state) {
+        loginButton.setEnabled(state);
+        checkboxSavePassword.setEnabled(state);
+        emailEditText.setEnabled(state);
+        passwordEditText.setEnabled(state);
+        textRegisterHere.setClickable(state);
+    }
+
+    /**
      * {@inheritDoc}
      *
      * <p>Calls for the user's username and API key to be extracted from the server's response
@@ -172,7 +191,12 @@ public class LoginFragment extends Fragment implements Observer {
     public void update(Object[] objList) {
         boolean success = (boolean) objList[0];
         String infoString = objList[1].toString();
-        if (!success) return;
+
+        // Re-enable login button on failure
+        if (!success) {
+            new Handler(Looper.getMainLooper()).post(() -> enableUIElements(true));
+            return;
+        }
 
         try {
             Map<String, String> userData = extractDataFromResponse(infoString);
