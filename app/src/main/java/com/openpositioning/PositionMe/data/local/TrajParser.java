@@ -4,6 +4,8 @@ import android.content.Context;
 import android.hardware.SensorManager;
 import android.util.Log;
 
+import androidx.annotation.Nullable;
+
 import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -12,26 +14,24 @@ import com.google.gson.JsonParser;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
-import java.io.File;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * Handles parsing of trajectory data stored in JSON files, combining IMU, PDR, GNSS, and pressure data
- * to reconstruct motion paths for replay.
+ * Handles parsing of trajectory data stored in JSON files, combining IMU, PDR, GNSS and
+ * optional barometer data to reconstruct replay motion paths.
  */
 public class TrajParser {
 
     private static final String TAG = "TrajParser";
-    private static final double SEA_LEVEL_PRESSURE_HPA = 1013.25d;
-    // 原始 replay 没有 building-specific floorHeight 时，先用保守默认值。
-    // 这样法国原始轨迹至少能在 replay 里看到“不是永远锁在基层”的楼层切换。
     private static final double DEFAULT_REPLAY_FLOOR_HEIGHT_METERS = 4.0d;
-    private static final double HEIGHT_CHANGE_THRESHOLD_METERS = 0.35d;
+    private static final double REPLAY_HEIGHT_CHANGED_THRESHOLD_METERS = 1.6d;
 
     public static class ReplayPoint {
         public LatLng pdrLocation;
@@ -69,39 +69,41 @@ public class TrajParser {
     }
 
     private static class ImuRecord {
-        public long relativeTimestamp;
-        public float rotationVectorX;
-        public float rotationVectorY;
-        public float rotationVectorZ;
-        public float rotationVectorW;
+        long relativeTimestamp;
+        float rotationVectorX, rotationVectorY, rotationVectorZ, rotationVectorW;
     }
 
     private static class PdrRecord {
-        public long relativeTimestamp;
-        public float x;
-        public float y;
-        public Integer syntheticFloor;
-        public Double currentElevation;
-        public Double deltaHeight;
-        public Boolean heightChanged;
-    }
-
-    private static class PressureRecord {
-        public long relativeTimestamp;
-        public double pressureHpa;
+        long relativeTimestamp;
+        float x, y;
+        Integer syntheticFloor;
+        Double currentElevation;
+        Double deltaHeight;
+        Boolean heightChanged;
     }
 
     private static class GnssRecord {
-        public long relativeTimestamp;
-        public double latitude;
-        public double longitude;
+        long relativeTimestamp;
+        double latitude, longitude;
     }
 
-    private static class VerticalReplayState {
-        public Integer syntheticFloor;
-        public Double currentElevation;
-        public Double deltaHeight;
-        public boolean heightChanged;
+    private static class PressureRecord {
+        long relativeTimestamp;
+        double pressureHpa;
+    }
+
+    private static class VerticalEstimate {
+        final double currentElevation;
+        final double deltaHeight;
+        final boolean heightChanged;
+        final int syntheticFloor;
+
+        VerticalEstimate(double currentElevation, double deltaHeight, boolean heightChanged, int syntheticFloor) {
+            this.currentElevation = currentElevation;
+            this.deltaHeight = deltaHeight;
+            this.heightChanged = heightChanged;
+            this.syntheticFloor = syntheticFloor;
+        }
     }
 
     public static List<ReplayPoint> parseTrajectoryData(String filePath, Context context,
@@ -120,13 +122,10 @@ public class TrajParser {
             }
 
             JsonObject root = readJsonObject(file);
-            if (root == null) {
-                Log.e(TAG, "Failed to parse root JSON object for file: " + filePath);
-                return result;
-            }
+            Log.i(TAG, "Successfully read trajectory file: " + filePath);
 
             Integer initialFloor = root.has("initialFloor") && !root.get("initialFloor").isJsonNull()
-                    ? safeGetInt(root, "initialFloor")
+                    ? safeGetInt(root.get("initialFloor"), null)
                     : null;
 
             List<ImuRecord> imuList = parseImuData(root.getAsJsonArray("imuData"));
@@ -134,33 +133,33 @@ public class TrajParser {
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
             List<PressureRecord> pressureList = parsePressureData(root.getAsJsonArray("pressureData"));
 
-            Log.i(TAG, "Parsed data - IMU: " + imuList.size()
-                    + " records, PDR: " + pdrList.size()
-                    + " records, GNSS: " + gnssList.size()
-                    + " records, Pressure: " + pressureList.size() + " records");
+            Log.i(TAG, String.format(Locale.US,
+                    "Parsed data - IMU=%d PDR=%d GNSS=%d Pressure=%d",
+                    imuList.size(), pdrList.size(), gnssList.size(), pressureList.size()));
 
-            double referenceAltitude = Double.NaN;
-            Double previousElevation = null;
-            Integer previousSyntheticFloor = null;
-            if (!pdrList.isEmpty() && !pressureList.isEmpty()) {
-                PressureRecord basePressure = findClosestPressureRecord(pressureList, pdrList.get(0).relativeTimestamp);
-                if (basePressure != null) {
-                    referenceAltitude = pressureToAltitudeMeters(basePressure.pressureHpa);
-                }
+            if (pdrList.isEmpty()) {
+                return result;
             }
+
+            long replayReferenceTimestamp = pdrList.get(0).relativeTimestamp;
+            PressureRecord replayReferencePressure = findClosestPressureRecord(pressureList, replayReferenceTimestamp);
+            Double baseElevation = replayReferencePressure != null
+                    ? pressureToRelativeElevationMeters(replayReferencePressure.pressureHpa,
+                    replayReferencePressure.pressureHpa)
+                    : null;
+            double floorHeightMeters = DEFAULT_REPLAY_FLOOR_HEIGHT_METERS;
 
             for (int i = 0; i < pdrList.size(); i++) {
                 PdrRecord pdr = pdrList.get(i);
 
                 ImuRecord closestImu = findClosestImuRecord(imuList, pdr.relativeTimestamp);
-                float orientationDeg = closestImu != null
-                        ? computeOrientationFromRotationVector(
+                float orientationDeg = closestImu != null ? computeOrientationFromRotationVector(
                         closestImu.rotationVectorX,
                         closestImu.rotationVectorY,
                         closestImu.rotationVectorZ,
                         closestImu.rotationVectorW,
-                        context)
-                        : 0f;
+                        context
+                ) : 0f;
 
                 float speed = 0f;
                 if (i > 0) {
@@ -183,27 +182,30 @@ public class TrajParser {
                         ? new LatLng(closestGnss.latitude, closestGnss.longitude)
                         : null;
 
-                VerticalReplayState verticalState;
-                if (hasEmbeddedReplayVerticalFields(pdr)) {
-                    verticalState = new VerticalReplayState();
-                    verticalState.syntheticFloor = pdr.syntheticFloor;
-                    verticalState.currentElevation = pdr.currentElevation;
-                    verticalState.deltaHeight = pdr.deltaHeight;
-                    verticalState.heightChanged = Boolean.TRUE.equals(pdr.heightChanged);
-                } else {
-                    verticalState = deriveVerticalStateFromPressure(
-                            pressureList,
-                            pdr.relativeTimestamp,
-                            referenceAltitude,
-                            previousElevation,
-                            previousSyntheticFloor);
-                }
+                Integer syntheticFloor = pdr.syntheticFloor;
+                Double currentElevation = pdr.currentElevation;
+                Double deltaHeight = pdr.deltaHeight;
+                boolean heightChanged = Boolean.TRUE.equals(pdr.heightChanged);
 
-                if (verticalState.currentElevation != null) {
-                    previousElevation = verticalState.currentElevation;
-                }
-                if (verticalState.syntheticFloor != null) {
-                    previousSyntheticFloor = verticalState.syntheticFloor;
+                if (syntheticFloor == null || currentElevation == null || deltaHeight == null || !heightChanged) {
+                    VerticalEstimate estimate = buildVerticalEstimate(
+                            pressureList,
+                            replayReferencePressure,
+                            pdr.relativeTimestamp,
+                            floorHeightMeters
+                    );
+                    if (syntheticFloor == null) {
+                        syntheticFloor = estimate.syntheticFloor;
+                    }
+                    if (currentElevation == null) {
+                        currentElevation = estimate.currentElevation;
+                    }
+                    if (deltaHeight == null) {
+                        deltaHeight = estimate.deltaHeight;
+                    }
+                    if (!heightChanged) {
+                        heightChanged = estimate.heightChanged;
+                    }
                 }
 
                 result.add(new ReplayPoint(
@@ -212,10 +214,10 @@ public class TrajParser {
                         orientationDeg,
                         speed,
                         pdr.relativeTimestamp,
-                        verticalState.syntheticFloor,
-                        verticalState.currentElevation,
-                        verticalState.deltaHeight,
-                        verticalState.heightChanged,
+                        syntheticFloor,
+                        currentElevation,
+                        deltaHeight,
+                        heightChanged,
                         initialFloor
                 ));
             }
@@ -238,15 +240,16 @@ public class TrajParser {
                 sb.append(line).append('\n');
             }
         }
+
         String raw = sb.toString();
         int firstBrace = raw.indexOf('{');
         if (firstBrace > 0) {
             raw = raw.substring(firstBrace);
         }
-        return new JsonParser().parse(raw).getAsJsonObject();
+        return JsonParser.parseString(raw).getAsJsonObject();
     }
 
-    private static List<ImuRecord> parseImuData(JsonArray imuArray) {
+    private static List<ImuRecord> parseImuData(@Nullable JsonArray imuArray) {
         List<ImuRecord> imuList = new ArrayList<>();
         if (imuArray == null) {
             return imuList;
@@ -258,23 +261,24 @@ public class TrajParser {
             }
             JsonObject obj = element.getAsJsonObject();
             ImuRecord record = new ImuRecord();
-            record.relativeTimestamp = safeGetLong(obj, "relativeTimestamp");
+            record.relativeTimestamp = safeGetLong(obj.get("relativeTimestamp"), 0L);
 
-            JsonObject rotationVector = obj.has("rotationVector") && obj.get("rotationVector").isJsonObject()
-                    ? obj.getAsJsonObject("rotationVector")
-                    : null;
-            if (rotationVector != null) {
-                record.rotationVectorX = safeGetFloat(rotationVector, "x");
-                record.rotationVectorY = safeGetFloat(rotationVector, "y");
-                record.rotationVectorZ = safeGetFloat(rotationVector, "z");
-                record.rotationVectorW = safeGetFloat(rotationVector, "w");
+            JsonObject rv = obj.has("rotationVector") && obj.get("rotationVector").isJsonObject()
+                    ? obj.getAsJsonObject("rotationVector") : null;
+            if (rv != null) {
+                record.rotationVectorX = safeGetFloat(rv.get("x"), 0f);
+                record.rotationVectorY = safeGetFloat(rv.get("y"), 0f);
+                record.rotationVectorZ = safeGetFloat(rv.get("z"), 0f);
+                record.rotationVectorW = safeGetFloat(rv.get("w"), 1f);
+            } else {
+                record.rotationVectorW = 1f;
             }
             imuList.add(record);
         }
         return imuList;
     }
 
-    private static List<PdrRecord> parsePdrData(JsonArray pdrArray) {
+    private static List<PdrRecord> parsePdrData(@Nullable JsonArray pdrArray) {
         List<PdrRecord> pdrList = new ArrayList<>();
         if (pdrArray == null) {
             return pdrList;
@@ -286,49 +290,19 @@ public class TrajParser {
             }
             JsonObject obj = element.getAsJsonObject();
             PdrRecord record = new PdrRecord();
-            record.relativeTimestamp = safeGetLong(obj, "relativeTimestamp");
-            record.x = safeGetFloat(obj, "x");
-            record.y = safeGetFloat(obj, "y");
-            record.syntheticFloor = obj.has("syntheticFloor") && !obj.get("syntheticFloor").isJsonNull()
-                    ? safeGetInt(obj, "syntheticFloor")
-                    : null;
-            record.currentElevation = obj.has("currentElevation") && !obj.get("currentElevation").isJsonNull()
-                    ? safeGetDouble(obj, "currentElevation")
-                    : null;
-            record.deltaHeight = obj.has("deltaHeight") && !obj.get("deltaHeight").isJsonNull()
-                    ? safeGetDouble(obj, "deltaHeight")
-                    : null;
-            record.heightChanged = obj.has("heightChanged") && !obj.get("heightChanged").isJsonNull()
-                    ? obj.get("heightChanged").getAsBoolean()
-                    : null;
+            record.relativeTimestamp = safeGetLong(obj.get("relativeTimestamp"), 0L);
+            record.x = safeGetFloat(obj.get("x"), 0f);
+            record.y = safeGetFloat(obj.get("y"), 0f);
+            record.syntheticFloor = safeGetInt(obj.get("syntheticFloor"), null);
+            record.currentElevation = safeGetDoubleObj(obj.get("currentElevation"));
+            record.deltaHeight = safeGetDoubleObj(obj.get("deltaHeight"));
+            record.heightChanged = safeGetBoolean(obj.get("heightChanged"), null);
             pdrList.add(record);
         }
         return pdrList;
     }
 
-    private static List<PressureRecord> parsePressureData(JsonArray pressureArray) {
-        List<PressureRecord> pressureList = new ArrayList<>();
-        if (pressureArray == null) {
-            return pressureList;
-        }
-
-        for (JsonElement element : pressureArray) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
-            JsonObject obj = element.getAsJsonObject();
-            if (!obj.has("pressure") || obj.get("pressure").isJsonNull()) {
-                continue;
-            }
-            PressureRecord record = new PressureRecord();
-            record.relativeTimestamp = safeGetLong(obj, "relativeTimestamp");
-            record.pressureHpa = safeGetDouble(obj, "pressure");
-            pressureList.add(record);
-        }
-        return pressureList;
-    }
-
-    private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
+    private static List<GnssRecord> parseGnssData(@Nullable JsonArray gnssArray) {
         List<GnssRecord> gnssList = new ArrayList<>();
         if (gnssArray == null) {
             return gnssList;
@@ -340,107 +314,82 @@ public class TrajParser {
             }
             JsonObject obj = element.getAsJsonObject();
             JsonObject position = obj.has("position") && obj.get("position").isJsonObject()
-                    ? obj.getAsJsonObject("position")
-                    : obj;
-
-            if (!position.has("latitude") || !position.has("longitude")) {
-                continue;
-            }
+                    ? obj.getAsJsonObject("position") : obj;
 
             GnssRecord record = new GnssRecord();
-            record.relativeTimestamp = safeGetLong(position, "relativeTimestamp");
-            record.latitude = safeGetDouble(position, "latitude");
-            record.longitude = safeGetDouble(position, "longitude");
+            record.relativeTimestamp = safeGetLong(position.get("relativeTimestamp"), 0L);
+            record.latitude = safeGetDouble(position.get("latitude"), 0d);
+            record.longitude = safeGetDouble(position.get("longitude"), 0d);
             gnssList.add(record);
         }
         return gnssList;
     }
 
-    private static boolean hasEmbeddedReplayVerticalFields(PdrRecord pdr) {
-        return pdr.syntheticFloor != null
-                || pdr.currentElevation != null
-                || pdr.deltaHeight != null
-                || Boolean.TRUE.equals(pdr.heightChanged);
-    }
-
-    private static VerticalReplayState deriveVerticalStateFromPressure(List<PressureRecord> pressureList,
-                                                                       long targetTimestamp,
-                                                                       double referenceAltitude,
-                                                                       Double previousElevation,
-                                                                       Integer previousSyntheticFloor) {
-        VerticalReplayState state = new VerticalReplayState();
-        if (pressureList == null || pressureList.isEmpty() || Double.isNaN(referenceAltitude)) {
-            return state;
+    private static List<PressureRecord> parsePressureData(@Nullable JsonArray pressureArray) {
+        List<PressureRecord> pressureList = new ArrayList<>();
+        if (pressureArray == null) {
+            return pressureList;
         }
 
-        PressureRecord pressureRecord = findClosestPressureRecord(pressureList, targetTimestamp);
-        if (pressureRecord == null) {
-            return state;
+        for (JsonElement element : pressureArray) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject obj = element.getAsJsonObject();
+            PressureRecord record = new PressureRecord();
+            record.relativeTimestamp = safeGetLong(obj.get("relativeTimestamp"), 0L);
+            record.pressureHpa = safeGetDouble(obj.get("pressure"), Double.NaN);
+            if (!Double.isNaN(record.pressureHpa) && record.pressureHpa > 0d) {
+                pressureList.add(record);
+            }
+        }
+        return pressureList;
+    }
+
+    private static VerticalEstimate buildVerticalEstimate(List<PressureRecord> pressureList,
+                                                          @Nullable PressureRecord basePressure,
+                                                          long targetTimestamp,
+                                                          double floorHeightMeters) {
+        if (pressureList == null || pressureList.isEmpty() || basePressure == null) {
+            return new VerticalEstimate(0d, 0d, false, 0);
         }
 
-        double altitude = pressureToAltitudeMeters(pressureRecord.pressureHpa);
-        double currentElevation = altitude - referenceAltitude;
-        double deltaHeight = previousElevation == null ? 0d : currentElevation - previousElevation;
-        int syntheticFloor = (int) Math.round(currentElevation / DEFAULT_REPLAY_FLOOR_HEIGHT_METERS);
+        PressureRecord closest = findClosestPressureRecord(pressureList, targetTimestamp);
+        if (closest == null) {
+            return new VerticalEstimate(0d, 0d, false, 0);
+        }
 
-        state.currentElevation = currentElevation;
-        state.deltaHeight = deltaHeight;
-        state.syntheticFloor = syntheticFloor;
-        state.heightChanged = Math.abs(deltaHeight) >= HEIGHT_CHANGE_THRESHOLD_METERS
-                || (previousSyntheticFloor != null && syntheticFloor != previousSyntheticFloor);
-        return state;
+        double currentElevation = pressureToRelativeElevationMeters(basePressure.pressureHpa, closest.pressureHpa);
+        double deltaHeight = currentElevation;
+        boolean heightChanged = Math.abs(deltaHeight) >= REPLAY_HEIGHT_CHANGED_THRESHOLD_METERS;
+        int syntheticFloor = (int) Math.round(deltaHeight / floorHeightMeters);
+
+        return new VerticalEstimate(currentElevation, deltaHeight, heightChanged, syntheticFloor);
     }
 
-    private static double pressureToAltitudeMeters(double pressureHpa) {
-        return 44330.0d * (1.0d - Math.pow(pressureHpa / SEA_LEVEL_PRESSURE_HPA, 0.1903d));
+    private static double pressureToRelativeElevationMeters(double basePressureHpa, double currentPressureHpa) {
+        return 44330.0d * (1.0d - Math.pow(currentPressureHpa / basePressureHpa, 0.1903d));
     }
 
+    @Nullable
     private static ImuRecord findClosestImuRecord(List<ImuRecord> imuList, long targetTimestamp) {
-        if (imuList == null || imuList.isEmpty()) {
-            return null;
-        }
-        ImuRecord closest = null;
-        long bestDistance = Long.MAX_VALUE;
-        for (ImuRecord imu : imuList) {
-            long distance = Math.abs(imu.relativeTimestamp - targetTimestamp);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                closest = imu;
-            }
-        }
-        return closest;
+        return imuList.stream()
+                .min(Comparator.comparingLong(imu -> Math.abs(imu.relativeTimestamp - targetTimestamp)))
+                .orElse(null);
     }
 
+    @Nullable
     private static GnssRecord findClosestGnssRecord(List<GnssRecord> gnssList, long targetTimestamp) {
-        if (gnssList == null || gnssList.isEmpty()) {
-            return null;
-        }
-        GnssRecord closest = null;
-        long bestDistance = Long.MAX_VALUE;
-        for (GnssRecord gnss : gnssList) {
-            long distance = Math.abs(gnss.relativeTimestamp - targetTimestamp);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                closest = gnss;
-            }
-        }
-        return closest;
+        return gnssList.stream()
+                .min(Comparator.comparingLong(gnss -> Math.abs(gnss.relativeTimestamp - targetTimestamp)))
+                .orElse(null);
     }
 
+    @Nullable
     private static PressureRecord findClosestPressureRecord(List<PressureRecord> pressureList, long targetTimestamp) {
-        if (pressureList == null || pressureList.isEmpty()) {
-            return null;
-        }
-        PressureRecord closest = null;
-        long bestDistance = Long.MAX_VALUE;
-        for (PressureRecord record : pressureList) {
-            long distance = Math.abs(record.relativeTimestamp - targetTimestamp);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                closest = record;
-            }
-        }
-        return closest;
+        return pressureList.stream()
+                .min(Comparator.comparingLong(pr -> Math.abs(pr.relativeTimestamp - targetTimestamp)))
+                .orElse(null);
     }
 
     private static float computeOrientationFromRotationVector(float rx, float ry, float rz, float rw, Context context) {
@@ -448,7 +397,6 @@ public class TrajParser {
         float[] rotationMatrix = new float[9];
         float[] orientationAngles = new float[3];
 
-        SensorManager sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
         SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVector);
         SensorManager.getOrientation(rotationMatrix, orientationAngles);
 
@@ -456,35 +404,54 @@ public class TrajParser {
         return azimuthDeg < 0 ? azimuthDeg + 360.0f : azimuthDeg;
     }
 
-    private static long safeGetLong(JsonObject obj, String key) {
+    private static long safeGetLong(@Nullable JsonElement element, long fallback) {
         try {
-            return obj.has(key) && !obj.get(key).isJsonNull() ? obj.get(key).getAsLong() : 0L;
-        } catch (Exception e) {
-            return 0L;
+            return element == null || element.isJsonNull() ? fallback : element.getAsLong();
+        } catch (Exception ignored) {
+            return fallback;
         }
     }
 
-    private static int safeGetInt(JsonObject obj, String key) {
+    private static float safeGetFloat(@Nullable JsonElement element, float fallback) {
         try {
-            return obj.has(key) && !obj.get(key).isJsonNull() ? obj.get(key).getAsInt() : 0;
-        } catch (Exception e) {
-            return 0;
+            return element == null || element.isJsonNull() ? fallback : element.getAsFloat();
+        } catch (Exception ignored) {
+            return fallback;
         }
     }
 
-    private static float safeGetFloat(JsonObject obj, String key) {
+    private static double safeGetDouble(@Nullable JsonElement element, double fallback) {
         try {
-            return obj.has(key) && !obj.get(key).isJsonNull() ? obj.get(key).getAsFloat() : 0f;
-        } catch (Exception e) {
-            return 0f;
+            return element == null || element.isJsonNull() ? fallback : element.getAsDouble();
+        } catch (Exception ignored) {
+            return fallback;
         }
     }
 
-    private static double safeGetDouble(JsonObject obj, String key) {
+    @Nullable
+    private static Double safeGetDoubleObj(@Nullable JsonElement element) {
         try {
-            return obj.has(key) && !obj.get(key).isJsonNull() ? obj.get(key).getAsDouble() : 0d;
-        } catch (Exception e) {
-            return 0d;
+            return element == null || element.isJsonNull() ? null : element.getAsDouble();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    @Nullable
+    private static Integer safeGetInt(@Nullable JsonElement element, @Nullable Integer fallback) {
+        try {
+            return element == null || element.isJsonNull() ? fallback : element.getAsInt();
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
+    @Nullable
+    private static Boolean safeGetBoolean(@Nullable JsonElement element, @Nullable Boolean fallback) {
+        try {
+            return element == null || element.isJsonNull() ? fallback : element.getAsBoolean();
+        } catch (Exception ignored) {
+            return fallback;
         }
     }
 }

@@ -643,7 +643,8 @@ public class TrajectoryMapFragment extends Fragment {
             GroundOverlay overlay = gMap.addGroundOverlay(new GroundOverlayOptions()
                     .image(BitmapDescriptorFactory.fromResource(drawableResId))
                     .positionFromBounds(bounds)
-                    .zIndex(19f));
+                    .transparency(0.18f)
+                    .zIndex(8f));
             if (overlay != null) {
                 realMapOverlays.add(overlay);
             }
@@ -1705,9 +1706,7 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         int relativeFloorOffset = 0;
-        // Replay 里的 syntheticFloor 是“相对起始楼层的偏移”，可以是正数也可以是负数。
-        // 之前这里只接受 > 0，导致“下楼 replay”永远被忽略，轨迹会一直锁在基层。
-        if (replaySyntheticFloor != null && replaySyntheticFloor != 0 && hasReplayVerticalEvidence()) {
+        if (replaySyntheticFloor != null && hasReplayVerticalEvidence()) {
             relativeFloorOffset = replaySyntheticFloor;
         }
 
