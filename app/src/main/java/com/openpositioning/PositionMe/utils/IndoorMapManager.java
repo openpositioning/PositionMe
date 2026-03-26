@@ -13,7 +13,11 @@ import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Manages indoor floor map display for all supported buildings
@@ -59,6 +63,7 @@ public class IndoorMapManager {
     private static final int ROOM_STROKE = Color.argb(210, 33, 150, 243);
     private static final int ROOM_FILL = Color.argb(60, 33, 150, 243);
     private static final int DEFAULT_STROKE = Color.argb(170, 66, 165, 245);
+    private static final Pattern FLOOR_NUMBER_PATTERN = Pattern.compile("-?\\d+");
 
     /**
      * Constructor to set the map instance.
@@ -242,7 +247,7 @@ public class IndoorMapManager {
                 FloorplanApiClient.BuildingInfo building =
                         SensorFusion.getInstance().getFloorplanBuilding(apiName);
                 if (building != null) {
-                    currentFloorShapes = building.getFloorShapesList();
+                    currentFloorShapes = normalizeFloorOrder(building.getFloorShapesList());
                     Log.i(TAG, "Loaded floorplan building=" + apiName
                             + " floors=" + (currentFloorShapes == null ? 0 : currentFloorShapes.size()));
                     if (currentFloorShapes != null) {
@@ -251,6 +256,15 @@ public class IndoorMapManager {
                             Log.d(TAG, "Floor index=" + i + " display=" + floorShapes.getDisplayName()
                                     + " features=" + floorShapes.getFeatures().size());
                         }
+                    }
+                }
+
+                if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
+                    int groundFloorIndex = findFloorIndexForLogicalFloor(0);
+                    if (groundFloorIndex >= 0) {
+                        currentFloor = groundFloorIndex;
+                    } else if (currentFloor < 0 || currentFloor >= currentFloorShapes.size()) {
+                        currentFloor = 0;
                     }
                 }
 
@@ -349,6 +363,79 @@ public class IndoorMapManager {
     private int getFillColor(String indoorType) {
         if ("room".equals(indoorType)) return ROOM_FILL;
         return Color.TRANSPARENT;
+    }
+
+    private List<FloorplanApiClient.FloorShapes> normalizeFloorOrder(
+            List<FloorplanApiClient.FloorShapes> input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+
+        List<FloorplanApiClient.FloorShapes> ordered = new ArrayList<>(input);
+        Collections.sort(ordered, (a, b) -> {
+            Integer floorA = logicalFloorFromDisplayName(a == null ? null : a.getDisplayName());
+            Integer floorB = logicalFloorFromDisplayName(b == null ? null : b.getDisplayName());
+
+            if (floorA != null && floorB != null) {
+                return Integer.compare(floorA, floorB);
+            }
+            if (floorA != null) {
+                return -1;
+            }
+            if (floorB != null) {
+                return 1;
+            }
+            return 0;
+        });
+        return ordered;
+    }
+
+    private int findFloorIndexForLogicalFloor(int logicalFloor) {
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) {
+            return -1;
+        }
+        for (int i = 0; i < currentFloorShapes.size(); i++) {
+            FloorplanApiClient.FloorShapes floorShapes = currentFloorShapes.get(i);
+            Integer candidate = logicalFloorFromDisplayName(
+                    floorShapes == null ? null : floorShapes.getDisplayName());
+            if (candidate != null && candidate == logicalFloor) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private Integer logicalFloorFromDisplayName(String displayName) {
+        if (displayName == null) {
+            return null;
+        }
+
+        String normalized = displayName.trim().toUpperCase(Locale.US).replace(" ", "");
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        if ("LG".equals(normalized) || "L".equals(normalized) || "LOWERGROUND".equals(normalized)) {
+            return -1;
+        }
+        if ("G".equals(normalized) || "GF".equals(normalized)
+                || "GROUND".equals(normalized) || "GROUNDFLOOR".equals(normalized)) {
+            return 0;
+        }
+
+        if (normalized.startsWith("F") || normalized.startsWith("L")) {
+            normalized = normalized.substring(1);
+        }
+
+        Matcher matcher = FLOOR_NUMBER_PATTERN.matcher(normalized);
+        if (matcher.matches()) {
+            try {
+                return Integer.parseInt(normalized);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     /**
