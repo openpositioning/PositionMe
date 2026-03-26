@@ -28,6 +28,9 @@ public class SensorEventHandler {
 
     private static final float ALPHA = 0.8f;
     private static final long LARGE_GAP_THRESHOLD_MS = 500;
+    private static final float FLIP_DETECTION_MIN_DEG = 150f;
+    private static final float FLIP_DETECTION_MAX_DEG = 210f;
+    private static final float FLIP_GYRO_MAX_RAD_PER_SEC = 0.8f;
 
     private final SensorState state;
     private final PdrProcessing pdrProcessing;
@@ -46,6 +49,8 @@ public class SensorEventHandler {
     private float lastPdrX = 0f;
     private float lastPdrY = 0f;
     private boolean hasPdrReference = false;
+    private boolean hasPreviousHeading = false;
+    private float previousHeadingRad = 0f;
 
     /**
      * Creates a new SensorEventHandler.
@@ -153,6 +158,26 @@ public class SensorEventHandler {
                 float[] rotationVectorDCM = new float[9];
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM, state.rotation);
                 SensorManager.getOrientation(rotationVectorDCM, state.orientation);
+
+                float correctedAzimuth = state.orientation[0];
+                if (hasPreviousHeading) {
+                    float deltaDeg = Math.abs((float) Math.toDegrees(
+                            shortestAngularDistance(previousHeadingRad, correctedAzimuth)));
+                    float gyroNorm = (float) Math.sqrt(
+                            state.angularVelocity[0] * state.angularVelocity[0]
+                                    + state.angularVelocity[1] * state.angularVelocity[1]
+                                    + state.angularVelocity[2] * state.angularVelocity[2]);
+
+                    if (deltaDeg >= FLIP_DETECTION_MIN_DEG
+                            && deltaDeg <= FLIP_DETECTION_MAX_DEG
+                            && gyroNorm <= FLIP_GYRO_MAX_RAD_PER_SEC) {
+                        correctedAzimuth = normalizeAngleRad((float) (correctedAzimuth + Math.PI));
+                    }
+                }
+
+                state.orientation[0] = correctedAzimuth;
+                previousHeadingRad = correctedAzimuth;
+                hasPreviousHeading = true;
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
@@ -209,6 +234,20 @@ public class SensorEventHandler {
         }
     }
 
+    private static float normalizeAngleRad(float angle) {
+        while (angle > Math.PI) {
+            angle -= (float) (2.0 * Math.PI);
+        }
+        while (angle <= -Math.PI) {
+            angle += (float) (2.0 * Math.PI);
+        }
+        return angle;
+    }
+
+    private static float shortestAngularDistance(float from, float to) {
+        return normalizeAngleRad(to - from);
+    }
+
     /**
      * Utility function to log the event frequency of each sensor.
      * Call this periodically for debugging purposes.
@@ -230,5 +269,7 @@ public class SensorEventHandler {
         this.hasPdrReference = false;
         this.lastPdrX = 0f;
         this.lastPdrY = 0f;
+        this.hasPreviousHeading = false;
+        this.previousHeadingRad = 0f;
     }
 }
