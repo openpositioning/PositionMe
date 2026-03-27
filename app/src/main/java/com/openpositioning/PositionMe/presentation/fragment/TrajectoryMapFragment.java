@@ -439,6 +439,7 @@ public class TrajectoryMapFragment extends Fragment {
         btnToggleControls = view.findViewById(R.id.btnToggleControls);
         btnToggleLog = view.findViewById(R.id.btnToggleLog);
         debugStatusText = view.findViewById(R.id.debugStatusText);
+        isGnssOn = gnssSwitch != null && gnssSwitch.isChecked();
 
         btnFindIndoorMap = view.findViewById(R.id.btnFindIndoorMap);
         btnFindActualMap = view.findViewById(R.id.btnFindActualMap);
@@ -511,6 +512,7 @@ public class TrajectoryMapFragment extends Fragment {
 
         gnssSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             isGnssOn = isChecked;
+            trajectoryRenderer.setShowGnssObservations(isChecked);
             if (!isChecked) {
                 trajectoryRenderer.clearGnssMarker();
             }
@@ -1554,6 +1556,7 @@ public class TrajectoryMapFragment extends Fragment {
         });
 
         trajectoryRenderer.attachToMap(map);
+        trajectoryRenderer.setShowGnssObservations(gnssSwitch == null || gnssSwitch.isChecked());
         trajectoryRenderer.setShowWifiObservations(showWifiSwitch == null || showWifiSwitch.isChecked());
         trajectoryRenderer.setShowPdrObservations(showPdrSwitch == null || showPdrSwitch.isChecked());
     }
@@ -1689,7 +1692,7 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     public void updateGNSS(@NonNull LatLng gnssLocation) {
-        trajectoryRenderer.updateGnss(gnssLocation, isGnssOn);
+        trajectoryRenderer.updateGnss(gnssLocation);
     }
 
     public void clearGNSS() {

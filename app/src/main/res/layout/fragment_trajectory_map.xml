@@ -60,7 +60,8 @@
                             android:id="@+id/gnssSwitch"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/gnssSwitch" />
+                            android:checked="true"
+                            android:text="Show GNSS" />
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/autoFloor"
@@ -73,14 +74,14 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:checked="true"
-                            android:text="📶 Show WiFi" />
+                            android:text="Show WiFi" />
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/showPdrSwitch"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:checked="true"
-                            android:text="👣 Show PDR" />
+                            android:text="Show PDR" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/lineColorButton"
@@ -132,19 +133,6 @@
                     android:textAllCaps="false"
                     android:textColor="@android:color/white"
                     app:backgroundTint="#455A64" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnCopyLog"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginStart="8dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:minWidth="0dp"
-                    android:text="Copy"
-                    android:textAllCaps="false"
-                    android:textColor="@android:color/white"
-                    app:backgroundTint="#607D8B" />
 
             </LinearLayout>
 

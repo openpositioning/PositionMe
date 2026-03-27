@@ -36,8 +36,11 @@ class TrajectoryRenderer {
     private static final int TRAJECTORY_BLACK_OUTLINE_COLOR = Color.argb(210, 235, 235, 235);
     private static final int RAW_PDR_COLOR = Color.argb(170, 30, 136, 229);
     private static final int WIFI_COLOR = Color.argb(190, 46, 125, 50);
+    private static final int GNSS_COLOR = Color.argb(200, 255, 167, 38);
     private static final float RAW_PDR_WIDTH_PX = 5f;
     private static final float WIFI_WIDTH_PX = 6f;
+    private static final float GNSS_WIDTH_PX = 6f;
+    private static final int MAX_ABSOLUTE_HISTORY_POINTS = 20;
 
     @Nullable
     private GoogleMap map;
@@ -66,6 +69,7 @@ class TrajectoryRenderer {
     private boolean useRedTrajectory = true;
     private boolean showPdrObservations = true;
     private boolean showWifiObservations = true;
+    private boolean showGnssObservations = true;
 
     void attachToMap(@NonNull GoogleMap googleMap) {
         map = googleMap;
@@ -81,12 +85,12 @@ class TrajectoryRenderer {
 
     void setShowWifiObservations(boolean show) {
         showWifiObservations = show;
-        if (wifiPolyline != null) {
-            wifiPolyline.setVisible(show);
-        }
-        if (wifiMarker != null) {
-            wifiMarker.setVisible(show);
-        }
+        applyWifiVisibility();
+    }
+
+    void setShowGnssObservations(boolean show) {
+        showGnssObservations = show;
+        applyGnssVisibility();
     }
 
     void updateCurrentPosition(@NonNull Context context,
@@ -158,7 +162,7 @@ class TrajectoryRenderer {
     }
 
     void updateWifiObservation(@Nullable LatLng wifiLocation) {
-        if (map == null || !showWifiObservations || wifiLocation == null) {
+        if (map == null || wifiLocation == null) {
             return;
         }
 
@@ -167,21 +171,15 @@ class TrajectoryRenderer {
                     .position(wifiLocation)
                     .title("WiFi Position")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
-            lastWifiLocation = wifiLocation;
-            return;
+        } else {
+            wifiMarker.setPosition(wifiLocation);
         }
 
-        wifiMarker.setVisible(true);
-        wifiMarker.setPosition(wifiLocation);
-        if (lastWifiLocation != null && !lastWifiLocation.equals(wifiLocation) && wifiPolyline != null) {
-            List<LatLng> wifiPoints = new ArrayList<>(wifiPolyline.getPoints());
-            wifiPoints.add(wifiLocation);
-            if (wifiPoints.size() > 40) {
-                wifiPoints = new ArrayList<>(wifiPoints.subList(wifiPoints.size() - 40, wifiPoints.size()));
-            }
-            wifiPolyline.setPoints(wifiPoints);
+        if (lastWifiLocation == null || !lastWifiLocation.equals(wifiLocation)) {
+            appendAbsoluteHistoryPoint(wifiPolyline, wifiLocation);
+            lastWifiLocation = wifiLocation;
         }
-        lastWifiLocation = wifiLocation;
+        applyWifiVisibility();
     }
 
     void addTestPointMarker(int index, long timestampMs, @NonNull LatLng position) {
@@ -198,26 +196,24 @@ class TrajectoryRenderer {
         }
     }
 
-    void updateGnss(@NonNull LatLng gnssLocation, boolean gnssEnabled) {
-        if (map == null || !gnssEnabled) {
+    void updateGnss(@Nullable LatLng gnssLocation) {
+        if (map == null || gnssLocation == null) {
             return;
         }
         if (gnssMarker == null) {
             gnssMarker = map.addMarker(new MarkerOptions()
                     .position(gnssLocation)
                     .title("GNSS Position")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-            lastGnssLocation = gnssLocation;
-            return;
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+        } else {
+            gnssMarker.setPosition(gnssLocation);
         }
 
-        gnssMarker.setPosition(gnssLocation);
-        if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation) && gnssPolyline != null) {
-            List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
-            gnssPoints.add(gnssLocation);
-            gnssPolyline.setPoints(gnssPoints);
+        if (lastGnssLocation == null || !lastGnssLocation.equals(gnssLocation)) {
+            appendAbsoluteHistoryPoint(gnssPolyline, gnssLocation);
+            lastGnssLocation = gnssLocation;
         }
-        lastGnssLocation = gnssLocation;
+        applyGnssVisibility();
     }
 
     void clearGnssMarker() {
@@ -275,9 +271,12 @@ class TrajectoryRenderer {
         trajectoryMain = map.addPolyline(buildTrajectoryMainOptions());
         rawPdrPolyline = map.addPolyline(buildRawPdrPolylineOptions());
         gnssPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.BLUE)
-                .width(5f)
-                .zIndex(TRAJECTORY_Z_INDEX - 19f)
+                .color(GNSS_COLOR)
+                .width(GNSS_WIDTH_PX)
+                .zIndex(TRAJECTORY_Z_INDEX - 16f)
+                .startCap(new RoundCap())
+                .endCap(new RoundCap())
+                .jointType(JointType.ROUND)
                 .add());
         wifiPolyline = map.addPolyline(new PolylineOptions()
                 .color(WIFI_COLOR)
@@ -290,9 +289,8 @@ class TrajectoryRenderer {
         if (rawPdrPolyline != null) {
             rawPdrPolyline.setVisible(showPdrObservations);
         }
-        if (wifiPolyline != null) {
-            wifiPolyline.setVisible(showWifiObservations);
-        }
+        applyWifiVisibility();
+        applyGnssVisibility();
         ensureTrajectoryStyling();
         applyTrajectoryColor();
     }
@@ -368,6 +366,39 @@ class TrajectoryRenderer {
                 .endCap(new RoundCap())
                 .zIndex(TRAJECTORY_Z_INDEX - 18f)
                 .add();
+    }
+
+
+    private void appendAbsoluteHistoryPoint(@Nullable Polyline polyline, @NonNull LatLng point) {
+        if (polyline == null) {
+            return;
+        }
+        List<LatLng> points = new ArrayList<>(polyline.getPoints());
+        if (points.isEmpty() || !points.get(points.size() - 1).equals(point)) {
+            points.add(point);
+        }
+        if (points.size() > MAX_ABSOLUTE_HISTORY_POINTS) {
+            points = new ArrayList<>(points.subList(points.size() - MAX_ABSOLUTE_HISTORY_POINTS, points.size()));
+        }
+        polyline.setPoints(points);
+    }
+
+    private void applyWifiVisibility() {
+        if (wifiPolyline != null) {
+            wifiPolyline.setVisible(showWifiObservations);
+        }
+        if (wifiMarker != null) {
+            wifiMarker.setVisible(showWifiObservations && lastWifiLocation != null);
+        }
+    }
+
+    private void applyGnssVisibility() {
+        if (gnssPolyline != null) {
+            gnssPolyline.setVisible(showGnssObservations);
+        }
+        if (gnssMarker != null) {
+            gnssMarker.setVisible(showGnssObservations && lastGnssLocation != null);
+        }
     }
 
     private static void removeMarker(@Nullable Marker marker) {
