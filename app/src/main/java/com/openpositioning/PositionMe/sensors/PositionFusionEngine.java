@@ -40,6 +40,11 @@ public class PositionFusionEngine {
     private static final double EPS = 1e-300;
     private static final double CONNECTOR_RADIUS_M = 3.0;
     private static final double LIFT_HORIZONTAL_MAX_M = 0.50;
+    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.20;
+    private static final double ORIENTATION_BIAS_MAX_STEP_RAD = Math.toRadians(6.0);
+    private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(45.0);
+    private static final double ORIENTATION_BIAS_MIN_STEP_M = 0.35;
+    private static final double ORIENTATION_BIAS_MIN_INNOVATION_M = 0.50;
 
     private final float floorHeightMeters;
     private final Random random = new Random();
@@ -55,6 +60,9 @@ public class PositionFusionEngine {
     private String activeBuildingName;
     private final Map<Integer, FloorConstraint> floorConstraints = new HashMap<>();
     private double recentStepMotionMeters;
+    private double recentStepEastMeters;
+    private double recentStepNorthMeters;
+    private double headingBiasRad;
 
     private static final class Particle {
         double xEast;
@@ -99,11 +107,16 @@ public class PositionFusionEngine {
         hasAnchor = true;
 
         fallbackFloor = initialFloor;
+        headingBiasRad = 0.0;
+        recentStepEastMeters = 0.0;
+        recentStepNorthMeters = 0.0;
+        recentStepMotionMeters = 0.0;
         initParticlesAtOrigin(initialFloor);
         if (DEBUG_LOGS) {
             Log.i(TAG, String.format(Locale.US,
-                    "Reset anchor=(%.7f, %.7f) floor=%d particles=%d",
-                    latDeg, lonDeg, initialFloor, PARTICLE_COUNT));
+                    "Reset anchor=(%.7f, %.7f) floor=%d particles=%d headingBiasDeg=%.2f",
+                    latDeg, lonDeg, initialFloor, PARTICLE_COUNT,
+                    Math.toDegrees(headingBiasRad)));
         }
     }
 
@@ -112,14 +125,19 @@ public class PositionFusionEngine {
             return;
         }
 
+        recentStepEastMeters = dxEastMeters;
+        recentStepNorthMeters = dyNorthMeters;
         recentStepMotionMeters = Math.hypot(dxEastMeters, dyNorthMeters);
+        double[] correctedStep = rotateVector(dxEastMeters, dyNorthMeters, headingBiasRad);
+        double correctedDx = correctedStep[0];
+        double correctedDy = correctedStep[1];
         int blockedByWall = 0;
 
         for (Particle p : particles) {
             double oldX = p.xEast;
             double oldY = p.yNorth;
-            double candidateX = oldX + dxEastMeters + random.nextGaussian() * PDR_NOISE_STD_M;
-            double candidateY = oldY + dyNorthMeters + random.nextGaussian() * PDR_NOISE_STD_M;
+            double candidateX = oldX + correctedDx + random.nextGaussian() * PDR_NOISE_STD_M;
+            double candidateY = oldY + correctedDy + random.nextGaussian() * PDR_NOISE_STD_M;
 
             if (crossesWall(p.floor, oldX, oldY, candidateX, candidateY)) {
                 blockedByWall++;
@@ -132,8 +150,12 @@ public class PositionFusionEngine {
 
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
-                    "Predict dPDR=(%.2fE, %.2fN) noiseStd=%.2f blockedByWall=%d",
-                    dxEastMeters, dyNorthMeters, PDR_NOISE_STD_M, blockedByWall));
+                    "Predict dPDRraw=(%.2fE, %.2fN) dPDRcorr=(%.2fE, %.2fN) headingBiasDeg=%.2f noiseStd=%.2f blockedByWall=%d",
+                    dxEastMeters, dyNorthMeters,
+                    correctedDx, correctedDy,
+                    Math.toDegrees(headingBiasRad),
+                    PDR_NOISE_STD_M,
+                    blockedByWall));
         }
     }
 
@@ -325,6 +347,12 @@ public class PositionFusionEngine {
         }
 
         double[] z = toLocal(latDeg, lonDeg);
+        double priorMeanEast = 0.0;
+        double priorMeanNorth = 0.0;
+        for (Particle p : particles) {
+            priorMeanEast += p.weight * p.xEast;
+            priorMeanNorth += p.weight * p.yNorth;
+        }
         if (floorHint != null) {
             injectFloorSupportIfNeeded(floorHint, z[0], z[1]);
         }
@@ -381,8 +409,57 @@ public class PositionFusionEngine {
             resampled = true;
         }
 
+        double innovationEast = z[0] - priorMeanEast;
+        double innovationNorth = z[1] - priorMeanNorth;
+        updateOrientationBiasFromInnovation(innovationEast, innovationNorth, floorHint == null ? "GNSS" : "WiFi");
+
         updateCounter++;
         logUpdateSummary(z[0], z[1], sigmaMeters, floorHint, effectiveBefore, effectiveN, resampled);
+    }
+
+    private void updateOrientationBiasFromInnovation(double innovationEast,
+                                                     double innovationNorth,
+                                                     String source) {
+        if (recentStepMotionMeters < ORIENTATION_BIAS_MIN_STEP_M) {
+            return;
+        }
+
+        double innovationNorm = Math.hypot(innovationEast, innovationNorth);
+        if (innovationNorm < ORIENTATION_BIAS_MIN_INNOVATION_M) {
+            return;
+        }
+
+        double stepNorm2 = recentStepEastMeters * recentStepEastMeters
+                + recentStepNorthMeters * recentStepNorthMeters;
+        if (stepNorm2 < 1e-6) {
+            return;
+        }
+
+        // cross(step, innovation) tells whether absolute fixes lie left/right of step heading.
+        double cross = recentStepEastMeters * innovationNorth
+                - recentStepNorthMeters * innovationEast;
+        double rawBiasDelta = ORIENTATION_BIAS_LEARN_RATE * (cross / stepNorm2);
+        double boundedBiasDelta = clamp(rawBiasDelta,
+                -ORIENTATION_BIAS_MAX_STEP_RAD,
+                ORIENTATION_BIAS_MAX_STEP_RAD);
+
+        headingBiasRad = clamp(headingBiasRad + boundedBiasDelta,
+                -ORIENTATION_BIAS_MAX_ABS_RAD,
+                ORIENTATION_BIAS_MAX_ABS_RAD);
+
+        if (DEBUG_LOGS) {
+            Log.d(TAG, String.format(Locale.US,
+                    "HeadingBias update src=%s innovation=(%.2fE,%.2fN)|%.2fm step=(%.2fE,%.2fN)|%.2fm deltaDeg=%.2f biasDeg=%.2f",
+                    source,
+                    innovationEast,
+                    innovationNorth,
+                    innovationNorm,
+                    recentStepEastMeters,
+                    recentStepNorthMeters,
+                    recentStepMotionMeters,
+                    Math.toDegrees(boundedBiasDelta),
+                    Math.toDegrees(headingBiasRad)));
+        }
     }
 
     private void injectFloorSupportIfNeeded(int floorHint, double zEast, double zNorth) {
@@ -494,6 +571,18 @@ public class PositionFusionEngine {
             p.xEast += random.nextGaussian() * ROUGHEN_STD_M;
             p.yNorth += random.nextGaussian() * ROUGHEN_STD_M;
         }
+    }
+
+    private static double[] rotateVector(double east, double north, double angleRad) {
+        double cos = Math.cos(angleRad);
+        double sin = Math.sin(angleRad);
+        double rotatedEast = east * cos - north * sin;
+        double rotatedNorth = east * sin + north * cos;
+        return new double[]{rotatedEast, rotatedNorth};
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private double[] toLocal(double latDeg, double lonDeg) {
