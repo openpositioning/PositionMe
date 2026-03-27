@@ -585,7 +585,7 @@ public class SensorFusion implements SensorEventListener {
     /**
      * Setter function for core location data.
      *
-     * @param startPosition contains the initial location set by the user
+     * @param startPosition contains the initial autonomous anchor chosen by the app
      */
     public void setStartGNSSLatitude(float[] startPosition) {
         state.startLocation[0] = startPosition[0];

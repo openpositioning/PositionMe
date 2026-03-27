@@ -435,16 +435,18 @@ public class TrajectoryMapFragment extends Fragment {
                 if (hasPendingCameraMove && pendingCameraPosition != null) {
                     float savedZoom = getSavedMapZoom();
                     gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, savedZoom));
+                    Log.d(TAG, String.format(Locale.UK,
+                            "STEP2_CAMERA applied pending autonomous camera lat=%.6f lon=%.6f zoom=%.2f",
+                            pendingCameraPosition.latitude,
+                            pendingCameraPosition.longitude,
+                            savedZoom));
                     hasPendingCameraMove = false;
                     pendingCameraPosition = null;
                 } else if (!replayModeEnabled && getContext() != null) {
-                    SharedPreferences prefs = getContext().getSharedPreferences("MapCameraState", Context.MODE_PRIVATE);
-                    float savedZoom = prefs.getFloat("user_selected_zoom", 19f);
-                    float savedLat = prefs.getFloat("user_start_lat", 0f);
-                    float savedLon = prefs.getFloat("user_start_lon", 0f);
-                    if (savedLat != 0f && savedLon != 0f) {
-                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(savedLat, savedLon), savedZoom));
-                    }
+                    float savedZoom = getSavedMapZoom();
+                    Log.d(TAG, String.format(Locale.UK,
+                            "STEP2_CAMERA recording mode waiting for autonomous anchor; skip saved user_start_lat/lon restore, zoom=%.2f",
+                            savedZoom));
                 }
 
                 restoreCachedBuildingsIfAny();
