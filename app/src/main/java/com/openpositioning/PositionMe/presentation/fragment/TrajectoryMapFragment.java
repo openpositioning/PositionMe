@@ -273,6 +273,11 @@ public class TrajectoryMapFragment extends Fragment {
                     return autoFloorSwitch != null && autoFloorSwitch.isChecked();
                 }
 
+                @Override
+                public boolean hasReliableInitialFloorFix() {
+                    return floorController.hasReliableInitialFloorFix();
+                }
+
                 @Nullable
                 @Override
                 public LatLng getCurrentLocation() {
@@ -492,8 +497,9 @@ public class TrajectoryMapFragment extends Fragment {
 
         if (floorUpButton != null) {
             floorUpButton.setOnClickListener(v -> {
-                if (autoFloorSwitch != null) {
-                    autoFloorSwitch.setChecked(false);
+                if (isAutoFloorEnabled()) {
+                    Log.d(TAG, "AUTO_FLOOR ignored manual floor-up because AutoFloor owns display floor.");
+                    return;
                 }
                 if (selectedFloorplanBuilding != null) {
                     int nextFloorIndex = getAdjacentFloorIndex(selectedFloorplanBuilding, currentFloorIndex, true);
@@ -506,8 +512,9 @@ public class TrajectoryMapFragment extends Fragment {
 
         if (floorDownButton != null) {
             floorDownButton.setOnClickListener(v -> {
-                if (autoFloorSwitch != null) {
-                    autoFloorSwitch.setChecked(false);
+                if (isAutoFloorEnabled()) {
+                    Log.d(TAG, "AUTO_FLOOR ignored manual floor-down because AutoFloor owns display floor.");
+                    return;
                 }
                 if (selectedFloorplanBuilding != null) {
                     int nextFloorIndex = getAdjacentFloorIndex(selectedFloorplanBuilding, currentFloorIndex, false);
@@ -535,7 +542,7 @@ public class TrajectoryMapFragment extends Fragment {
                 if (indoorMapManager != null) {
                     indoorMapManager.setSelectedBuilding(selectedFloorplanBuilding);
                 }
-                setFloor(currentFloorIndex);
+                floorController.refreshCurrentFloorUi();
 
                 if (selectedVenueText != null) {
                     selectedVenueText.setText("Showing indoor vector map for " +
@@ -564,7 +571,7 @@ public class TrajectoryMapFragment extends Fragment {
                 if (indoorMapManager != null) {
                     indoorMapManager.setSelectedBuilding(selectedFloorplanBuilding);
                 }
-                setFloor(currentFloorIndex);
+                floorController.refreshCurrentFloorUi();
 
                 if (selectedVenueText != null) {
                     if (actualMapVisible) {
@@ -666,10 +673,28 @@ public class TrajectoryMapFragment extends Fragment {
         if (selectedFloorplanBuilding == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             return;
         }
+        if (isAutoFloorEnabled()) {
+            Log.d(TAG, String.format(Locale.US,
+                    "AUTO_FLOOR ignored external display-floor update logical=%d current=%d because FloorController owns display floor",
+                    logicalFloor,
+                    currentFloorIndex));
+            return;
+        }
+        if (!floorController.hasReliableInitialFloorFix()) {
+            Log.d(TAG, String.format(Locale.US,
+                    "AUTO_FLOOR ignored external display-floor update logical=%d current=%d because initial floor is not confirmed yet",
+                    logicalFloor,
+                    currentFloorIndex));
+            return;
+        }
         int targetFloorIndex = indoorMapManager.logicalFloorToIndex(logicalFloor);
         if (targetFloorIndex != currentFloorIndex) {
             setFloor(targetFloorIndex);
         }
+    }
+
+    public boolean isAutoFloorEnabled() {
+        return autoFloorSwitch != null && autoFloorSwitch.isChecked();
     }
 
     public boolean isGnssEnabled() {
@@ -1141,24 +1166,18 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     private void startAutoFloor() {
-        if (autoFloorHandler == null) {
-            autoFloorHandler = new Handler(Looper.getMainLooper());
-        }
         lastCandidateFloor = Integer.MIN_VALUE;
         lastCandidateTime = 0L;
-        applyImmediateFloor();
-
-        autoFloorTask = new Runnable() {
-            @Override
-            public void run() {
-                evaluateAutoFloor();
-                autoFloorHandler.postDelayed(this, AUTO_FLOOR_CHECK_INTERVAL_MS);
-            }
-        };
-        autoFloorHandler.post(autoFloorTask);
+        latestCandidateLogicalFloor = Integer.MIN_VALUE;
+        floorController.startAutoFloor();
+        Log.d(TAG, String.format(Locale.US,
+                "AUTO_FLOOR delegated start visibleLogical=%d building=%s",
+                getCurrentVisibleLogicalFloor(),
+                selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : "null"));
     }
 
     private void applyImmediateFloor() {
+        floorController.applyImmediateFloor();
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             Log.d(TAG, "AUTO_FLOOR applyImmediate skipped: map not ready");
             return;
@@ -1171,11 +1190,9 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     private void stopAutoFloor() {
-        if (autoFloorHandler != null && autoFloorTask != null) {
-            autoFloorHandler.removeCallbacks(autoFloorTask);
-        }
+        floorController.stopAutoFloor();
         Log.d(TAG, String.format(Locale.US,
-                "AUTO_FLOOR stop visibleLogical=%d lastCandidate=%d latestCandidate=%d",
+                "AUTO_FLOOR delegated stop visibleLogical=%d lastCandidate=%d latestCandidate=%d",
                 getCurrentVisibleLogicalFloor(), lastCandidateFloor, latestCandidateLogicalFloor));
         lastCandidateFloor = Integer.MIN_VALUE;
         lastCandidateTime = 0L;
@@ -1183,6 +1200,7 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     private void evaluateAutoFloor() {
+        floorController.evaluateAutoFloor();
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             Log.d(TAG, "AUTO_FLOOR evaluate skipped: map not ready");
             return;
@@ -1527,7 +1545,7 @@ public class TrajectoryMapFragment extends Fragment {
                 OverlayCalibration defaults = getHardcodedCalibrationDefault(targetKey, floorKey);
                 saveOverlayCalibration(targetKey, floorKey, defaults);
                 if (actualMapVisible) {
-                    setFloor(currentFloorIndex);
+                    floorController.refreshCurrentFloorUi();
                 }
                 if (selectedVenueText != null) {
                     selectedVenueText.setText("Reset calibration for " + prettyBuildingName(targetKey) + " " + floorKey);
@@ -1567,7 +1585,7 @@ public class TrajectoryMapFragment extends Fragment {
         saveOverlayCalibration(targetKey, floorKey, updated);
         logCalibration(targetKey, floorKey, updated, "updated");
         if (actualMapVisible) {
-            setFloor(currentFloorIndex);
+            floorController.refreshCurrentFloorUi();
         }
         updateCalibrationUi();
     }

@@ -46,6 +46,7 @@ final class MapMatchingCoordinator {
         int getCurrentFloorIndex();
         void setFloor(int floorIndex);
         boolean isAutoFloorEnabled();
+        boolean hasReliableInitialFloorFix();
         @Nullable LatLng getCurrentLocation();
         void setCurrentLocation(@NonNull LatLng location);
         @NonNull String resolveKnownBuildingKey(@NonNull FloorplanApiClient.BuildingInfo building,
@@ -157,12 +158,15 @@ final class MapMatchingCoordinator {
 
         long timestampMs = SystemClock.elapsedRealtime();
         int displayFloorIndex = host.getCurrentFloorIndex();
+        boolean hasReliableInitialFloorFix = replayMode || host.hasReliableInitialFloorFix();
         int candidateFloorIndex = replayMode
                 ? resolveReplayCandidateFloorIndex()
                 : resolveLiveCandidateFloorIndex();
-        int sourceFloorIndex = previousMatchedPose != null
+        int sourceFloorIndex = replayMode
+                ? (previousMatchedPose != null ? previousMatchedPose.getFloor() : candidateFloorIndex)
+                : (hasReliableInitialFloorFix && previousMatchedPose != null
                 ? previousMatchedPose.getFloor()
-                : candidateFloorIndex;
+                : displayFloorIndex);
         AbsoluteObservationCorrection absoluteCorrection = replayMode
                 ? AbsoluteObservationCorrection.passThrough(rawLocation, "replay_pdr")
                 : applyAbsoluteObservationCorrection(rawLocation, candidateFloorIndex);
@@ -309,6 +313,9 @@ final class MapMatchingCoordinator {
     }
 
     private int resolveLiveCandidateFloorIndex() {
+        if (!host.hasReliableInitialFloorFix()) {
+            return host.getCurrentFloorIndex();
+        }
         Integer trackingCandidateFloorIndex = host.getTrackingCandidateFloorIndex();
         if (trackingCandidateFloorIndex != null) {
             return trackingCandidateFloorIndex;

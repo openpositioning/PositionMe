@@ -519,7 +519,15 @@ public class RecordingFragment extends Fragment {
                     fusedHeadingDeg
             );
 
-            trajectoryMapFragment.updateDisplayedFloor(fusedPose.getFloor());
+            if (!trajectoryMapFragment.isAutoFloorEnabled()) {
+                Log.d(TAG, String.format(Locale.UK,
+                        "PF_BRANCH suppressed fused display-floor update floor=%d; map-matching floor controller owns floor confirmation",
+                        fusedPose.getFloor()));
+            } else {
+                Log.d(TAG, String.format(Locale.UK,
+                        "PF_BRANCH skipped display-floor update floor=%d because AutoFloor owns display floor",
+                        fusedPose.getFloor()));
+            }
 
             // Keep debug info visible for quick validation.
             trajectoryMapFragment.updateDebugInfo((float) fusedPose.getHeadingRad());
