@@ -78,9 +78,20 @@ final class MapMatchingCoordinator {
     @Nullable
     private Integer replayBaseFloorIndex;
     private boolean replayDisplayFloorInitialized = false;
+    @NonNull
+    private String latestDebugStatus = "abs:none  src:idle\n"
+            + "floor d/c/m: -/-/-\n"
+            + "vertical: steady Δ0.00m\n"
+            + "correction: NONE\n"
+            + "Waiting for updates";
 
     MapMatchingCoordinator(@NonNull Host host) {
         this.host = host;
+    }
+
+    @NonNull
+    String getLatestDebugStatus() {
+        return latestDebugStatus;
     }
 
     void onReplayModeChanged(boolean enabled) {
@@ -89,6 +100,7 @@ final class MapMatchingCoordinator {
         verticalMotionDetector.reset();
         host.getTrajectoryRenderer().clearRawReplayPath();
         clearReplayContext(true);
+        latestDebugStatus = defaultDebugStatus();
         if (enabled) {
             replayDisplayFloorInitialized = false;
         }
@@ -100,6 +112,7 @@ final class MapMatchingCoordinator {
         verticalMotionDetector.reset();
         host.getTrajectoryRenderer().clearRawReplayPath();
         clearReplayContext(true);
+        latestDebugStatus = defaultDebugStatus();
     }
 
     void setReplayFrameContext(@Nullable Integer syntheticFloor,
@@ -215,6 +228,16 @@ final class MapMatchingCoordinator {
                         : CorrectionType.NONE.name(),
                 matchingResult.getDebugReason()));
 
+        latestDebugStatus = buildDebugStatus(
+                absoluteCorrection.getObservationSource(),
+                absoluteCorrection.getPoseSource(),
+                displayFloorIndex,
+                candidateFloorIndex,
+                matchedFloor,
+                verticalHint,
+                matchingResult
+        );
+
         LatLng oldLocation = host.getCurrentLocation();
         host.setCurrentLocation(matchedLocation);
         previousMatchedPose = new CandidatePose(
@@ -253,6 +276,7 @@ final class MapMatchingCoordinator {
         verticalMotionDetector.reset();
         host.getTrajectoryRenderer().clearRawReplayPath();
         clearReplayContext(true);
+        latestDebugStatus = defaultDebugStatus();
     }
 
     private void clearReplayContext(boolean clearBaseFloorState) {
@@ -669,6 +693,54 @@ final class MapMatchingCoordinator {
                 result.getDebugReason()));
     }
 
+
+    @NonNull
+    private String defaultDebugStatus() {
+        return "abs:none  src:idle\n"
+                + "floor d/c/m: -/-/-\n"
+                + "vertical: steady Δ0.00m\n"
+                + "correction: NONE\n"
+                + "Waiting for updates";
+    }
+
+    @NonNull
+    private String buildDebugStatus(@Nullable String absoluteSource,
+                                    @Nullable String poseSource,
+                                    int displayFloorIndex,
+                                    int candidateFloorIndex,
+                                    int matchedFloor,
+                                    @Nullable VerticalTransitionHint verticalHint,
+                                    @NonNull MapMatchingResult result) {
+        String absoluteValue = absoluteSource == null ? "none" : absoluteSource;
+        String poseValue = poseSource == null ? "unknown" : poseSource;
+        String verticalValue = (verticalHint != null && verticalHint.isHeightChanged()) ? "changed" : "steady";
+        double deltaHeight = verticalHint != null ? verticalHint.getDeltaHeight() : 0d;
+        String correctionName = result.getCorrectionType() != null
+                ? result.getCorrectionType().name()
+                : CorrectionType.NONE.name();
+        String reason = result.getDebugReason() != null ? result.getDebugReason().trim() : "Waiting for updates";
+        if (reason.isEmpty()) {
+            reason = "Waiting for updates";
+        }
+        if (reason.length() > 80) {
+            reason = reason.substring(0, 80) + "…";
+        }
+        return String.format(Locale.US,
+                "abs:%s  src:%s\n"
+                        + "floor d/c/m: %d/%d/%d\n"
+                        + "vertical: %s Δ%.2fm\n"
+                        + "correction: %s\n"
+                        + "%s",
+                absoluteValue,
+                poseValue,
+                displayFloorIndex,
+                candidateFloorIndex,
+                matchedFloor,
+                verticalValue,
+                deltaHeight,
+                correctionName,
+                reason);
+    }
     private static final class AbsoluteObservationCorrection {
         @NonNull
         private final LatLng correctedLatLng;

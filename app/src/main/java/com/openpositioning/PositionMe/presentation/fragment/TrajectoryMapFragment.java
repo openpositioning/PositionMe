@@ -408,7 +408,10 @@ public class TrajectoryMapFragment extends Fragment {
     private Button switchColorButton;
     private View mapControlsContent;
     private Button btnToggleControls;
+    private Button btnToggleLog;
+    private TextView debugStatusText;
     private boolean areMapControlsExpanded = true;
+    private boolean isDebugStatusVisible = false;
 
     public TrajectoryMapFragment() {
     }
@@ -434,6 +437,8 @@ public class TrajectoryMapFragment extends Fragment {
         switchColorButton = view.findViewById(R.id.lineColorButton);
         mapControlsContent = view.findViewById(R.id.mapControlsContent);
         btnToggleControls = view.findViewById(R.id.btnToggleControls);
+        btnToggleLog = view.findViewById(R.id.btnToggleLog);
+        debugStatusText = view.findViewById(R.id.debugStatusText);
 
         btnFindIndoorMap = view.findViewById(R.id.btnFindIndoorMap);
         btnFindActualMap = view.findViewById(R.id.btnFindActualMap);
@@ -469,6 +474,7 @@ public class TrajectoryMapFragment extends Fragment {
         }
         setFloorControlsVisibility(View.GONE);
         initMapControlsToggle();
+        initDebugStatusToggle();
         applyTrajectoryColorButtonState();
         updateActualMapButtonState();
 
@@ -1628,6 +1634,7 @@ public class TrajectoryMapFragment extends Fragment {
             autoFloorSwitch.setEnabled(!enabled);
             autoFloorSwitch.setAlpha(enabled ? 0.45f : 1f);
         }
+        refreshDebugStatusText();
     }
 
     public void setReplayFrameContext(@Nullable Integer syntheticFloor,
@@ -1649,10 +1656,12 @@ public class TrajectoryMapFragment extends Fragment {
 
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         mapMatchingCoordinator.updateUserLocation(newLocation, orientation);
+        refreshDebugStatusText();
     }
 
     private void resetMapMatchingState() {
         mapMatchingCoordinator.resetMapMatchingState();
+        refreshDebugStatusText();
     }
 
     public void setInitialCameraPosition(@NonNull LatLng startLocation) {
@@ -2083,6 +2092,45 @@ public class TrajectoryMapFragment extends Fragment {
         }
         if (btnToggleControls != null) {
             btnToggleControls.setText(areMapControlsExpanded ? "Hide" : "Show");
+        }
+    }
+
+
+    private void initDebugStatusToggle() {
+        if (btnToggleLog != null) {
+            btnToggleLog.setOnClickListener(v -> toggleDebugStatusPanel());
+        }
+        refreshDebugStatusText();
+        updateDebugStatusUi();
+    }
+
+    private void toggleDebugStatusPanel() {
+        isDebugStatusVisible = !isDebugStatusVisible;
+        refreshDebugStatusText();
+        updateDebugStatusUi();
+    }
+
+    private void refreshDebugStatusText() {
+        if (debugStatusText == null) {
+            return;
+        }
+        String status = mapMatchingCoordinator.getLatestDebugStatus();
+        if (status == null || status.trim().isEmpty()) {
+            status = "abs:none  src:idle\n"
+                    + "floor d/c/m: -/-/-\n"
+                    + "vertical: steady Δ0.00m\n"
+                    + "correction: NONE\n"
+                    + "Waiting for updates";
+        }
+        debugStatusText.setText(status);
+    }
+
+    private void updateDebugStatusUi() {
+        if (debugStatusText != null) {
+            debugStatusText.setVisibility(isDebugStatusVisible ? View.VISIBLE : View.GONE);
+        }
+        if (btnToggleLog != null) {
+            btnToggleLog.setText(isDebugStatusVisible ? "Close Log" : "Log");
         }
     }
 

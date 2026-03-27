@@ -17,97 +17,141 @@
         android:layout_height="wrap_content"
         android:layout_margin="10dp"
         android:gravity="top"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         app:layout_anchor="@id/trajectoryMap"
         app:layout_anchorGravity="top|start">
 
-        <com.google.android.material.card.MaterialCardView
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="#F7FFFFFF"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="6dp">
+            android:gravity="top"
+            android:orientation="horizontal">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="#F7FFFFFF"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="6dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="10dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Map Controls"
+                        android:textColor="@android:color/black"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:id="@+id/mapControlsContent"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:orientation="vertical">
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/gnssSwitch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/gnssSwitch" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/autoFloor"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/auto_floor" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/showWifiSwitch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true"
+                            android:text="📶 Show WiFi" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/showPdrSwitch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true"
+                            android:text="👣 Show PDR" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/lineColorButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Red"
+                            android:textColor="@android:color/white"
+                            app:backgroundTint="@android:color/holo_red_dark"
+                            app:elevation="5dp" />
+
+                        <Spinner
+                            android:id="@+id/mapSwitchSpinner"
+                            android:layout_width="wrap_content"
+                            android:layout_height="48dp"
+                            android:layout_marginTop="8dp"
+                            android:background="@android:color/white"
+                            android:spinnerMode="dropdown" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="10dp">
+                android:layout_marginStart="8dp"
+                android:orientation="horizontal">
 
-                <TextView
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToggleControls"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Map Controls"
-                    android:textColor="@android:color/black"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
+                    android:layout_height="36dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:text="Hide"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    app:backgroundTint="#546E7A" />
 
-                <LinearLayout
-                    android:id="@+id/mapControlsContent"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToggleLog"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:gravity="center"
-                    android:orientation="vertical">
+                    android:layout_height="36dp"
+                    android:layout_marginStart="8dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:text="Log"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    app:backgroundTint="#455A64" />
 
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/gnssSwitch"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/gnssSwitch" />
-
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/autoFloor"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/auto_floor" />
-
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/showWifiSwitch"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checked="true"
-                        android:text="📶 Show WiFi" />
-
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/showPdrSwitch"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checked="true"
-                        android:text="👣 Show PDR" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/lineColorButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Red"
-                        android:textColor="@android:color/white"
-                        app:backgroundTint="@android:color/holo_red_dark"
-                        app:elevation="5dp" />
-
-                    <Spinner
-                        android:id="@+id/mapSwitchSpinner"
-                        android:layout_width="wrap_content"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="8dp"
-                        android:background="@android:color/white"
-                        android:spinnerMode="dropdown" />
-                </LinearLayout>
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnToggleControls"
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/debugStatusText"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:layout_marginStart="8dp"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:minWidth="0dp"
-            android:text="Hide"
-            android:textAllCaps="false"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#DD263238"
+            android:paddingStart="10dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="8dp"
+            android:text="abs:none  src:idle&#10;floor d/c/m: -/-/-&#10;vertical: steady Δ0.00m&#10;correction: NONE&#10;Waiting for updates"
             android:textColor="@android:color/white"
-            app:backgroundTint="#546E7A" />
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:visibility="visible" />
 
     </LinearLayout>
 
