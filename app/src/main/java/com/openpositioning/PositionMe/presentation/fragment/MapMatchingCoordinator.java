@@ -140,9 +140,7 @@ final class MapMatchingCoordinator {
 
         boolean replayMode = host.isReplayModeEnabled();
         LatLng rawLocation = newLocation;
-        if (replayMode) {
-            host.getTrajectoryRenderer().appendRawReplayPoint(rawLocation);
-        }
+        host.getTrajectoryRenderer().appendRawObservationPoint(rawLocation);
 
         long timestampMs = SystemClock.elapsedRealtime();
         int displayFloorIndex = host.getCurrentFloorIndex();
@@ -155,6 +153,10 @@ final class MapMatchingCoordinator {
         AbsoluteObservationCorrection absoluteCorrection = replayMode
                 ? AbsoluteObservationCorrection.passThrough(rawLocation, "replay_pdr")
                 : applyAbsoluteObservationCorrection(rawLocation, candidateFloorIndex);
+        SensorFusion sensorFusion = host.getSensorFusion();
+        if (!replayMode && sensorFusion != null) {
+            host.getTrajectoryRenderer().updateWifiObservation(sensorFusion.getLatLngWifiPositioning());
+        }
         LatLng candidateLatLng = absoluteCorrection.getCorrectedLatLng();
         FloorplanApiClient.FloorShapes sourceFloorShapes = getFloorShapesForFloorIndex(sourceFloorIndex);
         FloorplanApiClient.FloorShapes targetFloorShapes = getFloorShapesForFloorIndex(candidateFloorIndex);

@@ -401,6 +401,8 @@ public class TrajectoryMapFragment extends Fragment {
     private Spinner switchMapSpinner;
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
+    private SwitchMaterial showWifiSwitch;
+    private SwitchMaterial showPdrSwitch;
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private TextView floorLabel;
     private Button switchColorButton;
@@ -424,6 +426,8 @@ public class TrajectoryMapFragment extends Fragment {
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
+        showWifiSwitch = view.findViewById(R.id.showWifiSwitch);
+        showPdrSwitch = view.findViewById(R.id.showPdrSwitch);
         floorUpButton = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel = view.findViewById(R.id.floorLabel);
@@ -505,6 +509,14 @@ public class TrajectoryMapFragment extends Fragment {
                 trajectoryRenderer.clearGnssMarker();
             }
         });
+        if (showWifiSwitch != null) {
+            showWifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) ->
+                    trajectoryRenderer.setShowWifiObservations(isChecked));
+        }
+        if (showPdrSwitch != null) {
+            showPdrSwitch.setOnCheckedChangeListener((buttonView, isChecked) ->
+                    trajectoryRenderer.setShowPdrObservations(isChecked));
+        }
 
         switchColorButton.setOnClickListener(v -> {
             trajectoryRenderer.toggleTrajectoryColor();
@@ -1536,6 +1548,8 @@ public class TrajectoryMapFragment extends Fragment {
         });
 
         trajectoryRenderer.attachToMap(map);
+        trajectoryRenderer.setShowWifiObservations(showWifiSwitch == null || showWifiSwitch.isChecked());
+        trajectoryRenderer.setShowPdrObservations(showPdrSwitch == null || showPdrSwitch.isChecked());
     }
 
     private String prettyBuildingName(String raw) {

@@ -62,6 +62,20 @@
                         android:layout_height="wrap_content"
                         android:text="@string/auto_floor" />
 
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/showWifiSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="📶 Show WiFi" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/showPdrSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="👣 Show PDR" />
+
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/lineColorButton"
                         android:layout_width="wrap_content"
