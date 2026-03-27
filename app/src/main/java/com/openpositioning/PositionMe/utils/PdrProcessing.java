@@ -38,8 +38,10 @@ public class PdrProcessing {
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
     private static final int MIN_REQUIRED_SAMPLES = 2;
-    private static final float FUSION_FEEDBACK_GAIN = 0.15f;
-    private static final float FUSION_FEEDBACK_MAX_STEP_M = 0.8f;
+    private static final float FUSION_FEEDBACK_GAIN_NEAR = 0.22f;
+    private static final float FUSION_FEEDBACK_GAIN_MEDIUM = 0.35f;
+    private static final float FUSION_FEEDBACK_GAIN_FAR = 0.50f;
+    private static final float FUSION_FEEDBACK_MAX_STEP_M = 1.8f;
     //endregion
 
     //region Instance variables
@@ -290,10 +292,18 @@ public class PdrProcessing {
         float errorX = targetX - correctedX;
         float errorY = targetY - correctedY;
 
-        float deltaX = clamp(errorX * FUSION_FEEDBACK_GAIN,
+        float errorDist = (float) Math.hypot(errorX, errorY);
+        float gain = FUSION_FEEDBACK_GAIN_NEAR;
+        if (errorDist >= 4.0f) {
+            gain = FUSION_FEEDBACK_GAIN_FAR;
+        } else if (errorDist >= 1.5f) {
+            gain = FUSION_FEEDBACK_GAIN_MEDIUM;
+        }
+
+        float deltaX = clamp(errorX * gain,
                 -FUSION_FEEDBACK_MAX_STEP_M,
                 FUSION_FEEDBACK_MAX_STEP_M);
-        float deltaY = clamp(errorY * FUSION_FEEDBACK_GAIN,
+        float deltaY = clamp(errorY * gain,
                 -FUSION_FEEDBACK_MAX_STEP_M,
                 FUSION_FEEDBACK_MAX_STEP_M);
 

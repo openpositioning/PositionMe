@@ -54,6 +54,7 @@ public class SensorFusion implements SensorEventListener {
     //region Static variables
     private static final SensorFusion sensorFusion = new SensorFusion();
     private static final String TAG = "SensorFusion";
+    private static final boolean ENABLE_PDR_FEEDBACK = false;
     //endregion
 
     //region Instance variables
@@ -728,7 +729,9 @@ public class SensorFusion implements SensorEventListener {
         state.fusedAvailable = true;
 
         // Feed the fused absolute estimate back into local PDR coordinates to limit long-term drift.
-        applyFusionFeedbackToPdr(estimate.getLatLng());
+        if (ENABLE_PDR_FEEDBACK) {
+            applyFusionFeedbackToPdr(estimate.getLatLng());
+        }
     }
 
     private void applyFusionFeedbackToPdr(@NonNull LatLng fusedLatLng) {

@@ -31,6 +31,10 @@ public class SensorEventHandler {
     private static final float FLIP_DETECTION_MIN_DEG = 150f;
     private static final float FLIP_DETECTION_MAX_DEG = 210f;
     private static final float FLIP_GYRO_MAX_RAD_PER_SEC = 0.8f;
+    private static final float FLIP_DETECTION_STRICT_MIN_DEG = 170f;
+    private static final float FLIP_DETECTION_STRICT_MAX_DEG = 190f;
+    private static final float FLIP_GYRO_STRICT_MAX_RAD_PER_SEC = 0.3f;
+    private static final int FLIP_HYSTERESIS_MS = 500;
 
     private final SensorState state;
     private final PdrProcessing pdrProcessing;
@@ -51,6 +55,7 @@ public class SensorEventHandler {
     private boolean hasPdrReference = false;
     private boolean hasPreviousHeading = false;
     private float previousHeadingRad = 0f;
+    private long lastFlipCorrectionTime = 0;
 
     /**
      * Creates a new SensorEventHandler.
@@ -168,10 +173,21 @@ public class SensorEventHandler {
                                     + state.angularVelocity[1] * state.angularVelocity[1]
                                     + state.angularVelocity[2] * state.angularVelocity[2]);
 
-                    if (deltaDeg >= FLIP_DETECTION_MIN_DEG
-                            && deltaDeg <= FLIP_DETECTION_MAX_DEG
-                            && gyroNorm <= FLIP_GYRO_MAX_RAD_PER_SEC) {
+                    long timeSinceLastFlip = currentTime - lastFlipCorrectionTime;
+                    boolean hysteresisOk = timeSinceLastFlip >= FLIP_HYSTERESIS_MS;
+
+                    if (hysteresisOk
+                            && deltaDeg >= FLIP_DETECTION_STRICT_MIN_DEG
+                            && deltaDeg <= FLIP_DETECTION_STRICT_MAX_DEG
+                            && gyroNorm <= FLIP_GYRO_STRICT_MAX_RAD_PER_SEC) {
                         correctedAzimuth = normalizeAngleRad((float) (correctedAzimuth + Math.PI));
+                        lastFlipCorrectionTime = currentTime;
+                        Log.w("SensorFusion", "180-flip detected and corrected: deltaDeg=" + deltaDeg
+                                + " gyroNorm=" + gyroNorm);
+                    } else if (!hysteresisOk && deltaDeg >= FLIP_DETECTION_STRICT_MIN_DEG
+                            && deltaDeg <= FLIP_DETECTION_STRICT_MAX_DEG) {
+                        Log.d("SensorFusion", "Flip pattern detected but hysteresis active; timeSinceLastFlip="
+                                + timeSinceLastFlip + "ms");
                     }
                 }
 
@@ -272,5 +288,6 @@ public class SensorEventHandler {
         this.lastPdrY = 0f;
         this.hasPreviousHeading = false;
         this.previousHeadingRad = 0f;
+        this.lastFlipCorrectionTime = 0;
     }
 }

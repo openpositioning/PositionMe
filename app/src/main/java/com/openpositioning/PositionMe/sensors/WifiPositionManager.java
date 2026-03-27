@@ -66,7 +66,15 @@ public class WifiPositionManager implements Observer {
         try {
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList) {
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+                String bssidKey = getBssidKey(data);
+                if (bssidKey == null) {
+                    continue;
+                }
+                wifiAccessPoints.put(bssidKey, data.getLevel());
+            }
+            if (wifiAccessPoints.length() == 0) {
+                Log.w("WifiPositionManager", "Skipping WiFi positioning request: no valid BSSID keys");
+                return;
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
@@ -95,7 +103,15 @@ public class WifiPositionManager implements Observer {
         try {
             JSONObject wifiAccessPoints = new JSONObject();
             for (Wifi data : this.wifiList) {
-                wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
+                String bssidKey = getBssidKey(data);
+                if (bssidKey == null) {
+                    continue;
+                }
+                wifiAccessPoints.put(bssidKey, data.getLevel());
+            }
+            if (wifiAccessPoints.length() == 0) {
+                Log.w("WifiPositionManager", "Skipping WiFi callback request: no valid BSSID keys");
+                return;
             }
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
@@ -148,4 +164,46 @@ public class WifiPositionManager implements Observer {
     public void setWifiFixListener(WifiFixListener wifiFixListener) {
         this.wifiFixListener = wifiFixListener;
     }
+
+    private String getBssidKey(Wifi wifi) {
+        String bssidString = wifi.getBssidString();
+        if (bssidString != null && !bssidString.trim().isEmpty()) {
+            String normalizedHex = normalizeMacToHex(bssidString.trim());
+            if (normalizedHex != null) {
+                long macValue = Long.parseUnsignedLong(normalizedHex, 16);
+                return Long.toUnsignedString(macValue);
+            }
+        }
+
+        // Fallback: convert packed long (lower 48 bits) to unsigned decimal string.
+        long mac = wifi.getBssid() & 0x0000FFFFFFFFFFFFL;
+        return Long.toUnsignedString(mac);
+    }
+
+    private String normalizeMacToHex(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.replace(":", "").replace("-", "").toUpperCase();
+        if (!isValidHexMac(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
+    private boolean isValidHexMac(String value) {
+        if (value.length() != 12) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            boolean digit = c >= '0' && c <= '9';
+            boolean upperHex = c >= 'A' && c <= 'F';
+            if (!digit && !upperHex) {
+                return false;
+            }
+        }
+        return true;
+    }
+
 }
