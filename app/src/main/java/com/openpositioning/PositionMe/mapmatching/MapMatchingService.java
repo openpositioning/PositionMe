@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.mapmatching;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
@@ -8,30 +9,38 @@ import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 /**
  * 3.2 Map Matching 的核心服务类。
  *
- * 当前这一版开始真正使用地图几何约束：
- * 1. 检测穿墙
- * 2. 判断是否靠近 stairs / lift
- * 3. 用高度变化 + 地图位置约束楼层切换
+ * 这一版最小补丁重点处理两个问题：
+ * 1. 穿墙一段时间后，一旦重新回到合法区域就出现“大跳”
+ * 2. 仅凭末端一个点碰到楼梯/电梯红区，就被直接放行换层
  *
- * 这是一个“先求稳”的第一版：
- * - 穿墙时先回退到上一点
- * - 非法换层时先保持上一楼层
- * - 不做复杂投影修正，先保证行为正确、容易调试
+ * 处理策略：
+ * - 大跳恢复时，对单帧允许的最大位移做上限约束，避免瞬移
+ * - 楼层切换时，不再只看当前点；要求 previous/current（或 midpoint）
+ *   对 connector 有持续接触，并限制楼梯/电梯转换的水平位移范围
  */
 public class MapMatchingService {
-    // 水平位移较小时，更像 lift；较大时，更像 stairs
+    // 水平位移较小时，更像 lift
     private static final double MAX_LIFT_HORIZONTAL_DISPLACEMENT_METERS = 1.5;
+    // 楼梯换层允许有一定水平位移，但不能太大；否则多半是飘点/大跳
+    private static final double MAX_STAIRS_HORIZONTAL_DISPLACEMENT_METERS = 4.0;
     // 位移太小时，不做穿墙检测，避免传感器抖动带来误判
     private static final double MIN_DISPLACEMENT_FOR_WALL_CHECK_METERS = 0.3;
+    // 穿墙恢复后，单帧允许的最大“重新贴回”位移，避免轨迹瞬移
+    private static final double MAX_RECOVERY_STEP_METERS = 1.2;
+    // connector 区域附近略放宽，但仍然限制大跳
+    private static final double MAX_RECOVERY_STEP_NEAR_CONNECTOR_METERS = 2.0;
 
-    /**
-     * 对一次候选位置执行 map matching。
-     */
     @NonNull
     public MapMatchingResult match(@NonNull MapMatchingInput input) {
         CandidatePose currentPose = input.getCurrentCandidatePose();
         CandidatePose previousPose = input.getPreviousPose();
-        FloorplanApiClient.FloorShapes floorShapes = input.getActiveFloorShapes();
+
+        boolean floorTransitionAttempt = previousPose != null
+                && currentPose.getFloor() != previousPose.getFloor();
+        boolean floorChangeAllowed = isFloorChangeAllowed(input);
+
+        FloorplanApiClient.FloorShapes connectorFloorShapes = chooseConnectorFloorShapes(input, floorTransitionAttempt);
+        FloorplanApiClient.FloorShapes wallCheckFloorShapes = chooseWallCheckFloorShapes(input, floorTransitionAttempt);
 
         LatLng candidateLatLng = currentPose.getLatLng();
         LatLng correctedLatLng = candidateLatLng;
@@ -40,104 +49,75 @@ public class MapMatchingService {
         boolean nearStairs = false;
         boolean nearLift = false;
         boolean crossedWall = false;
-        boolean invalidFloorChange = false;
-        boolean floorChangeAllowed = isFloorChangeAllowed(input);
 
         CorrectionType correctionType = CorrectionType.NONE;
         String debugReason = "Candidate pose accepted.";
         boolean validPosition = true;
 
-        // =========================================================
-        // 【情况 1：当前没有可用地图】
-        // 不做地图约束，直接透传
-        // =========================================================
-        if (!input.hasActiveFloorMap() || floorShapes == null) {
-            return new MapMatchingResult(
-                    true,
-                    false,
-                    false,
-                    false,
-                    floorChangeAllowed,
-                    candidateLatLng,
-                    currentPose.getFloor(),
-                    CorrectionType.NONE,
-                    "No active floor map. Pass through candidate pose."
-            );
+        if (connectorFloorShapes != null) {
+            nearStairs = MapGeometryUtils.isNearStairs(candidateLatLng, connectorFloorShapes);
+            nearLift = MapGeometryUtils.isNearLift(candidateLatLng, connectorFloorShapes);
         }
 
-        // =========================================================
-        // 【新增：判断当前位置是否靠近 stairs / lift】
-        // =========================================================
-        nearStairs = MapGeometryUtils.isNearStairs(candidateLatLng, floorShapes);
-        nearLift = MapGeometryUtils.isNearLift(candidateLatLng, floorShapes);
-        // =========================================================
-        // 【新增：给当前垂直变化一个更易读的解释】
-        // 仅用于 debugReason，不改变主逻辑
-        // =========================================================
         MotionDelta motionDelta = input.getMotionDelta();
-        String transitionDescription = describeVerticalTransition(
-                nearStairs,
-                nearLift,
-                motionDelta
-        );
-
+        String transitionDescription = describeVerticalTransition(nearStairs, nearLift, motionDelta);
         if (input.getVerticalHint() != null && input.getVerticalHint().isHeightChanged()) {
             debugReason = "Height changed; " + transitionDescription + ".";
         } else {
             debugReason = "Candidate pose accepted; " + transitionDescription + ".";
         }
-        // =========================================================
-        // 【新增：判断轨迹是否穿墙】
-        // 如果穿墙，第一版先回退到上一点
-        // =========================================================
+
+        // 没有任何可用楼层地图时，不做墙体约束。
+        if (wallCheckFloorShapes == null) {
+            return new MapMatchingResult(
+                    true,
+                    false,
+                    nearStairs,
+                    nearLift,
+                    floorChangeAllowed,
+                    candidateLatLng,
+                    currentPose.getFloor(),
+                    CorrectionType.NONE,
+                    "No usable wall map. Pass through candidate pose."
+            );
+        }
+
+        // 穿墙检测：楼层切换尝试时优先看 source floor，避免被目标层几何误导。
         if (previousPose != null && previousPose.getLatLng() != null) {
             boolean shouldCheckWall = true;
-
-            MotionDelta wallCheckMotionDelta = input.getMotionDelta();
-            if (wallCheckMotionDelta != null) {
-                shouldCheckWall =
-                        wallCheckMotionDelta.getStepDistance() >= MIN_DISPLACEMENT_FOR_WALL_CHECK_METERS;
+            if (motionDelta != null) {
+                shouldCheckWall = motionDelta.getStepDistance() >= MIN_DISPLACEMENT_FOR_WALL_CHECK_METERS;
             }
 
             if (shouldCheckWall) {
                 crossedWall = MapGeometryUtils.crossesWall(
                         previousPose.getLatLng(),
                         candidateLatLng,
-                        floorShapes
+                        wallCheckFloorShapes
                 );
 
                 if (crossedWall) {
-                    // 【高级优化：沿墙滑动策略 (Sliding against the wall)】
-                    // 将用户的移动意图拆解为纬度(Y)和经度(X)两个独立分量
                     LatLng latOnlyPoint = new LatLng(candidateLatLng.latitude, previousPose.getLatLng().longitude);
                     LatLng lngOnlyPoint = new LatLng(previousPose.getLatLng().latitude, candidateLatLng.longitude);
 
-                    // 分别测试仅在单一坐标轴上移动是否会穿墙
-                    boolean canMoveLat = !MapGeometryUtils.crossesWall(previousPose.getLatLng(), latOnlyPoint, floorShapes);
-                    boolean canMoveLng = !MapGeometryUtils.crossesWall(previousPose.getLatLng(), lngOnlyPoint, floorShapes);
+                    boolean canMoveLat = !MapGeometryUtils.crossesWall(previousPose.getLatLng(), latOnlyPoint, wallCheckFloorShapes);
+                    boolean canMoveLng = !MapGeometryUtils.crossesWall(previousPose.getLatLng(), lngOnlyPoint, wallCheckFloorShapes);
 
                     if (canMoveLat && !canMoveLng) {
-                        // 经度(东西)被墙挡住，但纬度(南北)畅通 -> 允许沿南北方向贴墙滑动
                         correctedLatLng = latOnlyPoint;
                         correctionType = CorrectionType.THROUGH_WALL;
                         debugReason = "Crossed wall. Sliding along Latitude (N/S).";
                         validPosition = true;
                     } else if (!canMoveLat && canMoveLng) {
-                        // 纬度(南北)被墙挡住，但经度(东西)畅通 -> 允许沿东西方向贴墙滑动
                         correctedLatLng = lngOnlyPoint;
                         correctionType = CorrectionType.THROUGH_WALL;
                         debugReason = "Crossed wall. Sliding along Longitude (E/W).";
                         validPosition = true;
                     } else {
-                        // 两个方向都被挡住（比如走进了直角死胡同），退回最安全的“原地罚站”XY坐标
                         correctedLatLng = previousPose.getLatLng();
-
-                        // ★ 核心修复：解绑楼层和平面！如果当前正好触发了合法的电梯/楼梯换层，
-                        // 就保留新楼层，绝不强行撤销楼层！
                         if (!floorChangeAllowed) {
                             correctedFloor = previousPose.getFloor();
                         }
-
                         correctionType = CorrectionType.THROUGH_WALL;
                         debugReason = "Crossed wall. Stuck in corner, reverted to previous XY pose.";
                         validPosition = false;
@@ -148,24 +128,31 @@ public class MapMatchingService {
             }
         }
 
-        // =========================================================
-        // 【新增：楼层变化约束】
-        // 如果当前候选楼层和上一时刻不同，但不满足换层条件，
-        // 第一版先保持上一楼层
-        // =========================================================
-        if (previousPose != null
-                && currentPose.getFloor() != previousPose.getFloor()
-                && !floorChangeAllowed) {
-
-            invalidFloorChange = true;
+        if (floorTransitionAttempt && !floorChangeAllowed && previousPose != null) {
             correctedFloor = previousPose.getFloor();
-
             if (correctionType == CorrectionType.NONE) {
                 correctionType = CorrectionType.INVALID_FLOOR_CHANGE;
-                debugReason = "Floor change rejected: no valid height change or not near stairs/lift.";
+                debugReason = "Floor change rejected: connector evidence is too weak or horizontal jump is too large.";
             }
-
             validPosition = false;
+        }
+
+        if (!crossedWall && previousPose != null && previousPose.getLatLng() != null && motionDelta != null) {
+            LatLng clampedRecovery = clampRecoveryJump(
+                    previousPose.getLatLng(),
+                    correctedLatLng,
+                    motionDelta,
+                    nearStairs || nearLift,
+                    floorTransitionAttempt,
+                    floorChangeAllowed
+            );
+            if (!samePoint(clampedRecovery, correctedLatLng)) {
+                correctedLatLng = clampedRecovery;
+                if (correctionType == CorrectionType.NONE) {
+                    correctionType = CorrectionType.SNAP_TO_VALID_AREA;
+                }
+                debugReason = "Large recovery jump limited to avoid instant snap-back.";
+            }
         }
 
         return new MapMatchingResult(
@@ -181,83 +168,148 @@ public class MapMatchingService {
         );
     }
 
-    /**
-     * 判断当前是否允许换层。
-     *
-     * 当前这一版规则：
-     * 1. 必须有 verticalHint
-     * 2. 必须检测到明显高度变化
-     * 3. 如果没有可用地图，为了不阻断原逻辑，先允许
-     * 4. 如果有地图，则必须 near stairs 或 near lift
-     * 5. 如果有 motionDelta，则进一步用 stepDistance 区分 stairs / lift：
-     *    - nearLift only  -> 需要较小水平位移
-     *    - nearStairs only -> 需要较大水平位移
-     *    - 如果两者都 near，则先允许（第一版不强行细分）
-     */
     public boolean isFloorChangeAllowed(@NonNull MapMatchingInput input) {
         VerticalTransitionHint verticalHint = input.getVerticalHint();
+        CandidatePose previousPose = input.getPreviousPose();
+        CandidatePose currentPose = input.getCurrentCandidatePose();
 
-        if (verticalHint == null) {
+        if (verticalHint == null || !verticalHint.isHeightChanged()) {
             return false;
         }
 
-        if (!verticalHint.isHeightChanged()) {
+        if (previousPose == null || currentPose.getFloor() == previousPose.getFloor()) {
             return false;
         }
 
-        // 没有地图时先不阻断现有逻辑
-        if (!input.hasActiveFloorMap()) {
+        FloorplanApiClient.FloorShapes connectorFloorShapes = chooseConnectorFloorShapes(input, true);
+        if (connectorFloorShapes == null) {
+            // 没有地图时维持旧版宽松策略，不阻断已有逻辑。
             return true;
         }
 
-        FloorplanApiClient.FloorShapes floorShapes = input.getActiveFloorShapes();
-        if (floorShapes == null) {
-            return true;
+        LatLng previousPoint = previousPose.getLatLng();
+        LatLng currentPoint = currentPose.getLatLng();
+        LatLng midpoint = midpoint(previousPoint, currentPoint);
+
+        boolean currentNearStairs = MapGeometryUtils.isNearStairs(currentPoint, connectorFloorShapes);
+        boolean currentNearLift = MapGeometryUtils.isNearLift(currentPoint, connectorFloorShapes);
+        if (!currentNearStairs && !currentNearLift) {
+            return false;
         }
 
-        LatLng currentPoint = input.getCurrentCandidatePose().getLatLng();
+        boolean previousNearStairs = previousPoint != null
+                && MapGeometryUtils.isNearStairs(previousPoint, connectorFloorShapes);
+        boolean previousNearLift = previousPoint != null
+                && MapGeometryUtils.isNearLift(previousPoint, connectorFloorShapes);
+        boolean midpointNearStairs = midpoint != null
+                && MapGeometryUtils.isNearStairs(midpoint, connectorFloorShapes);
+        boolean midpointNearLift = midpoint != null
+                && MapGeometryUtils.isNearLift(midpoint, connectorFloorShapes);
 
-        boolean nearStairs = MapGeometryUtils.isNearStairs(currentPoint, floorShapes);
-        boolean nearLift = MapGeometryUtils.isNearLift(currentPoint, floorShapes);
-
-        // 不在楼梯/电梯附近，不允许换层
-        if (!nearStairs && !nearLift) {
+        boolean stairsPersistence = currentNearStairs && (previousNearStairs || midpointNearStairs);
+        boolean liftPersistence = currentNearLift && (previousNearLift || midpointNearLift);
+        if (!stairsPersistence && !liftPersistence) {
             return false;
         }
 
         MotionDelta motionDelta = input.getMotionDelta();
-
-        // 没有运动增量时，保持上一版的宽松策略
         if (motionDelta == null) {
-            return nearStairs || nearLift;
+            return stairsPersistence || liftPersistence;
         }
 
         double stepDistance = motionDelta.getStepDistance();
+        if (stepDistance > MAX_STAIRS_HORIZONTAL_DISPLACEMENT_METERS) {
+            return false;
+        }
+
         boolean likelyLiftMotion = stepDistance <= MAX_LIFT_HORIZONTAL_DISPLACEMENT_METERS;
 
-        // 只靠近 lift：要求水平位移小，更像乘电梯
-        if (nearLift && !nearStairs) {
+        if (liftPersistence && !stairsPersistence) {
             return likelyLiftMotion;
         }
-
-        // 只靠近 stairs：要求水平位移较大，更像走楼梯
-        if (nearStairs && !nearLift) {
+        if (stairsPersistence && !liftPersistence) {
             return !likelyLiftMotion;
         }
-
-        // 两者都靠近时，第一版先允许
         return true;
     }
 
-    /**
-     * 根据当前位置和水平位移，给一次垂直变化做一个简单解释：
-     * 更像 stairs / 更像 lift / 不确定。
-     *
-     * 这个方法当前只用于调试说明，不改变主逻辑。
-     */
+    @Nullable
+    private FloorplanApiClient.FloorShapes chooseConnectorFloorShapes(@NonNull MapMatchingInput input,
+                                                                      boolean floorTransitionAttempt) {
+        if (floorTransitionAttempt && input.getSourceFloorShapes() != null) {
+            return input.getSourceFloorShapes();
+        }
+        if (input.getActiveFloorShapes() != null) {
+            return input.getActiveFloorShapes();
+        }
+        return input.getSourceFloorShapes();
+    }
+
+    @Nullable
+    private FloorplanApiClient.FloorShapes chooseWallCheckFloorShapes(@NonNull MapMatchingInput input,
+                                                                      boolean floorTransitionAttempt) {
+        if (floorTransitionAttempt && input.getSourceFloorShapes() != null) {
+            return input.getSourceFloorShapes();
+        }
+        if (input.getActiveFloorShapes() != null) {
+            return input.getActiveFloorShapes();
+        }
+        return input.getSourceFloorShapes();
+    }
+
+    @NonNull
+    private LatLng clampRecoveryJump(@NonNull LatLng previousLatLng,
+                                     @NonNull LatLng candidateLatLng,
+                                     @NonNull MotionDelta motionDelta,
+                                     boolean nearConnector,
+                                     boolean floorTransitionAttempt,
+                                     boolean floorChangeAllowed) {
+        if (floorTransitionAttempt && floorChangeAllowed) {
+            return candidateLatLng;
+        }
+
+        double stepDistance = motionDelta.getStepDistance();
+        double maxAllowedStep = nearConnector
+                ? MAX_RECOVERY_STEP_NEAR_CONNECTOR_METERS
+                : MAX_RECOVERY_STEP_METERS;
+
+        if (stepDistance <= maxAllowedStep) {
+            return candidateLatLng;
+        }
+
+        double ratio = maxAllowedStep / Math.max(stepDistance, 1e-6);
+        double latitude = previousLatLng.latitude
+                + (candidateLatLng.latitude - previousLatLng.latitude) * ratio;
+        double longitude = previousLatLng.longitude
+                + (candidateLatLng.longitude - previousLatLng.longitude) * ratio;
+        return new LatLng(latitude, longitude);
+    }
+
+    @Nullable
+    private LatLng midpoint(@Nullable LatLng a, @Nullable LatLng b) {
+        if (a == null || b == null) {
+            return null;
+        }
+        return new LatLng(
+                (a.latitude + b.latitude) / 2.0,
+                (a.longitude + b.longitude) / 2.0
+        );
+    }
+
+    private boolean samePoint(@Nullable LatLng a, @Nullable LatLng b) {
+        if (a == b) {
+            return true;
+        }
+        if (a == null || b == null) {
+            return false;
+        }
+        return Math.abs(a.latitude - b.latitude) < 1e-12
+                && Math.abs(a.longitude - b.longitude) < 1e-12;
+    }
+
     private String describeVerticalTransition(boolean nearStairs,
                                               boolean nearLift,
-                                              MotionDelta motionDelta) {
+                                              @Nullable MotionDelta motionDelta) {
         if (!nearStairs && !nearLift) {
             return "not near stairs or lift";
         }
@@ -283,7 +335,6 @@ public class MapMatchingService {
                     : "likely stairs transition";
         }
 
-        // 两者都 near 时，先给一个保守描述
         return likelyLiftMotion
                 ? "near both stairs and lift, motion slightly favors lift"
                 : "near both stairs and lift, motion slightly favors stairs";

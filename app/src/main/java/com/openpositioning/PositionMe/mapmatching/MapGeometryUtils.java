@@ -21,10 +21,10 @@ public class MapGeometryUtils {
 
     // 默认邻近阈值（米）
     // 楼梯邻近阈值可以稍大一点
-    private static final double STAIRS_PROXIMITY_THRESHOLD_METERS = 4.0;
+    private static final double STAIRS_PROXIMITY_THRESHOLD_METERS = 2.2;
 
     // 电梯邻近阈值相对更紧一些
-    private static final double LIFT_PROXIMITY_THRESHOLD_METERS = 2.5;
+    private static final double LIFT_PROXIMITY_THRESHOLD_METERS = 1.8;
     /**
      * 判断从 start 到 end 的轨迹是否穿过当前楼层中的 wall。
      */

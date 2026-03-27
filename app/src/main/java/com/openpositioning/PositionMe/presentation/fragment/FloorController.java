@@ -6,6 +6,7 @@ import android.os.SystemClock;
 import android.view.View;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.android.material.switchmaterial.SwitchMaterial;
@@ -25,6 +26,8 @@ public class FloorController {
 
     private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000L;
     private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000L;
+    private static final float AUTO_FLOOR_MIN_VERTICAL_DELTA_METERS = 1.2f;
+    private static final float AUTO_FLOOR_VERTICAL_FRACTION_PER_FLOOR = 0.55f;
 
     public interface Host {
         @Nullable FloorplanApiClient.BuildingInfo getSelectedFloorplanBuilding();
@@ -46,6 +49,7 @@ public class FloorController {
     private Runnable autoFloorTask;
     private int lastCandidateFloor = Integer.MIN_VALUE;
     private long lastCandidateTime = 0L;
+    private float lastCommittedElevationMeters = Float.NaN;
 
     private SwitchMaterial autoFloorSwitch;
     private FloatingActionButton floorUpButton;
@@ -121,6 +125,7 @@ public class FloorController {
         int maxFloor = selectedFloorplanBuilding.getFloorShapesList().size() - 1;
         int clampedFloor = Math.max(0, Math.min(newFloorIndex, maxFloor));
         host.setCurrentFloorIndex(clampedFloor);
+        syncAutoFloorAnchor();
         host.refreshSelectedPolygonAppearance();
 
         if (!host.isIndoorMapVisible() && !host.isActualMapVisible()) {
@@ -291,20 +296,25 @@ public class FloorController {
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             return;
         }
-        int candidateFloor;
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
-        } else {
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) {
-                return;
-            }
-            candidateFloor = Math.round(elevation / floorHeight);
+
+        Integer candidateFloorIndex = resolveAutoFloorCandidateIndex(sensorFusion, indoorMapManager);
+        if (candidateFloorIndex == null) {
+            return;
         }
-        setFloor(indoorMapManager.logicalFloorToIndex(candidateFloor));
-        lastCandidateFloor = candidateFloor;
-        lastCandidateTime = SystemClock.elapsedRealtime();
+
+        long now = SystemClock.elapsedRealtime();
+        lastCandidateFloor = candidateFloorIndex;
+        lastCandidateTime = now;
+
+        if (candidateFloorIndex == host.getCurrentFloorIndex()) {
+            syncAutoFloorAnchor();
+            return;
+        }
+
+        if (shouldAllowAutoFloorChange(candidateFloorIndex, sensorFusion, indoorMapManager)) {
+            setFloor(candidateFloorIndex);
+            lastCandidateTime = SystemClock.elapsedRealtime();
+        }
     }
 
     public void stopAutoFloor() {
@@ -324,27 +334,87 @@ public class FloorController {
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             return;
         }
-        int candidateFloor;
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
-        } else {
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) {
-                return;
-            }
-            candidateFloor = Math.round(elevation / floorHeight);
+
+        Integer candidateFloorIndex = resolveAutoFloorCandidateIndex(sensorFusion, indoorMapManager);
+        if (candidateFloorIndex == null) {
+            return;
+        }
+
+        if (candidateFloorIndex == host.getCurrentFloorIndex()) {
+            lastCandidateFloor = candidateFloorIndex;
+            lastCandidateTime = SystemClock.elapsedRealtime();
+            syncAutoFloorAnchor();
+            return;
+        }
+
+        if (!shouldAllowAutoFloorChange(candidateFloorIndex, sensorFusion, indoorMapManager)) {
+            lastCandidateFloor = candidateFloorIndex;
+            lastCandidateTime = SystemClock.elapsedRealtime();
+            return;
         }
 
         long now = SystemClock.elapsedRealtime();
-        if (candidateFloor != lastCandidateFloor) {
-            lastCandidateFloor = candidateFloor;
+        if (candidateFloorIndex != lastCandidateFloor) {
+            lastCandidateFloor = candidateFloorIndex;
             lastCandidateTime = now;
             return;
         }
         if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
-            setFloor(indoorMapManager.logicalFloorToIndex(candidateFloor));
-            lastCandidateTime = now;
+            setFloor(candidateFloorIndex);
+            lastCandidateTime = SystemClock.elapsedRealtime();
+        }
+    }
+
+    @Nullable
+    private Integer resolveAutoFloorCandidateIndex(@Nullable SensorFusion sensorFusion,
+                                                   @Nullable IndoorMapManager indoorMapManager) {
+        if (sensorFusion == null || indoorMapManager == null) {
+            return null;
+        }
+
+        int candidateLogicalFloor;
+        if (sensorFusion.getLatLngWifiPositioning() != null) {
+            candidateLogicalFloor = sensorFusion.getWifiFloor();
+        } else {
+            float floorHeight = indoorMapManager.getFloorHeight();
+            if (floorHeight <= 0f) {
+                return null;
+            }
+            candidateLogicalFloor = Math.round(sensorFusion.getElevation() / floorHeight);
+        }
+
+        return indoorMapManager.logicalFloorToIndex(candidateLogicalFloor);
+    }
+
+    private boolean shouldAllowAutoFloorChange(int candidateFloorIndex,
+                                               @NonNull SensorFusion sensorFusion,
+                                               @NonNull IndoorMapManager indoorMapManager) {
+        if (candidateFloorIndex == host.getCurrentFloorIndex()) {
+            return false;
+        }
+
+        if (sensorFusion.getElevator()) {
+            return true;
+        }
+
+        float floorHeight = indoorMapManager.getFloorHeight();
+        if (floorHeight <= 0f || Float.isNaN(lastCommittedElevationMeters)) {
+            return false;
+        }
+
+        int floorSteps = Math.max(1, Math.abs(candidateFloorIndex - host.getCurrentFloorIndex()));
+        float requiredDelta = Math.max(
+                AUTO_FLOOR_MIN_VERTICAL_DELTA_METERS,
+                floorHeight * AUTO_FLOOR_VERTICAL_FRACTION_PER_FLOOR * floorSteps
+        );
+        float measuredDelta = Math.abs(sensorFusion.getElevation() - lastCommittedElevationMeters);
+        return measuredDelta >= requiredDelta;
+    }
+
+    private void syncAutoFloorAnchor() {
+        SensorFusion sensorFusion = host.getSensorFusion();
+        if (sensorFusion != null) {
+            lastCommittedElevationMeters = sensorFusion.getElevation();
         }
     }
 

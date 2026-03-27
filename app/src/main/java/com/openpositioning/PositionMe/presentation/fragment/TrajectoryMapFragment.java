@@ -1580,6 +1580,18 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     public void setReplayModeEnabled(boolean enabled) {
+        if (replayModeEnabled == enabled) {
+            if (enabled) {
+                stopAutoFloor();
+            }
+            if (autoFloorSwitch != null) {
+                autoFloorSwitch.setChecked(false);
+                autoFloorSwitch.setEnabled(!enabled);
+                autoFloorSwitch.setAlpha(enabled ? 0.45f : 1f);
+            }
+            return;
+        }
+
         replayModeEnabled = enabled;
         mapMatchingCoordinator.onReplayModeChanged(enabled);
         if (enabled) {
@@ -1976,6 +1988,8 @@ public class TrajectoryMapFragment extends Fragment {
 
     public void clearMapAndReset() {
         stopAutoFloor();
+        resetMapMatchingState();
+        currentLocation = null;
         if (autoFloorSwitch != null) {
             autoFloorSwitch.setChecked(false);
         }
