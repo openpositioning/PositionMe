@@ -60,7 +60,7 @@
                 android:id="@+id/obsDotsSwitch"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="🟡🟢🔵 Obs" />
+                android:text="🟡PDR 🟢WiFi 🔵GPS" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/lineColorButton"

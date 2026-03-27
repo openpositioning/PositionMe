@@ -41,7 +41,7 @@ import java.util.TimerTask;
 public class WifiDataProcessor implements Observable {
 
     //Time over which a new scan will be initiated
-    private static final long scanInterval = 3000;
+    private static final long scanInterval = 1500;
 
     // Application context for handling permissions and WifiManager instances
     private final Context context;

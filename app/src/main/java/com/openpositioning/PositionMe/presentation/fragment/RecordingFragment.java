@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import com.openpositioning.PositionMe.utils.BuildingPolygon;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -117,11 +118,12 @@ public class RecordingFragment extends Fragment {
     private static final float STAIR_ELEV_RATE_THRESHOLD = 0.3f; // m per 200ms tick
     private static final float STAIR_STEP_SCALE = 0.35f; // horizontal fraction on stairs
 
-    // Calibration: collect multiple KNN/WiFi samples before initializing PF
+    // Calibration: collect multiple KNN/WiFi + GNSS samples before initializing PF
     private static final int CALIBRATION_SAMPLES = 3;
     private static final long CALIBRATION_TIMEOUT_MS = 9000;
     private long calibrationStartTime = 0;
-    private final java.util.List<LatLng> calibrationPositions = new java.util.ArrayList<>();
+    private final java.util.List<LatLng> calibrationPositions = new java.util.ArrayList<>(); // KNN/WiFi
+    private final java.util.List<LatLng> calibrationGnssPositions = new java.util.ArrayList<>(); // GNSS
     private boolean calibrating = false;
     private TextView calibrationCountdown;
 
@@ -200,6 +202,7 @@ public class RecordingFragment extends Fragment {
         calibrating = true;
         calibrationStartTime = System.currentTimeMillis();
         calibrationPositions.clear();
+        calibrationGnssPositions.clear();
         if (calibrationCountdown != null) calibrationCountdown.setVisibility(View.VISIBLE);
 
         // Buttons
@@ -334,49 +337,66 @@ public class RecordingFragment extends Fragment {
             float gnssAcc = sensorFusion.getGNSSAccuracy();
 
             if (calibrating) {
-                // Collect KNN/WiFi samples during calibration
+                // Collect KNN/WiFi samples
                 LatLng sample = (knnPos != null) ? knnPos : wifiPos;
                 if (sample != null && !sample.equals(lastCalibSample())) {
                     calibrationPositions.add(sample);
-                    Log.d("PF_Init", "Calibration sample #" + calibrationPositions.size()
+                    Log.d("PF_Init", "Calib KNN/WiFi #" + calibrationPositions.size()
                             + " at " + sample.latitude + "," + sample.longitude);
+                }
+                // Collect GNSS samples
+                if (gnssPos != null && !gnssPos.equals(lastCalibGnssSample())) {
+                    calibrationGnssPositions.add(gnssPos);
+                    Log.d("PF_Init", "Calib GNSS #" + calibrationGnssPositions.size()
+                            + " at " + gnssPos.latitude + "," + gnssPos.longitude);
                 }
 
                 long elapsed = System.currentTimeMillis() - calibrationStartTime;
                 long remaining = Math.max(0, CALIBRATION_TIMEOUT_MS - elapsed);
+                int totalSamples = Math.max(calibrationPositions.size(), calibrationGnssPositions.size());
 
                 if (calibrationCountdown != null) {
                     int secs = (int) Math.ceil(remaining / 1000.0);
                     calibrationCountdown.setText("Calibrating... " + secs + "s\nPlease stand still"
-                            + "\nSamples: " + calibrationPositions.size() + "/" + CALIBRATION_SAMPLES);
+                            + "\nSamples: " + totalSamples + "/" + CALIBRATION_SAMPLES);
                 }
 
                 // Finish: enough samples or timeout
-                if (calibrationPositions.size() >= CALIBRATION_SAMPLES || remaining <= 0) {
+                if (totalSamples >= CALIBRATION_SAMPLES || remaining <= 0) {
                     calibrating = false;
                     if (calibrationCountdown != null) calibrationCountdown.setVisibility(View.GONE);
 
+                    // Compute averages
+                    LatLng knnWifiAvg = averagePositions(calibrationPositions);
+                    LatLng gnssAvg = averagePositions(calibrationGnssPositions);
+
+                    // Decide based on GNSS accuracy:
+                    // Good GNSS (<15m) = outdoor → trust GNSS over KNN/WiFi
+                    // Poor GNSS (>50m) = indoor → trust KNN/WiFi
+                    float currentGnssAcc = sensorFusion.getGNSSAccuracy();
+                    boolean gnssReliable = (gnssAvg != null && currentGnssAcc < 15.0f);
+
                     LatLng initPos;
                     String src;
-                    if (!calibrationPositions.isEmpty()) {
-                        double avgLat = 0, avgLng = 0;
-                        for (LatLng p : calibrationPositions) {
-                            avgLat += p.latitude; avgLng += p.longitude;
-                        }
-                        avgLat /= calibrationPositions.size();
-                        avgLng /= calibrationPositions.size();
-                        initPos = new LatLng(avgLat, avgLng);
+                    if (gnssReliable) {
+                        // Good GNSS signal = outdoor/door, use GNSS
+                        initPos = gnssAvg;
+                        src = "GNSS(acc=" + String.format("%.1f", currentGnssAcc) + "m,"
+                                + calibrationGnssPositions.size() + " samples)";
+                        Log.d("PF_Init", "GNSS reliable (acc=" + currentGnssAcc + "m) → using GNSS");
+                    } else if (knnWifiAvg != null) {
+                        initPos = knnWifiAvg;
                         src = "KNN/WiFi avg(" + calibrationPositions.size() + " samples)";
-                    } else if (gnssPos != null) {
-                        initPos = gnssPos;
-                        src = "GNSS(fallback,acc=" + String.format("%.1f", gnssAcc) + "m)";
+                    } else if (gnssAvg != null) {
+                        initPos = gnssAvg;
+                        src = "GNSS(fallback," + calibrationGnssPositions.size() + " samples)";
                     } else {
                         return;
                     }
 
                     particleFilter.initialize(initPos);
                     pfInitialized = true;
-                    pfInitFromGnss = calibrationPositions.isEmpty();
+                    pfInitFromGnss = (knnWifiAvg == null) || gnssReliable;
                     if (trajectoryMapFragment != null) trajectoryMapFragment.enableTrajectory();
                     refreshPFWallData();
                     Log.d("PF_Init", "PF initialized from " + src
@@ -595,6 +615,24 @@ public class RecordingFragment extends Fragment {
     }
 
     private int testPointIndex = 0;
+
+    private LatLng lastCalibGnssSample() {
+        return calibrationGnssPositions.isEmpty() ? null
+                : calibrationGnssPositions.get(calibrationGnssPositions.size() - 1);
+    }
+
+    private LatLng averagePositions(java.util.List<LatLng> positions) {
+        if (positions == null || positions.isEmpty()) return null;
+        double lat = 0, lng = 0;
+        for (LatLng p : positions) { lat += p.latitude; lng += p.longitude; }
+        return new LatLng(lat / positions.size(), lng / positions.size());
+    }
+
+    private boolean isInsideAnyBuilding(LatLng pos) {
+        return BuildingPolygon.inNucleus(pos)
+                || BuildingPolygon.inLibrary(pos)
+                || BuildingPolygon.inMurchison(pos);
+    }
 
     private static class TestPoint {
         final int index;

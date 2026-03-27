@@ -237,6 +237,22 @@ public class IndoorMapManager {
                     isIndoorMapSet = true;
                 }
 
+            } else if (inAnyBuilding && isIndoorMapSet && detected != currentBuilding) {
+                // Building switch: only between Nucleus ↔ Library (not for unknown buildings)
+                boolean isKnownSwitch =
+                        (currentBuilding == BUILDING_NUCLEUS && detected == BUILDING_LIBRARY)
+                     || (currentBuilding == BUILDING_LIBRARY && detected == BUILDING_NUCLEUS);
+                if (isKnownSwitch) {
+                    Log.d(TAG, "Building switch: " + currentBuilding + " → " + detected);
+                    clearDrawnShapes();
+                    isIndoorMapSet = false;
+                    // Re-enter the first branch on next call to load new building
+                    currentBuilding = BUILDING_NONE;
+                    currentFloorShapes = null;
+                    setBuildingOverlay(); // recursive call to load the new building
+                    return;
+                }
+                // Otherwise (e.g. Ann Walker area) keep current building via sticky logic
             } else if (!inAnyBuilding && isIndoorMapSet) {
                 // Sticky logic: keep indoor map if position is within 25m of building
                 if (isWithinStickyRadius(currentLocation)) {
@@ -383,7 +399,7 @@ public class IndoorMapManager {
         return zones;
     }
 
-    private static final double TRANSITION_ZONE_RADIUS_M = 8.0;
+    private static final double TRANSITION_ZONE_RADIUS_M = 5.0;
 
     /**
      * Checks whether a position is near any stairs or lift zone on the current floor.

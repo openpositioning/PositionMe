@@ -394,7 +394,7 @@ public class TrajectoryMapFragment extends Fragment {
                 gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
             }
 
-            if (polyline != null) {
+            if (trajectoryEnabled && polyline != null) {
                 List<LatLng> pts = new ArrayList<>(polyline.getPoints());
                 pts.add(newLocation);
                 polyline.setPoints(pts);
@@ -819,7 +819,18 @@ public class TrajectoryMapFragment extends Fragment {
         float elevation = sensorFusion.getElevation();
         float floorHeight = indoorMapManager.getFloorHeight();
         if (floorHeight <= 0) return;
-        int floorDelta = Math.round((elevation - wifiAnchorElevation) / floorHeight);
+        // Floor delta with asymmetric dead zone: anchor floor holds from -2.1m to +2.6m,
+        // then each subsequent floor is floorHeight (4.2m) wide, shifted up by 0.5m
+        float elevDiff = elevation - wifiAnchorElevation;
+        int floorDelta;
+        if (elevDiff >= -2.1f && elevDiff < 2.6f) {
+            floorDelta = 0;  // stay on anchor floor
+        } else if (elevDiff >= 2.6f) {
+            floorDelta = 1 + (int) ((elevDiff - 2.6f) / floorHeight);
+        } else {
+            // below -2.1m
+            floorDelta = -1 - (int) ((-2.1f - elevDiff) / floorHeight);
+        }
         int candidateIndex = wifiAnchorFloorIndex + floorDelta;
         String source = "anchor=" + wifiAnchorFloorIndex + " elev=" + String.format("%.2f", elevation)
                 + " anchorElev=" + String.format("%.2f", wifiAnchorElevation)
