@@ -305,6 +305,18 @@ public class TrajectoryMapFragment extends Fragment {
                     return replayModeEnabled;
                 }
 
+                @Nullable
+                @Override
+                public SensorFusion getSensorFusion() {
+                    return sensorFusion;
+                }
+
+                @Nullable
+                @Override
+                public Integer getTrackingCandidateFloorIndex() {
+                    return floorController.peekTrackingFloorCandidateIndex();
+                }
+
                 @Override
                 public int getCurrentFloorIndex() {
                     return currentFloorIndex;

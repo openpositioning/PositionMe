@@ -17,13 +17,22 @@ import com.openpositioning.PositionMe.mapmatching.MapMatchingInput;
 import com.openpositioning.PositionMe.mapmatching.MapMatchingResult;
 import com.openpositioning.PositionMe.mapmatching.MapMatchingService;
 import com.openpositioning.PositionMe.mapmatching.MotionDelta;
+import com.openpositioning.PositionMe.mapmatching.VerticalMotionDetector;
 import com.openpositioning.PositionMe.mapmatching.VerticalTransitionHint;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 
 import java.util.List;
 import java.util.Locale;
 
 final class MapMatchingCoordinator {
+
+    private static final double WIFI_MAX_PULL_METERS = 6.0;
+    private static final double GNSS_MAX_PULL_METERS = 10.0;
+    private static final double WIFI_BLEND_RATIO = 0.45;
+    private static final double GNSS_BLEND_RATIO = 0.20;
+    private static final double MAX_OBSERVATION_RESIDUAL_METERS = 25.0;
+
 
     interface Host {
         @Nullable GoogleMap getGoogleMap();
@@ -32,6 +41,8 @@ final class MapMatchingCoordinator {
         @Nullable FloorplanApiClient.BuildingInfo getSelectedFloorplanBuilding();
         @Nullable IndoorMapManager getIndoorMapManager();
         boolean isReplayModeEnabled();
+        @Nullable SensorFusion getSensorFusion();
+        @Nullable Integer getTrackingCandidateFloorIndex();
         int getCurrentFloorIndex();
         void setFloor(int floorIndex);
         boolean isAutoFloorEnabled();
@@ -51,6 +62,7 @@ final class MapMatchingCoordinator {
 
     private final Host host;
     private final MapMatchingService mapMatchingService = new MapMatchingService();
+    private final VerticalMotionDetector verticalMotionDetector = new VerticalMotionDetector();
 
     @Nullable
     private CandidatePose previousMatchedPose;
@@ -73,6 +85,8 @@ final class MapMatchingCoordinator {
 
     void onReplayModeChanged(boolean enabled) {
         previousMatchedPose = null;
+        mapMatchingService.resetTransientState();
+        verticalMotionDetector.reset();
         host.getTrajectoryRenderer().clearRawReplayPath();
         clearReplayContext(true);
         if (enabled) {
@@ -82,6 +96,8 @@ final class MapMatchingCoordinator {
 
     void onSelectedBuildingChanged() {
         previousMatchedPose = null;
+        mapMatchingService.resetTransientState();
+        verticalMotionDetector.reset();
         host.getTrajectoryRenderer().clearRawReplayPath();
         clearReplayContext(true);
     }
@@ -129,23 +145,29 @@ final class MapMatchingCoordinator {
         }
 
         long timestampMs = SystemClock.elapsedRealtime();
+        int displayFloorIndex = host.getCurrentFloorIndex();
         int candidateFloorIndex = replayMode
                 ? resolveReplayCandidateFloorIndex()
                 : resolveLiveCandidateFloorIndex();
         int sourceFloorIndex = previousMatchedPose != null
                 ? previousMatchedPose.getFloor()
                 : candidateFloorIndex;
+        AbsoluteObservationCorrection absoluteCorrection = replayMode
+                ? AbsoluteObservationCorrection.passThrough(rawLocation, "replay_pdr")
+                : applyAbsoluteObservationCorrection(rawLocation, candidateFloorIndex);
+        LatLng candidateLatLng = absoluteCorrection.getCorrectedLatLng();
         FloorplanApiClient.FloorShapes sourceFloorShapes = getFloorShapesForFloorIndex(sourceFloorIndex);
         FloorplanApiClient.FloorShapes targetFloorShapes = getFloorShapesForFloorIndex(candidateFloorIndex);
         CandidatePose currentCandidatePose = new CandidatePose(
-                rawLocation,
+                candidateLatLng,
                 candidateFloorIndex,
                 timestampMs,
-                replayMode ? "replay_pdr" : "live_pdr"
+                absoluteCorrection.getPoseSource()
         );
 
-        MotionDelta motionDelta = buildMotionDelta(previousMatchedPose, rawLocation, orientation);
-        VerticalTransitionHint verticalHint = replayMode ? buildReplayVerticalHint() : null;
+        MotionDelta motionDelta = buildMotionDelta(previousMatchedPose, candidateLatLng, orientation);
+        VerticalTransitionHint verticalHint = buildVerticalTransitionHint(timestampMs);
+        logVerticalHintDiagnostics(verticalHint, replayMode, candidateFloorIndex);
         FloorplanApiClient.BuildingInfo selectedBuilding = host.getSelectedFloorplanBuilding();
         String activeBuildingId = selectedBuilding != null
                 ? host.resolveKnownBuildingKey(selectedBuilding, selectedBuilding.getName())
@@ -171,15 +193,21 @@ final class MapMatchingCoordinator {
                 : matchedFloor;
 
         logFeatureValidation(rawLocation, matchingResult);
+        logAbsoluteObservationDiagnostics(rawLocation, absoluteCorrection);
         Log.d(host.getTestLogTag(), String.format(Locale.US,
-                "raw=(%.6f, %.6f) matched=(%.6f, %.6f) sourceFloor=%d candidateFloor=%d matchedFloor=%d correction=%s reason=%s",
+                "raw=(%.6f, %.6f) candidate=(%.6f, %.6f) matched=(%.6f, %.6f) sourceFloor=%d candidateFloor=%d matchedFloor=%d displayFloor=%d autoFloorEnabled=%s candidateSource=%s correction=%s reason=%s",
                 rawLocation.latitude,
                 rawLocation.longitude,
+                candidateLatLng.latitude,
+                candidateLatLng.longitude,
                 matchedLocation.latitude,
                 matchedLocation.longitude,
                 sourceFloorIndex,
                 candidateFloorIndex,
                 matchedFloor,
+                displayFloorIndex,
+                String.valueOf(host.isAutoFloorEnabled()),
+                absoluteCorrection.getPoseSource(),
                 matchingResult.getCorrectionType() != null
                         ? matchingResult.getCorrectionType().name()
                         : CorrectionType.NONE.name(),
@@ -219,6 +247,8 @@ final class MapMatchingCoordinator {
 
     void resetMapMatchingState() {
         previousMatchedPose = null;
+        mapMatchingService.resetTransientState();
+        verticalMotionDetector.reset();
         host.getTrajectoryRenderer().clearRawReplayPath();
         clearReplayContext(true);
     }
@@ -253,10 +283,123 @@ final class MapMatchingCoordinator {
     }
 
     private int resolveLiveCandidateFloorIndex() {
+        Integer trackingCandidateFloorIndex = host.getTrackingCandidateFloorIndex();
+        if (trackingCandidateFloorIndex != null) {
+            return trackingCandidateFloorIndex;
+        }
         if (previousMatchedPose != null) {
             return previousMatchedPose.getFloor();
         }
         return host.getCurrentFloorIndex();
+    }
+
+    @NonNull
+    private AbsoluteObservationCorrection applyAbsoluteObservationCorrection(@NonNull LatLng rawLocation,
+                                                                             int candidateFloorIndex) {
+        SensorFusion sensorFusion = host.getSensorFusion();
+        if (sensorFusion == null) {
+            return AbsoluteObservationCorrection.passThrough(rawLocation, "live_pdr");
+        }
+
+        LatLng wifiObservation = sensorFusion.getLatLngWifiPositioning();
+        if (isUsableObservation(wifiObservation)) {
+            double rawDistanceMeters = distanceMeters(rawLocation, wifiObservation);
+            if (rawDistanceMeters <= MAX_OBSERVATION_RESIDUAL_METERS) {
+                double blendRatio = previousMatchedPose == null ? 0.70 : WIFI_BLEND_RATIO;
+                double maxPullMeters = previousMatchedPose == null ? WIFI_MAX_PULL_METERS * 2.0 : WIFI_MAX_PULL_METERS;
+                LatLng blended = blendTowardObservation(rawLocation, wifiObservation, blendRatio, maxPullMeters);
+                return new AbsoluteObservationCorrection(blended, "live_wifi_fused", "wifi", rawDistanceMeters);
+            }
+        }
+
+        LatLng gnssObservation = getGnssObservation(sensorFusion);
+        if (isUsableObservation(gnssObservation)) {
+            double rawDistanceMeters = distanceMeters(rawLocation, gnssObservation);
+            if (rawDistanceMeters <= MAX_OBSERVATION_RESIDUAL_METERS) {
+                double blendRatio = previousMatchedPose == null ? 0.40 : GNSS_BLEND_RATIO;
+                double maxPullMeters = previousMatchedPose == null ? GNSS_MAX_PULL_METERS * 1.5 : GNSS_MAX_PULL_METERS;
+                LatLng blended = blendTowardObservation(rawLocation, gnssObservation, blendRatio, maxPullMeters);
+                return new AbsoluteObservationCorrection(blended, "live_gnss_fused", "gnss", rawDistanceMeters);
+            }
+        }
+
+        return AbsoluteObservationCorrection.passThrough(rawLocation, "live_pdr");
+    }
+
+    private void logAbsoluteObservationDiagnostics(@NonNull LatLng rawLocation,
+                                                   @NonNull AbsoluteObservationCorrection correction) {
+        if (!correction.hasExternalObservation()) {
+            Log.d(host.getTestLogTag(), String.format(Locale.US,
+                    "ABSOLUTE_UPDATE source=none raw=(%.6f, %.6f) candidate=(%.6f, %.6f)",
+                    rawLocation.latitude,
+                    rawLocation.longitude,
+                    correction.getCorrectedLatLng().latitude,
+                    correction.getCorrectedLatLng().longitude));
+            return;
+        }
+
+        double appliedShiftMeters = distanceMeters(rawLocation, correction.getCorrectedLatLng());
+        Log.d(host.getTestLogTag(), String.format(Locale.US,
+                "ABSOLUTE_UPDATE source=%s residualMeters=%.2f appliedShiftMeters=%.2f candidate=(%.6f, %.6f)",
+                correction.getObservationSource(),
+                correction.getObservationResidualMeters(),
+                appliedShiftMeters,
+                correction.getCorrectedLatLng().latitude,
+                correction.getCorrectedLatLng().longitude));
+    }
+
+    @Nullable
+    private LatLng getGnssObservation(@NonNull SensorFusion sensorFusion) {
+        float[] gnss = sensorFusion.getGNSSLatitude(false);
+        if (gnss == null || gnss.length < 2) {
+            return null;
+        }
+        if (gnss[0] == 0f && gnss[1] == 0f) {
+            return null;
+        }
+        return new LatLng(gnss[0], gnss[1]);
+    }
+
+    private boolean isUsableObservation(@Nullable LatLng observation) {
+        return observation != null
+                && !Double.isNaN(observation.latitude)
+                && !Double.isNaN(observation.longitude)
+                && !(observation.latitude == 0d && observation.longitude == 0d);
+    }
+
+    @NonNull
+    private LatLng blendTowardObservation(@NonNull LatLng rawLocation,
+                                          @NonNull LatLng observation,
+                                          double blendRatio,
+                                          double maxPullMeters) {
+        LatLng blended = interpolate(rawLocation, observation, blendRatio);
+        double appliedShiftMeters = distanceMeters(rawLocation, blended);
+        if (appliedShiftMeters <= maxPullMeters) {
+            return blended;
+        }
+        double limitedRatio = maxPullMeters / Math.max(appliedShiftMeters, 1e-6d);
+        return interpolate(rawLocation, blended, limitedRatio);
+    }
+
+    @NonNull
+    private LatLng interpolate(@NonNull LatLng from, @NonNull LatLng to, double ratio) {
+        double clampedRatio = Math.max(0d, Math.min(1d, ratio));
+        return new LatLng(
+                from.latitude + (to.latitude - from.latitude) * clampedRatio,
+                from.longitude + (to.longitude - from.longitude) * clampedRatio
+        );
+    }
+
+    private double distanceMeters(@NonNull LatLng from, @NonNull LatLng to) {
+        float[] results = new float[1];
+        Location.distanceBetween(
+                from.latitude,
+                from.longitude,
+                to.latitude,
+                to.longitude,
+                results
+        );
+        return results[0];
     }
 
     @Nullable
@@ -279,6 +422,42 @@ final class MapMatchingCoordinator {
         double deltaX = rawLocation.longitude - previousPose.getLatLng().longitude;
         double deltaY = rawLocation.latitude - previousPose.getLatLng().latitude;
         return new MotionDelta(deltaX, deltaY, results[0], orientation);
+    }
+
+    @Nullable
+    private VerticalTransitionHint buildVerticalTransitionHint(long timestampMs) {
+        if (!host.isReplayModeEnabled()) {
+            SensorFusion sensorFusion = host.getSensorFusion();
+            if (sensorFusion == null) {
+                return null;
+            }
+
+            double elevationMeters = sensorFusion.getElevation();
+            boolean elevatorLikely = sensorFusion.getElevator();
+            verticalMotionDetector.addSample(timestampMs, elevationMeters, elevatorLikely);
+            return verticalMotionDetector.buildHint();
+        }
+        return buildReplayVerticalHint();
+    }
+
+    private void logVerticalHintDiagnostics(@Nullable VerticalTransitionHint verticalHint,
+                                            boolean replayMode,
+                                            int candidateFloorIndex) {
+        if (verticalHint == null) {
+            Log.d(host.getTestLogTag(), String.format(Locale.US,
+                    "VERTICAL_HINT source=%s candidateFloor=%d available=false",
+                    replayMode ? "replay" : "live",
+                    candidateFloorIndex));
+            return;
+        }
+
+        Log.d(host.getTestLogTag(), String.format(Locale.US,
+                "VERTICAL_HINT source=%s candidateFloor=%d available=true elevation=%.2f deltaHeight=%.2f heightChanged=%s",
+                replayMode ? "replay" : "live",
+                candidateFloorIndex,
+                verticalHint.getCurrentElevation(),
+                verticalHint.getDeltaHeight(),
+                String.valueOf(verticalHint.isHeightChanged())));
     }
 
     @Nullable
@@ -486,5 +665,53 @@ final class MapMatchingCoordinator {
                 String.valueOf(result.isFloorChangeAllowed()),
                 result.getCorrectionType() != null ? result.getCorrectionType().name() : CorrectionType.NONE.name(),
                 result.getDebugReason()));
+    }
+
+    private static final class AbsoluteObservationCorrection {
+        @NonNull
+        private final LatLng correctedLatLng;
+        @NonNull
+        private final String poseSource;
+        @Nullable
+        private final String observationSource;
+        private final double observationResidualMeters;
+
+        private AbsoluteObservationCorrection(@NonNull LatLng correctedLatLng,
+                                              @NonNull String poseSource,
+                                              @Nullable String observationSource,
+                                              double observationResidualMeters) {
+            this.correctedLatLng = correctedLatLng;
+            this.poseSource = poseSource;
+            this.observationSource = observationSource;
+            this.observationResidualMeters = observationResidualMeters;
+        }
+
+        @NonNull
+        static AbsoluteObservationCorrection passThrough(@NonNull LatLng latLng, @NonNull String poseSource) {
+            return new AbsoluteObservationCorrection(latLng, poseSource, null, 0d);
+        }
+
+        @NonNull
+        LatLng getCorrectedLatLng() {
+            return correctedLatLng;
+        }
+
+        @NonNull
+        String getPoseSource() {
+            return poseSource;
+        }
+
+        boolean hasExternalObservation() {
+            return observationSource != null;
+        }
+
+        @Nullable
+        String getObservationSource() {
+            return observationSource;
+        }
+
+        double getObservationResidualMeters() {
+            return observationResidualMeters;
+        }
     }
 }

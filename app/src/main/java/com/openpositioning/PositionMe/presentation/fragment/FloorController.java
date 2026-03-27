@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.presentation.fragment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
@@ -24,6 +25,7 @@ import java.util.List;
  */
 public class FloorController {
 
+    private static final String TAG = "FloorController";
     private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000L;
     private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000L;
     private static final float AUTO_FLOOR_MIN_VERTICAL_DELTA_METERS = 1.2f;
@@ -84,8 +86,9 @@ public class FloorController {
 
         if (floorUpButton != null) {
             floorUpButton.setOnClickListener(v -> {
-                if (autoFloorSwitch != null) {
-                    autoFloorSwitch.setChecked(false);
+                if (isAutoFloorEnabled()) {
+                    Log.d(TAG, "Ignored manual floor-up because AutoFloor is enabled.");
+                    return;
                 }
                 FloorplanApiClient.BuildingInfo building = host.getSelectedFloorplanBuilding();
                 if (building != null) {
@@ -100,8 +103,9 @@ public class FloorController {
 
         if (floorDownButton != null) {
             floorDownButton.setOnClickListener(v -> {
-                if (autoFloorSwitch != null) {
-                    autoFloorSwitch.setChecked(false);
+                if (isAutoFloorEnabled()) {
+                    Log.d(TAG, "Ignored manual floor-down because AutoFloor is enabled.");
+                    return;
                 }
                 FloorplanApiClient.BuildingInfo building = host.getSelectedFloorplanBuilding();
                 if (building != null) {
@@ -325,6 +329,10 @@ public class FloorController {
         lastCandidateTime = 0L;
     }
 
+    public boolean isAutoFloorEnabled() {
+        return autoFloorSwitch != null && autoFloorSwitch.isChecked();
+    }
+
     public void evaluateAutoFloor() {
         if (host.isReplayModeEnabled()) {
             return;
@@ -384,6 +392,43 @@ public class FloorController {
         }
 
         return indoorMapManager.logicalFloorToIndex(candidateLogicalFloor);
+    }
+
+    /**
+     * Returns a floor candidate for positioning logic without forcing the UI to switch floors.
+     *
+     * Strategy:
+     * - If WiFi positioning is available, expose its floor immediately as an algorithm candidate.
+     * - Otherwise only expose a barometer/elevator-derived floor when the same evidence would be
+     *   strong enough to justify an AutoFloor transition.
+     * - If the evidence is weak, return null so the caller can keep the previous matched floor.
+     */
+    @Nullable
+    public Integer peekTrackingFloorCandidateIndex() {
+        if (host.isReplayModeEnabled()) {
+            return null;
+        }
+
+        SensorFusion sensorFusion = host.getSensorFusion();
+        IndoorMapManager indoorMapManager = host.getIndoorMapManager();
+        if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
+            return null;
+        }
+
+        Integer rawCandidateFloorIndex = resolveAutoFloorCandidateIndex(sensorFusion, indoorMapManager);
+        if (rawCandidateFloorIndex == null) {
+            return null;
+        }
+
+        if (sensorFusion.getLatLngWifiPositioning() != null) {
+            return rawCandidateFloorIndex;
+        }
+
+        if (shouldAllowAutoFloorChange(rawCandidateFloorIndex, sensorFusion, indoorMapManager)) {
+            return rawCandidateFloorIndex;
+        }
+
+        return null;
     }
 
     private boolean shouldAllowAutoFloorChange(int candidateFloorIndex,
