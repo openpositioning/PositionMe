@@ -32,6 +32,8 @@ public class PositionFusionEngine {
     private static final double INIT_STD_M = 2.0;
     private static final double ROUGHEN_STD_M = 0.15;
     private static final double WIFI_SIGMA_M = 5.5;
+    private static final double INDOOR_GNSS_SIGMA_MULTIPLIER = 2.0;
+    private static final double INDOOR_GNSS_MIN_SIGMA_M = 10.0;
     private static final double FLOOR_HINT_MIN_SUPPORT = 0.08;
     private static final double FLOOR_HINT_INJECTION_FRACTION = 0.25;
     private static final double FLOOR_HINT_INJECTION_STD_M = 1.2;
@@ -168,10 +170,14 @@ public class PositionFusionEngine {
 
     public synchronized void updateGnss(double latDeg, double lonDeg, float accuracyMeters) {
         double sigma = Math.max(accuracyMeters, 3.0f);
+        boolean indoors = activeBuildingName != null && !activeBuildingName.isEmpty();
+        if (indoors) {
+            sigma = Math.max(sigma * INDOOR_GNSS_SIGMA_MULTIPLIER, INDOOR_GNSS_MIN_SIGMA_M);
+        }
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
-                    "GNSS update lat=%.7f lon=%.7f acc=%.2f sigma=%.2f",
-                    latDeg, lonDeg, accuracyMeters, sigma));
+                    "GNSS update lat=%.7f lon=%.7f acc=%.2f sigma=%.2f indoors=%s",
+                    latDeg, lonDeg, accuracyMeters, sigma, String.valueOf(indoors)));
         }
         applyAbsoluteFix(latDeg, lonDeg, sigma, null);
     }
