@@ -40,6 +40,7 @@ import com.openpositioning.PositionMe.utils.CoordinateConverter;
 import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.google.android.gms.maps.model.LatLng;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -448,7 +449,7 @@ public class RecordingFragment extends Fragment {
 //                changed
                 // Green PDR observation dot — same position as the red polyline
                 mapFrag.updatePdrPosition(newLocation);
-                float[][] particles = sensorFusion.getParticles();
+//                float[][] particles = sensorFusion.getParticles();
                 float[] bestEnu = sensorFusion.getBestParticleEstimate();
                 CoordinateConverter converter = sensorFusion.getCoordinateConverter();
 
@@ -465,6 +466,8 @@ public class RecordingFragment extends Fragment {
                         displayLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation())
                 );
+                Log.d("MapCompare", "PF displayLocation = " + displayLocation);
+                Log.d("MapCompare", "Fused location = " + Arrays.toString(sensorFusion.getFusedLatLon()));
             }
         }
 
@@ -558,6 +561,7 @@ public class RecordingFragment extends Fragment {
                 android.util.Log.e("RecordingUI", "Error updating counts: " + e.getMessage());
             }
         }
+
     }
 
     /**

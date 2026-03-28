@@ -537,6 +537,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                         // Predict particle motion
                         particleFilter.predict(dx, dy);
                         ekfPositioning.predict(dx, dy);
+                        float[] bestBefore = particleFilter.getBestEstimate();
+                        Log.d("PFDebug", "Best BEFORE constraints: " +
+                                bestBefore[0] + ", " + bestBefore[1]);
 
                         // Apply wall constraints after prediction
                         if (coordinateConverter != null && indoorMapManager != null) {
@@ -560,8 +563,13 @@ public class SensorFusion implements SensorEventListener, Observer {
                                     liveWeights,
                                     coordinateConverter
                             );
+                            particleFilter.normalizeWeights();
 
                             Log.d("SensorFusion", "Applied wall constraints to particle cloud");
+                            float[] bestAfter = particleFilter.getBestEstimate();
+
+                            Log.d("PFDebug", "Best BEFORE constraints: " + bestBefore[0] + ", " + bestBefore[1]);
+                            Log.d("PFDebug", "Best AFTER constraints: " + bestAfter[0] + ", " + bestAfter[1]);
                         }
 
                         prevPdrX = newCords[0];

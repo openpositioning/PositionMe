@@ -280,6 +280,27 @@ public class ParticleFilter {
         }
     }
 
+    public void normalizeWeights() {
+        if (!initialized) return;
+
+        float totalWeight = 0f;
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            totalWeight += weights[i];
+        }
+
+        if (totalWeight > 1e-10f) {
+            for (int i = 0; i < NUM_PARTICLES; i++) {
+                weights[i] /= totalWeight;
+            }
+        } else {
+            Log.w(TAG, "Weight collapse detected — resetting to uniform weights");
+            float uniform = 1.0f / NUM_PARTICLES;
+            for (int i = 0; i < NUM_PARTICLES; i++) {
+                weights[i] = uniform;
+            }
+        }
+    }
+
     /**
      * Resampling: draws new particles from the current weighted distribution, then resets weights to uniform.
      */

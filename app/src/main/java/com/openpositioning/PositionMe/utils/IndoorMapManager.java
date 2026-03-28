@@ -196,6 +196,7 @@ public class IndoorMapManager {
             float[] weights,
             CoordinateConverter converter) {
 
+
         if (currentVenue == null || currentFloorKey == null) return;
         IndoorVenue.FloorFeatures floor =
                 currentVenue.floorFeatures.get(currentFloorKey);
@@ -203,20 +204,32 @@ public class IndoorMapManager {
 
         for (int i = 0; i < weights.length; i++) {
             if (weights[i] == 0f) continue; // already dead, skip
+            Log.d("WallDebug", "Particle " + i +
+                    " prev=(" + prevEast[i] + "," + prevNorth[i] + ")" +
+                    " curr=(" + currEast[i] + "," + currNorth[i] + ")" +
+                    " floor = "+ currentFloorKey);
 
             //convert prev and curr to LatLng
             LatLng prev = toLatLng(prevEast[i], prevNorth[i], converter);
             LatLng curr = toLatLng(currEast[i], currNorth[i], converter);
+
             //check if cross walls on that floor
             if (crossesAnyWall(prev, curr, floor.wallPolygons)) {
+                Log.d("WallDebug", "Particle " + i + " CROSSED WALL");
                 LatLng snapped = adjustPositionToNearestValidLocation(
                         prev, curr, getNearestWallPolygon(prev, curr, floor.wallPolygons));
+                Log.d("WallDebug", "Snapped from " + curr + " → " + snapped);
                 float[] enu = converter.toEnu(snapped.latitude, snapped.longitude);
+                Log.d("WallDebug", "Snapped from " + curr + " → " + snapped);
                 //directly change currEast, currNorth, and weights arrays
                 currEast[i] = enu[0];
                 currNorth[i] = enu[1];
-                weights[i] *= 0;
+                //downweight changed location
+                weights[i] *= 0.01f;
+                Log.d("WallDebug", "Weight updated: " + weights[i]);
+
             }
+
             }
         Log.e("IndoorMapManager", "applied wall constraints!");
 
@@ -632,7 +645,8 @@ public class IndoorMapManager {
             float strokeWidth = 2.0f;
 
             if (t.contains("wall")) {
-                fillColor = Color.argb(0, 0, 0, 0);
+                strokeColor = Color.RED;
+                fillColor = Color.argb(0, 250, 0, 0);
                 strokeWidth = 3.5f;
             } else if (t.contains("door")) {
                 fillColor = Color.argb(0, 0, 0, 0);
