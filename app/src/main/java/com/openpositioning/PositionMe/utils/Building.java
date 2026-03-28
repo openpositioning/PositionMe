@@ -53,7 +53,7 @@ public class Building {
 
     private List<LatLng> outlinePoints;
     private String name;
-    private Map<String, List<Map<String, List<LatLng>>>> floorPlans;
+    private List<FloorPlan> floorPlans;
     private List<String> floorNames;
     private float floorHeight;
     private int floorNumber = BUILDING_NO_FLOOR;
@@ -66,10 +66,7 @@ public class Building {
     private PolygonOptions outlinePolygonOptions;
     private Polygon outlinePolygon;
 
-    public Building(
-            String name,
-            List<LatLng> outlinePoints,
-            Map<String, List<Map<String, List<LatLng>>>> floorPlans) {
+    public Building(String name, List<LatLng> outlinePoints, List<FloorPlan> floorPlans) {
         this.name = name;
         this.floorPlans = floorPlans;
         this.outlinePoints = outlinePoints;
@@ -84,7 +81,8 @@ public class Building {
         */
         this.outlinePolygonOptions = buildOutlinePolygon();
         this.floorPlanElementOptions = buildFloorPlanElements();
-        this.floorNames = defineFloorNameOrder(new ArrayList<>(this.floorPlans.keySet()));
+
+        this.floorNames = defineFloorNameOrder(this.floorPlans);
 
         // Define the floor height
         if (name.equals(BUILDING_NAME_NUCLEUS)) {
@@ -118,54 +116,52 @@ public class Building {
      */
     private Map<String, List<Object>> buildFloorPlanElements() {
         Map<String, List<Object>> floorPlanElementOptions = new HashMap<>();
-        List<String> floorNames = new ArrayList<>(this.floorPlans.keySet());
-        for (String floorName : floorNames) {
-            List<Map<String, List<LatLng>>> floorPlan = floorPlans.get(floorName);
-            List<Object> floorElements = new ArrayList<>();
+        List<String> floorNames = new ArrayList<>();
 
-            // Most building floor plans will be a list of MultiPolygon objects
-            // Nucleus will use a list of MultiLineString objects
-            for (Map<String, List<LatLng>> element : floorPlan) {
-                for (String elementType : element.keySet()) {
-                    List<LatLng> elementPoints = element.get(elementType);
-                    switch (elementType) {
-                        case BUILDING_ELEMENT_WALL:
-                            floorElements.add(
-                                    new PolylineOptions()
-                                            .width(LINE_WEIGHT_FLOOR_PLAN)
-                                            .color(COLOUR_FLOOR_PLAN_ELEMENTS_WALL)
-                                            .zIndex(1)
-                                            .addAll(elementPoints));
-                            break;
-                        case BUILDING_ELEMENT_STAIRS:
-                            floorElements.add(
-                                    new PolygonOptions()
-                                            .strokeWidth(LINE_WEIGHT_FLOOR_PLAN)
-                                            .strokeColor(COLOUR_FLOOR_PLAN_ELEMENTS_STAIRS)
-                                            .fillColor(COLOUR_FLOOR_PLAN_ELEMENTS_STAIRS)
-                                            .zIndex(1)
-                                            .addAll(elementPoints));
-                            break;
-                        case BUILDING_ELEMENT_LIFT:
-                            floorElements.add(
-                                    new PolygonOptions()
-                                            .strokeWidth(LINE_WEIGHT_FLOOR_PLAN)
-                                            .strokeColor(COLOUR_FLOOR_PLAN_ELEMENTS_LIFT)
-                                            .fillColor(COLOUR_FLOOR_PLAN_ELEMENTS_LIFT)
-                                            .zIndex(1)
-                                            .addAll(elementPoints));
-                            break;
-                        default:
-                            Log.w(TAG, "Unknown element type \"" + elementType + "\"");
-                            floorElements.add(
-                                    new PolylineOptions()
-                                            .width(LINE_WEIGHT_FLOOR_PLAN)
-                                            .color(COLOUR_FLOOR_PLAN_ELEMENTS_DEFAULT)
-                                            .zIndex(1)
-                                            .addAll(elementPoints));
-                            break;
-                    }
-                }
+        for (FloorPlan floorPlan : floorPlans) {
+            String floorName = floorPlan.getFloorName();
+            floorNames.add(floorName);
+
+            List<List<LatLng>> elementsWall = floorPlan.getElementsOfType(BUILDING_ELEMENT_WALL);
+            List<List<LatLng>> elementsStairs =
+                    floorPlan.getElementsOfType(BUILDING_ELEMENT_STAIRS);
+            List<List<LatLng>> elementsLift = floorPlan.getElementsOfType(BUILDING_ELEMENT_LIFT);
+            List<List<LatLng>> elementsUnknown = floorPlan.getUnknownElements();
+
+            List<Object> floorElements = new ArrayList<>();
+            for (List<LatLng> elementWall : elementsWall) {
+                floorElements.add(
+                        new PolylineOptions()
+                                .width(LINE_WEIGHT_FLOOR_PLAN)
+                                .color(COLOUR_FLOOR_PLAN_ELEMENTS_WALL)
+                                .zIndex(2)
+                                .addAll(elementWall));
+            }
+            for (List<LatLng> elementStairs : elementsStairs) {
+                floorElements.add(
+                        new PolygonOptions()
+                                .strokeWidth(LINE_WEIGHT_FLOOR_PLAN)
+                                .strokeColor(COLOUR_FLOOR_PLAN_ELEMENTS_STAIRS)
+                                .fillColor(COLOUR_FLOOR_PLAN_ELEMENTS_STAIRS)
+                                .zIndex(1)
+                                .addAll(elementStairs));
+            }
+            for (List<LatLng> elementLift : elementsLift) {
+                floorElements.add(
+                        new PolygonOptions()
+                                .strokeWidth(LINE_WEIGHT_FLOOR_PLAN)
+                                .strokeColor(COLOUR_FLOOR_PLAN_ELEMENTS_LIFT)
+                                .fillColor(COLOUR_FLOOR_PLAN_ELEMENTS_LIFT)
+                                .zIndex(1)
+                                .addAll(elementLift));
+            }
+            for (List<LatLng> elementUnknown : elementsUnknown) {
+                floorElements.add(
+                        new PolylineOptions()
+                                .width(LINE_WEIGHT_FLOOR_PLAN)
+                                .color(COLOUR_FLOOR_PLAN_ELEMENTS_DEFAULT)
+                                .zIndex(1)
+                                .addAll(elementUnknown));
             }
             floorPlanElementOptions.put(floorName, floorElements);
         }
@@ -176,13 +172,19 @@ public class Building {
      * Sort the floor plan names such that the lowest index is the lowest floor. Also sets the
      * ground floor index for future reference
      *
-     * @param names The unsorted list of floor plan names
-     * @return The sorted floor plan names
+     * @param floors The list of all {@link FloorPlan FloorPlans} associated with the building
+     * @return A list of sorted floor plan names
      */
-    private List<String> defineFloorNameOrder(List<String> names) {
+    private List<String> defineFloorNameOrder(List<FloorPlan> floors) {
         List<String> orderedNames = new ArrayList<>();
+
+        List<String> allNames = new ArrayList<>();
+        for (FloorPlan floor : floors) {
+            allNames.add(floor.getFloorName());
+        }
+
         for (String floorPrefix : BUILDING_FLOOR_PREFIX_ORDER) {
-            for (String name : names) {
+            for (String name : allNames) {
                 if (name.toUpperCase().startsWith(floorPrefix)) {
                     orderedNames.add(name);
                 }
@@ -190,7 +192,7 @@ public class Building {
         }
 
         // Add floor names with unexpected/unknown prefixes to end of floor plan list
-        for (String name : names) {
+        for (String name : allNames) {
             if (!orderedNames.contains(name)) {
                 Log.w(TAG, "Unexpected floor name \"" + name + "\"; adding to end of list");
                 orderedNames.add(name);
