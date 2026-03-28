@@ -370,6 +370,7 @@ private SwitchMaterial showPdrPathSwitch;
 
                             indoorMapManager.selectVenue(v);
 
+
                             if(getActivity() instanceof VenueSelectionListener) {
                                 ((VenueSelectionListener) getActivity()).onVenueSelected(
                                         v.venueId != null ? v.venueId : v.name

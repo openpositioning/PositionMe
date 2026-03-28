@@ -216,6 +216,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private final List<TestPoint> testPoints = new ArrayList<>();
 
+    boolean enuBaked = false;
+
     private IndoorMapManager indoorMapManager;
 
     //region Initialisation
@@ -269,7 +271,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     public void setIndoorMapManager(IndoorMapManager indoorMapManager) {
+        Log.i("SensorFusion", "set indoormapmanager");
         this.indoorMapManager = indoorMapManager;
+        if(coordinateConverter == null){
+            Log.i("SensorFusion", "coordinateConverter null");
+        }
+        if (!enuBaked && this.indoorMapManager != null && coordinateConverter != null) {
+            Log.i("SensorFusion", "Baking ENU coordinates from setIndoorMapManager");
+            this.indoorMapManager.bakeEnuCoordinates(coordinateConverter);
+            enuBaked = true;
+        }
     }
 
 
@@ -625,17 +636,28 @@ public class SensorFusion implements SensorEventListener, Observer {
             float speed = (float) location.getSpeed();
             String provider = location.getProvider();
             // Initialize coordinate converter and particle filter on first GNSS position during recording
+            if (coordinateConverter == null) {
+                coordinateConverter = new CoordinateConverter(
+                        location.getLatitude(), location.getLongitude());
+                Log.i("SensorFusion", "CoordinateConverter initialised at lat="
+                        + latitude + " lon=" + longitude);
+            }
             if (saveRecording) {
                 if (!particleFilter.isInitialized()) {
                     // First position: set East-North origin, spread particles around (0,0)
-                    coordinateConverter = new CoordinateConverter(
-                            location.getLatitude(), location.getLongitude());
+//                    coordinateConverter = new CoordinateConverter(
+//                            location.getLatitude(), location.getLongitude());
+
                     particleFilter.initParticles(0f, 0f, Math.max(accuracy, 5f));
                     ekfPositioning.initParticles(0f, 0f, Math.max(accuracy, 5f));
                     prevPdrX = 0f;
                     prevPdrY = 0f;
                     Log.i("SensorFusion", "ParticleFilter initialised at lat="
                             + latitude + " lon=" + longitude);
+                    if (indoorMapManager != null) {
+                        indoorMapManager.bakeEnuCoordinates(coordinateConverter);
+                        enuBaked = true;
+                    }
                 } else {
                     // Subsequent positions: convert to East-North space and update particle weights
                     float[] enu = coordinateConverter.toEnu(
@@ -1031,8 +1053,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     if (!particleFilter.isInitialized()) {
                         // if GNSS not available — launch with first WiFi position
-                        coordinateConverter = new CoordinateConverter(
-                                wifiLocation.latitude, wifiLocation.longitude);
+//                        coordinateConverter = new CoordinateConverter(
+//                                wifiLocation.latitude, wifiLocation.longitude);
                         particleFilter.initParticles(0f, 0f, 20f);
                         prevPdrX = 0f;
                         prevPdrY = 0f;
@@ -1554,7 +1576,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         particleFilter = new ParticleFilter();
         ekfPositioning = new ExtendedKalmanFilter();
         useEKF = settings.getBoolean("use_ekf", false);
-        coordinateConverter = null;
+//        coordinateConverter = null;
         lastGnssLatLon = null;
         lastWifiLatLon = null;
         lastPdrLatLon  = null;

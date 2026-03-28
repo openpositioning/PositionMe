@@ -20,6 +20,7 @@ import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -87,8 +88,8 @@ public class IndoorMapManager {
 
         public static class FloorFeatures {
             public List<List<LatLng>> wallPolygons = new ArrayList<>();
-            public List<LatLng> wallPolylines = new ArrayList<>(); // if your walls are lines
-            public List<LatLng> stairsCenters = new ArrayList<>(); // or polygons if provided
+            public List<List<float[]>> wallPolygonsEnu = new ArrayList<>();
+            public List<LatLng> stairsCenters = new ArrayList<>();
             public List<LatLng> liftCenters = new ArrayList<>();
         }
     }
@@ -196,44 +197,131 @@ public class IndoorMapManager {
             float[] weights,
             CoordinateConverter converter) {
 
-
         if (currentVenue == null || currentFloorKey == null) return;
-        IndoorVenue.FloorFeatures floor =
-                currentVenue.floorFeatures.get(currentFloorKey);
-        if (floor == null || floor.wallPolygons.isEmpty()) return;
+        IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
+        if (floor == null || floor.wallPolygonsEnu.isEmpty()) {
+            Log.w("WallDebug", "No ENU wall polygons — did bakeEnuCoordinates run?");
+            return;
+        }
 
         for (int i = 0; i < weights.length; i++) {
-            if (weights[i] == 0f) continue; // already dead, skip
-            Log.d("WallDebug", "Particle " + i +
-                    " prev=(" + prevEast[i] + "," + prevNorth[i] + ")" +
-                    " curr=(" + currEast[i] + "," + currNorth[i] + ")" +
-                    " floor = "+ currentFloorKey);
+            if (weights[i] == 0f) continue;
 
-            //convert prev and curr to LatLng
-            LatLng prev = toLatLng(prevEast[i], prevNorth[i], converter);
-            LatLng curr = toLatLng(currEast[i], currNorth[i], converter);
+            float[] prev = {prevEast[i], prevNorth[i]};
+            float[] curr = {currEast[i], currNorth[i]};
 
-            //check if cross walls on that floor
-            if (crossesAnyWall(prev, curr, floor.wallPolygons)) {
-                Log.d("WallDebug", "Particle " + i + " CROSSED WALL");
-                LatLng snapped = adjustPositionToNearestValidLocation(
-                        prev, curr, getNearestWallPolygon(prev, curr, floor.wallPolygons));
-                Log.d("WallDebug", "Snapped from " + curr + " → " + snapped);
-                float[] enu = converter.toEnu(snapped.latitude, snapped.longitude);
-                Log.d("WallDebug", "Snapped from " + curr + " → " + snapped);
-                //directly change currEast, currNorth, and weights arrays
-                currEast[i] = enu[0];
-                currNorth[i] = enu[1];
-                //downweight changed location
-                weights[i] *= 0.01f;
-                Log.d("WallDebug", "Weight updated: " + weights[i]);
-
+            if (crossesAnyWallEnu(prev, curr, floor.wallPolygonsEnu)) {
+                // Snap back to just before the wall
+                float[] snapped = snapToWallEnu(prev, curr, floor.wallPolygonsEnu);
+                currEast[i]  = snapped[0];
+                currNorth[i] = snapped[1];
+                weights[i]   = 0f;
             }
-
-            }
-        Log.e("IndoorMapManager", "applied wall constraints!");
-
         }
+    }
+    private float[] snapToWallEnu(float[] from, float[] to,
+                                  List<List<float[]>> allWalls) {
+        float[] best = from.clone();
+        double low = 0.0, high = 1.0;
+
+        for (int iter = 0; iter < 24; iter++) {
+            double mid = (low + high) / 2.0;
+            float[] candidate = {
+                    (float)(from[0] + mid * (to[0] - from[0])),
+                    (float)(from[1] + mid * (to[1] - from[1]))
+            };
+
+            // Check candidate against ALL walls, not just the nearest
+            if (crossesAnyWallEnu(from, candidate, allWalls)) {
+                high = mid;
+            } else {
+                low = mid;
+                best = candidate;
+            }
+        }
+        return best;
+    }
+    private boolean crossesAnyWallEnu(float[] from, float[] to, List<List<float[]>> walls) {
+        for (List<float[]> polygon : walls) {
+            for (int i = 0; i < polygon.size(); i++) {
+                float[] a = polygon.get(i);
+                float[] b = polygon.get((i + 1) % polygon.size());
+                if (segmentsIntersectEnu(from, to, a, b)) return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean segmentsIntersectEnu(float[] p1, float[] p2, float[] p3, float[] p4) {
+        // All values in metres — no precision issues
+        double d1x = p2[0] - p1[0], d1y = p2[1] - p1[1];
+        double d2x = p4[0] - p3[0], d2y = p4[1] - p3[1];
+        double cross = d1x * d2y - d1y * d2x;
+        if (Math.abs(cross) < 1e-6) return false; // parallel, eps in m² is fine here
+
+        double t = ((p3[0] - p1[0]) * d2y - (p3[1] - p1[1]) * d2x) / cross;
+        double u = ((p3[0] - p1[0]) * d1y - (p3[1] - p1[1]) * d1x) / cross;
+        return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+    }
+//    public void applyWallConstraints(
+//            float[] prevEast, float[] prevNorth,
+//            float[] currEast, float[] currNorth,
+//            float[] weights,
+//            CoordinateConverter converter) {
+//
+//
+//        if (currentVenue == null || currentFloorKey == null) return;
+//        IndoorVenue.FloorFeatures floor =
+//                currentVenue.floorFeatures.get(currentFloorKey);
+//        if (floor == null || floor.wallPolygons.isEmpty()) return;
+//
+//        for (int i = 0; i < weights.length; i++) {
+//            if (weights[i] == 0f) continue; // already dead, skip
+//            Log.d("WallDebug", "Particle " + i +
+//                    " prev=(" + prevEast[i] + "," + prevNorth[i] + ")" +
+//                    " curr=(" + currEast[i] + "," + currNorth[i] + ")" +
+//                    " floor = "+ currentFloorKey);
+//
+//            //convert prev and curr to LatLng
+//            LatLng prev = toLatLng(prevEast[i], prevNorth[i], converter);
+//            LatLng curr = toLatLng(currEast[i], currNorth[i], converter);
+//
+//            //check if cross walls on that floor
+//            if (crossesAnyWall(prev, curr, floor.wallPolygons)) {
+//                Log.d("WallDebug", "Particle " + i + " CROSSED WALL");
+//                LatLng snapped = adjustPositionToNearestValidLocation(
+//                        prev, curr, getNearestWallPolygon(prev, curr, floor.wallPolygons));
+//                Log.d("WallDebug", "Snapped from " + curr + " → " + snapped);
+//                float[] enu = converter.toEnu(snapped.latitude, snapped.longitude);
+//                Log.d("WallDebug", "Snapped from " + curr + " → " + snapped);
+//                //directly change currEast, currNorth, and weights arrays
+//                currEast[i] = enu[0];
+//                currNorth[i] = enu[1];
+//                //downweight changed location
+//                weights[i] *= 0.01f;
+//                Log.d("WallDebug", "Weight updated: " + weights[i]);
+//
+//            }
+//
+//            }
+//        Log.e("IndoorMapManager", "applied wall constraints!");
+//
+//        }
+public void bakeEnuCoordinates(CoordinateConverter converter) {
+        if (currentVenue == null || currentFloorKey == null) return;
+        IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
+        if (floor == null) return;
+
+        floor.wallPolygonsEnu.clear();
+        for (List<LatLng> polygon : floor.wallPolygons) {
+            List<float[]> enuPoly = new ArrayList<>();
+            for (LatLng p : polygon) {
+                enuPoly.add(converter.toEnu(p.latitude, p.longitude));
+            }
+            floor.wallPolygonsEnu.add(enuPoly);
+        }
+        Log.d("WallDebug", "Baked " + floor.wallPolygonsEnu.size() + " wall polygons to ENU");
+}
     private List<LatLng> getNearestWallPolygon(LatLng from, LatLng to,
                                                List<List<LatLng>> wallPolygons) {
         for (List<LatLng> polygon : wallPolygons) {
@@ -276,9 +364,9 @@ public class IndoorMapManager {
 
         double eps = 1e-12;
 
-        if (Math.abs(val) < eps) {
-            return 0;      // collinear
-        }
+//        if (Math.abs(val) < eps) {
+//            return 0;      // collinear
+//        }
 
         return (val > 0) ? 1 : 2;
     }
@@ -608,6 +696,7 @@ public class IndoorMapManager {
                 drawFloor(floorsObj.getJSONObject(currentFloorKey), currentFloorKey);
                 isIndoorMapSet = true;
                 Log.d("IndoorMapManager", "Switched to floor: " + currentFloorKey);
+                bakeEnuCoordinates(SensorFusion.getInstance().getCoordinateConverter());
             }
 
         } catch (JSONException e) {
@@ -681,6 +770,8 @@ public class IndoorMapManager {
                 } else if (t.contains("lift") || t.contains("elevator")) {
                     features.liftCenters.add(centroidOf(outerPoints));
                 }
+                Log.d("IndoorTypes", "Feature " + i + " indoor_type='" + indoorType +
+                        "' geomType=" + geomType + " points=" + outerPoints.size());
 
                 PolygonOptions opts = new PolygonOptions()
                         .addAll(outerPoints)
