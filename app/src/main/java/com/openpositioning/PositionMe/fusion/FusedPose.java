@@ -1,5 +1,6 @@
 package com.openpositioning.PositionMe.fusion;
 import com.google.android.gms.maps.model.LatLng;
+import androidx.annotation.NonNull;
 
 /**
  * Immutable model representing the latest fused pose estimate produced by the

@@ -23,64 +23,50 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Centralises all trajectory-related rendering for {@link TrajectoryMapFragment}.
+ * UI-only map drawing helper for the live / replay trajectory screen.
  *
- * <p>This class is intentionally UI-focused. It owns:
- * <ul>
- *     <li>the current-position marker</li>
- *     <li>the matched trajectory polyline</li>
- *     <li>the raw PDR observation polyline</li>
- *     <li>the WiFi and GNSS markers / polylines</li>
- *     <li>test-point markers</li>
- * </ul>
+ * This class owns:
+ * - current user marker
+ * - fused trajectory polyline
+ * - raw PDR observation polyline
+ * - GNSS and WiFi observation markers / trails
+ * - test point markers
  *
- * <p>It does not perform map matching or floor reasoning. It only draws the
- * outputs produced elsewhere.
+ * It intentionally does NOT own map-matching logic or particle-filter logic.
  */
 class TrajectoryRenderer {
 
-    // Matched trajectory styling
     private static final int TRAJECTORY_MAIN_COLOR = Color.RED;
     private static final int TRAJECTORY_OUTLINE_COLOR = Color.WHITE;
     private static final int TRAJECTORY_BLACK_OUTLINE_COLOR = Color.argb(210, 235, 235, 235);
-    private static final float TRAJECTORY_WIDTH_MAIN_PX = 7f;
-    private static final float TRAJECTORY_WIDTH_OUTLINE_PX = 18f;
-    private static final float TRAJECTORY_Z_INDEX = 1000f;
 
-    // Observation layer styling
     private static final int RAW_PDR_COLOR = Color.argb(170, 30, 136, 229);
     private static final int WIFI_COLOR = Color.argb(190, 46, 125, 50);
     private static final int GNSS_COLOR = Color.argb(200, 255, 167, 38);
+
+    private static final float TRAJECTORY_WIDTH_MAIN_PX = 7f;
+    private static final float TRAJECTORY_WIDTH_OUTLINE_PX = 18f;
     private static final float RAW_PDR_WIDTH_PX = 5f;
     private static final float WIFI_WIDTH_PX = 6f;
     private static final float GNSS_WIDTH_PX = 6f;
+    private static final float TRAJECTORY_Z_INDEX = 1000f;
 
-    /**
-     * GNSS / WiFi traces are intentionally bounded so that overlays remain readable
-     * and do not grow indefinitely during long sessions.
-     */
     private static final int MAX_ABSOLUTE_HISTORY_POINTS = 20;
 
     @Nullable
     private GoogleMap map;
 
-    // Main current-position marker
     @Nullable
     private Marker orientationMarker;
-
-    // Absolute observation markers
     @Nullable
     private Marker gnssMarker;
     @Nullable
     private Marker wifiMarker;
 
-    // Matched trajectory polylines (outline + main stroke)
     @Nullable
     private Polyline trajectoryOutline;
     @Nullable
     private Polyline trajectoryMain;
-
-    // Raw / observation polylines
     @Nullable
     private Polyline rawPdrPolyline;
     @Nullable
@@ -101,16 +87,13 @@ class TrajectoryRenderer {
     private boolean showGnssObservations = true;
 
     /**
-     * Binds the renderer to a map instance and recreates all map-owned drawing objects.
+     * Attach renderer to the map and recreate all visual objects.
      */
     void attachToMap(@NonNull GoogleMap googleMap) {
         map = googleMap;
         resetMapArtifacts();
     }
 
-    /**
-     * Show or hide the raw PDR observation path.
-     */
     void setShowPdrObservations(boolean show) {
         showPdrObservations = show;
         if (rawPdrPolyline != null) {
@@ -118,34 +101,25 @@ class TrajectoryRenderer {
         }
     }
 
-    /**
-     * Show or hide WiFi observation marker and path.
-     */
     void setShowWifiObservations(boolean show) {
         showWifiObservations = show;
         applyWifiVisibility();
     }
 
-    /**
-     * Show or hide GNSS observation marker and path.
-     */
     void setShowGnssObservations(boolean show) {
         showGnssObservations = show;
         applyGnssVisibility();
     }
 
     /**
-     * Updates the current matched position marker.
+     * Update current user marker.
      *
-     * @param context           Fragment/activity context used for vector icon conversion
-     * @param matchedLocation   current matched trajectory location
-     * @param orientation       heading in degrees
-     * @param shouldFollowCamera whether the camera should follow this marker
-     * @param initialZoom       zoom level used when creating the marker for the first time
+     * @param matchedLocation fused or final displayed location
+     * @param orientationDeg heading in degrees for marker rotation
      */
     void updateCurrentPosition(@NonNull Context context,
                                @NonNull LatLng matchedLocation,
-                               float orientation,
+                               float orientationDeg,
                                boolean shouldFollowCamera,
                                float initialZoom) {
         if (map == null) {
@@ -156,20 +130,20 @@ class TrajectoryRenderer {
             orientationMarker = map.addMarker(new MarkerOptions()
                     .position(matchedLocation)
                     .flat(true)
-                    .rotation(orientation)
+                    .rotation(orientationDeg)
                     .title("Current Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(
                             UtilFunctions.getBitmapFromVector(
                                     context,
                                     R.drawable.ic_baseline_navigation_24
-                            ))));
-
+                            )
+                    )));
             map.moveCamera(CameraUpdateFactory.newLatLngZoom(matchedLocation, initialZoom));
             return;
         }
 
         orientationMarker.setPosition(matchedLocation);
-        orientationMarker.setRotation(orientation);
+        orientationMarker.setRotation(orientationDeg);
 
         if (shouldFollowCamera) {
             map.animateCamera(CameraUpdateFactory.newLatLng(matchedLocation));
@@ -177,7 +151,7 @@ class TrajectoryRenderer {
     }
 
     /**
-     * Appends a matched trajectory point to the displayed main trajectory.
+     * Append one point to the fused/matched trajectory.
      */
     void appendMatchedLocation(@Nullable LatLng oldLocation, @NonNull LatLng matchedLocation) {
         if (trajectoryMain == null) {
@@ -194,7 +168,7 @@ class TrajectoryRenderer {
     }
 
     /**
-     * Appends one raw PDR observation point.
+     * Append one raw PDR observation point.
      */
     void appendRawObservationPoint(@NonNull LatLng rawLocation) {
         if (rawPdrPolyline == null) {
@@ -209,23 +183,14 @@ class TrajectoryRenderer {
         rawPdrPolyline.setVisible(showPdrObservations);
     }
 
-    /**
-     * Replay uses the same raw-path rendering as live raw PDR observations.
-     */
     void appendRawReplayPoint(@NonNull LatLng rawLocation) {
         appendRawObservationPoint(rawLocation);
     }
 
-    /**
-     * Clears only the replay raw path.
-     */
     void clearRawReplayPath() {
         clearRawObservationPath();
     }
 
-    /**
-     * Clears the raw PDR observation polyline while keeping the object alive.
-     */
     void clearRawObservationPath() {
         if (rawPdrPolyline != null) {
             rawPdrPolyline.setPoints(new ArrayList<>());
@@ -234,57 +199,7 @@ class TrajectoryRenderer {
     }
 
     /**
-     * Updates the WiFi observation marker and its recent-history path.
-     */
-    void updateWifiObservation(@Nullable LatLng wifiLocation) {
-        if (map == null || wifiLocation == null) {
-            return;
-        }
-
-        if (wifiMarker == null) {
-            wifiMarker = map.addMarker(new MarkerOptions()
-                    .position(wifiLocation)
-                    .title("WiFi Position")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
-        } else {
-            wifiMarker.setPosition(wifiLocation);
-        }
-
-        if (lastWifiLocation == null || !lastWifiLocation.equals(wifiLocation)) {
-            appendAbsoluteHistoryPoint(wifiPolyline, wifiLocation);
-            lastWifiLocation = wifiLocation;
-        }
-        applyWifiVisibility();
-    }
-
-    /**
-     * Compatibility wrapper used by {@link TrajectoryMapFragment}.
-     */
-    void updateWifi(@Nullable LatLng wifiLocation) {
-        updateWifiObservation(wifiLocation);
-    }
-
-    /**
-     * Adds a numbered test-point marker to the map.
-     */
-    void addTestPointMarker(int index, long timestampMs, @NonNull LatLng position) {
-        if (map == null) {
-            return;
-        }
-
-        Marker marker = map.addMarker(new MarkerOptions()
-                .position(position)
-                .title("TP " + index)
-                .snippet("t=" + timestampMs));
-
-        if (marker != null) {
-            marker.showInfoWindow();
-            testPointMarkers.add(marker);
-        }
-    }
-
-    /**
-     * Updates the GNSS marker and recent-history path.
+     * Update GNSS marker and short GNSS breadcrumb trail.
      */
     void updateGnss(@Nullable LatLng gnssLocation) {
         if (map == null || gnssLocation == null) {
@@ -304,21 +219,12 @@ class TrajectoryRenderer {
             appendAbsoluteHistoryPoint(gnssPolyline, gnssLocation);
             lastGnssLocation = gnssLocation;
         }
+
         applyGnssVisibility();
     }
 
     /**
-     * Removes only the GNSS marker, leaving the GNSS polyline untouched.
-     */
-    void clearGnssMarker() {
-        if (gnssMarker != null) {
-            gnssMarker.remove();
-            gnssMarker = null;
-        }
-    }
-
-    /**
-     * Clears the GNSS marker and resets the GNSS path.
+     * Fully clears GNSS marker and GNSS trail.
      */
     void clearGnss() {
         clearGnssMarker();
@@ -331,13 +237,49 @@ class TrajectoryRenderer {
     }
 
     /**
-     * Clears the WiFi marker and resets the WiFi path.
+     * Remove only GNSS marker.
+     */
+    void clearGnssMarker() {
+        if (gnssMarker != null) {
+            gnssMarker.remove();
+            gnssMarker = null;
+        }
+    }
+
+    /**
+     * Update WiFi marker and short WiFi breadcrumb trail.
+     */
+    void updateWifi(@Nullable LatLng wifiLocation) {
+        if (map == null || wifiLocation == null) {
+            return;
+        }
+
+        if (wifiMarker == null) {
+            wifiMarker = map.addMarker(new MarkerOptions()
+                    .position(wifiLocation)
+                    .title("WiFi Position")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+        } else {
+            wifiMarker.setPosition(wifiLocation);
+        }
+
+        if (lastWifiLocation == null || !lastWifiLocation.equals(wifiLocation)) {
+            appendAbsoluteHistoryPoint(wifiPolyline, wifiLocation);
+            lastWifiLocation = wifiLocation;
+        }
+
+        applyWifiVisibility();
+    }
+
+    /**
+     * Fully clears WiFi marker and WiFi trail.
      */
     void clearWifi() {
         if (wifiMarker != null) {
             wifiMarker.remove();
             wifiMarker = null;
         }
+
         lastWifiLocation = null;
 
         if (wifiPolyline != null) {
@@ -347,7 +289,29 @@ class TrajectoryRenderer {
     }
 
     /**
-     * Clears only the matched trajectory, keeping raw / GNSS / WiFi observations intact.
+     * Add a numbered test point marker.
+     */
+    void addTestPointMarker(int index, long timestampMs, @NonNull LatLng position) {
+        if (map == null) {
+            return;
+        }
+
+        Marker marker = map.addMarker(new MarkerOptions()
+                .position(position)
+                .title("TP " + index)
+                .snippet("t=" + timestampMs));
+
+        if (marker != null) {
+            marker.showInfoWindow();
+            testPointMarkers.add(marker);
+        }
+    }
+
+    /**
+     * Clear only the fused/matched trajectory.
+     *
+     * Useful when the selected building changes but you do not want to remove
+     * GNSS/WiFi overlays or the current position marker.
      */
     void clearMatchedTrajectoryOnly() {
         if (trajectoryOutline != null) {
@@ -360,54 +324,28 @@ class TrajectoryRenderer {
     }
 
     /**
-     * Clears all rendered map state managed by this renderer, but keeps the map attachment alive.
-     *
-     * <p>This is useful when resetting the recording / replay session.
+     * Full visual reset for the whole renderer.
      */
     void clearAll() {
-        clearMatchedTrajectoryOnly();
-        clearRawObservationPath();
-        clearGnss();
-        clearWifi();
-
-        if (orientationMarker != null) {
-            orientationMarker.remove();
-            orientationMarker = null;
-        }
-
-        for (Marker marker : testPointMarkers) {
-            marker.remove();
-        }
-        testPointMarkers.clear();
+        resetMapArtifacts();
     }
 
-    /**
-     * Toggles the matched trajectory between red and black styling.
-     */
     void toggleTrajectoryColor() {
         useRedTrajectory = !useRedTrajectory;
         applyTrajectoryColor();
     }
 
-    /**
-     * Returns whether the main matched trajectory is currently using the red theme.
-     */
     boolean isUsingRedTrajectory() {
         return useRedTrajectory;
     }
 
-    /**
-     * Returns the current orientation marker position if available.
-     */
     @Nullable
     LatLng getOrientationPosition() {
         return orientationMarker != null ? orientationMarker.getPosition() : null;
     }
 
     /**
-     * Recreates every renderer-owned map artifact.
-     *
-     * <p>Call this after attaching to a new map, or after a hard reset.
+     * Recreate all renderer-owned map objects.
      */
     void resetMapArtifacts() {
         removePolyline(trajectoryOutline);
@@ -478,9 +416,6 @@ class TrajectoryRenderer {
         applyTrajectoryColor();
     }
 
-    /**
-     * Re-applies styling to the matched trajectory pair.
-     */
     private void ensureTrajectoryStyling() {
         if (trajectoryOutline != null) {
             trajectoryOutline.setWidth(TRAJECTORY_WIDTH_OUTLINE_PX);
@@ -501,23 +436,20 @@ class TrajectoryRenderer {
         applyTrajectoryColor();
     }
 
-    /**
-     * Applies the currently selected matched-trajectory color theme.
-     */
     private void applyTrajectoryColor() {
         if (trajectoryMain != null) {
             trajectoryMain.setColor(useRedTrajectory ? TRAJECTORY_MAIN_COLOR : Color.BLACK);
         }
+
         if (trajectoryOutline != null) {
             trajectoryOutline.setColor(
-                    useRedTrajectory ? TRAJECTORY_OUTLINE_COLOR : TRAJECTORY_BLACK_OUTLINE_COLOR
+                    useRedTrajectory
+                            ? TRAJECTORY_OUTLINE_COLOR
+                            : TRAJECTORY_BLACK_OUTLINE_COLOR
             );
         }
     }
 
-    /**
-     * Keeps the outline and main matched polylines perfectly synchronised.
-     */
     private void syncTrajectoryPolylinePoints(@NonNull List<LatLng> points) {
         if (trajectoryOutline != null) {
             trajectoryOutline.setPoints(points);
@@ -565,7 +497,7 @@ class TrajectoryRenderer {
     }
 
     /**
-     * Appends a point to a bounded-history absolute observation line.
+     * Append a point to GNSS/WiFi history but keep the history short.
      */
     private void appendAbsoluteHistoryPoint(@Nullable Polyline polyline, @NonNull LatLng point) {
         if (polyline == null) {
@@ -586,9 +518,6 @@ class TrajectoryRenderer {
         polyline.setPoints(points);
     }
 
-    /**
-     * Applies WiFi overlay visibility to both line and marker.
-     */
     private void applyWifiVisibility() {
         if (wifiPolyline != null) {
             wifiPolyline.setVisible(showWifiObservations);
@@ -598,9 +527,6 @@ class TrajectoryRenderer {
         }
     }
 
-    /**
-     * Applies GNSS overlay visibility to both line and marker.
-     */
     private void applyGnssVisibility() {
         if (gnssPolyline != null) {
             gnssPolyline.setVisible(showGnssObservations);

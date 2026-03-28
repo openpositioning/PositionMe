@@ -1,628 +1,740 @@
 package com.openpositioning.PositionMe.fusion;
 
 import android.content.Context;
-import android.content.SharedPreferences;
+import android.os.SystemClock;
 import android.util.Log;
-
+import android.content.SharedPreferences;
 import androidx.preference.PreferenceManager;
-
-import com.google.android.gms.maps.model.LatLng;
-import com.openpositioning.PositionMe.sensors.SensorFusion;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.mapmatching.CandidatePose;
+import com.openpositioning.PositionMe.sensors.SensorFusion;
+import com.openpositioning.PositionMe.sensors.SensorTypes;
+import com.openpositioning.PositionMe.utils.BuildingPolygon;
+import com.openpositioning.PositionMe.utils.IndoorMapManager;
+
+import com.openpositioning.PositionMe.fusion.CoordinateConverter;
+import com.openpositioning.PositionMe.mapmatching.VerticalMotionDetector;
+import com.openpositioning.PositionMe.mapmatching.VerticalTransitionHint;
+import com.openpositioning.PositionMe.mapmatching.MapGeometryUtils;
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
+
+import java.util.List;
+import java.util.Locale;
+
 /**
- * High-level manager around the particle filter engine.
+ * High-level controller for the live particle filter.
  *
- * <p>This class is responsible for:
- * - loading PF settings from SharedPreferences
- * - listening for user changes to those settings
- * - initialising the engine when enough information is available
- * - converting raw app data into PF prediction + observation inputs
- * - storing the latest fused pose estimate
+ * Responsibilities:
+ * - initialise the PF from a GNSS start anchor
+ * - convert live PDR motion into PF motion updates
+ * - convert map-match / WiFi / GNSS into optional absolute observations
+ * - expose latest fused pose back to SensorFusion
+ * - hold a first-pass hybrid map constraint model
  *
- * <p>This class does not implement the PF math itself.
- * That logic lives in {@link ParticleFilterEngine}.
+ * Notes:
+ * - This class does not render anything.
+ * - Rendering belongs in TrajectoryMapFragment / TrajectoryRenderer.
+ * - This version is intentionally conservative so it integrates safely first.
  */
 public class ParticleFilterManager {
 
-    private static final String TAG = "RecordingMode";
+    private static final String TAG = "ParticleFilterManager";
 
-    /** Main app sensor/data source. */
+    /**
+     * Optional callback host if another layer wants fused pose updates.
+     */
+    public interface Host {
+        void onFusedPoseUpdated(@NonNull FusedPose fusedPose);
+    }
+
     private final SensorFusion sensorFusion;
+    private final ParticleFilterEngine engine;
+    private final ParticleConstraintDebugger debugger;
 
-    /** Application context used for preferences. */
-    private final Context appContext;
+    @Nullable
+    private final Host host;
 
-    /** SharedPreferences backing live-tunable PF settings. */
-    private final SharedPreferences prefs;
+    @Nullable
+    private IndoorMapManager indoorMapManager;
 
-    /** Converts between global LatLng and local x/y coordinates. */
+    @Nullable
+    private HybridConstraintModel constraintModel;
+    @Nullable
     private CoordinateConverter coordinateConverter;
+    private final VerticalMotionDetector verticalMotionDetector = new VerticalMotionDetector();
 
-    /** The actual PF engine instance. */
-    private ParticleFilterEngine particleFilterEngine;
-
-    /** Latest estimated fused pose. */
+    /**
+     * Latest filtered pose exposed to the rest of the app.
+     */
+    @Nullable
     private FusedPose latestFusedPose;
-    /** Latest raw PF estimate before Kalman-style output smoothing. */
+
+    /**
+     * Latest raw PF output before any future smoothing layer.
+     * For now this is the same as fused output, but we keep them separate
+     * so later you can add smoothing without changing the external API.
+     */
+    @Nullable
     private FusedPose latestRawPose;
 
-    /** Kalman-style output smoother sitting after the PF. */
-    private final KalmanPoseSmoother poseSmoother = new KalmanPoseSmoother();
-
-    /** Whether WiFi observation was accepted during the latest buildObservation() call. */
-    private boolean lastWifiAccepted = false;
-
-    /** Whether GNSS observation was accepted during the latest buildObservation() call. */
-    private boolean lastGnssAccepted = false;
-
-    /*WiFi and GNSS gating*/
-    private static final double WIFI_GATE_METERS = 12.0;
-    private static final double GNSS_GATE_METERS = 25.0;
-    private static final double WIFI_OBS_EMA_ALPHA = 0.25;
-
-    private boolean wifiObsEmaInitialised = false;
-    private double wifiObsEmaX = 0.0;
-    private double wifiObsEmaY = 0.0;
-
-    /*When false, the manager remains constructed and can still hold PF settings,
-    but it must not produce fused poses or consume step updates for this session.*/
+    /**
+     * Whether the PF is currently enabled by the selected recording mode.
+     */
     private boolean enabled = false;
 
-    // -------------------------
-    // PDR incremental tracking
     /**
-     * PF prediction currently uses incremental displacement magnitude extracted
-     * from cumulative PDR/IMUNet position.
-     *
-     * These fields store the previous position so we can compute deltaS.
+     * Whether the PF has been initialised with a real anchor.
      */
-    private boolean firstPdrSample = true;
-    private double lastPdrX = 0.0;
-    private double lastPdrY = 0.0;
-
-    /** Previous heading so we can compute deltaTheta. */
-    private double lastHeading = 0.0;
-
-    // -------------------------
-    // Live PF settings
-    /** Current active PF settings. */
-    private ParticleFilterConfig currentConfig;
+    private boolean initialised = false;
 
     /**
-     * Set to true when the user changes PF settings in-app.
-     *
-     * <p>At the next step() call we reset the filter and allow it to reinitialise
-     * using the new parameter set.
+     * Last raw PDR values used to compute motion deltas.
      */
-    private boolean pfConfigDirty = false;
+    @Nullable
+    private float[] lastPdrValues;
 
-    public ParticleFilterManager(SensorFusion sensorFusion, Context context) {
+    /**
+     * Latest map-matched pose if provided by another subsystem.
+     */
+    @Nullable
+    private CandidatePose latestMatchedPose;
+
+    /**
+     * Primary constructor using an optional host callback.
+     */
+    public ParticleFilterManager(@NonNull SensorFusion sensorFusion,
+                                 @Nullable Host host) {
         this.sensorFusion = sensorFusion;
-        this.appContext = context.getApplicationContext();
+        this.host = host;
 
-        this.prefs = PreferenceManager.getDefaultSharedPreferences(appContext);
+        Context context = sensorFusion.getContext();
+        ParticleFilterEngine.Config cfg = buildConfigFromPreferences(context);
 
-        // Load config once at construction time
-        this.currentConfig = loadPfConfig();
-
-        // Listen for runtime parameter changes from the settings UI
-        prefs.registerOnSharedPreferenceChangeListener(pfListener);
+        this.engine = new ParticleFilterEngine(cfg);
+        this.debugger = new ParticleConstraintDebugger(TAG);
+        this.debugger.setMinIntervalMs(300);
     }
 
     /**
-     * Preference change listener for PF parameters only.
-     *
-     * <p>When the user edits a PF setting in the app:
-     * - reload config once
-     * - mark the filter dirty
-     * - let the next step() reset and rebuild the PF
+     * Compatibility constructor for branches where SensorFusion still passes Context.
+     * The Context is currently unused here, but this keeps your existing SensorFusion code compiling.
      */
-    private final SharedPreferences.OnSharedPreferenceChangeListener pfListener =
-            (sharedPreferences, key) -> {
-                if (key == null) return;
-
-                switch (key) {
-                    case "pf_particle_count":
-                    case "pf_sigma_step":
-                    case "pf_sigma_theta_deg":
-                    case "pf_sigma_wifi":
-                    case "pf_sigma_gnss":
-                    case "pf_init_pos_std":
-                    case "pf_init_heading_deg":
-                    case "pf_resample_ratio":
-                    case "pf_sigma_reg_pos":
-                    case "pf_sigma_reg_theta_deg":
-                        currentConfig = loadPfConfig();
-                        pfConfigDirty = true;
-                        Log.d(TAG, "PF config changed: " + key);
-                        break;
-                }
-            };
-
-    /**
-     * Must be called when the manager is no longer needed,
-     * otherwise the preference listener remains registered.
-     */
-    public void destroy() {
-        prefs.unregisterOnSharedPreferenceChangeListener(pfListener);
+    public ParticleFilterManager(@NonNull SensorFusion sensorFusion,
+                                 @Nullable Context ignoredContext) {
+        this(sensorFusion, (Host) null);
     }
 
     /**
-     * Loads all PF tunable parameters from SharedPreferences.
-     *
-     * <p>Angle values are stored in degrees in the UI,
-     * but converted to radians here before being passed to the engine.
-     */
-    private ParticleFilterConfig loadPfConfig() {
-        int particleCount = Integer.parseInt(prefs.getString("pf_particle_count", "300"));
-        double sigmaStep = Double.parseDouble(prefs.getString("pf_sigma_step", "0.15"));
-        double sigmaThetaDeg = Double.parseDouble(prefs.getString("pf_sigma_theta_deg", "6"));
-        double sigmaWifi = Double.parseDouble(prefs.getString("pf_sigma_wifi", "2.5"));
-        double sigmaGnss = Double.parseDouble(prefs.getString("pf_sigma_gnss", "5.0"));
-        double initPosStd = Double.parseDouble(prefs.getString("pf_init_pos_std", "1.0"));
-        double initHeadingDeg = Double.parseDouble(prefs.getString("pf_init_heading_deg", "10"));
-        double resampleRatio = Double.parseDouble(prefs.getString("pf_resample_ratio", "0.5"));
-        double sigmaRegPos = Double.parseDouble(prefs.getString("pf_sigma_reg_pos", "0.03"));
-        double sigmaRegThetaDeg = Double.parseDouble(prefs.getString("pf_sigma_reg_theta_deg", "1.0"));
-
-        Log.d("loadPfConfig", "Particle count" + particleCount);
-        Log.d("loadPfConfig", "SigmaStep" + sigmaStep);
-        Log.d("loadPfConfig", "SigmaWifi" + sigmaWifi);
-
-        return new ParticleFilterConfig(
-                particleCount,
-                sigmaStep,
-                Math.toRadians(sigmaThetaDeg),
-                sigmaWifi,
-                sigmaGnss,
-                initPosStd,
-                Math.toRadians(initHeadingDeg),
-                resampleRatio,
-                sigmaRegPos,
-                Math.toRadians(sigmaRegThetaDeg)
-        );
-    }
-
-    /**
-     * Advances the particle filter by one logical movement update.
-     *
-     * This method is usually triggered once per detected step, after the raw PDR
-     * state has already been updated by {@link PdrProcessing}.
-     *
-     * Runtime flow:
-     * 1. If the user changed PF settings in the UI, defer-reset the filter here.
-     *    We do it here rather than immediately inside the preference listener so
-     *    the PF is only rebuilt at a clean movement-update boundary.
-     * 2. Initialise the PF lazily when enough absolute position information exists.
-     * 3. Convert cumulative PDR motion into incremental motion for PF prediction.
-     * 4. Run PF prediction using step distance + heading change.
-     * 5. Build the absolute observation bundle from Wi-Fi / GNSS.
-     * 6. Update the filter and store the newest fused pose.
-     */
-    public void step() {
-        // If this recording session is using normal PDR mode,
-        // the PF manager must stay dormant.
-        if (!enabled) {
-            return;
-        }
-        // Apply any live-tuned PF parameter changes on the next clean PF update.
-        // This avoids rebuilding the filter in the middle of an unrelated callback.
-        if (pfConfigDirty) {
-            Log.d(TAG, "Applying new PF config -> resetting filter");
-            reset();
-            pfConfigDirty = false;
-        }
-        // Build the PF only when an initial absolute reference is available.
-        initialiseIfNeeded();
-        // Still waiting for enough data to initialise.
-        if (particleFilterEngine == null || coordinateConverter == null) {
-            return;
-        }
-        // Convert cumulative PDR movement into the scalar motion increment used
-        // by the PF motion model.
-        double deltaS = extractPdrDeltaDistance();
-        // Heading increment is derived from the latest orientation estimate.
-        double currentHeading = wrapAngle(sensorFusion.passOrientation());
-        double deltaTheta = wrapAngle(currentHeading - lastHeading);
-        lastHeading = currentHeading;
-        // Avoid predicting on numerical noise when the apparent movement is tiny.
-        // We still allow the absolute observation update below.
-        if (deltaS >= 0.01) {
-            particleFilterEngine.predict(deltaS, deltaTheta);
-            Log.d(TAG, "PF predict: deltaS=" + deltaS + ", deltaTheta=" + deltaTheta);
-        } else {
-            Log.d(TAG, "PF stationary: skip predict, keep update");
-        }
-        // Build absolute observations in the local PF frame, then correct the particles.
-        ParticleFilterObservation observation = buildObservation();
-        particleFilterEngine.update(observation);
-
-        FusedPose rawPose = particleFilterEngine.estimate(coordinateConverter);
-        latestRawPose = rawPose;
-
-        latestFusedPose = smoothPoseWithKalman(
-                rawPose,
-                deltaS,
-                Math.abs(deltaTheta),
-                lastWifiAccepted,
-                lastGnssAccepted
-        );
-
-        if (rawPose != null && latestFusedPose != null) {
-            Log.d(TAG,
-                    "PF raw vs kalman-smoothed"
-                            + " | rawX=" + rawPose.getXMeters()
-                            + ", rawY=" + rawPose.getYMeters()
-                            + ", smoothX=" + latestFusedPose.getXMeters()
-                            + ", smoothY=" + latestFusedPose.getYMeters()
-                            + ", rawThetaDeg=" + Math.toDegrees(rawPose.getHeadingRad())
-                            + ", smoothThetaDeg=" + Math.toDegrees(latestFusedPose.getHeadingRad())
-                            + ", conf=" + latestFusedPose.getConfidence()
-                            + ", wifiAccepted=" + lastWifiAccepted
-                            + ", gnssAccepted=" + lastGnssAccepted);
-        }
-    }
-
-    /**
-     * Initialises the PF only when a reliable autonomous absolute anchor is available.
-     *
-     * Priority:
-     * 1. already-locked autonomous session start stored in SensorFusion
-     * 2. live Wi-Fi position
-     * 3. live GNSS position
-     *
-     * This avoids dependence on a user-selected manual start point.
-     */
-    public void initialiseIfNeeded() {
-        if (particleFilterEngine != null && particleFilterEngine.isInitialised()) {
-            return;
-        }
-
-        LatLng initialLatLng = resolveAutonomousInitialLatLng();
-        int initialFloor = sensorFusion.getWifiFloor();
-
-        if (initialLatLng == null) {
-            Log.d(TAG, "PF init skipped: waiting for autonomous WiFi/GNSS initial position.");
-            return;
-        }
-
-        coordinateConverter = new CoordinateConverter(
-                initialLatLng.latitude,
-                initialLatLng.longitude
-        );
-
-        double[] initialLocal = coordinateConverter.latLngToLocal(initialLatLng);
-
-        particleFilterEngine = new ParticleFilterEngine(currentConfig);
-
-        poseSmoother.reset();
-        double initialHeading = wrapAngle(sensorFusion.passOrientation());
-        particleFilterEngine.initialise(
-                initialLocal[0],
-                initialLocal[1],
-                initialHeading,
-                initialFloor
-        );
-
-        FusedPose initialRawPose = particleFilterEngine.estimate(coordinateConverter);
-        latestRawPose = initialRawPose;
-        latestFusedPose = smoothPoseWithKalman(
-                initialRawPose,
-                0.0,
-                0.0,
-                true,
-                true
-        );
-        lastHeading = initialHeading;
-
-        Log.d(TAG,
-                "PF initialised from autonomous fix"
-                        + " | particles=" + currentConfig.particleCount
-                        + ", sigmaStep=" + currentConfig.sigmaStep
-                        + ", sigmaThetaDeg=" + Math.toDegrees(currentConfig.sigmaThetaRad)
-                        + ", sigmaWifi=" + currentConfig.sigmaWifi
-                        + ", sigmaGnss=" + currentConfig.sigmaGnss
-                        + ", lat=" + initialLatLng.latitude
-                        + ", lon=" + initialLatLng.longitude);
-    }
-
-    /**
-     * Resolves the PF initial anchor without using any manual user-selected position.
-     *
-     * Order:
-     * 1. already-locked autonomous session start from SensorFusion
-     * 2. live WiFi position
-     * 3. live GNSS position
-     *
-     * The first option keeps PF aligned with the same anchor already accepted by
-     * RecordingFragment once that has been seeded.
-     */
-    private LatLng resolveAutonomousInitialLatLng() {
-        // If RecordingFragment has already locked an autonomous start anchor into
-        // SensorFusion, prefer that so standard PDR mode and PF mode share the same start.
-        float[] storedStart = sensorFusion.getGNSSLatitude(true);
-        if (isValidLatLon(storedStart)) {
-            return new LatLng(storedStart[0], storedStart[1]);
-        }
-
-        LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
-        if (isValidLatLng(wifiLatLng)) {
-            return wifiLatLng;
-        }
-
-        float[] gnssLatLon = sensorFusion.getGNSSLatitude(false);
-        if (isValidLatLon(gnssLatLon)) {
-            return new LatLng(gnssLatLon[0], gnssLatLon[1]);
-        }
-
-        return null;
-    }
-
-    /**
-     * Clears only the live PF runtime state.
-     *
-     * This is intentionally different from clearing PF settings:
-     * - currentConfig is preserved
-     * - SharedPreferences values are preserved
-     * - only the active filter instance and motion trackers are reset
-     *
-     * This is useful when:
-     * - the user starts a new recording
-     * - PF settings change mid-session
-     * - PF mode is disabled for the current session
-     */
-    public void reset() {
-        coordinateConverter = null;
-        particleFilterEngine = null;
-        latestFusedPose = null;
-        latestRawPose = null;
-
-        firstPdrSample = true;
-        lastPdrX = 0.0;
-        lastPdrY = 0.0;
-        lastHeading = 0.0;
-
-        wifiObsEmaInitialised = false;
-        wifiObsEmaX = 0.0;
-        wifiObsEmaY = 0.0;
-
-        poseSmoother.reset();
-        lastWifiAccepted = false;
-        lastGnssAccepted = false;
-    }
-
-    /**
-     * Returns the latest fused estimate only when PF mode is active for this session.
-     *
-     * Returning null while disabled is deliberate:
-     * callers should interpret null as "PF output is not available / not in use",
-     * then fall back to normal PDR rendering if needed.
-     */
-    public FusedPose getLatestFusedPose() {
-        return enabled ? latestFusedPose : null;
-    }
-
-    public FusedPose getLatestRawPose(){ return enabled ? latestRawPose : null;}
-    /**
-     * Enables or disables PF participation for the current recording session.
-     *
-     * When disabling, we immediately reset the live PF state so stale fused poses
-     * from a previous session cannot leak into a standard-PDR recording.
+     * Enable or disable PF operation.
+     * Disabling also clears its state to avoid stale outputs.
      */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
 
-        Log.d(TAG, "PF manager = " + (enabled ? "ENABLED" : "DISABLED"));
+        Log.d(TAG,"Particle filter enabled = " + enabled);
 
         if (!enabled) {
             reset();
         }
+
+        Log.d(TAG, "Particle filter enabled = " + enabled);
     }
+
+    /**
+     * Returns whether PF mode is enabled.
+     */
     public boolean isEnabled() {
         return enabled;
     }
 
     /**
-     * Builds one observation bundle for the PF correction step.
-     *
-     * Observations are converted from global coordinates (LatLng) into the local
-     * x/y frame used internally by the PF.
-     *
-     * Current observation sources:
-     * - Wi-Fi position + Wi-Fi floor
-     * - GNSS position
-     *
-     * Either source may be absent in a given update cycle.
+     * Attach or refresh the current indoor map manager.
+     * This should be called once the active map fragment has a valid IndoorMapManager.
      */
-    private ParticleFilterObservation buildObservation() {
-        lastWifiAccepted = false;
-        lastGnssAccepted = false;
+    public void setIndoorMapManager(@Nullable IndoorMapManager indoorMapManager) {
+        this.indoorMapManager = indoorMapManager;
+        this.constraintModel = new HybridConstraintModel(indoorMapManager);
+        this.engine.setConstraintModel(this.constraintModel);
 
-        Double wifiX = null;
-        Double wifiY = null;
-        Integer wifiFloor = null;
-
-        LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
-        if (isValidLatLng(wifiLatLng)) {
-            double[] local = coordinateConverter.latLngToLocal(wifiLatLng);
-
-            boolean acceptWifi = true;
-            FusedPose gateRef = getGateReferencePose();
-            if (gateRef != null) {
-                double dx = local[0] - gateRef.getXMeters();
-                double dy = local[1] - gateRef.getYMeters();
-                double dist = Math.hypot(dx, dy);
-
-                if (dist > WIFI_GATE_METERS) {
-                    acceptWifi = false;
-                    Log.d(TAG, "Rejecting WiFi update by gate"
-                            + " | dist=" + dist
-                            + ", gate=" + WIFI_GATE_METERS);
-                }
-            }
-
-            if (acceptWifi) {
-                double[] smoothWifi = smoothWifiObservation(local[0], local[1]);
-                wifiX = smoothWifi[0];
-                wifiY = smoothWifi[1];
-                wifiFloor = sensorFusion.getWifiFloor();
-                lastWifiAccepted = true;
-            }
-        }
-
-        Double gnssX = null;
-        Double gnssY = null;
-
-        float[] gnssLatLon = sensorFusion.getGNSSLatitude(false);
-        if (isValidLatLon(gnssLatLon)) {
-            LatLng gnssLatLng = new LatLng(gnssLatLon[0], gnssLatLon[1]);
-            double[] local = coordinateConverter.latLngToLocal(gnssLatLng);
-
-            boolean acceptGnss = true;
-            FusedPose gateRef = getGateReferencePose();
-            if (gateRef != null) {
-                double dx = local[0] - gateRef.getXMeters();
-                double dy = local[1] - gateRef.getYMeters();
-                double dist = Math.hypot(dx, dy);
-
-                if (dist > GNSS_GATE_METERS) {
-                    acceptGnss = false;
-                    Log.d(TAG, "Rejecting GNSS update by gate"
-                            + " | dist=" + dist
-                            + ", gate=" + GNSS_GATE_METERS);
-                }
-            }
-
-            if (acceptGnss) {
-                gnssX = local[0];
-                gnssY = local[1];
-                lastGnssAccepted = true;
-            }
-        }
-
-        return new ParticleFilterObservation(wifiX, wifiY, wifiFloor, gnssX, gnssY);
+        Log.d(TAG, "IndoorMapManager attached to ParticleFilterManager: " + (indoorMapManager != null));
     }
 
-    private double[] smoothWifiObservation(double x, double y) {
-        if (!wifiObsEmaInitialised) {
-            wifiObsEmaInitialised = true;
-            wifiObsEmaX = x;
-            wifiObsEmaY = y;
-        } else {
-            wifiObsEmaX = wifiObsEmaX + WIFI_OBS_EMA_ALPHA * (x - wifiObsEmaX);
-            wifiObsEmaY = wifiObsEmaY + WIFI_OBS_EMA_ALPHA * (y - wifiObsEmaY);
-        }
+    /**
+     * Resets the PF for a new recording session.
+     */
+    public void reset() {
+        engine.clear();
+        latestFusedPose = null;
+        latestRawPose = null;
+        lastPdrValues = null;
+        latestMatchedPose = null;
+        initialised = false;
 
-        return new double[]{wifiObsEmaX, wifiObsEmaY};
+        Log.d(TAG, "Particle filter reset.");
     }
 
+    /**
+     * Returns true if the PF currently has particles initialised.
+     */
+    public boolean isInitialised() {
+        return initialised && engine.isInitialised();
+    }
+
+    /**
+     * Returns the latest fused PF pose.
+     */
     @Nullable
-    private FusedPose getGateReferencePose() {
-        if (latestRawPose != null) {
-            return latestRawPose;
-        }
+    public FusedPose getLatestFusedPose() {
         return latestFusedPose;
     }
 
     /**
-     * Converts cumulative PDR position into incremental distance.
-     *
-     * <p>The PF prediction currently uses:
-     * - scalar displacement magnitude deltaS
-     * - heading increment deltaTheta
-     *
-     * so here we compute:
-     *   deltaS = hypot(dx, dy)
+     * Returns the latest raw PF pose.
+     * At the moment this is the same as the fused pose.
      */
-    private double extractPdrDeltaDistance() {
-        float[] pdrPosition = sensorFusion.getLatestPdrMovement();
-        if (pdrPosition == null || pdrPosition.length < 2) {
-            return 0.0;
-        }
-
-        double px = pdrPosition[0];
-        double py = pdrPosition[1];
-
-        if (firstPdrSample) {
-            firstPdrSample = false;
-            lastPdrX = px;
-            lastPdrY = py;
-            return 0.0;
-        }
-
-        double dx = px - lastPdrX;
-        double dy = py - lastPdrY;
-
-        lastPdrX = px;
-        lastPdrY = py;
-
-        return Math.hypot(dx, dy);
+    @Nullable
+    public FusedPose getLatestRawPose() {
+        return latestRawPose;
     }
 
-    private FusedPose smoothPoseWithKalman(
-            FusedPose rawPose,
-            double deltaS,
-            double deltaThetaAbs,
-            boolean wifiAccepted,
-            boolean gnssAccepted
-    ) {
-        if (rawPose == null || coordinateConverter == null) {
-            return rawPose;
+    /**
+     * Returns a particle snapshot for debugging or visualisation.
+     */
+    @NonNull
+    public List<ParticleFilterEngine.Particle> getParticlesSnapshot() {
+        return engine.getParticlesSnapshot();
+    }
+
+    /**
+     * Optional map-matched pose input.
+     */
+    public void setLatestMatchedPose(@Nullable CandidatePose latestMatchedPose) {
+        this.latestMatchedPose = latestMatchedPose;
+    }
+
+    /**
+     * Compatibility update entry for SensorFusion.
+     * This method is what SensorFusion.stepParticleFilter() expects to call.
+     */
+    public void step() {
+        if (!enabled) {
+            return;
+        }
+        // Keep dependencies synced from SensorFusion.
+        setIndoorMapManager(sensorFusion.getParticleFilterIndoorMapManager());
+        setLatestMatchedPose(sensorFusion.getParticleFilterMatchedPose());
+
+        updateFromLiveSensors(SystemClock.elapsedRealtime());
+
+        latestRawPose = latestFusedPose;
+    }
+
+    /**
+     * Explicit initialisation from GNSS-based session anchor.
+     *
+     * This matches your desired policy:
+     * - initial anchor should come from GNSS
+     * - WiFi should not set the initial start point
+     */
+    public void initialiseFromGnss(@NonNull LatLng gnssStart,
+                                   int logicalFloor,
+                                   double headingRad) {
+        coordinateConverter = new CoordinateConverter(
+                gnssStart.latitude,
+                gnssStart.longitude
+        );
+
+        engine.initialise(gnssStart, logicalFloor, headingRad);
+        //At the anchor, Local x/y are exactly zero.
+        latestRawPose = new FusedPose(
+                0.0,
+                0.0,
+                headingRad,
+                logicalFloor,
+                gnssStart,
+                0.5f
+        );
+        latestFusedPose = latestRawPose;
+
+        initialised = true;
+        lastPdrValues = null;
+        verticalMotionDetector.reset();
+
+        Log.d(TAG, String.format(Locale.US,
+                "PF initialised from GNSS at %.6f, %.6f floor=%d heading=%.3f",
+                gnssStart.latitude, gnssStart.longitude, logicalFloor, Math.toDegrees(headingRad)));
+
+        pushLatestPoseToOutputs();
+    }
+
+    @NonNull
+    private ParticleFilterEngine.Config buildConfigFromPreferences(@Nullable Context context) {
+        ParticleFilterEngine.Config cfg = new ParticleFilterEngine.Config();
+
+        cfg.particleCount = parseIntPref(context, "pf_particle_count", 250, 50, 5000);
+        cfg.forwardNoiseStdMeters = parseDoublePref(context, "pf_sigma_step", 0.22, 0.01, 10.0);
+        cfg.headingNoiseStdRad = Math.toRadians(
+                parseDoublePref(context, "pf_sigma_theta_deg", 6.0, 0.1, 180.0)
+        );
+
+        cfg.enableMapConstraints = true;
+        cfg.hardKillOnWallCross = false;
+        cfg.hardKillOnInvalidFloorTransition = false;
+        cfg.softPenaltyForOutOfWalkable = true;
+
+        cfg.outOfWalkablePenalty = 0.15;
+        cfg.wallCrossPenalty = 0.05;
+        cfg.invalidFloorPenalty = 0.05;
+
+        cfg.enableAbsoluteObservationWeighting = true;
+        cfg.resampleEffectiveSampleSizeRatio =
+                parseDoublePref(context, "pf_resample_ratio", 0.45, 0.05, 0.95);
+
+        cfg.debugLogging = true;
+        return cfg;
+    }
+
+    private int parseIntPref(@Nullable Context context,
+                             @NonNull String key,
+                             int defaultValue,
+                             int minValue,
+                             int maxValue) {
+        if (context == null) {
+            return defaultValue;
         }
 
-        KalmanPoseSmoother.SmoothedPose smoothed = poseSmoother.update(
-                rawPose.getXMeters(),
-                rawPose.getYMeters(),
-                rawPose.getHeadingRad(),
-                rawPose.getConfidence(),
-                deltaS,
-                deltaThetaAbs,
-                wifiAccepted,
-                gnssAccepted
-        );
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        String raw = prefs.getString(key, String.valueOf(defaultValue));
 
-        LatLng smoothedLatLng = coordinateConverter.localToLatLng(
-                smoothed.x,
-                smoothed.y
-        );
+        try {
+            int parsed = Integer.parseInt(raw);
+            return Math.max(minValue, Math.min(maxValue, parsed));
+        } catch (Exception e) {
+            Log.w(TAG, "Invalid integer preference for " + key + ": " + raw);
+            return defaultValue;
+        }
+    }
+
+    private double parseDoublePref(@Nullable Context context,
+                                   @NonNull String key,
+                                   double defaultValue,
+                                   double minValue,
+                                   double maxValue) {
+        if (context == null) {
+            return defaultValue;
+        }
+
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        String raw = prefs.getString(key, String.valueOf(defaultValue));
+
+        try {
+            double parsed = Double.parseDouble(raw);
+            return Math.max(minValue, Math.min(maxValue, parsed));
+        } catch (Exception e) {
+            Log.w(TAG, "Invalid double preference for " + key + ": " + raw);
+            return defaultValue;
+        }
+    }
+
+    @NonNull
+    private FusedPose enrichWithLocalCoordinates(@NonNull FusedPose geographicPose) {
+        if (coordinateConverter == null) {
+            return geographicPose;
+        }
+
+        double[] local = coordinateConverter.latLngToLocal(geographicPose.getLatLng());
 
         return new FusedPose(
-                smoothed.x,
-                smoothed.y,
-                smoothed.theta,
-                rawPose.getFloor(),
-                smoothedLatLng,
-                rawPose.getConfidence()
+                local[0],
+                local[1],
+                geographicPose.getHeadingRad(),
+                geographicPose.getFloor(),
+                geographicPose.getLatLng(),
+                geographicPose.getConfidence()
         );
     }
 
     /**
-     * Checks whether a LatLng is meaningful enough to use.
+     * Main live-update entry point.
+     *
+     * This should be called once per live cycle after SensorFusion already contains:
+     * - latest PDR
+     * - latest GNSS
+     * - latest WiFi
+     * - latest optional matched pose
      */
-    private boolean isValidLatLng(LatLng latLng) {
-        if (latLng == null) {
-            return false;
+    public void updateFromLiveSensors(long timestampMs) {
+        if (!enabled) {
+            return;
         }
-        return !(Math.abs(latLng.latitude) < 1e-6 && Math.abs(latLng.longitude) < 1e-6);
+
+        if (!initialised) {
+            tryInitialiseFromCurrentSensors();
+            if (!initialised) {
+                Log.d(TAG, "PF update skipped: waiting for initial GNSS anchor.");
+                return;
+            }
+        }
+
+        float[] pdr = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
+        if (pdr == null || pdr.length < 2) {
+            Log.d(TAG, "PF update skipped: PDR unavailable.");
+            return;
+        }
+
+        ParticleFilterEngine.MotionInput motionInput = buildMotionInput(pdr, timestampMs);
+        ParticleFilterEngine.AbsoluteObservation observation = buildObservation();
+
+        ParticleFilterEngine.StepResult result = engine.update(motionInput, observation);
+
+        // Convert engine geographic output into the local x/y frame used by recorder/UI.
+        latestRawPose = enrichWithLocalCoordinates(result.fusedPose);
+
+        // For now fused == raw. Later you can insert KalmanPoseSmoother here.
+        latestFusedPose = latestRawPose;
+
+        pushLatestPoseToOutputs();
+
+        Log.d(TAG, String.format(Locale.US,
+                "PF_OUTPUT lat=%.6f lng=%.6f x=%.3f y=%.3f floor=%d conf=%.3f",
+                latestFusedPose.getLatLng().latitude,
+                latestFusedPose.getLatLng().longitude,
+                latestFusedPose.getXMeters(),
+                latestFusedPose.getYMeters(),
+                latestFusedPose.getFloor(),
+                latestFusedPose.getConfidence()));
+
+        debugger.logStep(
+                "live_update",
+                result.diagnostics.totalParticles,
+                result.diagnostics.aliveParticles,
+                result.diagnostics.wallRejectedCount,
+                result.diagnostics.floorRejectedCount,
+                result.diagnostics.outOfWalkablePenalisedCount,
+                result.diagnostics.observationWeightedCount,
+                observation == null ? "obs:none" : ("obs:" + observation.source)
+        );
+
+        debugger.logFusedPose(
+                "live_update",
+                latestFusedPose.getLatLng().latitude,
+                latestFusedPose.getLatLng().longitude,
+                latestFusedPose.getFloor(),
+                latestFusedPose.getHeadingRad(),
+                latestFusedPose.getConfidence()
+        );
     }
 
     /**
-     * Checks whether a raw float lat/lon array is meaningful enough to use.
+     * Pushes the latest PF outputs back into SensorFusion and host callback.
      */
-    private boolean isValidLatLon(float[] latLon) {
-        if (latLon == null || latLon.length < 2) {
-            return false;
+    private void pushLatestPoseToOutputs() {
+        sensorFusion.setLatestRawFusedPose(latestRawPose);
+        sensorFusion.setLatestFusedPose(latestFusedPose);
+
+        if (host != null && latestFusedPose != null) {
+            host.onFusedPoseUpdated(latestFusedPose);
         }
-        return !(Math.abs(latLon[0]) < 1e-6 && Math.abs(latLon[1]) < 1e-6);
     }
 
     /**
-     * Wraps heading angle to [-pi, pi].
+     * Attempts one-time PF initialisation from current GNSS.
+     * GNSS is used as the initial anchor by design.
      */
-    private double wrapAngle(double angle) {
-        while (angle > Math.PI) angle -= 2.0 * Math.PI;
-        while (angle < -Math.PI) angle += 2.0 * Math.PI;
-        return angle;
+    private void tryInitialiseFromCurrentSensors() {
+        float[] gnss = sensorFusion.getGNSSLatitude(false);
+        if (gnss == null || gnss.length < 2) {
+            return;
+        }
+
+        if (Math.abs(gnss[0]) < 1e-6 && Math.abs(gnss[1]) < 1e-6) {
+            return;
+        }
+
+        int floor = 0;
+        double heading = sensorFusion.passOrientation();
+
+        initialiseFromGnss(new LatLng(gnss[0], gnss[1]), floor, heading);
+    }
+
+    /**
+     * Converts raw PDR into one PF motion step.
+     *
+     * This uses:
+     * - PDR delta distance
+     * - current heading change relative to previous fused heading
+     * - placeholder vertical transition fields
+     */
+    @NonNull
+    private ParticleFilterEngine.MotionInput buildMotionInput(@NonNull float[] pdr,
+                                                              long timestampMs) {
+
+        double deltaForwardMeters = 0.0;
+
+        if (lastPdrValues != null && lastPdrValues.length >= 2) {
+            double dx = pdr[0] - lastPdrValues[0];
+            double dy = pdr[1] - lastPdrValues[1];
+            deltaForwardMeters = Math.sqrt(dx * dx + dy * dy);
+        }
+
+        double currentHeading = sensorFusion.passOrientation();
+        double deltaHeadingRad = 0.0;
+
+        if (latestFusedPose != null) {
+            deltaHeadingRad = wrapAngleRad(currentHeading - latestFusedPose.getHeadingRad());
+        }
+
+        // Build a conservative vertical hint from recent barometer/elevator evidence.
+        verticalMotionDetector.addSample(
+                timestampMs,
+                sensorFusion.getElevation(),
+                sensorFusion.getElevator()
+        );
+        VerticalTransitionHint verticalHint = verticalMotionDetector.buildHint();
+
+        double deltaHeightMeters = 0.0;
+        boolean heightChanged = false;
+        if (verticalHint != null) {
+            deltaHeightMeters = verticalHint.getDeltaHeight();
+            heightChanged = verticalHint.isHeightChanged();
+        }
+
+        lastPdrValues = new float[]{pdr[0], pdr[1]};
+
+        Log.d(TAG, String.format(Locale.US,
+                "PF_MOTION deltaS=%.3f deltaHeadingDeg=%.2f deltaH=%.2f heightChanged=%s",
+                deltaForwardMeters,
+                Math.toDegrees(deltaHeadingRad),
+                deltaHeightMeters,
+                String.valueOf(heightChanged)));
+
+        return new ParticleFilterEngine.MotionInput(
+                deltaForwardMeters,
+                deltaHeadingRad,
+                deltaHeightMeters,
+                heightChanged,
+                timestampMs
+        );
+    }
+
+    /**
+     * Builds the strongest currently-available absolute observation.
+     *
+     * Priority:
+     * 1) map-matched pose
+     * 2) WiFi
+     * 3) GNSS
+     */
+    @Nullable
+    private ParticleFilterEngine.AbsoluteObservation buildObservation() {
+        // strongest indoor observation: map matched pose
+        if (latestMatchedPose != null) {
+            LatLng ll = latestMatchedPose.getLatLng();
+
+            Integer floor = null;
+            if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
+                floor = indoorMapManager.indexToLogicalFloor(latestMatchedPose.getFloor());
+            } else {
+                floor = latestMatchedPose.getFloor();
+            }
+
+            if (ll != null) {
+                return new ParticleFilterEngine.AbsoluteObservation(
+                        ll,
+                        floor,
+                        null, // CandidatePose currently does not carry heading here
+                        1.2,  // strong spatial trust
+                        Math.toRadians(12.0),
+                        0.90,
+                        "map_match"
+                );
+            }
+        }
+
+        // WiFi as fallback
+        LatLng wifi = sensorFusion.getLatLngWifiPositioning();
+        if (wifi != null && !(Math.abs(wifi.latitude) < 1e-6 && Math.abs(wifi.longitude) < 1e-6)) {
+            Log.d(TAG, String.format(Locale.US,
+                    "PF_OBS source=wifi lat=%.6f lng=%.6f floor=%d",
+                    wifi.latitude,
+                    wifi.longitude,
+                    sensorFusion.getWifiFloor()));
+
+            return new ParticleFilterEngine.AbsoluteObservation(
+                    wifi,
+                    sensorFusion.getWifiFloor(),
+                    null,
+                    5.0,
+                    Math.toRadians(45.0),
+                    0.45,
+                    "wifi"
+            );
+        }
+
+        // GNSS as weakest fallback
+        float[] gnss = sensorFusion.getGNSSLatitude(false);
+        if (gnss != null && gnss.length >= 2
+                && !(Math.abs(gnss[0]) < 1e-6 && Math.abs(gnss[1]) < 1e-6)) {
+
+            Log.d(TAG, String.format(Locale.US,
+                    "PF_OBS source=gnss lat=%.6f lng=%.6f",
+                    gnss[0], gnss[1]));
+
+            return new ParticleFilterEngine.AbsoluteObservation(
+                    new LatLng(gnss[0], gnss[1]),
+                    null,
+                    null,
+                    8.0,
+                    Math.toRadians(60.0),
+                    0.30,
+                    "gnss"
+            );
+        }
+
+        Log.d(TAG, "PF_OBS source=none");
+        return null;
+    }
+
+    /**
+     * First-pass hybrid map constraint model.
+     *
+     * This version is intentionally coarse and safe:
+     * - if no indoor map is loaded, it stays permissive
+     * - if indoor map is loaded, it enforces selected-building containment
+     * - wall crossing is approximated using outer-building boundary only
+     * - floor changes are allowed conservatively for now
+     *
+     * Later can ne replace with:
+     * - wall segment intersection from vector map features
+     * - connector / stairs / lift region checks
+     * - room / corridor walkability masks
+     */
+    private static class HybridConstraintModel implements ParticleFilterEngine.ConstraintModel {
+
+        @Nullable
+        private final IndoorMapManager indoorMapManager;
+
+        HybridConstraintModel(@Nullable IndoorMapManager indoorMapManager) {
+            this.indoorMapManager = indoorMapManager;
+        }
+
+        /**
+         * Returns whether a PF particle is in a valid walkable coarse region.
+         *
+         * First-pass behaviour:
+         * - if no indoor map is loaded, allow all states
+         * - otherwise require coarse containment inside the selected building footprint
+         */
+        @Override
+        public boolean isWalkable(double lat, double lng, int logicalFloor) {
+            if (indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
+                return true;
+            }
+
+            LatLng point = new LatLng(lat, lng);
+            int currentBuilding = indoorMapManager.getCurrentBuilding();
+
+            switch (currentBuilding) {
+                case IndoorMapManager.BUILDING_NUCLEUS:
+                    return BuildingPolygon.inNucleus(point);
+
+                case IndoorMapManager.BUILDING_LIBRARY:
+                    return BuildingPolygon.inLibrary(point);
+
+                case IndoorMapManager.BUILDING_MURCHISON:
+                    return BuildingPolygon.inMurchison(point);
+
+                default:
+                    return true;
+            }
+        }
+
+        /**
+         * Returns whether the motion segment crosses an invalid outer building boundary.
+         *
+         * First-pass behaviour:
+         * - if both old and new are inside walkable space, do not reject
+         * - if the new state leaves the selected building footprint, treat it as invalid crossing
+         *
+         * Later replace this with wall-segment intersection against the vector floor map.
+         */
+        @Override
+        public boolean crossesWall(double oldLat, double oldLng,
+                                   double newLat, double newLng,
+                                   int logicalFloor) {
+            if (indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
+                return false;
+            }
+
+            boolean oldWalkable = isWalkable(oldLat, oldLng, logicalFloor);
+            boolean newWalkable = isWalkable(newLat, newLng, logicalFloor);
+
+            return oldWalkable && !newWalkable;
+        }
+
+        /**
+         * Returns whether a floor transition is allowed.
+         *
+         * First-pass behaviour:
+         * - same floor is always valid
+         * - if no indoor map is present, allow
+         * - if indoor map is present, still allow conservatively for now
+         *
+         * Later replace this with:
+         * - stairs region
+         * - lift region
+         * - connector region checks
+         */
+        @Override
+        public boolean isFloorTransitionAllowed(double lat, double lng, int oldFloor, int newFloor) {
+            if (oldFloor == newFloor) {
+                return true;
+            }
+
+            if (indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
+                return true;
+            }
+
+            // Conservative first integration: allow, then refine later.
+            return true;
+        }
+
+        /**
+         * Returns a soft map likelihood in [0,1].
+         *
+         * First-pass behaviour:
+         * - 1.0 if valid inside coarse building footprint
+         * - 0.15 if outside valid coarse indoor region
+         */
+        @Override
+        public double mapLikelihood(double lat, double lng, int logicalFloor) {
+            if (indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
+                return 1.0;
+            }
+
+            return isWalkable(lat, lng, logicalFloor) ? 1.0 : 0.15;
+        }
+
+        /**
+         * Optional recovery pose.
+         * Not used yet in this first integration.
+         */
+        @Nullable
+        @Override
+        public CandidatePose getRecoveryPose(@NonNull LatLng currentLatLng, int logicalFloor) {
+            return null;
+        }
+    }
+
+    /**
+     * Wrap angle to [-pi, pi].
+     */
+    private static double wrapAngleRad(double a) {
+        while (a > Math.PI) a -= 2.0 * Math.PI;
+        while (a < -Math.PI) a += 2.0 * Math.PI;
+        return a;
     }
 }

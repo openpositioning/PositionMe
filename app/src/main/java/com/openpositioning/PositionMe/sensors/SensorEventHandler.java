@@ -6,6 +6,9 @@ import android.hardware.SensorManager;
 import android.os.SystemClock;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 
@@ -186,31 +189,32 @@ public class SensorEventHandler {
                     // Acceleration samples have now been consumed for this step.
                     this.accelMagnitude.clear();
 
-                    if (particleFilterManager != null) {
+                    if (particleFilterManager != null && particleFilterManager.isEnabled()) {
+                        Log.d("SensorFusion", String.format(
+                                "PF_STEP_TRIGGER stepTimeMs=%d rawPdrX=%.3f rawPdrY=%.3f headingDeg=%.2f",
+                                stepTime,
+                                newCords[0],
+                                newCords[1],
+                                Math.toDegrees(state.orientation[0])
+                        ));
+
                         particleFilterManager.step();
                     }
 
                     if (recorder.isRecording()) {
-                        // Default behaviour: store and draw the raw PDR local position.
-                        float[] pointToStoreAndDraw = newCords;
-                        // If PF mode is enabled and a fused pose is already available,
-                        // override the saved/drawn point with fused local x/y.
-                        //
-                        // Important:
-                        // - PDR still drives motion prediction internally
-                        // - only the exported/displayed trajectory switches to fused output
-                        if (particleFilterManager != null && particleFilterManager.isEnabled()) {
-                            FusedPose fusedPose = particleFilterManager.getLatestFusedPose();
+                        /*
+                         * Important:
+                         * Raw PDR is always updated first, even in PF mode.
+                         * The particle filter uses that raw step motion as its prediction input.
+                         *
+                         * After PF stepping:
+                         * - PDR mode stores/draws raw local PDR
+                         * - PF mode stores/draws PF fused local trajectory
+                         */
+                        float[] pointToStoreAndDraw = resolveTrajectoryPointForCurrentMode(newCords);
 
-                            if (fusedPose != null) {
-                                pointToStoreAndDraw = new float[]{
-                                        (float) fusedPose.getXMeters(),
-                                        (float) fusedPose.getYMeters()
-                                };
-                            }
-                        }
-                        // Draw exactly the same point that will be written to the trajectory payload,
-                        // keeping the live view consistent with the saved result.
+                        // Draw exactly the same trajectory point that will be saved,
+                        // so the live local path view stays consistent with the recording payload.
                         this.pathView.drawTrajectory(pointToStoreAndDraw);
                         state.stepCounter++;
 
@@ -219,10 +223,87 @@ public class SensorEventHandler {
                                 pointToStoreAndDraw[0],
                                 pointToStoreAndDraw[1]
                         );
+
+                        if (particleFilterManager != null && particleFilterManager.isEnabled()) {
+                            FusedPose fusedPose = particleFilterManager.getLatestFusedPose();
+                            if (fusedPose != null && fusedPose.getLatLng() != null) {
+                                Log.d("SensorFusion",
+                                        "Recorded PF trajectory point from fused pose lat="
+                                                + fusedPose.getLatLng().latitude
+                                                + " lng=" + fusedPose.getLatLng().longitude
+                                                + " floor=" + fusedPose.getFloor()
+                                                + " conf=" + fusedPose.getConfidence());
+                            }
+                        }
                     }
-                    break;
-                }
+        }}}
+
+    /**
+     * Returns the point that should be drawn and recorded for the current positioning mode.
+     *
+     * Behaviour:
+     * - PDR mode: return raw PDR coordinates directly
+     * - PF mode: convert the latest fused geographic pose back into local metres
+     *            relative to the recording start anchor
+     * - PF not ready yet: fall back to raw PDR
+     */
+    @NonNull
+    private float[] resolveTrajectoryPointForCurrentMode(@NonNull float[] rawPdrPoint) {
+        if (particleFilterManager == null || !particleFilterManager.isEnabled()) {
+            return rawPdrPoint;
         }
+
+        FusedPose fusedPose = particleFilterManager.getLatestFusedPose();
+        if (fusedPose == null || fusedPose.getLatLng() == null) {
+            Log.d("SensorFusion", "PF mode enabled but fused pose not ready yet, using raw PDR point.");
+            return rawPdrPoint;
+        }
+
+        float[] localPoint = convertLatLngToLocalMeters(
+                fusedPose.getLatLng().latitude,
+                fusedPose.getLatLng().longitude
+        );
+
+        if (localPoint == null) {
+            Log.d("SensorFusion", "PF fused pose available but start GNSS anchor missing, using raw PDR point.");
+            return rawPdrPoint;
+        }
+
+        Log.d("SensorFusion",
+                "Using PF trajectory point x=" + localPoint[0]
+                        + " y=" + localPoint[1]
+                        + " floor=" + fusedPose.getFloor()
+                        + " conf=" + fusedPose.getConfidence());
+
+        return localPoint;
+    }
+
+    /**
+     * Converts a geographic position into local metres relative to the recording start anchor.
+     *
+     * Convention used here:
+     * - x = east-west metres
+     * - y = north-south metres
+     *
+     * This matches the most common local trajectory convention used with map anchoring.
+     */
+    @Nullable
+    private float[] convertLatLngToLocalMeters(double lat, double lng) {
+        float startLat = state.startLocation[0];
+        float startLng = state.startLocation[1];
+
+        if (Math.abs(startLat) < 1e-6f && Math.abs(startLng) < 1e-6f) {
+            return null;
+        }
+
+        double northMeters = (lat - startLat) * 111320.0;
+        double midLatRad = Math.toRadians((lat + startLat) * 0.5);
+        double eastMeters = (lng - startLng) * 111320.0 * Math.cos(midLatRad);
+
+        return new float[] {
+                (float) eastMeters,
+                (float) northMeters
+        };
     }
 
     /**

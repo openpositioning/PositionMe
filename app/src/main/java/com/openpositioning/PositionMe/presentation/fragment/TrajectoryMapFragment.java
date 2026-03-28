@@ -727,6 +727,10 @@ public class TrajectoryMapFragment extends Fragment {
 
         resetMapOverlays();
 
+        if(sensorFusion != null){
+            sensorFusion.setParticleFilterMatchedPose(null);
+        }
+
         if (indoorMapManager != null) {
             indoorMapManager.clearIndoorMap();
         }
@@ -735,18 +739,11 @@ public class TrajectoryMapFragment extends Fragment {
             selectedVenueText.setText("Tap a blue building outline to select a building");
         }
 
-        calibrationTargetBuildingKey = "";
-        updateCalibrationUi();
-        updateActualMapButtonState();
-        updateAutoFloorAvailability();
-
         if (indoorLoadingIndicator != null) {
             indoorLoadingIndicator.setVisibility(View.GONE);
         }
 
         setFloorControlsVisibility(View.GONE);
-        syncReplayUiState();
-        refreshDebugStatusText();
     }
 
     // Map / building lifecycle
@@ -758,6 +755,8 @@ public class TrajectoryMapFragment extends Fragment {
         map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
         indoorMapManager = new IndoorMapManager(map);
+        //Wire the live indoor map manager into SensorFusion
+        sensorFusion.setParticleFilterIndoorMapManager(indoorMapManager);
 
         map.setOnPolygonClickListener(polygon -> {
             FloorplanApiClient.BuildingInfo building = polygonToBuilding.get(polygon);

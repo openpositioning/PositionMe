@@ -11,20 +11,25 @@ import android.location.LocationListener;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.openpositioning.PositionMe.Traj;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
+import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+import com.openpositioning.PositionMe.fusion.FusedPose;
+import com.openpositioning.PositionMe.fusion.ParticleFilterManager;
+import com.openpositioning.PositionMe.mapmatching.CandidatePose;
 import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.service.SensorCollectionService;
+import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.utils.TrajectoryValidator;
-import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,44 +40,64 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.openpositioning.PositionMe.fusion.FusedPose;
-import com.openpositioning.PositionMe.fusion.ParticleFilterManager;
-import android.util.Log;
-
 /**
- * The SensorFusion class is the main data gathering and processing class of the application.
+ * Main sensor/data fusion singleton for the application.
  *
- * <p>It follows the singleton design pattern to ensure that every fragment and process has access
- * to the same data and sensor instances. Internally it delegates to specialised modules:</p>
+ * <p>This class owns:
  * <ul>
- *   <li>{@link SensorState} &ndash; shared sensor data holder</li>
- *   <li>{@link SensorEventHandler} &ndash; sensor event dispatch (switch logic)</li>
- *   <li>{@link TrajectoryRecorder} &ndash; recording lifecycle &amp; protobuf construction</li>
- *   <li>{@link WifiPositionManager} &ndash; WiFi scan processing &amp; positioning</li>
+ *     <li>live sensor state</li>
+ *     <li>PDR processing</li>
+ *     <li>recording lifecycle</li>
+ *     <li>GNSS / WiFi / BLE data collection</li>
+ *     <li>particle filter wiring</li>
  * </ul>
  *
- * <p>The public API is unchanged &ndash; all external callers continue to use
- * {@code SensorFusion.getInstance().method()}.</p>
+ * <p>External callers should continue using {@code SensorFusion.getInstance()}.</p>
  */
 public class SensorFusion implements SensorEventListener {
 
-    //region Static variables
+    // Singleton
     private static final SensorFusion sensorFusion = new SensorFusion();
-    //endregion
 
-    //region Instance variables
+    public static SensorFusion getInstance() {
+        return sensorFusion;
+    }
+
+    private SensorFusion() {
+        this.locationListener = new MyLocationListener();
+    }
+
+    // Constants
+    public static final int TRAJECTORY_MODE_PDR = 0;
+    public static final int TRAJECTORY_MODE_PARTICLE_FILTER = 1;
+
+    private static final String TAG = "SensorFusion";
+
+    // Core app state
     private Context appContext;
 
-    // Shared sensor state
+    /**
+     * Shared live sensor state container.
+     */
     private final SensorState state = new SensorState();
 
     // Internal modules
     private SensorEventHandler eventHandler;
     private TrajectoryRecorder recorder;
     private WifiPositionManager wifiPositionManager;
-    private ParticleFilterManager particleFilterManager; //For fused live positioning
+    private ParticleFilterManager particleFilterManager;
 
-    // Movement sensor instances (lifecycle managed here)
+    @Nullable
+    private FusedPose latestParticleFilterPose;
+
+    @Nullable
+    private FusedPose latestRawParticleFilterPose;
+    @Nullable
+    private CandidatePose particleFilterMatchedPose;
+    @Nullable
+    private IndoorMapManager particleFilterIndoorMapManager;
+
+    // Movement sensors
     private MovementSensor accelerometerSensor;
     private MovementSensor barometerSensor;
     private MovementSensor gyroscopeSensor;
@@ -96,90 +121,32 @@ public class SensorFusion implements SensorEventListener {
     private PdrProcessing pdrProcessing;
     private PathView pathView;
 
-    // Sensor registration latency setting
+    /**
+     * Sensor batching latency configuration.
+     */
     long maxReportLatencyNs = 0;
 
-    // Floorplan API cache (latest result from start-location step)
+    // Floorplan / building cache
+
+    /**
+     * Latest building metadata returned by the floorplan API.
+     * Cached by building id for later fragments and PF use.
+     */
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingCache =
             new HashMap<>();
-    //endregion
 
-    //region Initialisation
+    // Recording mode state
 
-    /**
-     * Private constructor for implementing singleton design pattern.
-     */
-    private SensorFusion() {
-        this.locationListener = new MyLocationListener();
-    }
     private int recordingTrajectoryMode = TRAJECTORY_MODE_PDR;
 
+    // Initialisation
     /**
-     * Static function to access singleton instance of SensorFusion.
-     *
-     * @return singleton instance of SensorFusion class.
-     */
-    public static SensorFusion getInstance() {
-        return sensorFusion;
-    }
-    public static final int TRAJECTORY_MODE_PDR = 0;
-    public static final int TRAJECTORY_MODE_PARTICLE_FILTER = 1;
-    private static final String TAG = "RecordingMode";
-
-    /**
-     * Returns the latest PDR position estimate in local meters relative to the recording start.
-     *
-     * @return float array of size 2 containing x and y position in meters
-     */
-    public float[] getLatestPdrMovement() {
-        return pdrProcessing.getPDRMovement();
-    }
-
-    /**
-     * Advances the particle filter by one update step using the most recent motion and
-     * absolute observations.
-     */
-    public void stepParticleFilter() {
-        if (particleFilterManager != null && isParticleFilterTrajectoryMode()) {
-            particleFilterManager.step();
-        }
-    }
-
-    /**
-     * Returns the latest fused pose estimate produced by the particle filter.
-     *
-     * @return fused pose estimate, or null if the filter has not been initialised yet
-     */
-    public FusedPose getLatestFusedPose() {
-        if (!isParticleFilterTrajectoryMode()) {
-            return null;
-        }
-        return particleFilterManager != null ? particleFilterManager.getLatestFusedPose() : null;
-    }
-    public FusedPose getLatestRawFusedPose() {
-        if (!isParticleFilterTrajectoryMode()) {
-            return null;
-        }
-        return particleFilterManager != null ? particleFilterManager.getLatestRawPose() : null;
-    }
-
-    /**
-     * Initialisation function for the SensorFusion instance.
-     *
-     * <p>Initialises all movement sensor instances, creates internal modules, and prepares
-     * the system for data collection.</p>
-     *
-     * @param context application context for permissions and device access.
-     *
-     * @see MovementSensor handling all SensorManager based data collection devices.
-     * @see ServerCommunications handling communication with the server.
-     * @see GNSSDataProcessor for location data processing.
-     * @see WifiDataProcessor for network data processing.
+     * Initialises SensorFusion and all dependent modules.
      */
     public void setContext(Context context) {
         this.appContext = context.getApplicationContext();
 
-        // Initialise movement sensors
+        // Movement sensors
         this.accelerometerSensor = new MovementSensor(context, Sensor.TYPE_ACCELEROMETER);
         this.barometerSensor = new MovementSensor(context, Sensor.TYPE_PRESSURE);
         this.gyroscopeSensor = new MovementSensor(context, Sensor.TYPE_GYROSCOPE);
@@ -191,127 +158,277 @@ public class SensorFusion implements SensorEventListener {
         this.gravitySensor = new MovementSensor(context, Sensor.TYPE_GRAVITY);
         this.linearAccelerationSensor = new MovementSensor(context, Sensor.TYPE_LINEAR_ACCELERATION);
 
-        // Initialise non-sensor data sources
+        // External data sources
         this.gnssProcessor = new GNSSDataProcessor(context, locationListener);
         ServerCommunications serverCommunications = new ServerCommunications(context);
 
-        // Initialise utilities
+        // Utilities
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.pdrProcessing = new PdrProcessing(context);
         this.pathView = new PathView(context, null);
         WiFiPositioning wiFiPositioning = new WiFiPositioning(context);
 
-        // Create internal modules
+        // Recorder
         this.recorder = new TrajectoryRecorder(appContext, state, serverCommunications, settings);
         this.recorder.setSensorReferences(
-                accelerometerSensor, gyroscopeSensor, magnetometerSensor,
-                barometerSensor, lightSensor, proximitySensor, rotationSensor);
+                accelerometerSensor,
+                gyroscopeSensor,
+                magnetometerSensor,
+                barometerSensor,
+                lightSensor,
+                proximitySensor,
+                rotationSensor
+        );
 
+        // WiFi positioning manager
         this.wifiPositionManager = new WifiPositionManager(wiFiPositioning, recorder);
 
-        //Initialise the particle filter manager after core modules are ready
-        this.particleFilterManager = new ParticleFilterManager(sensorFusion,context);
+        // Particle filter manager
+        this.particleFilterManager = new ParticleFilterManager(
+                this,
+                new ParticleFilterManager.Host() {
+                    @Override
+                    public void onFusedPoseUpdated(@NonNull FusedPose fusedPose) {
+                        latestParticleFilterPose = fusedPose;
+                    }
+                }
+        );
         this.particleFilterManager.setEnabled(isParticleFilterTrajectoryMode());
 
+        if (particleFilterIndoorMapManager != null) {
+            this.particleFilterManager.setIndoorMapManager(particleFilterIndoorMapManager);
+        }
+
+        // Event handler
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
-                state, pdrProcessing, pathView, recorder, particleFilterManager, bootTime);
+                state,
+                pdrProcessing,
+                pathView,
+                recorder,
+                particleFilterManager,
+                bootTime
+        );
 
-        // Register WiFi observer on WifiPositionManager (not on SensorFusion)
+        // WiFi scanner
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(wifiPositionManager);
 
-        // Initialise BLE scanner and register observer for trajectory recording
+        // BLE scanner
         this.bleProcessor = new BleDataProcessor(context);
         bleProcessor.registerObserver(new Observer() {
             @Override
             public void update(Object[] objList) {
                 List<BleDevice> bleList = Stream.of(objList)
-                        .map(o -> (BleDevice) o).collect(Collectors.toList());
+                        .map(o -> (BleDevice) o)
+                        .collect(Collectors.toList());
                 recorder.addBleFingerprint(bleList);
             }
         });
 
-        // Initialise WiFi RTT manager and register as WiFi scan observer
+        // WiFi RTT
         this.rttManager = new RttManager(appContext, recorder, wifiProcessor);
         wifiProcessor.registerObserver(rttManager);
 
-        // Initialise BLE RTT estimator and register on BLE scan updates
+        // BLE RTT
         this.bleRttManager = new BleRttManager(recorder);
         bleProcessor.registerObserver(bleRttManager);
 
         if (!rttManager.isRttSupported()) {
             new Handler(Looper.getMainLooper()).post(() ->
-                    Toast.makeText(appContext,
+                    Toast.makeText(
+                            appContext,
                             "WiFi RTT is not supported on this device",
-                            Toast.LENGTH_LONG).show());
+                            Toast.LENGTH_LONG
+                    ).show()
+            );
         }
     }
 
-    //endregion
-
-    public void resetParticleFilterForRecording(){
-        if (particleFilterManager != null){
-            particleFilterManager.reset();
-        }
+    // Particle filter wiring
+    /**
+     * Returns the latest local PDR movement estimate in metres.
+     */
+    public float[] getLatestPdrMovement() {
+        return pdrProcessing.getPDRMovement();
     }
-    //region SensorEventListener
 
     /**
-     * {@inheritDoc}
+     * Advances the particle filter by one live update step.
      *
-     * <p>Delegates to {@link SensorEventHandler#handleSensorEvent(SensorEvent)}.</p>
+     * <p>This should be called after the latest sensor values have already been updated.
+     * The PF manager will internally:
+     * <ul>
+     *     <li>try GNSS initialisation if not yet initialised</li>
+     *     <li>read live PDR motion</li>
+     *     <li>read GNSS / WiFi / matched pose observations</li>
+     *     <li>produce fused/raw PF outputs</li>
+     * </ul>
      */
+    public void stepParticleFilter() {
+        if (particleFilterManager == null || !isParticleFilterTrajectoryMode()) {
+            return;
+        }
+
+        particleFilterManager.step();
+
+        // Keep cached copies here so fragments can query SensorFusion directly.
+        latestParticleFilterPose = particleFilterManager.getLatestFusedPose();
+        latestRawParticleFilterPose = particleFilterManager.getLatestRawPose();
+    }
+
+    /**
+     * Wires the current indoor map manager into SensorFusion so the PF can access
+     * walkability / wall / floor-transition constraints.
+     */
+    public void setParticleFilterIndoorMapManager(@Nullable IndoorMapManager indoorMapManager) {
+        this.particleFilterIndoorMapManager = indoorMapManager;
+
+        if (particleFilterManager != null) {
+            particleFilterManager.setIndoorMapManager(indoorMapManager);
+        }
+    }
+
+    /**
+     * Stores the latest accepted map-matched pose for the particle filter.
+     * This is written by MapMatchingCoordinator and consumed by ParticleFilterManager.
+     */
+    public void setParticleFilterMatchedPose(@Nullable CandidatePose matchedPose) {
+        this.particleFilterMatchedPose = matchedPose;
+
+        if (particleFilterManager != null) {
+            particleFilterManager.setLatestMatchedPose(matchedPose);
+        }
+    }
+
+    /**
+     * Returns the indoor map manager currently used by the particle filter.
+     */
+    @Nullable
+    public IndoorMapManager getParticleFilterIndoorMapManager() {
+        return particleFilterIndoorMapManager;
+    }
+
+    /**
+     * Returns the latest map-matched pose that should be used as a strong PF observation.
+     */
+    @Nullable
+    public CandidatePose getParticleFilterMatchedPose() {
+        return particleFilterMatchedPose;
+    }
+
+    /**
+     * Resets the particle filter for a new recording session.
+     */
+    public void resetParticleFilterForRecording() {
+        particleFilterMatchedPose = null;
+
+        if (particleFilterManager != null) {
+            particleFilterManager.reset();
+        }
+        latestParticleFilterPose = null;
+        latestRawParticleFilterPose = null;
+    }
+
+    /**
+     * Returns the latest fused PF pose.
+     */
+    @Nullable
+    public FusedPose getLatestFusedPose() {
+        if (!isParticleFilterTrajectoryMode()) {
+            return null;
+        }
+
+        if (particleFilterManager != null) {
+            FusedPose managerPose = particleFilterManager.getLatestFusedPose();
+            if (managerPose != null) {
+                latestParticleFilterPose = managerPose;
+            }
+        }
+
+        return latestParticleFilterPose;
+    }
+
+    /**
+     * Returns the latest raw PF pose.
+     */
+    @Nullable
+    public FusedPose getLatestRawFusedPose() {
+        if (!isParticleFilterTrajectoryMode()) {
+            return null;
+        }
+
+        if (particleFilterManager != null) {
+            FusedPose rawPose = particleFilterManager.getLatestRawPose();
+            if (rawPose != null) {
+                latestRawParticleFilterPose = rawPose;
+            }
+        }
+
+        return latestRawParticleFilterPose;
+    }
+
+    /**
+     * Allows PF-related classes to push the latest fused pose back into SensorFusion.
+     */
+    public void setLatestFusedPose(@Nullable FusedPose fusedPose) {
+        this.latestParticleFilterPose = fusedPose;
+    }
+
+    /**
+     * Allows PF-related classes to push the latest raw PF pose back into SensorFusion.
+     */
+    public void setLatestRawFusedPose(@Nullable FusedPose rawPose) {
+        this.latestRawParticleFilterPose = rawPose;
+    }
+
+    // SensorEventListener
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
         eventHandler.handleSensorEvent(sensorEvent);
     }
 
-    /** {@inheritDoc} */
     @Override
-    public void onAccuracyChanged(Sensor sensor, int i) {}
+    public void onAccuracyChanged(Sensor sensor, int i) {
+        // No-op
+    }
 
-    //endregion
-
-    //region Start/Stop listening
-
+    // Start/stop listening
     /**
-     * Registers all device listeners and enables updates with the specified sampling rate.
-     *
-     * <p>Should be called from {@link MainActivity} when resuming the application.</p>
+     * Registers all listeners and resumes live collection.
      */
     public void resumeListening() {
-        accelerometerSensor.sensorManager.registerListener(this,
-                accelerometerSensor.sensor, 10000, (int) maxReportLatencyNs);
-        accelerometerSensor.sensorManager.registerListener(this,
-                linearAccelerationSensor.sensor, 10000, (int) maxReportLatencyNs);
-        accelerometerSensor.sensorManager.registerListener(this,
-                gravitySensor.sensor, 10000, (int) maxReportLatencyNs);
-        barometerSensor.sensorManager.registerListener(this,
-                barometerSensor.sensor, (int) 1e6);
-        gyroscopeSensor.sensorManager.registerListener(this,
-                gyroscopeSensor.sensor, 10000, (int) maxReportLatencyNs);
-        lightSensor.sensorManager.registerListener(this,
-                lightSensor.sensor, (int) 1e6);
-        proximitySensor.sensorManager.registerListener(this,
-                proximitySensor.sensor, (int) 1e6);
-        magnetometerSensor.sensorManager.registerListener(this,
-                magnetometerSensor.sensor, 10000, (int) maxReportLatencyNs);
-        stepDetectionSensor.sensorManager.registerListener(this,
-                stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
-        rotationSensor.sensorManager.registerListener(this,
-                rotationSensor.sensor, (int) 1e6);
+        accelerometerSensor.sensorManager.registerListener(
+                this, accelerometerSensor.sensor, 10000, (int) maxReportLatencyNs);
+        accelerometerSensor.sensorManager.registerListener(
+                this, linearAccelerationSensor.sensor, 10000, (int) maxReportLatencyNs);
+        accelerometerSensor.sensorManager.registerListener(
+                this, gravitySensor.sensor, 10000, (int) maxReportLatencyNs);
+        barometerSensor.sensorManager.registerListener(
+                this, barometerSensor.sensor, (int) 1e6);
+        gyroscopeSensor.sensorManager.registerListener(
+                this, gyroscopeSensor.sensor, 10000, (int) maxReportLatencyNs);
+        lightSensor.sensorManager.registerListener(
+                this, lightSensor.sensor, (int) 1e6);
+        proximitySensor.sensorManager.registerListener(
+                this, proximitySensor.sensor, (int) 1e6);
+        magnetometerSensor.sensorManager.registerListener(
+                this, magnetometerSensor.sensor, 10000, (int) maxReportLatencyNs);
+        stepDetectionSensor.sensorManager.registerListener(
+                this, stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
+        rotationSensor.sensorManager.registerListener(
+                this, rotationSensor.sensor, (int) 1e6);
+
         // Foreground service owns WiFi/BLE scanning during recording.
         if (!recorder.isRecording()) {
             startWirelessCollectors();
         }
+
         gnssProcessor.startLocationUpdates();
     }
 
     /**
-     * Un-registers all device listeners and pauses data collection.
-     *
-     * <p>Should be called from {@link MainActivity} when pausing the application.</p>
+     * Unregisters listeners and pauses live collection.
      */
     public void stopListening() {
         if (!recorder.isRecording()) {
@@ -325,23 +442,16 @@ public class SensorFusion implements SensorEventListener {
             rotationSensor.sensorManager.unregisterListener(this);
             linearAccelerationSensor.sensorManager.unregisterListener(this);
             gravitySensor.sensorManager.unregisterListener(this);
+
             stopWirelessCollectors();
-            this.gnssProcessor.stopUpdating();
+            gnssProcessor.stopUpdating();
         }
     }
 
-    /**
-     * Called by {@link SensorCollectionService} when foreground collection starts.
-     * Moves WiFi/BLE scanning responsibility into the service lifecycle while recording.
-     */
     public void onCollectionServiceStarted() {
         startWirelessCollectors();
     }
 
-    /**
-     * Called by {@link SensorCollectionService} when foreground collection stops.
-     * Stops WiFi/BLE scans that were started for recording continuity.
-     */
     public void onCollectionServiceStopped() {
         stopWirelessCollectors();
     }
@@ -361,31 +471,29 @@ public class SensorFusion implements SensorEventListener {
                 wifiProcessor.stopListening();
             }
         } catch (Exception e) {
-            System.err.println("WiFi stop failed");
+            Log.w(TAG, "WiFi stop failed", e);
         }
+
         try {
             if (bleProcessor != null) {
                 bleProcessor.stopListening();
             }
         } catch (Exception e) {
-            System.err.println("BLE stop failed");
+            Log.w(TAG, "BLE stop failed", e);
         }
     }
 
-    //endregion
-
-    //region Recording lifecycle (delegated to TrajectoryRecorder)
-
+    // Recording lifecycle
     /**
-     * Enables saving sensor values to the trajectory object.
-     * Also starts the foreground service to keep data collection alive in the background.
-     *
-     * @see TrajectoryRecorder#startRecording(PdrProcessing)
-     * @see SensorCollectionService
+     * Starts trajectory recording and foreground collection.
      */
     public void startRecording() {
         recorder.startRecording(pdrProcessing);
         eventHandler.resetBootTime(recorder.getBootTime());
+
+        latestParticleFilterPose = null;
+        latestRawParticleFilterPose = null;
+        particleFilterMatchedPose = null;
 
         if (isParticleFilterTrajectoryMode()) {
             resetParticleFilterForRecording();
@@ -398,6 +506,28 @@ public class SensorFusion implements SensorEventListener {
         }
     }
 
+    /**
+     * Stops trajectory recording and foreground collection.
+     */
+    public void stopRecording() {
+        recorder.stopRecording();
+
+        latestParticleFilterPose = null;
+        latestRawParticleFilterPose = null;
+        particleFilterMatchedPose = null;
+
+        if (particleFilterManager != null) {
+            particleFilterManager.reset();
+        }
+
+        if (appContext != null) {
+            SensorCollectionService.stop(appContext);
+        }
+    }
+
+    /**
+     * Selects whether this recording session uses standard PDR or PF trajectory mode.
+     */
     public void setRecordingTrajectoryMode(int mode) {
         if (mode != TRAJECTORY_MODE_PARTICLE_FILTER) {
             mode = TRAJECTORY_MODE_PDR;
@@ -413,8 +543,11 @@ public class SensorFusion implements SensorEventListener {
         if (particleFilterManager != null) {
             boolean enableParticleFilter = (mode == TRAJECTORY_MODE_PARTICLE_FILTER);
             particleFilterManager.setEnabled(enableParticleFilter);
+
             if (!enableParticleFilter) {
                 particleFilterManager.reset();
+                latestParticleFilterPose = null;
+                latestRawParticleFilterPose = null;
             }
         }
     }
@@ -427,94 +560,58 @@ public class SensorFusion implements SensorEventListener {
         return recordingTrajectoryMode == TRAJECTORY_MODE_PARTICLE_FILTER;
     }
 
-    /**
-     * Disables saving sensor values to the trajectory object.
-     * Also stops the foreground service since background collection is no longer needed.
-     *
-     * @see TrajectoryRecorder#stopRecording()
-     * @see SensorCollectionService
-     */
-    public void stopRecording() {
-        recorder.stopRecording();
-        if (appContext != null) {
-            SensorCollectionService.stop(appContext);
-        }
-    }
-
-    /**
-     * Validates the current trajectory against quality thresholds before upload.
-     *
-     * @return validation result with errors and warnings
-     * @see TrajectoryValidator
-     */
     public TrajectoryValidator.ValidationResult validateTrajectory() {
         return recorder.validateTrajectory();
     }
 
-    /**
-     * Send the trajectory object to servers.
-     *
-     * @see TrajectoryRecorder#sendTrajectoryToCloud()
-     */
     public void sendTrajectoryToCloud() {
         recorder.sendTrajectoryToCloud();
     }
 
-    /**
-     * Sets the trajectory name/ID for the current recording session.
-     *
-     * @param id trajectory name entered by the user
-     */
     public void setTrajectoryId(String id) {
         recorder.setTrajectoryId(id);
     }
 
-    /**
-     * Gets the trajectory name/ID for the current recording session.
-     *
-     * @return trajectory name string, or null if not set
-     */
     public String getTrajectoryId() {
         return recorder.getTrajectoryId();
     }
 
-    /** save test point to csv files */
     public void saveTestPointToCSV(File file) throws IOException {
         recorder.saveTestPointToCsv(file);
     }
 
-    /** save the entire recording protobuf into a json file*/
     public void saveRecordingToJSON(File file) throws IOException {
         recorder.saveTrajectoryToJson(file);
     }
 
-    /**
-     * Sets the selected building identifier for the current recording session.
-     * Used to determine the campaign name when uploading the trajectory.
-     *
-     * @param buildingId building name from the floorplan API (e.g. "nucleus_building")
-     */
     public void setSelectedBuildingId(String buildingId) {
         recorder.setSelectedBuildingId(buildingId);
     }
 
-    /**
-     * Gets the selected building identifier for the current recording session.
-     *
-     * @return building name string, or null if no building was selected
-     */
     public String getSelectedBuildingId() {
         return recorder.getSelectedBuildingId();
     }
 
     /**
-     * Caches floorplan API building payloads for use in later fragments.
-     *
-     * @param buildings buildings returned by floorplan API
+     * Writes the current initial metadata into the protobuf recording.
      */
+    public void writeInitialMetadata() {
+        recorder.writeInitialMetadata();
+    }
+
+    /**
+     * Adds a user test point to the recording protobuf.
+     */
+    public void addTestPointToProto(long pressTimestampMs, double lat, double lng) {
+        recorder.addTestPoint(pressTimestampMs, lat, lng);
+    }
+
+    // Floorplan cache
     public void setFloorplanBuildings(List<FloorplanApiClient.BuildingInfo> buildings) {
         floorplanBuildingCache.clear();
-        if (buildings == null) return;
+        if (buildings == null) {
+            return;
+        }
 
         for (FloorplanApiClient.BuildingInfo building : buildings) {
             if (building == null || building.getName() == null || building.getName().isEmpty()) {
@@ -524,12 +621,7 @@ public class SensorFusion implements SensorEventListener {
         }
     }
 
-    /**
-     * Returns a cached floorplan entry by building id.
-     *
-     * @param buildingId building name from floorplan API
-     * @return cached building info, or null if not present
-     */
+    @Nullable
     public FloorplanApiClient.BuildingInfo getFloorplanBuilding(String buildingId) {
         if (buildingId == null || buildingId.isEmpty()) {
             return null;
@@ -537,39 +629,14 @@ public class SensorFusion implements SensorEventListener {
         return floorplanBuildingCache.get(buildingId);
     }
 
-    /**
-     * Returns all cached floorplan entries.
-     *
-     * @return list copy of cached building info objects
-     */
+    @NonNull
     public List<FloorplanApiClient.BuildingInfo> getFloorplanBuildings() {
         return new ArrayList<>(floorplanBuildingCache.values());
     }
 
+    // Getters / setters
     /**
-     * Writes the initial position and heading into the trajectory protobuf.
-     * Should be called after startRecording() and setStartGNSSLatitude().
-     */
-    public void writeInitialMetadata() {
-        recorder.writeInitialMetadata();
-    }
-
-    /**
-     * Adds a test point (user ground truth marker) to the trajectory.
-     */
-    public void addTestPointToProto(long pressTimestampMs, double lat, double lng) {
-        recorder.addTestPoint(pressTimestampMs, lat, lng);
-    }
-
-    //endregion
-
-    //region Getters/Setters
-
-    /**
-     * Getter function for core location data.
-     *
-     * @param start set true to get the initial location
-     * @return longitude and latitude data in a float[2].
+     * Returns current GNSS or recording start GNSS.
      */
     public float[] getGNSSLatitude(boolean start) {
         float[] latLong = new float[2];
@@ -583,9 +650,7 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Setter function for core location data.
-     *
-     * @param startPosition contains the initial location set by the user
+     * Sets the recording start GNSS anchor.
      */
     public void setStartGNSSLatitude(float[] startPosition) {
         state.startLocation[0] = startPosition[0];
@@ -593,36 +658,28 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
-     * Function to redraw path in corrections fragment.
-     *
-     * @param scalingRatio new size of path due to updated step length
+     * Redraws path using a corrected stride scaling ratio.
      */
     public void redrawPath(float scalingRatio) {
         pathView.redraw(scalingRatio);
     }
 
     /**
-     * Getter function for average step length.
-     *
-     * @return average step length of total PDR.
+     * Returns average step length from PDR.
      */
     public float passAverageStepLength() {
         return pdrProcessing.getAverageStepLength();
     }
 
     /**
-     * Getter function for device orientation.
-     *
-     * @return orientation of device in radians.
+     * Returns current device heading in radians.
      */
     public float passOrientation() {
         return state.orientation[0];
     }
 
     /**
-     * Return most recent sensor readings.
-     *
-     * @return Map of {@link SensorTypes} to float array of most recent values.
+     * Returns latest live sensor values.
      */
     public Map<SensorTypes, float[]> getSensorValueMap() {
         Map<SensorTypes, float[]> sensorValueMap = new HashMap<>();
@@ -638,110 +695,59 @@ public class SensorFusion implements SensorEventListener {
         return sensorValueMap;
     }
 
-    /**
-     * Return the most recent list of WiFi names and levels.
-     *
-     * @return list of Wifi objects.
-     */
     public List<Wifi> getWifiList() {
         return wifiPositionManager.getWifiList();
     }
 
-    /**
-     * Get information about all the sensors registered in SensorFusion.
-     *
-     * @return List of SensorInfo objects containing name, resolution, power, etc.
-     */
     public List<SensorInfo> getSensorInfos() {
         List<SensorInfo> sensorInfoList = new ArrayList<>();
-        sensorInfoList.add(this.accelerometerSensor.sensorInfo);
-        sensorInfoList.add(this.barometerSensor.sensorInfo);
-        sensorInfoList.add(this.gyroscopeSensor.sensorInfo);
-        sensorInfoList.add(this.lightSensor.sensorInfo);
-        sensorInfoList.add(this.proximitySensor.sensorInfo);
-        sensorInfoList.add(this.magnetometerSensor.sensorInfo);
+        sensorInfoList.add(accelerometerSensor.sensorInfo);
+        sensorInfoList.add(barometerSensor.sensorInfo);
+        sensorInfoList.add(gyroscopeSensor.sensorInfo);
+        sensorInfoList.add(lightSensor.sensorInfo);
+        sensorInfoList.add(proximitySensor.sensorInfo);
+        sensorInfoList.add(magnetometerSensor.sensorInfo);
         return sensorInfoList;
     }
 
-    /**
-     * Registers the caller observer to receive updates from the server instance.
-     *
-     * @param observer Instance implementing {@link Observer} who wants to be notified of
-     *                 events relating to sending and receiving trajectories.
-     */
     public void registerForServerUpdate(Observer observer) {
         recorder.getServerCommunications().registerObserver(observer);
     }
 
-    /**
-     * Get the estimated elevation value in meters calculated by the PDR class.
-     *
-     * @return float of the estimated elevation in meters.
-     */
     public float getElevation() {
         return state.elevation;
     }
 
-    /**
-     * Get an estimate whether the user is currently taking an elevator.
-     *
-     * @return true if the PDR estimates the user is in an elevator, false otherwise.
-     */
     public boolean getElevator() {
         return state.elevator;
     }
 
-    /**
-     * Estimates position of the phone based on proximity and light sensors.
-     *
-     * @return int 1 if the phone is by the ear, int 0 otherwise.
-     */
     public int getHoldMode() {
-        int proximityThreshold = 1, lightThreshold = 100;
-        if (state.proximity < proximityThreshold && state.light > lightThreshold) {
-            return 1;
-        } else {
-            return 0;
-        }
+        int proximityThreshold = 1;
+        int lightThreshold = 100;
+        return (state.proximity < proximityThreshold && state.light > lightThreshold) ? 1 : 0;
     }
 
-    /**
-     * Returns the latest Wi-Fi based geographic position.
-     *
-     * @return latest Wi-Fi LatLng, or null if unavailable
-     */
+    @Nullable
     public LatLng getLatLngWifiPositioning() {
         return wifiPositionManager != null ? wifiPositionManager.getLatLngWifiPositioning() : null;
     }
 
-    /**
-     * Returns the latest Wi-Fi based floor estimate.
-     *
-     * @return latest Wi-Fi floor estimate
-     */
     public int getWifiFloor() {
         return wifiPositionManager != null ? wifiPositionManager.getWifiFloor() : 0;
     }
 
-    /**
-     * Utility function to log the event frequency of each sensor.
-     */
     public void logSensorFrequencies() {
         eventHandler.logSensorFrequencies();
     }
 
-    //endregion
-
-    public Context getContext(){
+    public Context getContext() {
         return appContext;
     }
 
-    //region Location listener
-
+    // GNSS listener
     /**
-     * Location listener class to receive updates from the location manager.
-     * Writes position data to {@link SensorState} and GNSS readings to
-     * {@link TrajectoryRecorder}.
+     * GNSS listener that updates live SensorState and records GNSS samples.
      */
     class MyLocationListener implements LocationListener {
         @Override
@@ -751,6 +757,4 @@ public class SensorFusion implements SensorEventListener {
             recorder.addGnssData(location);
         }
     }
-
-    //endregion
 }

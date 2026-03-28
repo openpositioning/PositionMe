@@ -328,7 +328,7 @@ public class RecordingFragment extends Fragment {
 
         testPoints.add(new TestPoint(idx, ts, cur.latitude, cur.longitude));
         sensorFusion.addTestPointToProto(ts, cur.latitude, cur.longitude);
-
+        // Improved version: pass timestamp into marker renderer too
         trajectoryMapFragment.addTestPointMarker(idx, ts, cur);
 
         Log.d(TAG, String.format(
@@ -415,6 +415,8 @@ public class RecordingFragment extends Fragment {
         LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
         if (wifiLatLng != null && trajectoryMapFragment.isWifiEnabled()) {
             trajectoryMapFragment.updateWifi(wifiLatLng);
+        } else {
+            trajectoryMapFragment.clearWifi();
         }
 
         // GNSS overlay and GNSS error display
@@ -488,47 +490,35 @@ public class RecordingFragment extends Fragment {
     /**
      * Updates the map using the latest fused PF estimate.
      *
-     * If the PF has not yet initialised, this deliberately falls back
-     * to standard PDR so the user still sees a live trajectory.
+     * If PF is enabled, the fused pose is always preferred.
+     * If fused pose is still unavailable, fall back to standard PDR
+     * so the user still sees a trajectory immediately.
      */
     private void updateLiveMapWithParticleFilter(@Nullable float[] pdrValues) {
         FusedPose fusedPose = sensorFusion.getLatestFusedPose();
 
         if (fusedPose == null) {
-            Log.d(TAG, "PF_BRANCH fused pose is null -> falling back to standard PDR");
+            Log.d(TAG, "PF fused pose not ready yet; falling back to standard PDR view.");
             updateLiveMapWithStandardPdr(pdrValues);
             return;
         }
 
-        LatLng fusedLatLng = fusedPose.getLatLng();
-        float fusedHeadingDeg = (float) Math.toDegrees(fusedPose.getHeadingRad());
+        Log.d(TAG,
+                "PF branch using fused pose: " + fusedPose.getLatLng()
+                        + ", floor=" + fusedPose.getFloor()
+                        + ", confidence=" + fusedPose.getConfidence());
 
-        Log.d(TAG, String.format(
-                Locale.UK,
-                "PF_BRANCH using fused pose lat=%.6f lon=%.6f floor=%d conf=%.3f headingDeg=%.2f",
-                fusedLatLng.latitude,
-                fusedLatLng.longitude,
-                fusedPose.getFloor(),
-                fusedPose.getConfidence(),
-                fusedHeadingDeg
-        ));
+        trajectoryMapFragment.updateUserLocation(
+                fusedPose.getLatLng(),
+                (float) Math.toDegrees(fusedPose.getHeadingRad())
+        );
 
-        if (trajectoryMapFragment != null) {
-            trajectoryMapFragment.updateUserLocation(
-                    fusedLatLng,
-                    fusedHeadingDeg
-            );
+        trajectoryMapFragment.updateDisplayedFloor(fusedPose.getFloor());
+        trajectoryMapFragment.updateDebugInfo((float) fusedPose.getHeadingRad());
 
-            trajectoryMapFragment.updateDisplayedFloor(fusedPose.getFloor());
-
-            // Keep debug info visible for quick validation.
-            trajectoryMapFragment.updateDebugInfo((float) fusedPose.getHeadingRad());
-
-            if (!initialCameraPositionSet) {
-                trajectoryMapFragment.setInitialCameraPosition(fusedLatLng);
-                initialCameraPositionSet = true;
-                Log.d(TAG, "PF_BRANCH initial camera position set from fused pose");
-            }
+        if (!initialCameraPositionSet) {
+            trajectoryMapFragment.setInitialCameraPosition(fusedPose.getLatLng());
+            initialCameraPositionSet = true;
         }
     }
 
@@ -624,35 +614,25 @@ public class RecordingFragment extends Fragment {
     /**
      * Resolves the first usable autonomous absolute position.
      *
-     * Current policy:
-     * - prefer WiFi if already available
-     * - otherwise use GNSS
+     * New policy:
+     * 1. Prefer GNSS first for initial anchor.
+     * 2. Use WiFi only as fallback.
+     *
+     * This prevents the start location from being pulled to a sparse WiFi AP location.
      */
     @Nullable
     private LatLng resolveAutonomousInitialLocation() {
-        // Prefer GNSS for the initial anchor
+        // Prefer GNSS first
         float[] gnssLatLng = sensorFusion.getGNSSLatitude(false);
         if (gnssLatLng != null
                 && gnssLatLng.length >= 2
                 && !(Math.abs(gnssLatLng[0]) < 1e-6 && Math.abs(gnssLatLng[1]) < 1e-6)) {
-            Log.d(TAG, String.format(
-                    Locale.UK,
-                    "INITIAL_ANCHOR using GNSS lat=%.6f lon=%.6f",
-                    gnssLatLng[0],
-                    gnssLatLng[1]
-            ));
             return new LatLng(gnssLatLng[0], gnssLatLng[1]);
         }
 
-        // Optional fallback to WiFi only if GNSS is unavailable
+        // Only fallback to WiFi if GNSS is not ready
         LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
         if (isValidLatLng(wifiLatLng)) {
-            Log.d(TAG, String.format(
-                    Locale.UK,
-                    "INITIAL_ANCHOR fallback to WiFi lat=%.6f lon=%.6f",
-                    wifiLatLng.latitude,
-                    wifiLatLng.longitude
-            ));
             return wifiLatLng;
         }
 
