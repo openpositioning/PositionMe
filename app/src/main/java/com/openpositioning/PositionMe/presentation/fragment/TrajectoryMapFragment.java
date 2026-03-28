@@ -81,6 +81,8 @@ public class TrajectoryMapFragment extends Fragment {
     private static final String TAG = "TrajectoryMapFragment";
     private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000;
     private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000;
+    private static final int MAX_AUTO_FLOOR_STEP_WITHOUT_ELEVATOR = 1;
+    private static final int MAX_WIFI_BARO_FLOOR_DISAGREEMENT = 1;
     private Handler autoFloorHandler;
     private Runnable autoFloorTask;
     private int lastCandidateFloor = Integer.MIN_VALUE;
@@ -307,7 +309,6 @@ public class TrajectoryMapFragment extends Fragment {
      * and append to polyline if the user actually moved.
      *
      * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
@@ -654,15 +655,8 @@ public class TrajectoryMapFragment extends Fragment {
         if (sensorFusion == null || indoorMapManager == null) return;
         if (!indoorMapManager.getIsIndoorMapSet()) return;
 
-        int candidateFloor;
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            candidateFloor = sensorFusion.getWifiFloor();
-        } else {
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-            if (floorHeight <= 0) return;
-            candidateFloor = Math.round(elevation / floorHeight);
-        }
+        Integer candidateFloor = resolveAutoFloorCandidate();
+        if (candidateFloor == null) return;
 
         indoorMapManager.setCurrentFloor(candidateFloor, true);
         updateFloorLabel();
@@ -692,33 +686,10 @@ public class TrajectoryMapFragment extends Fragment {
         if (sensorFusion == null || indoorMapManager == null) return;
         if (!indoorMapManager.getIsIndoorMapSet()) return;
 
-        int candidateFloor;
-        boolean hasAuthoritativeSource = false; // 新增一个标志，判断我们是否有“权威”信源
+        Integer candidateFloor = resolveAutoFloorCandidate();
+        if (candidateFloor == null) return;
+        boolean hasAuthoritativeSource = sensorFusion.getLatLngWifiPositioning() != null;
 
-        // 👑 最高优先级：使用 WiFi 定位返回的楼层 (如果有)
-        if (sensorFusion.getLatLngWifiPositioning() != null) {
-            // WiFi API 返回的楼层通常是以 0 为地面的，最可靠
-            candidateFloor = sensorFusion.getWifiFloor();
-            hasAuthoritativeSource = true;
-            android.util.Log.d("FloorDebug", "楼层来源: WiFi, 原始值: " + candidateFloor);
-        } else {
-            // ⚠️ 次要优先级：使用气压计估算楼层
-            float elevation = sensorFusion.getElevation();
-            float floorHeight = indoorMapManager.getFloorHeight();
-
-            if (floorHeight <= 0) {
-                // 如果没有设置楼层高度，则无法计算，直接退出
-                return;
-            }
-
-            // 使用气压计计算楼层，同样以 0 为地面
-            // Math.round() 会四舍五入到最近的整数
-            candidateFloor = Math.round(elevation / floorHeight);
-            android.util.Log.d("FloorDebug", "楼层来源: 气压计, 海拔: " + elevation + ", 计算值: " + candidateFloor);
-        }
-
-        // --- 防抖动逻辑 (Debounce) 保持不变 ---
-        // (这部分逻辑是好的，可以防止楼层在两个值之间快速跳变)
         long now = SystemClock.elapsedRealtime();
         if (candidateFloor != lastCandidateFloor) {
             lastCandidateFloor = candidateFloor;
@@ -727,19 +698,84 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
-            // 只有当信号源是权威的（WiFi），或者我们长时间没有权威信号时，才更新楼层
-            // 这可以防止不准的气压计覆盖掉刚定位成功的 WiFi 楼层
-            if (hasAuthoritativeSource || (now - lastAuthoritativeTime > 15000)) { // 超过15秒没收到WiFi才信气压计
+            if (hasAuthoritativeSource || (now - lastAuthoritativeTime > 15000)) {
                 indoorMapManager.setCurrentFloor(candidateFloor, true);
                 updateFloorLabel();
 
                 if (hasAuthoritativeSource) {
-                    lastAuthoritativeTime = now; // 记录上次权威更新的时间
+                    lastAuthoritativeTime = now;
                 }
             }
-            // 重置计时器
             lastCandidateTime = now;
         }
+    }
+
+    private Integer resolveAutoFloorCandidate() {
+        boolean hasWifiFloor = sensorFusion.getLatLngWifiPositioning() != null;
+        Integer wifiFloor = hasWifiFloor ? sensorFusion.getWifiFloor() : null;
+        Integer barometricFloor = getBarometricFloorEstimate();
+        boolean elevatorDetected = sensorFusion.getElevator();
+
+        if (hasWifiFloor) {
+            if (barometricFloor != null
+                    && Math.abs(wifiFloor - barometricFloor) > MAX_WIFI_BARO_FLOOR_DISAGREEMENT
+                    && !elevatorDetected) {
+                Log.d(TAG, "Skipping WiFi auto-floor candidate due to large barometric disagreement: wifi="
+                        + wifiFloor + ", barometric=" + barometricFloor);
+            } else if (isPlausibleAutoFloorCandidate(wifiFloor, elevatorDetected)) {
+                Log.d(TAG, "Auto-floor candidate from WiFi: " + wifiFloor);
+                return wifiFloor;
+            } else {
+                Log.d(TAG, "Skipping implausible WiFi auto-floor candidate: " + wifiFloor);
+            }
+        }
+
+        if (barometricFloor != null && isPlausibleAutoFloorCandidate(barometricFloor, elevatorDetected)) {
+            Log.d(TAG, "Auto-floor candidate from barometer: " + barometricFloor);
+            return barometricFloor;
+        }
+
+        if (barometricFloor != null) {
+            Log.d(TAG, "Skipping implausible barometric auto-floor candidate: " + barometricFloor);
+        }
+        return null;
+    }
+
+    private Integer getBarometricFloorEstimate() {
+        float floorHeight = indoorMapManager.getFloorHeight();
+        if (floorHeight <= 0) return null;
+        return Math.round(sensorFusion.getElevation() / floorHeight);
+    }
+
+    private boolean isPlausibleAutoFloorCandidate(int candidateFloor, boolean elevatorDetected) {
+        int currentLogicalFloor = indoorMapManager.getCurrentFloor() - indoorMapManager.getAutoFloorBias();
+        if (candidateFloor == currentLogicalFloor) return true;
+        if (elevatorDetected) return Math.abs(candidateFloor - currentLogicalFloor) <= 2;
+        return Math.abs(candidateFloor - currentLogicalFloor) <= MAX_AUTO_FLOOR_STEP_WITHOUT_ELEVATOR;
+    }
+
+    /**
+     */
+    public void drawGnssUpdatePoint(LatLng location) {
+        if (gMap == null || location == null) return;
+        gMap.addCircle(new CircleOptions()
+                .center(location)
+                .radius(0.75)
+                .fillColor(Color.BLUE)
+                .strokeWidth(0)
+                .zIndex(2));
+    }
+
+    /**
+     */
+    public void drawWifiUpdatePoint(LatLng location) {
+        if (gMap == null || location == null) return;
+        gMap.addCircle(new CircleOptions()
+                .center(location)
+                .radius(0.75)
+                .fillColor(Color.GREEN)
+                .strokeWidth(0)
+                .zIndex(3));
     }
 
     //endregion

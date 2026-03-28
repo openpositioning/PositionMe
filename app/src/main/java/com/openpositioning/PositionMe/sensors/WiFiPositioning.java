@@ -118,62 +118,62 @@ public class WiFiPositioning {
 
 
     /**
-     * Creates a POST request using the WiFi fingerprint to obtain user's location
-     * The POST request is issued to https://openpositioning.org/api/position/fine
-     * (the openpositioning API) with the WiFI fingerprint passed as the parameter.
+     * Creates a POST request using the WiFi fingerprint to obtain the user's location.
      *
-     * The response of the post request returns the coordinates of the WiFi position
-     * along with the floor of the building the user is at though a callback.
+     * <p>The POST request is issued to {@code https://openpositioning.org/api/position/fine}
+     * (the openpositioning API) with the WiFi fingerprint passed as the parameter.
      *
-     * A try and catch block along with error Logs have been added to keep a record of error's
-     * obtained while handling POST requests (for better maintainability and secure programming)
+     * <p>The response of the POST request returns the coordinates of the WiFi position
+     * along with the floor of the building the user is at through a callback.
      *
-     * @param jsonWifiFeatures WiFi Fingerprint from device
-     * @param callback callback function to allow user to use location when ready
+     * <p>A try-catch block along with error logs have been added to keep a record of errors
+     * obtained while handling POST requests for better maintainability and secure programming.
+     *
+     * @param jsonWifiFeatures WiFi fingerprint from the device
+     * @param callback callback function to handle the location response or errors
      */
-    public void request( JSONObject jsonWifiFeatures, final VolleyCallback callback) {
-        // Creating the POST request using WiFi fingerprint (a JSON object)
+    public void request(JSONObject jsonWifiFeatures, final VolleyCallback callback) {
+        // Create the POST request using the WiFi fingerprint (a JSON object).
         JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(
                 Request.Method.POST, url, jsonWifiFeatures,
                 response -> {
                     try {
-                        Log.d("WifiSuccess", "✅✅✅ WiFi定位API成功！服务器返回坐标！✅✅✅");
-                        Log.d("jsonObject",response.toString());
-                        wifiLocation = new LatLng(response.getDouble("lat"),response.getDouble("lon"));
+                        Log.d("WifiSuccess", "Success! Server returned coordinates.");
+                        Log.d("jsonObject", response.toString());
+
+                        wifiLocation = new LatLng(response.getDouble("lat"), response.getDouble("lon"));
                         floor = response.getInt("floor");
-                        callback.onSuccess(wifiLocation,floor);
+                        callback.onSuccess(wifiLocation, floor);
                     } catch (JSONException e) {
-                        Log.e("jsonErrors","Error parsing response: "+e.getMessage()+" "+ response);
+                        Log.e("jsonErrors", "Error parsing response: " + e.getMessage() + " " + response);
                         callback.onError("Error parsing response: " + e.getMessage());
                     }
                 },
                 error -> {
                     if (error.networkResponse != null) {
                         int statusCode = error.networkResponse.statusCode;
-                        String responseBody = "无返回体数据";
+                        String responseBody = "";
 
-                        // 提取服务器返回的真实错误信息
                         if (error.networkResponse.data != null) {
                             try {
                                 responseBody = new String(error.networkResponse.data, "UTF-8");
                             } catch (Exception e) {
-                                responseBody = "解析响应体失败";
+                                responseBody = "";
                             }
                         }
 
-                        Log.e("WifiProbe", "HTTP 状态码: " + statusCode + ", 服务器回复: " + responseBody);
+                        Log.e("WifiProbe", "HTTP Status Code: " + statusCode + ", Server Response: " + responseBody);
                         callback.onError("Status: " + statusCode + " Body: " + responseBody);
-
                     } else {
-                        // 根本没连上服务器（比如没网、超时、DNS解析失败等）
-                        Log.e("WifiProbe", "网络底层错误: " + error.toString());
+                        Log.e("WifiProbe", "Network layer error: " + error.toString());
                         callback.onError("Network Error: " + error.toString());
                     }
                 }
         );
-        // ！！！新增：打印我们要发送给服务器的“WiFi指纹证据” ！！！
-        Log.d("WifiProbe", "==== 即将发送的 WiFi 指纹: ==== \n" + jsonWifiFeatures.toString());
-        // Adds the request to the request queue
+
+        Log.d("WifiProbe", "==== WiFi Fingerprint to be sent: ==== \n" + jsonWifiFeatures.toString());
+
+        // Add the request to the request queue.
         requestQueue.add(jsonObjectRequest);
     }
 

@@ -38,6 +38,12 @@ public class PdrProcessing {
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
     private static final int MIN_REQUIRED_SAMPLES = 2;
+    private static final float HEADING_MEDIUM_JUMP_THRESHOLD_RAD = (float) Math.toRadians(32.0);
+    private static final float HEADING_JUMP_THRESHOLD_RAD = (float) Math.toRadians(50.0);
+    private static final float HEADING_SMOOTH_ALPHA_VERY_STABLE = 0.08f;
+    private static final float HEADING_SMOOTH_ALPHA_STABLE = 0.25f;
+    private static final float HEADING_SMOOTH_ALPHA_TURNING = 0.80f;
+    private static final float GYRO_TURN_CONFIRM_THRESHOLD_RAD_S = 0.6f;
     //endregion
 
     //region Instance variables
@@ -71,6 +77,7 @@ public class PdrProcessing {
     // Step sum and length aggregation variables
     private float sumStepLength = 0;
     private int stepCount = 0;
+    private float filteredHeadingRad = Float.NaN;
     //endregion
 
     /**
@@ -84,15 +91,15 @@ public class PdrProcessing {
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
 //        // Check if estimate or manual values should be used
 //        this.useManualStep = this.settings.getBoolean("manual_step_values", false);
-        // 强制开启手动步长模式，不再使用不准的自动估计算法！
+        // Keep manual step length enabled because it is more stable than the auto estimate here.
         this.useManualStep = true;
         if(useManualStep) {
             try {
                 // Retrieve manual step  length
-                this.stepLength = this.settings.getInt("user_step_length", 20) / 100f;
+                this.stepLength = this.settings.getInt("user_step_length", 75) / 100f;
             } catch (Exception e) {
                 // Invalid values - reset to defaults
-                this.stepLength = 0.20f;
+                this.stepLength = 0.75f;
                 this.settings.edit().putInt("user_step_length", 20).apply();
             }
         }
@@ -142,13 +149,23 @@ public class PdrProcessing {
      * @param headingRad                heading relative to magnetic north in radians.
      */
     public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
+        return updatePdr(currentStepEnd, accelMagnitudeOvertime, headingRad, 0f, false);
+    }
+
+    public float[] updatePdr(long currentStepEnd,
+                             List<Double> accelMagnitudeOvertime,
+                             float headingRad,
+                             float gyroZRadPerSec,
+                             boolean recentTurnDetected) {
         if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.size() < MIN_REQUIRED_SAMPLES) {
             return new float[]{this.positionX, this.positionY};  // Return current position without update
-                                                                // - TODO - temporary solution of the empty list issue
+                                                                 // - TODO - temporary solution of the empty list issue
         }
 
+        float stableHeading = stabiliseHeading(headingRad, gyroZRadPerSec, recentTurnDetected);
+
         // Change angle so zero rad is east
-        float adaptedHeading = (float) (Math.PI/2 - headingRad);
+        float adaptedHeading = (float) (Math.PI/2 - stableHeading);
 
         // check if accelMagnitudeOvertime is empty
         if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.isEmpty()) {
@@ -163,9 +180,8 @@ public class PdrProcessing {
             this.stepLength = weibergMinMax(accelMagnitudeOvertime);
             // System.err.println("Step Length" + stepLength);
         }
-        // ！！！强制修正：无视所有前面的算法，步长就按我们说的算！！！
-        // ！！！我们先从一个极小的值开始测试，比如 30 厘米 ！！！
-        stepLength = 0.70f;
+        // Use the manually tuned constant step length after testing.
+        stepLength = 0.75f;
 
         // Increment aggregate variables
         sumStepLength += stepLength;
@@ -181,6 +197,54 @@ public class PdrProcessing {
 
         // return current position
         return new float[]{this.positionX, this.positionY};
+    }
+
+    private float stabiliseHeading(float rawHeadingRad, float gyroZRadPerSec, boolean recentTurnDetected) {
+        if (Float.isNaN(filteredHeadingRad)) {
+            filteredHeadingRad = normalizeAngle(rawHeadingRad);
+            return filteredHeadingRad;
+        }
+
+        float normalizedHeading = unwrapAngle(rawHeadingRad, filteredHeadingRad);
+        float delta = normalizedHeading - filteredHeadingRad;
+        float absDelta = Math.abs(delta);
+        boolean mediumJump = absDelta > HEADING_MEDIUM_JUMP_THRESHOLD_RAD;
+        boolean largeJump = Math.abs(delta) > HEADING_JUMP_THRESHOLD_RAD;
+        boolean activeTurn = recentTurnDetected || Math.abs(gyroZRadPerSec) >= GYRO_TURN_CONFIRM_THRESHOLD_RAD_S;
+
+        if (largeJump && !activeTurn) {
+            return filteredHeadingRad;
+        }
+
+        if (mediumJump && !activeTurn) {
+            filteredHeadingRad = normalizeAngle(filteredHeadingRad + HEADING_SMOOTH_ALPHA_VERY_STABLE * delta);
+            return filteredHeadingRad;
+        }
+
+        float alpha = activeTurn ? HEADING_SMOOTH_ALPHA_TURNING : HEADING_SMOOTH_ALPHA_STABLE;
+        filteredHeadingRad = normalizeAngle(filteredHeadingRad + alpha * delta);
+        return filteredHeadingRad;
+    }
+
+    private float unwrapAngle(float angle, float referenceAngle) {
+        float normalized = normalizeAngle(angle);
+        while (normalized - referenceAngle > Math.PI) {
+            normalized -= (float) (2 * Math.PI);
+        }
+        while (normalized - referenceAngle < -Math.PI) {
+            normalized += (float) (2 * Math.PI);
+        }
+        return normalized;
+    }
+
+    private float normalizeAngle(float angle) {
+        while (angle > Math.PI) {
+            angle -= (float) (2 * Math.PI);
+        }
+        while (angle < -Math.PI) {
+            angle += (float) (2 * Math.PI);
+        }
+        return angle;
     }
 
     /**
@@ -400,6 +464,7 @@ public class PdrProcessing {
         this.startElevationBuffer = new Float[3];
         // Start floor - assumed to be zero
         this.currentFloor = 0;
+        this.filteredHeadingRad = Float.NaN;
     }
 
     /**

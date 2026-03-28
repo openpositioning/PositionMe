@@ -164,12 +164,8 @@ public class IndoorMapManager {
         int targetIndex = -1;
 
         if (autoFloor) {
-            // 如果是自动切换（来自WiFi/气压计的数字 0, 1, -1）
-            // 现在的列表顺序很整齐：-1对应0, 0对应1, 1对应2...
-            // 规律就是：索引 = 物理楼层 + 1
             targetIndex = newFloor + 1;
         } else {
-            // 如果是手动按钮传入的，它传的通常就是目标 index
             targetIndex = newFloor;
         }
 
@@ -177,6 +173,10 @@ public class IndoorMapManager {
             this.currentFloor = targetIndex;
             drawFloorShapes(targetIndex);
         }
+        List<FloorplanApiClient.MapShapeFeature> currentFeatures = currentFloorShapes.get(targetIndex).getFeatures();
+        SensorFusion.getInstance().setCurrentWalls(currentFeatures);
+
+        android.util.Log.d("FloorFix", "鎴愬姛鍒囨崲鍒版ゼ灞傜储寮? " + targetIndex + "锛屽苟鏇存柊浜嗗澹佹暟鎹紒");
     }
 
     /**
@@ -242,6 +242,8 @@ public class IndoorMapManager {
                 if (currentFloorShapes != null && !currentFloorShapes.isEmpty()) {
                     drawFloorShapes(currentFloor);
                     isIndoorMapSet = true;
+                    List<FloorplanApiClient.MapShapeFeature> currentFeatures = currentFloorShapes.get(currentFloor).getFeatures();
+                    SensorFusion.getInstance().setCurrentWalls(currentFeatures);
                 }
 
             } else if (!inAnyBuilding && isIndoorMapSet) {
@@ -417,5 +419,13 @@ public class IndoorMapManager {
             pts.add(pts.get(0));
             gMap.addPolyline(new PolylineOptions().color(Color.GREEN).addAll(pts));
         }
+    }
+    /**
+     */
+    public List<FloorplanApiClient.MapShapeFeature> getCurrentFloorMapShapes() {
+        if (currentFloorShapes != null && currentFloor >= 0 && currentFloor < currentFloorShapes.size()) {
+            return currentFloorShapes.get(currentFloor).getFeatures();
+        }
+        return null;
     }
 }

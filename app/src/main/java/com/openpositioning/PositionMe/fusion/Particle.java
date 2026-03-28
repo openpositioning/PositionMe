@@ -1,36 +1,57 @@
 package com.openpositioning.PositionMe.fusion;
 
 import java.util.Random;
-public class Particle {
-    float x;       // x坐标
-    float y;       // y坐标
-    int floor;     // 楼层
-    double weight; // 权重
 
-    // 构造函数等...
+/** Represents a single particle in the particle filter. */
+public class Particle {
+    float x;
+    float y;
+    public float oldX;
+    public float oldY;
+    int floor;
+    double weight;
+
+    /**
+     * Creates a particle with an initial position and floor.
+     *
+     * @param x initial x coordinate in meters
+     * @param y initial y coordinate in meters
+     * @param floor initial floor index
+     */
     public Particle(float x, float y, int floor) {
         this.x = x;
         this.y = y;
+        this.oldX = x;
+        this.oldY = y;
         this.floor = floor;
-        this.weight = 1.0; // 初始权重都一样
+        this.weight = 1.0;
     }
 
     /**
-     * 根据给定的位移来移动粒子，并增加一些随机噪声。
-     * @param deltaX X方向的位移
-     * @param deltaY Y方向的位移
-     * @param random 一个随机数生成器实例
+     * Moves the particle using the default motion noise.
+     *
+     * @param deltaX movement along the x axis in meters
+     * @param deltaY movement along the y axis in meters
+     * @param random random source used to sample motion noise
      */
     public void move(float deltaX, float deltaY, Random random) {
-        // 这是基础移动：直接把位移加上去
+        move(deltaX, deltaY, random, 0.03f);
+    }
+
+    /**
+     * Moves the particle and adds Gaussian motion noise.
+     *
+     * @param deltaX movement along the x axis in meters
+     * @param deltaY movement along the y axis in meters
+     * @param random random source used to sample motion noise
+     * @param noiseStdDev standard deviation of the motion noise in meters
+     */
+    public void move(float deltaX, float deltaY, Random random, float noiseStdDev) {
+        this.oldX = this.x;
+        this.oldY = this.y;
         this.x += deltaX;
         this.y += deltaY;
-
-        // 这是关键的“增加噪声”部分
-        // random.nextGaussian() 生成一个符合标准正态分布（均值为0，标准差为1）的随机数
-        // 我们把它乘以一个很小的值（比如0.1），来控制噪声的大小（即标准差为0.1米）
-        // 这意味着大部分噪声会在-0.1米到+0.1米之间，少数会更大一些。这比均匀分布更真实。
-        this.x += random.nextGaussian() * 0.05;
-        this.y += random.nextGaussian() * 0.05;
+        this.x += random.nextGaussian() * noiseStdDev;
+        this.y += random.nextGaussian() * noiseStdDev;
     }
 }

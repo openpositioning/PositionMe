@@ -373,16 +373,13 @@ public class FloorplanApiClient {
                 keys.add(it.next());
             }
             //Collections.sort(keys);
-            // ！！！核心修复：手动按物理高度排序，不要用 Collections.sort(keys) ！！！
             List<String> Keys = new ArrayList<>();
-            // 定义 Nucleus 楼层的物理正确顺序
             String[] physicalOrder = {"LG", "GF", "F1", "F2", "F3"};
             for (String pKey : physicalOrder) {
                 if (root.has(pKey)) {
                     Keys.add(pKey);
                 }
             }
-            // 如果还有不在列表里的（容错），再把剩下的加进去
             Iterator<String> allKeys = root.keys();
             while (allKeys.hasNext()) {
                 String k = allKeys.next();

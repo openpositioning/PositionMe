@@ -53,6 +53,9 @@ public class SensorFusion implements SensorEventListener {
     //region Static variables
     private static final SensorFusion sensorFusion = new SensorFusion();
     //endregion
+    private static final double START_WIFI_WEIGHT = 0.7;
+    private static final double START_GNSS_WEIGHT = 0.3;
+    private static final double MAX_START_BLEND_DISTANCE_METERS = 25.0;
 
     //region Instance variables
     private Context appContext;
@@ -96,6 +99,9 @@ public class SensorFusion implements SensorEventListener {
     // Floorplan API cache (latest result from start-location step)
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingCache =
             new HashMap<>();
+    private List<FloorplanApiClient.MapShapeFeature> currentWalls = null;
+    private LatLng latestWifiLocation = null;
+    private LatLng latestGnssLocation = null;
     //endregion
 
     //region Initialisation
@@ -123,7 +129,6 @@ public class SensorFusion implements SensorEventListener {
      * the system for data collection.</p>
      *
      * @param context application context for permissions and device access.
-     *
      * @see MovementSensor handling all SensorManager based data collection devices.
      * @see ServerCommunications handling communication with the server.
      * @see GNSSDataProcessor for location data processing.
@@ -195,10 +200,10 @@ public class SensorFusion implements SensorEventListener {
                             "WiFi RTT is not supported on this device",
                             Toast.LENGTH_LONG).show());
         }
-        // --- 新增：初始化粒子滤波器 ---
-        // 假设我们用 1000 个粒子。
-        // 注意：目前还没有调用 initialize() 撒点，因为撒点需要地图边界，
-        // 我们等后面获取到地图信息时再调用撒点。
+        // Initialise the particle filter once. Particle placement still happens later
+        // after map bounds become available.
+        this.particleFilter = new com.openpositioning.PositionMe.fusion.ParticleFilter(1000);
+        // ------------------------------
         this.particleFilter = new com.openpositioning.PositionMe.fusion.ParticleFilter(1000);
         // ------------------------------
     }
@@ -217,9 +222,12 @@ public class SensorFusion implements SensorEventListener {
         eventHandler.handleSensorEvent(sensorEvent);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void onAccuracyChanged(Sensor sensor, int i) {}
+    public void onAccuracyChanged(Sensor sensor, int i) {
+    }
 
     //endregion
 
@@ -496,17 +504,14 @@ public class SensorFusion implements SensorEventListener {
      * @param startPosition contains the initial location set by the user
      */
     public void setStartGNSSLatitude(float[] startPosition) {
-        state.startLocation[0] = startPosition[0];
-        state.startLocation[1] = startPosition[1];
-        // --- 核心任务：初始化并激活粒子滤波器---
+        LatLng blendedStart = resolveBlendedStartLocation(startPosition);
+        state.startLocation[0] = (float) blendedStart.latitude;
+        state.startLocation[1] = (float) blendedStart.longitude;
 
         if (this.particleFilter != null) {
-
-            // 1. 定义一个合理的初始分布范围。
-            //    因为我们的 PDR 是以米为单位的，所以这里的范围也应该是米。
-            //    由于我们现在在起始点，本地坐标系的原点就是 (0, 0)。
-            //    我们可以假设初始不确定性在一个 20米 x 20米 的正方形区域内。
-            float initialUncertainty = 10.0f; // 半径10米
+            // The local coordinate origin is the user-selected start point.
+            // Initialise particles within a symmetric uncertainty box around that point.
+            float initialUncertainty = 10.0f; // 10-meter half-width
 
             com.openpositioning.PositionMe.fusion.MapBounds bounds =
                     new com.openpositioning.PositionMe.fusion.MapBounds(
@@ -516,13 +521,47 @@ public class SensorFusion implements SensorEventListener {
                             initialUncertainty   // maxY
                     );
 
-            // 2. 万事俱备，调用 initialize 进行撒点！
-            //    这会在 (0,0) 点周围 20x20 米的范围内随机撒下 1000 个粒子。
+            // Initialise particles around the selected start point.
             this.particleFilter.initialize(bounds);
 
-            Log.d("ParticleFilter", "粒子滤波器已在起始点周围初始化！");
+            Log.d("ParticleFilter", "Particle filter initialised around the selected start point.");
         }
-        // --- 粒子滤波器激活完成 ---
+        // Particle filter start-up is complete.
+    }
+
+    private LatLng resolveBlendedStartLocation(float[] startPosition) {
+        LatLng gnssStart = new LatLng(startPosition[0], startPosition[1]);
+        LatLng wifiStart = getLatLngWifiPositioning();
+
+        if (wifiStart == null) {
+            Log.d("StartLocation", "Using GNSS-only start location");
+            return gnssStart;
+        }
+
+        double distanceMeters = distanceMeters(gnssStart, wifiStart);
+        if (distanceMeters > MAX_START_BLEND_DISTANCE_METERS) {
+            Log.d("StartLocation", "Skipping WiFi/GNSS start blending, distance too large: "
+                    + distanceMeters);
+            return gnssStart;
+        }
+
+        double blendedLat = wifiStart.latitude * START_WIFI_WEIGHT + gnssStart.latitude * START_GNSS_WEIGHT;
+        double blendedLng = wifiStart.longitude * START_WIFI_WEIGHT + gnssStart.longitude * START_GNSS_WEIGHT;
+        Log.d("StartLocation", "Using blended start location, wifiWeight="
+                + START_WIFI_WEIGHT + ", gnssWeight=" + START_GNSS_WEIGHT
+                + ", distance=" + distanceMeters);
+        return new LatLng(blendedLat, blendedLng);
+    }
+
+    private double distanceMeters(LatLng a, LatLng b) {
+        double radius = 6378137.0;
+        double lat1 = Math.toRadians(a.latitude);
+        double lat2 = Math.toRadians(b.latitude);
+        double dLat = lat2 - lat1;
+        double dLng = Math.toRadians(b.longitude - a.longitude);
+        double x = dLng * Math.cos((lat1 + lat2) / 2.0);
+        double y = dLat;
+        return Math.sqrt(x * x + y * y) * radius;
     }
 
     /**
@@ -679,56 +718,101 @@ public class SensorFusion implements SensorEventListener {
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
 
-            // --- 激活粒子滤波的 GNSS (GPS) 纠偏功能！ ---
+            // Apply GNSS corrections only when the reported accuracy is acceptable.
             com.openpositioning.PositionMe.fusion.ParticleFilter pf = getParticleFilter();
 
             if (pf != null && state.startLocation != null && state.startLocation[0] != 0.0f) {
 
                 float realAccuracy = location.getAccuracy();
 
-                // ！！！核心修改：智能拒止劣质 GPS 信号 ！！！
-                // 在室内，GPS 误差通常会飙升到 20米、50米甚至更高。
-                // 此时的坐标毫无价值，如果强行使用，会把红线带飞。
-                // 设定门槛：如果误差大于 20 米，直接忽略这次 GPS 数据！
+                // Ignore poor indoor GNSS fixes to avoid dragging the trajectory away.
+                // Indoor GPS errors often become large enough to be harmful instead of helpful.
+                // When that happens, skip this update entirely.
+                // The threshold is currently set to 20 meters.
                 if (realAccuracy > 20.0f) {
-                    android.util.Log.d("ParticleFilter", "GPS 信号太差 (" + realAccuracy + "m)，果断拒绝，不进行纠偏！");
-                    return; // 提前结束方法，不执行 updateWeights
+                    android.util.Log.d("ParticleFilter", "GNSS fix rejected due to poor accuracy: " + realAccuracy + "m");
+                    return; // Skip this GNSS correction.
                 }
 
-                // 1. 获取起点 GPS 坐标，作为平面坐标系的原点 (0,0)
+                // Convert the current GNSS fix into the local map coordinate system.
+                // Convert the current GNSS fix into the local map coordinate system.
                 double lat0 = state.startLocation[0];
                 double lng0 = state.startLocation[1];
 
-                // 2. 获取当前 GPS 坐标
                 double lat = location.getLatitude();
                 double lng = location.getLongitude();
 
-                // 3. 转换为平面坐标 (米)
                 double R = 6378137.0;
                 double dLat = Math.toRadians(lat - lat0);
                 double dLng = Math.toRadians(lng - lng0);
                 float x = (float) (R * dLng * Math.cos(Math.toRadians(lat0)));
                 float y = (float) (R * dLat);
 
-                // 4. 信号既然合格（小于 20米），我们就使用它真实的误差来进行更新。
-                // 为了防止极个别手机报告的误差接近 0 导致崩溃，设置个下限。
+                // Use the reported accuracy, but keep a lower bound for numerical stability.
+                // This avoids overly confident updates from unrealistic near-zero values.
                 float usedSigma = Math.max(realAccuracy, 10.0f);
 
                 com.openpositioning.PositionMe.fusion.Measurement gnssMeasurement =
                         new com.openpositioning.PositionMe.fusion.Measurement(x, y, usedSigma);
 
-                // 5. 喂给粒子滤波器
-                pf.updateWeights(gnssMeasurement);
+                // Feed the accepted GNSS measurement into the particle filter.
+                // Reuse the current map state so blocked particles can be down-weighted.
+                LatLng startLocation = new LatLng(state.startLocation[0], state.startLocation[1]);
+                LatLng gnssLoc = new LatLng(location.getLatitude(), location.getLongitude());
+                setLatestGnssLocation(gnssLoc);
+                pf.updateWeights(gnssMeasurement, currentWalls, startLocation);
                 pf.resample();
 
-                android.util.Log.d("ParticleFilter", "GNSS 优质纠偏触发！当前误差: " + usedSigma + " 米");
+                android.util.Log.d("ParticleFilter", "GNSS correction applied with sigma=" + usedSigma + "m");
+
+                android.util.Log.d("ParticleFilter", "GNSS correction applied with sigma=" + usedSigma + "m");
             }
         }
     }
-    // --- 新增：获取粒子滤波器实例 ---
+
+    // Returns the shared particle filter instance.
+    // Returns the shared particle filter instance.
     public com.openpositioning.PositionMe.fusion.ParticleFilter getParticleFilter() {
         return this.particleFilter;
     }
 
+    // Accessors for the current map state used by map matching and drawing.
+    public void setCurrentWalls(List<FloorplanApiClient.MapShapeFeature> walls) {
+        this.currentWalls = walls;
+    }
+
+    public List<FloorplanApiClient.MapShapeFeature> getCurrentWalls() {
+        return this.currentWalls;
+    }
+
+    public LatLng getStartLocationLatLng() {
+        if (state.startLocation == null || state.startLocation.length < 2) {
+            return null;
+        }
+        if (state.startLocation[0] == 0.0f && state.startLocation[1] == 0.0f) {
+            return null;
+        }
+        return new LatLng(state.startLocation[0], state.startLocation[1]);
+    }
+
+    public void setLatestWifiLocation(LatLng loc) {
+        this.latestWifiLocation = loc;
+    }
+
+    public LatLng popLatestWifiLocation() {
+        LatLng loc = this.latestWifiLocation;
+        this.latestWifiLocation = null; // Clear after consumption so the marker is drawn once.
+        return loc;
+    }
+
+    public void setLatestGnssLocation(LatLng loc) {
+        this.latestGnssLocation = loc;
+    }
+
+    public LatLng popLatestGnssLocation() {
+        LatLng loc = this.latestGnssLocation;
+        this.latestGnssLocation = null; // Clear after consumption so the marker is drawn once.
+        return loc;
+    }
     //endregion
 }

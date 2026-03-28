@@ -1,183 +1,142 @@
 package com.openpositioning.PositionMe.fusion;
 
+import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
+import com.openpositioning.PositionMe.utils.GeometryUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+/** Particle filter used to fuse PDR motion with map and measurement constraints. */
 public class ParticleFilter {
 
     private List<Particle> particles;
-    private int numParticles;
-    private Random random = new Random(); // 在类的成员变量里创建一个随机数生成器
+    private final int numParticles;
+    private final Random random = new Random();
 
+    /**
+     * Creates a particle filter with a fixed number of particles.
+     *
+     * @param numParticles number of particles maintained by the filter
+     */
     public ParticleFilter(int numParticles) {
         this.numParticles = numParticles;
         this.particles = new ArrayList<>(numParticles);
     }
 
     /**
-     * 步骤 1: 初始化
-     * 在地图的某个区域内随机撒点
-     */
-    /**
-     * 步骤 1: 初始化
-     * 在地图的某个区域内随机撒点
-     * @param mapBounds 地图的边界信息
+     * Initializes particles uniformly within the provided map bounds.
+     *
+     * @param mapBounds rectangular initialization bounds in local map coordinates
      */
     public void initialize(MapBounds mapBounds) {
-        // 1. 清空旧的粒子列表，确保每次初始化都是全新的开始
         particles.clear();
-
-        // 2. 计算地图的宽度和高度
         float width = mapBounds.maxX - mapBounds.minX;
         float height = mapBounds.maxY - mapBounds.minY;
 
-        // 3. 这是一个循环，会执行 numParticles 次，i会从0变到numParticles-1
         for (int i = 0; i < numParticles; i++) {
-
-            // 4. 生成一个0.0到1.0之间的随机小数，乘以宽度，再加上最小X值
-            //    这就得到了一个在 minX 和 maxX 之间的随机X坐标
             float randomX = mapBounds.minX + random.nextFloat() * width;
-
-            // 5. 同理，生成一个在 minY 和 maxY 之间的随机Y坐标
             float randomY = mapBounds.minY + random.nextFloat() * height;
-
-            // 6. 假设开始时都在0楼
-            int initialFloor = 0;
-
-            // 7. 使用这些随机生成的坐标和楼层，创建一个新的粒子对象
-            Particle newParticle = new Particle(randomX, randomY, initialFloor);
-
-            // 8. 把这个新创建的粒子添加到我们的粒子列表中
-            particles.add(newParticle);
+            particles.add(new Particle(randomX, randomY, 0));
         }
     }
 
-
     /**
-     * 步骤 2: 预测
-     * 根据 PDR 的移动数据，移动所有粒子
-     * @param movement 包含本次移动 deltaX 和 deltaY 的对象
+     * Applies a PDR motion update to all particles.
+     *
+     * @param movement PDR motion in local map coordinates
      */
     public void predict(PDRMovement movement) {
-        // 1. 获取本次移动的x和y方向的距离
-        float dx = movement.deltaX;
-        float dy = movement.deltaY;
+        predict(movement, 1);
+    }
 
-        // 2. 遍历粒子列表中的每一个粒子 p
-        for (Particle p : particles) {
-            // 3. 调用该粒子自己的 move 方法，让它移动
-            //    我们把移动距离和粒子滤波器自己的随机数生成器传给它
-            p.move(dx, dy, this.random);
+    /**
+     * Applies a subdivided PDR motion update to all particles.
+     *
+     * @param movement PDR motion in local map coordinates
+     * @param subdivisions number of substeps used for this update
+     */
+    public void predict(PDRMovement movement, int subdivisions) {
+        int safeSubdivisions = Math.max(1, subdivisions);
+        float dx = movement.deltaX / safeSubdivisions;
+        float dy = movement.deltaY / safeSubdivisions;
+        float noiseStdDev = 0.03f / (float) Math.sqrt(safeSubdivisions);
+
+        for (Particle particle : particles) {
+            particle.move(dx, dy, this.random, noiseStdDev);
         }
     }
 
     /**
-     * 步骤 3: 更新
-     * 根据 WiFi/GNSS 测量结果，更新每个粒子的权重
-     * @param measurement 包含测量位置和精度的对象
+     * Updates particle weights using an external position measurement.
+     *
+     * @param measurement measured position and uncertainty
+     * @param walls unused, kept to match the current call sites
+     * @param startLocation unused, kept to match the current call sites
      */
-    public void updateWeights(Measurement measurement) {
-        // 1. 我们需要一个变量来记录所有粒子权重的新增总和，以便后续归一化
+    public void updateWeights(
+            Measurement measurement,
+            List<FloorplanApiClient.MapShapeFeature> walls,
+            LatLng startLocation) {
         double totalWeight = 0;
 
-        // 2. 遍历每一个粒子 p
-        for (Particle p : particles) {
-            // 3. 计算这个粒子到测量点的欧几里得距离的平方
-            //    (x1-x2)^2 + (y1-y2)^2
-            //    我们用距离的平方可以避免开方运算，效率更高。
-            double distanceSquared = Math.pow(p.x - measurement.x, 2) + Math.pow(p.y - measurement.y, 2);
-
-            // 4. 使用高斯函数计算这个粒子基于本次测量的“似然度”（likelihood）
-            //    这就是 p(z|x) 的核心，即“在x位置看到z测量的概率”
-            //    公式是: (1/sqrt(2*PI*sigma^2)) * exp(-(distance^2)/(2*sigma^2))
-            //    我们忽略前面的常数部分，因为它在归一化时会被消掉。
+        for (Particle particle : particles) {
+            double distanceSquared =
+                    Math.pow(particle.x - measurement.x, 2)
+                            + Math.pow(particle.y - measurement.y, 2);
             double sigma = measurement.accuracy;
             double likelihood = Math.exp(-distanceSquared / (2 * Math.pow(sigma, 2)));
-
-            // 5. 更新粒子的权重。新的权重 = 旧的权重 * 本次计算出的似然度
-            //    如果一个粒子连续多次都离测量点很近，它的权重会持续增大。
-            p.weight *= likelihood;
-
-            // 6. 累加这个新权重到总权重中
-            totalWeight += p.weight;
+            particle.weight *= likelihood;
+            totalWeight += particle.weight;
         }
 
-        // 7. 归一化所有粒子的权重（让它们的总和等于1）
-        //    这是为下一步的“重采样”做准备。
-        for (Particle p : particles) {
+        for (Particle particle : particles) {
             if (totalWeight > 0) {
-                p.weight /= totalWeight;
+                particle.weight /= totalWeight;
             } else {
-                // 如果所有粒子权重都变成0（极少发生，但可能），给它们一个平均权重
-                p.weight = 1.0 / numParticles;
+                particle.weight = 1.0 / numParticles;
             }
         }
     }
 
-    /**
-     * 步骤 4: 重采样
-     * 根据当前所有粒子的权重，生成一个全新的粒子集合。
-     * 权重高的粒子有更大概率被多次选中，权重低的则可能被淘汰。
-     * 这个实现使用了“低方差采样”（或称“轮盘赌采样”）算法。
-     */
+    /** Resamples particles using roulette-wheel sampling. */
     public void resample() {
-        // 1. 创建一个新的、空的列表，用来存放重采样后的新粒子
         List<Particle> newParticles = new ArrayList<>(numParticles);
 
-        // 2. 计算当前权重最大的值，用于轮盘赌算法
         double maxWeight = 0;
-        for (Particle p : particles) {
-            if (p.weight > maxWeight) {
-                maxWeight = p.weight;
+        for (Particle particle : particles) {
+            if (particle.weight > maxWeight) {
+                maxWeight = particle.weight;
             }
         }
 
-        // 如果所有粒子权重都为0，无法进行重采样，直接返回
         if (maxWeight == 0) {
             return;
         }
 
-        // 3. 轮盘赌算法的核心
-        //    想象一个周长为 maxWeight * 2.0 的轮盘
-        //    我们从一个随机的位置开始，然后均匀地在轮盘上走 N 步来挑选粒子（跨过小的扇区
         double beta = 0.0;
-        int index = random.nextInt(numParticles); // 随机选一个起始粒子
+        int index = random.nextInt(numParticles);
 
         for (int i = 0; i < numParticles; i++) {
             beta += random.nextDouble() * 2.0 * maxWeight;
 
-            // 寻找下一个权重足够大的粒子
             while (beta > particles.get(index).weight) {
                 beta -= particles.get(index).weight;
-                index = (index + 1) % numParticles; // 循环地移动到下一个粒子
+                index = (index + 1) % numParticles;
             }
 
-            // 找到了！这个粒子 'index' 被选中了。
-            // 我们不是直接把它放进去，而是创建一个它的“克隆”
             Particle selected = particles.get(index);
-            Particle newParticle = new Particle(selected.x, selected.y, selected.floor);
-
-            // 把这个克隆体添加到新粒子列表中
-            // 注意：新粒子的权重在构造函数里已经被默认设为1.0，为下一轮做好了准备
-            newParticles.add(newParticle);
+            newParticles.add(new Particle(selected.x, selected.y, selected.floor));
         }
 
-        // 4. 最后，用这个全新的、充满了“精英”和他们“克隆体”的列表，
-        //    替换掉旧的、权重不均的粒子列表。
         this.particles = newParticles;
     }
 
-//    // 其他辅助方法
-//    private void normalizeWeights() { ... }
-//    private double calculateDistance(Particle p, Position pos) { ... }
-//    private double gaussian(double distance, double sigma) { ... }
-
     /**
-     * 获取最终的估计位置
-     * 使用所有粒子的“加权平均值”。
-     * 权重越大的粒子，对最终结果的影响越大。
-     * @return 估计的 Position 对象
+     * Returns the weighted mean particle position.
+     *
+     * @return estimated position in local map coordinates
      */
     public Position getEstimatedPosition() {
         if (particles == null || particles.isEmpty()) {
@@ -188,24 +147,238 @@ public class ParticleFilter {
         float expectedY = 0;
         double totalWeight = 0;
 
-        // 遍历所有粒子，计算加权总和
-        for (Particle p : particles) {
-            expectedX += p.x * p.weight; // 坐标乘以它的权重
-            expectedY += p.y * p.weight;
-            totalWeight += p.weight;     // 累加总权重
+        for (Particle particle : particles) {
+            expectedX += particle.x * particle.weight;
+            expectedY += particle.y * particle.weight;
+            totalWeight += particle.weight;
         }
 
-        // 如果总权重为0（极少发生），就返回简单平均
         if (totalWeight == 0) {
-            float sumX = 0, sumY = 0;
-            for (Particle p : particles) {
-                sumX += p.x;
-                sumY += p.y;
+            float sumX = 0;
+            float sumY = 0;
+            for (Particle particle : particles) {
+                sumX += particle.x;
+                sumY += particle.y;
             }
             return new Position(sumX / particles.size(), sumY / particles.size());
         }
 
-        // 最终坐标 = 加权总和 / 总权重
-        return new Position((float)(expectedX / totalWeight), (float)(expectedY / totalWeight));
+        return new Position((float) (expectedX / totalWeight), (float) (expectedY / totalWeight));
+    }
+
+    /**
+     * Returns a map-aware estimated position.
+     *
+     * <p>If the weighted mean falls inside a blocked polygon, the filter falls back to the
+     * highest-weight valid particle.
+     *
+     * @param walls blocking map features
+     * @param startLocation origin used to convert local coordinates to latitude and longitude
+     * @return estimated position in local map coordinates
+     */
+    public Position getEstimatedPosition(
+            List<FloorplanApiClient.MapShapeFeature> walls, LatLng startLocation) {
+        Position estimate = getEstimatedPosition();
+        if (walls == null || startLocation == null || walls.isEmpty()) {
+            return estimate;
+        }
+
+        LatLng estimatedLatLng = toLatLng(estimate.x, estimate.y, startLocation);
+        if (!isBlockedPosition(estimatedLatLng, walls)) {
+            return estimate;
+        }
+
+        Particle bestParticle = null;
+        for (Particle particle : particles) {
+            LatLng particleLatLng = toLatLng(particle.x, particle.y, startLocation);
+            if (isBlockedPosition(particleLatLng, walls)) {
+                continue;
+            }
+            if (bestParticle == null || particle.weight > bestParticle.weight) {
+                bestParticle = particle;
+            }
+        }
+
+        if (bestParticle != null) {
+            return new Position(bestParticle.x, bestParticle.y);
+        }
+
+        return estimate;
+    }
+
+    /**
+     * Returns the current estimated position converted to geographic coordinates.
+     *
+     * @param walls blocking map features
+     * @param startLocation origin used to convert local coordinates to latitude and longitude
+     * @return estimated latitude and longitude, or {@code null} if the start location is unavailable
+     */
+    public LatLng getEstimatedLatLng(
+            List<FloorplanApiClient.MapShapeFeature> walls, LatLng startLocation) {
+        if (startLocation == null) {
+            return null;
+        }
+        Position estimate = getEstimatedPosition(walls, startLocation);
+        return toLatLng(estimate.x, estimate.y, startLocation);
+    }
+
+    /**
+     * Returns a horizontal motion scale for special indoor areas.
+     *
+     * @param features current floor map features
+     * @param startLocation origin used to convert local coordinates to latitude and longitude
+     * @param elevatorDetected whether elevator motion is currently detected
+     * @return horizontal motion scale applied before prediction
+     */
+    public float getHorizontalMovementScale(
+            List<FloorplanApiClient.MapShapeFeature> features,
+            LatLng startLocation,
+            boolean elevatorDetected) {
+        if (features == null || startLocation == null || features.isEmpty()) {
+            return 1.0f;
+        }
+
+        Position estimate = getEstimatedPosition(features, startLocation);
+        LatLng estimatedLatLng = toLatLng(estimate.x, estimate.y, startLocation);
+
+        if (isInsideIndoorType(estimatedLatLng, features, "elevator")) {
+            return elevatorDetected ? 0.05f : 0.15f;
+        }
+        if (isInsideIndoorType(estimatedLatLng, features, "stairs")) {
+            return 0.18f;
+        }
+        return 1.0f;
+    }
+
+    /**
+     * Suppresses particles that cross blocking geometry or end inside blocked polygons.
+     *
+     * @param walls blocking map features
+     * @param startLocation origin used to convert local coordinates to latitude and longitude
+     */
+    public void applyMapMatching(
+            List<FloorplanApiClient.MapShapeFeature> walls, LatLng startLocation) {
+        if (walls == null || startLocation == null || particles.isEmpty()) {
+            return;
+        }
+
+        boolean allDead = true;
+
+        for (Particle particle : particles) {
+            LatLng oldPos = toLatLng(particle.oldX, particle.oldY, startLocation);
+            LatLng newPos = toLatLng(particle.x, particle.y, startLocation);
+            boolean hitWall = isPathBlocked(oldPos, newPos, walls)
+                    || isBlockedPosition(newPos, walls);
+
+            if (hitWall) {
+                particle.weight = 0.0;
+            } else {
+                allDead = false;
+            }
+        }
+
+        if (allDead) {
+            for (Particle particle : particles) {
+                particle.x = particle.oldX + (float) (random.nextGaussian() * 0.1);
+                particle.y = particle.oldY + (float) (random.nextGaussian() * 0.1);
+                particle.weight = 1.0;
+            }
+            return;
+        }
+
+        double totalWeight = 0;
+        for (Particle particle : particles) {
+            totalWeight += particle.weight;
+        }
+
+        if (totalWeight > 0 && totalWeight < particles.size()) {
+            for (Particle particle : particles) {
+                particle.weight /= totalWeight;
+            }
+            resample();
+            android.util.Log.d("MapMatch", "Blocked particles were removed and resampled.");
+        }
+    }
+
+    private LatLng toLatLng(float x, float y, LatLng startLocation) {
+        double radius = 6378137.0;
+        double lat0Rad = Math.toRadians(startLocation.latitude);
+        double dLat = y / radius;
+        double dLng = x / (radius * Math.cos(lat0Rad));
+        return new LatLng(
+                startLocation.latitude + Math.toDegrees(dLat),
+                startLocation.longitude + Math.toDegrees(dLng));
+    }
+
+    private boolean isPathBlocked(
+            LatLng oldPos, LatLng newPos, List<FloorplanApiClient.MapShapeFeature> walls) {
+        for (FloorplanApiClient.MapShapeFeature wall : walls) {
+            if (!isBlockingFeature(wall)) {
+                continue;
+            }
+            for (List<LatLng> part : wall.getParts()) {
+                if (part == null || part.size() < 2) {
+                    continue;
+                }
+                for (int i = 0; i < part.size() - 1; i++) {
+                    if (GeometryUtils.doSegmentsIntersect(oldPos, newPos, part.get(i), part.get(i + 1))) {
+                        return true;
+                    }
+                }
+                if (part.size() > 2
+                        && GeometryUtils.doSegmentsIntersect(
+                                oldPos, newPos, part.get(part.size() - 1), part.get(0))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isBlockedPosition(
+            LatLng position, List<FloorplanApiClient.MapShapeFeature> walls) {
+        for (FloorplanApiClient.MapShapeFeature wall : walls) {
+            if (!isBlockingFeature(wall)) {
+                continue;
+            }
+            if (!"Polygon".equals(wall.getGeometryType())
+                    && !"MultiPolygon".equals(wall.getGeometryType())) {
+                continue;
+            }
+            for (List<LatLng> part : wall.getParts()) {
+                if (part != null && part.size() >= 3
+                        && GeometryUtils.isPointInPolygon(position, part)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isInsideIndoorType(
+            LatLng position,
+            List<FloorplanApiClient.MapShapeFeature> features,
+            String indoorType) {
+        for (FloorplanApiClient.MapShapeFeature feature : features) {
+            if (!indoorType.equals(feature.getIndoorType())) {
+                continue;
+            }
+            if (!"Polygon".equals(feature.getGeometryType())
+                    && !"MultiPolygon".equals(feature.getGeometryType())) {
+                continue;
+            }
+            for (List<LatLng> part : feature.getParts()) {
+                if (part != null && part.size() >= 3
+                        && GeometryUtils.isPointInPolygon(position, part)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isBlockingFeature(FloorplanApiClient.MapShapeFeature feature) {
+        return "wall".equals(feature.getIndoorType())
+                || "unaccessible".equals(feature.getIndoorType());
     }
 }
