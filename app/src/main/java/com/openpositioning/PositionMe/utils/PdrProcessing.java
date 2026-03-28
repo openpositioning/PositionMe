@@ -38,10 +38,6 @@ public class PdrProcessing {
     // Threshold under which movement is considered non-existent
     private static final float epsilon = 0.18f;
     private static final int MIN_REQUIRED_SAMPLES = 2;
-    private static final float FUSION_FEEDBACK_GAIN_NEAR = 0.22f;
-    private static final float FUSION_FEEDBACK_GAIN_MEDIUM = 0.35f;
-    private static final float FUSION_FEEDBACK_GAIN_FAR = 0.50f;
-    private static final float FUSION_FEEDBACK_MAX_STEP_M = 1.8f;
     //endregion
 
     //region Instance variables
@@ -56,10 +52,6 @@ public class PdrProcessing {
     // Current 2D position coordinates
     private float positionX;
     private float positionY;
-    private float correctionX;
-    private float correctionY;
-    private float pendingCorrectionX;
-    private float pendingCorrectionY;
 
     // Vertical movement calculation
     private Float[] startElevationBuffer;
@@ -110,10 +102,6 @@ public class PdrProcessing {
         // Initial position and elevation - starts from zero
         this.positionX = 0f;
         this.positionY = 0f;
-        this.correctionX = 0f;
-        this.correctionY = 0f;
-        this.pendingCorrectionX = 0f;
-        this.pendingCorrectionY = 0f;
         this.elevation = 0f;
 
 
@@ -153,7 +141,7 @@ public class PdrProcessing {
      */
     public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
         if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.size() < MIN_REQUIRED_SAMPLES) {
-            return new float[]{this.positionX + this.correctionX, this.positionY + this.correctionY};
+            return new float[]{this.positionX, this.positionY};
                                                                 // - TODO - temporary solution of the empty list issue
         }
 
@@ -163,7 +151,7 @@ public class PdrProcessing {
         // check if accelMagnitudeOvertime is empty
         if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.isEmpty()) {
             // return current position, do not update
-            return new float[]{this.positionX + this.correctionX, this.positionY + this.correctionY};
+            return new float[]{this.positionX, this.positionY};
         }
         
         // Calculate step length
@@ -187,7 +175,7 @@ public class PdrProcessing {
         this.positionY += y;
 
         // return current position
-        return new float[]{this.positionX + this.correctionX, this.positionY + this.correctionY};
+        return new float[]{this.positionX, this.positionY};
     }
 
     /**
@@ -280,48 +268,9 @@ public class PdrProcessing {
      * @return  float array of size 2, with the X and Y coordinates respectively.
      */
     public float[] getPDRMovement() {
-        float [] pdrPosition= new float[] {positionX + correctionX, positionY + correctionY};
+        float [] pdrPosition= new float[] {positionX, positionY};
         return pdrPosition;
 
-    }
-
-    public void applyFusionFeedback(float targetX, float targetY) {
-        float correctedX = this.positionX + this.correctionX;
-        float correctedY = this.positionY + this.correctionY;
-
-        float errorX = targetX - correctedX;
-        float errorY = targetY - correctedY;
-
-        float errorDist = (float) Math.hypot(errorX, errorY);
-        float gain = FUSION_FEEDBACK_GAIN_NEAR;
-        if (errorDist >= 4.0f) {
-            gain = FUSION_FEEDBACK_GAIN_FAR;
-        } else if (errorDist >= 1.5f) {
-            gain = FUSION_FEEDBACK_GAIN_MEDIUM;
-        }
-
-        float deltaX = clamp(errorX * gain,
-                -FUSION_FEEDBACK_MAX_STEP_M,
-                FUSION_FEEDBACK_MAX_STEP_M);
-        float deltaY = clamp(errorY * gain,
-                -FUSION_FEEDBACK_MAX_STEP_M,
-                FUSION_FEEDBACK_MAX_STEP_M);
-
-        this.correctionX += deltaX;
-        this.correctionY += deltaY;
-        this.pendingCorrectionX += deltaX;
-        this.pendingCorrectionY += deltaY;
-    }
-
-    public float[] consumePendingFeedbackDelta() {
-        float[] delta = new float[]{pendingCorrectionX, pendingCorrectionY};
-        pendingCorrectionX = 0f;
-        pendingCorrectionY = 0f;
-        return delta;
-    }
-
-    private static float clamp(float value, float min, float max) {
-        return Math.max(min, Math.min(max, value));
     }
 
     /**
@@ -421,10 +370,6 @@ public class PdrProcessing {
         // Initial position and elevation - starts from zero
         this.positionX = 0f;
         this.positionY = 0f;
-        this.correctionX = 0f;
-        this.correctionY = 0f;
-        this.pendingCorrectionX = 0f;
-        this.pendingCorrectionY = 0f;
         this.elevation = 0f;
 
         if(this.settings.getBoolean("overwrite_constants", false)) {

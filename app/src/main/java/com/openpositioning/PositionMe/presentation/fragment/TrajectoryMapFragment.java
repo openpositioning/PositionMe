@@ -61,6 +61,8 @@ public class TrajectoryMapFragment extends Fragment {
     private static final long TRAJECTORY_APPEND_MIN_INTERVAL_MS = 1000;
     private static final double TRAJECTORY_APPEND_MIN_METERS = 0.60;
     private static final double OBSERVATION_CIRCLE_RADIUS_M = 1.4;
+    private static final long GNSS_OBSERVATION_TTL_MS = 15000;
+    private static final long WIFI_OBSERVATION_TTL_MS = 20000;
 
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
@@ -71,6 +73,9 @@ public class TrajectoryMapFragment extends Fragment {
     private final List<Circle> gnssObservationCircles = new ArrayList<>();
     private final List<Circle> wifiObservationCircles = new ArrayList<>();
     private final List<Circle> pdrObservationCircles = new ArrayList<>();
+    private final List<Long> gnssObservationTimesMs = new ArrayList<>();
+    private final List<Long> wifiObservationTimesMs = new ArrayList<>();
+    private final List<Long> pdrObservationTimesMs = new ArrayList<>();
 
     private Polyline polyline; // Polyline representing user's movement path
     private boolean isRed = true; // Tracks whether the polyline color is red
@@ -202,6 +207,9 @@ public class TrajectoryMapFragment extends Fragment {
                 stopAutoFloor();
             }
         });
+        if (autoFloorSwitch.isChecked()) {
+            startAutoFloor();
+        }
 
         floorUpButton.setOnClickListener(v -> {
             // If user manually changes floor, turn off auto floor
@@ -320,6 +328,9 @@ public class TrajectoryMapFragment extends Fragment {
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
 
+        // Expire stale GNSS/WiFi observation points even when no new fixes arrive.
+        pruneExpiredObservations();
+
         LatLng displayLocation = newLocation;
 
         // Keep track of current location
@@ -421,10 +432,12 @@ public class TrajectoryMapFragment extends Fragment {
 
         addObservationMarker(
             gnssObservationCircles,
+            gnssObservationTimesMs,
                 gnssLocation,
             Color.argb(220, 33, 150, 243),
             Color.argb(80, 33, 150, 243),
-                false);
+                false,
+                GNSS_OBSERVATION_TTL_MS);
 
         if (!isGnssOn) return;
 
@@ -456,10 +469,12 @@ public class TrajectoryMapFragment extends Fragment {
     public void updateWiFiObservation(@NonNull LatLng wifiLocation) {
         addObservationMarker(
             wifiObservationCircles,
+            wifiObservationTimesMs,
                 wifiLocation,
             Color.argb(220, 67, 160, 71),
             Color.argb(80, 67, 160, 71),
-                false);
+                false,
+                WIFI_OBSERVATION_TTL_MS);
     }
 
     /**
@@ -468,10 +483,12 @@ public class TrajectoryMapFragment extends Fragment {
     public void updatePdrObservation(@NonNull LatLng pdrLocation) {
         addObservationMarker(
             pdrObservationCircles,
+            pdrObservationTimesMs,
                 pdrLocation,
             Color.argb(220, 251, 140, 0),
             Color.argb(80, 251, 140, 0),
-                false);
+                false,
+                Long.MAX_VALUE);
     }
 
 
@@ -514,7 +531,7 @@ public class TrajectoryMapFragment extends Fragment {
     public void clearMapAndReset() {
         stopAutoFloor();
         if (autoFloorSwitch != null) {
-            autoFloorSwitch.setChecked(false);
+            autoFloorSwitch.setChecked(true);
         }
         if (polyline != null) {
             polyline.remove();
@@ -588,16 +605,20 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     private void addObservationMarker(@NonNull List<Circle> bucket,
+                                      @NonNull List<Long> timesBucket,
                                       @NonNull LatLng location,
                                       int strokeColor,
                                       int fillColor,
-                                      boolean respectGnssSwitch) {
+                                      boolean respectGnssSwitch,
+                                      long ttlMs) {
         if (gMap == null) {
             return;
         }
         if (respectGnssSwitch && !isGnssOn) {
             return;
         }
+
+        pruneExpiredObservationCircles(bucket, timesBucket, ttlMs);
 
         Circle circle = gMap.addCircle(new CircleOptions()
             .center(location)
@@ -612,23 +633,62 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         bucket.add(circle);
+        timesBucket.add(SystemClock.elapsedRealtime());
         while (bucket.size() > MAX_OBSERVATION_MARKERS) {
             Circle stale = bucket.remove(0);
             stale.remove();
+            if (!timesBucket.isEmpty()) {
+                timesBucket.remove(0);
+            }
+        }
+    }
+
+    private void pruneExpiredObservations() {
+        long now = SystemClock.elapsedRealtime();
+        pruneExpiredObservationCircles(gnssObservationCircles, gnssObservationTimesMs,
+                GNSS_OBSERVATION_TTL_MS, now);
+        pruneExpiredObservationCircles(wifiObservationCircles, wifiObservationTimesMs,
+                WIFI_OBSERVATION_TTL_MS, now);
+    }
+
+    private void pruneExpiredObservationCircles(@NonNull List<Circle> bucket,
+                                                @NonNull List<Long> timesBucket,
+                                                long ttlMs) {
+        pruneExpiredObservationCircles(bucket, timesBucket, ttlMs, SystemClock.elapsedRealtime());
+    }
+
+    private void pruneExpiredObservationCircles(@NonNull List<Circle> bucket,
+                                                @NonNull List<Long> timesBucket,
+                                                long ttlMs,
+                                                long nowMs) {
+        if (ttlMs == Long.MAX_VALUE) {
+            return;
+        }
+
+        while (!bucket.isEmpty() && !timesBucket.isEmpty()) {
+            long ageMs = nowMs - timesBucket.get(0);
+            if (ageMs <= ttlMs) {
+                break;
+            }
+            Circle stale = bucket.remove(0);
+            stale.remove();
+            timesBucket.remove(0);
         }
     }
 
     private void clearObservationMarkers() {
-        clearObservationCircles(gnssObservationCircles);
-        clearObservationCircles(wifiObservationCircles);
-        clearObservationCircles(pdrObservationCircles);
+        clearObservationCircles(gnssObservationCircles, gnssObservationTimesMs);
+        clearObservationCircles(wifiObservationCircles, wifiObservationTimesMs);
+        clearObservationCircles(pdrObservationCircles, pdrObservationTimesMs);
     }
 
-    private void clearObservationCircles(@NonNull List<Circle> bucket) {
+    private void clearObservationCircles(@NonNull List<Circle> bucket,
+                                         @NonNull List<Long> timesBucket) {
         for (Circle c : bucket) {
             c.remove();
         }
         bucket.clear();
+        timesBucket.clear();
     }
 
     /**

@@ -24,7 +24,6 @@ import com.openpositioning.PositionMe.service.SensorCollectionService;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.utils.TrajectoryValidator;
-import com.openpositioning.PositionMe.utils.UtilFunctions;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 
 import java.util.ArrayList;
@@ -54,7 +53,6 @@ public class SensorFusion implements SensorEventListener {
     //region Static variables
     private static final SensorFusion sensorFusion = new SensorFusion();
     private static final String TAG = "SensorFusion";
-    private static final boolean ENABLE_PDR_FEEDBACK = false;
     //endregion
 
     //region Instance variables
@@ -727,30 +725,6 @@ public class SensorFusion implements SensorEventListener {
         state.fusedLongitude = (float) estimate.getLatLng().longitude;
         state.fusedFloor = estimate.getFloor();
         state.fusedAvailable = true;
-
-        // Feed the fused absolute estimate back into local PDR coordinates to limit long-term drift.
-        if (ENABLE_PDR_FEEDBACK) {
-            applyFusionFeedbackToPdr(estimate.getLatLng());
-        }
-    }
-
-    private void applyFusionFeedbackToPdr(@NonNull LatLng fusedLatLng) {
-        if (pdrProcessing == null) {
-            return;
-        }
-
-        float startLat = state.startLocation[0];
-        float startLon = state.startLocation[1];
-        if (startLat == 0f && startLon == 0f) {
-            return;
-        }
-
-        double dLat = fusedLatLng.latitude - startLat;
-        double dLon = fusedLatLng.longitude - startLon;
-
-        float targetY = (float) UtilFunctions.degreesToMetersLat(dLat);
-        float targetX = (float) UtilFunctions.degreesToMetersLng(dLon, startLat);
-        pdrProcessing.applyFusionFeedback(targetX, targetY);
     }
 
     //endregion

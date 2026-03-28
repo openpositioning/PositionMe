@@ -221,13 +221,12 @@ public class SensorEventHandler {
                             this.accelMagnitude,
                             state.orientation[0]
                     );
-                    float[] correctionDelta = this.pdrProcessing.consumePendingFeedbackDelta();
 
                     float dx = 0f;
                     float dy = 0f;
                     if (hasPdrReference) {
-                        dx = newCords[0] - lastPdrX - correctionDelta[0];
-                        dy = newCords[1] - lastPdrY - correctionDelta[1];
+                        dx = newCords[0] - lastPdrX;
+                        dy = newCords[1] - lastPdrY;
                     }
                     lastPdrX = newCords[0];
                     lastPdrY = newCords[1];
