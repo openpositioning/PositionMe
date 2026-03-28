@@ -164,6 +164,10 @@ public class TrajectoryMapFragment extends Fragment {
 
                     drawBuildingPolygon();
 
+                    if (autoFloorSwitch != null && autoFloorSwitch.isChecked()) {
+                        startAutoFloor();
+                    }
+
                     Log.d("TrajectoryMapFragment", "onMapReady: Map is ready!");
 
 
@@ -533,6 +537,7 @@ public class TrajectoryMapFragment extends Fragment {
         if (autoFloorSwitch != null) {
             autoFloorSwitch.setChecked(true);
         }
+        startAutoFloor();
         if (polyline != null) {
             polyline.remove();
             polyline = null;
@@ -791,6 +796,9 @@ public class TrajectoryMapFragment extends Fragment {
      * of consistent readings).
      */
     private void startAutoFloor() {
+        if (autoFloorHandler != null && autoFloorTask != null) {
+            return;
+        }
         if (autoFloorHandler == null) {
             autoFloorHandler = new Handler(Looper.getMainLooper());
         }
@@ -844,6 +852,7 @@ public class TrajectoryMapFragment extends Fragment {
         if (autoFloorHandler != null && autoFloorTask != null) {
             autoFloorHandler.removeCallbacks(autoFloorTask);
         }
+        autoFloorTask = null;
         lastCandidateFloor = Integer.MIN_VALUE;
         lastCandidateTime = 0;
         Log.d(TAG, "Auto-floor stopped");
