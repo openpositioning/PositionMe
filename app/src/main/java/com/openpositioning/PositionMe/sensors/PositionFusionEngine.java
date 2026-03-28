@@ -32,11 +32,6 @@ public class PositionFusionEngine {
     private static final double INIT_STD_M = 2.0;
     private static final double ROUGHEN_STD_M = 0.15;
     private static final double WIFI_SIGMA_M = 5.5;
-    private static final double INDOOR_GNSS_SIGMA_MULTIPLIER = 2.0;
-    private static final double INDOOR_GNSS_MIN_SIGMA_M = 10.0;
-    private static final double FLOOR_HINT_MIN_SUPPORT = 0.08;
-    private static final double FLOOR_HINT_INJECTION_FRACTION = 0.25;
-    private static final double FLOOR_HINT_INJECTION_STD_M = 1.2;
     private static final double EPS = 1e-300;
     private static final double CONNECTOR_RADIUS_M = 3.0;
     private static final double LIFT_HORIZONTAL_MAX_M = 0.50;
@@ -161,14 +156,10 @@ public class PositionFusionEngine {
 
     public synchronized void updateGnss(double latDeg, double lonDeg, float accuracyMeters) {
         double sigma = Math.max(accuracyMeters, 3.0f);
-        boolean indoors = activeBuildingName != null && !activeBuildingName.isEmpty();
-        if (indoors) {
-            sigma = Math.max(sigma * INDOOR_GNSS_SIGMA_MULTIPLIER, INDOOR_GNSS_MIN_SIGMA_M);
-        }
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
-                    "GNSS update lat=%.7f lon=%.7f acc=%.2f sigma=%.2f indoors=%s",
-                    latDeg, lonDeg, accuracyMeters, sigma, String.valueOf(indoors)));
+                    "GNSS update lat=%.7f lon=%.7f acc=%.2f sigma=%.2f",
+                    latDeg, lonDeg, accuracyMeters, sigma));
         }
         applyAbsoluteFix(latDeg, lonDeg, sigma, null);
     }
@@ -353,9 +344,6 @@ public class PositionFusionEngine {
             priorMeanEast += p.weight * p.xEast;
             priorMeanNorth += p.weight * p.yNorth;
         }
-        if (floorHint != null) {
-            injectFloorSupportIfNeeded(floorHint, z[0], z[1]);
-        }
         double effectiveBefore = computeEffectiveSampleSize();
 
         double sigma2 = sigmaMeters * sigmaMeters;
@@ -460,46 +448,6 @@ public class PositionFusionEngine {
                     Math.toDegrees(boundedBiasDelta),
                     Math.toDegrees(headingBiasRad)));
         }
-    }
-
-    private void injectFloorSupportIfNeeded(int floorHint, double zEast, double zNorth) {
-        double floorSupport = floorSupportWeight(floorHint);
-        if (floorSupport >= FLOOR_HINT_MIN_SUPPORT) {
-            return;
-        }
-
-        int injectCount = Math.max(1,
-                (int) Math.round(PARTICLE_COUNT * FLOOR_HINT_INJECTION_FRACTION));
-        List<Integer> indices = new ArrayList<>(particles.size());
-        for (int i = 0; i < particles.size(); i++) {
-            indices.add(i);
-        }
-        indices.sort((a, b) -> Double.compare(particles.get(a).weight, particles.get(b).weight));
-
-        for (int i = 0; i < injectCount && i < indices.size(); i++) {
-            Particle p = particles.get(indices.get(i));
-            p.floor = floorHint;
-            p.xEast = zEast + random.nextGaussian() * FLOOR_HINT_INJECTION_STD_M;
-            p.yNorth = zNorth + random.nextGaussian() * FLOOR_HINT_INJECTION_STD_M;
-        }
-
-        if (DEBUG_LOGS) {
-            Log.i(TAG, String.format(Locale.US,
-                    "Floor support injection hint=%d supportBefore=%.3f injectCount=%d",
-                    floorHint,
-                    floorSupport,
-                    injectCount));
-        }
-    }
-
-    private double floorSupportWeight(int floor) {
-        double sum = 0.0;
-        for (Particle p : particles) {
-            if (p.floor == floor) {
-                sum += p.weight;
-            }
-        }
-        return sum;
     }
 
     private void initParticlesAtOrigin(int initialFloor) {
