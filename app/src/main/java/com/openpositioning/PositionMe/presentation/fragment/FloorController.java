@@ -30,6 +30,8 @@ public class FloorController {
     private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000L;
     private static final float AUTO_FLOOR_MIN_VERTICAL_DELTA_METERS = 1.2f;
     private static final float AUTO_FLOOR_VERTICAL_FRACTION_PER_FLOOR = 0.55f;
+    private static final long INITIAL_FLOOR_WIFI_STABLE_MS = 1500L;
+    private static final int INITIAL_FLOOR_WIFI_REQUIRED_SAMPLES = 3;
 
     public interface Host {
         @Nullable FloorplanApiClient.BuildingInfo getSelectedFloorplanBuilding();
@@ -52,6 +54,10 @@ public class FloorController {
     private int lastCandidateFloor = Integer.MIN_VALUE;
     private long lastCandidateTime = 0L;
     private float lastCommittedElevationMeters = Float.NaN;
+    private boolean initialFloorResolved = false;
+    private int pendingInitialWifiFloor = Integer.MIN_VALUE;
+    private long pendingInitialWifiSinceMs = 0L;
+    private int pendingInitialWifiSamples = 0;
 
     private SwitchMaterial autoFloorSwitch;
     private FloatingActionButton floorUpButton;
@@ -120,6 +126,14 @@ public class FloorController {
     }
 
     public void setFloor(int newFloorIndex) {
+        applyFloorInternal(newFloorIndex, true);
+    }
+
+    public void refreshCurrentFloorUi() {
+        applyFloorInternal(host.getCurrentFloorIndex(), false);
+    }
+
+    private void applyFloorInternal(int newFloorIndex, boolean confirmFloor) {
         FloorplanApiClient.BuildingInfo selectedFloorplanBuilding = host.getSelectedFloorplanBuilding();
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
         if (selectedFloorplanBuilding == null || indoorMapManager == null) {
@@ -128,8 +142,12 @@ public class FloorController {
 
         int maxFloor = selectedFloorplanBuilding.getFloorShapesList().size() - 1;
         int clampedFloor = Math.max(0, Math.min(newFloorIndex, maxFloor));
-        host.setCurrentFloorIndex(clampedFloor);
-        syncAutoFloorAnchor();
+        if (confirmFloor) {
+            host.setCurrentFloorIndex(clampedFloor);
+            initialFloorResolved = true;
+            resetInitialFloorBootstrapState();
+            syncAutoFloorAnchor();
+        }
         host.refreshSelectedPolygonAppearance();
 
         if (!host.isIndoorMapVisible() && !host.isActualMapVisible()) {
@@ -249,9 +267,6 @@ public class FloorController {
         if (floorLabel != null) {
             floorLabel.setVisibility(visibility);
         }
-        if (autoFloorSwitch != null) {
-            autoFloorSwitch.setVisibility(visibility);
-        }
         if (visibility == View.VISIBLE) {
             updateFloorLabel();
         }
@@ -277,6 +292,15 @@ public class FloorController {
         }
         lastCandidateFloor = Integer.MIN_VALUE;
         lastCandidateTime = 0L;
+        resetInitialFloorBootstrapState();
+
+        // If WiFi bootstrap is not available yet, use the current visible floor as the
+        // starting baseline so barometer/elevator logic can still work.
+        if (!initialFloorResolved) {
+            initialFloorResolved = true;
+            syncAutoFloorAnchor();
+        }
+
         applyImmediateFloor();
 
         autoFloorTask = new Runnable() {
@@ -299,6 +323,17 @@ public class FloorController {
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             return;
+        }
+
+        if (!initialFloorResolved) {
+            Integer bootstrapFloorIndex = resolveInitialWifiBootstrapFloorIndex(sensorFusion, indoorMapManager);
+            if (bootstrapFloorIndex != null) {
+                Log.d(TAG, "Initial floor bootstrap accepted from stable WiFi floor candidate: index=" + bootstrapFloorIndex);
+                setFloor(bootstrapFloorIndex);
+                lastCandidateFloor = bootstrapFloorIndex;
+                lastCandidateTime = SystemClock.elapsedRealtime();
+                return;
+            }
         }
 
         Integer candidateFloorIndex = resolveAutoFloorCandidateIndex(sensorFusion, indoorMapManager);
@@ -327,10 +362,15 @@ public class FloorController {
         }
         lastCandidateFloor = Integer.MIN_VALUE;
         lastCandidateTime = 0L;
+        resetInitialFloorBootstrapState();
     }
 
     public boolean isAutoFloorEnabled() {
         return autoFloorSwitch != null && autoFloorSwitch.isChecked();
+    }
+
+    public boolean hasReliableInitialFloorFix() {
+        return initialFloorResolved;
     }
 
     public void evaluateAutoFloor() {
@@ -341,6 +381,17 @@ public class FloorController {
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
         if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             return;
+        }
+
+        if (!initialFloorResolved) {
+            Integer bootstrapFloorIndex = resolveInitialWifiBootstrapFloorIndex(sensorFusion, indoorMapManager);
+            if (bootstrapFloorIndex != null) {
+                Log.d(TAG, "Initial floor bootstrap accepted from stable WiFi floor candidate during evaluation: index=" + bootstrapFloorIndex);
+                setFloor(bootstrapFloorIndex);
+                lastCandidateFloor = bootstrapFloorIndex;
+                lastCandidateTime = SystemClock.elapsedRealtime();
+                return;
+            }
         }
 
         Integer candidateFloorIndex = resolveAutoFloorCandidateIndex(sensorFusion, indoorMapManager);
@@ -382,6 +433,9 @@ public class FloorController {
 
         int candidateLogicalFloor;
         if (sensorFusion.getLatLngWifiPositioning() != null) {
+            if (!initialFloorResolved) {
+                return null;
+            }
             candidateLogicalFloor = sensorFusion.getWifiFloor();
         } else {
             float floorHeight = indoorMapManager.getFloorHeight();
@@ -421,13 +475,45 @@ public class FloorController {
         }
 
         if (sensorFusion.getLatLngWifiPositioning() != null) {
-            return rawCandidateFloorIndex;
+            return initialFloorResolved ? rawCandidateFloorIndex : null;
         }
 
         if (shouldAllowAutoFloorChange(rawCandidateFloorIndex, sensorFusion, indoorMapManager)) {
             return rawCandidateFloorIndex;
         }
 
+        return null;
+    }
+
+    private void resetInitialFloorBootstrapState() {
+        pendingInitialWifiFloor = Integer.MIN_VALUE;
+        pendingInitialWifiSinceMs = 0L;
+        pendingInitialWifiSamples = 0;
+    }
+
+    @Nullable
+    private Integer resolveInitialWifiBootstrapFloorIndex(@NonNull SensorFusion sensorFusion,
+                                                          @NonNull IndoorMapManager indoorMapManager) {
+        if (sensorFusion.getLatLngWifiPositioning() == null) {
+            resetInitialFloorBootstrapState();
+            return null;
+        }
+
+        int candidateFloorIndex = indoorMapManager.logicalFloorToIndex(sensorFusion.getWifiFloor());
+        long now = SystemClock.elapsedRealtime();
+        if (candidateFloorIndex != pendingInitialWifiFloor) {
+            pendingInitialWifiFloor = candidateFloorIndex;
+            pendingInitialWifiSinceMs = now;
+            pendingInitialWifiSamples = 1;
+            return null;
+        }
+
+        pendingInitialWifiSamples++;
+        long stableDurationMs = now - pendingInitialWifiSinceMs;
+        if (pendingInitialWifiSamples >= INITIAL_FLOOR_WIFI_REQUIRED_SAMPLES
+                && stableDurationMs >= INITIAL_FLOOR_WIFI_STABLE_MS) {
+            return candidateFloorIndex;
+        }
         return null;
     }
 

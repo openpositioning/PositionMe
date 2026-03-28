@@ -191,6 +191,25 @@ public class StartLocationFragment extends Fragment {
     private boolean hasInitialCameraPositioned = false;
     private boolean followCurrentLocationWithStartMarker = true;
 
+    private boolean isRecordingMode() {
+        return requireActivity() instanceof RecordingActivity;
+    }
+
+    private boolean isReplayMode() {
+        return requireActivity() instanceof ReplayActivity;
+    }
+
+    private void updateInstructionTextForMode() {
+        if (instructionText == null) {
+            return;
+        }
+        if (isRecordingMode()) {
+            instructionText.setText("Stand at the real start point. The app will lock the initial position automatically from GNSS/WiFi. Tap a building only to select the venue and floorplan.");
+        } else {
+            instructionText.setText("Choose the replay start point on the map, then select the building if needed.");
+        }
+    }
+
     // Live GNSS update loop
     private final Handler liveLocationHandler = new Handler(Looper.getMainLooper());
     private final Runnable liveLocationRunnable = new Runnable() {
@@ -258,6 +277,7 @@ public class StartLocationFragment extends Fragment {
         btnFindActualMap = view.findViewById(R.id.btnFindActualMap);
 
         ensureBackToCurrentLocationButton(view);
+        updateInstructionTextForMode();
 
         floorUpButton = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
@@ -298,36 +318,46 @@ public class StartLocationFragment extends Fragment {
             float chosenLat = startPosition[0];
             float chosenLon = startPosition[1];
 
-            // Save the user's current map zoom and chosen position so the next screen
-            // can begin with a consistent camera view.
             if (mMap != null && getContext() != null) {
                 float userChosenZoom = mMap.getCameraPosition().zoom;
-                getContext()
-                        .getSharedPreferences("MapCameraState", Context.MODE_PRIVATE)
-                        .edit()
-                        .putFloat("user_selected_zoom", userChosenZoom)
-                        .putFloat("user_start_lat", chosenLat)
-                        .putFloat("user_start_lon", chosenLon)
-                        .apply();
+                Context context = getContext();
+                Context safeContext = context;
+                if (safeContext != null) {
+                    android.content.SharedPreferences.Editor editor = safeContext
+                            .getSharedPreferences("MapCameraState", Context.MODE_PRIVATE)
+                            .edit()
+                            .putFloat("user_selected_zoom", userChosenZoom);
+
+                    if (isReplayMode()) {
+                        editor.putFloat("user_start_lat", chosenLat)
+                                .putFloat("user_start_lon", chosenLon);
+                        Log.d(TAG, String.format(java.util.Locale.UK,
+                                "STEP1_START_UI replay start saved lat=%.6f lon=%.6f zoom=%.2f",
+                                chosenLat,
+                                chosenLon,
+                                userChosenZoom));
+                    } else {
+                        editor.remove("user_start_lat");
+                        editor.remove("user_start_lon");
+                        Log.d(TAG, String.format(java.util.Locale.UK,
+                                "STEP1_START_UI recording mode saved zoom only zoom=%.2f building=%s",
+                                userChosenZoom,
+                                selectedBuildingId));
+                    }
+                    editor.apply();
+                }
             }
 
-            // Keep selected building metadata for later use.
             if (selectedBuildingId != null) {
                 sensorFusion.setSelectedBuildingId(selectedBuildingId);
+                Log.d(TAG, "STEP1_START_UI selected building=" + selectedBuildingId);
             }
 
-            if (requireActivity() instanceof RecordingActivity) {
-                /*
-                 * Start recording immediately, but do not inject the user-selected
-                 * start position into SensorFusion.
-                 *
-                 * The true initial recording position is now determined later in
-                 * RecordingFragment from the first valid autonomous WiFi/GNSS fix.
-                 */
+            if (isRecordingMode()) {
                 sensorFusion.startRecording();
+                Log.d(TAG, "STEP1_START_UI recording started; initial anchor will be autonomous");
                 ((RecordingActivity) requireActivity()).showRecordingScreen();
-
-            } else if (requireActivity() instanceof ReplayActivity) {
+            } else if (isReplayMode()) {
                 ((ReplayActivity) requireActivity()).onStartLocationChosen(chosenLat, chosenLon);
             }
         });
@@ -375,12 +405,19 @@ public class StartLocationFragment extends Fragment {
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
                 .zIndex(21f));
 
+        boolean replayMode = isReplayMode();
+
         startMarker = mMap.addMarker(new MarkerOptions()
                 .position(position)
-                .title("Selected Start")
-                .draggable(true)
-                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
+                .title(replayMode ? "Selected Start" : "Phone Position")
+                .draggable(replayMode)
+                .icon(BitmapDescriptorFactory.defaultMarker(
+                        replayMode
+                                ? BitmapDescriptorFactory.HUE_RED
+                                : BitmapDescriptorFactory.HUE_GREEN))
                 .zIndex(22f));
+
+        Log.d(TAG, "STEP1_START_UI setupMap replayMode=" + replayMode + " draggableStartMarker=" + replayMode);
 
         // Only lock the initial camera position once a real GNSS fix exists.
         boolean gnssReady = !(startPosition[0] == 0f && startPosition[1] == 0f);
@@ -389,30 +426,39 @@ public class StartLocationFragment extends Fragment {
             hasInitialCameraPositioned = true;
         }
 
-        mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
-            @Override
-            public void onMarkerDragStart(@NonNull Marker marker) {
-            }
-
-            @Override
-            public void onMarkerDrag(@NonNull Marker marker) {
-            }
-
-            @Override
-            public void onMarkerDragEnd(@NonNull Marker marker) {
-                if (startMarker == null || !marker.equals(startMarker)) {
-                    return;
+        if (isReplayMode()) {
+            mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener() {
+                @Override
+                public void onMarkerDragStart(@NonNull Marker marker) {
                 }
 
-                isMarkerDraggedSelection = true;
-                followCurrentLocationWithStartMarker = false;
-                startPosition[0] = (float) marker.getPosition().latitude;
-                startPosition[1] = (float) marker.getPosition().longitude;
+                @Override
+                public void onMarkerDrag(@NonNull Marker marker) {
+                }
 
-                clearBuildingSelectionAndOverlays();
-                requestBuildingData();
-            }
-        });
+                @Override
+                public void onMarkerDragEnd(@NonNull Marker marker) {
+                    if (startMarker == null || !marker.equals(startMarker)) {
+                        return;
+                    }
+
+                    isMarkerDraggedSelection = true;
+                    followCurrentLocationWithStartMarker = false;
+                    startPosition[0] = (float) marker.getPosition().latitude;
+                    startPosition[1] = (float) marker.getPosition().longitude;
+
+                    Log.d(TAG, String.format(java.util.Locale.UK,
+                            "STEP1_START_UI replay marker dragged lat=%.6f lon=%.6f",
+                            startPosition[0],
+                            startPosition[1]));
+
+                    clearBuildingSelectionAndOverlays();
+                    requestBuildingData();
+                }
+            });
+        } else {
+            mMap.setOnMarkerDragListener(null);
+        }
 
         mMap.setOnPolygonClickListener(polygon -> {
             String buildingName = (String) polygon.getTag();
@@ -555,14 +601,32 @@ public class StartLocationFragment extends Fragment {
         currentFloorIndex = getDefaultFloorIndex(selectedFloorplanBuilding);
 
         LatLng center = computePolygonCenter(polygon);
-        if (startMarker != null) {
-            startMarker.setPosition(center);
-        }
+        if (isReplayMode()) {
+            if (startMarker != null) {
+                startMarker.setPosition(center);
+            }
 
-        followCurrentLocationWithStartMarker = false;
-        isMarkerDraggedSelection = true;
-        startPosition[0] = (float) center.latitude;
-        startPosition[1] = (float) center.longitude;
+            followCurrentLocationWithStartMarker = false;
+            isMarkerDraggedSelection = true;
+            startPosition[0] = (float) center.latitude;
+            startPosition[1] = (float) center.longitude;
+
+            Log.d(TAG, String.format(java.util.Locale.UK,
+                    "STEP1_START_UI replay building selected=%s centerLat=%.6f centerLon=%.6f",
+                    buildingName,
+                    center.latitude,
+                    center.longitude));
+        } else {
+            Log.d(TAG, String.format(java.util.Locale.UK,
+                    "STEP1_START_UI recording building selected=%s currentPhoneLat=%.6f currentPhoneLon=%.6f",
+                    buildingName,
+                    startPosition[0],
+                    startPosition[1]));
+            if (mMap != null) {
+                float targetZoom = Math.max(18.5f, mMap.getCameraPosition().zoom);
+                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(center, targetZoom));
+            }
+        }
 
         updateBuildingInfoDisplay(buildingName);
         redrawSelectedBuildingOverlay();
@@ -1581,6 +1645,7 @@ public class StartLocationFragment extends Fragment {
     private void resetToCurrentLocation() {
         followCurrentLocationWithStartMarker = true;
         isMarkerDraggedSelection = false;
+        Log.d(TAG, "STEP1_START_UI reset to current live position");
         clearBuildingSelectionAndOverlays();
         updateLiveLocation(true);
         requestBuildingDataWhenReady();

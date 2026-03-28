@@ -228,8 +228,6 @@ public class ParticleFilterManager {
         setLatestMatchedPose(sensorFusion.getParticleFilterMatchedPose());
 
         updateFromLiveSensors(SystemClock.elapsedRealtime());
-
-        latestRawPose = latestFusedPose;
     }
 
     /**

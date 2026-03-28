@@ -51,9 +51,6 @@ public class TrajectoryMapFragment extends Fragment {
 
     private static final String TAG = "TrajectoryMapFragment";
     private static final String TEST_LOG_TAG = "MAP_MATCH_TEST";
-
-    private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000L;
-    private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000L;
     private static final String CALIBRATION_PREFS_NAME = "actual_map_calibration";
     private static final float CALIBRATION_SHIFT_STEP = 0.005f;
     private static final float CALIBRATION_SCALE_STEP = 0.005f;
@@ -91,14 +88,6 @@ public class TrajectoryMapFragment extends Fragment {
     // Overlay calibration state
     private final List<GroundOverlay> realMapOverlays = new ArrayList<>();
     private String calibrationTargetBuildingKey = "";
-
-    // Auto-floor helper state
-    private Handler autoFloorHandler;
-    private Runnable autoFloorTask;
-    private int lastCandidateFloor = Integer.MIN_VALUE;
-    private long lastCandidateTime = 0L;
-    private int latestCandidateLogicalFloor = Integer.MIN_VALUE;
-    private long lastAutoFloorLogTime = 0L;
 
     // UI references
     private Spinner switchMapSpinner;
@@ -273,6 +262,11 @@ public class TrajectoryMapFragment extends Fragment {
                     return autoFloorSwitch != null && autoFloorSwitch.isChecked();
                 }
 
+                @Override
+                public boolean hasReliableInitialFloorFix() {
+                    return floorController.hasReliableInitialFloorFix();
+                }
+
                 @Nullable
                 @Override
                 public LatLng getCurrentLocation() {
@@ -430,16 +424,18 @@ public class TrajectoryMapFragment extends Fragment {
                 if (hasPendingCameraMove && pendingCameraPosition != null) {
                     float savedZoom = getSavedMapZoom();
                     gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pendingCameraPosition, savedZoom));
+                    Log.d(TAG, String.format(Locale.UK,
+                            "STEP2_CAMERA applied pending autonomous camera lat=%.6f lon=%.6f zoom=%.2f",
+                            pendingCameraPosition.latitude,
+                            pendingCameraPosition.longitude,
+                            savedZoom));
                     hasPendingCameraMove = false;
                     pendingCameraPosition = null;
                 } else if (!replayModeEnabled && getContext() != null) {
-                    SharedPreferences prefs = getContext().getSharedPreferences("MapCameraState", Context.MODE_PRIVATE);
-                    float savedZoom = prefs.getFloat("user_selected_zoom", 19f);
-                    float savedLat = prefs.getFloat("user_start_lat", 0f);
-                    float savedLon = prefs.getFloat("user_start_lon", 0f);
-                    if (savedLat != 0f && savedLon != 0f) {
-                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(savedLat, savedLon), savedZoom));
-                    }
+                    float savedZoom = getSavedMapZoom();
+                    Log.d(TAG, String.format(Locale.UK,
+                            "STEP2_CAMERA recording mode waiting for autonomous anchor; skip saved user_start_lat/lon restore, zoom=%.2f",
+                            savedZoom));
                 }
 
                 restoreCachedBuildingsIfAny();
@@ -480,44 +476,6 @@ public class TrajectoryMapFragment extends Fragment {
         }
         applyTrajectoryColorButtonState();
 
-        if (autoFloorSwitch != null) {
-            autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
-                if (isChecked) {
-                    startAutoFloor();
-                } else {
-                    stopAutoFloor();
-                }
-            });
-        }
-
-        if (floorUpButton != null) {
-            floorUpButton.setOnClickListener(v -> {
-                if (autoFloorSwitch != null) {
-                    autoFloorSwitch.setChecked(false);
-                }
-                if (selectedFloorplanBuilding != null) {
-                    int nextFloorIndex = getAdjacentFloorIndex(selectedFloorplanBuilding, currentFloorIndex, true);
-                    if (nextFloorIndex != currentFloorIndex) {
-                        setFloor(nextFloorIndex);
-                    }
-                }
-            });
-        }
-
-        if (floorDownButton != null) {
-            floorDownButton.setOnClickListener(v -> {
-                if (autoFloorSwitch != null) {
-                    autoFloorSwitch.setChecked(false);
-                }
-                if (selectedFloorplanBuilding != null) {
-                    int nextFloorIndex = getAdjacentFloorIndex(selectedFloorplanBuilding, currentFloorIndex, false);
-                    if (nextFloorIndex != currentFloorIndex) {
-                        setFloor(nextFloorIndex);
-                    }
-                }
-            });
-        }
-
         if (btnFindIndoorMap != null) {
             btnFindIndoorMap.setOnClickListener(v -> {
                 if (selectedFloorplanBuilding == null) {
@@ -535,7 +493,7 @@ public class TrajectoryMapFragment extends Fragment {
                 if (indoorMapManager != null) {
                     indoorMapManager.setSelectedBuilding(selectedFloorplanBuilding);
                 }
-                setFloor(currentFloorIndex);
+                floorController.refreshCurrentFloorUi();
 
                 if (selectedVenueText != null) {
                     selectedVenueText.setText("Showing indoor vector map for " +
@@ -564,7 +522,7 @@ public class TrajectoryMapFragment extends Fragment {
                 if (indoorMapManager != null) {
                     indoorMapManager.setSelectedBuilding(selectedFloorplanBuilding);
                 }
-                setFloor(currentFloorIndex);
+                floorController.refreshCurrentFloorUi();
 
                 if (selectedVenueText != null) {
                     if (actualMapVisible) {
@@ -600,7 +558,10 @@ public class TrajectoryMapFragment extends Fragment {
         mapMatchingCoordinator.onReplayModeChanged(enabled);
 
         if (enabled) {
-            stopAutoFloor();
+            floorController.stopAutoFloor();
+            if (autoFloorSwitch != null && autoFloorSwitch.isChecked()){
+                autoFloorSwitch.setChecked(false);
+            }
         }
 
         syncReplayUiState();
@@ -666,10 +627,28 @@ public class TrajectoryMapFragment extends Fragment {
         if (selectedFloorplanBuilding == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
             return;
         }
+        if (isAutoFloorEnabled()) {
+            Log.d(TAG, String.format(Locale.US,
+                    "AUTO_FLOOR ignored external display-floor update logical=%d current=%d because FloorController owns display floor",
+                    logicalFloor,
+                    currentFloorIndex));
+            return;
+        }
+        if (!floorController.hasReliableInitialFloorFix()) {
+            Log.d(TAG, String.format(Locale.US,
+                    "AUTO_FLOOR ignored external display-floor update logical=%d current=%d because initial floor is not confirmed yet",
+                    logicalFloor,
+                    currentFloorIndex));
+            return;
+        }
         int targetFloorIndex = indoorMapManager.logicalFloorToIndex(logicalFloor);
         if (targetFloorIndex != currentFloorIndex) {
             setFloor(targetFloorIndex);
         }
+    }
+
+    public boolean isAutoFloorEnabled() {
+        return autoFloorSwitch != null && autoFloorSwitch.isChecked();
     }
 
     public boolean isGnssEnabled() {
@@ -694,19 +673,15 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     public void clearMapAndReset() {
-        stopAutoFloor();
-
         if (autoFloorSwitch != null) {
             autoFloorSwitch.setChecked(false);
         }
+        floorController.stopAutoFloor();
 
         mapMatchingCoordinator.resetMapMatchingState();
         trajectoryRenderer.clearAll();
 
         currentLocation = null;
-        latestCandidateLogicalFloor = Integer.MIN_VALUE;
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0L;
 
         for (Polygon p : floorplanPolygons) {
             p.remove();
@@ -744,6 +719,7 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         setFloorControlsVisibility(View.GONE);
+        updateAutoFloorAvailability();
     }
 
     // Map / building lifecycle
@@ -1108,123 +1084,12 @@ public class TrajectoryMapFragment extends Fragment {
         if (!enabled && autoFloorSwitch.isChecked()) {
             autoFloorSwitch.setChecked(false);
         }
+
+        autoFloorSwitch.setVisibility(View.VISIBLE);
     }
 
     private void syncReplayUiState() {
         updateAutoFloorAvailability();
-    }
-
-    private int getCurrentVisibleLogicalFloor() {
-        if (selectedFloorplanBuilding == null) {
-            return 0;
-        }
-        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
-            return indoorMapManager.indexToLogicalFloor(currentFloorIndex);
-        }
-        return currentFloorIndex;
-    }
-
-    private int resolveCandidateLogicalFloor() {
-        Integer candidateIndex = floorController.peekTrackingFloorCandidateIndex();
-        if (candidateIndex != null) {
-            if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
-                return indoorMapManager.indexToLogicalFloor(candidateIndex);
-            }
-            return candidateIndex;
-        }
-        return getCurrentVisibleLogicalFloor();
-    }
-
-    private String describeCandidateFloorSource() {
-        return "FloorControllerTracking";
-    }
-
-    private void startAutoFloor() {
-        if (autoFloorHandler == null) {
-            autoFloorHandler = new Handler(Looper.getMainLooper());
-        }
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0L;
-        applyImmediateFloor();
-
-        autoFloorTask = new Runnable() {
-            @Override
-            public void run() {
-                evaluateAutoFloor();
-                autoFloorHandler.postDelayed(this, AUTO_FLOOR_CHECK_INTERVAL_MS);
-            }
-        };
-        autoFloorHandler.post(autoFloorTask);
-    }
-
-    private void applyImmediateFloor() {
-        if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
-            Log.d(TAG, "AUTO_FLOOR applyImmediate skipped: map not ready");
-            return;
-        }
-        int candidateFloor = resolveCandidateLogicalFloor();
-        latestCandidateLogicalFloor = candidateFloor;
-        lastCandidateFloor = candidateFloor;
-        lastCandidateTime = SystemClock.elapsedRealtime();
-        logAutoFloorState("applyImmediate", candidateFloor, describeCandidateFloorSource());
-    }
-
-    private void stopAutoFloor() {
-        if (autoFloorHandler != null && autoFloorTask != null) {
-            autoFloorHandler.removeCallbacks(autoFloorTask);
-        }
-        Log.d(TAG, String.format(Locale.US,
-                "AUTO_FLOOR stop visibleLogical=%d lastCandidate=%d latestCandidate=%d",
-                getCurrentVisibleLogicalFloor(), lastCandidateFloor, latestCandidateLogicalFloor));
-        lastCandidateFloor = Integer.MIN_VALUE;
-        lastCandidateTime = 0L;
-        latestCandidateLogicalFloor = Integer.MIN_VALUE;
-    }
-
-    private void evaluateAutoFloor() {
-        if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
-            Log.d(TAG, "AUTO_FLOOR evaluate skipped: map not ready");
-            return;
-        }
-
-        int candidateFloor = resolveCandidateLogicalFloor();
-        String source = describeCandidateFloorSource();
-        latestCandidateLogicalFloor = candidateFloor;
-
-        long now = SystemClock.elapsedRealtime();
-        if (candidateFloor != lastCandidateFloor) {
-            logAutoFloorState("candidate_changed", candidateFloor, source);
-            lastCandidateFloor = candidateFloor;
-            lastCandidateTime = now;
-            return;
-        }
-
-        if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
-            logAutoFloorState("candidate_stable", candidateFloor, source);
-            lastCandidateTime = now;
-        } else {
-            logAutoFloorState("candidate_waiting", candidateFloor, source);
-        }
-    }
-
-    private void logAutoFloorState(@NonNull String phase, int candidateFloor, @NonNull String source) {
-        long now = SystemClock.elapsedRealtime();
-        if (now - lastAutoFloorLogTime < 0L) {
-            return;
-        }
-        lastAutoFloorLogTime = now;
-
-        Log.d(TAG, String.format(Locale.US,
-                "AUTO_FLOOR phase=%s source=%s candidate=%d visible=%d latestCandidate=%d lastCandidate=%d elapsedSinceCandidate=%d building=%s indoorVisible=%s",
-                phase,
-                source,
-                candidateFloor,
-                getCurrentVisibleLogicalFloor(),
-                latestCandidateLogicalFloor,
-                lastCandidateFloor,
-                lastCandidateTime == 0 ? -1 : (now - lastCandidateTime),
-                selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : "null",
-                String.valueOf(indoorMapVisible)));
     }
 
     // UI helpers
@@ -1526,7 +1391,7 @@ public class TrajectoryMapFragment extends Fragment {
                 OverlayCalibration defaults = getHardcodedCalibrationDefault(targetKey, floorKey);
                 saveOverlayCalibration(targetKey, floorKey, defaults);
                 if (actualMapVisible) {
-                    setFloor(currentFloorIndex);
+                    floorController.refreshCurrentFloorUi();
                 }
                 if (selectedVenueText != null) {
                     selectedVenueText.setText("Reset calibration for " + prettyBuildingName(targetKey) + " " + floorKey);
@@ -1566,7 +1431,7 @@ public class TrajectoryMapFragment extends Fragment {
         saveOverlayCalibration(targetKey, floorKey, updated);
         logCalibration(targetKey, floorKey, updated, "updated");
         if (actualMapVisible) {
-            setFloor(currentFloorIndex);
+            floorController.refreshCurrentFloorUi();
         }
         updateCalibrationUi();
     }

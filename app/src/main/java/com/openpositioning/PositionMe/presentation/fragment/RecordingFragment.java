@@ -98,8 +98,21 @@ public class RecordingFragment extends Fragment {
     private boolean tcpStreamingEnabled = false;
 
     // Autonomous initial map anchoring
+    private static final long INITIAL_ANCHOR_STABLE_DURATION_MS = 1000L;
+    private static final int INITIAL_ANCHOR_REQUIRED_SAMPLES = 3;
+    private static final double INITIAL_ANCHOR_MAX_JUMP_METRES = 8.0;
+
+    private enum InitialAnchorSource {
+        WIFI,
+        GNSS
+    }
+
     private LatLng autonomousInitialLocation = null;
     private boolean initialMapLocationSeeded = false;
+    private LatLng pendingInitialAnchorCandidate = null;
+    private InitialAnchorSource pendingInitialAnchorSource = null;
+    private long pendingInitialAnchorSinceMs = 0L;
+    private int pendingInitialAnchorSamples = 0;
 
 
     // Test point handling
@@ -328,7 +341,7 @@ public class RecordingFragment extends Fragment {
 
         testPoints.add(new TestPoint(idx, ts, cur.latitude, cur.longitude));
         sensorFusion.addTestPointToProto(ts, cur.latitude, cur.longitude);
-        // Improved version: pass timestamp into marker renderer too
+
         trajectoryMapFragment.addTestPointMarker(idx, ts, cur);
 
         Log.d(TAG, String.format(
@@ -495,6 +508,10 @@ public class RecordingFragment extends Fragment {
      * so the user still sees a trajectory immediately.
      */
     private void updateLiveMapWithParticleFilter(@Nullable float[] pdrValues) {
+        if (trajectoryMapFragment == null) {
+            return;
+        }
+
         FusedPose fusedPose = sensorFusion.getLatestFusedPose();
 
         if (fusedPose == null) {
@@ -513,12 +530,23 @@ public class RecordingFragment extends Fragment {
                 (float) Math.toDegrees(fusedPose.getHeadingRad())
         );
 
-        trajectoryMapFragment.updateDisplayedFloor(fusedPose.getFloor());
+        // Let map matching / floor controller own final display-floor decisions.
+        if (!trajectoryMapFragment.isAutoFloorEnabled()) {
+            Log.d(TAG, String.format(Locale.UK,
+                    "PF_BRANCH not forcing display floor=%d; map-matching flow owns floor confirmation",
+                    fusedPose.getFloor()));
+        } else {
+            Log.d(TAG, String.format(Locale.UK,
+                    "PF_BRANCH AutoFloor enabled; not forcing display floor=%d here",
+                    fusedPose.getFloor()));
+        }
+
         trajectoryMapFragment.updateDebugInfo((float) fusedPose.getHeadingRad());
 
         if (!initialCameraPositionSet) {
             trajectoryMapFragment.setInitialCameraPosition(fusedPose.getLatLng());
             initialCameraPositionSet = true;
+            Log.d(TAG, "PF_BRANCH initial camera position set from fused pose");
         }
     }
 
@@ -574,7 +602,7 @@ public class RecordingFragment extends Fragment {
      * Required behaviour:
      * - never use a user-selected marker as the initial position
      * - wait for live WiFi or GNSS positioning
-     * - lock the first usable fix as the recording anchor
+     * - lock a stable usable fix as the recording anchor
      */
     private void seedInitialMapLocation() {
         if (trajectoryMapFragment == null || initialMapLocationSeeded) {
@@ -607,36 +635,94 @@ public class RecordingFragment extends Fragment {
         );
 
         Log.d(TAG,
-                "Seeded initial map location from autonomous fix at "
+                "STEP3_ANCHOR locked autonomous initial map location at "
                         + initialFix.latitude + ", " + initialFix.longitude);
     }
 
     /**
-     * Resolves the first usable autonomous absolute position.
+     * Resolves a stable autonomous absolute position.
      *
-     * New policy:
-     * 1. Prefer GNSS first for initial anchor.
+     * Policy:
+     * 1. Prefer GNSS first for the initial anchor.
      * 2. Use WiFi only as fallback.
-     *
-     * This prevents the start location from being pulled to a sparse WiFi AP location.
+     * 3. Require the candidate to remain stable briefly before locking.
      */
     @Nullable
     private LatLng resolveAutonomousInitialLocation() {
-        // Prefer GNSS first
         float[] gnssLatLng = sensorFusion.getGNSSLatitude(false);
+
+        LatLng candidateLatLng = null;
+        InitialAnchorSource candidateSource = null;
+
+        // Prefer GNSS first
         if (gnssLatLng != null
                 && gnssLatLng.length >= 2
                 && !(Math.abs(gnssLatLng[0]) < 1e-6 && Math.abs(gnssLatLng[1]) < 1e-6)) {
-            return new LatLng(gnssLatLng[0], gnssLatLng[1]);
+            candidateLatLng = new LatLng(gnssLatLng[0], gnssLatLng[1]);
+            candidateSource = InitialAnchorSource.GNSS;
+        } else {
+            // Fallback to WiFi only if GNSS is not ready
+            LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
+            if (isValidLatLng(wifiLatLng)) {
+                candidateLatLng = wifiLatLng;
+                candidateSource = InitialAnchorSource.WIFI;
+            }
         }
 
-        // Only fallback to WiFi if GNSS is not ready
-        LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
-        if (isValidLatLng(wifiLatLng)) {
-            return wifiLatLng;
+        if (candidateLatLng == null || candidateSource == null) {
+            resetPendingInitialAnchor("no usable GNSS/WiFi fix yet");
+            return null;
+        }
+
+        long now = System.currentTimeMillis();
+        boolean sourceChanged = pendingInitialAnchorSource != candidateSource;
+        boolean jumpTooLarge = pendingInitialAnchorCandidate != null
+                && UtilFunctions.distanceBetweenPoints(pendingInitialAnchorCandidate, candidateLatLng)
+                > INITIAL_ANCHOR_MAX_JUMP_METRES;
+
+        if (pendingInitialAnchorCandidate == null || sourceChanged || jumpTooLarge) {
+            pendingInitialAnchorCandidate = candidateLatLng;
+            pendingInitialAnchorSource = candidateSource;
+            pendingInitialAnchorSinceMs = now;
+            pendingInitialAnchorSamples = 1;
+
+            Log.d(TAG, String.format(
+                    Locale.UK,
+                    "STEP3_ANCHOR pending source=%s lat=%.6f lon=%.6f",
+                    candidateSource,
+                    candidateLatLng.latitude,
+                    candidateLatLng.longitude
+            ));
+            return null;
+        }
+
+        pendingInitialAnchorSamples++;
+        long stableDurationMs = now - pendingInitialAnchorSinceMs;
+        if (pendingInitialAnchorSamples >= INITIAL_ANCHOR_REQUIRED_SAMPLES
+                || stableDurationMs >= INITIAL_ANCHOR_STABLE_DURATION_MS) {
+            Log.d(TAG, String.format(
+                    Locale.UK,
+                    "STEP3_ANCHOR accepted stable source=%s samples=%d stableMs=%d lat=%.6f lon=%.6f",
+                    candidateSource,
+                    pendingInitialAnchorSamples,
+                    stableDurationMs,
+                    candidateLatLng.latitude,
+                    candidateLatLng.longitude
+            ));
+            return candidateLatLng;
         }
 
         return null;
+    }
+
+    private void resetPendingInitialAnchor(@NonNull String reason) {
+        if (pendingInitialAnchorCandidate != null || pendingInitialAnchorSource != null) {
+            Log.d(TAG, "STEP3_ANCHOR reset pending candidate: " + reason);
+        }
+        pendingInitialAnchorCandidate = null;
+        pendingInitialAnchorSource = null;
+        pendingInitialAnchorSinceMs = 0L;
+        pendingInitialAnchorSamples = 0;
     }
 
     /**
