@@ -32,11 +32,19 @@ public class PositionFusionEngine {
     private static final double INIT_STD_M = 2.0;
     private static final double ROUGHEN_STD_M = 0.15;
     private static final double WIFI_SIGMA_M = 5.5;
+    private static final double FLOOR_HINT_MIN_SUPPORT = 0.08;
+    private static final double FLOOR_HINT_INJECTION_FRACTION = 0.25;
+    private static final double FLOOR_HINT_INJECTION_STD_M = 1.2;
+    private static final double OUTLIER_GATE_SIGMA_MULT_GNSS = 2.8;
+    private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 2.3;
+    private static final double OUTLIER_GATE_MIN_M = 6.0;
+    private static final double MAX_OUTLIER_SIGMA_SCALE = 4.0;
+    private static final double OUTPUT_SMOOTHING_ALPHA = 0.20;
     private static final double EPS = 1e-300;
     private static final double CONNECTOR_RADIUS_M = 3.0;
     private static final double LIFT_HORIZONTAL_MAX_M = 0.50;
-    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.20;
-    private static final double ORIENTATION_BIAS_MAX_STEP_RAD = Math.toRadians(6.0);
+    private static final double ORIENTATION_BIAS_LEARN_RATE = 0.10;
+    private static final double ORIENTATION_BIAS_MAX_STEP_RAD = Math.toRadians(4.0);
     private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(45.0);
     private static final double ORIENTATION_BIAS_MIN_STEP_M = 0.35;
     private static final double ORIENTATION_BIAS_MIN_INNOVATION_M = 0.50;
@@ -58,6 +66,9 @@ public class PositionFusionEngine {
     private double recentStepEastMeters;
     private double recentStepNorthMeters;
     private double headingBiasRad;
+    private double smoothedEastMeters;
+    private double smoothedNorthMeters;
+    private boolean hasSmoothedEstimate;
 
     private static final class Particle {
         double xEast;
@@ -106,6 +117,7 @@ public class PositionFusionEngine {
         recentStepEastMeters = 0.0;
         recentStepNorthMeters = 0.0;
         recentStepMotionMeters = 0.0;
+        hasSmoothedEstimate = false;
         initParticlesAtOrigin(initialFloor);
         if (DEBUG_LOGS) {
             Log.i(TAG, String.format(Locale.US,
@@ -323,7 +335,16 @@ public class PositionFusionEngine {
             }
         }
 
-        LatLng latLng = toLatLng(meanX, meanY);
+        if (!hasSmoothedEstimate) {
+            smoothedEastMeters = meanX;
+            smoothedNorthMeters = meanY;
+            hasSmoothedEstimate = true;
+        } else {
+            smoothedEastMeters += OUTPUT_SMOOTHING_ALPHA * (meanX - smoothedEastMeters);
+            smoothedNorthMeters += OUTPUT_SMOOTHING_ALPHA * (meanY - smoothedNorthMeters);
+        }
+
+        LatLng latLng = toLatLng(smoothedEastMeters, smoothedNorthMeters);
         return new PositionFusionEstimate(latLng, bestFloor, true);
     }
 
@@ -344,9 +365,36 @@ public class PositionFusionEngine {
             priorMeanEast += p.weight * p.xEast;
             priorMeanNorth += p.weight * p.yNorth;
         }
+
+        if (floorHint != null) {
+            injectFloorSupportIfNeeded(floorHint, z[0], z[1]);
+        }
+
+        double innovationEast = z[0] - priorMeanEast;
+        double innovationNorth = z[1] - priorMeanNorth;
+        double innovationDistance = Math.hypot(innovationEast, innovationNorth);
+        double gateSigmaMultiplier = floorHint == null
+                ? OUTLIER_GATE_SIGMA_MULT_GNSS
+                : OUTLIER_GATE_SIGMA_MULT_WIFI;
+        double gateMeters = Math.max(gateSigmaMultiplier * sigmaMeters, OUTLIER_GATE_MIN_M);
+        double effectiveSigma = sigmaMeters;
+        if (innovationDistance > gateMeters) {
+            double sigmaScale = Math.min(innovationDistance / gateMeters, MAX_OUTLIER_SIGMA_SCALE);
+            effectiveSigma = sigmaMeters * sigmaScale;
+            if (DEBUG_LOGS) {
+                Log.w(TAG, String.format(Locale.US,
+                        "Outlier damping src=%s innovation=%.2fm gate=%.2fm sigma %.2f->%.2f",
+                        floorHint == null ? "GNSS" : "WiFi",
+                        innovationDistance,
+                        gateMeters,
+                        sigmaMeters,
+                        effectiveSigma));
+            }
+        }
+
         double effectiveBefore = computeEffectiveSampleSize();
 
-        double sigma2 = sigmaMeters * sigmaMeters;
+        double sigma2 = effectiveSigma * effectiveSigma;
         double maxLogWeight = Double.NEGATIVE_INFINITY;
         double[] logWeights = new double[particles.size()];
 
@@ -397,12 +445,10 @@ public class PositionFusionEngine {
             resampled = true;
         }
 
-        double innovationEast = z[0] - priorMeanEast;
-        double innovationNorth = z[1] - priorMeanNorth;
         updateOrientationBiasFromInnovation(innovationEast, innovationNorth, floorHint == null ? "GNSS" : "WiFi");
 
         updateCounter++;
-        logUpdateSummary(z[0], z[1], sigmaMeters, floorHint, effectiveBefore, effectiveN, resampled);
+        logUpdateSummary(z[0], z[1], effectiveSigma, floorHint, effectiveBefore, effectiveN, resampled);
     }
 
     private void updateOrientationBiasFromInnovation(double innovationEast,
@@ -448,6 +494,46 @@ public class PositionFusionEngine {
                     Math.toDegrees(boundedBiasDelta),
                     Math.toDegrees(headingBiasRad)));
         }
+    }
+
+    private void injectFloorSupportIfNeeded(int floorHint, double zEast, double zNorth) {
+        double floorSupport = floorSupportWeight(floorHint);
+        if (floorSupport >= FLOOR_HINT_MIN_SUPPORT) {
+            return;
+        }
+
+        int injectCount = Math.max(1,
+                (int) Math.round(PARTICLE_COUNT * FLOOR_HINT_INJECTION_FRACTION));
+        List<Integer> indices = new ArrayList<>(particles.size());
+        for (int i = 0; i < particles.size(); i++) {
+            indices.add(i);
+        }
+        indices.sort((a, b) -> Double.compare(particles.get(a).weight, particles.get(b).weight));
+
+        for (int i = 0; i < injectCount && i < indices.size(); i++) {
+            Particle p = particles.get(indices.get(i));
+            p.floor = floorHint;
+            p.xEast = zEast + random.nextGaussian() * FLOOR_HINT_INJECTION_STD_M;
+            p.yNorth = zNorth + random.nextGaussian() * FLOOR_HINT_INJECTION_STD_M;
+        }
+
+        if (DEBUG_LOGS) {
+            Log.i(TAG, String.format(Locale.US,
+                    "Floor support injection hint=%d supportBefore=%.3f injectCount=%d",
+                    floorHint,
+                    floorSupport,
+                    injectCount));
+        }
+    }
+
+    private double floorSupportWeight(int floor) {
+        double sum = 0.0;
+        for (Particle p : particles) {
+            if (p.floor == floor) {
+                sum += p.weight;
+            }
+        }
+        return sum;
     }
 
     private void initParticlesAtOrigin(int initialFloor) {
