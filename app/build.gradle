@@ -127,12 +127,6 @@ dependencies {
     // implementation "androidx.compose.material3:material3:1.3.1"
     // implementation "androidx.activity:activity-compose:1.7.2"
 
-    // JSON parsing
-    implementation 'com.fasterxml.jackson.core:jackson-annotations:2.20'
-    implementation 'com.fasterxml.jackson.core:jackson-core:2.6.3'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.6.3'
-    implementation("de.grundid.opendatalab:geojson-jackson:3.0")
-
     // Testing
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'

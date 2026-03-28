@@ -411,7 +411,7 @@ public class TrajectoryMapFragment extends Fragment {
                                 }
                                 // Flag to not overwrite preview
                                 building.setIsPreviewingFloorPlan(
-                                        !building.getIsPreviowingFloorPlan());
+                                        !building.getIsPreviewingFloorPlan());
                             }
                         });
             }

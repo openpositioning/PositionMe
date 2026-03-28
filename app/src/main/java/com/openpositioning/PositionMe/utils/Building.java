@@ -27,9 +27,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.geojson.LngLatAlt;
-import org.geojson.MultiLineString;
-import org.geojson.MultiPolygon;
 
 /**
  * This class defines all buildings retrieved from the OpenPosition API. Buildings have a name, an
@@ -56,7 +53,7 @@ public class Building {
 
     private List<LatLng> outlinePoints;
     private String name;
-    private Map<String, List<Map<String, Object>>> floorPlans;
+    private Map<String, List<Map<String, List<LatLng>>>> floorPlans;
     private List<String> floorNames;
     private float floorHeight;
     private int floorNumber = BUILDING_NO_FLOOR;
@@ -72,7 +69,7 @@ public class Building {
     public Building(
             String name,
             List<LatLng> outlinePoints,
-            Map<String, List<Map<String, Object>>> floorPlans) {
+            Map<String, List<Map<String, List<LatLng>>>> floorPlans) {
         this.name = name;
         this.floorPlans = floorPlans;
         this.outlinePoints = outlinePoints;
@@ -123,36 +120,14 @@ public class Building {
         Map<String, List<Object>> floorPlanElementOptions = new HashMap<>();
         List<String> floorNames = new ArrayList<>(this.floorPlans.keySet());
         for (String floorName : floorNames) {
-            List<Map<String, Object>> floorPlan = floorPlans.get(floorName);
+            List<Map<String, List<LatLng>>> floorPlan = floorPlans.get(floorName);
             List<Object> floorElements = new ArrayList<>();
 
             // Most building floor plans will be a list of MultiPolygon objects
             // Nucleus will use a list of MultiLineString objects
-            for (Map<String, Object> element : floorPlan) {
-                String elementType = (String) element.keySet().toArray()[0];
-                Object elementInfo = element.get(elementType);
-                // Initialise empty, for use when floor plan is invalid
-                List<List<LngLatAlt>> allCoordinates = new ArrayList<>();
-                if (elementInfo instanceof MultiPolygon multiPolygon) {
-                    if (multiPolygon.getCoordinates().size() <= 0) {
-                        continue;
-                    }
-                    allCoordinates = multiPolygon.getCoordinates().get(0);
-                } else if (elementInfo instanceof MultiLineString multiLineString) {
-                    allCoordinates = multiLineString.getCoordinates();
-                } else {
-                    Log.w(
-                            TAG,
-                            name
-                                    + ": Invalid floorplan for floor "
-                                    + floorName
-                                    + " during construction!");
-                }
-                for (List<LngLatAlt> elementCoordinates : allCoordinates) {
-                    List<LatLng> floorElement = new ArrayList<>();
-                    for (LngLatAlt point : elementCoordinates) {
-                        floorElement.add(new LatLng(point.getLatitude(), point.getLongitude()));
-                    }
+            for (Map<String, List<LatLng>> element : floorPlan) {
+                for (String elementType : element.keySet()) {
+                    List<LatLng> elementPoints = element.get(elementType);
                     switch (elementType) {
                         case BUILDING_ELEMENT_WALL:
                             floorElements.add(
@@ -160,7 +135,7 @@ public class Building {
                                             .width(LINE_WEIGHT_FLOOR_PLAN)
                                             .color(COLOUR_FLOOR_PLAN_ELEMENTS_WALL)
                                             .zIndex(1)
-                                            .addAll(floorElement));
+                                            .addAll(elementPoints));
                             break;
                         case BUILDING_ELEMENT_STAIRS:
                             floorElements.add(
@@ -169,7 +144,7 @@ public class Building {
                                             .strokeColor(COLOUR_FLOOR_PLAN_ELEMENTS_STAIRS)
                                             .fillColor(COLOUR_FLOOR_PLAN_ELEMENTS_STAIRS)
                                             .zIndex(1)
-                                            .addAll(floorElement));
+                                            .addAll(elementPoints));
                             break;
                         case BUILDING_ELEMENT_LIFT:
                             floorElements.add(
@@ -178,7 +153,7 @@ public class Building {
                                             .strokeColor(COLOUR_FLOOR_PLAN_ELEMENTS_LIFT)
                                             .fillColor(COLOUR_FLOOR_PLAN_ELEMENTS_LIFT)
                                             .zIndex(1)
-                                            .addAll(floorElement));
+                                            .addAll(elementPoints));
                             break;
                         default:
                             Log.w(TAG, "Unknown element type \"" + elementType + "\"");
@@ -187,7 +162,7 @@ public class Building {
                                             .width(LINE_WEIGHT_FLOOR_PLAN)
                                             .color(COLOUR_FLOOR_PLAN_ELEMENTS_DEFAULT)
                                             .zIndex(1)
-                                            .addAll(floorElement));
+                                            .addAll(elementPoints));
                             break;
                     }
                 }
@@ -252,7 +227,7 @@ public class Building {
         return isInsideBuilding;
     }
 
-    public boolean getIsPreviowingFloorPlan() {
+    public boolean getIsPreviewingFloorPlan() {
         return isPreviewingFloorPlan;
     }
 

@@ -11,18 +11,12 @@ import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import org.geojson.Feature;
-import org.geojson.FeatureCollection;
-import org.geojson.GeoJsonObject;
-import org.geojson.LngLatAlt;
-import org.geojson.MultiPolygon;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Class used to manage indoor floor map overlays Currently used by RecordingFragment
@@ -85,7 +79,7 @@ public class IndoorMapManager implements Observer {
                 building.setCurrentFloor(Math.max(building.getFloorNumber(), 0), gMap);
                 // Disable preview if present
                 building.setIsPreviewingFloorPlan(false);
-            } else if (building.getIsPreviowingFloorPlan()) {
+            } else if (building.getIsPreviewingFloorPlan()) {
                 return;
             } else {
                 building.setFillColour(COLOUR_FLOOR_PLAN_FILL_TRANSPARENT);
@@ -134,8 +128,8 @@ public class IndoorMapManager implements Observer {
                 @SuppressWarnings("unchecked")
                 List<LatLng> outline = (List<LatLng>) building.get("outline");
                 @SuppressWarnings("unchecked")
-                Map<String, List<Map<String, Object>>> mapShapes =
-                        (Map<String, List<Map<String, Object>>>) building.get("map_shapes");
+                Map<String, List<Map<String, List<LatLng>>>> mapShapes =
+                        (Map<String, List<Map<String, List<LatLng>>>>) building.get("map_shapes");
 
                 // Add building to list of known buildings
                 if (!this.getAllBuildingNames().contains(name)) {
@@ -170,65 +164,145 @@ public class IndoorMapManager implements Observer {
                 String name = buildingEntry.getString("name");
 
                 // Part 2 - Building Outline
-                FeatureCollection featureCollection =
-                        new ObjectMapper()
-                                .readValue(
-                                        buildingEntry.getString("outline"),
-                                        FeatureCollection.class);
+                String outlineJson = buildingEntry.optString("outline", "");
 
                 /*
                  * For every feature in the collection, extract the geometry,
                  * extract the coordinates, and reconstruct the outline as
-                 * a list of LatLng points (ie, without the Alt, which is
-                 * always NaN)
+                 * a list of LatLng points
                  * */
-                List<Feature> featuresOutline = featureCollection.getFeatures();
-                List<LatLng> coordinates = new ArrayList<>();
-                for (Feature feature : featuresOutline) {
-                    GeoJsonObject geometry = feature.getGeometry();
-                    if (geometry instanceof MultiPolygon multiPolygon) {
-                        List<List<List<LngLatAlt>>> coordinatesLngLatAlt =
-                                multiPolygon.getCoordinates();
-                        for (LngLatAlt point : coordinatesLngLatAlt.get(0).get(0)) {
-                            coordinates.add(new LatLng(point.getLatitude(), point.getLongitude()));
+                ArrayList<LatLng> outlinePoints = new ArrayList<>();
+                if (!outlineJson.isEmpty()) {
+                    try {
+                        JSONObject outlineObject = new JSONObject(outlineJson);
+                        JSONArray features = outlineObject.getJSONArray("features");
+                        if (features.length() > 0) {
+                            JSONObject geometry =
+                                    features.getJSONObject(0).getJSONObject("geometry");
+                            JSONArray coordinates = geometry.getJSONArray("coordinates");
+                            JSONArray firstRing = new JSONArray();
+                            String typeGeometry = geometry.getString("type");
+                            switch (typeGeometry) {
+                                // MultiPolygon: coordinates[polygon_index][ring_index][point_index]
+                                case "MultiPolygon":
+                                    if (coordinates.length() > 0) {
+                                        JSONArray firstPolygon = coordinates.getJSONArray(0);
+                                        if (firstPolygon.length() > 0) {
+                                            firstRing = firstPolygon.getJSONArray(0);
+                                        }
+                                    }
+                                    break;
+                                // Polygon: coordinates[ring_index][point_index]
+                                case "Polygon":
+                                    if (coordinates.length() > 0) {
+                                        firstRing = coordinates.getJSONArray(0);
+                                    }
+                                    break;
+                                default:
+                                    break;
+                            }
+
+                            for (int j = 0; j < firstRing.length(); j++) {
+                                // GeoJSON: [longitude, latitude]
+                                JSONArray point = firstRing.getJSONArray(j);
+                                outlinePoints.add(
+                                        new LatLng(point.getDouble(1), point.getDouble(0)));
+                            }
                         }
+                    } catch (JSONException e) {
+                        Log.w(TAG, e.getMessage());
                     }
                 }
 
                 // Part 3 - Floor plans
-                Map<String, Object> floorplansJSON =
-                        new ObjectMapper()
-                                .readValue(
-                                        buildingEntry.getString("map_shapes"),
-                                        new TypeReference<>() {});
+                String mapShapesJson = buildingEntry.optString("map_shapes", "");
 
                 // Map to index floor plans by floor name
-                Map<String, List<Map<String, Object>>> floorplans = new HashMap<>();
+                Map<String, List<Map<String, List<LatLng>>>> floorplans = new HashMap<>();
 
-                for (String floorname : floorplansJSON.keySet()) {
-                    Object floor = floorplansJSON.get(floorname);
-                    FeatureCollection fc =
-                            new ObjectMapper().convertValue(floor, FeatureCollection.class);
+                if (!mapShapesJson.isEmpty()) {
+                    try {
+                        JSONObject floorplansObject = new JSONObject(mapShapesJson);
+                        for (Iterator<String> it = floorplansObject.keys(); it.hasNext(); ) {
+                            String floorname = it.next();
+                            JSONObject floor = floorplansObject.getJSONObject(floorname);
+                            JSONArray features = floor.getJSONArray("features");
+                            List<Map<String, List<LatLng>>> elements = new ArrayList<>();
+                            for (int j = 0; j < features.length(); j++) {
+                                JSONObject feature = features.getJSONObject(j);
 
-                    // Every element in the floor plan will be assigned it's element type
-                    List<Feature> features = fc.getFeatures();
-                    List<Map<String, Object>> floorElements = new ArrayList<>();
-                    for (Feature feature : features) {
-                        GeoJsonObject floorElement = feature.getGeometry();
+                                JSONObject properties = feature.getJSONObject("properties");
+                                String elementType = properties.getString("indoor_type");
 
-                        // String elementType = "wall";
-                        String elementType = (String) feature.getProperties().get("indoor_type");
-                        Map<String, Object> element = new HashMap<>();
-                        element.put(elementType, floorElement);
+                                JSONObject geometry = feature.getJSONObject("geometry");
+                                String geoType = geometry.getString("type");
+                                JSONArray coordinates = geometry.getJSONArray("coordinates");
 
-                        floorElements.add(element);
+                                switch (geoType) {
+                                    case "MultiLineString":
+                                        // coordinates[line_index][point_index] = [lon, lat]
+                                        for (int k = 0; k < coordinates.length(); k++) {
+                                            JSONArray line = coordinates.getJSONArray(k);
+                                            List<LatLng> points = new ArrayList<>();
+                                            for (int l = 0; l < line.length(); l++) {
+                                                JSONArray point = line.getJSONArray(l);
+                                                points.add(
+                                                        new LatLng(
+                                                                point.getDouble(1),
+                                                                point.getDouble(0)));
+                                            }
+                                            Map<String, List<LatLng>> element = new HashMap<>();
+                                            element.put(elementType, points);
+                                            elements.add(element);
+                                        }
+                                        break;
+                                    case "MultiPolygon":
+                                        // coordinates[polygon_index][ring_index][point_index] =
+                                        // [lon, lat]
+                                        for (int k = 0; k < coordinates.length(); k++) {
+                                            JSONArray polygon = coordinates.getJSONArray(k);
+                                            if (polygon.length() > 0) {
+                                                // Use the outer ring (index 0) of each polygon
+                                                JSONArray outerRing = polygon.getJSONArray(0);
+                                                List<LatLng> points = new ArrayList<>();
+                                                for (int l = 0; l < outerRing.length(); l++) {
+                                                    JSONArray point = outerRing.getJSONArray(l);
+                                                    points.add(
+                                                            new LatLng(
+                                                                    point.getDouble(1),
+                                                                    point.getDouble(0)));
+                                                }
+                                                Map<String, List<LatLng>> element = new HashMap<>();
+                                                element.put(elementType, points);
+                                                elements.add(element);
+                                            }
+                                        }
+                                        break;
+                                    default:
+                                }
+                                floorplans.put(floorname, elements);
+                            }
+                        }
+                    } catch (JSONException e) {
+                        Log.w(TAG, e.getMessage());
                     }
-                    floorplans.put(floorname, floorElements);
                 }
 
                 entryMap.put("name", name);
-                entryMap.put("outline", coordinates);
+                entryMap.put("outline", outlinePoints);
                 entryMap.put("map_shapes", floorplans);
+
+                Log.d(TAG, "Building name: " + name);
+                Log.d(TAG, "# of outline points: " + outlinePoints.size());
+                Log.d(TAG, "# of floors: " + floorplans.size());
+                for (String floorname : floorplans.keySet()) {
+                    Log.d(
+                            TAG,
+                            "# of elements on floor "
+                                    + floorname
+                                    + ": "
+                                    + floorplans.get(floorname).size());
+                }
 
                 entryList.add(entryMap);
                 Log.d(TAG, "Building '" + name + "' parsed");
