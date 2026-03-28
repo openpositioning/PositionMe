@@ -89,6 +89,7 @@ public class RecordingFragment extends Fragment {
     private float previousPosX = 0f;
     private float previousPosY = 0f;
 
+
     // References to the child map fragment
     private TrajectoryMapFragment trajectoryMapFragment;
 
@@ -511,6 +512,11 @@ public class RecordingFragment extends Fragment {
         if (newLocation != null && trajectoryMapFragment != null) {
             trajectoryMapFragment.updateUserLocation(newLocation,
                     (float) Math.toDegrees(sensorFusion.passOrientation()));
+
+            // Draw particle cloud if enabled
+            if (pfInitialized) {
+                trajectoryMapFragment.drawParticles(particleFilter.getParticleSnapshot());
+            }
         }
 
         // Display current positioning source

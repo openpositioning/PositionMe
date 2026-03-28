@@ -72,6 +72,7 @@ public class SensorFusion implements SensorEventListener {
     private MovementSensor proximitySensor;
     private MovementSensor magnetometerSensor;
     private MovementSensor stepDetectionSensor;
+    private MovementSensor stepCounterSensor;
     private MovementSensor rotationSensor;
     private MovementSensor gameRotationSensor;
     private MovementSensor gravitySensor;
@@ -142,6 +143,7 @@ public class SensorFusion implements SensorEventListener {
         this.proximitySensor = new MovementSensor(context, Sensor.TYPE_PROXIMITY);
         this.magnetometerSensor = new MovementSensor(context, Sensor.TYPE_MAGNETIC_FIELD);
         this.stepDetectionSensor = new MovementSensor(context, Sensor.TYPE_STEP_DETECTOR);
+        this.stepCounterSensor = new MovementSensor(context, Sensor.TYPE_STEP_COUNTER);
         this.rotationSensor = new MovementSensor(context, Sensor.TYPE_ROTATION_VECTOR);
         this.gameRotationSensor = new MovementSensor(context, Sensor.TYPE_GAME_ROTATION_VECTOR);
         this.gravitySensor = new MovementSensor(context, Sensor.TYPE_GRAVITY);
@@ -244,8 +246,14 @@ public class SensorFusion implements SensorEventListener {
                 proximitySensor.sensor, (int) 1e6);
         magnetometerSensor.sensorManager.registerListener(this,
                 magnetometerSensor.sensor, 10000, (int) maxReportLatencyNs);
-        stepDetectionSensor.sensorManager.registerListener(this,
-                stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
+        if (stepDetectionSensor.sensor != null) {
+            stepDetectionSensor.sensorManager.registerListener(this,
+                    stepDetectionSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
+        }
+        if (stepCounterSensor.sensor != null) {
+            stepCounterSensor.sensorManager.registerListener(this,
+                    stepCounterSensor.sensor, SensorManager.SENSOR_DELAY_NORMAL);
+        }
         rotationSensor.sensorManager.registerListener(this,
                 rotationSensor.sensor, (int) 1e6);
         gameRotationSensor.sensorManager.registerListener(this,
@@ -270,7 +278,10 @@ public class SensorFusion implements SensorEventListener {
             lightSensor.sensorManager.unregisterListener(this);
             proximitySensor.sensorManager.unregisterListener(this);
             magnetometerSensor.sensorManager.unregisterListener(this);
-            stepDetectionSensor.sensorManager.unregisterListener(this);
+            if (stepDetectionSensor.sensor != null)
+                stepDetectionSensor.sensorManager.unregisterListener(this);
+            if (stepCounterSensor.sensor != null)
+                stepCounterSensor.sensorManager.unregisterListener(this);
             rotationSensor.sensorManager.unregisterListener(this);
             gameRotationSensor.sensorManager.unregisterListener(this);
             linearAccelerationSensor.sensorManager.unregisterListener(this);

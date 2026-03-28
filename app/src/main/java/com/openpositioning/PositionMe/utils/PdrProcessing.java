@@ -28,7 +28,7 @@ public class PdrProcessing {
 
     //region Static variables
     // Weiberg algorithm coefficient for stride calculations
-    private static final float K = 0.28f;
+    private static final float K = 0.25f;
     // Number of samples (seconds) to keep as memory for elevation calculation
     private static final int elevationSeconds = 4;
     // Number of samples (0.01 seconds)

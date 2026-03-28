@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.sensors;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 import android.location.Location;
 import android.os.Build;
 import android.os.PowerManager;
@@ -126,6 +127,7 @@ public class TrajectoryRecorder {
         wakeLock.acquire(31 * 60 * 1000L /*31 minutes*/);
 
         this.saveRecording = true;
+        Log.d("RecorderDebug", "startRecording called, saveRecording=" + saveRecording);
         state.stepCounter = 0;
         this.counter = 0;
         this.secondCounter = 0;
@@ -167,9 +169,48 @@ public class TrajectoryRecorder {
         if (this.saveRecording) {
             this.saveRecording = false;
             storeTrajectoryTimer.cancel();
+            // Save protobuf locally so we don't depend on server download
+            saveTrajectoryLocally();
         }
         if (wakeLock.isHeld()) {
             this.wakeLock.release();
+        }
+    }
+
+    /**
+     * Saves the trajectory protobuf to local storage as both binary (.pb) and JSON (.txt).
+     * Files are saved to the app-specific Downloads directory.
+     */
+    private void saveTrajectoryLocally() {
+        if (trajectory == null) return;
+        try {
+            Traj.Trajectory built = trajectory.build();
+            java.io.File dir = appContext.getExternalFilesDir(
+                    android.os.Environment.DIRECTORY_DOWNLOADS);
+            if (dir != null && !dir.exists()) dir.mkdirs();
+
+            String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HHmmss",
+                    java.util.Locale.US).format(new java.util.Date());
+
+            // Save binary protobuf
+            java.io.File pbFile = new java.io.File(dir, "trajectory_" + timestamp + ".pb");
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(pbFile)) {
+                built.writeTo(fos);
+            }
+
+            // Save JSON version
+            java.io.File jsonFile = new java.io.File(dir, "trajectory_" + timestamp + ".txt");
+            try (java.io.FileWriter fw = new java.io.FileWriter(jsonFile)) {
+                fw.write(com.google.protobuf.util.JsonFormat.printer().print(built));
+            }
+
+            Log.d("RecorderDebug", "Trajectory saved locally: " + pbFile.getAbsolutePath()
+                    + " (IMU=" + built.getImuDataCount()
+                    + " PDR=" + built.getPdrDataCount()
+                    + " GNSS=" + built.getGnssDataCount()
+                    + " size=" + built.getSerializedSize() + " bytes)");
+        } catch (Exception e) {
+            Log.e("RecorderDebug", "Failed to save trajectory locally", e);
         }
     }
 
@@ -460,6 +501,10 @@ public class TrajectoryRecorder {
      */
     public void sendTrajectoryToCloud() {
         Traj.Trajectory sentTrajectory = trajectory.build();
+        Log.d("RecorderDebug", "Sending trajectory: IMU=" + sentTrajectory.getImuDataCount()
+                + " PDR=" + sentTrajectory.getPdrDataCount()
+                + " GNSS=" + sentTrajectory.getGnssDataCount()
+                + " size=" + sentTrajectory.getSerializedSize() + " bytes");
         this.serverCommunications.sendTrajectory(sentTrajectory, selectedBuildingId);
     }
 
@@ -500,6 +545,7 @@ public class TrajectoryRecorder {
     private class StoreDataInTrajectory extends TimerTask {
         @Override
         public void run() {
+            Log.d("RecorderDebug", "StoreData tick: saveRecording=" + saveRecording);
             if (saveRecording) {
                 long t = SystemClock.uptimeMillis() - bootTime;
 

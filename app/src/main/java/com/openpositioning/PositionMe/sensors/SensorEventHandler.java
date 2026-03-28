@@ -43,6 +43,10 @@ public class SensorEventHandler {
     // Heading stabilization state
     private float smoothedHeading = Float.NaN;  // low-pass filtered heading
 
+    // Step counter state (fallback for slow walking when STEP_DETECTOR is too insensitive)
+    private int lastStepCount = -1;
+    private static final long STEP_COUNTER_FALLBACK_MS = 800; // use counter if detector silent > 800ms
+
     // Acceleration magnitude buffer between steps
     private final List<Double> accelMagnitude = new ArrayList<>();
 
@@ -170,48 +174,62 @@ public class SensorEventHandler {
             }
 
             case Sensor.TYPE_STEP_DETECTOR:
-                long stepTime = SystemClock.uptimeMillis() - bootTime;
+                // Primary step source: responsive, fires immediately per step
+                handleStepEvent(currentTime);
+                break;
 
-                if (currentTime - lastStepTime < 20) {
-                    Log.e("SensorFusion", "Ignoring step event, too soon after last step event:"
-                            + (currentTime - lastStepTime) + " ms");
-                    break;
-                } else {
-                    lastStepTime = currentTime;
-
-                    if (accelMagnitude.isEmpty()) {
-                        Log.e("SensorFusion",
-                                "stepDetection triggered, but accelMagnitude is empty! " +
-                                        "This can cause updatePdr(...) to fail or return bad results.");
-                    } else {
-                        Log.d("SensorFusion",
-                                "stepDetection triggered, accelMagnitude size = "
-                                        + accelMagnitude.size());
-                    }
-
-                    // Compute raw heading: gyro-based with magnetometer offset
-                    // Use gyro heading directly — no LPF, no delay on turns
-                    float headingForPdr = Float.isNaN(state.headingOffset)
-                            ? state.orientation[0]
-                            : state.gameHeading + state.headingOffset;
-
-                    float[] newCords = this.pdrProcessing.updatePdr(
-                            stepTime,
-                            this.accelMagnitude,
-                            headingForPdr
-                    );
-
-                    this.accelMagnitude.clear();
-
-                    if (recorder.isRecording()) {
-                        this.pathView.drawTrajectory(newCords);
-                        state.stepCounter++;
-                        recorder.addPdrData(
-                                SystemClock.uptimeMillis() - bootTime,
-                                newCords[0], newCords[1]);
-                    }
+            case Sensor.TYPE_STEP_COUNTER:
+                // Fallback for slow walking: only triggers if STEP_DETECTOR has been
+                // silent for > 800ms, preventing double-counting during normal walking
+                int totalSteps = (int) sensorEvent.values[0];
+                if (lastStepCount < 0) {
+                    lastStepCount = totalSteps;
                     break;
                 }
+                int newSteps = totalSteps - lastStepCount;
+                lastStepCount = totalSteps;
+                if (newSteps > 0 && (currentTime - lastStepTime) > STEP_COUNTER_FALLBACK_MS) {
+                    // Detector has been silent — use counter to fill the gap
+                    for (int s = 0; s < newSteps && s < 3; s++) {
+                        handleStepEvent(currentTime);
+                    }
+                }
+                break;
+        }
+    }
+
+    /**
+     * Shared step handling logic used by both STEP_DETECTOR and STEP_COUNTER.
+     * Includes 300ms debounce to prevent double-counting the same physical step.
+     */
+    private void handleStepEvent(long currentTime) {
+        if (currentTime - lastStepTime < 300) {
+            return; // debounce
+        }
+        lastStepTime = currentTime;
+
+        long stepTime = SystemClock.uptimeMillis() - bootTime;
+
+        if (accelMagnitude.isEmpty()) {
+            Log.w("SensorFusion", "Step triggered but accelMagnitude empty");
+        }
+
+        float headingForPdr = Float.isNaN(state.headingOffset)
+                ? state.orientation[0]
+                : state.gameHeading + state.headingOffset;
+
+        float[] newCords = this.pdrProcessing.updatePdr(
+                stepTime, this.accelMagnitude, headingForPdr);
+
+        this.accelMagnitude.clear();
+
+        Log.d("StepDebug", "handleStepEvent: isRecording=" + recorder.isRecording()
+                + " coords=" + newCords[0] + "," + newCords[1]);
+        if (recorder.isRecording()) {
+            this.pathView.drawTrajectory(newCords);
+            state.stepCounter++;
+            recorder.addPdrData(SystemClock.uptimeMillis() - bootTime,
+                    newCords[0], newCords[1]);
         }
     }
 

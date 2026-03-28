@@ -75,6 +75,10 @@ public class TrajectoryMapFragment extends Fragment {
     private final java.util.LinkedList<Circle> pdrDots = new java.util.LinkedList<>();
     private final java.util.LinkedList<Circle> wifiDots = new java.util.LinkedList<>();
     private final java.util.LinkedList<Circle> gnssDots = new java.util.LinkedList<>();
+    // Particle cloud visualization
+    private boolean isParticleOn = false;
+    private final java.util.List<Circle> particleCircles = new java.util.ArrayList<>();
+
     // Keep test point markers so they can be cleared when recording ends
     private final List<Marker> testPointMarkers = new ArrayList<>();
 
@@ -221,6 +225,16 @@ public class TrajectoryMapFragment extends Fragment {
                 for (Circle c : pdrDots) c.remove();   pdrDots.clear();
                 for (Circle c : wifiDots) c.remove();   wifiDots.clear();
                 for (Circle c : gnssDots) c.remove();   gnssDots.clear();
+            }
+        });
+
+        // Particle cloud switch
+        SwitchMaterial particleSwitch = view.findViewById(R.id.particleSwitch);
+        particleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isParticleOn = isChecked;
+            if (!isChecked) {
+                for (Circle c : particleCircles) c.remove();
+                particleCircles.clear();
             }
         });
 
@@ -553,6 +567,62 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
+     * Draws particle cloud on the map. Each particle is a small semi-transparent red circle.
+     * Clears previous particles before drawing new ones.
+     *
+     * @param particles list of [lat, lng, weight] triples from ParticleFilter.getParticleSnapshot()
+     */
+    private static final int PARTICLE_SAMPLE_SIZE = 80;
+    private long lastParticleDrawTime = 0;
+    private static final long PARTICLE_DRAW_INTERVAL_MS = 1000;
+
+    /**
+     * Draws a sampled subset of particles on the map. Only redraws every 1 second
+     * and samples 80 particles to keep performance smooth.
+     */
+    public void drawParticles(List<double[]> particles) {
+        if (gMap == null || !isParticleOn) return;
+
+        // Throttle: only redraw every 1 second
+        long now = System.currentTimeMillis();
+        if (now - lastParticleDrawTime < PARTICLE_DRAW_INTERVAL_MS) return;
+        lastParticleDrawTime = now;
+
+        // Clear old particles
+        for (Circle c : particleCircles) c.remove();
+        particleCircles.clear();
+
+        if (particles == null || particles.isEmpty()) return;
+
+        // Sample a subset for performance
+        java.util.List<double[]> sampled;
+        if (particles.size() <= PARTICLE_SAMPLE_SIZE) {
+            sampled = particles;
+        } else {
+            sampled = new java.util.ArrayList<>(particles);
+            java.util.Collections.shuffle(sampled);
+            sampled = sampled.subList(0, PARTICLE_SAMPLE_SIZE);
+        }
+
+        // Find max weight for opacity scaling
+        double maxWeight = 0;
+        for (double[] p : sampled) {
+            if (p[2] > maxWeight) maxWeight = p[2];
+        }
+        if (maxWeight <= 0) maxWeight = 1;
+
+        for (double[] p : sampled) {
+            int alpha = (int) (40 + 160 * (p[2] / maxWeight));
+            Circle c = gMap.addCircle(new CircleOptions()
+                    .center(new LatLng(p[0], p[1]))
+                    .radius(0.3)
+                    .strokeWidth(0)
+                    .fillColor(Color.argb(alpha, 220, 50, 50)));
+            particleCircles.add(c);
+        }
+    }
+
+    /**
      * Sets or updates the WiFi position marker (green) on the map.
      */
     public void updateWifiMarker(@NonNull LatLng wifiLocation) {
@@ -823,10 +893,10 @@ public class TrajectoryMapFragment extends Fragment {
         // then each subsequent floor is floorHeight (4.2m) wide, shifted up by 0.5m
         float elevDiff = elevation - wifiAnchorElevation;
         int floorDelta;
-        if (elevDiff >= -2.1f && elevDiff < 2.6f) {
+        if (elevDiff >= -2.1f && elevDiff < 3.5f) {
             floorDelta = 0;  // stay on anchor floor
-        } else if (elevDiff >= 2.6f) {
-            floorDelta = 1 + (int) ((elevDiff - 2.6f) / floorHeight);
+        } else if (elevDiff >= 3.5f) {
+            floorDelta = 1 + (int) ((elevDiff - 3.5f) / floorHeight);
         } else {
             // below -2.1m
             floorDelta = -1 - (int) ((-2.1f - elevDiff) / floorHeight);
