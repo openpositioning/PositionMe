@@ -86,6 +86,8 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
+    private LatLng lastPdrLocationForViz = null; // Previous PDR position for delta calculation
+    private LatLng lastFusionLocationForViz = null; // Previous fusion position for delta calculation
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
 
@@ -483,16 +485,50 @@ public class TrajectoryMapFragment extends Fragment {
 
     /**
      * Adds a PDR observation marker (last N points).
+     * Visualized as: currentLocation + (delta_pdr - delta_fusion) to show only the
+     * current discrepancy between PDR and fusion, without cumulative drift.
      */
     public void updatePdrObservation(@NonNull LatLng pdrLocation) {
+        if (currentLocation == null) return;
+        
+        // Calculate deltas from last positions
+        double pdrDeltaLat = 0;
+        double pdrDeltaLng = 0;
+        double fusionDeltaLat = 0;
+        double fusionDeltaLng = 0;
+        
+        if (lastPdrLocationForViz != null) {
+            pdrDeltaLat = pdrLocation.latitude - lastPdrLocationForViz.latitude;
+            pdrDeltaLng = pdrLocation.longitude - lastPdrLocationForViz.longitude;
+        }
+        
+        if (lastFusionLocationForViz != null) {
+            fusionDeltaLat = currentLocation.latitude - lastFusionLocationForViz.latitude;
+            fusionDeltaLng = currentLocation.longitude - lastFusionLocationForViz.longitude;
+        }
+        
+        // PDR discrepancy: how much PDR moved vs fusion in this step
+        double discrepancyLat = pdrDeltaLat - fusionDeltaLat;
+        double discrepancyLng = pdrDeltaLng - fusionDeltaLng;
+        
+        // Visualize at: currentLocation + discrepancy
+        LatLng visualPdrLocation = new LatLng(
+            currentLocation.latitude + discrepancyLat,
+            currentLocation.longitude + discrepancyLng
+        );
+        
         addObservationMarker(
             pdrObservationCircles,
             pdrObservationTimesMs,
-                pdrLocation,
+                visualPdrLocation,
             Color.argb(220, 251, 140, 0),
             Color.argb(80, 251, 140, 0),
                 false,
                 Long.MAX_VALUE);
+        
+        // Update tracking positions for next call
+        lastPdrLocationForViz = pdrLocation;
+        lastFusionLocationForViz = currentLocation;
     }
 
 
@@ -538,6 +574,8 @@ public class TrajectoryMapFragment extends Fragment {
             autoFloorSwitch.setChecked(true);
         }
         startAutoFloor();
+        lastPdrLocationForViz = null;
+        lastFusionLocationForViz = null;
         if (polyline != null) {
             polyline.remove();
             polyline = null;
