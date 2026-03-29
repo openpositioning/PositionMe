@@ -12,7 +12,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 import android.util.Log;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -54,7 +53,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private Button start;
     private Button measurements;
     private Button files;
-    private Button indoorButton;
     private TextView gnssStatusTextView;
 
     // For the map
@@ -119,12 +117,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         files.setOnClickListener(v -> {
             NavDirections action = HomeFragmentDirections.actionHomeFragmentToFilesFragment();
             Navigation.findNavController(v).navigate(action);
-        });
-
-        // Indoor Positioning button
-        indoorButton = view.findViewById(R.id.indoorButton);
-        indoorButton.setOnClickListener(v -> {
-            Toast.makeText(requireContext(), R.string.indoor_mode_hint, Toast.LENGTH_SHORT).show();
         });
 
         // TextView to display GNSS disabled message
