@@ -32,9 +32,6 @@ public class PositionFusionEngine {
     private static final double INIT_STD_M = 2.0;
     private static final double ROUGHEN_STD_M = 0.15;
     private static final double WIFI_SIGMA_M = 5.5;
-    private static final double FLOOR_HINT_MIN_SUPPORT = 0.08;
-    private static final double FLOOR_HINT_INJECTION_FRACTION = 0.25;
-    private static final double FLOOR_HINT_INJECTION_STD_M = 1.2;
     private static final double OUTLIER_GATE_SIGMA_MULT_GNSS = 2.8;
     private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 2.3;
     private static final double OUTLIER_GATE_MIN_M = 6.0;
@@ -366,10 +363,6 @@ public class PositionFusionEngine {
             priorMeanNorth += p.weight * p.yNorth;
         }
 
-        if (floorHint != null) {
-            injectFloorSupportIfNeeded(floorHint, z[0], z[1]);
-        }
-
         double innovationEast = z[0] - priorMeanEast;
         double innovationNorth = z[1] - priorMeanNorth;
         double innovationDistance = Math.hypot(innovationEast, innovationNorth);
@@ -494,46 +487,6 @@ public class PositionFusionEngine {
                     Math.toDegrees(boundedBiasDelta),
                     Math.toDegrees(headingBiasRad)));
         }
-    }
-
-    private void injectFloorSupportIfNeeded(int floorHint, double zEast, double zNorth) {
-        double floorSupport = floorSupportWeight(floorHint);
-        if (floorSupport >= FLOOR_HINT_MIN_SUPPORT) {
-            return;
-        }
-
-        int injectCount = Math.max(1,
-                (int) Math.round(PARTICLE_COUNT * FLOOR_HINT_INJECTION_FRACTION));
-        List<Integer> indices = new ArrayList<>(particles.size());
-        for (int i = 0; i < particles.size(); i++) {
-            indices.add(i);
-        }
-        indices.sort((a, b) -> Double.compare(particles.get(a).weight, particles.get(b).weight));
-
-        for (int i = 0; i < injectCount && i < indices.size(); i++) {
-            Particle p = particles.get(indices.get(i));
-            p.floor = floorHint;
-            p.xEast = zEast + random.nextGaussian() * FLOOR_HINT_INJECTION_STD_M;
-            p.yNorth = zNorth + random.nextGaussian() * FLOOR_HINT_INJECTION_STD_M;
-        }
-
-        if (DEBUG_LOGS) {
-            Log.i(TAG, String.format(Locale.US,
-                    "Floor support injection hint=%d supportBefore=%.3f injectCount=%d",
-                    floorHint,
-                    floorSupport,
-                    injectCount));
-        }
-    }
-
-    private double floorSupportWeight(int floor) {
-        double sum = 0.0;
-        for (Particle p : particles) {
-            if (p.floor == floor) {
-                sum += p.weight;
-            }
-        }
-        return sum;
     }
 
     private void initParticlesAtOrigin(int initialFloor) {
