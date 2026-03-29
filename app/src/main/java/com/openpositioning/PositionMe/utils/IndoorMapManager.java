@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.utils;
 
 import android.graphics.Color;
+import android.os.Looper;
 import android.util.Log;
 
 import com.google.android.gms.maps.GoogleMap;
@@ -28,6 +29,11 @@ import org.json.JSONObject;
 
 import java.util.Map;
 import java.util.HashMap;
+//import java.util.logging.Handler;
+import android.os.Handler;
+import android.os.Looper;
+import java.util.logging.LogRecord;
+
 import static java.lang.Math.*;
 /**
  * Class used to manage indoor floor map overlays
@@ -71,6 +77,19 @@ public class IndoorMapManager {
 
     final double floorDistThresh = 5.0;
     final double liftDistThresh = 3.0;
+
+    private String confirmedFloorKey = null;
+    private float confirmedFloorElevation = Float.NaN;
+
+    private final Handler floorCommitHandler = new Handler(Looper.getMainLooper());
+    private static final long FLOOR_COMMIT_DELAY_MS = 1500;
+
+    private final Runnable commitBrowsedFloorRunnable = new Runnable() {
+        @Override
+        public void run() {
+            commitCurrentDisplayedFloor();
+        }
+    };
 
 
     /**
@@ -904,66 +923,126 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 //corrected position = point
 //break
 
-    public String acceptFloorChange(LatLng correctedLocation, LatLng oldLocation, float heightChangeMeters) {
-        if (currentVenue == null || currentFloorKey == null || correctedLocation == null || oldLocation == null) {
+    private long lastFloorChangeTimeMs = 0;
+    private static final long MIN_FLOOR_CHANGE_INTERVAL_MS = 5000; // 5 seconds minimum
+    private static final double HEIGHT_THRESHOLD_METERS = 2.5;
+    private static final double STAIRS_THRESHOLD_METERS = 5.0;
+    private static final double LIFT_THRESHOLD_METERS = 4.0;
+    private static final double LIFT_HORIZONTAL_THRESHOLD_METERS = 2.0;
+
+    public String acceptFloorChange(LatLng correctedLocation,
+                                    LatLng oldLocation,
+                                    float currentHeight) {
+
+        if (currentVenue == null ||
+                currentFloorKey == null ||
+                correctedLocation == null ||
+                oldLocation == null) {
             return currentFloorKey;
         }
 
-        // Require meaningful vertical movement first
-        double heightThresholdMeters = 2.5;
-        if (Math.abs(heightChangeMeters) < heightThresholdMeters) {
+        if (confirmedFloorKey == null || Float.isNaN(confirmedFloorElevation)) {
+            Log.d("MapMatch", "No confirmed floor reference yet");
             return currentFloorKey;
         }
 
-        IndoorVenue.FloorFeatures floorFeatures = currentVenue.floorFeatures.get(currentFloorKey);
+        long now = System.currentTimeMillis();
+        if (now - lastFloorChangeTimeMs < MIN_FLOOR_CHANGE_INTERVAL_MS) {
+            Log.d("MapMatch", "Floor change blocked by debounce");
+            return currentFloorKey;
+        }
+
+        float heightChangeMeters = currentHeight - confirmedFloorElevation;
+        if (Math.abs(heightChangeMeters) < HEIGHT_THRESHOLD_METERS) {
+            Log.d("MapMatch", "Height change too small: " + heightChangeMeters);
+            return currentFloorKey;
+        }
+
+        IndoorVenue.FloorFeatures floorFeatures = currentVenue.floorFeatures.get(confirmedFloorKey);
         if (floorFeatures == null) {
+            Log.d("MapMatch", "No floor features for confirmed floor: " + confirmedFloorKey);
             return currentFloorKey;
         }
 
-        double stairsThresholdMeters = 5.0;
-        double liftThresholdMeters = 4.0;
-        double liftHorizontalThresholdMeters = 2.0;
+        int direction = heightChangeMeters > 0 ? 1 : -1;
+        String nextFloorKey = getAdjacentFloorKey(confirmedFloorKey, direction);
 
-        boolean nearStairs = isNearAnyPoint(correctedLocation, floorFeatures.stairsCenters, stairsThresholdMeters);
-        boolean nearLift = isNearAnyPoint(correctedLocation, floorFeatures.liftCenters, liftThresholdMeters);
+        Log.d("MapMatch", "confirmed floor: " + confirmedFloorKey);
+        Log.d("MapMatch", "current displayed floor: " + currentFloorKey);
+        Log.d("MapMatch", "candidate next floor: " + nextFloorKey);
+        Log.d("MapMatch", "heightChange=" + heightChangeMeters);
 
-        if (!nearStairs && !nearLift) {
+        if (nextFloorKey == null || !currentVenue.floorFeatures.containsKey(nextFloorKey)) {
+            Log.d("MapMatch", "Next floor invalid");
             return currentFloorKey;
         }
+
+        boolean nearStairs = isNearAnyPoint(
+                correctedLocation,
+                floorFeatures.stairsCenters,
+                STAIRS_THRESHOLD_METERS
+        );
+
+        boolean nearLift = isNearAnyPoint(
+                correctedLocation,
+                floorFeatures.liftCenters,
+                LIFT_THRESHOLD_METERS
+        );
 
         double horizontalDisplacement = distanceMeters(oldLocation, correctedLocation);
 
-        boolean usedLift = nearLift && horizontalDisplacement < liftHorizontalThresholdMeters;
-        boolean usedStairs = nearStairs && horizontalDisplacement >= liftHorizontalThresholdMeters;
-        Log.d("MapMatch", "heightChange=" + heightChangeMeters +
-                ", floor=" + currentFloorKey);
-        Log.d("MapMatch", "nearStairs=" + nearStairs +
-                ", nearLift=" + nearLift);
+        boolean usedLift = nearLift && horizontalDisplacement < LIFT_HORIZONTAL_THRESHOLD_METERS;
+        boolean usedStairs = nearStairs && horizontalDisplacement >= LIFT_HORIZONTAL_THRESHOLD_METERS;
+
+        Log.d("MapMatch", "nearStairs=" + nearStairs + ", nearLift=" + nearLift);
         Log.d("MapMatch", "horizontalDisplacement=" + horizontalDisplacement);
+        Log.d("MapMatch", "usedLift=" + usedLift + ", usedStairs=" + usedStairs);
 
-        if (!usedLift && !usedStairs) {
+        /// commented out right now because location accuracy is bad so algo never detects that it is near stairs/lift
+//        if (!usedLift && !usedStairs) {
+//            Log.d("MapMatch", "Rejected floor change: not near stairs/lift in a plausible way");
+//            return currentFloorKey;
+//        }
+
+        if (nextFloorKey.equals(confirmedFloorKey)) {
             return currentFloorKey;
         }
 
-        String nextFloorKey = getAdjacentFloorKey(currentFloorKey, heightChangeMeters > 0);
-        if (nextFloorKey == null || !currentVenue.floorFeatures.containsKey(nextFloorKey)) {
-            return currentFloorKey;
-        }
-        if (!nextFloorKey.equals(currentFloorKey)) {
-            currentFloorKey = nextFloorKey;
-            boolean goingUp = heightChangeMeters > 0;
-            switchFloor(goingUp ? +1 : -1);
-        }
+        commitAutoFloorChange(nextFloorKey, currentHeight);
+        lastFloorChangeTimeMs = now;
 
-        return currentFloorKey;
+        Log.d("MapMatch", "Accepted floor change to " + nextFloorKey);
+        showFloor(nextFloorKey);
+        return nextFloorKey;
     }
 
-    private String getAdjacentFloorKey(String floorKey, boolean goingUp) {
+    private void commitCurrentDisplayedFloor() {
+        if (currentFloorKey == null) return;
+
+        confirmedFloorKey = currentFloorKey;
+        confirmedFloorElevation = SensorFusion.getInstance().getElevation();
+
+        Log.d("IndoorMapManager", "Confirmed floor: " + confirmedFloorKey +
+                " at elevation " + confirmedFloorElevation);
+    }
+
+    private String getAdjacentFloorKey(String floorKey, int direction) {
+        if (currentVenue == null || currentVenue.rawMapShapes == null) return null;
+
         try {
-            int floor = Integer.parseInt(floorKey);
-            int next = goingUp ? floor + 1 : floor - 1;
-            return String.valueOf(next);
-        } catch (NumberFormatException e) {
+            JSONObject floorsObj = new JSONObject(currentVenue.rawMapShapes);
+            List<String> floorKeys = getSortedFloorKeys(floorsObj);
+
+            int idx = floorKeys.indexOf(floorKey);
+            if (idx < 0) return null;
+
+            int next = idx + direction;
+            if (next < 0 || next >= floorKeys.size()) return null;
+
+            return floorKeys.get(next);
+
+        } catch (JSONException e) {
+            Log.e("IndoorMapManager", "getAdjacentFloorKey failed", e);
             return null;
         }
     }
@@ -1117,6 +1196,9 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
      * Switch floor based on direction (+1 or -1)
      */
     private void switchFloor(int direction) {
+//        Log.d("Switchfloor", "Switching from floor")
+
+
         if (currentVenue == null || currentVenue.rawMapShapes == null) return;
 
         try {
@@ -1134,12 +1216,61 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
                 isIndoorMapSet = true;
                 Log.d("IndoorMapManager", "Switched to floor: " + currentFloorKey);
                 bakeEnuCoordinates(SensorFusion.getInstance().getCoordinateConverter());
+
+
+                // Delay the floor commit
+                floorCommitHandler.removeCallbacks(commitBrowsedFloorRunnable);
+                floorCommitHandler.postDelayed(commitBrowsedFloorRunnable, FLOOR_COMMIT_DELAY_MS);
+
             }
 
         } catch (JSONException e) {
             Log.e("IndoorMapManager", "Floor switch failed", e);
         }
     }
+
+    private void showFloor(String floorKey) {
+        if (currentVenue == null || currentVenue.rawMapShapes == null || floorKey == null) return;
+
+        try {
+            JSONObject floorsObj = new JSONObject(currentVenue.rawMapShapes);
+
+            currentFloorKey = floorKey;
+            clearIndoorFloor();
+            Log.d("showFloor", "drawing floor "+ currentFloorKey);
+            drawFloor(floorsObj.getJSONObject(currentFloorKey), currentFloorKey);
+            isIndoorMapSet = true;
+            bakeEnuCoordinates(SensorFusion.getInstance().getCoordinateConverter());
+
+            Log.d("IndoorMapManager", "Showing floor: " + currentFloorKey);
+
+        } catch (JSONException e) {
+            Log.e("IndoorMapManager", "Failed to show floor: " + floorKey, e);
+        }
+    }
+
+    private void commitAutoFloorChange(String newFloorKey, float elevation) {
+        currentFloorKey = newFloorKey;
+        confirmedFloorKey = newFloorKey;
+        confirmedFloorElevation = elevation;
+
+        floorCommitHandler.removeCallbacks(commitBrowsedFloorRunnable);
+
+        try {
+            JSONObject floorsObj = new JSONObject(currentVenue.rawMapShapes);
+            clearIndoorFloor();
+            drawFloor(floorsObj.getJSONObject(currentFloorKey), currentFloorKey);
+            isIndoorMapSet = true;
+            bakeEnuCoordinates(SensorFusion.getInstance().getCoordinateConverter());
+        } catch (JSONException e) {
+            Log.e("IndoorMapManager", "Auto floor redraw failed", e);
+        }
+
+        Log.d("IndoorMapManager", "AUTO confirmed floor: " + confirmedFloorKey +
+                " at elevation " + confirmedFloorElevation);
+    }
+
+
     
     /**
      * Draw a single floor from GeoJSON FeatureCollection.
@@ -1350,6 +1481,14 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
     public String getCurrentFloorKey() {
         return currentFloorKey;
+    }
+
+    public String getConfirmedFloorKey() {
+        return confirmedFloorKey;
+    }
+
+    public float getConfirmedFloorElevation() {
+        return confirmedFloorElevation;
     }
 
     public IndoorVenue getCurrentVenue() { return currentVenue; }

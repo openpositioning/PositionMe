@@ -146,6 +146,9 @@ public class TrajectoryMapFragment extends Fragment {
     /** Full list of smoothed positions (mirrors rawPolyline but filtered). */
     private final List<LatLng> smoothedPoints = new ArrayList<>();
 
+    String newfloor;
+    String oldfloor;
+
 //    // -------------------------------------------------------------------------
 //    // Colour-coded observation markers (last N per source)
 //    // -------------------------------------------------------------------------
@@ -763,18 +766,13 @@ private SwitchMaterial showPdrPathSwitch;
         LatLng oldLocation = this.currentLocation;
         LatLng correctedLocation = newLocation;
         float heightChange = 0f;
+
         if (sensorFusion != null) {
             float currentElevation = sensorFusion.getElevation();
+            Log.d("MapMatch", "currel: " + currentElevation);
 
 
 
-            if (!Float.isNaN(lastElevation)) {
-                heightChange = currentElevation - lastElevation;
-            }
-
-
-            lastElevation = currentElevation;
-        }
 
         if (oldLocation != null && indoorMapManager != null) {
 //            correctedLocation = indoorMapManager.indoorLocationCorrection(
@@ -782,12 +780,21 @@ private SwitchMaterial showPdrPathSwitch;
 //                    newLocation,
 //                    heightChange
 //            );
-
-            indoorMapManager.acceptFloorChange(
+            oldfloor = newfloor;
+            newfloor = indoorMapManager.acceptFloorChange(
                     correctedLocation,
                     oldLocation,
-                    heightChange
+                    currentElevation
             );
+        }
+            if(oldfloor != newfloor) {
+                Log.d("MapMatch", "new floor: " + newfloor);
+
+
+                if (floorLabel != null) {
+                    floorLabel.post(() -> floorLabel.setText("Floor: " + newfloor));
+                }
+            }
         }
 
         this.currentLocation = correctedLocation;
