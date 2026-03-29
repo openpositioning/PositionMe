@@ -30,6 +30,7 @@ import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.utils.TrajectoryValidator;
+import com.openpositioning.PositionMe.fusion.AdaptiveQsmfiHeadingCalibrator;
 
 import java.io.File;
 import java.io.IOException;
@@ -120,6 +121,7 @@ public class SensorFusion implements SensorEventListener {
     // PDR and path
     private PdrProcessing pdrProcessing;
     private PathView pathView;
+    private AdaptiveQsmfiHeadingCalibrator adaptiveQsmfiHeadingCalibrator;
 
     /**
      * Sensor batching latency configuration.
@@ -198,6 +200,7 @@ public class SensorFusion implements SensorEventListener {
         if (particleFilterIndoorMapManager != null) {
             this.particleFilterManager.setIndoorMapManager(particleFilterIndoorMapManager);
         }
+        this.adaptiveQsmfiHeadingCalibrator = new AdaptiveQsmfiHeadingCalibrator();
 
         // Event handler
         long bootTime = SystemClock.uptimeMillis();
@@ -207,6 +210,7 @@ public class SensorFusion implements SensorEventListener {
                 pathView,
                 recorder,
                 particleFilterManager,
+                adaptiveQsmfiHeadingCalibrator,
                 bootTime
         );
 
@@ -495,6 +499,10 @@ public class SensorFusion implements SensorEventListener {
         latestRawParticleFilterPose = null;
         particleFilterMatchedPose = null;
 
+        if (adaptiveQsmfiHeadingCalibrator != null) {
+            adaptiveQsmfiHeadingCalibrator.reset();
+        }
+
         if (isParticleFilterTrajectoryMode()) {
             resetParticleFilterForRecording();
         }
@@ -676,7 +684,13 @@ public class SensorFusion implements SensorEventListener {
      * Returns current device heading in radians.
      */
     public float passOrientation() {
-        return state.orientation[0];
+        // if use Pf mode, use adaptive QSMFI heading, otherwise use normal orientation from rotation vector sensor
+        if (isParticleFilterTrajectoryMode()){
+            return passAdaptiveQsmfiHeading();
+        }
+        else {
+            return state.orientation[0];
+        }
     }
 
     /**
@@ -736,6 +750,47 @@ public class SensorFusion implements SensorEventListener {
 
     public int getWifiFloor() {
         return wifiPositionManager != null ? wifiPositionManager.getWifiFloor() : 0;
+    }
+
+    public float passAdaptiveQsmfiHeading() {
+        return adaptiveQsmfiHeadingCalibrator != null
+                ? adaptiveQsmfiHeadingCalibrator.getFusedHeadingRad()
+                : state.orientation[0];
+    }
+
+    public boolean isHeadingReliable() {
+        return adaptiveQsmfiHeadingCalibrator != null
+                && adaptiveQsmfiHeadingCalibrator.isHeadingReliable();
+    }
+
+    public String getLastHeadingCorrectionSource() {
+        return adaptiveQsmfiHeadingCalibrator != null
+                ? adaptiveQsmfiHeadingCalibrator.getLastCorrectionSource()
+                : "none";
+    }
+
+    public float getFusedHeadingRad(){
+        return adaptiveQsmfiHeadingCalibrator.getFusedHeadingRad();
+    }
+
+    public float getCompassHeadingRad(){
+        return adaptiveQsmfiHeadingCalibrator.getCompassHeadingRad();
+    }
+
+    public float getGyroHeadingRad(){
+        return adaptiveQsmfiHeadingCalibrator.getGyroHeadingRad();
+    }
+
+    public boolean getIsTurning(){
+        return adaptiveQsmfiHeadingCalibrator.getIsTurning();
+    }
+
+    public boolean getIsCompassStable(){
+        return adaptiveQsmfiHeadingCalibrator.getCompassStable();
+    }
+
+    public boolean getIsGyroStable(){
+        return adaptiveQsmfiHeadingCalibrator.getGyroStable();
     }
 
     public void logSensorFrequencies() {

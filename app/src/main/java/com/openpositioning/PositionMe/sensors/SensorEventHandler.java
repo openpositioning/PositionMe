@@ -18,6 +18,8 @@ import java.util.List;
 
 import com.openpositioning.PositionMe.fusion.ParticleFilterManager;
 import com.openpositioning.PositionMe.fusion.FusedPose;
+import com.openpositioning.PositionMe.fusion.AdaptiveQsmfiHeadingCalibrator;
+
 
 /**
  * Handles sensor event dispatching for all registered movement sensors.
@@ -46,6 +48,7 @@ public class SensorEventHandler {
     private final List<Double> accelMagnitude = new ArrayList<>();
 
     private final ParticleFilterManager particleFilterManager;
+    private final AdaptiveQsmfiHeadingCalibrator adaptiveQsmfiHeadingCalibrator;
 
     /**
      * Creates a new SensorEventHandler.
@@ -59,12 +62,14 @@ public class SensorEventHandler {
     public SensorEventHandler(SensorState state, PdrProcessing pdrProcessing,
                               PathView pathView, TrajectoryRecorder recorder,
                               ParticleFilterManager particleFilterManager,
+                              AdaptiveQsmfiHeadingCalibrator adaptiveQsmfiHeadingCalibrator,
                               long bootTime) {
         this.state = state;
         this.pdrProcessing = pdrProcessing;
         this.pathView = pathView;
         this.recorder = recorder;
         this.particleFilterManager = particleFilterManager;
+        this.adaptiveQsmfiHeadingCalibrator = adaptiveQsmfiHeadingCalibrator;
         this.bootTime = bootTime;
     }
 
@@ -108,6 +113,9 @@ public class SensorEventHandler {
                 state.angularVelocity[0] = sensorEvent.values[0];
                 state.angularVelocity[1] = sensorEvent.values[1];
                 state.angularVelocity[2] = sensorEvent.values[2];
+                if (adaptiveQsmfiHeadingCalibrator != null) {
+                    adaptiveQsmfiHeadingCalibrator.onGyro(sensorEvent.values[2], sensorEvent.timestamp);
+                }
 
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 state.filteredAcc[0] = sensorEvent.values[0];
@@ -130,6 +138,14 @@ public class SensorEventHandler {
                 state.gravity[1] = sensorEvent.values[1];
                 state.gravity[2] = sensorEvent.values[2];
 
+                if (adaptiveQsmfiHeadingCalibrator != null) {
+                    adaptiveQsmfiHeadingCalibrator.onGravity(
+                            sensorEvent.values[0],
+                            sensorEvent.values[1],
+                            sensorEvent.values[2]
+                    );
+                }
+
                 state.elevator = pdrProcessing.estimateElevator(
                         state.gravity, state.filteredAcc);
                 break;
@@ -146,6 +162,14 @@ public class SensorEventHandler {
                 state.magneticField[0] = sensorEvent.values[0];
                 state.magneticField[1] = sensorEvent.values[1];
                 state.magneticField[2] = sensorEvent.values[2];
+                if (adaptiveQsmfiHeadingCalibrator != null) {
+                    adaptiveQsmfiHeadingCalibrator.onMagneticField(
+                            sensorEvent.values[0],
+                            sensorEvent.values[1],
+                            sensorEvent.values[2],
+                            sensorEvent.timestamp
+                    );
+                }
                 break;
 
             case Sensor.TYPE_ROTATION_VECTOR:
@@ -181,13 +205,26 @@ public class SensorEventHandler {
                     // This remains true even in particle-filter mode because:
                     // - PF prediction still uses PDR as its motion input
                     // - the raw PDR output is the baseline fallback if PF has not initialised yet
+
+                    // Choose heading source for PDR:
+                    // - Prefer fused heading from QSMFI  when available
+                    //   → more stable and drift-corrected
+                    // - Fallback to raw orientation yaw (state.orientation[0]) if calibrator is unavailable
+                    float headingForPdr = adaptiveQsmfiHeadingCalibrator != null
+                            ? adaptiveQsmfiHeadingCalibrator.getFusedHeadingRad()
+                            : state.orientation[0];
+
                     float[] newCords = this.pdrProcessing.updatePdr(
                             stepTime,
                             this.accelMagnitude,
-                            state.orientation[0]
+                            headingForPdr
                     );
                     // Acceleration samples have now been consumed for this step.
                     this.accelMagnitude.clear();
+
+                    if (adaptiveQsmfiHeadingCalibrator != null) {
+                        adaptiveQsmfiHeadingCalibrator.onStepDetected(sensorEvent.timestamp);
+                    }
 
                     if (particleFilterManager != null && particleFilterManager.isEnabled()) {
                         Log.d("SensorFusion", String.format(
