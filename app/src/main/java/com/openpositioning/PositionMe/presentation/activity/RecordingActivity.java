@@ -199,6 +199,33 @@ public class RecordingActivity extends AppCompatActivity {
         updateModeDescription.run();
         particleFilterSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> updateModeDescription.run());
 
+        SwitchMaterial adaptiveHeadingSwitch = new SwitchMaterial(this);
+        adaptiveHeadingSwitch.setText("Use adaptive heading calibrator (QSMFI-style)");
+        adaptiveHeadingSwitch.setChecked(SensorFusion.getInstance().isAdaptiveHeadingEnabled());
+        LinearLayout.LayoutParams adaptiveHeadingParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        adaptiveHeadingParams.topMargin = dp(12);
+        container.addView(adaptiveHeadingSwitch, adaptiveHeadingParams);
+
+        TextView adaptiveHeadingDescription = new TextView(this);
+        adaptiveHeadingDescription.setTextSize(13f);
+        adaptiveHeadingDescription.setPadding(0, dp(4), 0, 0);
+        container.addView(adaptiveHeadingDescription);
+
+        Runnable updateAdaptiveHeadingDescription = () -> {
+            if (adaptiveHeadingSwitch.isChecked()) {
+                adaptiveHeadingDescription.setText(
+                        "Adaptive heading mode is session-scoped and is applied before both PDR and particle-filter motion updates. " +
+                                "This keeps the PF prediction, saved path, and live map aligned to the same heading convention.");
+            } else {
+                adaptiveHeadingDescription.setText(
+                        "Raw heading mode uses the current rotation-vector heading directly with no adaptive absolute-yaw correction.");
+            }
+        };
+        updateAdaptiveHeadingDescription.run();
+        adaptiveHeadingSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> updateAdaptiveHeadingDescription.run());
+
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("New Recording")
                 .setView(scrollView)
@@ -214,15 +241,20 @@ public class RecordingActivity extends AppCompatActivity {
                 if (name.isEmpty()) {
                     name = generateDefaultTrajectoryName();
                 }
-
-                applyTrajectorySetupAndContinue(name, particleFilterSwitch.isChecked());
+                applyTrajectorySetupAndContinue(
+                        name,
+                        particleFilterSwitch.isChecked(),
+                        adaptiveHeadingSwitch.isChecked()
+                );
                 dialog.dismiss();
             });
 
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
                 applyTrajectorySetupAndContinue(
                         generateDefaultTrajectoryName(),
-                        particleFilterSwitch.isChecked());
+                        particleFilterSwitch.isChecked(),
+                        adaptiveHeadingSwitch.isChecked()
+                );
                 dialog.dismiss();
             });
         });
@@ -239,17 +271,22 @@ public class RecordingActivity extends AppCompatActivity {
      * - SensorEventHandler will save the selected trajectory mode
      */
     private static final String TAG = "RecordingActivity";
-    private void applyTrajectorySetupAndContinue(String trajectoryName, boolean useParticleFilter) {
+    private void applyTrajectorySetupAndContinue(String trajectoryName,
+                                                 boolean useParticleFilter,
+                                                 boolean useAdaptiveHeading) {
         SensorFusion sensorFusion = SensorFusion.getInstance();
         sensorFusion.setTrajectoryId(trajectoryName);
         sensorFusion.setRecordingTrajectoryMode(
                 useParticleFilter
                         ? SensorFusion.TRAJECTORY_MODE_PARTICLE_FILTER
-                        : SensorFusion.TRAJECTORY_MODE_PDR);
+                        : SensorFusion.TRAJECTORY_MODE_PDR
+        );
+        sensorFusion.setUseAdaptiveQsmfiHeading(useAdaptiveHeading);
 
         Log.d(TAG, "New recording setup:"
                 + " name=" + trajectoryName
-                + ", mode=" + (useParticleFilter ? "PARTICLE_FILTER" : "STANDARD_PDR"));
+                + ", mode=" + (useParticleFilter ? "PARTICLE_FILTER" : "STANDARD_PDR")
+                + ", adaptiveHeading=" + useAdaptiveHeading);
 
         showStartLocationScreen();
     }

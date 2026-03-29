@@ -3,6 +3,7 @@ package com.openpositioning.PositionMe.utils;
 import android.graphics.Color;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.NonNull;
 
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.LatLng;
@@ -61,6 +62,28 @@ public class IndoorMapManager {
     private List<FloorplanApiClient.FloorShapes> currentFloorShapes;
 
     private boolean vectorBaseplateEnabled = false;
+
+    @Nullable
+    public FloorplanApiClient.FloorShapes getFloorShapesForIndex(int floorIndex) {
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) {
+            return null;
+        }
+        int safe = clampFloorIndex(floorIndex);
+        return currentFloorShapes.get(safe);
+    }
+
+    @Nullable
+    public FloorplanApiClient.FloorShapes getFloorShapesForLogicalFloor(int logicalFloor) {
+        if (currentFloorShapes == null || currentFloorShapes.isEmpty()) {
+            return null;
+        }
+        return getFloorShapesForIndex(logicalFloorToIndex(logicalFloor));
+    }
+
+    @NonNull
+    public List<FloorplanApiClient.FloorShapes> getCurrentFloorShapesList() {
+        return currentFloorShapes == null ? new ArrayList<>() : new ArrayList<>(currentFloorShapes);
+    }
 
     public IndoorMapManager(GoogleMap map) {
         this.gMap = map;

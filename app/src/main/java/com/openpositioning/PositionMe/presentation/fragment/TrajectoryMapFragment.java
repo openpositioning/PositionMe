@@ -1133,18 +1133,27 @@ public class TrajectoryMapFragment extends Fragment {
         }
 
         String building = selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : "none";
+        String particleSummary = sensorFusion != null
+                ? sensorFusion.getParticleFilterDebugSummary()
+                : "pf=unavailable";
+
         debugStatusText.setText(String.format(
                 Locale.US,
-                "mode=%s\nbuilding=%s\nfloorIndex=%d\nindoorVisible=%s\nactualVisible=%s\nreplay=%s\nlocation=%s",
+                "mode=%s\nbuilding=%s\nfloorIndex=%d\nindoorVisible=%s\nactualVisible=%s\nreplay=%s\nlocation=%s\n%s",
                 sensorFusion != null && sensorFusion.isParticleFilterTrajectoryMode() ? "PF" : "PDR",
                 building,
                 currentFloorIndex,
                 String.valueOf(indoorMapVisible),
                 String.valueOf(actualMapVisible),
                 String.valueOf(replayModeEnabled),
-                currentLocation == null ? "null" :
-                        String.format(Locale.US, "%.6f, %.6f", currentLocation.latitude, currentLocation.longitude)
+                currentLocation == null ? "null"
+                        : String.format(Locale.US, "%.6f, %.6f", currentLocation.latitude, currentLocation.longitude),
+                particleSummary
         ));
+    }
+
+    public void refreshLiveDebugBox() {
+        refreshDebugStatusText();
     }
 
     private void initMapTypeSpinner() {

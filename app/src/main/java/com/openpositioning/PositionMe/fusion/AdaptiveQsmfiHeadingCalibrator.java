@@ -120,7 +120,7 @@ public class AdaptiveQsmfiHeadingCalibrator {
         isGyroStable = false;
         lastGyroRate = 0.0;
 
-        headingReliable = true;
+        headingReliable = false;
         lastCorrectionSource = "gyro_only";
     }
 
@@ -220,6 +220,7 @@ public class AdaptiveQsmfiHeadingCalibrator {
     public boolean isHeadingReliable() {
         return headingReliable;
     }
+    public boolean isInitialised() { return initialised;}
 
     public String getLastCorrectionSource() {
         return lastCorrectionSource;

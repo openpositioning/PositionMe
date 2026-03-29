@@ -49,7 +49,7 @@ public class SensorEventHandler {
 
     private final ParticleFilterManager particleFilterManager;
     private final AdaptiveQsmfiHeadingCalibrator adaptiveQsmfiHeadingCalibrator;
-
+    private final SensorFusion sensorFusion;
     /**
      * Creates a new SensorEventHandler.
      *
@@ -63,6 +63,7 @@ public class SensorEventHandler {
                               PathView pathView, TrajectoryRecorder recorder,
                               ParticleFilterManager particleFilterManager,
                               AdaptiveQsmfiHeadingCalibrator adaptiveQsmfiHeadingCalibrator,
+                              SensorFusion sensorFusion,
                               long bootTime) {
         this.state = state;
         this.pdrProcessing = pdrProcessing;
@@ -70,6 +71,7 @@ public class SensorEventHandler {
         this.recorder = recorder;
         this.particleFilterManager = particleFilterManager;
         this.adaptiveQsmfiHeadingCalibrator = adaptiveQsmfiHeadingCalibrator;
+        this.sensorFusion = sensorFusion;
         this.bootTime = bootTime;
     }
 
@@ -210,9 +212,15 @@ public class SensorEventHandler {
                     // - Prefer fused heading from QSMFI  when available
                     //   → more stable and drift-corrected
                     // - Fallback to raw orientation yaw (state.orientation[0]) if calibrator is unavailable
-                    float headingForPdr = adaptiveQsmfiHeadingCalibrator != null
-                            ? adaptiveQsmfiHeadingCalibrator.getFusedHeadingRad()
-                            : state.orientation[0];
+                    float headingForPdr;
+                    if (sensorFusion != null
+                            && sensorFusion.isUseAdaptiveQsmfiHeading()
+                            && adaptiveQsmfiHeadingCalibrator != null
+                            && adaptiveQsmfiHeadingCalibrator.isInitialised()) {
+                        headingForPdr = adaptiveQsmfiHeadingCalibrator.getFusedHeadingRad();
+                    } else {
+                        headingForPdr = state.orientation[0];
+                    }
 
                     float[] newCords = this.pdrProcessing.updatePdr(
                             stepTime,

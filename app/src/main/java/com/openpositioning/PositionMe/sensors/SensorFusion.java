@@ -140,6 +140,7 @@ public class SensorFusion implements SensorEventListener {
     // Recording mode state
 
     private int recordingTrajectoryMode = TRAJECTORY_MODE_PDR;
+    private boolean useAdaptiveQsmfiHeading = false;
 
     // Initialisation
     /**
@@ -211,6 +212,7 @@ public class SensorFusion implements SensorEventListener {
                 recorder,
                 particleFilterManager,
                 adaptiveQsmfiHeadingCalibrator,
+                this,
                 bootTime
         );
 
@@ -247,6 +249,28 @@ public class SensorFusion implements SensorEventListener {
                     ).show()
             );
         }
+    }
+
+    public void setUseAdaptiveQsmfiHeading(boolean enabled) {
+        this.useAdaptiveQsmfiHeading = enabled;
+
+        if (adaptiveQsmfiHeadingCalibrator != null) {
+            adaptiveQsmfiHeadingCalibrator.reset();
+        }
+
+        Log.d(TAG, "useAdaptiveQsmfiHeading = " + enabled);
+    }
+
+    public boolean isUseAdaptiveQsmfiHeading() {
+        return useAdaptiveQsmfiHeading;
+    }
+
+    public void setAdaptiveHeadingEnabled(boolean enabled) {
+        setUseAdaptiveQsmfiHeading(enabled);
+    }
+
+    public boolean isAdaptiveHeadingEnabled() {
+        return isUseAdaptiveQsmfiHeading();
     }
 
     // Particle filter wiring
@@ -642,6 +666,14 @@ public class SensorFusion implements SensorEventListener {
         return new ArrayList<>(floorplanBuildingCache.values());
     }
 
+    @NonNull
+    public String getParticleFilterDebugSummary() {
+        if (particleFilterManager == null) {
+            return "pf=unavailable";
+        }
+        return particleFilterManager.getLiveDebugSummary();
+    }
+
     // Getters / setters
     /**
      * Returns current GNSS or recording start GNSS.
@@ -684,13 +716,12 @@ public class SensorFusion implements SensorEventListener {
      * Returns current device heading in radians.
      */
     public float passOrientation() {
-        // if use Pf mode, use adaptive QSMFI heading, otherwise use normal orientation from rotation vector sensor
-        if (isParticleFilterTrajectoryMode()){
-            return passAdaptiveQsmfiHeading();
+        if (useAdaptiveQsmfiHeading
+                && adaptiveQsmfiHeadingCalibrator != null
+                && adaptiveQsmfiHeadingCalibrator.isInitialised()) {
+            return adaptiveQsmfiHeadingCalibrator.getFusedHeadingRad();
         }
-        else {
-            return state.orientation[0];
-        }
+        return state.orientation[0];
     }
 
     /**

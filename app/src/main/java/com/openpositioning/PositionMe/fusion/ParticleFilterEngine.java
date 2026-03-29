@@ -177,6 +177,10 @@ public class ParticleFilterEngine {
         public double forwardNoiseStdMeters = 0.25;
         public double headingNoiseStdRad = Math.toRadians(6.0);
 
+        // Initial spread
+        public double initialPositionStdMeters = 1.0;
+        public double initialHeadingStdRad = Math.toRadians(12.0);
+
         // Map-constraint behaviour
         public boolean enableMapConstraints = true;
         public boolean hardKillOnWallCross = true;
@@ -190,11 +194,15 @@ public class ParticleFilterEngine {
         // Observation blending
         public boolean enableAbsoluteObservationWeighting = true;
         public double minimumWeightFloor = 1e-12;
+        public double observationSigmaWifiMeters = 2.5;
+        public double observationSigmaGnssMeters = 5.0;
 
         // Degeneracy / recovery
         public double resampleEffectiveSampleSizeRatio = 0.45;
         public boolean enableRecoveryIfCollapsed = true;
         public int recoverySeedCount = 40;
+        public double resampleRegularizationPosStdMeters = 0.03;
+        public double resampleRegularizationHeadingStdRad = Math.toRadians(1.0);
 
         // Logging
         public boolean debugLogging = true;
@@ -274,8 +282,8 @@ public class ParticleFilterEngine {
         referenceOriginLat = startLatLng.latitude;
         referenceOriginLng = startLatLng.longitude;
 
-        double initialSpreadMeters = 1.0;
-        double headingSpreadRad = Math.toRadians(12.0);
+        double initialSpreadMeters = config.initialPositionStdMeters;
+        double headingSpreadRad = config.initialHeadingStdRad;
 
         for (int i = 0; i < config.particleCount; i++) {
             double dNorth = gaussian(0.0, initialSpreadMeters);
@@ -621,6 +629,21 @@ public class ParticleFilterEngine {
             Particle copy = particles.get(i).copy();
             copy.weight = 1.0 / particles.size();
             copy.alive = true;
+
+            if (config.resampleRegularizationPosStdMeters > 0.0) {
+                double dNorth = gaussian(0.0, config.resampleRegularizationPosStdMeters);
+                double dEast = gaussian(0.0, config.resampleRegularizationPosStdMeters);
+                LatLng jittered = offsetLatLngMeters(new LatLng(copy.lat, copy.lng), dNorth, dEast);
+                copy.lat = jittered.latitude;
+                copy.lng = jittered.longitude;
+            }
+
+            if (config.resampleRegularizationHeadingStdRad > 0.0) {
+                copy.headingRad = wrapAngleRad(
+                        copy.headingRad + gaussian(0.0, config.resampleRegularizationHeadingStdRad)
+                );
+            }
+
             newParticles.add(copy);
         }
 
@@ -646,10 +669,25 @@ public class ParticleFilterEngine {
             center = new LatLng(seed.lat, seed.lng);
             floor = seed.logicalFloor;
             heading = seed.headingRad;
+        } else if (referenceOriginLatLng != null) {
+            center = referenceOriginLatLng;
+            floor = 0;
+            heading = 0.0;
         } else {
             center = new LatLng(0.0, 0.0);
             floor = 0;
             heading = 0.0;
+        }
+
+        if (constraintModel != null && center != null) {
+            CandidatePose recoveryPose = constraintModel.getRecoveryPose(center, floor);
+            if (recoveryPose != null && recoveryPose.getLatLng() != null) {
+                center = recoveryPose.getLatLng();
+                floor = recoveryPose.getLogicalFloor();
+                if (recoveryPose.getHeadingRad() != null) {
+                    heading = recoveryPose.getHeadingRad();
+                }
+            }
         }
 
         particles.clear();

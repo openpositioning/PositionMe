@@ -456,6 +456,9 @@ public class RecordingFragment extends Fragment {
             trajectoryMapFragment.clearGNSS();
         }
 
+        // Refresh live debug box
+        trajectoryMapFragment.refreshLiveDebugBox();
+
         // Update raw PDR history once, at the end of the cycle.
         previousPosX = pdrValues[0];
         previousPosY = pdrValues[1];
