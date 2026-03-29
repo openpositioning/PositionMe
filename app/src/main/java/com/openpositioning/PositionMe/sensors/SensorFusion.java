@@ -712,12 +712,15 @@ public class SensorFusion implements SensorEventListener, Observer {
                             adaptedAccuracy = Math.max(accuracy * 0.5f, 3.0f);
                         }
 
-                        // Derive heading from two consecutive valid GNSS fixes
+                        // Derive heading from two consecutive valid GNSS fixes.
+                        // Displacement must exceed 1.5x the reported accuracy to ensure the
+                        // computed direction reflects real movement rather than GPS noise.
                         if (lastGnssEnu != null) {
                             float dEast  = enu[0] - lastGnssEnu[0];
                             float dNorth = enu[1] - lastGnssEnu[1];
                             float gnssDist = (float) Math.hypot(dEast, dNorth);
-                            if (gnssDist > 3f) {
+                            float minDist  = Math.max(accuracy * 1.5f, 5f);
+                            if (gnssDist > minDist) {
                                 fusedHeading = normalizeAngle(
                                         (float) Math.atan2(dEast, dNorth));
                                 Log.d("SensorFusion", "GNSS heading: "
