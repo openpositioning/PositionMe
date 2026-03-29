@@ -135,6 +135,20 @@ public class ExtendedKalmanFilter {
     }
 
     /**
+     * Update with a WiFi positioning observation using AP-count-adaptive noise.
+     *
+     * @param measX   Observed East  position (metres)
+     * @param measY   Observed North position (metres)
+     * @param apCount Number of WiFi APs used to compute the position fix
+     */
+    public void updateWithWifi(float measX, float measY, int apCount) {
+        float noiseStd = Math.max(8.0f, 20.0f - apCount * 1.5f);
+        update(measX, measY, noiseStd);
+        Log.d(TAG, "WiFi update (apCount=" + apCount + ", noiseStd=" + noiseStd
+                + "m). State: (" + stateX + ", " + stateY + ")");
+    }
+
+    /**
      * Returns the current best position estimate.
      *
      * @return float[]{east, north} in East-North metres.

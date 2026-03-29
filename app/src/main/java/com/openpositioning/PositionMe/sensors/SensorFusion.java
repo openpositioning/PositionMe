@@ -200,6 +200,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     private float prevPdrX = 0f;
     private float prevPdrY = 0f;
 
+    // Gyroscope-integrated heading with rotation-vector correction (radians)
+    private float fusedHeading = 0f;
+    private boolean headingInitialised = false;
+    private long lastGyroTimestampMs = 0;
+
     // Floor change detection for particle reset
     private int lastKnownFloor = 0;
 
@@ -458,6 +463,17 @@ public class SensorFusion implements SensorEventListener, Observer {
                 angularVelocity[1] = sensorEvent.values[1];
                 angularVelocity[2] = sensorEvent.values[2];
 
+                // Integrate yaw rate to advance fusedHeading.
+                // angularVelocity[2] is the device z-axis rotation rate (rad/s).
+                if (headingInitialised && lastGyroTimestampMs > 0) {
+                    long dtMs = currentTime - lastGyroTimestampMs;
+                    if (dtMs > 0 && dtMs < 500) {
+                        fusedHeading = normalizeAngle(fusedHeading - angularVelocity[2] * (dtMs / 1000f));
+                    }
+                }
+                lastGyroTimestampMs = currentTime;
+                break;
+
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 filteredAcc[0] = sensorEvent.values[0];
                 filteredAcc[1] = sensorEvent.values[1];
@@ -509,6 +525,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                 float[] rotationVectorDCM = new float[9];
                 SensorManager.getRotationMatrixFromVector(rotationVectorDCM, this.rotation);
                 SensorManager.getOrientation(rotationVectorDCM, this.orientation);
+
+                // Complementary filter: slow rotation-vector correction on gyro-integrated heading.
+                // Corrects long-term gyro drift while preserving short-term stability.
+                if (!headingInitialised) {
+                    fusedHeading = this.orientation[0];
+                    headingInitialised = true;
+                } else {
+                    float diff = normalizeAngle(this.orientation[0] - fusedHeading);
+                    fusedHeading = normalizeAngle(fusedHeading + 0.02f * diff);
+                }
                 break;
 
             case Sensor.TYPE_STEP_DETECTOR:
@@ -534,7 +560,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                     float[] newCords = this.pdrProcessing.updatePdr(
                             stepTime,
                             this.accelMagnitude,
-                            this.orientation[0]
+                            fusedHeading
                     );
 
                     // Feed PDR displacement to particle filter
@@ -1040,6 +1066,8 @@ public class SensorFusion implements SensorEventListener, Observer {
             for (Wifi data : this.wifiList){
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
+            // Capture AP count before entering the async callback
+            final int apCount = this.wifiList.size();
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
@@ -1062,8 +1090,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                         // Normal update
                         float[] enu = coordinateConverter.toEnu(
                                 wifiLocation.latitude, wifiLocation.longitude);
-                        particleFilter.updateWithWifi(enu[0], enu[1]);
-                        ekfPositioning.updateWithWifi(enu[0], enu[1]);
+                        particleFilter.updateWithWifi(enu[0], enu[1], apCount);
+                        ekfPositioning.updateWithWifi(enu[0], enu[1], apCount);
 
                     }
                 }
@@ -1581,6 +1609,9 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastKnownFloor = 0;
         prevPdrX = 0f;
         prevPdrY = 0f;
+        fusedHeading = 0f;
+        headingInitialised = false;
+        lastGyroTimestampMs = 0;
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
@@ -1742,5 +1773,17 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     //endregion
+
+    /**
+     * Wraps an angle in radians to the range [-π, π].
+     *
+     * @param angle angle in radians
+     * @return equivalent angle in [-π, π]
+     */
+    private float normalizeAngle(float angle) {
+        while (angle >  Math.PI) angle -= 2 * (float) Math.PI;
+        while (angle < -Math.PI) angle += 2 * (float) Math.PI;
+        return angle;
+    }
 
 }
