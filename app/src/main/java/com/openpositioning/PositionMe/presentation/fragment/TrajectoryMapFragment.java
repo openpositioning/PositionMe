@@ -1137,9 +1137,11 @@ public class TrajectoryMapFragment extends Fragment {
                 ? sensorFusion.getParticleFilterDebugSummary()
                 : "pf=unavailable";
 
+        String autoFloorSummary = floorController.getAutoFloorDebugSummary();
+
         debugStatusText.setText(String.format(
                 Locale.US,
-                "mode=%s\nbuilding=%s\nfloorIndex=%d\nindoorVisible=%s\nactualVisible=%s\nreplay=%s\nlocation=%s\n%s",
+                "mode=%s\nbuilding=%s\nfloorIndex=%d\nindoorVisible=%s\nactualVisible=%s\nreplay=%s\nlocation=%s\n%s\n%s",
                 sensorFusion != null && sensorFusion.isParticleFilterTrajectoryMode() ? "PF" : "PDR",
                 building,
                 currentFloorIndex,
@@ -1148,7 +1150,8 @@ public class TrajectoryMapFragment extends Fragment {
                 String.valueOf(replayModeEnabled),
                 currentLocation == null ? "null"
                         : String.format(Locale.US, "%.6f, %.6f", currentLocation.latitude, currentLocation.longitude),
-                particleSummary
+                particleSummary,
+                autoFloorSummary
         ));
     }
 

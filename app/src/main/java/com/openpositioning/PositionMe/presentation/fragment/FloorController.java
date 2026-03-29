@@ -491,6 +491,18 @@ public class FloorController {
         pendingInitialWifiSamples = 0;
     }
 
+    @NonNull
+    public String getAutoFloorDebugSummary() {
+        SensorFusion sensorFusion = host.getSensorFusion();
+        return "autoFloor=" + isAutoFloorEnabled()
+                + " initResolved=" + initialFloorResolved
+                + " currentFloorIndex=" + host.getCurrentFloorIndex()
+                + " candidateFloor=" + lastCandidateFloor
+                + " elev=" + (sensorFusion == null ? "na" : sensorFusion.getElevation())
+                + " anchorElev=" + lastCommittedElevationMeters
+                + " elevator=" + (sensorFusion == null ? "na" : sensorFusion.getElevator());
+    }
+
     @Nullable
     private Integer resolveInitialWifiBootstrapFloorIndex(@NonNull SensorFusion sensorFusion,
                                                           @NonNull IndoorMapManager indoorMapManager) {

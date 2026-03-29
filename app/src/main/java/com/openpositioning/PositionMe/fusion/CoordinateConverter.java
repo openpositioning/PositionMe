@@ -12,7 +12,7 @@ import com.google.android.gms.maps.model.LatLng;
  */
 public class CoordinateConverter {
 
-    private static final double EARTH_RADIUS_METERS = 6378137.0;
+    private static final double DEGREE_IN_M = 111111.0;
 
     private final double lat0Deg;
     private final double lon0Deg;
@@ -35,11 +35,10 @@ public class CoordinateConverter {
      * @return array of size 2 containing x and y in meters
      */
     public double[] latLngToLocal(LatLng latLng) {
-        double dLat = Math.toRadians(latLng.latitude - lat0Deg);
-        double dLon = Math.toRadians(latLng.longitude - lon0Deg);
-
-        double x = EARTH_RADIUS_METERS * dLon * Math.cos(Math.toRadians(lat0Deg));
-        double y = EARTH_RADIUS_METERS * dLat;
+        double x = (latLng.longitude - lon0Deg)
+                * DEGREE_IN_M
+                * Math.cos(Math.toRadians(lat0Deg));
+        double y = (latLng.latitude - lat0Deg) * DEGREE_IN_M;
         return new double[]{x, y};
     }
 
@@ -51,9 +50,9 @@ public class CoordinateConverter {
      * @return corresponding geographic coordinate
      */
     public LatLng localToLatLng(double x, double y) {
-        double lat = lat0Deg + Math.toDegrees(y / EARTH_RADIUS_METERS);
-        double lon = lon0Deg + Math.toDegrees(
-                x / (EARTH_RADIUS_METERS * Math.cos(Math.toRadians(lat0Deg)))
+        double lat = lat0Deg + (y / DEGREE_IN_M);
+        double lon = lon0Deg + (
+                x / (DEGREE_IN_M * Math.cos(Math.toRadians(lat0Deg)))
         );
         return new LatLng(lat, lon);
     }

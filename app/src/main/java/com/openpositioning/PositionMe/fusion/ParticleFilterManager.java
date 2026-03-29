@@ -17,7 +17,6 @@ import com.openpositioning.PositionMe.mapmatching.VerticalMotionDetector;
 import com.openpositioning.PositionMe.mapmatching.VerticalTransitionHint;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.sensors.SensorTypes;
-import com.openpositioning.PositionMe.utils.BuildingPolygon;
 import com.openpositioning.PositionMe.utils.IndoorMapManager;
 
 import java.util.List;
@@ -26,23 +25,31 @@ import java.util.Locale;
 /**
  * High-level controller for the live particle filter.
  *
- * Responsibilities:
- * - initialise the PF from a GNSS start anchor
- * - convert live PDR motion into PF motion updates
- * - convert map-match / WiFi / GNSS into optional absolute observations
- * - expose latest fused pose back to SensorFusion
- * - apply indoor-map constraints using the same geometry helpers as map matching
+ * Cleaned design goals:
+ * - keep fusion state in local x/y
+ * - convert LatLng to local only when building an observation
+ * - convert local back to LatLng only when exporting a fused pose
+ * - keep map usage simple: wall crossing and floor-transition gating only
+ * - remove mapLikelihood and walkable-weight tuning completely
  */
 public class ParticleFilterManager {
 
     private static final String TAG = "ParticleFilterManager";
 
-    /**
-     * Optional callback host if another layer wants fused pose updates.
-     */
     public interface Host {
         void onFusedPoseUpdated(@NonNull FusedPose fusedPose);
     }
+
+    private static final double PF_MOTION_SCALE = 0.85;
+    private static final double PF_MOTION_DEADBAND_METERS = 0.02;
+    private static final double PF_MAX_STEP_METERS = 1.20;
+    private static final double PF_DRAW_MIN_TRANSLATION_METERS = 0.06;
+
+    private static final int WIFI_MIN_AP_COUNT = 8;
+    private static final double MAP_MATCH_JUMP_GATE_METERS = 12.0;
+    private static final double WIFI_JUMP_GATE_INDOOR_METERS = 8.0;
+    private static final double WIFI_JUMP_GATE_OUTDOOR_METERS = 18.0;
+    private static final double GNSS_JUMP_GATE_OUTDOOR_METERS = 30.0;
 
     private final SensorFusion sensorFusion;
     private final ParticleConstraintDebugger debugger;
@@ -61,7 +68,7 @@ public class ParticleFilterManager {
     @Nullable
     private ParticleFilterEngine engine;
     @Nullable
-    private ParticleFilterEngine.Config activeConfig;
+    private ParticleFilterConfig activeConfig;
     @Nullable
     private ParticleFilterEngine.StepDiagnostics lastDiagnostics;
 
@@ -70,31 +77,23 @@ public class ParticleFilterManager {
     @NonNull
     private String lastMotionSummary = "motion:idle";
 
-    /** Latest filtered pose exposed to the rest of the app. */
     @Nullable
     private FusedPose latestFusedPose;
-
-    /** Latest raw PF output before Kalman-style output smoothing. */
     @Nullable
     private FusedPose latestRawPose;
 
-    /** Whether the PF is currently enabled by the selected recording mode. */
     private boolean enabled = false;
-
-    /** Whether the PF has been initialised with a real anchor. */
     private boolean initialised = false;
 
-    /** Last raw PDR values used to compute motion deltas. */
     @Nullable
     private float[] lastPdrValues;
 
-    /** Latest map-matched pose if provided by another subsystem. */
     @Nullable
     private CandidatePose latestMatchedPose;
 
-    /**
-     * Primary constructor using an optional host callback.
-     */
+    private boolean lastPoseShouldBeDrawn = false;
+    private boolean lastMotionWasMeaningful = false;
+
     public ParticleFilterManager(@NonNull SensorFusion sensorFusion,
                                  @Nullable Host host) {
         this.sensorFusion = sensorFusion;
@@ -104,23 +103,16 @@ public class ParticleFilterManager {
         reloadRuntimeSettings(true);
     }
 
-    /**
-     * Compatibility constructor for branches where SensorFusion still passes Context.
-     */
     public ParticleFilterManager(@NonNull SensorFusion sensorFusion,
                                  @Nullable Context ignoredContext) {
         this(sensorFusion, (Host) null);
     }
 
-    /**
-     * Enable or disable PF operation.
-     * Disabling also clears its state to avoid stale outputs.
-     */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
 
         if (enabled) {
-            reloadRuntimeSettings(false);
+            reloadRuntimeSettings(true);
         } else {
             reset();
         }
@@ -128,14 +120,14 @@ public class ParticleFilterManager {
         Log.d(TAG, "Particle filter enabled = " + enabled);
     }
 
-    /** Returns whether PF mode is enabled. */
     public boolean isEnabled() {
         return enabled;
     }
 
-    /**
-     * Attach or refresh the current indoor map manager.
-     */
+    public boolean shouldDrawLatestPose() {
+        return lastPoseShouldBeDrawn;
+    }
+
     public void setIndoorMapManager(@Nullable IndoorMapManager indoorMapManager) {
         if (this.indoorMapManager == indoorMapManager && constraintModel != null) {
             return;
@@ -151,9 +143,7 @@ public class ParticleFilterManager {
         Log.d(TAG, "IndoorMapManager attached to ParticleFilterManager: " + (indoorMapManager != null));
     }
 
-    /** Resets the PF for a new recording session. */
     public void reset() {
-        reloadRuntimeSettings(true);
         latestFusedPose = null;
         latestRawPose = null;
         lastPdrValues = null;
@@ -162,6 +152,9 @@ public class ParticleFilterManager {
         lastDiagnostics = null;
         lastObservationSummary = "obs:none";
         lastMotionSummary = "motion:idle";
+        lastPoseShouldBeDrawn = false;
+        lastMotionWasMeaningful = false;
+
         verticalMotionDetector.reset();
         kalmanPoseSmoother.reset();
 
@@ -172,24 +165,20 @@ public class ParticleFilterManager {
         Log.d(TAG, "Particle filter reset.");
     }
 
-    /** Returns true if the PF currently has particles initialised. */
     public boolean isInitialised() {
         return initialised && engine != null && engine.isInitialised();
     }
 
-    /** Returns the latest fused PF pose. */
     @Nullable
     public FusedPose getLatestFusedPose() {
         return latestFusedPose;
     }
 
-    /** Returns the latest raw PF pose. */
     @Nullable
     public FusedPose getLatestRawPose() {
         return latestRawPose;
     }
 
-    /** Returns a particle snapshot for debugging or visualisation. */
     @NonNull
     public List<ParticleFilterEngine.Particle> getParticlesSnapshot() {
         if (engine == null) {
@@ -198,14 +187,10 @@ public class ParticleFilterManager {
         return engine.getParticlesSnapshot();
     }
 
-    /** Optional map-matched pose input. */
     public void setLatestMatchedPose(@Nullable CandidatePose latestMatchedPose) {
         this.latestMatchedPose = latestMatchedPose;
     }
 
-    /**
-     * Concise live debug summary for the live map debug panel.
-     */
     @NonNull
     public String getLiveDebugSummary() {
         if (!enabled) {
@@ -215,33 +200,30 @@ public class ParticleFilterManager {
             return "pf=waiting_for_step";
         }
 
-        int deadParticles = Math.max(0,
-                lastDiagnostics.totalParticles - lastDiagnostics.aliveParticles);
+        int deadParticles = Math.max(
+                0,
+                lastDiagnostics.totalParticles - lastDiagnostics.aliveParticles
+        );
 
         return String.format(Locale.US,
-                "pf alive=%d dead=%d total=%d ess=%.1f wall=%d floor=%d walk=%d obs=%s %s resample=%s recover=%s",
+                "pf alive=%d dead=%d total=%d ess=%.1f wall=%d floor=%d obs=%s %s resample=%s recover=%s",
                 lastDiagnostics.aliveParticles,
                 deadParticles,
                 lastDiagnostics.totalParticles,
                 lastDiagnostics.effectiveSampleSize,
                 lastDiagnostics.wallRejectedCount,
                 lastDiagnostics.floorRejectedCount,
-                lastDiagnostics.outOfWalkablePenalisedCount,
                 lastObservationSummary,
                 lastMotionSummary,
                 String.valueOf(lastDiagnostics.resampled),
                 String.valueOf(lastDiagnostics.recovered));
     }
 
-    /**
-     * Compatibility update entry for SensorFusion.
-     */
     public void step() {
         if (!enabled) {
             return;
         }
 
-        // Keep dependencies synced from SensorFusion.
         setIndoorMapManager(sensorFusion.getParticleFilterIndoorMapManager());
         setLatestMatchedPose(sensorFusion.getParticleFilterMatchedPose());
 
@@ -249,7 +231,8 @@ public class ParticleFilterManager {
     }
 
     /**
-     * Explicit initialisation from GNSS-based session anchor.
+     * Initialise the local PF at x=0, y=0 using the GNSS anchor as the
+     * coordinate-converter origin.
      */
     public void initialiseFromGnss(@NonNull LatLng gnssStart,
                                    int logicalFloor,
@@ -266,8 +249,8 @@ public class ParticleFilterManager {
                 gnssStart.longitude
         );
 
+        engine.initialise(0.0, 0.0, logicalFloor, headingRad);
         kalmanPoseSmoother.reset();
-        engine.initialise(gnssStart, logicalFloor, headingRad);
 
         latestRawPose = new FusedPose(
                 0.0,
@@ -291,46 +274,57 @@ public class ParticleFilterManager {
     }
 
     @NonNull
-    private ParticleFilterEngine.Config buildConfigFromPreferences(@Nullable Context context) {
-        ParticleFilterEngine.Config cfg = new ParticleFilterEngine.Config();
+    private ParticleFilterConfig buildConfigFromPreferences(@Nullable Context context) {
+        int particleCount = parseIntPref(context, "pf_particle_count", 250, 50, 5000);
 
-        cfg.particleCount = parseIntPref(context, "pf_particle_count", 250, 50, 5000);
-        cfg.forwardNoiseStdMeters = parseDoublePref(context, "pf_sigma_step", 0.22, 0.01, 10.0);
-        cfg.headingNoiseStdRad = Math.toRadians(
+        double sigmaStep = parseDoublePref(context, "pf_sigma_step", 0.22, 0.01, 10.0);
+        double sigmaThetaRad = Math.toRadians(
                 parseDoublePref(context, "pf_sigma_theta_deg", 6.0, 0.1, 180.0)
         );
 
-        cfg.observationSigmaWifiMeters = parseDoublePref(context, "pf_sigma_wifi", 2.5, 0.3, 50.0);
-        cfg.observationSigmaGnssMeters = parseDoublePref(context, "pf_sigma_gnss", 5.0, 0.5, 100.0);
-        cfg.initialPositionStdMeters = parseDoublePref(context, "pf_init_pos_std", 1.0, 0.05, 20.0);
-        cfg.initialHeadingStdRad = Math.toRadians(
+        double sigmaWifi = parseDoublePref(context, "pf_sigma_wifi", 2.5, 0.3, 50.0);
+        double sigmaGnss = parseDoublePref(context, "pf_sigma_gnss", 5.0, 0.5, 100.0);
+
+        double initPosStd = parseDoublePref(context, "pf_init_pos_std", 1.0, 0.05, 20.0);
+        double initHeadingStdRad = Math.toRadians(
                 parseDoublePref(context, "pf_init_heading_deg", 10.0, 0.1, 180.0)
         );
-        cfg.resampleEffectiveSampleSizeRatio =
-                parseDoublePref(context, "pf_resample_ratio", 0.45, 0.05, 0.95);
-        cfg.resampleRegularizationPosStdMeters =
-                parseDoublePref(context, "pf_sigma_reg_pos", 0.03, 0.0, 5.0);
-        cfg.resampleRegularizationHeadingStdRad = Math.toRadians(
+
+        double resampleRatio = parseDoublePref(context, "pf_resample_ratio", 0.45, 0.05, 0.95);
+        double sigmaRegPos = parseDoublePref(context, "pf_sigma_reg_pos", 0.03, 0.0, 5.0);
+        double sigmaRegThetaRad = Math.toRadians(
                 parseDoublePref(context, "pf_sigma_reg_theta_deg", 1.0, 0.0, 45.0)
         );
 
+        ParticleFilterConfig cfg = new ParticleFilterConfig(
+                particleCount,
+                sigmaStep,
+                sigmaThetaRad,
+                sigmaWifi,
+                sigmaGnss,
+                initPosStd,
+                initHeadingStdRad,
+                resampleRatio,
+                sigmaRegPos,
+                sigmaRegThetaRad
+        );
+
         cfg.enableMapConstraints = true;
-        cfg.hardKillOnWallCross = false;
-        cfg.hardKillOnInvalidFloorTransition = false;
-        cfg.softPenaltyForOutOfWalkable = true;
-
-        cfg.outOfWalkablePenalty = 0.18;
-        cfg.wallCrossPenalty = 0.05;
-        cfg.invalidFloorPenalty = 0.08;
-
         cfg.enableAbsoluteObservationWeighting = true;
+        cfg.minimumWeightFloor = 1e-12;
+
+        // Keep recovery disabled by default in the cleaned version.
+        cfg.enableRecoveryIfCollapsed = false;
+        cfg.recoveryPositionStdMeters = 0.75;
+        cfg.recoveryHeadingStdRad = Math.toRadians(8.0);
+
         cfg.debugLogging = true;
         return cfg;
     }
 
     private void reloadRuntimeSettings(boolean forceRecreateEngine) {
         Context context = sensorFusion.getContext();
-        ParticleFilterEngine.Config cfg = buildConfigFromPreferences(context);
+        ParticleFilterConfig cfg = buildConfigFromPreferences(context);
         activeConfig = cfg;
 
         if (forceRecreateEngine || engine == null || !initialised) {
@@ -397,27 +391,6 @@ public class ParticleFilterManager {
         }
     }
 
-    @NonNull
-    private FusedPose enrichWithLocalCoordinates(@NonNull FusedPose geographicPose) {
-        if (coordinateConverter == null) {
-            return geographicPose;
-        }
-
-        double[] local = coordinateConverter.latLngToLocal(geographicPose.getLatLng());
-
-        return new FusedPose(
-                local[0],
-                local[1],
-                geographicPose.getHeadingRad(),
-                geographicPose.getFloor(),
-                geographicPose.getLatLng(),
-                geographicPose.getConfidence()
-        );
-    }
-
-    /**
-     * Main live-update entry point.
-     */
     public void updateFromLiveSensors(long timestampMs) {
         if (!enabled) {
             return;
@@ -445,24 +418,29 @@ public class ParticleFilterManager {
         }
 
         ParticleFilterEngine.MotionInput motionInput = buildMotionInput(pdr, timestampMs);
-        ParticleFilterEngine.AbsoluteObservation observation = buildObservation();
+        boolean stationaryLike = !lastMotionWasMeaningful;
+        ParticleFilterEngine.AbsoluteObservation observation = buildObservation(stationaryLike);
 
-        ParticleFilterEngine.StepResult result = engine.update(motionInput, observation);
+        ParticleFilterEngine.StepResult result = engine.update(
+                motionInput,
+                observation,
+                coordinateConverter
+        );
         lastDiagnostics = result.diagnostics;
 
-        // Convert engine geographic output into the local x/y frame used by recorder/UI.
-        latestRawPose = enrichWithLocalCoordinates(result.fusedPose);
+        latestRawPose = result.fusedPose;
 
-        // Kalman-style output smoothing is applied only to the exported/displayed pose.
+        boolean strongAbsoluteObservation =
+                observation != null && "map_match".equals(observation.source);
+
         KalmanPoseSmoother.SmoothedPose smoothedPose = kalmanPoseSmoother.update(
-                latestRawPose.getXMeters(),
-                latestRawPose.getYMeters(),
+                latestRawPose.getX(),
+                latestRawPose.getY(),
                 latestRawPose.getHeadingRad(),
                 latestRawPose.getConfidence(),
                 motionInput.deltaForwardMeters,
                 Math.abs(motionInput.deltaHeadingRad),
-                observation != null && ("wifi".equals(observation.source) || "map_match".equals(observation.source)),
-                observation != null && "gnss".equals(observation.source)
+                strongAbsoluteObservation
         );
 
         LatLng smoothedLatLng = latestRawPose.getLatLng();
@@ -479,14 +457,16 @@ public class ParticleFilterManager {
                 latestRawPose.getConfidence()
         );
 
+        lastPoseShouldBeDrawn = lastMotionWasMeaningful;
+
         pushLatestPoseToOutputs();
 
         Log.d(TAG, String.format(Locale.US,
                 "PF_OUTPUT lat=%.6f lng=%.6f x=%.3f y=%.3f floor=%d conf=%.3f",
                 latestFusedPose.getLatLng().latitude,
                 latestFusedPose.getLatLng().longitude,
-                latestFusedPose.getXMeters(),
-                latestFusedPose.getYMeters(),
+                latestFusedPose.getX(),
+                latestFusedPose.getY(),
                 latestFusedPose.getFloor(),
                 latestFusedPose.getConfidence()));
 
@@ -496,7 +476,6 @@ public class ParticleFilterManager {
                 result.diagnostics.aliveParticles,
                 result.diagnostics.wallRejectedCount,
                 result.diagnostics.floorRejectedCount,
-                result.diagnostics.outOfWalkablePenalisedCount,
                 result.diagnostics.observationWeightedCount,
                 lastObservationSummary
         );
@@ -511,7 +490,6 @@ public class ParticleFilterManager {
         );
     }
 
-    /** Pushes the latest PF outputs back into SensorFusion and host callback. */
     private void pushLatestPoseToOutputs() {
         sensorFusion.setLatestRawFusedPose(latestRawPose);
         sensorFusion.setLatestFusedPose(latestFusedPose);
@@ -521,7 +499,6 @@ public class ParticleFilterManager {
         }
     }
 
-    /** Attempts one-time PF initialisation from current GNSS. */
     private void tryInitialiseFromCurrentSensors() {
         float[] gnss = sensorFusion.getGNSSLatitude(false);
         if (gnss == null || gnss.length < 2) {
@@ -533,14 +510,17 @@ public class ParticleFilterManager {
         }
 
         int floor = 0;
-        double heading = sensorFusion.passOrientation();
 
+        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
+            floor = indoorMapManager.indexToLogicalFloor(indoorMapManager.getCurrentFloor());
+        } else if (sensorFusion.getLatLngWifiPositioning() != null) {
+            floor = sensorFusion.getWifiFloor();
+        }
+
+        double heading = sensorFusion.passOrientation();
         initialiseFromGnss(new LatLng(gnss[0], gnss[1]), floor, heading);
     }
 
-    /**
-     * Converts raw PDR into one PF motion step.
-     */
     @NonNull
     private ParticleFilterEngine.MotionInput buildMotionInput(@NonNull float[] pdr,
                                                               long timestampMs) {
@@ -551,6 +531,13 @@ public class ParticleFilterManager {
             double dx = pdr[0] - lastPdrValues[0];
             double dy = pdr[1] - lastPdrValues[1];
             deltaForwardMeters = Math.sqrt(dx * dx + dy * dy);
+
+            if (deltaForwardMeters < PF_MOTION_DEADBAND_METERS) {
+                deltaForwardMeters = 0.0;
+            }
+
+            deltaForwardMeters *= PF_MOTION_SCALE;
+            deltaForwardMeters = Math.min(deltaForwardMeters, PF_MAX_STEP_METERS);
         }
 
         double currentHeading = sensorFusion.passOrientation();
@@ -560,7 +547,6 @@ public class ParticleFilterManager {
             deltaHeadingRad = wrapAngleRad(currentHeading - latestFusedPose.getHeadingRad());
         }
 
-        // Build a conservative vertical hint from recent barometer/elevator evidence.
         verticalMotionDetector.addSample(
                 timestampMs,
                 sensorFusion.getElevation(),
@@ -571,22 +557,25 @@ public class ParticleFilterManager {
         double deltaHeightMeters = 0.0;
         boolean heightChanged = false;
         String connectorState = "connector=none";
+
         if (verticalHint != null) {
             deltaHeightMeters = verticalHint.getDeltaHeight();
             heightChanged = verticalHint.isHeightChanged();
 
             if (constraintModel != null && latestFusedPose != null) {
                 connectorState = "connector=" + constraintModel.classifyNearbyConnector(
-                        latestFusedPose.getLatLng().latitude,
-                        latestFusedPose.getLatLng().longitude,
+                        latestFusedPose.getX(),
+                        latestFusedPose.getY(),
                         latestFusedPose.getFloor());
+
                 boolean nearStairs = constraintModel.isNearStairs(
-                        latestFusedPose.getLatLng().latitude,
-                        latestFusedPose.getLatLng().longitude,
+                        latestFusedPose.getX(),
+                        latestFusedPose.getY(),
                         latestFusedPose.getFloor());
+
                 boolean nearLift = constraintModel.isNearLift(
-                        latestFusedPose.getLatLng().latitude,
-                        latestFusedPose.getLatLng().longitude,
+                        latestFusedPose.getX(),
+                        latestFusedPose.getY(),
                         latestFusedPose.getFloor());
 
                 if (heightChanged && !nearStairs && !nearLift) {
@@ -600,21 +589,25 @@ public class ParticleFilterManager {
 
         lastPdrValues = new float[]{pdr[0], pdr[1]};
 
+        lastMotionWasMeaningful = deltaForwardMeters >= PF_DRAW_MIN_TRANSLATION_METERS || heightChanged;
+
         lastMotionSummary = String.format(Locale.US,
-                "motion=ds%.2f dθ%.1f° dh%.2f %s hc=%s",
+                "motion=ds%.2f dθ%.1f° dh%.2f %s hc=%s draw=%s",
                 deltaForwardMeters,
                 Math.toDegrees(deltaHeadingRad),
                 deltaHeightMeters,
                 connectorState,
-                String.valueOf(heightChanged));
+                String.valueOf(heightChanged),
+                String.valueOf(lastMotionWasMeaningful));
 
         Log.d(TAG, String.format(Locale.US,
-                "PF_MOTION deltaS=%.3f deltaHeadingDeg=%.2f deltaH=%.2f heightChanged=%s %s",
+                "PF_MOTION deltaS=%.3f deltaHeadingDeg=%.2f deltaH=%.2f heightChanged=%s %s draw=%s",
                 deltaForwardMeters,
                 Math.toDegrees(deltaHeadingRad),
                 deltaHeightMeters,
                 String.valueOf(heightChanged),
-                connectorState));
+                connectorState,
+                String.valueOf(lastMotionWasMeaningful)));
 
         return new ParticleFilterEngine.MotionInput(
                 deltaForwardMeters,
@@ -626,7 +619,7 @@ public class ParticleFilterManager {
     }
 
     /**
-     * Builds the strongest currently-available absolute observation.
+     * Builds absolute observations in local x/y.
      *
      * Priority:
      * 1) map-matched pose
@@ -634,14 +627,25 @@ public class ParticleFilterManager {
      * 3) GNSS
      */
     @Nullable
-    private ParticleFilterEngine.AbsoluteObservation buildObservation() {
-        LatLng currentBelief = latestFusedPose != null ? latestFusedPose.getLatLng() : null;
+    private ParticleFilterEngine.AbsoluteObservation buildObservation(boolean stationaryLike) {
+        if (coordinateConverter == null) {
+            lastObservationSummary = "obs:none";
+            return null;
+        }
+
+        double beliefX = latestFusedPose != null ? latestFusedPose.getX() : 0.0;
+        double beliefY = latestFusedPose != null ? latestFusedPose.getY() : 0.0;
+        boolean haveBelief = latestFusedPose != null;
+
         double sigmaWifi = activeConfig != null ? activeConfig.observationSigmaWifiMeters : 2.5;
         double sigmaGnss = activeConfig != null ? activeConfig.observationSigmaGnssMeters : 5.0;
+        boolean indoorActive = indoorMapManager != null && indoorMapManager.getIsIndoorMapSet();
 
-        // Strongest indoor observation: map matched pose.
+        // 1) map-match
         if (latestMatchedPose != null && latestMatchedPose.getLatLng() != null) {
-            LatLng ll = latestMatchedPose.getLatLng();
+            LatLng latLng = latestMatchedPose.getLatLng();
+            double[] local = coordinateConverter.latLngToLocal(latLng);
+
             Integer floor;
             if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
                 floor = indoorMapManager.indexToLogicalFloor(latestMatchedPose.getFloor());
@@ -649,9 +653,9 @@ public class ParticleFilterManager {
                 floor = latestMatchedPose.getFloor();
             }
 
-            if (currentBelief != null) {
-                double jumpMeters = distanceMeters(currentBelief, ll);
-                if (jumpMeters > 20.0) {
+            if (haveBelief) {
+                double jumpMeters = Math.hypot(local[0] - beliefX, local[1] - beliefY);
+                if (jumpMeters > MAP_MATCH_JUMP_GATE_METERS) {
                     lastObservationSummary = String.format(Locale.US,
                             "obs:map_match_reject_jump(%.1fm)", jumpMeters);
                     Log.d(TAG, lastObservationSummary);
@@ -661,30 +665,43 @@ public class ParticleFilterManager {
 
             lastObservationSummary = String.format(Locale.US,
                     "obs:map_match floor=%s", String.valueOf(floor));
+
             return new ParticleFilterEngine.AbsoluteObservation(
-                    ll,
+                    local[0],
+                    local[1],
                     floor,
-                    latestMatchedPose.getHeadingRad(),
-                    1.2,
-                    Math.toRadians(12.0),
-                    0.92,
+                    null,
+                    1.8,
+                    Math.toRadians(15.0),
+                    0.80,
                     "map_match"
             );
         }
 
-        // WiFi as indoor fallback.
+        // 2) WiFi
         LatLng wifi = sensorFusion.getLatLngWifiPositioning();
         int wifiCount = sensorFusion.getWifiList() == null ? 0 : sensorFusion.getWifiList().size();
+
         if (wifi != null && !(Math.abs(wifi.latitude) < 1e-6 && Math.abs(wifi.longitude) < 1e-6)) {
-            if (wifiCount < 3) {
+            if (indoorActive && !stationaryLike) {
+                lastObservationSummary = "obs:wifi_suppressed_moving";
+                Log.d(TAG, lastObservationSummary);
+                return null;
+            }
+
+            if (wifiCount < WIFI_MIN_AP_COUNT) {
                 lastObservationSummary = "obs:wifi_reject_low_ap_count";
                 Log.d(TAG, lastObservationSummary);
                 return null;
             }
 
-            if (currentBelief != null) {
-                double jumpMeters = distanceMeters(currentBelief, wifi);
-                double gateMeters = indoorMapManager != null && indoorMapManager.getIsIndoorMapSet() ? 22.0 : 30.0;
+            double[] local = coordinateConverter.latLngToLocal(wifi);
+
+            if (haveBelief) {
+                double jumpMeters = Math.hypot(local[0] - beliefX, local[1] - beliefY);
+                double gateMeters = indoorActive
+                        ? WIFI_JUMP_GATE_INDOOR_METERS
+                        : WIFI_JUMP_GATE_OUTDOOR_METERS;
                 if (jumpMeters > gateMeters) {
                     lastObservationSummary = String.format(Locale.US,
                             "obs:wifi_reject_jump(%.1fm)", jumpMeters);
@@ -693,27 +710,23 @@ public class ParticleFilterManager {
                 }
             }
 
-            double confidence = wifiCount >= 6 ? 0.65 : (wifiCount >= 4 ? 0.50 : 0.35);
-            double sigmaMeters = sigmaWifi * (wifiCount >= 6 ? 1.0 : 1.35);
             int wifiFloor = sensorFusion.getWifiFloor();
 
-            if (constraintModel != null && indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()
-                    && !constraintModel.isWalkable(wifi.latitude, wifi.longitude, wifiFloor)) {
-                confidence *= 0.6;
-                sigmaMeters *= 1.5;
+            double confidence;
+            if (wifiCount >= 10) {
+                confidence = indoorActive ? 0.05 : 0.20;
+            } else {
+                confidence = indoorActive ? 0.03 : 0.12;
             }
+
+            double sigmaMeters = indoorActive ? sigmaWifi * 4.5 : sigmaWifi * 1.8;
 
             lastObservationSummary = String.format(Locale.US,
                     "obs:wifi ap=%d floor=%d", wifiCount, wifiFloor);
-            Log.d(TAG, String.format(Locale.US,
-                    "PF_OBS source=wifi lat=%.6f lng=%.6f floor=%d ap=%d",
-                    wifi.latitude,
-                    wifi.longitude,
-                    wifiFloor,
-                    wifiCount));
 
             return new ParticleFilterEngine.AbsoluteObservation(
-                    wifi,
+                    local[0],
+                    local[1],
                     wifiFloor,
                     null,
                     sigmaMeters,
@@ -723,16 +736,23 @@ public class ParticleFilterManager {
             );
         }
 
-        // GNSS as weakest fallback.
+        // 3) GNSS
         float[] gnss = sensorFusion.getGNSSLatitude(false);
         if (gnss != null && gnss.length >= 2
                 && !(Math.abs(gnss[0]) < 1e-6 && Math.abs(gnss[1]) < 1e-6)) {
-            LatLng gnssLatLng = new LatLng(gnss[0], gnss[1]);
 
-            if (currentBelief != null) {
-                double jumpMeters = distanceMeters(currentBelief, gnssLatLng);
-                double gateMeters = indoorMapManager != null && indoorMapManager.getIsIndoorMapSet() ? 38.0 : 50.0;
-                if (jumpMeters > gateMeters) {
+            if (indoorActive) {
+                lastObservationSummary = "obs:gnss_disabled_indoors";
+                Log.d(TAG, lastObservationSummary);
+                return null;
+            }
+
+            LatLng gnssLatLng = new LatLng(gnss[0], gnss[1]);
+            double[] local = coordinateConverter.latLngToLocal(gnssLatLng);
+
+            if (haveBelief) {
+                double jumpMeters = Math.hypot(local[0] - beliefX, local[1] - beliefY);
+                if (jumpMeters > GNSS_JUMP_GATE_OUTDOOR_METERS) {
                     lastObservationSummary = String.format(Locale.US,
                             "obs:gnss_reject_jump(%.1fm)", jumpMeters);
                     Log.d(TAG, lastObservationSummary);
@@ -740,30 +760,16 @@ public class ParticleFilterManager {
                 }
             }
 
-            double confidence = indoorMapManager != null && indoorMapManager.getIsIndoorMapSet() ? 0.12 : 0.30;
-            double sigmaMeters = indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()
-                    ? sigmaGnss * 1.8
-                    : sigmaGnss;
-
-            if (constraintModel != null && indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()
-                    && !constraintModel.isWalkable(gnssLatLng.latitude, gnssLatLng.longitude,
-                    latestFusedPose != null ? latestFusedPose.getFloor() : 0)) {
-                confidence *= 0.5;
-                sigmaMeters *= 1.5;
-            }
-
             lastObservationSummary = "obs:gnss";
-            Log.d(TAG, String.format(Locale.US,
-                    "PF_OBS source=gnss lat=%.6f lng=%.6f",
-                    gnss[0], gnss[1]));
 
             return new ParticleFilterEngine.AbsoluteObservation(
-                    gnssLatLng,
+                    local[0],
+                    local[1],
                     null,
                     null,
-                    sigmaMeters,
+                    sigmaGnss * 1.8,
                     Math.toRadians(60.0),
-                    confidence,
+                    0.08,
                     "gnss"
             );
         }
@@ -773,20 +779,13 @@ public class ParticleFilterManager {
         return null;
     }
 
-    private static double distanceMeters(@NonNull LatLng a, @NonNull LatLng b) {
-        double dLat = (b.latitude - a.latitude) * 111320.0;
-        double midLatRad = Math.toRadians((a.latitude + b.latitude) * 0.5);
-        double dLng = (b.longitude - a.longitude) * 111320.0 * Math.cos(midLatRad);
-        return Math.sqrt(dLat * dLat + dLng * dLng);
-    }
-
     /**
-     * Hybrid map constraint model backed by IndoorMapManager floor shapes.
+     * Local x/y adapter around the existing geographic floor-shape / map utilities.
+     *
+     * The particle filter stays local.
+     * Constraints convert local x/y to LatLng only when the map must be queried.
      */
-    private static class HybridConstraintModel implements ParticleFilterEngine.ConstraintModel {
-
-        private static final double WALL_EXCLUSION_METERS = 0.30;
-        private static final double NEAR_WALL_SOFT_METERS = 1.20;
+    private class HybridConstraintModel implements ParticleFilterEngine.ConstraintModel {
 
         @Nullable
         private final IndoorMapManager indoorMapManager;
@@ -803,48 +802,38 @@ public class ParticleFilterManager {
             return indoorMapManager.getFloorShapesForLogicalFloor(logicalFloor);
         }
 
-        private boolean isInsideSelectedBuilding(@NonNull LatLng point) {
-            if (indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
-                return true;
+        @Nullable
+        private LatLng toLatLng(double x, double y) {
+            if (coordinateConverter == null) {
+                return null;
             }
-
-            int currentBuilding = indoorMapManager.getCurrentBuilding();
-            switch (currentBuilding) {
-                case IndoorMapManager.BUILDING_NUCLEUS:
-                    return BuildingPolygon.inNucleus(point);
-                case IndoorMapManager.BUILDING_LIBRARY:
-                    return BuildingPolygon.inLibrary(point);
-                case IndoorMapManager.BUILDING_MURCHISON:
-                    return BuildingPolygon.inMurchison(point);
-                default:
-                    return true;
-            }
+            return coordinateConverter.localToLatLng(x, y);
         }
 
-        boolean isNearStairs(double lat, double lng, int logicalFloor) {
-            FloorplanApiClient.FloorShapes floorShapes = getFloorShapes(logicalFloor);
-            if (floorShapes == null) {
+        boolean isNearStairs(double x, double y, int floor) {
+            FloorplanApiClient.FloorShapes floorShapes = getFloorShapes(floor);
+            LatLng point = toLatLng(x, y);
+            if (floorShapes == null || point == null) {
                 return false;
             }
-            LatLng point = new LatLng(lat, lng);
             return MapGeometryUtils.isInsideIndoorType(point, floorShapes, "stairs")
                     || MapGeometryUtils.isNearStairs(point, floorShapes);
         }
 
-        boolean isNearLift(double lat, double lng, int logicalFloor) {
-            FloorplanApiClient.FloorShapes floorShapes = getFloorShapes(logicalFloor);
-            if (floorShapes == null) {
+        boolean isNearLift(double x, double y, int floor) {
+            FloorplanApiClient.FloorShapes floorShapes = getFloorShapes(floor);
+            LatLng point = toLatLng(x, y);
+            if (floorShapes == null || point == null) {
                 return false;
             }
-            LatLng point = new LatLng(lat, lng);
             return MapGeometryUtils.isInsideIndoorType(point, floorShapes, "lift")
                     || MapGeometryUtils.isNearLift(point, floorShapes);
         }
 
         @NonNull
-        String classifyNearbyConnector(double lat, double lng, int logicalFloor) {
-            boolean stairs = isNearStairs(lat, lng, logicalFloor);
-            boolean lift = isNearLift(lat, lng, logicalFloor);
+        String classifyNearbyConnector(double x, double y, int floor) {
+            boolean stairs = isNearStairs(x, y, floor);
+            boolean lift = isNearLift(x, y, floor);
             if (stairs && lift) {
                 return "stairs+lift";
             }
@@ -858,43 +847,29 @@ public class ParticleFilterManager {
         }
 
         @Override
-        public boolean isWalkable(double lat, double lng, int logicalFloor) {
-            LatLng point = new LatLng(lat, lng);
-            if (!isInsideSelectedBuilding(point)) {
-                return false;
-            }
-
-            FloorplanApiClient.FloorShapes floorShapes = getFloorShapes(logicalFloor);
-            if (floorShapes == null) {
-                return true;
-            }
-
-            double nearestWallMeters = nearestWallDistanceMeters(point, floorShapes);
-            return nearestWallMeters > WALL_EXCLUSION_METERS;
-        }
-
-        @Override
-        public boolean crossesWall(double oldLat, double oldLng,
-                                   double newLat, double newLng,
-                                   int logicalFloor) {
+        public boolean crossesWall(double oldX, double oldY,
+                                   double newX, double newY,
+                                   int floor) {
             if (indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
                 return false;
             }
 
-            FloorplanApiClient.FloorShapes floorShapes = getFloorShapes(logicalFloor);
-            if (floorShapes == null) {
-                return isWalkable(oldLat, oldLng, logicalFloor) && !isWalkable(newLat, newLng, logicalFloor);
+            LatLng oldPoint = toLatLng(oldX, oldY);
+            LatLng newPoint = toLatLng(newX, newY);
+            if (oldPoint == null || newPoint == null) {
+                return false;
             }
 
-            return MapGeometryUtils.crossesWall(
-                    new LatLng(oldLat, oldLng),
-                    new LatLng(newLat, newLng),
-                    floorShapes
-            );
+            FloorplanApiClient.FloorShapes floorShapes = getFloorShapes(floor);
+            if (floorShapes == null) {
+                return false;
+            }
+
+            return MapGeometryUtils.crossesWall(oldPoint, newPoint, floorShapes);
         }
 
         @Override
-        public boolean isFloorTransitionAllowed(double lat, double lng, int oldFloor, int newFloor) {
+        public boolean isFloorTransitionAllowed(double x, double y, int oldFloor, int newFloor) {
             if (oldFloor == newFloor) {
                 return true;
             }
@@ -903,161 +878,20 @@ public class ParticleFilterManager {
                 return true;
             }
 
-            boolean stairsSource = isNearStairs(lat, lng, oldFloor);
-            boolean liftSource = isNearLift(lat, lng, oldFloor);
-            boolean stairsTarget = isNearStairs(lat, lng, newFloor);
-            boolean liftTarget = isNearLift(lat, lng, newFloor);
+            boolean stairsSource = isNearStairs(x, y, oldFloor);
+            boolean liftSource = isNearLift(x, y, oldFloor);
+            boolean stairsTarget = isNearStairs(x, y, newFloor);
+            boolean liftTarget = isNearLift(x, y, newFloor);
 
             return (stairsSource && stairsTarget)
                     || (liftSource && liftTarget)
-                    || stairsSource || liftSource || stairsTarget || liftTarget;
-        }
-
-        @Override
-        public double mapLikelihood(double lat, double lng, int logicalFloor) {
-            LatLng point = new LatLng(lat, lng);
-            if (!isInsideSelectedBuilding(point)) {
-                return 0.05;
-            }
-
-            FloorplanApiClient.FloorShapes floorShapes = getFloorShapes(logicalFloor);
-            if (floorShapes == null) {
-                return 0.80;
-            }
-
-            double nearestWallMeters = nearestWallDistanceMeters(point, floorShapes);
-            if (nearestWallMeters <= 0.10) {
-                return 0.05;
-            }
-            if (nearestWallMeters <= WALL_EXCLUSION_METERS) {
-                return 0.20;
-            }
-            if (nearestWallMeters <= 0.70) {
-                return 0.55;
-            }
-            if (nearestWallMeters <= NEAR_WALL_SOFT_METERS) {
-                return 0.80;
-            }
-            return 1.0;
-        }
-
-        @Nullable
-        @Override
-        public CandidatePose getRecoveryPose(@NonNull LatLng currentLatLng, int logicalFloor) {
-            if (isWalkable(currentLatLng.latitude, currentLatLng.longitude, logicalFloor)) {
-                return new CandidatePose(currentLatLng, logicalFloor, SystemClock.elapsedRealtime(), "pf_recovery");
-            }
-
-            FloorplanApiClient.FloorShapes floorShapes = getFloorShapes(logicalFloor);
-            if (floorShapes == null) {
-                return null;
-            }
-
-            LatLng stairs = MapGeometryUtils.findNearestSafeInteriorPointOnIndoorType(
-                    currentLatLng,
-                    floorShapes,
-                    "stairs"
-            );
-            LatLng lift = MapGeometryUtils.findNearestSafeInteriorPointOnIndoorType(
-                    currentLatLng,
-                    floorShapes,
-                    "lift"
-            );
-
-            LatLng best = null;
-            if (stairs != null && lift != null) {
-                best = distanceMeters(currentLatLng, stairs) <= distanceMeters(currentLatLng, lift) ? stairs : lift;
-            } else if (stairs != null) {
-                best = stairs;
-            } else if (lift != null) {
-                best = lift;
-            }
-
-            if (best == null) {
-                return null;
-            }
-
-            return new CandidatePose(best, logicalFloor, SystemClock.elapsedRealtime(), "pf_recovery");
-        }
-
-        private static double nearestWallDistanceMeters(@NonNull LatLng point,
-                                                        @NonNull FloorplanApiClient.FloorShapes floorShapes) {
-            double best = Double.POSITIVE_INFINITY;
-            if (floorShapes.getFeatures() == null) {
-                return best;
-            }
-
-            for (FloorplanApiClient.MapShapeFeature feature : floorShapes.getFeatures()) {
-                if (!"wall".equalsIgnoreCase(feature.getIndoorType())) {
-                    continue;
-                }
-                if (feature.getParts() == null) {
-                    continue;
-                }
-                for (List<LatLng> part : feature.getParts()) {
-                    if (part == null || part.size() < 2) {
-                        continue;
-                    }
-                    for (int i = 0; i < part.size() - 1; i++) {
-                        best = Math.min(best, pointToSegmentDistanceMeters(point, part.get(i), part.get(i + 1)));
-                    }
-                }
-            }
-            return best;
-        }
-
-        private static double pointToSegmentDistanceMeters(@NonNull LatLng p,
-                                                           @NonNull LatLng a,
-                                                           @NonNull LatLng b) {
-            double[] pxy = toLocalMeters(p, p);
-            double[] axy = toLocalMeters(a, p);
-            double[] bxy = toLocalMeters(b, p);
-
-            double ax = axy[0];
-            double ay = axy[1];
-            double bx = bxy[0];
-            double by = bxy[1];
-            double px = pxy[0];
-            double py = pxy[1];
-
-            double vx = bx - ax;
-            double vy = by - ay;
-            double wx = px - ax;
-            double wy = py - ay;
-
-            double vv = vx * vx + vy * vy;
-            if (vv <= 1e-9) {
-                double dx = px - ax;
-                double dy = py - ay;
-                return Math.sqrt(dx * dx + dy * dy);
-            }
-
-            double t = (wx * vx + wy * vy) / vv;
-            t = Math.max(0.0, Math.min(1.0, t));
-
-            double cx = ax + t * vx;
-            double cy = ay + t * vy;
-            double dx = px - cx;
-            double dy = py - cy;
-            return Math.sqrt(dx * dx + dy * dy);
-        }
-
-        private static double[] toLocalMeters(@NonNull LatLng point, @NonNull LatLng origin) {
-            double dNorth = (point.latitude - origin.latitude) * 111320.0;
-            double midLatRad = Math.toRadians((point.latitude + origin.latitude) * 0.5);
-            double dEast = (point.longitude - origin.longitude) * 111320.0 * Math.cos(midLatRad);
-            return new double[]{dEast, dNorth};
-        }
-
-        private static double distanceMeters(@NonNull LatLng a, @NonNull LatLng b) {
-            double dLat = (b.latitude - a.latitude) * 111320.0;
-            double midLatRad = Math.toRadians((a.latitude + b.latitude) * 0.5);
-            double dLng = (b.longitude - a.longitude) * 111320.0 * Math.cos(midLatRad);
-            return Math.sqrt(dLat * dLat + dLng * dLng);
+                    || stairsSource
+                    || liftSource
+                    || stairsTarget
+                    || liftTarget;
         }
     }
 
-    /** Wrap angle to [-pi, pi]. */
     private static double wrapAngleRad(double a) {
         while (a > Math.PI) a -= 2.0 * Math.PI;
         while (a < -Math.PI) a += 2.0 * Math.PI;

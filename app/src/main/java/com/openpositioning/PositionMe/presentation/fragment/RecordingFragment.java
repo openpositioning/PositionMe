@@ -528,6 +528,11 @@ public class RecordingFragment extends Fragment {
                         + ", floor=" + fusedPose.getFloor()
                         + ", confidence=" + fusedPose.getConfidence());
 
+        if (!sensorFusion.shouldDrawLatestParticleFilterPose()) {
+            Log.d(TAG, "PF draw skipped: no meaningful movement");
+            return;
+        }
+
         trajectoryMapFragment.updateUserLocation(
                 fusedPose.getLatLng(),
                 (float) Math.toDegrees(fusedPose.getHeadingRad())

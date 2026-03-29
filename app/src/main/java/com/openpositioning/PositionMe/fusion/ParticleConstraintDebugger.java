@@ -8,12 +8,11 @@ import androidx.annotation.Nullable;
 import java.util.Locale;
 
 /**
- * Helper used to keep PF constraint logging readable.
+ * Helper used to keep PF logging readable.
  *
  * This class does not change PF behaviour.
  * It only formats state into consistent Logcat lines.
  */
-
 public class ParticleConstraintDebugger {
     private final String tag;
     private long lastLogTimeMs = 0L;
@@ -32,8 +31,7 @@ public class ParticleConstraintDebugger {
                         int aliveCount,
                         int wallRejectedCount,
                         int floorRejectedCount,
-                        int connectorAcceptedCount,
-                        int observationAcceptedCount,
+                        int observationWeightedCount,
                         @Nullable String note) {
         long now = System.currentTimeMillis();
         if (now - lastLogTimeMs < minIntervalMs) {
@@ -42,14 +40,13 @@ public class ParticleConstraintDebugger {
         lastLogTimeMs = now;
 
         Log.d(tag, String.format(Locale.US,
-                "PF_CONSTRAINT phase=%s particles=%d alive=%d wallRejected=%d floorRejected=%d connectorAccepted=%d obsAccepted=%d note=%s",
+                "PF_STEP phase=%s particles=%d alive=%d wallRejected=%d floorRejected=%d obsWeighted=%d note=%s",
                 phase,
                 particleCount,
                 aliveCount,
                 wallRejectedCount,
                 floorRejectedCount,
-                connectorAcceptedCount,
-                observationAcceptedCount,
+                observationWeightedCount,
                 note == null ? "-" : note));
     }
 

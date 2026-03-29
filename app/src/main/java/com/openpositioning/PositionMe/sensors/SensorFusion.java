@@ -768,6 +768,10 @@ public class SensorFusion implements SensorEventListener {
         return state.elevator;
     }
 
+    public boolean shouldDrawLatestParticleFilterPose() {
+        return particleFilterManager != null && particleFilterManager.shouldDrawLatestPose();
+    }
+
     public int getHoldMode() {
         int proximityThreshold = 1;
         int lightThreshold = 100;

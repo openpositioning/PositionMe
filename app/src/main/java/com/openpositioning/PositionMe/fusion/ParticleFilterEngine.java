@@ -6,31 +6,21 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.openpositioning.PositionMe.mapmatching.CandidatePose;
-import com.openpositioning.PositionMe.utils.IndoorMapManager;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 
 /**
  * Core particle filter engine for live indoor positioning.
  *
- * Design goals:
- * - Keep the engine independent from Fragment/UI code.
- * - Support a hybrid strategy:
- *   1) prediction from motion
- *   2) optional map-constraint penalty / rejection
- *   3) optional absolute observation weighting (GNSS / WiFi / matched pose)
- *   4) resampling
- *   5) fused state extraction
- *
- * Important:
- * This engine is intentionally conservative.
- * It does NOT immediately kill every particle near a wall unless the transition is clearly impossible.
- * That makes debugging and convergence much more stable in early integration.
+ * Cleaned design goals:
+ * - keep the state in local x/y meters
+ * - use the map only as a feasibility veto
+ * - never use map likelihoods or walkable penalties as continuous weights
+ * - convert to LatLng only once when exporting the fused pose
  */
 public class ParticleFilterEngine {
 
@@ -40,39 +30,50 @@ public class ParticleFilterEngine {
      * Individual particle.
      */
     public static class Particle {
-        public double lat;
-        public double lng;
+        public double x;
+        public double y;
         public double headingRad;
-        public int logicalFloor;
+        public int floor;
         public double weight;
         public boolean alive = true;
 
-        public Particle(double lat,
-                        double lng,
+        // True previous state saved before prediction.
+        public double prevX;
+        public double prevY;
+        public double prevHeadingRad;
+        public int prevFloor;
+
+        public Particle(double x,
+                        double y,
                         double headingRad,
-                        int logicalFloor,
+                        int floor,
                         double weight) {
-            this.lat = lat;
-            this.lng = lng;
+            this.x = x;
+            this.y = y;
             this.headingRad = headingRad;
-            this.logicalFloor = logicalFloor;
+            this.floor = floor;
             this.weight = weight;
+
+            this.prevX = x;
+            this.prevY = y;
+            this.prevHeadingRad = headingRad;
+            this.prevFloor = floor;
         }
 
+        @NonNull
         public Particle copy() {
-            Particle p = new Particle(lat, lng, headingRad, logicalFloor, weight);
+            Particle p = new Particle(x, y, headingRad, floor, weight);
             p.alive = alive;
+            p.prevX = prevX;
+            p.prevY = prevY;
+            p.prevHeadingRad = prevHeadingRad;
+            p.prevFloor = prevFloor;
             return p;
-        }
-
-        public LatLng toLatLng() {
-            return new LatLng(lat, lng);
         }
     }
 
     /**
      * Motion input for one PF update.
-     * This should usually come from PDR / IMU integration.
      */
     public static class MotionInput {
         public final double deltaForwardMeters;
@@ -95,27 +96,29 @@ public class ParticleFilterEngine {
     }
 
     /**
-     * Optional absolute observation.
-     * Can be GNSS, WiFi, or map-matched pose.
+     * Optional absolute observation in local x/y.
      */
     public static class AbsoluteObservation {
-        @Nullable public final LatLng latLng;
-        @Nullable public final Integer logicalFloor;
+        @Nullable public final Double x;
+        @Nullable public final Double y;
+        @Nullable public final Integer floor;
         @Nullable public final Double headingRad;
         public final double horizontalSigmaMeters;
         public final double headingSigmaRad;
         public final double confidence;
-        public final String source;
+        @NonNull public final String source;
 
-        public AbsoluteObservation(@Nullable LatLng latLng,
-                                   @Nullable Integer logicalFloor,
+        public AbsoluteObservation(@Nullable Double x,
+                                   @Nullable Double y,
+                                   @Nullable Integer floor,
                                    @Nullable Double headingRad,
                                    double horizontalSigmaMeters,
                                    double headingSigmaRad,
                                    double confidence,
                                    @NonNull String source) {
-            this.latLng = latLng;
-            this.logicalFloor = logicalFloor;
+            this.x = x;
+            this.y = y;
+            this.floor = floor;
             this.headingRad = headingRad;
             this.horizontalSigmaMeters = horizontalSigmaMeters;
             this.headingSigmaRad = headingSigmaRad;
@@ -125,98 +128,27 @@ public class ParticleFilterEngine {
     }
 
     /**
-     * Optional map-constraint helper.
+     * Optional map-constraint helper in local x/y space.
      *
-     * You can back this with:
-     * - IndoorMapManager
-     * - wall polygons / line segments
-     * - connector / stairs / lift regions
-     * - floor transition rules
+     * The map is treated as a feasibility gate only.
      */
     public interface ConstraintModel {
+        boolean crossesWall(double oldX, double oldY,
+                            double newX, double newY,
+                            int floor);
 
-        /**
-         * Returns true if the particle state is inside a valid walkable region.
-         */
-        boolean isWalkable(double lat, double lng, int logicalFloor);
-
-        /**
-         * Returns true if the transition from old->new is blocked by a wall / invalid barrier.
-         */
-        boolean crossesWall(double oldLat, double oldLng,
-                            double newLat, double newLng,
-                            int logicalFloor);
-
-        /**
-         * Returns true if changing from oldFloor to newFloor is allowed near this location.
-         * Usually this means stairs / lift / connector region.
-         */
-        boolean isFloorTransitionAllowed(double lat, double lng, int oldFloor, int newFloor);
-
-        /**
-         * Returns a soft map-consistency factor in [0, 1].
-         * 1 = strong agreement with map
-         * 0 = impossible according to map
-         */
-        double mapLikelihood(double lat, double lng, int logicalFloor);
-
-        /**
-         * Optional nearest valid pose for recovery if particles collapse.
-         */
-        @Nullable
-        CandidatePose getRecoveryPose(@NonNull LatLng currentLatLng, int logicalFloor);
+        boolean isFloorTransitionAllowed(double x, double y,
+                                         int oldFloor, int newFloor);
     }
 
     /**
-     * Tunable configuration for the PF.
-     */
-    public static class Config {
-        public int particleCount = 250;
-
-        // Prediction noise
-        public double forwardNoiseStdMeters = 0.25;
-        public double headingNoiseStdRad = Math.toRadians(6.0);
-
-        // Initial spread
-        public double initialPositionStdMeters = 1.0;
-        public double initialHeadingStdRad = Math.toRadians(12.0);
-
-        // Map-constraint behaviour
-        public boolean enableMapConstraints = true;
-        public boolean hardKillOnWallCross = true;
-        public boolean hardKillOnInvalidFloorTransition = true;
-        public boolean softPenaltyForOutOfWalkable = true;
-
-        public double outOfWalkablePenalty = 0.10;
-        public double wallCrossPenalty = 0.02;
-        public double invalidFloorPenalty = 0.02;
-
-        // Observation blending
-        public boolean enableAbsoluteObservationWeighting = true;
-        public double minimumWeightFloor = 1e-12;
-        public double observationSigmaWifiMeters = 2.5;
-        public double observationSigmaGnssMeters = 5.0;
-
-        // Degeneracy / recovery
-        public double resampleEffectiveSampleSizeRatio = 0.45;
-        public boolean enableRecoveryIfCollapsed = true;
-        public int recoverySeedCount = 40;
-        public double resampleRegularizationPosStdMeters = 0.03;
-        public double resampleRegularizationHeadingStdRad = Math.toRadians(1.0);
-
-        // Logging
-        public boolean debugLogging = true;
-    }
-
-    /**
-     * Summary of one update step for easier debugging.
+     * Summary of one update step for debugging.
      */
     public static class StepDiagnostics {
         public int totalParticles;
         public int aliveParticles;
         public int wallRejectedCount;
         public int floorRejectedCount;
-        public int outOfWalkablePenalisedCount;
         public int observationWeightedCount;
         public double effectiveSampleSize;
         public boolean resampled;
@@ -240,17 +172,14 @@ public class ParticleFilterEngine {
         }
     }
 
-    private final Config config;
+    private final ParticleFilterConfig config;
     private final Random random;
     private final List<Particle> particles = new ArrayList<>();
 
     @Nullable
     private ConstraintModel constraintModel;
-    @Nullable private LatLng referenceOriginLatLng;
-    private double referenceOriginLat = Double.NaN;
-    private double referenceOriginLng = Double.NaN;
 
-    public ParticleFilterEngine(@NonNull Config config) {
+    public ParticleFilterEngine(@NonNull ParticleFilterConfig config) {
         this.config = config;
         this.random = new Random();
     }
@@ -265,57 +194,35 @@ public class ParticleFilterEngine {
 
     public void clear() {
         particles.clear();
-        referenceOriginLatLng = null;
-        referenceOriginLat = Double.NaN;
-        referenceOriginLng = Double.NaN;
     }
 
     /**
-     * Initialise particles around a known anchor.
+     * Initialise particles around a known local anchor.
      */
-    public void initialise(@NonNull LatLng startLatLng,
-                           int logicalFloor,
+    public void initialise(double startX,
+                           double startY,
+                           int floor,
                            double headingRad) {
         particles.clear();
 
-        referenceOriginLatLng = startLatLng;
-        referenceOriginLat = startLatLng.latitude;
-        referenceOriginLng = startLatLng.longitude;
-
-        double initialSpreadMeters = config.initialPositionStdMeters;
-        double headingSpreadRad = config.initialHeadingStdRad;
+        double equalWeight = 1.0 / Math.max(1, config.particleCount);
 
         for (int i = 0; i < config.particleCount; i++) {
-            double dNorth = gaussian(0.0, initialSpreadMeters);
-            double dEast = gaussian(0.0, initialSpreadMeters);
-
-            LatLng perturbed = offsetLatLngMeters(startLatLng, dNorth, dEast);
-
-            double particleHeading = wrapAngleRad(headingRad + gaussian(0.0, headingSpreadRad));
-
-            Particle particle = new Particle(
-                    perturbed.latitude,
-                    perturbed.longitude,
-                    particleHeading,
-                    logicalFloor,
-                    1.0 / config.particleCount
+            double x = startX + gaussian(0.0, config.initialPositionStdMeters);
+            double y = startY + gaussian(0.0, config.initialPositionStdMeters);
+            double heading = wrapAngleRad(
+                    headingRad + gaussian(0.0, config.initialHeadingStdRad)
             );
 
-            if (constraintModel != null && config.enableMapConstraints) {
-                if (!constraintModel.isWalkable(particle.lat, particle.lng, logicalFloor)) {
-                    if (config.softPenaltyForOutOfWalkable) {
-                        particle.weight *= config.outOfWalkablePenalty;
-                    }
-                }
-            }
-
-            particles.add(particle);
+            particles.add(new Particle(x, y, heading, floor, equalWeight));
         }
 
         normaliseWeights();
-        log(String.format(Locale.US,
-                "Initialised PF with %d particles at %.6f, %.6f floor=%d",
-                particles.size(), startLatLng.latitude, startLatLng.longitude, logicalFloor));
+        log("Initialised PF with "
+                + particles.size()
+                + " particles at x=" + startX
+                + " y=" + startY
+                + " floor=" + floor);
     }
 
     /**
@@ -323,7 +230,8 @@ public class ParticleFilterEngine {
      */
     @NonNull
     public StepResult update(@NonNull MotionInput motionInput,
-                             @Nullable AbsoluteObservation absoluteObservation) {
+                             @Nullable AbsoluteObservation absoluteObservation,
+                             @NonNull CoordinateConverter coordinateConverter) {
 
         if (particles.isEmpty()) {
             throw new IllegalStateException("ParticleFilterEngine.update() called before initialise().");
@@ -332,8 +240,8 @@ public class ParticleFilterEngine {
         StepDiagnostics diagnostics = new StepDiagnostics();
         diagnostics.totalParticles = particles.size();
 
-        predictParticles(motionInput, diagnostics);
-        applyConstraintWeights(motionInput, diagnostics);
+        predictParticles(motionInput);
+        enforceConstraintsVeto(diagnostics);
 
         if (absoluteObservation != null && config.enableAbsoluteObservationWeighting) {
             applyAbsoluteObservation(absoluteObservation, diagnostics);
@@ -350,53 +258,48 @@ public class ParticleFilterEngine {
             diagnostics.resampled = true;
         }
 
-        if (countAliveParticles() == 0 || totalWeight() <= 0.0) {
-            if (config.enableRecoveryIfCollapsed) {
-                recoverParticles();
-                diagnostics.recovered = true;
-            }
+        if ((countAliveParticles() == 0 || totalWeight() <= 0.0) && config.enableRecoveryIfCollapsed) {
+            recoverParticles();
+            diagnostics.recovered = true;
+            normaliseWeights();
         }
 
-        normaliseWeights();
-        FusedPose fusedPose = buildFusedPose();
+        FusedPose fusedPose = buildFusedPose(coordinateConverter);
         List<Particle> snapshot = deepCopyParticles();
 
         if (config.debugLogging) {
-            Log.d(TAG, String.format(Locale.US,
-                    "PF step: alive=%d/%d wallReject=%d floorReject=%d walkPenalty=%d obsWeighted=%d ess=%.2f resampled=%s recovered=%s",
-                    diagnostics.aliveParticles,
-                    diagnostics.totalParticles,
-                    diagnostics.wallRejectedCount,
-                    diagnostics.floorRejectedCount,
-                    diagnostics.outOfWalkablePenalisedCount,
-                    diagnostics.observationWeightedCount,
-                    diagnostics.effectiveSampleSize,
-                    String.valueOf(diagnostics.resampled),
-                    String.valueOf(diagnostics.recovered)));
+            Log.d(TAG,
+                    "PF step: alive=" + diagnostics.aliveParticles + "/" + diagnostics.totalParticles
+                            + " wallRejected=" + diagnostics.wallRejectedCount
+                            + " floorRejected=" + diagnostics.floorRejectedCount
+                            + " obsWeighted=" + diagnostics.observationWeightedCount
+                            + " ess=" + diagnostics.effectiveSampleSize
+                            + " resampled=" + diagnostics.resampled
+                            + " recovered=" + diagnostics.recovered);
         }
 
         return new StepResult(fusedPose, diagnostics, snapshot);
     }
 
     /**
-     * Prediction step.
+     * Prediction step in local x/y.
      *
-     * Each particle:
-     * - perturbs heading
-     * - moves forward with motion noise
-     * - optionally changes logical floor if vertical change is significant
+     * x = east-west local metres
+     * y = north-south local metres
+     *
+     * headingRad convention:
+     * 0 = north, +pi/2 = east
      */
-    private void predictParticles(@NonNull MotionInput motionInput,
-                                  @NonNull StepDiagnostics diagnostics) {
-
+    private void predictParticles(@NonNull MotionInput motionInput) {
         for (Particle p : particles) {
             if (!p.alive) {
                 continue;
             }
 
-            double oldLat = p.lat;
-            double oldLng = p.lng;
-            int oldFloor = p.logicalFloor;
+            p.prevX = p.x;
+            p.prevY = p.y;
+            p.prevHeadingRad = p.headingRad;
+            p.prevFloor = p.floor;
 
             double noisyHeading = wrapAngleRad(
                     p.headingRad
@@ -410,26 +313,25 @@ public class ParticleFilterEngine {
             double dNorth = noisyForward * Math.cos(noisyHeading);
             double dEast = noisyForward * Math.sin(noisyHeading);
 
-            LatLng updated = offsetLatLngMeters(new LatLng(oldLat, oldLng), dNorth, dEast);
-
-            p.lat = updated.latitude;
-            p.lng = updated.longitude;
+            p.x += dEast;
+            p.y += dNorth;
             p.headingRad = noisyHeading;
 
-            // Simple vertical floor proposal.
             if (motionInput.heightChanged && Math.abs(motionInput.deltaHeightMeters) > 1.2) {
                 int floorDelta = motionInput.deltaHeightMeters > 0 ? 1 : -1;
-                p.logicalFloor = oldFloor + floorDelta;
+                p.floor = p.floor + floorDelta;
             }
         }
     }
 
     /**
-     * Apply map-based penalties / rejection after prediction.
+     * Apply map constraints as hard feasibility vetoes only.
+     *
+     * No continuous weighting.
+     * No walkable penalties.
+     * No map likelihood shaping.
      */
-    private void applyConstraintWeights(@NonNull MotionInput motionInput,
-                                        @NonNull StepDiagnostics diagnostics) {
-
+    private void enforceConstraintsVeto(@NonNull StepDiagnostics diagnostics) {
         if (constraintModel == null || !config.enableMapConstraints) {
             return;
         }
@@ -439,74 +341,37 @@ public class ParticleFilterEngine {
                 continue;
             }
 
-            // Walkability check
-            boolean walkable = constraintModel.isWalkable(p.lat, p.lng, p.logicalFloor);
-            if (!walkable) {
-                if (config.softPenaltyForOutOfWalkable) {
-                    p.weight *= config.outOfWalkablePenalty;
-                    diagnostics.outOfWalkablePenalisedCount++;
-                }
-            }
-
-            // We do a wall-cross / transition validation by approximating previous state
-            double backwardNorth = motionInput.deltaForwardMeters * Math.cos(p.headingRad);
-            double backwardEast = motionInput.deltaForwardMeters * Math.sin(p.headingRad);
-            LatLng approxPrev = offsetLatLngMeters(new LatLng(p.lat, p.lng), -backwardNorth, -backwardEast);
-
-            boolean crossedWall = constraintModel.crossesWall(
-                    approxPrev.latitude,
-                    approxPrev.longitude,
-                    p.lat,
-                    p.lng,
-                    p.logicalFloor
-            );
-
-            if (crossedWall) {
+            int wallFloor = p.prevFloor;
+            if (constraintModel.crossesWall(p.prevX, p.prevY, p.x, p.y, wallFloor)) {
                 diagnostics.wallRejectedCount++;
-                if (config.hardKillOnWallCross) {
-                    p.alive = false;
-                    p.weight = 0.0;
-                    continue;
-                } else {
-                    p.weight *= config.wallCrossPenalty;
-                }
+
+                // Reject the illegal translation but keep the heading update.
+                p.x = p.prevX;
+                p.y = p.prevY;
             }
 
-            // Floor transition check
-            if (motionInput.heightChanged && Math.abs(motionInput.deltaHeightMeters) > 1.2) {
-                int oldFloor = motionInput.deltaHeightMeters > 0
-                        ? p.logicalFloor - 1
-                        : p.logicalFloor + 1;
-
+            if (p.floor != p.prevFloor) {
                 boolean allowed = constraintModel.isFloorTransitionAllowed(
-                        p.lat, p.lng, oldFloor, p.logicalFloor
+                        p.x,
+                        p.y,
+                        p.prevFloor,
+                        p.floor
                 );
 
                 if (!allowed) {
                     diagnostics.floorRejectedCount++;
-                    if (config.hardKillOnInvalidFloorTransition) {
-                        p.alive = false;
-                        p.weight = 0.0;
-                        continue;
-                    } else {
-                        p.weight *= config.invalidFloorPenalty;
-                    }
+                    p.floor = p.prevFloor;
                 }
             }
-
-            // Soft map likelihood
-            double mapLikelihood = clamp01(
-                    constraintModel.mapLikelihood(p.lat, p.lng, p.logicalFloor)
-            );
-            p.weight *= Math.max(config.minimumWeightFloor, mapLikelihood);
         }
     }
 
     /**
-     * Apply absolute observation weighting.
+     * Apply absolute observation weighting in local x/y.
      */
     private void applyAbsoluteObservation(@NonNull AbsoluteObservation obs,
                                           @NonNull StepDiagnostics diagnostics) {
+        double cappedConfidence = capObservationConfidence(obs.source, obs.confidence);
 
         for (Particle p : particles) {
             if (!p.alive) {
@@ -515,19 +380,17 @@ public class ParticleFilterEngine {
 
             double w = 1.0;
 
-            if (obs.latLng != null) {
-                double distMeters = distanceMeters(
-                        p.lat, p.lng,
-                        obs.latLng.latitude, obs.latLng.longitude
-                );
+            if (obs.x != null && obs.y != null) {
+                double dx = p.x - obs.x;
+                double dy = p.y - obs.y;
+                double distance = Math.hypot(dx, dy);
+
                 double sigma = Math.max(0.5, obs.horizontalSigmaMeters);
-                w *= gaussianPdf(distMeters, 0.0, sigma);
+                w *= gaussianPdf(distance, 0.0, sigma);
             }
 
-            if (obs.logicalFloor != null) {
-                if (p.logicalFloor != obs.logicalFloor) {
-                    w *= 0.15;
-                }
+            if (obs.floor != null && p.floor != obs.floor) {
+                w *= 0.25;
             }
 
             if (obs.headingRad != null) {
@@ -536,13 +399,25 @@ public class ParticleFilterEngine {
                 w *= gaussianPdf(err, 0.0, sigma);
             }
 
-            // Blend by confidence so weak observations do not dominate too aggressively.
-            double confidence = clamp01(obs.confidence);
-            double blended = (1.0 - confidence) + confidence * w;
-
+            double blended = (1.0 - cappedConfidence) + cappedConfidence * w;
             p.weight *= Math.max(config.minimumWeightFloor, blended);
             diagnostics.observationWeightedCount++;
         }
+    }
+
+    private double capObservationConfidence(@NonNull String source, double confidence) {
+        double capped = clamp01(confidence);
+
+        if ("wifi".equals(source)) {
+            return Math.min(capped, 0.08);
+        }
+        if ("gnss".equals(source)) {
+            return Math.min(capped, 0.08);
+        }
+        if ("map_match".equals(source)) {
+            return Math.min(capped, 0.85);
+        }
+        return capped;
     }
 
     private void enforceWeightFloor() {
@@ -604,7 +479,7 @@ public class ParticleFilterEngine {
     }
 
     /**
-     * Standard systematic resampling.
+     * Standard systematic resampling in local x/y.
      */
     private void systematicResample() {
         List<Particle> newParticles = new ArrayList<>(particles.size());
@@ -619,23 +494,20 @@ public class ParticleFilterEngine {
             cumulative[i] = running;
         }
 
-        int i = 0;
+        int index = 0;
         for (int m = 0; m < particles.size(); m++) {
             double threshold = u + m * step;
-            while (i < cumulative.length - 1 && cumulative[i] < threshold) {
-                i++;
+            while (index < cumulative.length - 1 && cumulative[index] < threshold) {
+                index++;
             }
 
-            Particle copy = particles.get(i).copy();
+            Particle copy = particles.get(index).copy();
             copy.weight = 1.0 / particles.size();
             copy.alive = true;
 
             if (config.resampleRegularizationPosStdMeters > 0.0) {
-                double dNorth = gaussian(0.0, config.resampleRegularizationPosStdMeters);
-                double dEast = gaussian(0.0, config.resampleRegularizationPosStdMeters);
-                LatLng jittered = offsetLatLngMeters(new LatLng(copy.lat, copy.lng), dNorth, dEast);
-                copy.lat = jittered.latitude;
-                copy.lng = jittered.longitude;
+                copy.x += gaussian(0.0, config.resampleRegularizationPosStdMeters);
+                copy.y += gaussian(0.0, config.resampleRegularizationPosStdMeters);
             }
 
             if (config.resampleRegularizationHeadingStdRad > 0.0) {
@@ -652,55 +524,32 @@ public class ParticleFilterEngine {
     }
 
     /**
-     * Recovery if the PF collapses.
+     * Local-only recovery around the best particle.
      *
-     * Strategy:
-     * - keep a few random particles around the highest-weight survivor if possible
-     * - otherwise reseed around current fused pose or origin-like fallback
+     * This keeps the recovery logic simple and avoids map-driven teleporting.
      */
     private void recoverParticles() {
         Particle seed = findBestParticle();
-        LatLng center;
 
-        int floor;
-        double heading;
+        double centerX = 0.0;
+        double centerY = 0.0;
+        int floor = 0;
+        double heading = 0.0;
 
         if (seed != null) {
-            center = new LatLng(seed.lat, seed.lng);
-            floor = seed.logicalFloor;
+            centerX = seed.x;
+            centerY = seed.y;
+            floor = seed.floor;
             heading = seed.headingRad;
-        } else if (referenceOriginLatLng != null) {
-            center = referenceOriginLatLng;
-            floor = 0;
-            heading = 0.0;
-        } else {
-            center = new LatLng(0.0, 0.0);
-            floor = 0;
-            heading = 0.0;
-        }
-
-        if (constraintModel != null && center != null) {
-            CandidatePose recoveryPose = constraintModel.getRecoveryPose(center, floor);
-            if (recoveryPose != null && recoveryPose.getLatLng() != null) {
-                center = recoveryPose.getLatLng();
-                floor = recoveryPose.getLogicalFloor();
-                if (recoveryPose.getHeadingRad() != null) {
-                    heading = recoveryPose.getHeadingRad();
-                }
-            }
         }
 
         particles.clear();
 
         for (int i = 0; i < config.particleCount; i++) {
-            double dNorth = gaussian(0.0, 1.5);
-            double dEast = gaussian(0.0, 1.5);
-            LatLng p = offsetLatLngMeters(center, dNorth, dEast);
-
             particles.add(new Particle(
-                    p.latitude,
-                    p.longitude,
-                    wrapAngleRad(heading + gaussian(0.0, Math.toRadians(15))),
+                    centerX + gaussian(0.0, config.recoveryPositionStdMeters),
+                    centerY + gaussian(0.0, config.recoveryPositionStdMeters),
+                    wrapAngleRad(heading + gaussian(0.0, config.recoveryHeadingStdRad)),
                     floor,
                     1.0 / config.particleCount
             ));
@@ -710,10 +559,10 @@ public class ParticleFilterEngine {
     @Nullable
     private Particle findBestParticle() {
         Particle best = null;
-        double bestW = -1.0;
+        double bestWeight = -1.0;
         for (Particle p : particles) {
-            if (p.weight > bestW) {
-                bestW = p.weight;
+            if (p.weight > bestWeight) {
+                bestWeight = p.weight;
                 best = p;
             }
         }
@@ -721,12 +570,12 @@ public class ParticleFilterEngine {
     }
 
     /**
-     * Build fused pose from weighted mean.
+     * Build fused pose from weighted mean in local x/y.
      */
     @NonNull
-    private FusedPose buildFusedPose() {
-        double lat = 0.0;
-        double lng = 0.0;
+    private FusedPose buildFusedPose(@NonNull CoordinateConverter converter) {
+        double x = 0.0;
+        double y = 0.0;
         double cosSum = 0.0;
         double sinSum = 0.0;
 
@@ -740,58 +589,39 @@ public class ParticleFilterEngine {
                 continue;
             }
 
-            lat += p.lat * p.weight;
-            lng += p.lng * p.weight;
+            x += p.x * p.weight;
+            y += p.y * p.weight;
             cosSum += Math.cos(p.headingRad) * p.weight;
             sinSum += Math.sin(p.headingRad) * p.weight;
 
-            floors.add(p.logicalFloor);
+            floors.add(p.floor);
             floorWeights.add(p.weight);
             weightSum += p.weight;
         }
 
         if (weightSum <= 0.0) {
-            LatLng fallbackLatLng = referenceOriginLatLng != null
-                    ? referenceOriginLatLng
-                    : new LatLng(0.0, 0.0);
-
             return new FusedPose(
                     0.0,
                     0.0,
                     0.0,
                     0,
-                    fallbackLatLng,
+                    converter.localToLatLng(0.0, 0.0),
                     0.0f
             );
         }
 
-        // Safety in case weights are not perfectly normalised.
-        lat /= weightSum;
-        lng /= weightSum;
+        x /= weightSum;
+        y /= weightSum;
 
         int fusedFloor = weightedModeFloor(floors, floorWeights);
         double fusedHeading = Math.atan2(sinSum, cosSum);
         float confidence = (float) computeConfidence();
 
-        LatLng fusedLatLng = new LatLng(lat, lng);
-
-        double xMeters = 0.0;
-        double yMeters = 0.0;
-
-        if (!Double.isNaN(referenceOriginLat) && !Double.isNaN(referenceOriginLng)) {
-            double[] xy = latLngToLocalMeters(
-                    referenceOriginLat,
-                    referenceOriginLng,
-                    lat,
-                    lng
-            );
-            xMeters = xy[0];
-            yMeters = xy[1];
-        }
+        LatLng fusedLatLng = converter.localToLatLng(x, y);
 
         return new FusedPose(
-                xMeters,
-                yMeters,
+                x,
+                y,
                 fusedHeading,
                 fusedFloor,
                 fusedLatLng,
@@ -805,26 +635,26 @@ public class ParticleFilterEngine {
             return 0;
         }
 
-        java.util.Map<Integer, Double> acc = new java.util.HashMap<>();
+        Map<Integer, Double> accumulated = new HashMap<>();
         for (int i = 0; i < floors.size(); i++) {
-            int f = floors.get(i);
-            double w = weights.get(i);
-            acc.put(f, acc.getOrDefault(f, 0.0) + w);
+            int floor = floors.get(i);
+            double weight = weights.get(i);
+            accumulated.put(floor, accumulated.getOrDefault(floor, 0.0) + weight);
         }
 
         int bestFloor = floors.get(0);
         double bestWeight = -1.0;
-        for (java.util.Map.Entry<Integer, Double> e : acc.entrySet()) {
-            if (e.getValue() > bestWeight) {
-                bestWeight = e.getValue();
-                bestFloor = e.getKey();
+        for (Map.Entry<Integer, Double> entry : accumulated.entrySet()) {
+            if (entry.getValue() > bestWeight) {
+                bestWeight = entry.getValue();
+                bestFloor = entry.getKey();
             }
         }
         return bestFloor;
     }
 
     /**
-     * A simple confidence metric:
+     * Simple confidence metric:
      * higher when ESS is high and alive particle count is healthy.
      */
     private double computeConfidence() {
@@ -848,10 +678,6 @@ public class ParticleFilterEngine {
         return copy;
     }
 
-    // -------------------------
-    // Math helpers
-    // -------------------------
-
     private double gaussian(double mean, double std) {
         return mean + random.nextGaussian() * std;
     }
@@ -874,33 +700,6 @@ public class ParticleFilterEngine {
 
     private static double clamp01(double x) {
         return Math.max(0.0, Math.min(1.0, x));
-    }
-
-    private static LatLng offsetLatLngMeters(@NonNull LatLng base,
-                                             double northMeters,
-                                             double eastMeters) {
-        double dLat = northMeters / 111320.0;
-        double dLng = eastMeters / (111320.0 * Math.cos(Math.toRadians(base.latitude)));
-        return new LatLng(base.latitude + dLat, base.longitude + dLng);
-    }
-
-    private static double distanceMeters(double lat1, double lng1,
-                                         double lat2, double lng2) {
-        double dLat = (lat2 - lat1) * 111320.0;
-        double midLatRad = Math.toRadians((lat1 + lat2) * 0.5);
-        double dLng = (lng2 - lng1) * 111320.0 * Math.cos(midLatRad);
-        return Math.sqrt(dLat * dLat + dLng * dLng);
-    }
-
-    @NonNull
-    private static double[] latLngToLocalMeters(double originLat,
-                                                double originLng,
-                                                double lat,
-                                                double lng) {
-        double dNorth = (lat - originLat) * 111320.0;
-        double midLatRad = Math.toRadians((lat + originLat) * 0.5);
-        double dEast = (lng - originLng) * 111320.0 * Math.cos(midLatRad);
-        return new double[]{dEast, dNorth};
     }
 
     private void log(@NonNull String message) {
