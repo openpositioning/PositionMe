@@ -63,6 +63,7 @@ public class SensorFusion implements SensorEventListener {
     private SensorEventHandler eventHandler;
     private TrajectoryRecorder recorder;
     private WifiPositionManager wifiPositionManager;
+    private ParticleFilter particleFilter;
 
     // Movement sensor instances (lifecycle managed here)
     private MovementSensor accelerometerSensor;
@@ -160,9 +161,12 @@ public class SensorFusion implements SensorEventListener {
 
         this.wifiPositionManager = new WifiPositionManager(wiFiPositioning, recorder);
 
+        // Initialise particle filter
+        this.particleFilter = new ParticleFilter();
+
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
-                state, pdrProcessing, pathView, recorder, bootTime);
+                state, pdrProcessing, pathView, recorder, particleFilter, bootTime);
 
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
@@ -328,6 +332,7 @@ public class SensorFusion implements SensorEventListener {
     public void startRecording() {
         recorder.startRecording(pdrProcessing);
         eventHandler.resetBootTime(recorder.getBootTime());
+        particleFilter.tryInitialise();
 
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
         stopWirelessCollectors();

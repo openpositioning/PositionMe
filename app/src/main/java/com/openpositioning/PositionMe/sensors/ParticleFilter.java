@@ -22,6 +22,9 @@ public class ParticleFilter {
     private static final float GNSS_Init_STD = 15.0f;
     private static final float WiFi_Init_STD = 8.0f;
 
+    // PDR process noise standard deviation approximation (adjustable)
+    public static final float PDR_Process_Noise_STD = 0.4f;
+
     // The defined particle set
     private final Particle[] particles;
 
@@ -143,6 +146,40 @@ public class ParticleFilter {
 
         estimatedX = centerX;
         estimatedY = centerY;
+    }
+
+    /**
+     * PDR motion model prediction
+     *
+     * Moves all defined particles according to PDR displacement with
+     * added Gaussian process noise to account for uncertainty in step length
+     * and heading.
+     */
+    public void predict(float deltaEast, float deltaNorth, float PDRstd) {
+        // Early return if filter not initialised
+        if (!initialised) {
+            return;
+        }
+
+        // Shift each particle with Gaussian noise considered
+        for (int i = 0; i < Num_Particles; i++) {
+            float noiseX = (float) (random.nextGaussian() * PDRstd);
+            float noiseY = (float) (random.nextGaussian() * PDRstd);
+            particles[i].x += deltaEast + noiseX;
+            particles[i].y += deltaNorth + noiseY;
+        }
+
+        // Update weighted mean estimate
+        estimatedX = 0f;
+        estimatedY = 0f;
+        for (int i = 0; i < Num_Particles; i++) {
+            estimatedX += particles[i].x * particles[i].weight;
+            estimatedY += particles[i].y * particles[i].weight;
+        }
+
+        //Debug test
+        Log.d("ParticleFilter", "Delta: (" + deltaEast + ", " + deltaNorth
+            + " ; Estimate: ("+ estimatedX + ", " + estimatedY +")");
     }
 
     /**
