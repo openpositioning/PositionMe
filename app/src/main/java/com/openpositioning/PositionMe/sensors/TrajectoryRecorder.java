@@ -251,6 +251,25 @@ public class TrajectoryRecorder {
     }
 
     /**
+     * Adds a fused/corrected position entry to the trajectory.
+     */
+    public void addCorrectedPosition(long relativeTimestamp,
+                                     double latitude,
+                                     double longitude,
+                                     int floor) {
+        if (trajectory == null || !saveRecording) return;
+
+        Traj.GNSSPosition.Builder corrected = Traj.GNSSPosition.newBuilder()
+                .setRelativeTimestamp(relativeTimestamp)
+                .setLatitude(latitude)
+                .setLongitude(longitude)
+                .setAltitude(0.0);
+
+        corrected.setFloor(String.valueOf(floor));
+        trajectory.addCorrectedPositions(corrected);
+    }
+
+    /**
      * Adds a GNSS reading to the trajectory.
      */
     public void addGnssData(Location location) {

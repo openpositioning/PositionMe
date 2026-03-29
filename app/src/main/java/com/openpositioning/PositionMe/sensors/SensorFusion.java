@@ -725,6 +725,18 @@ public class SensorFusion implements SensorEventListener {
         state.fusedLongitude = (float) estimate.getLatLng().longitude;
         state.fusedFloor = estimate.getFloor();
         state.fusedAvailable = true;
+
+        if (recorder != null && recorder.isRecording()) {
+            long relativeTimestamp = SystemClock.uptimeMillis() - recorder.getBootTime();
+            if (relativeTimestamp < 0) {
+                relativeTimestamp = 0;
+            }
+            recorder.addCorrectedPosition(
+                    relativeTimestamp,
+                    estimate.getLatLng().latitude,
+                    estimate.getLatLng().longitude,
+                    estimate.getFloor());
+        }
     }
 
     //endregion

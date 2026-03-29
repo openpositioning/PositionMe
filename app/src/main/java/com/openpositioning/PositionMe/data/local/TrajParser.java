@@ -104,6 +104,12 @@ public class TrajParser {
         public double latitude, longitude; // GNSS coordinates
     }
 
+    /** Represents a fused/corrected position record from protobuf corrected_positions. */
+    private static class CorrectedRecord {
+        public long relativeTimestamp;
+        public double latitude, longitude;
+    }
+
     /**
      * Parses trajectory data from a JSON file and reconstructs a list of replay points.
      *
@@ -150,43 +156,71 @@ public class TrajParser {
             List<ImuRecord> imuList = parseImuData(root.getAsJsonArray("imuData"));
             List<PdrRecord> pdrList = parsePdrData(root.getAsJsonArray("pdrData"));
             List<GnssRecord> gnssList = parseGnssData(root.getAsJsonArray("gnssData"));
+                JsonArray correctedArray = root.has("correctedPositions")
+                    ? root.getAsJsonArray("correctedPositions")
+                    : root.getAsJsonArray("corrected_positions");
+                List<CorrectedRecord> correctedList = parseCorrectedData(correctedArray);
 
             Log.i(TAG, "Parsed data - IMU: " + imuList.size() + " records, PDR: "
-                    + pdrList.size() + " records, GNSS: " + gnssList.size() + " records");
+                    + pdrList.size() + " records, GNSS: " + gnssList.size() + " records"
+                    + ", Corrected: " + correctedList.size() + " records");
 
-            for (int i = 0; i < pdrList.size(); i++) {
-                PdrRecord pdr = pdrList.get(i);
+                if (!correctedList.isEmpty()) {
+                for (int i = 0; i < correctedList.size(); i++) {
+                    CorrectedRecord corrected = correctedList.get(i);
 
-                ImuRecord closestImu = findClosestImuRecord(imuList, pdr.relativeTimestamp);
-                float orientationDeg = closestImu != null ? computeOrientationFromRotationVector(
+                    ImuRecord closestImu = findClosestImuRecord(imuList, corrected.relativeTimestamp);
+                    float orientationDeg = closestImu != null ? computeOrientationFromRotationVector(
                         closestImu.rotationVectorX,
                         closestImu.rotationVectorY,
                         closestImu.rotationVectorZ,
                         closestImu.rotationVectorW,
                         context
-                ) : 0f;
+                    ) : 0f;
 
-                float speed = 0f;
-                if (i > 0) {
+                    LatLng correctedLocation = new LatLng(corrected.latitude, corrected.longitude);
+
+                    GnssRecord closestGnss = findClosestGnssRecord(gnssList, corrected.relativeTimestamp);
+                    LatLng gnssLocation = closestGnss != null ?
+                        new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
+
+                    result.add(new ReplayPoint(correctedLocation, gnssLocation, orientationDeg,
+                        0f, corrected.relativeTimestamp));
+                }
+                } else {
+                for (int i = 0; i < pdrList.size(); i++) {
+                    PdrRecord pdr = pdrList.get(i);
+
+                    ImuRecord closestImu = findClosestImuRecord(imuList, pdr.relativeTimestamp);
+                    float orientationDeg = closestImu != null ? computeOrientationFromRotationVector(
+                        closestImu.rotationVectorX,
+                        closestImu.rotationVectorY,
+                        closestImu.rotationVectorZ,
+                        closestImu.rotationVectorW,
+                        context
+                    ) : 0f;
+
+                    float speed = 0f;
+                    if (i > 0) {
                     PdrRecord prev = pdrList.get(i - 1);
                     double dt = (pdr.relativeTimestamp - prev.relativeTimestamp) / 1000.0;
                     double dx = pdr.x - prev.x;
                     double dy = pdr.y - prev.y;
                     double distance = Math.sqrt(dx * dx + dy * dy);
                     if (dt > 0) speed = (float) (distance / dt);
-                }
+                    }
 
+                    double lat = originLat + pdr.y * 1E-5;
+                    double lng = originLng + pdr.x * 1E-5;
+                    LatLng pdrLocation = new LatLng(lat, lng);
 
-                double lat = originLat + pdr.y * 1E-5;
-                double lng = originLng + pdr.x * 1E-5;
-                LatLng pdrLocation = new LatLng(lat, lng);
-
-                GnssRecord closestGnss = findClosestGnssRecord(gnssList, pdr.relativeTimestamp);
-                LatLng gnssLocation = closestGnss != null ?
+                    GnssRecord closestGnss = findClosestGnssRecord(gnssList, pdr.relativeTimestamp);
+                    LatLng gnssLocation = closestGnss != null ?
                         new LatLng(closestGnss.latitude, closestGnss.longitude) : null;
 
-                result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
-                        0f, pdr.relativeTimestamp));
+                    result.add(new ReplayPoint(pdrLocation, gnssLocation, orientationDeg,
+                        speed, pdr.relativeTimestamp));
+                }
             }
 
             Collections.sort(result, Comparator.comparingLong(rp -> rp.timestamp));
@@ -219,6 +253,16 @@ private static List<PdrRecord> parsePdrData(JsonArray pdrArray) {
         pdrList.add(record);
     }
     return pdrList;
+}/** Parses corrected (fused) data from JSON. */
+private static List<CorrectedRecord> parseCorrectedData(JsonArray correctedArray) {
+    List<CorrectedRecord> correctedList = new ArrayList<>();
+    if (correctedArray == null) return correctedList;
+    Gson gson = new Gson();
+    for (int i = 0; i < correctedArray.size(); i++) {
+        CorrectedRecord record = gson.fromJson(correctedArray.get(i), CorrectedRecord.class);
+        correctedList.add(record);
+    }
+    return correctedList;
 }/** Parses GNSS data from JSON. */
 private static List<GnssRecord> parseGnssData(JsonArray gnssArray) {
     List<GnssRecord> gnssList = new ArrayList<>();
