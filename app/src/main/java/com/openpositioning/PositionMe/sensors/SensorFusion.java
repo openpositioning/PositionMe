@@ -667,14 +667,15 @@ public class SensorFusion implements SensorEventListener, Observer {
                     lastGnssLatLon = new double[]{location.getLatitude(), location.getLongitude()};
                     // Detect floor change and reset particle cloud if needed
                     int currentFloor = pdrProcessing.getCurrentFloor();
-                    if (currentFloor != lastKnownFloor) {
-                        float[] best = particleFilter.getBestEstimate();
-                        particleFilter.resetAroundPosition(best[0], best[1], 8f);
-                        ekfPositioning.resetAroundPosition(best[0], best[1], 8f);
-                        lastKnownFloor = currentFloor;
-                        Log.i("SensorFusion", "Floor change detected: " + lastKnownFloor
-                                + " → " + currentFloor + ", particles reset");
-                    }
+//                    if (currentFloor != lastKnownFloor) {
+//                        float[] best = particleFilter.getBestEstimate();
+//                        particleFilter.resetAroundPosition(best[0], best[1], 8f);
+//                        ekfPositioning.resetAroundPosition(best[0], best[1], 8f);
+//                        Log.i("SensorFusion", "Floor change detected: " + lastKnownFloor
+//                                + " → " + currentFloor + ", particles reset");
+//                        lastKnownFloor = currentFloor;
+//
+//                    }
 
                 }
             }
