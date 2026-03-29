@@ -659,11 +659,11 @@ public class SensorFusion implements SensorEventListener, Observer {
                         enuBaked = true;
                     }
                 } else {
-                    // Subsequent positions: convert to East-North space and update particle weights
+                    // Subsequent positions: convert to East-North space and update particle weights.
                     float[] enu = coordinateConverter.toEnu(
                             location.getLatitude(), location.getLongitude());
-                    particleFilter.updateWithGnss(enu[0], enu[1]);
-                    ekfPositioning.updateWithGnss(enu[0], enu[1]);
+                    particleFilter.updateWithGnss(enu[0], enu[1], accuracy);
+                    ekfPositioning.updateWithGnss(enu[0], enu[1], accuracy);
                     lastGnssLatLon = new double[]{location.getLatitude(), location.getLongitude()};
                     // Detect floor change and reset particle cloud if needed
                     int currentFloor = pdrProcessing.getCurrentFloor();
@@ -747,8 +747,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             } else {
                 android.util.Log.d("SensorFusion", "Duplicate WiFi fingerprint skipped");
             }
-            // Adding WiFi data to Trajectory
-            this.trajectory.addWifiFingerprints(wifiData);
 
 
         }
