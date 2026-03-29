@@ -650,6 +650,13 @@ public class SensorFusion implements SensorEventListener {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
+
+            // Update particle weights with GNSS measurement
+            if (particleFilter.isInitialised()) {
+                LatLng gnssLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                float accuracy = location.getAccuracy();
+                particleFilter.updateWeights(gnssLatLng, accuracy);
+            }
         }
     }
 

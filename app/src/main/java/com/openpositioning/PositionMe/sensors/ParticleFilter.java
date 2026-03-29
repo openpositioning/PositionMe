@@ -25,6 +25,10 @@ public class ParticleFilter {
     // PDR process noise standard deviation approximation (adjustable)
     public static final float PDR_Process_Noise_STD = 0.4f;
 
+    // Min and max GNSS measurment accuracy for weight update (define rejected measurements)
+    private static final float GNSS_Min_Accuracy = 5.0f;
+    private static final float GNSS_Max_Accuracy = 50.0f;
+
     // The defined particle set
     private final Particle[] particles;
 
@@ -180,6 +184,58 @@ public class ParticleFilter {
         //Debug test
         Log.d("ParticleFilter", "Delta: (" + deltaEast + ", " + deltaNorth
             + " ; Estimate: ("+ estimatedX + ", " + estimatedY +")");
+    }
+
+    /**
+     *  Particle weight update
+     */
+    public void updateWeights(LatLng measurementLatLng, float accuracy) {
+        // Early return if not initialised
+        if (!initialised || measurementLatLng == null) {
+            return;
+        }
+
+        // Early return if out of accuracy range (poor measurement)
+        if (accuracy <= 0 || accuracy >= GNSS_Max_Accuracy) {
+            return;
+        }
+        float sigma = Math.max(accuracy, GNSS_Min_Accuracy);
+
+        // Convert received measurement to local frame (meters)
+        float[] Measurement_Local = latLngToLocal(measurementLatLng);
+        float mx = Measurement_Local[0];
+        float my = Measurement_Local[1];
+
+        // Calculate each particle weighting
+        float twoSigmaSquared = 2.0f * sigma * sigma;
+        for (int i = 0; i < Num_Particles; i++) {
+            // Calculate distance in meters from particle to measurement
+            float dx = particles[i].x - mx;
+            float dy = particles[i].y - my;
+
+            // Gaussian likelihood equation
+            float d = (float) Math.sqrt(dx * dx + dy * dy);
+            float dSquared = d * d;
+            float likelihood = (float) Math.exp(-dSquared / twoSigmaSquared);
+            particles[i].weight *= likelihood;
+        }
+
+        // Normalise weights and to sum = 1.0
+        float weightSum = 0f;
+        for (int i = 0; i < Num_Particles; i++) {
+            weightSum += particles[i].weight;
+        }
+        for (int i = 0; i < Num_Particles; i++) {
+            particles[i].weight /= weightSum;
+        }
+
+        // Recalculate weighted mean estimate of position
+        estimatedX = 0f;
+        estimatedY = 0f;
+        for (int i = 0; i < Num_Particles; i++) {
+            estimatedX += particles[i].x * particles[i].weight;
+            estimatedY += particles[i].y * particles[i].weight;
+        }
     }
 
     /**
