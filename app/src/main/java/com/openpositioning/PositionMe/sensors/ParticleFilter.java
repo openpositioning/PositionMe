@@ -278,12 +278,19 @@ public class ParticleFilter {
     }
 
     /**
+     * Fraction of particles injected near the observation when weight collapse is detected.
+     * These particles allow the filter to recover when PDR error exceeds the observation noise range.
+     */
+    private static final float INJECTION_FRACTION = 0.2f;
+
+    /**
      * Multiplies each particle's weight by the Gaussian likelihood of the given observation.
      * Normalizes the weight array, sum = 1.
      *
      * Likelihood: w_i *= exp( -distance^2 / (2 * std^2) )
      *
-     * If all weights collapse to zero, weights are reset to uniform to allow recovery.
+     * If all weights collapse to zero, a fraction of particles is injected near the observation
+     * to allow recovery when PDR error is large. Remaining particles retain uniform weights.
      *
      * @param measX    Observed East  position (East-North metres)
      * @param measY    Observed North position (East-North metres)
@@ -307,8 +314,15 @@ public class ParticleFilter {
                 weights[i] /= totalWeight;
             }
         } else {
-            // Weight collapse: reset to uniform so the filter can recover
-            Log.w(TAG, "Weight collapse detected — resetting to uniform weights");
+            // Weight collapse: inject a fraction of particles near the observation,
+            // then reset all weights to uniform.
+            Log.w(TAG, "Weight collapse — injecting particles near observation ("
+                    + measX + ", " + measY + ")");
+            int injected = (int) (NUM_PARTICLES * INJECTION_FRACTION);
+            for (int i = 0; i < injected; i++) {
+                particlesX[i] = measX + (float) (random.nextGaussian() * noiseStd);
+                particlesY[i] = measY + (float) (random.nextGaussian() * noiseStd);
+            }
             float uniform = 1.0f / NUM_PARTICLES;
             for (int i = 0; i < NUM_PARTICLES; i++) {
                 weights[i] = uniform;
