@@ -60,6 +60,8 @@
 
     <!-- Preference Titles -->
     <string name="settings_title">Settings</string>
+    <string name="appearance_header">Appearance</string>
+    <string name="theme_mode_title">Theme</string>
     <string name="sensor_header">Sensors</string>
     <string name="sync_header">Sync</string>
     <string name="user_header">User information</string>

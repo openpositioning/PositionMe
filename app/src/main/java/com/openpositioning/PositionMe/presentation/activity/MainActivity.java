@@ -15,7 +15,6 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.Toolbar;
 
 import androidx.core.content.ContextCompat;
@@ -34,6 +33,7 @@ import com.openpositioning.PositionMe.sensors.Observer;
 import com.openpositioning.PositionMe.sensors.SensorFusion;
 import com.openpositioning.PositionMe.service.SensorCollectionService;
 import com.openpositioning.PositionMe.utils.PermissionManager;
+import com.openpositioning.PositionMe.utils.ThemePreferences;
 
 
 import java.util.Objects;
@@ -90,7 +90,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+        ThemePreferences.applyThemeFromPreferences(this);
         setContentView(R.layout.activity_main);
 
         // Set up navigation and fragments
@@ -102,8 +102,6 @@ public class MainActivity extends AppCompatActivity implements Observer {
         Toolbar toolbar = findViewById(R.id.main_toolbar);
         setSupportActionBar(toolbar);
         toolbar.showOverflowMenu();
-        toolbar.setBackgroundColor(ContextCompat.getColor(getApplicationContext(), R.color.md_theme_light_surface));
-        toolbar.setTitleTextColor(ContextCompat.getColor(getApplicationContext(), R.color.black));
         toolbar.setNavigationIcon(R.drawable.ic_baseline_back_arrow);
 
         // Set up back action with NavigationUI

@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.openpositioning.PositionMe.R;
 import com.openpositioning.PositionMe.presentation.fragment.ReplayFragment;
 import com.openpositioning.PositionMe.presentation.fragment.StartLocationFragment;
+import com.openpositioning.PositionMe.utils.ThemePreferences;
 
 
 /**
@@ -51,6 +52,7 @@ public class ReplayActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ThemePreferences.applyThemeFromPreferences(this);
         setContentView(R.layout.activity_replay);
         // Get the trajectory file path from the Intent
         filePath = getIntent().getStringExtra(EXTRA_TRAJECTORY_FILE_PATH);

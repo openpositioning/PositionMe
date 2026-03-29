@@ -297,9 +297,10 @@ public class TrajectoryMapFragment extends Fragment {
         };
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
                 requireContext(),
-                android.R.layout.simple_spinner_dropdown_item,
+            R.layout.item_map_type_spinner,
                 maps
         );
+        adapter.setDropDownViewResource(R.layout.item_map_type_spinner_dropdown);
         switchMapSpinner.setAdapter(adapter);
 
         switchMapSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
