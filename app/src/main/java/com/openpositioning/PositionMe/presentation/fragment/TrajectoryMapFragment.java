@@ -131,7 +131,7 @@ public class TrajectoryMapFragment extends Fragment {
      * Low-pass filter alpha. Range [0,1].
      * Lower = smoother but more lag; higher = less smoothing but more responsive.
      */
-    private static final double LOW_PASS_ALPHA = 0.25;
+    private static final double LOW_PASS_ALPHA = 0.15;
 
     // -------------------------------------------------------------------------
     // Smoothing state
@@ -943,12 +943,14 @@ private SwitchMaterial showPdrPathSwitch;
     public void updateFusedPosition(@NonNull LatLng fusedLocation) {
         if (gMap == null) return;
 
+        // Apply LPF to fused position; both polylines share the same filtered point
+        LatLng lpfFiltered = applyLowPassFilter(fusedLocation);
+
         // Purple fused path — always grows
-        smoothedPoints.add(fusedLocation);
+        smoothedPoints.add(lpfFiltered);
         redrawFusedTrajectory();
 
         // Teal LPF path — grows but only visible when smoothing toggle is ON
-        LatLng lpfFiltered = applyLowPassFilter(fusedLocation);
         lpfPoints.add(lpfFiltered);
         if (lpfPolyline != null) {
             lpfPolyline.setPoints(new ArrayList<>(lpfPoints));

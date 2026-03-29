@@ -135,6 +135,18 @@ public class ExtendedKalmanFilter {
     }
 
     /**
+     * Update with a WiFi positioning observation with a caller-supplied noise std.
+     *
+     * @param measX    Observed East  position (metres)
+     * @param measY    Observed North position (metres)
+     * @param noiseStd Observation noise standard deviation (metres)
+     */
+    public void updateWithWifi(float measX, float measY, float noiseStd) {
+        update(measX, measY, noiseStd);
+        Log.d(TAG, "WiFi update (noiseStd=" + noiseStd + "m). State: (" + stateX + ", " + stateY + ")");
+    }
+
+    /**
      * Update with a WiFi positioning observation using AP-count-adaptive noise.
      *
      * @param measX   Observed East  position (metres)

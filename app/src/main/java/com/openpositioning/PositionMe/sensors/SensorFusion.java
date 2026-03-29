@@ -219,6 +219,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private double[] lastWifiLatLon   = null;   // {lat, lon}
     private double[] lastPdrLatLon    = null;   // {lat, lon}
 
+    // Previous valid GNSS position in ENU (metres), used to derive heading from consecutive fixes
+    private float[] lastGnssEnu = null;
+
     private final List<TestPoint> testPoints = new ArrayList<>();
 
     boolean enuBaked = false;
@@ -547,6 +550,12 @@ public class SensorFusion implements SensorEventListener, Observer {
                 } else {
                     lastStepTime = currentTime;
 
+                    // Skip PDR update if the acceleration pattern indicates no real movement
+                    if (isStationary(accelMagnitude)) {
+                        accelMagnitude.clear();
+                        break;
+                    }
+
                     // Log if accelMagnitude is empty
                     if (accelMagnitude.isEmpty()) {
                         Log.e("SensorFusion",
@@ -688,9 +697,40 @@ public class SensorFusion implements SensorEventListener, Observer {
                     // Subsequent positions: convert to East-North space and update particle weights.
                     float[] enu = coordinateConverter.toEnu(
                             location.getLatitude(), location.getLongitude());
-                    particleFilter.updateWithGnss(enu[0], enu[1], accuracy);
-                    ekfPositioning.updateWithGnss(enu[0], enu[1], accuracy);
-                    lastGnssLatLon = new double[]{location.getLatitude(), location.getLongitude()};
+
+                    // Jump detection: reject position if it is too far from the current estimate
+                    float[] currentEst = particleFilter.getBestEstimate();
+                    float jumpDist = (float) Math.hypot(
+                            enu[0] - currentEst[0], enu[1] - currentEst[1]);
+                    if (jumpDist > 80f) {
+                        Log.w("SensorFusion", "GNSS jump " + jumpDist + "m — update rejected");
+                    } else {
+                        // Sigma-adaptive noise: tighten observation noise when particles diverge
+                        float adaptedAccuracy = accuracy;
+                        double sigma = particleFilter.getSigmaMetres();
+                        if (sigma > 15.0) {
+                            adaptedAccuracy = Math.max(accuracy * 0.5f, 3.0f);
+                        }
+
+                        // Derive heading from two consecutive valid GNSS fixes
+                        if (lastGnssEnu != null) {
+                            float dEast  = enu[0] - lastGnssEnu[0];
+                            float dNorth = enu[1] - lastGnssEnu[1];
+                            float gnssDist = (float) Math.hypot(dEast, dNorth);
+                            if (gnssDist > 3f) {
+                                fusedHeading = normalizeAngle(
+                                        (float) Math.atan2(dEast, dNorth));
+                                Log.d("SensorFusion", "GNSS heading: "
+                                        + (float) Math.toDegrees(fusedHeading) + "°");
+                            }
+                        }
+                        lastGnssEnu = enu;
+
+                        particleFilter.updateWithGnss(enu[0], enu[1], adaptedAccuracy);
+                        ekfPositioning.updateWithGnss(enu[0], enu[1], adaptedAccuracy);
+                        lastGnssLatLon = new double[]{location.getLatitude(), location.getLongitude()};
+                    }
+
                     // Detect floor change and reset particle cloud if needed
                     int currentFloor = pdrProcessing.getCurrentFloor();
                     if (currentFloor != lastKnownFloor) {
@@ -1090,9 +1130,23 @@ public class SensorFusion implements SensorEventListener, Observer {
                         // Normal update
                         float[] enu = coordinateConverter.toEnu(
                                 wifiLocation.latitude, wifiLocation.longitude);
-                        particleFilter.updateWithWifi(enu[0], enu[1], apCount);
-                        ekfPositioning.updateWithWifi(enu[0], enu[1], apCount);
 
+                        // Jump detection: reject position if it is too far from the current estimate
+                        float[] currentEst = particleFilter.getBestEstimate();
+                        float jumpDist = (float) Math.hypot(
+                                enu[0] - currentEst[0], enu[1] - currentEst[1]);
+                        if (jumpDist > 80f) {
+                            Log.w("SensorFusion", "WiFi jump " + jumpDist + "m — update rejected");
+                        } else {
+                            // Sigma-adaptive noise: tighten observation noise when particles diverge
+                            float noiseStd = Math.max(8.0f, 20.0f - apCount * 1.5f);
+                            double sigma = particleFilter.getSigmaMetres();
+                            if (sigma > 15.0) {
+                                noiseStd = Math.max(noiseStd * 0.5f, 5.0f);
+                            }
+                            particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
+                            ekfPositioning.updateWithWifi(enu[0], enu[1], noiseStd);
+                        }
                     }
                 }
 
@@ -1612,6 +1666,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         fusedHeading = 0f;
         headingInitialised = false;
         lastGyroTimestampMs = 0;
+        lastGnssEnu = null;
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
@@ -1773,6 +1828,23 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     //endregion
+
+    /**
+     * Returns true if the linear acceleration samples indicate the device is stationary.
+     * Uses the peak-to-peak range of the sample window.
+     *
+     * @param samples linear acceleration magnitudes (m/s²) collected between two step events
+     * @return true if peak-to-peak range is below the stationary threshold (0.5 m/s²)
+     */
+    private boolean isStationary(List<Double> samples) {
+        if (samples.isEmpty()) return false;
+        double max = Double.MIN_VALUE, min = Double.MAX_VALUE;
+        for (double v : samples) {
+            if (v > max) max = v;
+            if (v < min) min = v;
+        }
+        return (max - min) < 0.5;
+    }
 
     /**
      * Wraps an angle in radians to the range [-π, π].

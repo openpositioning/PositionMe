@@ -148,6 +148,21 @@ public class ParticleFilter {
     }
 
     /**
+     * Update step using a WiFi positioning observation with a caller-supplied noise std.
+     *
+     * @param measX    Observed East  position in East-North metres
+     * @param measY    Observed North position in East-North metres
+     * @param noiseStd Observation noise standard deviation (metres)
+     */
+    public void updateWithWifi(float measX, float measY, float noiseStd) {
+        if (!initialized) return;
+        updateWeights(measX, measY, noiseStd);
+        resample();
+        Log.d(TAG, "WiFi update (noiseStd=" + noiseStd + "m). Best estimate: "
+                + java.util.Arrays.toString(getBestEstimate()));
+    }
+
+    /**
      * Update step using a WiFi positioning observation with AP-count-adaptive noise.
      *
      * @param measX   Observed East  position in East-North metres
