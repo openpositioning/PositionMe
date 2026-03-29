@@ -114,6 +114,20 @@ public class ExtendedKalmanFilter {
         Log.d(TAG, "GNSS update. State: (" + stateX + ", " + stateY + ")");
     }
 
+    /**
+     * Update with a GNSS observation using accuracy-adaptive noise.
+     *
+     * @param measX    Observed East  position (metres)
+     * @param measY    Observed North position (metres)
+     * @param accuracy Reported horizontal accuracy from Android Location (metres)
+     */
+    public void updateWithGnss(float measX, float measY, float accuracy) {
+        float noiseStd = Math.min(Math.max(accuracy, 3.0f), 30.0f);
+        update(measX, measY, noiseStd);
+        Log.d(TAG, "GNSS update (accuracy=" + accuracy + "m, noiseStd=" + noiseStd
+                + "m). State: (" + stateX + ", " + stateY + ")");
+    }
+
     /** Update with a WiFi positioning observation. */
     public void updateWithWifi(float measX, float measY) {
         update(measX, measY, WIFI_NOISE_STD);

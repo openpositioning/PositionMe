@@ -115,6 +115,26 @@ public class ParticleFilter {
     }
 
     /**
+     * Update step using a GNSS position observation with accuracy-adaptive noise.
+     * Maps the reported GNSS accuracy (metres) to an observation noise std dev:
+     *   accuracy < 5 m  → noise std = accuracy (high trust)
+     *   accuracy 5–20 m → noise std = accuracy
+     *   accuracy > 20 m → noise std = accuracy (capped at 30 m)
+     *
+     * @param measX    Observed East  position in East-North metres
+     * @param measY    Observed North position in East-North metres
+     * @param accuracy Reported horizontal accuracy from Android Location (metres)
+     */
+    public void updateWithGnss(float measX, float measY, float accuracy) {
+        if (!initialized) return;
+        float noiseStd = Math.min(Math.max(accuracy, 3.0f), 30.0f);
+        updateWeights(measX, measY, noiseStd);
+        resample();
+        Log.d(TAG, "GNSS update (accuracy=" + accuracy + "m, noiseStd=" + noiseStd
+                + "m). Best estimate: " + java.util.Arrays.toString(getBestEstimate()));
+    }
+
+    /**
      * Update step using a WiFi positioning observation.
      *
      * @param measX  Observed East  position in East-North metres

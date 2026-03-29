@@ -211,11 +211,11 @@ public class IndoorMapManager {
             float[] curr = {currEast[i], currNorth[i]};
 
             if (crossesAnyWallEnu(prev, curr, floor.wallPolygonsEnu)) {
-                // Snap back to just before the wall
+                // Snap particle to last valid position and apply strong weight penalty
                 float[] snapped = snapToWallEnu(prev, curr, floor.wallPolygonsEnu);
                 currEast[i]  = snapped[0];
                 currNorth[i] = snapped[1];
-                weights[i]   = 0f;
+                weights[i]  *= 0.01f;
             }
         }
     }
@@ -461,11 +461,11 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
     }
 
     //find nearest valid point that doesn't intersect walls
-//loop through points on segment just traversed starting from predicted location back towards prev location
-//use dx and dy
-//once we find point that doesn't intersect wall
-//corrected position = point
-//break
+    //loop through points on segment just traversed starting from predicted location back towards prev location
+    //use dx and dy
+    //once we find point that doesn't intersect wall
+    //corrected position = point
+    //break
 
     public String acceptFloorChange(LatLng correctedLocation, LatLng oldLocation, float heightChangeMeters) {
         if (currentVenue == null || currentFloorKey == null || correctedLocation == null || oldLocation == null) {
