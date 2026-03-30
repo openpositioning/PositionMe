@@ -222,6 +222,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Previous valid GNSS position in ENU (metres), used to derive heading from consecutive fixes
     private float[] lastGnssEnu = null;
 
+    // Last WiFi position in ENU (metres), cached for stationary soft-update
+    private float[] lastWifiEnu = null;
+
     private final List<TestPoint> testPoints = new ArrayList<>();
 
     boolean enuBaked = false;
@@ -1118,8 +1121,9 @@ public class SensorFusion implements SensorEventListener, Observer {
             for (Wifi data : this.wifiList){
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
-            // Capture AP count before entering the async callback
+            // Capture AP count and timestamp before entering the async callback
             final int apCount = this.wifiList.size();
+            final long currentTime = System.currentTimeMillis();
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
@@ -1150,6 +1154,9 @@ public class SensorFusion implements SensorEventListener, Observer {
                         float[] enu = coordinateConverter.toEnu(
                                 wifiLocation.latitude, wifiLocation.longitude);
 
+                        // Cache WiFi ENU for stationary soft-update
+                        lastWifiEnu = enu;
+
                         // Jump detection: reject position if it is too far from the current estimate
                         float[] currentEst = particleFilter.getBestEstimate();
                         float jumpDist = (float) Math.hypot(
@@ -1157,11 +1164,28 @@ public class SensorFusion implements SensorEventListener, Observer {
                         if (jumpDist > 80f) {
                             Log.w("SensorFusion", "WiFi jump " + jumpDist + "m — update rejected");
                         } else {
-                            // Sigma-adaptive noise: tighten observation noise when particles diverge
+                            // Stationary duration in milliseconds
+                            long stationaryMs = currentTime - lastStepTime;
+
+                            // Base noise from AP count
                             float noiseStd = Math.max(8.0f, 20.0f - apCount * 1.5f);
-                            double sigma = particleFilter.getSigmaMetres();
-                            if (sigma > 15.0) {
-                                noiseStd = Math.max(noiseStd * 0.5f, 5.0f);
+
+                            // Aggressively tighten noise and inflate EKF covariance when stationary,
+                            // so both PF and EKF converge strongly to the WiFi observation.
+                            if (stationaryMs > 3000) {
+                                // >3s stationary: near-full trust in WiFi (K ≈ 0.97)
+                                noiseStd = 2.0f;
+                                ekfPositioning.inflateCovariance(200.0f);
+                            } else if (stationaryMs > 1000) {
+                                // >1s stationary: strong WiFi pull (K ≈ 0.90)
+                                noiseStd = 3.0f;
+                                ekfPositioning.inflateCovariance(50.0f);
+                            } else {
+                                // Moving: sigma-adaptive reduction only
+                                double sigma = particleFilter.getSigmaMetres();
+                                if (sigma > 15.0) {
+                                    noiseStd = Math.max(noiseStd * 0.5f, 5.0f);
+                                }
                             }
                             particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
                             ekfPositioning.updateWithWifi(enu[0], enu[1], noiseStd);
@@ -1247,6 +1271,11 @@ public class SensorFusion implements SensorEventListener, Observer {
     public float[][] getParticles() {
         if (particleFilter == null) return new float[0][2];
         return particleFilter.getParticles();
+    }
+
+    /** Returns true if the EKF is selected as the active positioning algorithm. */
+    public boolean isUsingEKF() {
+        return useEKF;
     }
 
 
@@ -1690,7 +1719,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         particleFilter = new ParticleFilter();
         ekfPositioning = new ExtendedKalmanFilter();
         useEKF = settings.getBoolean("use_ekf", false);
-//        coordinateConverter = null;
+        coordinateConverter = null;  // force fresh origin at actual recording position
+        enuBaked = false;
         lastGnssLatLon = null;
         lastWifiLatLon = null;
         lastPdrLatLon  = null;
@@ -1701,6 +1731,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         headingInitialised = false;
         lastGyroTimestampMs = 0;
         lastGnssEnu = null;
+        lastWifiEnu = null;
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {

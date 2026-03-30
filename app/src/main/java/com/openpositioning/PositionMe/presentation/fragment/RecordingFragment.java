@@ -377,15 +377,18 @@ public class RecordingFragment extends Fragment {
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
+        // Wait for the filter to acquire its first real position fix before drawing.
+        double[] fused = sensorFusion.getFusedLatLon();
+        if (fused == null) {
+            previousPosX = pdrValues[0];
+            previousPosY = pdrValues[1];
+            return;
+        }
+
+        {
+            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation();
             LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
+                    oldLocation != null ? oldLocation : new LatLng(fused[0], fused[1]),
                     new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
             );
 
@@ -412,11 +415,8 @@ public class RecordingFragment extends Fragment {
 //                        && wifiLocation.longitude != 0.0) {
 //                    mapFrag.updateWifiPosition(wifiLocation);
 //                }
-                // Drive the arrow marker and purple polyline with the fused position
-                double[] fused = sensorFusion.getFusedLatLon();
-                if (fused != null) {
-                    mapFrag.updateFusedPosition(new LatLng(fused[0], fused[1]));
-                }
+                // Drive the arrow marker and fused trajectory polyline
+                mapFrag.updateFusedPosition(new LatLng(fused[0], fused[1]));
                 // Amber WiFi observation dot — raw WiFi fix from OpenPositioning API
 //                double[] wifi = sensorFusion.getLastWifiLatLon();
 //                if (wifi != null) {
@@ -448,15 +448,6 @@ public class RecordingFragment extends Fragment {
 
                 // Green PDR observation dot
                 mapFrag.updatePdrPosition(newLocation);
-
-                // Arrow marker — always follows the active fusion algorithm (PF or EKF)
-                LatLng displayLocation = (fused != null)
-                        ? new LatLng(fused[0], fused[1])
-                        : newLocation;
-                mapFrag.updateUserLocation(
-                        displayLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation())
-                );
             }
         }
 
