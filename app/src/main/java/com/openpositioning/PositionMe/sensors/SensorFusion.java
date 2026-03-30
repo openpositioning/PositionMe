@@ -1121,9 +1121,13 @@ public class SensorFusion implements SensorEventListener, Observer {
             for (Wifi data : this.wifiList){
                 wifiAccessPoints.put(String.valueOf(data.getBssid()), data.getLevel());
             }
-            // Capture AP count and timestamp before entering the async callback
+            // Capture AP count, average RSSI and timestamp before the async callback closure.
+            // These must be final locals because the lambda captures them from the enclosing scope.
             final int apCount = this.wifiList.size();
             final long currentTime = System.currentTimeMillis();
+            float rssiSum = 0f;
+            for (Wifi data : this.wifiList) rssiSum += data.getLevel();
+            final float avgRssi = (apCount > 0) ? rssiSum / apCount : -75f;
             // Creating POST Request
             JSONObject wifiFingerPrint = new JSONObject();
             wifiFingerPrint.put(WIFI_FINGERPRINT, wifiAccessPoints);
@@ -1157,36 +1161,59 @@ public class SensorFusion implements SensorEventListener, Observer {
                         // Cache WiFi ENU for stationary soft-update
                         lastWifiEnu = enu;
 
-                        // Jump detection: reject position if it is too far from the current estimate
+                        // Hard-reject implausibly large jumps (> 80 m).
                         float[] currentEst = particleFilter.getBestEstimate();
                         float jumpDist = (float) Math.hypot(
                                 enu[0] - currentEst[0], enu[1] - currentEst[1]);
                         if (jumpDist > 80f) {
-                            Log.w("SensorFusion", "WiFi jump " + jumpDist + "m — update rejected");
+                            Log.w("SensorFusion", "WiFi hard-reject: jump=" + jumpDist + "m");
                         } else {
-                            // Stationary duration in milliseconds
                             long stationaryMs = currentTime - lastStepTime;
+                            boolean isStationary = stationaryMs > 1000;
 
-                            // Base noise from AP count
+                            // Base observation noise from AP count.
+                            // More visible APs → tighter position estimate → lower noise.
                             float noiseStd = Math.max(8.0f, 20.0f - apCount * 1.5f);
 
-                            // Aggressively tighten noise and inflate EKF covariance when stationary,
-                            // so both PF and EKF converge strongly to the WiFi observation.
+                            // Scale noise based on average signal strength of the scan.
+                            // Strong signal (> -60 dBm) → reliable ranging; weak (< -80 dBm) → coarser estimate.
+                            if (avgRssi > -60f) {
+                                noiseStd *= 0.7f;
+                            } else if (avgRssi < -80f) {
+                                noiseStd *= 1.5f;
+                            }
+
+                            // When moving, a large displacement between the WiFi fix and the current
+                            // estimate is likely a fingerprinting error rather than true movement.
+                            // Penalise proportionally: at 8 m → ×1, at 16 m → ×2, capped at ×4.
+                            if (!isStationary && jumpDist > 8f) {
+                                float jumpPenalty = Math.min(jumpDist / 8f, 4f);
+                                noiseStd *= jumpPenalty;
+                                Log.d("SensorFusion", "WiFi jump penalty ×" + jumpPenalty
+                                        + " dist=" + jumpDist + "m rssi=" + avgRssi);
+                            }
+
+                            // When stationary, WiFi is the primary position source.
+                            // Tighten noise and inflate EKF covariance so updates converge quickly.
                             if (stationaryMs > 3000) {
-                                // >3s stationary: near-full trust in WiFi (K ≈ 0.97)
                                 noiseStd = 2.0f;
                                 ekfPositioning.inflateCovariance(200.0f);
-                            } else if (stationaryMs > 1000) {
-                                // >1s stationary: strong WiFi pull (K ≈ 0.90)
+                            } else if (isStationary) {
                                 noiseStd = 3.0f;
                                 ekfPositioning.inflateCovariance(50.0f);
                             } else {
-                                // Moving: sigma-adaptive reduction only
+                                // While moving, reduce noise further only if the particle cloud
+                                // is already widely dispersed.
                                 double sigma = particleFilter.getSigmaMetres();
                                 if (sigma > 15.0) {
                                     noiseStd = Math.max(noiseStd * 0.5f, 5.0f);
                                 }
                             }
+
+                            noiseStd = Math.max(noiseStd, 2.0f);
+                            Log.d("SensorFusion", "WiFi update noiseStd=" + noiseStd
+                                    + " apCount=" + apCount + " avgRssi=" + avgRssi
+                                    + " jump=" + jumpDist + "m stationary=" + isStationary);
                             particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
                             ekfPositioning.updateWithWifi(enu[0], enu[1], noiseStd);
                         }
