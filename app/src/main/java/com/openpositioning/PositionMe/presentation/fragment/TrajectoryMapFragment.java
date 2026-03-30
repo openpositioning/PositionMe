@@ -145,20 +145,26 @@ public class TrajectoryMapFragment extends Fragment {
         // Collapsible left panel
         View leftPanelContent = view.findViewById(R.id.leftPanelContent);
         TextView leftToggle = view.findViewById(R.id.leftPanelToggle);
-        leftToggle.setOnClickListener(v -> {
+        View leftPanelHeader = view.findViewById(R.id.leftPanelHeader);
+        View.OnClickListener leftPanelToggleClick = v -> {
             boolean visible = leftPanelContent.getVisibility() == View.VISIBLE;
             leftPanelContent.setVisibility(visible ? View.GONE : View.VISIBLE);
             leftToggle.setText(visible ? "▼" : "▲");
-        });
+        };
+        leftToggle.setOnClickListener(leftPanelToggleClick);
+        leftPanelHeader.setOnClickListener(leftPanelToggleClick);
 
         // Collapsible right panel
         View rightPanelContent = view.findViewById(R.id.rightPanelContent);
         TextView rightToggle = view.findViewById(R.id.rightPanelToggle);
-        rightToggle.setOnClickListener(v -> {
+        View rightPanelHeader = view.findViewById(R.id.rightPanelHeader);
+        View.OnClickListener rightPanelToggleClick = v -> {
             boolean visible = rightPanelContent.getVisibility() == View.VISIBLE;
             rightPanelContent.setVisibility(visible ? View.GONE : View.VISIBLE);
             rightToggle.setText(visible ? "▼" : "▲");
-        });
+        };
+        rightToggle.setOnClickListener(rightPanelToggleClick);
+        rightPanelHeader.setOnClickListener(rightPanelToggleClick);
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);

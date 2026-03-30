@@ -33,10 +33,13 @@
 
             <!-- Header row: always visible, contains the toggle arrow -->
             <LinearLayout
+                android:id="@+id/leftPanelHeader"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="start">
+                android:gravity="start"
+                android:clickable="true"
+                android:focusable="true">
 
                 <TextView
                     android:id="@+id/leftPanelToggle"
@@ -121,11 +124,14 @@
 
             <!-- Header row: title + toggle arrow always visible -->
             <LinearLayout
+                android:id="@+id/rightPanelHeader"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
                 android:baselineAligned="false"
+                android:clickable="true"
+                android:focusable="true"
                 android:background="@drawable/switch_label_bg"
                 android:paddingStart="6dp"
                 android:paddingEnd="6dp"
@@ -259,8 +265,9 @@
             android:layout_height="wrap_content"
             android:layout_margin="16dp"
             android:src="@android:drawable/arrow_down_float"
-            app:backgroundTint="@color/md_theme_primary"
-            app:tint="@color/md_theme_onPrimary"
+            app:backgroundTint="@color/glass_fab_bg"
+            app:tint="@color/glass_fab_icon"
+            app:elevation="0dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             android:contentDescription="@string/floor_down" />
@@ -291,10 +298,11 @@
             android:layout_marginBottom="28dp"
             android:contentDescription="@string/floor_up"
             android:src="@android:drawable/arrow_up_float"
-            app:backgroundTint="@color/md_theme_primary"
+            app:backgroundTint="@color/glass_fab_bg"
+            app:tint="@color/glass_fab_icon"
+            app:elevation="0dp"
             app:layout_constraintBottom_toTopOf="@+id/floorLabel"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:tint="@color/md_theme_onPrimary" />
+            app:layout_constraintEnd_toEndOf="parent" />
 
         <androidx.constraintlayout.widget.Guideline
             android:id="@+id/guideline"
