@@ -1244,6 +1244,7 @@ private SwitchMaterial showPdrPathSwitch;
      */
     private void redrawParticleCloud() {
         if (!showParticleCloud || gMap == null) return;
+        if (SensorFusion.getInstance().isUsingEKF()) { clearParticleCloud(); return; }
 
         long now = System.currentTimeMillis();
         if (now - lastParticleRedrawMs < 2000) return; // 2s throttle
@@ -1312,8 +1313,8 @@ private SwitchMaterial showPdrPathSwitch;
      * Adds a numbered observation dot at the given position for the specified source.
      *
      * After adding, ALL markers in the queue are renumbered so that:
-     *   - The newest dot always shows "1"
-     *   - The oldest dot shows the highest number (up to MAX_OBSERVATION_MARKERS)
+     *   - The oldest dot always shows "1"
+     *   - The newest dot shows the highest number (up to MAX_OBSERVATION_MARKERS)
      *
      * When the queue is full, the oldest marker is removed before the new one is added.
      *
@@ -1332,7 +1333,7 @@ private SwitchMaterial showPdrPathSwitch;
             if (oldest != null) oldest.remove();
         }
 
-        // Add the new dot — starts as number 1 (most recent), others will be renumbered below
+        // Add the new dot — label is overwritten by the renumber loop below
         Marker newDot = gMap.addMarker(new MarkerOptions()
                 .position(position)
                 .icon(BitmapDescriptorFactory.fromBitmap(
@@ -1346,14 +1347,14 @@ private SwitchMaterial showPdrPathSwitch;
             markerQueue.add(newDot);
         }
 
-        // Renumber all markers: newest = 1, oldest = queue.size()
-        // The queue is ordered oldest-first (LinkedList), so we iterate in reverse
+        // Renumber all markers: oldest = 1, newest = queue.size()
+        // The queue is ordered oldest-first (LinkedList), so i=0 is oldest
         List<Marker> markerList = new ArrayList<>(markerQueue);
         int total = markerList.size();
         for (int i = 0; i < total; i++) {
             Marker m = markerList.get(i);
             if (m == null) continue;
-            int recencyNumber = total - i; // oldest gets highest number
+            int recencyNumber = i + 1; // oldest = 1, newest = total
             Object tag = m.getTag();
             int markerColor = (tag instanceof Integer) ? (int) tag : color;
             m.setIcon(BitmapDescriptorFactory.fromBitmap(
@@ -1381,7 +1382,7 @@ private SwitchMaterial showPdrPathSwitch;
      * Numbers are updated across the whole queue after each new dot is added.
      *
      * @param color  fill colour of the dot.
-     * @param number the recency label to display (1 = most recent).
+     * @param number the sequence label to display (1 = oldest, highest = newest).
      * @return a 40×40 px Bitmap with a filled circle and white number.
      */
     private Bitmap createNumberedDotBitmap(int color, int number) {

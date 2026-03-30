@@ -448,15 +448,6 @@ public class RecordingFragment extends Fragment {
 
                 // Green PDR observation dot
                 mapFrag.updatePdrPosition(newLocation);
-
-                // Arrow marker — always follows the active fusion algorithm (PF or EKF)
-                LatLng displayLocation = (fused != null)
-                        ? new LatLng(fused[0], fused[1])
-                        : newLocation;
-                mapFrag.updateUserLocation(
-                        displayLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation())
-                );
             }
         }
 
