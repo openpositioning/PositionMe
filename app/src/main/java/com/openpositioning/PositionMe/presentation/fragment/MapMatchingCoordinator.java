@@ -251,7 +251,7 @@ final class MapMatchingCoordinator {
         );
 
         LatLng oldLocation = host.getCurrentLocation();
-        host.setCurrentLocation(matchedLocation);
+        host.setCurrentLocation(rawLocation);
 
         previousMatchedPose = new CandidatePose(
                 matchedLocation,
@@ -270,8 +270,8 @@ final class MapMatchingCoordinator {
         savedZoom = context.getSharedPreferences("MapCameraState", Context.MODE_PRIVATE)
                 .getFloat("user_selected_zoom", 19f);
 
-        host.getTrajectoryRenderer().updateCurrentPosition(context, matchedLocation, orientation, shouldFollowCamera, savedZoom);
-        host.getTrajectoryRenderer().appendMatchedLocation(oldLocation, matchedLocation);
+        host.getTrajectoryRenderer().updateCurrentPosition(context, rawLocation, orientation, shouldFollowCamera, savedZoom);
+        host.getTrajectoryRenderer().appendMatchedLocation(oldLocation, rawLocation);
 
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
         if (indoorMapManager != null) {

@@ -211,9 +211,7 @@ public class ParticleFilterEngine {
         for (Particle particle : particles) {
             double w = 1.0;
 
-
             // Wi-Fi position likelihood
-
             if (observation.getWifiX() != null && observation.getWifiY() != null) {
                 double dx = particle.x - observation.getWifiX();
                 double dy = particle.y - observation.getWifiY();
@@ -228,39 +226,35 @@ public class ParticleFilterEngine {
                 }
             }
 
-
             // GNSS position likelihood
-
-            if (observation.getGnssX() != null && observation.getGnssY() != null) {
-                double dx = particle.x - observation.getGnssX();
-                double dy = particle.y - observation.getGnssY();
-                w *= gaussian2D(dx, dy, sigmaGnss);
-            }
-
-
-            // Discrete wall-crossing penalty
-
-            if (constraintContext != null && constraintContext.isUsable()) {
-                double stepMeters = Math.hypot(particle.x - particle.prevX, particle.y - particle.prevY);
-                if (stepMeters >= MIN_STEP_FOR_WALL_CHECK_METERS) {
-                    LatLng prevLatLng = constraintContext.coordinateConverter.localToLatLng(
-                            particle.prevX,
-                            particle.prevY
-                    );
-                    LatLng currentLatLng = constraintContext.coordinateConverter.localToLatLng(
-                            particle.x,
-                            particle.y
-                    );
-
-                    if (MapGeometryUtils.crossesWall(
-                            prevLatLng,
-                            currentLatLng,
-                            constraintContext.sourceFloorShapes)) {
-                        w *= constraintContext.wallCrossPenalty;
-                    }
-                }
-            }
-
+//            if (observation.getGnssX() != null && observation.getGnssY() != null) {
+//                double dx = particle.x - observation.getGnssX();
+//                double dy = particle.y - observation.getGnssY();
+//                w *= gaussian2D(dx, dy, sigmaGnss);
+//            }
+//
+//            // Discrete wall-crossing penalty
+//            if (constraintContext != null && constraintContext.isUsable()) {
+//                double stepMeters = Math.hypot(particle.x - particle.prevX, particle.y - particle.prevY);
+//                if (stepMeters >= MIN_STEP_FOR_WALL_CHECK_METERS) {
+//                    LatLng prevLatLng = constraintContext.coordinateConverter.localToLatLng(
+//                            particle.prevX,
+//                            particle.prevY
+//                    );
+//                    LatLng currentLatLng = constraintContext.coordinateConverter.localToLatLng(
+//                            particle.x,
+//                            particle.y
+//                    );
+//
+//                    if (MapGeometryUtils.crossesWall(
+//                            prevLatLng,
+//                            currentLatLng,
+//                            constraintContext.sourceFloorShapes)) {
+//                        w *= constraintContext.wallCrossPenalty;
+//                    }
+//                }
+//            }
+//
             particle.weight = w;
             weightSum += w;
         }

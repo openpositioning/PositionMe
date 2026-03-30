@@ -44,6 +44,17 @@ public class MapMatchingService {
     private static final double POST_TRANSITION_RELEASE_MAX_STEP_METERS = 0.75;
     private static final double POST_TRANSITION_RELEASE_COMPLETE_METERS = 0.20;
     private static final double POST_TRANSITION_RELEASE_CANCEL_METERS = 6.0;
+    private int consecutiveFreezeCount = 0;
+    private static final int MAX_FREEZE_FRAMES = 5;
+
+    private static final double[] ANGLE_OFFSETS = {
+            0,
+            15, -15,
+            30, -30,
+            45, -45,
+            60, -60,
+            90, -90
+    };
 
     @Nullable
     private PostTransitionReleaseState postTransitionReleaseState;
@@ -92,19 +103,56 @@ public class MapMatchingService {
             debugReason = "Candidate pose accepted; " + transitionDescription + ".";
         }
 
-        if (shouldFreezeIdleMotion(previousPose, currentPose, motionDelta, nearStairs, nearLift, floorTransitionAttempt, input.getVerticalHint())) {
+        boolean frozen = shouldFreezeIdleMotion(
+                previousPose,
+                currentPose,
+                motionDelta,
+                nearStairs,
+                nearLift,
+                floorTransitionAttempt,
+                input.getVerticalHint()
+        );
+
+        if (frozen && previousPose != null && consecutiveFreezeCount < MAX_FREEZE_FRAMES){
+            consecutiveFreezeCount++;
+            LatLng blendedLatLng = interpolate(
+                    previousPose.getLatLng(),
+                    currentPose.getLatLng(),
+                    0.2
+            );
+
             return new MapMatchingResult(
                     true,
                     false,
                     nearStairs,
                     nearLift,
                     false,
-                    previousPose.getLatLng(),
+                    blendedLatLng,
                     previousPose.getFloor(),
                     CorrectionType.NONE,
-                    "Micro-motion frozen to suppress idle drift."
+                    "Micro-motion frozen (count=" + consecutiveFreezeCount + ")"
             );
+        } else {
+            // escape condition
+//            if (frozen) {
+//                Log.d(TAG, "Freeze escape triggered after " + consecutiveFreezeCount + " frames");
+//            }
+            consecutiveFreezeCount = 0;
         }
+
+//        if (shouldFreezeIdleMotion(previousPose, currentPose, motionDelta, nearStairs, nearLift, floorTransitionAttempt, input.getVerticalHint())) {
+//            return new MapMatchingResult(
+//                    true,
+//                    false,
+//                    nearStairs,
+//                    nearLift,
+//                    false,
+//                    previousPose.getLatLng(),
+//                    previousPose.getFloor(),
+//                    CorrectionType.NONE,
+//                    "Micro-motion frozen to suppress idle drift."
+//            );
+//        }
 
         if (transitionLanding != null) {
             startPostTransitionRelease(transitionLanding.landingLatLng, currentPose.getFloor());
@@ -414,23 +462,96 @@ public class MapMatchingService {
             );
         }
 
-        if (lastValidPoint != null && !samePoint(lastValidPoint, previousLatLng)) {
+        // ✅ fallback: try directional escape
+        LatLng directionalPoint = findValidDirectionMove(
+                previousLatLng,
+                candidateLatLng,
+                wallCheckFloorShapes
+        );
+
+        // optional: verify it's actually valid
+        if (!samePoint(directionalPoint, previousLatLng)
+                && !MapGeometryUtils.crossesWall(previousLatLng, directionalPoint, wallCheckFloorShapes)) {
+
             return new WallRecovery(
-                    lastValidPoint,
-                    CorrectionType.SNAP_TO_VALID_AREA,
-                    "Crossed wall. Projected to last valid point before wall.",
+                    directionalPoint,
+                    CorrectionType.THROUGH_WALL,
+                    "Crossed wall. Directional escape applied.",
                     true
             );
         }
 
+        // final fallback
         return new WallRecovery(
                 previousLatLng,
                 CorrectionType.THROUGH_WALL,
-                "Crossed wall. Stuck in corner, reverted to previous XY pose.",
+                "Crossed wall. No valid direction found, staying in place.",
                 false
         );
-    }
 
+//        LatLng blended = interpolate(previousLatLng, candidateLatLng, 0.3);
+//
+//        //  check if this move crosses a wall
+//        boolean crosses = MapGeometryUtils.crossesWall(
+//                previousLatLng,
+//                blended,
+//                wallCheckFloorShapes
+//        );
+//
+//        if (!crosses) {
+//            return new WallRecovery(
+//                    blended,
+//                    CorrectionType.THROUGH_WALL,
+//                    "Safe blended movement.",
+//                    true
+//            );
+//        }
+//
+//        // last resort: very small step along valid direction
+//        LatLng microStep = interpolate(previousLatLng, candidateLatLng, 0.1);
+//        return new WallRecovery(
+//                microStep,
+//                CorrectionType.THROUGH_WALL,
+//                "Micro-step escape near wall.",
+//                false
+//        );
+
+//        LatLng blended = interpolate(previousLatLng, candidateLatLng, 0.3);
+//
+//        return new WallRecovery(
+//                blended,
+//                CorrectionType.THROUGH_WALL,
+//                "Corner escape: blended towards candidate.",
+//                false
+//        );
+    }
+    private LatLng findValidDirectionMove(
+            LatLng previous,
+            LatLng candidate,
+            FloorplanApiClient.FloorShapes shapes) {
+
+        double baseAngle = Math.atan2(
+                candidate.latitude - previous.latitude,
+                candidate.longitude - previous.longitude
+        );
+
+        double step = 0.00001; // small normalized step (tune this)
+
+        for (double offsetDeg : ANGLE_OFFSETS) {
+            double angle = baseAngle + Math.toRadians(offsetDeg);
+
+            double newLat = previous.latitude + step * Math.sin(angle);
+            double newLng = previous.longitude + step * Math.cos(angle);
+
+            LatLng testPoint = new LatLng(newLat, newLng);
+
+            if (!MapGeometryUtils.crossesWall(previous, testPoint, shapes)) {
+                return testPoint;
+            }
+        }
+
+        return previous; // fallback if all directions blocked
+    }
     @Nullable
     private LatLng anchorFloorTransition(@NonNull LatLng point,
                                          @NonNull FloorplanApiClient.FloorShapes connectorFloorShapes,

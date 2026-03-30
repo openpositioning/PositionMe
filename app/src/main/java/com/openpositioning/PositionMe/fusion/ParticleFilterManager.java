@@ -47,7 +47,7 @@ public class ParticleFilterManager {
     private static final double WIFI_GATE_METERS = 5.0;
     private static final double GNSS_GATE_METERS = 25.0;
     private static final double WIFI_OBS_EMA_ALPHA = 0.10;
-    private static final double WALL_CROSS_PENALTY = 0;
+    private static final double WALL_CROSS_PENALTY = 0.4;
 
     /** Main app sensor/data source. */
     private final SensorFusion sensorFusion;
@@ -233,7 +233,6 @@ public class ParticleFilterManager {
 
         FusedPose rawPose = particleFilterEngine.estimate(coordinateConverter);
         FusedPose correctedPose = applyDiscreteMapMatching(rawPose, currentHeading, deltaS);
-       // latestFusedPose = smoothPose(correctedPose != null ? correctedPose : rawPose);
         latestFusedPose = correctedPose;
     }
 
@@ -277,7 +276,6 @@ public class ParticleFilterManager {
 
         FusedPose initialRawPose = particleFilterEngine.estimate(coordinateConverter);
         FusedPose initialCorrectedPose = applyDiscreteMapMatching(initialRawPose, initialHeading, 0.0);
-        //latestFusedPose = smoothPose(initialCorrectedPose != null ? initialCorrectedPose : initialRawPose);
         latestFusedPose = initialCorrectedPose;
         lastHeading = initialHeading;
 
@@ -513,124 +511,68 @@ public class ParticleFilterManager {
                 targetFloorShapes,
                 sensorFusion.getSelectedBuildingId()
         );
-
         MapMatchingResult result = mapMatchingService.match(input);
 
-        int candidateCorrectedFloor = sanitiseFloorIndex(result.getCorrectedFloor());
-        boolean floorTransitionAccepted =
-                result.isFloorChangeAllowed() && candidateCorrectedFloor != activePfFloor;
-
         LatLng rawLatLng = rawPose.getLatLng();
-        LatLng candidateMatchedLatLng = result.getCorrectedLatLng() != null
+        LatLng correctedCandidate = result.getCorrectedLatLng() != null
                 ? result.getCorrectedLatLng()
                 : rawLatLng;
 
-        // Conservative jump guard:
-        // - same-floor corrections must stay small
-        // - near stairs/lifts can be slightly looser
-        // - true accepted floor transitions are allowed
-        final double maxSameFloorCorrectionMeters = 0.8;
-        final double maxConnectorCorrectionMeters = 1.5;
+     // ✅ Soft guard instead of hard reject
+        double correctionMeters = distanceMeters(rawLatLng, correctedCandidate);
+        double maxCorrection = 2.0; // relaxed threshold
 
-        double allowedCorrectionMeters =
-                (result.isNearStairs() || result.isNearLift())
-                        ? maxConnectorCorrectionMeters
-                        : maxSameFloorCorrectionMeters;
+        LatLng finalLatLng;
 
-        double correctionMeters = distanceMeters(rawLatLng, candidateMatchedLatLng);
-
-        LatLng correctedLatLng;
-        int correctedFloor = activePfFloor;
-
-        if (result.isCrossedWall()) {
-            // Wall event: do not snap to a far corrected point.
-            // Prefer the last valid matched pose if we have one.
-            if (lastMatchedPose != null && lastMatchedPose.getLatLng() != null) {
-                correctedLatLng = lastMatchedPose.getLatLng();
-            } else {
-                correctedLatLng = rawLatLng;
-            }
-            correctedFloor = activePfFloor;
-
-            Log.d(TAG, "Map correction guarded (wall cross) -> using last valid/raw pose"
-                    + " | correction=" + result.getCorrectionType()
-                    + ", reason=" + result.getDebugReason());
-        } else if (result.getCorrectionType()
-                == com.openpositioning.PositionMe.mapmatching.CorrectionType.INVALID_FLOOR_CHANGE) {
-            // Invalid floor change: keep previous valid floor/pose.
-            if (lastMatchedPose != null && lastMatchedPose.getLatLng() != null) {
-                correctedLatLng = lastMatchedPose.getLatLng();
-            } else {
-                correctedLatLng = rawLatLng;
-            }
-            correctedFloor = activePfFloor;
-
-            Log.d(TAG, "Map correction guarded (invalid floor change) -> using last valid/raw pose"
-                    + " | reason=" + result.getDebugReason());
-        } else if (floorTransitionAccepted) {
-            // Real validated floor transition: allow map-matching correction.
-            correctedLatLng = candidateMatchedLatLng;
-            correctedFloor = candidateCorrectedFloor;
-
-            Log.d(TAG, "Map correction accepted for floor transition"
-                    + " | newFloor=" + correctedFloor
-                    + ", correctionMeters=" + correctionMeters
-                    + ", reason=" + result.getDebugReason());
-        } else if (correctionMeters <= allowedCorrectionMeters) {
-            // Small same-floor correction is okay.
-            correctedLatLng = candidateMatchedLatLng;
-            correctedFloor = activePfFloor;
+        if (correctionMeters > maxCorrection) {
+            // instead of rejecting → clamp movement
+            finalLatLng = interpolate(rawLatLng, correctedCandidate, 0.5);
         } else {
-            // Too large for a same-floor correction: ignore it.
-            correctedLatLng = rawLatLng;
-            correctedFloor = activePfFloor;
-
-            Log.d(TAG, "Rejected large same-floor map correction"
-                    + " | correctionMeters=" + correctionMeters
-                    + ", allowed=" + allowedCorrectionMeters
-                    + ", nearStairs=" + result.isNearStairs()
-                    + ", nearLift=" + result.isNearLift()
-                    + ", correction=" + result.getCorrectionType()
-                    + ", reason=" + result.getDebugReason());
+            finalLatLng = correctedCandidate;
         }
 
-        if (correctedFloor != activePfFloor && particleFilterEngine != null) {
+    // ✅ Update floor (important)
+        int correctedFloor = sanitiseFloorIndex(result.getCorrectedFloor());
+        if (result.isFloorChangeAllowed() && correctedFloor != activePfFloor) {
             activePfFloor = correctedFloor;
-            particleFilterEngine.setAllParticlesFloor(activePfFloor);
-            Log.d(TAG, "PF floor owner changed to " + activePfFloor
-                    + " | reason=" + result.getDebugReason());
+            if (particleFilterEngine != null) {
+                particleFilterEngine.setAllParticlesFloor(activePfFloor);
+            }
         }
 
-        double[] correctedLocal = coordinateConverter.latLngToLocal(correctedLatLng);
+    // ✅ Convert to local
+        double[] correctedLocal = coordinateConverter.latLngToLocal(finalLatLng);
+
         FusedPose correctedPose = new FusedPose(
                 correctedLocal[0],
                 correctedLocal[1],
                 rawPose.getHeadingRad(),
                 activePfFloor,
-                correctedLatLng,
+                finalLatLng,
                 rawPose.getConfidence()
         );
 
+     // ✅ CRITICAL: update lastMatchedPose
         lastMatchedPose = new CandidatePose(
-                correctedLatLng,
+                finalLatLng,
                 activePfFloor,
                 System.currentTimeMillis(),
                 "pf_matched",
                 correctedPose.getHeadingRad()
         );
 
-        Log.d(TAG,
-                "Map match"
-                        + " | floor=" + activePfFloor
-                        + ", crossedWall=" + result.isCrossedWall()
-                        + ", nearStairs=" + result.isNearStairs()
-                        + ", nearLift=" + result.isNearLift()
-                        + ", floorAllowed=" + result.isFloorChangeAllowed()
-                        + ", correction=" + result.getCorrectionType()
-                        + ", correctionMeters=" + correctionMeters
-                        + ", reason=" + result.getDebugReason());
-
         return correctedPose;
+
+    }
+
+    private LatLng interpolate(LatLng from, LatLng to, double alpha) {
+        if (from == null) return to;
+        if (to == null) return from;
+
+        double lat = from.latitude + alpha * (to.latitude - from.latitude);
+        double lng = from.longitude + alpha * (to.longitude - from.longitude);
+
+        return new LatLng(lat, lng);
     }
 
     private int resolveRequestedFloor(@Nullable VerticalTransitionHint verticalHint) {

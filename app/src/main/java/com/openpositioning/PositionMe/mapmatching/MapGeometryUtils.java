@@ -29,6 +29,60 @@ public class MapGeometryUtils {
     // 安全内缩值不要太大，否则切层时会出现明显的横向/纵向跳点。
     private static final double CONNECTOR_SAFE_INSET_METERS = 0.35;
     private static final int CONNECTOR_SAFE_POINT_STEPS = 16;
+    private static final double LOCAL_DIRECTION_SEARCH_RADIUS_METERS = 4.0;
+    private static final double LOCAL_DIRECTION_MIN_SEGMENT_WEIGHT = 0.25;
+
+    /**
+     * Estimate the dominant walkable heading around a point by inspecting nearby wall edges.
+     * The dominant travel direction in corridors is usually parallel to nearby wall edges.
+     */
+    public static double estimateLocalWalkableHeadingRadians(LatLng point,
+                                                             FloorplanApiClient.FloorShapes floorShapes,
+                                                             double fallbackHeadingRad) {
+        if (point == null || floorShapes == null || floorShapes.getFeatures() == null) {
+            return fallbackHeadingRad;
+        }
+
+        double sumCos2 = 0d;
+        double sumSin2 = 0d;
+        double totalWeight = 0d;
+
+        for (FloorplanApiClient.MapShapeFeature feature : floorShapes.getFeatures()) {
+            if (!"wall".equalsIgnoreCase(feature.getIndoorType())) {
+                continue;
+            }
+            List<List<LatLng>> parts = feature.getParts();
+            if (parts == null) continue;
+            for (List<LatLng> part : parts) {
+                if (part == null || part.size() < 2) continue;
+                for (int i = 0; i < part.size(); i++) {
+                    LatLng a = part.get(i);
+                    LatLng b = part.get((i + 1) % part.size());
+                    if (a == null || b == null || samePoint(a, b)) continue;
+                    double distance = distancePointToSegmentMeters(point, a, b);
+                    if (distance > LOCAL_DIRECTION_SEARCH_RADIUS_METERS) continue;
+                    double heading = headingBetween(a, b);
+                    double closenessWeight = 1d / Math.max(distance, LOCAL_DIRECTION_MIN_SEGMENT_WEIGHT);
+                    double lengthWeight = Math.max(0.30d, distanceMeters(a, b));
+                    double weight = closenessWeight * Math.min(lengthWeight, 6.0d);
+                    sumCos2 += Math.cos(2d * heading) * weight;
+                    sumSin2 += Math.sin(2d * heading) * weight;
+                    totalWeight += weight;
+                }
+            }
+        }
+
+        if (totalWeight <= 1e-6d) {
+            return fallbackHeadingRad;
+        }
+
+        double axisHeading = 0.5d * Math.atan2(sumSin2, sumCos2);
+        double alternative = normalizeAngleRadians(axisHeading + Math.PI);
+        return angularDifference(axisHeading, fallbackHeadingRad)
+                <= angularDifference(alternative, fallbackHeadingRad)
+                ? axisHeading
+                : alternative;
+    }
 
     /**
      * 判断从 start 到 end 的轨迹是否穿过当前楼层中的 wall。
@@ -148,6 +202,69 @@ public class MapGeometryUtils {
         }
 
         return false;
+    }
+
+
+    /**
+     * Returns true when the point falls inside a wall polygon/ring on the current floor.
+     */
+    public static boolean isInsideWall(LatLng point,
+                                       FloorplanApiClient.FloorShapes floorShapes) {
+        if (point == null || floorShapes == null || floorShapes.getFeatures() == null) {
+            return false;
+        }
+
+        for (FloorplanApiClient.MapShapeFeature feature : floorShapes.getFeatures()) {
+            if (!"wall".equalsIgnoreCase(feature.getIndoorType())) {
+                continue;
+            }
+
+            List<List<LatLng>> parts = feature.getParts();
+            if (parts == null) continue;
+
+            for (List<LatLng> part : parts) {
+                if (part == null || part.size() < 3) continue;
+                if (isPointInPolygon(point, part)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Distance from a point to the nearest wall boundary on the active floor.
+     * Returns Double.MAX_VALUE when no wall geometry is available.
+     */
+    public static double distanceToNearestWallMeters(LatLng point,
+                                                     FloorplanApiClient.FloorShapes floorShapes) {
+        if (point == null || floorShapes == null || floorShapes.getFeatures() == null) {
+            return Double.MAX_VALUE;
+        }
+
+        double bestDistance = Double.MAX_VALUE;
+        for (FloorplanApiClient.MapShapeFeature feature : floorShapes.getFeatures()) {
+            if (!"wall".equalsIgnoreCase(feature.getIndoorType())) {
+                continue;
+            }
+
+            List<List<LatLng>> parts = feature.getParts();
+            if (parts == null) continue;
+
+            for (List<LatLng> part : parts) {
+                if (part == null || part.size() < 2) continue;
+                if (part.size() >= 3 && isPointInPolygon(point, part)) {
+                    return 0.0;
+                }
+                double distance = distancePointToPolygonBoundaryMeters(point, part);
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                }
+            }
+        }
+
+        return bestDistance;
     }
 
     /**
@@ -576,6 +693,25 @@ public class MapGeometryUtils {
         return fromLocalMeters(closestX, closestY, p);
     }
 
+    /**
+     * Euclidean distance in local tangent plane (meters).
+     */
+    public static double distanceMetersPublic(LatLng a, LatLng b) {
+        return distanceMeters(a, b);
+    }
+
+    /**
+     * Move a point by east/north offsets in meters using a local tangent plane approximation.
+     */
+    public static LatLng offsetPointByMeters(LatLng reference,
+                                             double eastMeters,
+                                             double northMeters) {
+        if (reference == null) {
+            return null;
+        }
+        return fromLocalMeters(eastMeters, northMeters, reference);
+    }
+
     private static double distanceMeters(LatLng a, LatLng b) {
         double[] bxy = toLocalMeters(b, a);
         return Math.hypot(bxy[0], bxy[1]);
@@ -626,6 +762,33 @@ public class MapGeometryUtils {
                 start.latitude + (end.latitude - start.latitude) * clamped,
                 start.longitude + (end.longitude - start.longitude) * clamped
         );
+    }
+
+    private static double headingBetween(LatLng from, LatLng to) {
+        double[] xy = toLocalMeters(to, from);
+        if (Math.abs(xy[0]) < 1e-9 && Math.abs(xy[1]) < 1e-9) {
+            return 0d;
+        }
+        return Math.atan2(xy[0], xy[1]);
+    }
+
+    private static boolean samePoint(LatLng a, LatLng b) {
+        if (a == b) return true;
+        if (a == null || b == null) return false;
+        return Math.abs(a.latitude - b.latitude) < 1e-12
+                && Math.abs(a.longitude - b.longitude) < 1e-12;
+    }
+
+    private static double normalizeAngleRadians(double angle) {
+        double value = angle;
+        while (value <= -Math.PI) value += 2d * Math.PI;
+        while (value > Math.PI) value -= 2d * Math.PI;
+        return value;
+    }
+
+    private static double angularDifference(double a, double b) {
+        double diff = Math.abs(normalizeAngleRadians(a - b));
+        return diff > Math.PI ? (2d * Math.PI - diff) : diff;
     }
 
     /**

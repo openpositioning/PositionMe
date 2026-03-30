@@ -89,6 +89,7 @@ public class AdaptiveQsmfiHeadingCalibrator {
     private double lastGyroRate = 0.0;
     private boolean isCompassStable = false;
     private boolean isGyroStable = false;
+    private boolean isStraight = false;
 
     public void reset() {
         hasGravity = false;
@@ -119,6 +120,7 @@ public class AdaptiveQsmfiHeadingCalibrator {
         isCompassStable = false;
         isGyroStable = false;
         lastGyroRate = 0.0;
+        isStraight = false;
 
         headingReliable = false;
         lastCorrectionSource = "gyro_only";
@@ -293,11 +295,10 @@ public class AdaptiveQsmfiHeadingCalibrator {
         if (canFuse) {
             double gain;
             if (isTurning) {
-                gain = walking ? 0.05 : 0.10;
+                gain = walking ? 0.07 : 0.10;
             } else {
                 gain = walking ? 0.12 : 0.25;
             }
-
             fusedHeadingRad = blendAngle(fusedHeadingRad, stableHeading, gain);
             headingReliable = true;
             lastCorrectionSource = "qsmfi";
