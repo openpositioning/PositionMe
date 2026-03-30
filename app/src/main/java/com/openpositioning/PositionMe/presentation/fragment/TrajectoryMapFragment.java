@@ -137,13 +137,13 @@ public class TrajectoryMapFragment extends Fragment {
     // Smoothing state
     // -------------------------------------------------------------------------
 
-    /** Whether the LPF-smoothed (teal) polyline is shown instead of the raw (red) one. */
+    /** Whether the smoothed (purple) polyline is currently shown instead of raw. */
     private boolean isSmoothingEnabled = false;
 
-    /** Running filtered position state for the low-pass filter. */
+    /** Running smoothed position for the low-pass filter. */
     private LatLng smoothedPosition = null;
 
-    /** Raw (unfiltered) fused positions — shown when smoothing toggle is OFF. */
+    /** Full list of smoothed positions (mirrors rawPolyline but filtered). */
     private final List<LatLng> smoothedPoints = new ArrayList<>();
 
 //    // -------------------------------------------------------------------------
@@ -617,7 +617,7 @@ private SwitchMaterial showPdrPathSwitch;
                 .width(6f)
                 .visible(true));
 
-        // LPF-smoothed fused trajectory — dark red, only visible when smoothing toggle is ON
+        // LPF-smoothed fused trajectory — only visible when smoothing toggle is ON
         lpfPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.RED)
                 .width(7f)
@@ -1168,9 +1168,9 @@ private SwitchMaterial showPdrPathSwitch;
     }
 
     /**
-     * Controls visibility of the fused trajectory polylines based on the smoothing toggle.
-     * Toggle OFF → red polyline shows raw fused positions (no filter).
-     * Toggle ON  → teal polyline shows LPF-smoothed positions; raw polyline hidden.
+     * Controls visibility of the LPF-smoothed fused polyline.
+     * The red PDR line and purple fused line are always visible.
+     * Only the teal LPF line is toggled by the smoothing switch.
      */
     private void updatePolylineVisibility() {
         if (smoothedPolyline != null) {
@@ -1499,7 +1499,7 @@ private SwitchMaterial showPdrPathSwitch;
             smoothedPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
                     .width(6f)
-                    .visible(true));
+                    .visible(!isSmoothingEnabled));
             lpfPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.RED)
                     .width(7f)
