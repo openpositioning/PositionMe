@@ -139,7 +139,7 @@
             app:key="wifi_interval"
             app:title="@string/wifi_scan_title"
             app:dependency="overwrite_constants"
-            app:defaultValue="5"
+            app:defaultValue="1"
             android:summary="@string/wifi_scan_interval" />
 
     </PreferenceCategory>
