@@ -386,11 +386,6 @@ public class RecordingFragment extends Fragment {
             return;
         }
 
-        LatLng authoritativeStart = resolveAuthoritativeStartAnchor();
-        if (authoritativeStart != null && autonomousInitialLocation == null) {
-            autonomousInitialLocation = authoritativeStart;
-        }
-
         boolean shouldAdvanceLiveTrajectory = shouldUpdateLiveTrajectory(pdrValues);
 
         // Capture previous raw PDR values before updating them.
@@ -489,20 +484,16 @@ public class RecordingFragment extends Fragment {
             return;
         }
 
-        LatLng startAnchor = resolveAuthoritativeStartAnchor();
-        if (startAnchor == null) {
-            Log.d(TAG, "PDR_BRANCH waiting for authoritative start anchor");
+        if (autonomousInitialLocation == null) {
+            Log.d(TAG, "PDR_BRANCH waiting for autonomous initial location");
             return;
         }
 
-        // Keep this cached too, so later branches use the same anchor consistently.
-        autonomousInitialLocation = startAnchor;
-
-        LatLng currentPdrLocation = UtilFunctions.calculateNewPos(startAnchor, pdrValues);
+        LatLng currentPdrLocation = UtilFunctions.calculateNewPos(autonomousInitialLocation, pdrValues);
 
         Log.d(TAG, String.format(
                 Locale.UK,
-                "PDR_BRANCH using authoritative anchor lat=%.6f lon=%.6f headingDeg=%.2f advance=%s",
+                "PDR_BRANCH using anchored PDR lat=%.6f lon=%.6f headingDeg=%.2f advance=%s",
                 currentPdrLocation.latitude,
                 currentPdrLocation.longitude,
                 Math.toDegrees(sensorFusion.passOrientation()),
@@ -523,7 +514,7 @@ public class RecordingFragment extends Fragment {
         if (!initialCameraPositionSet) {
             trajectoryMapFragment.setInitialCameraPosition(currentPdrLocation);
             initialCameraPositionSet = true;
-            Log.d(TAG, "PDR_BRANCH initial camera position set from authoritative start anchor");
+            Log.d(TAG, "PDR_BRANCH initial camera position set from anchored PDR");
         }
     }
 
@@ -558,6 +549,8 @@ public class RecordingFragment extends Fragment {
             Log.d(TAG, "PF draw skipped: no meaningful PF pose available");
             return;
         }
+
+        trajectoryMapFragment.updateFusionFloorTracking(fusedPose.getFloor());
 
         if (shouldAdvanceLiveTrajectory || !initialCameraPositionSet) {
             trajectoryMapFragment.updateUserLocation(
@@ -748,62 +741,6 @@ public class RecordingFragment extends Fragment {
                     candidateLatLng.longitude
             ));
             return candidateLatLng;
-        }
-
-        return null;
-    }
-
-    @Nullable
-    private LatLng resolveAuthoritativeStartAnchor() {
-        if (sensorFusion == null) {
-            return null;
-        }
-
-        // 1) User-corrected manual anchor
-        LatLng manualStart = sensorFusion.getManualStartAnchorLatLng();
-        if (manualStart != null) {
-            sensorFusion.setStartGNSSLatitude(new float[]{
-                    (float) manualStart.latitude,
-                    (float) manualStart.longitude
-            });
-
-            trajectoryMapFragment.setInitialCameraPosition(manualStart);
-
-            // Only do this once if already have a flag for initial anchor written.
-            // initialAnchorWritten = true;
-
-            Log.d("RecordingFragment", String.format(Locale.UK,
-                    "Using manual start anchor lat=%.6f lon=%.6f",
-                    manualStart.latitude,
-                    manualStart.longitude));
-            return manualStart;
-        }
-
-        // 2) Already cached autonomous initial location in this fragment
-        if (autonomousInitialLocation != null) {
-            return autonomousInitialLocation;
-        }
-
-        // 3) Stored session start anchor
-        float[] storedStart = sensorFusion.getGNSSLatitude(true);
-        if (storedStart != null
-                && storedStart.length >= 2
-                && !(Math.abs(storedStart[0]) < 1e-6 && Math.abs(storedStart[1]) < 1e-6)) {
-            return new LatLng(storedStart[0], storedStart[1]);
-        }
-
-        // 4) WiFi
-        LatLng wifiLatLng = sensorFusion.getLatLngWifiPositioning();
-        if (wifiLatLng != null) {
-            return wifiLatLng;
-        }
-
-        // 5) GNSS
-        float[] gnss = sensorFusion.getGNSSLatitude(false);
-        if (gnss != null
-                && gnss.length >= 2
-                && !(Math.abs(gnss[0]) < 1e-6 && Math.abs(gnss[1]) < 1e-6)) {
-            return new LatLng(gnss[0], gnss[1]);
         }
 
         return null;

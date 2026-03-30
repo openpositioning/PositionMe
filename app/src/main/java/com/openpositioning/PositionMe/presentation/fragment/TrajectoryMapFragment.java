@@ -146,6 +146,10 @@ public class TrajectoryMapFragment extends Fragment {
     private TextView debugAdaptedHeading;
     private TextView debugCosSin;
 
+    private Integer lastFusionFloorIndex = null;
+    private int fusionFloorStableCount = 0;
+    private static final int MIN_FUSION_FLOOR_STABLE_FRAMES = 3;
+
     // Controller / coordinator
     private final FloorController floorController = new FloorController(new FloorController.Host() {
         @Override
@@ -256,6 +260,12 @@ public class TrajectoryMapFragment extends Fragment {
                 @Override
                 public Integer getTrackingCandidateFloorIndex() {
                     return floorController.peekTrackingFloorCandidateIndex();
+                }
+
+                @Nullable
+                @Override
+                public Integer getStableFusionFloorIndex() {
+                    return TrajectoryMapFragment.this.getStableFusionFloorIndex();
                 }
 
                 @Override
@@ -442,27 +452,11 @@ public class TrajectoryMapFragment extends Fragment {
                             savedZoom));
                     hasPendingCameraMove = false;
                     pendingCameraPosition = null;
-                } else if (!replayModeEnabled) {
+                } else if (!replayModeEnabled && getContext() != null) {
                     float savedZoom = getSavedMapZoom();
-
-                    LatLng manualStart = sensorFusion != null
-                            ? sensorFusion.getManualStartAnchorLatLng()
-                            : null;
-
-                    if (manualStart != null) {
-                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(manualStart, savedZoom));
-                        currentLocation = manualStart;
-
-                        Log.d(TAG, String.format(Locale.UK,
-                                "STEP2_CAMERA applied manual recording start lat=%.6f lon=%.6f zoom=%.2f",
-                                manualStart.latitude,
-                                manualStart.longitude,
-                                savedZoom));
-                    } else if (getContext() != null) {
-                        Log.d(TAG, String.format(Locale.UK,
-                                "STEP2_CAMERA recording mode has no manual start anchor; waiting for autonomous anchor, zoom=%.2f",
-                                savedZoom));
-                    }
+                    Log.d(TAG, String.format(Locale.UK,
+                            "STEP2_CAMERA recording mode waiting for autonomous anchor; skip saved user_start_lat/lon restore, zoom=%.2f",
+                            savedZoom));
                 }
 
                 restoreCachedBuildingsIfAny();
@@ -613,6 +607,31 @@ public class TrajectoryMapFragment extends Fragment {
     public void updateUserLocation(@NonNull LatLng newLocation, float orientationDeg) {
         mapMatchingCoordinator.updateUserLocation(newLocation, orientationDeg);
         refreshDebugStatusText();
+    }
+
+    public void updateFusionFloorTracking(@Nullable Integer fusionFloorIndex) {
+        if (fusionFloorIndex == null) {
+            fusionFloorStableCount = 0;
+            lastFusionFloorIndex = null;
+            return;
+        }
+
+        if (fusionFloorIndex.equals(lastFusionFloorIndex)) {
+            fusionFloorStableCount++;
+        } else {
+            lastFusionFloorIndex = fusionFloorIndex;
+            fusionFloorStableCount = 1;
+        }
+    }
+
+    @Nullable
+    public Integer getStableFusionFloorIndex() {
+        if (lastFusionFloorIndex == null) {
+            return null;
+        }
+        return fusionFloorStableCount >= MIN_FUSION_FLOOR_STABLE_FRAMES
+                ? lastFusionFloorIndex
+                : null;
     }
 
     public void setReplayModeEnabled(boolean enabled) {
@@ -1304,37 +1323,31 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
-        String engine = sensorFusion != null && sensorFusion.isParticleFilterTrajectoryMode()
+        String engine = (sensorFusion != null && sensorFusion.isParticleFilterTrajectoryMode())
                 ? "PF"
                 : "PDR";
 
-        String building = selectedFloorplanBuilding != null
-                ? selectedFloorplanBuilding.getName()
-                : "none";
-
-        String particleSummary = sensorFusion != null
+        String pfSummary = sensorFusion != null
                 ? sensorFusion.getParticleFilterDebugSummary()
                 : "Particles: unavailable";
+
+        String mapMatchingSummary = mapMatchingCoordinator.getLatestDebugStatus();
 
         int wifiFloor = sensorFusion != null ? sensorFusion.getWifiFloor() : -1;
         boolean wifiAvailable = sensorFusion != null && sensorFusion.getLatLngWifiPositioning() != null;
 
-        String mapMatchingSummary = mapMatchingCoordinator.getLatestDebugStatus();
-
         debugStatusText.setText(String.format(
                 Locale.US,
                 "Engine: %s\n" +
-                        "Building: %s\n" +
                         "Display floor: %d\n" +
                         "WiFi: %s | floor: %d\n" +
                         "%s\n" +
                         "%s",
                 engine,
-                building,
                 currentFloorIndex,
                 wifiAvailable ? "yes" : "no",
                 wifiFloor,
-                particleSummary,
+                pfSummary,
                 mapMatchingSummary
         ));
     }

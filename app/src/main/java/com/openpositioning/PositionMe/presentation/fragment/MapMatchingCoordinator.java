@@ -43,6 +43,7 @@ final class MapMatchingCoordinator {
         boolean isReplayModeEnabled();
         @Nullable SensorFusion getSensorFusion();
         @Nullable Integer getTrackingCandidateFloorIndex();
+        @Nullable Integer getStableFusionFloorIndex();
         int getCurrentFloorIndex();
         void setFloor(int floorIndex);
         boolean isAutoFloorEnabled();
@@ -80,7 +81,11 @@ final class MapMatchingCoordinator {
     private Integer replayBaseFloorIndex;
     private boolean replayDisplayFloorInitialized = false;
     @NonNull
-    private String latestDebugStatus = "MM: idle";
+    private String latestDebugStatus = "abs:none  src:idle\n"
+            + "floor d/c/m: -/-/-\n"
+            + "vertical: steady Δ0.00m\n"
+            + "correction: NONE\n"
+            + "Waiting for updates";
 
     MapMatchingCoordinator(@NonNull Host host) {
         this.host = host;
@@ -156,9 +161,20 @@ final class MapMatchingCoordinator {
         final int candidateFloorIndex = replayMode
                 ? resolveReplayCandidateFloorIndex()
                 : resolveLiveCandidateFloorIndex();
-        final int sourceFloorIndex = previousMatchedPose != null
+        final int previousStateFloor = previousMatchedPose != null
                 ? previousMatchedPose.getFloor()
                 : candidateFloorIndex;
+        final Integer stableFusionFloor = replayMode ? null : host.getStableFusionFloorIndex();
+        final int sourceFloorIndex;
+        if (!replayMode
+                && stableFusionFloor != null
+                && previousMatchedPose != null
+                && stableFusionFloor != previousMatchedPose.getFloor()
+                && candidateFloorIndex == stableFusionFloor) {
+            sourceFloorIndex = stableFusionFloor;
+        } else {
+            sourceFloorIndex = previousStateFloor;
+        }
 
         final AbsoluteObservationCorrection absoluteCorrection = replayMode
                 ? AbsoluteObservationCorrection.passThrough(rawLocation, "replay_pdr")
@@ -195,23 +211,11 @@ final class MapMatchingCoordinator {
                 activeBuildingId
         );
 
-//        MapMatchingResult matchingResult = mapMatchingService.match(matchingInput);
-//        LatLng matchedLocation = matchingResult.getCorrectedLatLng() != null
-//                ? matchingResult.getCorrectedLatLng()
-//                : rawLocation;
-//        int matchedFloor = matchingResult.getCorrectedFloor();
-//        int floorForState = replayMode
-//                ? resolveReplayDisplayFloor(matchedFloor)
-//                : matchedFloor;
-
         MapMatchingResult matchingResult = mapMatchingService.match(matchingInput);
-
-        // Map-matching correction OFF:
-        // keep computing matchingResult for debug only,
-        // but do not let it modify the displayed/live state.
-        LatLng matchedLocation = rawLocation;
-        int matchedFloor = candidateFloorIndex;
-
+        LatLng matchedLocation = matchingResult.getCorrectedLatLng() != null
+                ? matchingResult.getCorrectedLatLng()
+                : rawLocation;
+        int matchedFloor = matchingResult.getCorrectedFloor();
         int floorForState = replayMode
                 ? resolveReplayDisplayFloor(matchedFloor)
                 : matchedFloor;
@@ -237,27 +241,40 @@ final class MapMatchingCoordinator {
                         : CorrectionType.NONE.name(),
                 matchingResult.getDebugReason()));
 
-        latestDebugStatus = String.format(
-                Locale.US,
-                "MM: %s\nwall=%s stairs=%s lift=%s allow=%s\nreason=%s",
-                matchingResult.getCorrectionType() != null
-                        ? matchingResult.getCorrectionType().name()
-                        : "NONE",
-                String.valueOf(matchingResult.isCrossedWall()),
-                String.valueOf(matchingResult.isNearStairs()),
-                String.valueOf(matchingResult.isNearLift()),
-                String.valueOf(matchingResult.isFloorChangeAllowed()),
-                matchingResult.getDebugReason() != null ? matchingResult.getDebugReason() : "none"
+        latestDebugStatus = buildDebugStatus(
+                absoluteCorrection.getObservationSource(),
+                absoluteCorrection.getPoseSource(),
+                floorForState,
+                candidateFloorIndex,
+                matchedFloor,
+                verticalHint,
+                matchingResult
         );
 
         LatLng oldLocation = host.getCurrentLocation();
-        host.setCurrentLocation(rawLocation);
+        host.setCurrentLocation(matchedLocation);
+
+        boolean rejectedOnlyDueToWeakVerticalEvidence =
+                matchingResult.getCorrectionType() == CorrectionType.INVALID_FLOOR_CHANGE
+                        && matchingResult.getDebugReason() != null
+                        && matchingResult.getDebugReason().toLowerCase(Locale.US)
+                        .contains("no reliable vertical evidence");
+
+        boolean shouldResyncStateFromFusion = !replayMode
+                && stableFusionFloor != null
+                && stableFusionFloor == candidateFloorIndex
+                && candidateFloorIndex != sourceFloorIndex
+                && rejectedOnlyDueToWeakVerticalEvidence;
+
+        if (shouldResyncStateFromFusion) {
+            floorForState = stableFusionFloor;
+        }
 
         previousMatchedPose = new CandidatePose(
                 matchedLocation,
                 floorForState,
                 timestampMs,
-                replayMode ? "replay_map_state" : "candidate_unmatched"
+                replayMode ? "replay_map_state" : "map_matched"
         );
 
         if (replayMode) {
@@ -270,8 +287,8 @@ final class MapMatchingCoordinator {
         savedZoom = context.getSharedPreferences("MapCameraState", Context.MODE_PRIVATE)
                 .getFloat("user_selected_zoom", 19f);
 
-        host.getTrajectoryRenderer().updateCurrentPosition(context, rawLocation, orientation, shouldFollowCamera, savedZoom);
-        host.getTrajectoryRenderer().appendMatchedLocation(oldLocation, rawLocation);
+        host.getTrajectoryRenderer().updateCurrentPosition(context, matchedLocation, orientation, shouldFollowCamera, savedZoom);
+        host.getTrajectoryRenderer().appendMatchedLocation(oldLocation, matchedLocation);
 
         IndoorMapManager indoorMapManager = host.getIndoorMapManager();
         if (indoorMapManager != null) {
@@ -323,20 +340,20 @@ final class MapMatchingCoordinator {
     }
 
     private int resolveLiveCandidateFloorIndex() {
-        if (!host.hasReliableInitialFloorFix()) {
-            if (previousMatchedPose != null) {
-                return previousMatchedPose.getFloor();
-            }
-            return host.getCurrentFloorIndex();
-        }
-
         Integer trackingCandidateFloorIndex = host.getTrackingCandidateFloorIndex();
         if (trackingCandidateFloorIndex != null) {
             return trackingCandidateFloorIndex;
         }
+
+        Integer fusionFloorIndex = host.getStableFusionFloorIndex();
+        if (fusionFloorIndex != null) {
+            return fusionFloorIndex;
+        }
+
         if (previousMatchedPose != null) {
             return previousMatchedPose.getFloor();
         }
+
         return host.getCurrentFloorIndex();
     }
 
@@ -747,16 +764,16 @@ final class MapMatchingCoordinator {
 
         return String.format(
                 Locale.US,
-                "MM: %s\n" +
+                "WiFi src: %s\n" +
+                        "MM: %s\n" +
                         "wall=%s stairs=%s lift=%s allow=%s\n" +
-                        "WiFi src: %s\n" +
                         "floor d/pf/mm: %d/%d/%d",
+                wifiSource,
                 correctionName,
                 String.valueOf(result.isCrossedWall()),
                 String.valueOf(result.isNearStairs()),
                 String.valueOf(result.isNearLift()),
                 String.valueOf(result.isFloorChangeAllowed()),
-                wifiSource,
                 displayFloorIndex,
                 candidateFloorIndex,
                 matchedFloor
