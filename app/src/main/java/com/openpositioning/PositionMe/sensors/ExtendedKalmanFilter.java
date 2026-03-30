@@ -17,7 +17,7 @@ public class ExtendedKalmanFilter {
     private static final String TAG = "EKFPositioning";
 
     /** PDR process noise standard deviation (metres). */
-    private static final float MOTION_NOISE_STD = 0.3f;
+    private static final float MOTION_NOISE_STD = 0.15f;
     /** GNSS observation noise standard deviation (metres). */
     private static final float GNSS_NOISE_STD   = 5.0f;
     /** WiFi observation noise standard deviation (metres). */
@@ -114,10 +114,50 @@ public class ExtendedKalmanFilter {
         Log.d(TAG, "GNSS update. State: (" + stateX + ", " + stateY + ")");
     }
 
+    /**
+     * Update with a GNSS observation using accuracy-adaptive noise.
+     *
+     * @param measX    Observed East  position (metres)
+     * @param measY    Observed North position (metres)
+     * @param accuracy Reported horizontal accuracy from Android Location (metres)
+     */
+    public void updateWithGnss(float measX, float measY, float accuracy) {
+        float noiseStd = Math.min(Math.max(accuracy, 3.0f), 30.0f);
+        update(measX, measY, noiseStd);
+        Log.d(TAG, "GNSS update (accuracy=" + accuracy + "m, noiseStd=" + noiseStd
+                + "m). State: (" + stateX + ", " + stateY + ")");
+    }
+
     /** Update with a WiFi positioning observation. */
     public void updateWithWifi(float measX, float measY) {
         update(measX, measY, WIFI_NOISE_STD);
         Log.d(TAG, "WiFi update. State: (" + stateX + ", " + stateY + ")");
+    }
+
+    /**
+     * Update with a WiFi positioning observation with a caller-supplied noise std.
+     *
+     * @param measX    Observed East  position (metres)
+     * @param measY    Observed North position (metres)
+     * @param noiseStd Observation noise standard deviation (metres)
+     */
+    public void updateWithWifi(float measX, float measY, float noiseStd) {
+        update(measX, measY, noiseStd);
+        Log.d(TAG, "WiFi update (noiseStd=" + noiseStd + "m). State: (" + stateX + ", " + stateY + ")");
+    }
+
+    /**
+     * Update with a WiFi positioning observation using AP-count-adaptive noise.
+     *
+     * @param measX   Observed East  position (metres)
+     * @param measY   Observed North position (metres)
+     * @param apCount Number of WiFi APs used to compute the position fix
+     */
+    public void updateWithWifi(float measX, float measY, int apCount) {
+        float noiseStd = Math.max(8.0f, 20.0f - apCount * 1.5f);
+        update(measX, measY, noiseStd);
+        Log.d(TAG, "WiFi update (apCount=" + apCount + ", noiseStd=" + noiseStd
+                + "m). State: (" + stateX + ", " + stateY + ")");
     }
 
     /**
@@ -153,5 +193,28 @@ public class ExtendedKalmanFilter {
         Log.i(TAG, "EKF reset around (" + centreX + ", " + centreY + ")");
     }
 
+    /**
+     * Inflates the diagonal of P to allow WiFi observations to pull the state.
+     *
+     * @param amount Variance increment (metres²) added to p00 and p11
+     */
+    public void inflateCovariance(float amount) {
+        p00 += amount;
+        p11 += amount;
+    }
+
     public boolean isInitialized() { return initialized; }
+
+    /**
+     * Directly offsets the state position without modifying the covariance matrix.
+     * Used to drip-feed a large WiFi correction over several PDR steps so the
+     * displayed trajectory does not exhibit a single-frame jump.
+     *
+     * @param dx East  offset to add to the current state (metres)
+     * @param dy North offset to add to the current state (metres)
+     */
+    public void applyDirectOffset(float dx, float dy) {
+        stateX += dx;
+        stateY += dy;
+    }
 }

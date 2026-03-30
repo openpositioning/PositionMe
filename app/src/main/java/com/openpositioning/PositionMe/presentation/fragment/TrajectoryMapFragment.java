@@ -125,7 +125,7 @@ public class TrajectoryMapFragment extends Fragment {
     private static final float MIN_DOT_SPACING_METRES = 2.0f;
 
     /** Number of recent observations kept per source for colour-coded dots. */
-    private static final int MAX_OBSERVATION_MARKERS = 10;
+    private static final int MAX_OBSERVATION_MARKERS = 500;
 
 
     /** Default rolling-window size for observation dots. */
@@ -139,7 +139,7 @@ public class TrajectoryMapFragment extends Fragment {
      * Low-pass filter alpha. Range [0,1].
      * Lower = smoother but more lag; higher = less smoothing but more responsive.
      */
-    private static final double LOW_PASS_ALPHA = 0.25;
+    private static final double LOW_PASS_ALPHA = 0.3;
 
     // -------------------------------------------------------------------------
     // Smoothing state
@@ -228,6 +228,8 @@ public class TrajectoryMapFragment extends Fragment {
     /** Most recent device heading in degrees, from passOrientation(). */
     private float lastOrientation = 0f;
 
+
+    private float lastElevation = Float.NaN; //To compute height change between old and current position
 
 
 
@@ -372,6 +374,8 @@ private SwitchMaterial showPdrPathSwitch;
 
 //                    drawBuildingPolygon();
                     indoorMapManager = new IndoorMapManager(gMap);
+                    sensorFusion = SensorFusion.getInstance();
+                    sensorFusion.setIndoorMapManager(indoorMapManager);
                     // 1) Handle user clicking a venue outline polygon
                     gMap.setOnPolygonClickListener(polygon -> {
                         IndoorMapManager.IndoorVenue v = indoorMapManager.getVenueForPolygon(polygon);
@@ -388,6 +392,7 @@ private SwitchMaterial showPdrPathSwitch;
                                                     Math.min(400, v.rawMapShapes.length()))));
 
                             indoorMapManager.selectVenue(v);
+
 
                             if(getActivity() instanceof VenueSelectionListener) {
                                 ((VenueSelectionListener) getActivity()).onVenueSelected(
@@ -643,31 +648,29 @@ private SwitchMaterial showPdrPathSwitch;
         // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
 
-        // Raw PDR trajectory — red, always present
-        // Initialize an empty polyline
+        // Raw PDR trajectory — green, matches PDR observation dots
         pdrPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.parseColor("#8B00FF"))
+                .color(COLOR_PDR)
                 .width(5f)
-                .add() // start empty
+                .add()
         );
 
-        // GNSS path in blue
+        // GNSS path — blue, matches GNSS observation dots
         gnssPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.BLUE)
+                .color(COLOR_GNSS)
                 .width(5f)
+                .add()
                 .visible(false)
                 .add() // start empty
         );
 
-        //        Added
-        // Smoothed trajectory — purple, only visible when smoothing is ON
-        // Raw fused trajectory — purple, always visible
+        // Fused trajectory — red, matches the arrow marker
         fusedPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.RED)
+                .color(Color.parseColor("#8B00FF"))
                 .width(6f)
                 .visible(true));
 
-        // LPF-smoothed fused trajectory — teal, only visible when smoothing toggle is ON
+        // LPF-smoothed fused trajectory — only visible when smoothing toggle is ON
         lpfPolyline = map.addPolyline(new PolylineOptions()
                 .color(Color.parseColor("#00BCD4"))
                 .width(7f)
@@ -684,6 +687,7 @@ private SwitchMaterial showPdrPathSwitch;
     }
 
     private void maybeRequestNearbyVenues(@NonNull LatLng loc) {
+        Log.d("MapDebug", "maybeRequestNearbyVenues called, timeSinceLast=" + (System.currentTimeMillis() - lastVenueQueryMs) + " loc=" + loc);
         if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) return;
 
         long now = System.currentTimeMillis();
@@ -797,14 +801,64 @@ private SwitchMaterial showPdrPathSwitch;
      * @param orientation The user’s heading (e.g. from sensor fusion).
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
+        Log.d("MapDebug", "updateUserLocation called, gMap=" + gMap + " sensorFusion=" + sensorFusion);
         if (gMap == null) return;
+        if (sensorFusion == null) sensorFusion = SensorFusion.getInstance();
+
 
         // Store orientation for use by the fused marker
         lastOrientation = orientation;
 
         // Keep track of current location
         LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
+        LatLng correctedLocation = newLocation;
+        float heightChange = 0f;
+        if (sensorFusion != null) {
+            float currentElevation = sensorFusion.getElevation();
+
+
+
+            if (!Float.isNaN(lastElevation)) {
+                heightChange = currentElevation - lastElevation;
+            }
+
+
+            lastElevation = currentElevation;
+        }
+
+        if (oldLocation != null && indoorMapManager != null) {
+//            correctedLocation = indoorMapManager.indoorLocationCorrection(
+//                    oldLocation,
+//                    newLocation,
+//                    heightChange
+//            );
+
+            String newFloorKey = indoorMapManager.acceptFloorChange(
+                    correctedLocation,
+                    oldLocation,
+                    heightChange);
+            String currentFloorKey = indoorMapManager.getCurrentFloorKey();
+            if (newFloorKey != null && currentFloorKey != null
+                    && !newFloorKey.equals(currentFloorKey)) {
+                try {
+                    sensorFusion.onFloorChanged(Integer.parseInt(newFloorKey));
+                } catch (NumberFormatException e) {
+                    Log.w("TrajectoryMapFragment", "Non-numeric floor key: " + newFloorKey);
+                }
+            }
+        }
+
+        this.currentLocation = correctedLocation;
+        newLocation = correctedLocation;
+        Log.d("IndoorTest", "oldLocation = " + oldLocation);
+        Log.d("IndoorTest", "newLocation = " + newLocation);
+        Log.d("IndoorTest", "heightChange = " + heightChange);
+
+//        if indoor map is active and current venue is known:
+//        send oldLocation, newLocation, current floor, and maybe barometer info to IndoorMapManager
+//        get back corrected position/floor
+//        then update marker/polyline using that corrected result
+
 
         // If no marker, create it
 //        if (orientationMarker == null) {
@@ -868,6 +922,8 @@ private SwitchMaterial showPdrPathSwitch;
         // call api
         if (floorplanRemote != null) {
             maybeRequestNearbyVenues(newLocation);
+//            IndoorMapManager IMMM = new IndoorMapManager();
+//            IMMM.initializeFloorFromLocation(newLocation);
         }
     }
 
@@ -945,11 +1001,11 @@ private SwitchMaterial showPdrPathSwitch;
     public void updateFusedPosition(@NonNull LatLng fusedLocation) {
         if (gMap == null) return;
 
-        // Purple fused path — always grows
+        // Raw fused path — always grows (no filter applied here)
         smoothedPoints.add(fusedLocation);
         redrawFusedTrajectory();
 
-        // Teal LPF path — grows but only visible when smoothing toggle is ON
+        // LPF-smoothed path — grows but only visible when smoothing toggle is ON
         LatLng lpfFiltered = applyLowPassFilter(fusedLocation);
         lpfPoints.add(lpfFiltered);
         if (lpfPolyline != null) {
@@ -1059,6 +1115,14 @@ private SwitchMaterial showPdrPathSwitch;
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;
 
+        // Blue dot — always shown when gnssDotSwitch is ON, regardless of gnssSwitch
+        if (showGnssDots && hasMoved(gnssLocation, lastGnssDotPos)) {
+            addObservationMarker(gnssLocation, COLOR_GNSS, gnssObservationMarkers);
+            lastGnssDotPos = gnssLocation;
+        }
+
+        if (!isGnssOn) return;
+
         // GNSS marker and path line — only when GNSS switch is ON
         if (isGnssOn) {
             if (gnssMarker == null) {
@@ -1083,8 +1147,7 @@ private SwitchMaterial showPdrPathSwitch;
                 }
             }
         }
-// Always update lastGnssLocation — needed so path builds correctly
-        // when gnssSwitch is turned ON mid-session
+        // Always update lastGnssLocation so path builds correctly when gnssSwitch is turned ON mid-session
         lastGnssLocation = gnssLocation;
 
         // Blue dot — independent of gnssSwitch, only controlled by gnssDotSwitch
@@ -1175,6 +1238,9 @@ private SwitchMaterial showPdrPathSwitch;
      * Only the teal LPF line is toggled by the smoothing switch.
      */
     private void updatePolylineVisibility() {
+        if (fusedPolyline != null) {
+            fusedPolyline.setVisible(!isSmoothingEnabled);
+        }
         if (lpfPolyline != null) {
             lpfPolyline.setVisible(isSmoothingEnabled);
         }
@@ -1244,6 +1310,7 @@ private SwitchMaterial showPdrPathSwitch;
      */
     private void redrawParticleCloud() {
         if (!showParticleCloud || gMap == null) return;
+        if (SensorFusion.getInstance().isUsingEKF()) { clearParticleCloud(); return; }
 
         long now = System.currentTimeMillis();
         if (now - lastParticleRedrawMs < 2000) return; // 2s throttle
@@ -1498,7 +1565,7 @@ private SwitchMaterial showPdrPathSwitch;
             fusedPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.parseColor("#8B00FF"))
                     .width(6f)
-                    .visible(true));
+                    .visible(!isSmoothingEnabled));
             lpfPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.parseColor("#00BCD4"))
                     .width(7f)
@@ -1625,6 +1692,10 @@ private SwitchMaterial showPdrPathSwitch;
         synchronized (macLock) {
             observedMacs = new ArrayList<>(macs);
         }
+    }
+
+    public IndoorMapManager getIndoorMapManager() {
+        return indoorMapManager;
     }
 
 

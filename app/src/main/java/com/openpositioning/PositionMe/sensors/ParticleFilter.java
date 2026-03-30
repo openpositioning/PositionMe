@@ -27,7 +27,7 @@ public class ParticleFilter {
      * Standard deviation of Gaussian noise added to each particle during the predict step (metres).
      * Represents uncertainty in PDR step length / heading.
      */
-    private static final float MOTION_NOISE_STD = 0.3f;
+    private static final float MOTION_NOISE_STD = 0.15f;
 
     /**
      * Standard deviation of the GNSS observation model (metres).
@@ -115,6 +115,26 @@ public class ParticleFilter {
     }
 
     /**
+     * Update step using a GNSS position observation with accuracy-adaptive noise.
+     * Maps the reported GNSS accuracy (metres) to an observation noise std dev:
+     *   accuracy < 5 m  → noise std = accuracy (high trust)
+     *   accuracy 5–20 m → noise std = accuracy
+     *   accuracy > 20 m → noise std = accuracy (capped at 30 m)
+     *
+     * @param measX    Observed East  position in East-North metres
+     * @param measY    Observed North position in East-North metres
+     * @param accuracy Reported horizontal accuracy from Android Location (metres)
+     */
+    public void updateWithGnss(float measX, float measY, float accuracy) {
+        if (!initialized) return;
+        float noiseStd = Math.min(Math.max(accuracy, 3.0f), 30.0f);
+        updateWeights(measX, measY, noiseStd);
+        resample();
+        Log.d(TAG, "GNSS update (accuracy=" + accuracy + "m, noiseStd=" + noiseStd
+                + "m). Best estimate: " + java.util.Arrays.toString(getBestEstimate()));
+    }
+
+    /**
      * Update step using a WiFi positioning observation.
      *
      * @param measX  Observed East  position in East-North metres
@@ -125,6 +145,37 @@ public class ParticleFilter {
         updateWeights(measX, measY, WIFI_NOISE_STD);
         resample();
         Log.d(TAG, "WiFi update applied. Best estimate: " + java.util.Arrays.toString(getBestEstimate()));
+    }
+
+    /**
+     * Update step using a WiFi positioning observation with a caller-supplied noise std.
+     *
+     * @param measX    Observed East  position in East-North metres
+     * @param measY    Observed North position in East-North metres
+     * @param noiseStd Observation noise standard deviation (metres)
+     */
+    public void updateWithWifi(float measX, float measY, float noiseStd) {
+        if (!initialized) return;
+        updateWeights(measX, measY, noiseStd);
+        resample();
+        Log.d(TAG, "WiFi update (noiseStd=" + noiseStd + "m). Best estimate: "
+                + java.util.Arrays.toString(getBestEstimate()));
+    }
+
+    /**
+     * Update step using a WiFi positioning observation with AP-count-adaptive noise.
+     *
+     * @param measX   Observed East  position in East-North metres
+     * @param measY   Observed North position in East-North metres
+     * @param apCount Number of WiFi APs used to compute the position fix
+     */
+    public void updateWithWifi(float measX, float measY, int apCount) {
+        if (!initialized) return;
+        float noiseStd = Math.max(8.0f, 20.0f - apCount * 1.5f);
+        updateWeights(measX, measY, noiseStd);
+        resample();
+        Log.d(TAG, "WiFi update (apCount=" + apCount + ", noiseStd=" + noiseStd
+                + "m). Best estimate: " + java.util.Arrays.toString(getBestEstimate()));
     }
 
     /**
@@ -180,6 +231,44 @@ public class ParticleFilter {
     }
 
     /**
+     * Returns a deep copy of all particle positions in local East-North coordinates.
+     * Each row is one particle: {east, north}.
+     */
+    public float[][] getParticlesCopy() {
+        if (!initialized) return new float[0][2];
+
+        float[][] copy = new float[NUM_PARTICLES][2];
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            copy[i][0] = particlesX[i];
+            copy[i][1] = particlesY[i];
+        }
+        return copy;
+    }
+
+    /**
+     * Returns a copy of the particle weights.
+     */
+    public float[] getWeights() {
+        if (!initialized) return new float[0];
+
+        float[] copy = new float[NUM_PARTICLES];
+        System.arraycopy(weights, 0, copy, 0, NUM_PARTICLES);
+        return copy;
+    }
+
+    public float[] getParticlesXRef() {
+        return particlesX;
+    }
+
+    public float[] getParticlesYRef() {
+        return particlesY;
+    }
+
+    public float[] getWeightsRef() {
+        return weights;
+    }
+
+    /**
      * Resets the particle cloud around a new position with increased uncertainty.
      * Called when a floor change is detected, to prevent particles from remaining on the wrong floor.
      * Horizontal position is still preserved as the best estimate, but spread is widened.
@@ -204,12 +293,19 @@ public class ParticleFilter {
     }
 
     /**
+     * Fraction of particles injected near the observation when weight collapse is detected.
+     * These particles allow the filter to recover when PDR error exceeds the observation noise range.
+     */
+    private static final float INJECTION_FRACTION = 0.2f;
+
+    /**
      * Multiplies each particle's weight by the Gaussian likelihood of the given observation.
      * Normalizes the weight array, sum = 1.
      *
      * Likelihood: w_i *= exp( -distance^2 / (2 * std^2) )
      *
-     * If all weights collapse to zero, weights are reset to uniform to allow recovery.
+     * If all weights collapse to zero, a fraction of particles is injected near the observation
+     * to allow recovery when PDR error is large. Remaining particles retain uniform weights.
      *
      * @param measX    Observed East  position (East-North metres)
      * @param measY    Observed North position (East-North metres)
@@ -233,7 +329,35 @@ public class ParticleFilter {
                 weights[i] /= totalWeight;
             }
         } else {
-            // Weight collapse: reset to uniform so the filter can recover
+            // Weight collapse: inject a fraction of particles near the observation,
+            // then reset all weights to uniform.
+            Log.w(TAG, "Weight collapse — injecting particles near observation ("
+                    + measX + ", " + measY + ")");
+            int injected = (int) (NUM_PARTICLES * INJECTION_FRACTION);
+            for (int i = 0; i < injected; i++) {
+                particlesX[i] = measX + (float) (random.nextGaussian() * noiseStd);
+                particlesY[i] = measY + (float) (random.nextGaussian() * noiseStd);
+            }
+            float uniform = 1.0f / NUM_PARTICLES;
+            for (int i = 0; i < NUM_PARTICLES; i++) {
+                weights[i] = uniform;
+            }
+        }
+    }
+
+    public void normalizeWeights() {
+        if (!initialized) return;
+
+        float totalWeight = 0f;
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            totalWeight += weights[i];
+        }
+
+        if (totalWeight > 1e-10f) {
+            for (int i = 0; i < NUM_PARTICLES; i++) {
+                weights[i] /= totalWeight;
+            }
+        } else {
             Log.w(TAG, "Weight collapse detected — resetting to uniform weights");
             float uniform = 1.0f / NUM_PARTICLES;
             for (int i = 0; i < NUM_PARTICLES; i++) {
