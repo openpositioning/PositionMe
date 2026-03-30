@@ -104,6 +104,9 @@ public class PositionFusionEngine {
         this.floorHeightMeters = floorHeightMeters > 0f ? floorHeightMeters : 4f;
     }
 
+    /**
+     * Re-anchors the local tangent frame and reinitializes all particles.
+     */
     public synchronized void reset(double latDeg, double lonDeg, int initialFloor) {
         anchorLatDeg = latDeg;
         anchorLonDeg = lonDeg;
@@ -124,6 +127,12 @@ public class PositionFusionEngine {
         }
     }
 
+    /**
+     * Prediction step: propagate particles using step displacement + process noise.
+     *
+     * <p>When a predicted segment intersects an indoor wall, motion is blocked for
+     * that particle to keep trajectories inside mapped traversable space.</p>
+     */
     public synchronized void updatePdrDisplacement(float dxEastMeters, float dyNorthMeters) {
         if (!hasAnchor || particles.isEmpty()) {
             return;
@@ -163,6 +172,9 @@ public class PositionFusionEngine {
         }
     }
 
+    /**
+     * GNSS measurement update. Accuracy is converted into measurement sigma.
+     */
     public synchronized void updateGnss(double latDeg, double lonDeg, float accuracyMeters) {
         double sigma = Math.max(accuracyMeters, 3.0f);
         if (DEBUG_LOGS) {
@@ -173,6 +185,9 @@ public class PositionFusionEngine {
         applyAbsoluteFix(latDeg, lonDeg, sigma, null);
     }
 
+    /**
+     * WiFi absolute-fix update with fixed sigma and floor hint support.
+     */
     public synchronized void updateWifi(double latDeg, double lonDeg, int wifiFloor) {
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
@@ -182,6 +197,12 @@ public class PositionFusionEngine {
         applyAbsoluteFix(latDeg, lonDeg, WIFI_SIGMA_M, wifiFloor);
     }
 
+    /**
+     * Floor-transition update from barometer/elevator cues.
+     *
+     * <p>Transitions are allowed only near mapped stairs/lifts when those
+     * connectors are available for the floor.</p>
+     */
     public synchronized void updateElevation(float elevationMeters, boolean elevatorLikely) {
         int floorFromBarometer = Math.round(elevationMeters / floorHeightMeters);
         fallbackFloor = floorFromBarometer;
@@ -214,6 +235,9 @@ public class PositionFusionEngine {
         }
     }
 
+    /**
+     * Updates indoor map-matching constraints for the currently containing building.
+     */
     public synchronized void updateMapMatchingContext(
             double currentLatDeg,
             double currentLonDeg,
@@ -308,6 +332,9 @@ public class PositionFusionEngine {
         }
     }
 
+    /**
+     * Returns the current fused estimate as the weighted particle mean.
+     */
     public synchronized PositionFusionEstimate getEstimate() {
         if (!hasAnchor || particles.isEmpty()) {
             return new PositionFusionEstimate(null, fallbackFloor, false);
@@ -345,6 +372,9 @@ public class PositionFusionEngine {
         return new PositionFusionEstimate(latLng, bestFloor, true);
     }
 
+    /**
+     * Absolute-fix measurement update (GNSS/WiFi): reweight, normalize and resample.
+     */
     private void applyAbsoluteFix(double latDeg, double lonDeg, double sigmaMeters, Integer floorHint) {
         if (!hasAnchor) {
             reset(latDeg, lonDeg, 0);
@@ -363,6 +393,7 @@ public class PositionFusionEngine {
             priorMeanNorth += p.weight * p.yNorth;
         }
 
+        // Innovation is measured against the prior weighted mean in local EN coordinates.
         double innovationEast = z[0] - priorMeanEast;
         double innovationNorth = z[1] - priorMeanNorth;
         double innovationDistance = Math.hypot(innovationEast, innovationNorth);
@@ -371,6 +402,7 @@ public class PositionFusionEngine {
                 : OUTLIER_GATE_SIGMA_MULT_WIFI;
         double gateMeters = Math.max(gateSigmaMultiplier * sigmaMeters, OUTLIER_GATE_MIN_M);
         double effectiveSigma = sigmaMeters;
+        // Outlier damping: inflate sigma instead of discarding large residual fixes.
         if (innovationDistance > gateMeters) {
             double sigmaScale = Math.min(innovationDistance / gateMeters, MAX_OUTLIER_SIGMA_SCALE);
             effectiveSigma = sigmaMeters * sigmaScale;
@@ -502,6 +534,7 @@ public class PositionFusionEngine {
         }
     }
 
+    /** Re-seeds particles around the latest absolute measurement when weights collapse. */
     private void reinitializeAroundMeasurement(double x, double y, int floor) {
         particles.clear();
         double w = 1.0 / PARTICLE_COUNT;
@@ -526,6 +559,7 @@ public class PositionFusionEngine {
         return 1.0 / sumSquared;
     }
 
+    /** Systematic resampling used when effective particle count drops too low. */
     private void resampleSystematic() {
         List<Particle> resampled = new ArrayList<>(PARTICLE_COUNT);
         double step = 1.0 / PARTICLE_COUNT;
@@ -560,6 +594,7 @@ public class PositionFusionEngine {
         }
     }
 
+    /** Applies heading-bias correction to a step vector in local EN coordinates. */
     private static double[] rotateVector(double east, double north, double angleRad) {
         double cos = Math.cos(angleRad);
         double sin = Math.sin(angleRad);
@@ -572,6 +607,7 @@ public class PositionFusionEngine {
         return Math.max(min, Math.min(max, value));
     }
 
+    /** Converts WGS84 coordinates to local East/North meters around the anchor. */
     private double[] toLocal(double latDeg, double lonDeg) {
         double lat0Rad = Math.toRadians(anchorLatDeg);
         double dLat = Math.toRadians(latDeg - anchorLatDeg);
@@ -582,6 +618,7 @@ public class PositionFusionEngine {
         return new double[]{east, north};
     }
 
+    /** Converts local East/North meters back to WGS84 coordinates. */
     private LatLng toLatLng(double eastMeters, double northMeters) {
         double lat0Rad = Math.toRadians(anchorLatDeg);
 
@@ -598,6 +635,7 @@ public class PositionFusionEngine {
         return new LatLng(lat, lon);
     }
 
+    /** Returns true when segment (x0,y0)->(x1,y1) intersects any mapped wall segment. */
     private boolean crossesWall(int floor, double x0, double y0, double x1, double y1) {
         FloorConstraint fc = floorConstraints.get(floor);
         if (fc == null || fc.walls.isEmpty()) {
@@ -614,6 +652,9 @@ public class PositionFusionEngine {
         return false;
     }
 
+    /**
+     * Validates whether a floor transition is plausible at the particle position.
+     */
     private boolean canUseConnector(int floor, double x, double y, boolean elevatorLikely) {
         if (floorConstraints.isEmpty()) {
             return true;
@@ -651,6 +692,7 @@ public class PositionFusionEngine {
         return false;
     }
 
+    /** Converts polyline points from API geometry into local wall segments. */
     private void addWallSegments(List<LatLng> points, List<Segment> out) {
         if (points == null || points.size() < 2) {
             return;
@@ -672,6 +714,7 @@ public class PositionFusionEngine {
         return new Point2D(local[0], local[1]);
     }
 
+    /** Computes a centroid in local meters for stairs/lift connector features. */
     private Point2D toLocalCentroid(List<LatLng> points) {
         if (points == null || points.isEmpty()) {
             return null;
@@ -696,6 +739,7 @@ public class PositionFusionEngine {
         return new Point2D(sx / count, sy / count);
     }
 
+    /** Maps floor display labels (e.g. G, LG) to numeric logical floors. */
     private Integer parseLogicalFloor(FloorplanApiClient.FloorShapes floor, int index) {
         if (floor == null) {
             return null;
@@ -720,6 +764,7 @@ public class PositionFusionEngine {
         return index;
     }
 
+    /** Point-in-polygon test in lat/lon space for containing-building detection. */
     private boolean pointInPolygon(LatLng point, List<LatLng> polygon) {
         boolean inside = false;
         for (int i = 0, j = polygon.size() - 1; i < polygon.size(); j = i++) {
@@ -738,6 +783,7 @@ public class PositionFusionEngine {
         return inside;
     }
 
+    /** Robust segment intersection test with collinearity handling. */
     private boolean segmentsIntersect(Point2D p1, Point2D p2, Point2D q1, Point2D q2) {
         double o1 = orientation(p1, p2, q1);
         double o2 = orientation(p1, p2, q2);
@@ -758,6 +804,7 @@ public class PositionFusionEngine {
         return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
     }
 
+    /** Inclusive collinearity-bound check used by segment intersection. */
     private boolean onSegment(Point2D a, Point2D b, Point2D c) {
         return b.x >= Math.min(a.x, c.x) - 1e-9
                 && b.x <= Math.max(a.x, c.x) + 1e-9
