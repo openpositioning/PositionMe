@@ -225,6 +225,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Last WiFi position in ENU (metres), cached for stationary soft-update
     private float[] lastWifiEnu = null;
 
+    // Timestamp of the last accepted WiFi fix, used for staleness-based noise scaling.
+    private long lastWifiUpdateTimeMs = 0;
+
+    // Gradual EKF correction: large WiFi corrections are spread over CORRECTION_STEPS
+    // PDR steps via applyDirectOffset() to avoid single-frame trajectory jumps.
+    private static final int CORRECTION_STEPS = 8;
+    private float pendingCorrectionX = 0f;
+    private float pendingCorrectionY = 0f;
+    private int pendingCorrectionStepsLeft = 0;
+
     private final List<TestPoint> testPoints = new ArrayList<>();
 
     boolean enuBaked = false;
@@ -589,6 +599,7 @@ public class SensorFusion implements SensorEventListener, Observer {
                         // Clamp EKF position to walls after each prediction step.
                         float[] ekfPrev = ekfPositioning.getBestEstimate();
                         ekfPositioning.predict(dx, dy);
+
                         if (coordinateConverter != null
                                 && indoorMapManager != null
                                 && settings.getBoolean("use_wall_constraints", true)) {
@@ -1167,16 +1178,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                             // Base noise from AP count
                             float noiseStd = Math.max(8.0f, 20.0f - apCount * 1.5f);
 
-                            // Aggressively tighten noise and inflate EKF covariance when stationary,
-                            // so both PF and EKF converge strongly to the WiFi observation.
+                            // Tighten noise when stationary so WiFi can correct drift,
+                            // but keep enough noise to avoid a hard single-frame snap.
                             if (stationaryMs > 3000) {
-                                // >3s stationary: near-full trust in WiFi (K ≈ 0.97)
-                                noiseStd = 2.0f;
-                                ekfPositioning.inflateCovariance(200.0f);
+                                // >3s stationary: moderate trust (K ≈ 0.60)
+                                noiseStd = 6.0f;
+                                ekfPositioning.inflateCovariance(40.0f);
                             } else if (stationaryMs > 1000) {
-                                // >1s stationary: strong WiFi pull (K ≈ 0.90)
-                                noiseStd = 3.0f;
-                                ekfPositioning.inflateCovariance(50.0f);
+                                // >1s stationary: gentle pull (K ≈ 0.45)
+                                noiseStd = 8.0f;
+                                ekfPositioning.inflateCovariance(15.0f);
                             } else {
                                 // Moving: sigma-adaptive reduction only
                                 double sigma = particleFilter.getSigmaMetres();
@@ -1184,8 +1195,34 @@ public class SensorFusion implements SensorEventListener, Observer {
                                     noiseStd = Math.max(noiseStd * 0.5f, 5.0f);
                                 }
                             }
+                            // Staleness penalty: a fix that arrives after a long gap carries
+                            // less information because the RF environment may have changed.
+                            // 0–3 s  → factor 1.0 (full trust)
+                            // 3–5 s  → factor 1.0→2.0 (trust halved at 5 s)
+                            // 5–10 s → factor 2.0→1000 (negligible influence at 10 s)
+                            // ≥10 s  → factor 1000 (effectively ignored)
+                            if (lastWifiUpdateTimeMs > 0) {
+                                float ageSecs = (currentTime - lastWifiUpdateTimeMs) / 1000f;
+                                float staleFactor;
+                                if (ageSecs <= 3f) {
+                                    staleFactor = 1.0f;
+                                } else if (ageSecs <= 5f) {
+                                    staleFactor = 1.0f + (ageSecs - 3f) / 2f;
+                                } else if (ageSecs < 10f) {
+                                    staleFactor = 2.0f + (ageSecs - 5f) / 5f * 998f;
+                                } else {
+                                    staleFactor = 1000f;
+                                }
+                                if (staleFactor > 1.0f) {
+                                    noiseStd *= staleFactor;
+                                    Log.d("SensorFusion", "WiFi stale penalty ×" + staleFactor
+                                            + " age=" + ageSecs + "s");
+                                }
+                            }
+
                             particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
                             ekfPositioning.updateWithWifi(enu[0], enu[1], noiseStd);
+                            lastWifiUpdateTimeMs = currentTime;
                         }
                     }
                 }
@@ -1729,6 +1766,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastGyroTimestampMs = 0;
         lastGnssEnu = null;
         lastWifiEnu = null;
+        lastWifiUpdateTimeMs = 0;
+        pendingCorrectionX = 0f;
+        pendingCorrectionY = 0f;
+        pendingCorrectionStepsLeft = 0;
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
