@@ -1,7 +1,6 @@
 package com.openpositioning.PositionMe.utils;
 
 import android.graphics.Color;
-import android.os.Looper;
 import android.util.Log;
 
 import com.google.android.gms.maps.GoogleMap;
@@ -209,8 +208,6 @@ public class IndoorMapManager {
      * @param currNorth  current North positions after predict() (length 300)
      * @param weights    weight array — modified in-place
      * @param converter  to convert East-North → LatLng for wall geometry check
-     *
-     *
      */
     private static final float INTERSECTION_EPSILON = 1e-6f;
     private static final float WALL_CLEARANCE_METERS = 0.20f;
@@ -226,7 +223,6 @@ public class IndoorMapManager {
             CoordinateConverter converter) {
 
         if (currentVenue == null || currentFloorKey == null) return;
-
         IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
         if (floor == null || floor.wallPolygonsEnu == null || floor.wallPolygonsEnu.isEmpty()) return;
 
@@ -917,11 +913,11 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
     }
 
     //find nearest valid point that doesn't intersect walls
-//loop through points on segment just traversed starting from predicted location back towards prev location
-//use dx and dy
-//once we find point that doesn't intersect wall
-//corrected position = point
-//break
+    //loop through points on segment just traversed starting from predicted location back towards prev location
+    //use dx and dy
+    //once we find point that doesn't intersect wall
+    //corrected position = point
+    //break
 
     private long lastFloorChangeTimeMs = 0;
     private static final long MIN_FLOOR_CHANGE_INTERVAL_MS = 5000; // 5 seconds minimum
@@ -1196,9 +1192,6 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
      * Switch floor based on direction (+1 or -1)
      */
     private void switchFloor(int direction) {
-//        Log.d("Switchfloor", "Switching from floor")
-
-
         if (currentVenue == null || currentVenue.rawMapShapes == null) return;
 
         try {
@@ -1271,7 +1264,7 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
     }
 
 
-    
+
     /**
      * Draw a single floor from GeoJSON FeatureCollection.
      */
