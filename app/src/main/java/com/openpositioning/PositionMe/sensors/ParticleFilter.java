@@ -4,6 +4,7 @@ import com.google.android.gms.maps.model.LatLng;
 
 import android.util.Log;
 
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -44,6 +45,9 @@ public class ParticleFilter {
 
     private final Random random;
     private final SensorFusion sensorFusion;
+
+    // Map matcher for wall-constrained prediction (null-safe: if null, predict runs unchanged)
+    private MapMatcher mapMatcher;
 
     // Defines a single hypothesis about the user's position
     private static class Particle{
@@ -129,11 +133,22 @@ public class ParticleFilter {
 
     /**
      * Function to retry initial position estimation if it was deferred at construction
-      */
+     */
     public void tryInitialise() {
         if (!initialised) {
             initialisePosition();
         }
+    }
+
+    /**
+     * Wires in a MapMatcher for wall-constrained particle prediction.
+     * When set, predict() will reject movements that enter or cross walls.
+     * Safe to call with null to disable map matching.
+     *
+     * @param mm the MapMatcher instance, or null
+     */
+    public void setMapMatcher(MapMatcher mm) {
+        this.mapMatcher = mm;
     }
 
     /**
@@ -173,6 +188,53 @@ public class ParticleFilter {
             particles[i].y += deltaNorth + noiseY;
         }
 
+        // Wall rejection: zero weights of particles that land inside a wall polygon
+        Log.d("ParticleFilter", "predict() reached wall check — mapMatcher="
+                + (mapMatcher == null ? "null" : (mapMatcher.isInitialised() ? "ready" : "not initialised")));
+        if (mapMatcher == null) {
+            Log.w("ParticleFilter", "Wall rejection skipped: mapMatcher is null");
+        } else if (!mapMatcher.isInitialised()) {
+            Log.w("ParticleFilter", "Wall rejection skipped: mapMatcher not initialised"
+                    + " (building=" + mapMatcher.getLoadedBuildingId() + ")");
+        } else {
+            int floorIndex = mapMatcher.getLikelyFloorIndex();
+            List<MapMatcher.WallFeature> walls = mapMatcher.getWallsForFloor(floorIndex);
+            int zeroed = 0;
+            for (int i = 0; i < Num_Particles; i++) {
+                for (MapMatcher.WallFeature wall : walls) {
+                    if (!wall.isPolygon) continue;
+                    if (MapGeometry.isPointInsidePolygon(
+                            particles[i].x, particles[i].y, wall.localPoints)) {
+                        particles[i].weight = 0f;
+                        zeroed++;
+                        break;
+                    }
+                }
+            }
+            Log.d("ParticleFilter", "Wall rejection (floor " + floorIndex + "): "
+                    + zeroed + "/" + Num_Particles + " particles zeroed this step");
+
+            // Renormalise remaining weights
+            float weightSum = 0f;
+            for (int i = 0; i < Num_Particles; i++) {
+                weightSum += particles[i].weight;
+            }
+            if (weightSum == 0f) {
+                Log.w("ParticleFilter", "All particles rejected — recovering with uniform respread around estimate");
+                float spread = 2.0f;
+                float uniform = 1.0f / Num_Particles;
+                for (int i = 0; i < Num_Particles; i++) {
+                    particles[i].x = estimatedX + (float) (random.nextGaussian() * spread);
+                    particles[i].y = estimatedY + (float) (random.nextGaussian() * spread);
+                    particles[i].weight = uniform;
+                }
+            } else {
+                for (int i = 0; i < Num_Particles; i++) {
+                    particles[i].weight /= weightSum;
+                }
+            }
+        }
+
         // Update weighted mean estimate
         estimatedX = 0f;
         estimatedY = 0f;
@@ -183,7 +245,7 @@ public class ParticleFilter {
 
         //Debug test
         Log.d("ParticleFilter", "Delta: (" + deltaEast + ", " + deltaNorth
-            + " ; Estimate: ("+ estimatedX + ", " + estimatedY +")");
+                + " ; Estimate: ("+ estimatedX + ", " + estimatedY +")");
     }
 
     /**
@@ -252,6 +314,58 @@ public class ParticleFilter {
                 + "Estimate: (" + estimatedX + ", " + estimatedY + ") "
                 + "Best particle: (" + particles[maxIndex].x + ", " + particles[maxIndex].y + ") "
                 + "Max weight: " + maxWeight);
+
+        resample();
+    }
+
+    /**
+     * Systematic resampling of particles for weight degeneration solution (SIR)
+     */
+    private void resample() {
+        // Calculate effective sample size as 1 / sum of particle weights squared
+        float sumWeightsSquared = 0f;
+        for (int i = 0; i < Num_Particles; i++) {
+            sumWeightsSquared += particles[i].weight * particles[i].weight;
+        }
+        float N_eff = 1.0f / sumWeightsSquared;
+
+        // Early return if effective sample size >= set threshold
+        float threshold = Num_Particles / 2.0f;
+        if (N_eff >= threshold) {
+            Log.d("ParticleFilter", "Resampling skipped");
+            return;
+        }
+
+        // Build cumulative sum array from normalised weights
+        float[] cumulativeSum = new float[Num_Particles];
+        cumulativeSum[0] = particles[0].weight;
+        for (int i = 1; i < Num_Particles; i++) {
+            cumulativeSum[i] = cumulativeSum[i-1] + particles[i].weight;
+        }
+
+        // Set uniform staring point
+        float overN = 1.0f / Num_Particles;
+        float u1 = random.nextFloat() * overN;
+
+        Particle[] resampledParticles = new Particle[Num_Particles];
+        float uniformWeighting = overN;
+        int j = 0;
+
+        for (int i = 0; i < Num_Particles; i++) {
+            float u = u1 + i * overN;
+
+            while (j < Num_Particles - 1 && u > cumulativeSum[j]) {
+                j++;
+            }
+
+            resampledParticles[i] = new Particle(
+                    particles[j].x, particles[j].y, uniformWeighting);
+        }
+
+        // Replace particle array with resampled particles
+        System.arraycopy(resampledParticles, 0, particles, 0, Num_Particles);
+
+        Log.d("ParticleFilter", "Resampling complete: all weights reset to " + uniformWeighting);
     }
 
     /**

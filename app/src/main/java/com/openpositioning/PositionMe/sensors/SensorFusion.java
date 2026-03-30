@@ -11,6 +11,7 @@ import android.location.LocationListener;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -64,6 +65,7 @@ public class SensorFusion implements SensorEventListener {
     private TrajectoryRecorder recorder;
     private WifiPositionManager wifiPositionManager;
     private ParticleFilter particleFilter;
+    private MapMatcher mapMatcher;
 
     // Movement sensor instances (lifecycle managed here)
     private MovementSensor accelerometerSensor;
@@ -163,6 +165,10 @@ public class SensorFusion implements SensorEventListener {
 
         // Initialise particle filter
         this.particleFilter = new ParticleFilter();
+
+        // Create map matcher and wire into particle filter
+        this.mapMatcher = new MapMatcher(this);
+        particleFilter.setMapMatcher(mapMatcher);
 
         wiFiPositioning.setParticleFilter(particleFilter);
 
@@ -336,6 +342,9 @@ public class SensorFusion implements SensorEventListener {
         eventHandler.resetBootTime(recorder.getBootTime());
         particleFilter.tryInitialise();
 
+        // Try to load building map now that particles are initialised
+        tryTriggerMapMatcher(getSelectedBuildingId());
+
         // Handover WiFi/BLE scan lifecycle from activity callbacks to foreground service.
         stopWirelessCollectors();
 
@@ -429,6 +438,9 @@ public class SensorFusion implements SensorEventListener {
             }
             floorplanBuildingCache.put(building.getName(), building);
         }
+
+        // Attempt to load building map now that the cache is populated
+        tryTriggerMapMatcher(getSelectedBuildingId());
     }
 
     /**
@@ -451,6 +463,25 @@ public class SensorFusion implements SensorEventListener {
      */
     public List<FloorplanApiClient.BuildingInfo> getFloorplanBuildings() {
         return new ArrayList<>(floorplanBuildingCache.values());
+    }
+
+    /**
+     * Attempts to load building map data into the map matcher when all required
+     * conditions are met: particle filter initialised, origin set, and floorplan
+     * cache non-empty.
+     *
+     * <p>Called from both {@link #setFloorplanBuildings} and {@link #startRecording}
+     * because either can fire first; all guards are checked each time.</p>
+     *
+     * @param preferredBuildingId building name hint; may be null for auto-detection
+     */
+    private void tryTriggerMapMatcher(String preferredBuildingId) {
+        if (mapMatcher == null) return;
+        if (!particleFilter.isInitialised()) return;
+        if (particleFilter.getOrigin() == null) return;
+        if (floorplanBuildingCache.isEmpty()) return;
+        mapMatcher.tryLoadBuilding(preferredBuildingId, particleFilter.getOrigin());
+        Log.d("Debug", "MapMatcher ready: " + mapMatcher.isInitialised());
     }
 
     /**
@@ -653,8 +684,8 @@ public class SensorFusion implements SensorEventListener {
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
 
-             // Update particle weights with GNSS measurement
-             if (particleFilter.isInitialised()) {
+            // Update particle weights with GNSS measurement
+            if (particleFilter.isInitialised()) {
                 LatLng gnssLatLng = new LatLng(location.getLatitude(), location.getLongitude());
                 float accuracy = location.getAccuracy();
                 particleFilter.updateWeights(gnssLatLng, accuracy);
