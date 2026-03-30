@@ -193,5 +193,15 @@ public class ExtendedKalmanFilter {
         Log.i(TAG, "EKF reset around (" + centreX + ", " + centreY + ")");
     }
 
+    /**
+     * Inflates the diagonal of P to allow WiFi observations to pull the state.
+     *
+     * @param amount Variance increment (metres²) added to p00 and p11
+     */
+    public void inflateCovariance(float amount) {
+        p00 += amount;
+        p11 += amount;
+    }
+
     public boolean isInitialized() { return initialized; }
 }

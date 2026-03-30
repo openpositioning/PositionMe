@@ -117,7 +117,7 @@ public class TrajectoryMapFragment extends Fragment {
     private static final float MIN_DOT_SPACING_METRES = 2.0f;
 
     /** Number of recent observations kept per source for colour-coded dots. */
-    private static final int MAX_OBSERVATION_MARKERS = 10;
+    private static final int MAX_OBSERVATION_MARKERS = 500;
 
 
     /** Default rolling-window size for observation dots. */
@@ -168,7 +168,7 @@ public class TrajectoryMapFragment extends Fragment {
 
     /** Current rolling-window size — updated when user changes the N input. */
 //    private int maxObservations = DEFAULT_MAX_OBSERVATIONS;
-    private final int maxObservations = 5;
+    private final int maxObservations = MAX_OBSERVATION_MARKERS;
 
     // Per-source visibility flags (all enabled by default)
     private boolean showGnssDots = true;
@@ -423,8 +423,8 @@ private SwitchMaterial showPdrPathSwitch;
                     polyline.setColor(Color.BLACK);
                     isRed = false;
                 } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
+                    switchColorButton.setBackgroundColor(COLOR_PDR);
+                    polyline.setColor(COLOR_PDR);
                     isRed = true;
                 }
             }
@@ -600,32 +600,29 @@ private SwitchMaterial showPdrPathSwitch;
         // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
 
-        // Raw PDR trajectory — red, always present
-        // Initialize an empty polyline
+        // Raw PDR trajectory — green, matches PDR observation dots
         polyline = map.addPolyline(new PolylineOptions()
-                .color(Color.RED)
+                .color(COLOR_PDR)
                 .width(5f)
-                .add() // start empty
+                .add()
         );
 
-        // GNSS path in blue
+        // GNSS path — blue, matches GNSS observation dots
         gnssPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.BLUE)
+                .color(COLOR_GNSS)
                 .width(5f)
-                .add() // start empty
+                .add()
         );
 
-        //        Added
-        // Smoothed trajectory — purple, only visible when smoothing is ON
-        // Raw fused trajectory — purple, always visible
+        // Fused trajectory — red, matches the arrow marker
         smoothedPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.parseColor("#8B00FF"))
+                .color(Color.RED)
                 .width(6f)
                 .visible(true));
 
-        // LPF-smoothed fused trajectory — teal, only visible when smoothing toggle is ON
+        // LPF-smoothed fused trajectory — dark red, only visible when smoothing toggle is ON
         lpfPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.parseColor("#00BCD4"))
+                .color(Color.parseColor("#B71C1C"))
                 .width(7f)
                 .visible(false));
 
@@ -1065,6 +1062,13 @@ private SwitchMaterial showPdrPathSwitch;
      */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;
+
+        // Blue dot — always shown when gnssDotSwitch is ON, regardless of gnssSwitch
+        if (showGnssDots && hasMoved(gnssLocation, lastGnssDotPos)) {
+            addObservationMarker(gnssLocation, COLOR_GNSS, gnssObservationMarkers);
+            lastGnssDotPos = gnssLocation;
+        }
+
         if (!isGnssOn) return;
 
         // GNSS marker and path line — only when GNSS switch is ON
@@ -1085,15 +1089,8 @@ private SwitchMaterial showPdrPathSwitch;
                 }
             }
         }
-// Always update lastGnssLocation — needed so path builds correctly
-        // when gnssSwitch is turned ON mid-session
+        // Always update lastGnssLocation so path builds correctly when gnssSwitch is turned ON mid-session
         lastGnssLocation = gnssLocation;
-
-        // Blue dot — independent of gnssSwitch, only controlled by gnssDotSwitch
-        if (showGnssDots && hasMoved(gnssLocation, lastGnssDotPos)) {
-            addObservationMarker(gnssLocation, COLOR_GNSS, gnssObservationMarkers);
-            lastGnssDotPos = gnssLocation;
-        }
     }
 
     /**
@@ -1246,6 +1243,7 @@ private SwitchMaterial showPdrPathSwitch;
      */
     private void redrawParticleCloud() {
         if (!showParticleCloud || gMap == null) return;
+        if (SensorFusion.getInstance().isUsingEKF()) { clearParticleCloud(); return; }
 
         long now = System.currentTimeMillis();
         if (now - lastParticleRedrawMs < 2000) return; // 2s throttle
@@ -1314,8 +1312,8 @@ private SwitchMaterial showPdrPathSwitch;
      * Adds a numbered observation dot at the given position for the specified source.
      *
      * After adding, ALL markers in the queue are renumbered so that:
-     *   - The newest dot always shows "1"
-     *   - The oldest dot shows the highest number (up to MAX_OBSERVATION_MARKERS)
+     *   - The oldest dot always shows "1"
+     *   - The newest dot shows the highest number (up to MAX_OBSERVATION_MARKERS)
      *
      * When the queue is full, the oldest marker is removed before the new one is added.
      *
@@ -1334,7 +1332,7 @@ private SwitchMaterial showPdrPathSwitch;
             if (oldest != null) oldest.remove();
         }
 
-        // Add the new dot — starts as number 1 (most recent), others will be renumbered below
+        // Add the new dot — label is overwritten by the renumber loop below
         Marker newDot = gMap.addMarker(new MarkerOptions()
                 .position(position)
                 .icon(BitmapDescriptorFactory.fromBitmap(
@@ -1348,14 +1346,14 @@ private SwitchMaterial showPdrPathSwitch;
             markerQueue.add(newDot);
         }
 
-        // Renumber all markers: newest = 1, oldest = queue.size()
-        // The queue is ordered oldest-first (LinkedList), so we iterate in reverse
+        // Renumber all markers: oldest = 1, newest = queue.size()
+        // The queue is ordered oldest-first (LinkedList), so i=0 is oldest
         List<Marker> markerList = new ArrayList<>(markerQueue);
         int total = markerList.size();
         for (int i = 0; i < total; i++) {
             Marker m = markerList.get(i);
             if (m == null) continue;
-            int recencyNumber = total - i; // oldest gets highest number
+            int recencyNumber = i + 1; // oldest = 1, newest = total
             Object tag = m.getTag();
             int markerColor = (tag instanceof Integer) ? (int) tag : color;
             m.setIcon(BitmapDescriptorFactory.fromBitmap(
@@ -1383,7 +1381,7 @@ private SwitchMaterial showPdrPathSwitch;
      * Numbers are updated across the whole queue after each new dot is added.
      *
      * @param color  fill colour of the dot.
-     * @param number the recency label to display (1 = most recent).
+     * @param number the sequence label to display (1 = oldest, highest = newest).
      * @return a 40×40 px Bitmap with a filled circle and white number.
      */
     private Bitmap createNumberedDotBitmap(int color, int number) {
