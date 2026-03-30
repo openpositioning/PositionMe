@@ -68,6 +68,13 @@
         app:icon="@drawable/ic_baseline_location_searching_24">
 
         <SwitchPreferenceCompat
+            app:key="use_ekf"
+            app:title="Use Extended Kalman Filter"
+            app:summaryOff="Particle filter (default)"
+            app:summaryOn="Extended Kalman Filter"
+            app:defaultValue="false" />
+
+        <SwitchPreferenceCompat
             app:key="overwrite_constants"
             app:title="@string/constants_enable_title"
             app:summaryOff="@string/constants_summary_off"
