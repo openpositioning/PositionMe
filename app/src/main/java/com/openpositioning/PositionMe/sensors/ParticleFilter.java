@@ -25,7 +25,7 @@ public class ParticleFilter {
     // PDR process noise standard deviation approximation (adjustable)
     public static final float PDR_Process_Noise_STD = 0.4f;
 
-    // Min and max GNSS measurment accuracy for weight update (define rejected measurements)
+    // Min and max GNSS measurement accuracy for weight update (define rejected measurements)
     private static final float GNSS_Min_Accuracy = 5.0f;
     private static final float GNSS_Max_Accuracy = 50.0f;
 
@@ -236,6 +236,22 @@ public class ParticleFilter {
             estimatedX += particles[i].x * particles[i].weight;
             estimatedY += particles[i].y * particles[i].weight;
         }
+
+        // Debugging code for terminal output and observation
+        float maxWeight = 0f;
+        int maxIndex = 0;
+        for (int i = 0; i < Num_Particles; i++) {
+            if (particles[i].weight > maxWeight) {
+                maxWeight = particles[i].weight;
+                maxIndex = i;
+            }
+        }
+
+        Log.d("ParticleFilter", "Update called - "
+                + "Measurement: (" + mx + ", " + my + ") "
+                + "Estimate: (" + estimatedX + ", " + estimatedY + ") "
+                + "Best particle: (" + particles[maxIndex].x + ", " + particles[maxIndex].y + ") "
+                + "Max weight: " + maxWeight);
     }
 
     /**

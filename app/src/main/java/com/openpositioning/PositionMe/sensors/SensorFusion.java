@@ -151,7 +151,7 @@ public class SensorFusion implements SensorEventListener {
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);
         this.pdrProcessing = new PdrProcessing(context);
         this.pathView = new PathView(context, null);
-        WiFiPositioning wiFiPositioning = new WiFiPositioning(context);
+        WiFiPositioning wiFiPositioning = new WiFiPositioning(context, null);
 
         // Create internal modules
         this.recorder = new TrajectoryRecorder(appContext, state, serverCommunications, settings);
@@ -163,6 +163,8 @@ public class SensorFusion implements SensorEventListener {
 
         // Initialise particle filter
         this.particleFilter = new ParticleFilter();
+
+        wiFiPositioning.setParticleFilter(particleFilter);
 
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
@@ -651,8 +653,8 @@ public class SensorFusion implements SensorEventListener {
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
 
-            // Update particle weights with GNSS measurement
-            if (particleFilter.isInitialised()) {
+             // Update particle weights with GNSS measurement
+             if (particleFilter.isInitialised()) {
                 LatLng gnssLatLng = new LatLng(location.getLatitude(), location.getLongitude());
                 float accuracy = location.getAccuracy();
                 particleFilter.updateWeights(gnssLatLng, accuracy);
