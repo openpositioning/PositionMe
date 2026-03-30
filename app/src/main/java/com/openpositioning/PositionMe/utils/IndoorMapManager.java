@@ -1302,15 +1302,17 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
             float strokeWidth = 2.0f;
 
             if (t.contains("wall")) {
-                strokeColor = Color.RED;
+//                strokeColor = Color.RED;
                 fillColor = Color.argb(0, 250, 0, 0);
                 strokeWidth = 3.5f;
-            } else if (t.contains("door")) {
+            } else if (t.contains("lift")) {
+                strokeColor = Color.RED;
                 fillColor = Color.argb(0, 0, 0, 0);
-                strokeWidth = 4.5f;
-            } else if (t.contains("corridor") || t.contains("hall")) {
+                strokeWidth = 8f;
+            } else if (t.contains("stairs")) {
+                strokeColor = Color.YELLOW;
                 fillColor = Color.argb(35, 60, 130, 255);
-                strokeWidth = 1.5f;
+                strokeWidth = 8f;
             } else if (t.contains("room") || t.contains("area")) {
                 fillColor = Color.argb(30, 60, 130, 255);
                 strokeWidth = 1.2f;
