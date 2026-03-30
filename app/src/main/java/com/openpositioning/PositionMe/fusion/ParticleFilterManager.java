@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.os.SystemClock;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
 
@@ -100,6 +101,23 @@ public class ParticleFilterManager {
     private double emaTheta = 0.0;
     private float emaConfidence = 0f;
 
+    private static final double SOFT_STUCK_WALL_RATIO = 0.60;
+    private static final double HARD_STUCK_WALL_RATIO = 0.80;
+    private static final double LOW_NEFF_RATIO = 0.25;
+
+    private static final double MIN_STEP_FOR_RECOVERY_METERS = 0.35;
+    private static final double MAX_FUSED_MOVEMENT_WHEN_STUCK_METERS = 0.20;
+
+    private static final int HARD_RECOVERY_AFTER_CONSECUTIVE_STEPS = 3;
+
+    private static final double SOFT_RECOVERY_RESPAWN_FRACTION = 0.35;
+    private static final double HARD_RECOVERY_RESPAWN_FRACTION = 0.75;
+
+    private static final double SOFT_RECOVERY_POSITION_STD_METERS = 0.45;
+    private static final double HARD_RECOVERY_POSITION_STD_METERS = 0.90;
+
+    private static final double RECOVERY_HEADING_STD_RAD = Math.toRadians(15.0);
+
     // -------------------------
     // Map-constraint state
     // -------------------------
@@ -112,7 +130,8 @@ public class ParticleFilterManager {
 
     /** Authoritative floor owner for live PF mode. */
     private int activePfFloor = 0;
-
+    /** Counts consecutive step updates where the PF appears wall-stuck. */
+    private int consecutiveStuckSteps = 0;
     public ParticleFilterManager(SensorFusion sensorFusion, Context context) {
         this.sensorFusion = sensorFusion;
         this.appContext = context.getApplicationContext();
@@ -232,8 +251,16 @@ public class ParticleFilterManager {
         particleFilterEngine.update(observation, constraintContext);
 
         FusedPose rawPose = particleFilterEngine.estimate(coordinateConverter);
+        rawPose = maybeRecoverStuckParticles(
+                deltaS,
+                currentHeading,
+                observation,
+                constraintContext,
+                rawPose
+        );
+
         FusedPose correctedPose = applyDiscreteMapMatching(rawPose, currentHeading, deltaS);
-        latestFusedPose = correctedPose;
+        latestFusedPose = correctedPose != null ? correctedPose : rawPose;
     }
 
     /**
@@ -350,6 +377,7 @@ public class ParticleFilterManager {
         lastMatchedPose = null;
         verticalMotionDetector.reset();
         mapMatchingService.resetTransientState();
+        consecutiveStuckSteps = 0;
     }
 
     public FusedPose getLatestFusedPose() {
@@ -448,6 +476,137 @@ public class ParticleFilterManager {
                 sourceFloorShapes,
                 WALL_CROSS_PENALTY
         );
+    }
+
+    @Nullable
+    private FusedPose maybeRecoverStuckParticles(double stepDistanceMeters,
+                                                 double currentHeadingRad,
+                                                 @Nullable ParticleFilterObservation observation,
+                                                 @Nullable ParticleFilterEngine.ConstraintContext constraintContext,
+                                                 @Nullable FusedPose rawPose) {
+        if (particleFilterEngine == null || coordinateConverter == null || rawPose == null) {
+            return rawPose;
+        }
+
+        // Recovery should only happen on a real step, not while stationary.
+        if (stepDistanceMeters < MIN_STEP_FOR_RECOVERY_METERS) {
+            consecutiveStuckSteps = 0;
+            return rawPose;
+        }
+
+        double wallInvalidRatio = particleFilterEngine.getLastWallInvalidRatio();
+        double neffRatio = particleFilterEngine.getLastNeff()
+                / Math.max(1.0, particleFilterEngine.getParticleCount());
+
+        double fusedMovementMeters = latestFusedPose == null
+                ? stepDistanceMeters
+                : Math.hypot(
+                rawPose.getXMeters() - latestFusedPose.getXMeters(),
+                rawPose.getYMeters() - latestFusedPose.getYMeters()
+        );
+
+        boolean fusedLooksFrozen = fusedMovementMeters < MAX_FUSED_MOVEMENT_WHEN_STUCK_METERS;
+
+        boolean softStuck = wallInvalidRatio > SOFT_STUCK_WALL_RATIO
+                && (neffRatio < LOW_NEFF_RATIO || fusedLooksFrozen);
+
+        if (!softStuck) {
+            consecutiveStuckSteps = 0;
+            return rawPose;
+        }
+
+        consecutiveStuckSteps++;
+
+        double[] recoveryAnchor = resolveLastValidRecoveryAnchorXY(rawPose);
+
+        boolean hardRecovery = consecutiveStuckSteps >= HARD_RECOVERY_AFTER_CONSECUTIVE_STEPS
+                && wallInvalidRatio > HARD_STUCK_WALL_RATIO;
+
+        if (hardRecovery) {
+            double[] wifiAnchor = resolveAcceptedWifiRecoveryAnchorXY(observation);
+            if (wifiAnchor != null) {
+                recoveryAnchor = wifiAnchor;
+            }
+        }
+
+        double respawnFraction = hardRecovery
+                ? HARD_RECOVERY_RESPAWN_FRACTION
+                : SOFT_RECOVERY_RESPAWN_FRACTION;
+
+        double positionStdMeters = hardRecovery
+                ? HARD_RECOVERY_POSITION_STD_METERS
+                : SOFT_RECOVERY_POSITION_STD_METERS;
+
+        boolean recovered = particleFilterEngine.rejuvenateParticles(
+                recoveryAnchor[0],
+                recoveryAnchor[1],
+                currentHeadingRad,
+                activePfFloor,
+                respawnFraction,
+                positionStdMeters,
+                RECOVERY_HEADING_STD_RAD,
+                constraintContext
+        );
+
+        if (!recovered) {
+            return rawPose;
+        }
+
+        FusedPose recoveredPose = particleFilterEngine.estimate(coordinateConverter);
+
+        Log.d(TAG,
+                "PF wall-stuck recovery applied"
+                        + " | hardRecovery=" + hardRecovery
+                        + ", consecutiveStuckSteps=" + consecutiveStuckSteps
+                        + ", wallInvalidRatio=" + wallInvalidRatio
+                        + ", neffRatio=" + neffRatio
+                        + ", fusedMovementMeters=" + fusedMovementMeters
+                        + ", anchorX=" + recoveryAnchor[0]
+                        + ", anchorY=" + recoveryAnchor[1]);
+
+        return recoveredPose != null ? recoveredPose : rawPose;
+    }
+
+    @NonNull
+    private double[] resolveLastValidRecoveryAnchorXY(@NonNull FusedPose fallbackPose) {
+        if (lastMatchedPose != null && lastMatchedPose.getLatLng() != null && coordinateConverter != null) {
+            return coordinateConverter.latLngToLocal(lastMatchedPose.getLatLng());
+        }
+
+        if (latestFusedPose != null) {
+            return new double[]{
+                    latestFusedPose.getXMeters(),
+                    latestFusedPose.getYMeters()
+            };
+        }
+
+        return new double[]{
+                fallbackPose.getXMeters(),
+                fallbackPose.getYMeters()
+        };
+    }
+
+    @Nullable
+    private double[] resolveAcceptedWifiRecoveryAnchorXY(@Nullable ParticleFilterObservation observation) {
+        if (observation == null
+                || observation.getWifiX() == null
+                || observation.getWifiY() == null) {
+            return null;
+        }
+
+        /*
+         * Only use WiFi as a hard relocalisation anchor if it agrees with the current PF floor.
+         * This stops cross-floor WiFi mistakes from blowing up recovery.
+         */
+        int wifiFloor = sensorFusion.getWifiFloor();
+        if (isFloorIndexAvailable(wifiFloor) && wifiFloor != activePfFloor) {
+            return null;
+        }
+
+        return new double[]{
+                observation.getWifiX(),
+                observation.getWifiY()
+        };
     }
 
     @Nullable

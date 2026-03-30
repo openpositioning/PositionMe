@@ -76,7 +76,11 @@ public class ParticleFilterEngine {
 
     /** Whether the last update triggered resampling. */
     private boolean lastResampled = false;
+    /** Number of particles that crossed a wall during the latest update. */
+    private int lastWallInvalidCount = 0;
 
+    /** Fraction of particles that crossed a wall during the latest update. */
+    private double lastWallInvalidRatio = 0.0;
     public ParticleFilterEngine(ParticleFilterConfig cfg) {
         this.particleCount = cfg.particleCount;
         this.sigmaStep = cfg.sigmaStep;
@@ -114,6 +118,8 @@ public class ParticleFilterEngine {
 
         lastNeff = particleCount;
         lastResampled = false;
+        lastWallInvalidCount = 0;
+        lastWallInvalidRatio = 0.0;
 
         Log.d(TAG,
                 "PF engine initialised"
@@ -207,6 +213,7 @@ public class ParticleFilterEngine {
         }
 
         double weightSum = 0.0;
+        int wallInvalidCount = 0;
 
         for (Particle particle : particles) {
             double w = 1.0;
@@ -216,10 +223,8 @@ public class ParticleFilterEngine {
                 double dx = particle.x - observation.getWifiX();
                 double dy = particle.y - observation.getWifiY();
 
-                // Gaussian likelihood based on local planar distance.
                 w *= gaussian2D(dx, dy, sigmaWifi);
 
-                // Penalise particles that disagree with Wi-Fi floor estimate.
                 if (observation.getWifiFloor() != null
                         && particle.floor != observation.getWifiFloor()) {
                     w *= 0.50;
@@ -227,44 +232,49 @@ public class ParticleFilterEngine {
             }
 
             // GNSS position likelihood
-//            if (observation.getGnssX() != null && observation.getGnssY() != null) {
-//                double dx = particle.x - observation.getGnssX();
-//                double dy = particle.y - observation.getGnssY();
-//                w *= gaussian2D(dx, dy, sigmaGnss);
-//            }
-//
-//            // Discrete wall-crossing penalty
-//            if (constraintContext != null && constraintContext.isUsable()) {
-//                double stepMeters = Math.hypot(particle.x - particle.prevX, particle.y - particle.prevY);
-//                if (stepMeters >= MIN_STEP_FOR_WALL_CHECK_METERS) {
-//                    LatLng prevLatLng = constraintContext.coordinateConverter.localToLatLng(
-//                            particle.prevX,
-//                            particle.prevY
-//                    );
-//                    LatLng currentLatLng = constraintContext.coordinateConverter.localToLatLng(
-//                            particle.x,
-//                            particle.y
-//                    );
-//
-//                    if (MapGeometryUtils.crossesWall(
-//                            prevLatLng,
-//                            currentLatLng,
-//                            constraintContext.sourceFloorShapes)) {
-//                        w *= constraintContext.wallCrossPenalty;
-//                    }
-//                }
-//            }
-//
+            if (observation.getGnssX() != null && observation.getGnssY() != null) {
+                double dx = particle.x - observation.getGnssX();
+                double dy = particle.y - observation.getGnssY();
+                w *= gaussian2D(dx, dy, sigmaGnss);
+            }
+
+            // Discrete wall-crossing penalty
+            if (constraintContext != null && constraintContext.isUsable()) {
+                double stepMeters = Math.hypot(particle.x - particle.prevX, particle.y - particle.prevY);
+                if (stepMeters >= MIN_STEP_FOR_WALL_CHECK_METERS) {
+                    LatLng prevLatLng = constraintContext.coordinateConverter.localToLatLng(
+                            particle.prevX,
+                            particle.prevY
+                    );
+                    LatLng currentLatLng = constraintContext.coordinateConverter.localToLatLng(
+                            particle.x,
+                            particle.y
+                    );
+
+                    if (MapGeometryUtils.crossesWall(
+                            prevLatLng,
+                            currentLatLng,
+                            constraintContext.sourceFloorShapes)) {
+                        wallInvalidCount++;
+                        w *= constraintContext.wallCrossPenalty;
+                    }
+                }
+            }
+
             particle.weight = w;
             weightSum += w;
         }
 
         normaliseWeights(weightSum);
 
+        lastWallInvalidCount = wallInvalidCount;
+        lastWallInvalidRatio = particleCount > 0
+                ? (double) wallInvalidCount / (double) particleCount
+                : 0.0;
+
         lastNeff = effectiveSampleSize();
         lastResampled = false;
 
-        // Resample if too few particles carry meaningful weight.
         if (lastNeff < particleCount * resampleRatio) {
             systematicResample();
             regularizeParticles();
@@ -335,6 +345,14 @@ public class ParticleFilterEngine {
         return lastNeff;
     }
 
+    public int getLastWallInvalidCount() {
+        return lastWallInvalidCount;
+    }
+
+    public double getLastWallInvalidRatio() {
+        return lastWallInvalidRatio;
+    }
+
     private static final double ALIVE_WEIGHT_EPS = 1e-6;
 
     public int getParticleCount() {
@@ -357,6 +375,136 @@ public class ParticleFilterEngine {
 
     public boolean wasResampledLastStep() {
         return lastResampled;
+    }
+
+    /**
+     * Rejuvenates the weakest particles around a recovery anchor.
+     *
+     * Design:
+     * - replace only a fraction of the cloud
+     * - bias new particles forward along the current heading
+     * - reject samples that immediately cross a wall
+     * - use the last valid anchor / accepted WiFi anchor chosen by the manager
+     */
+    public boolean rejuvenateParticles(double anchorX,
+                                       double anchorY,
+                                       double headingRad,
+                                       int floor,
+                                       double respawnFraction,
+                                       double positionStdMeters,
+                                       double headingStdRad,
+                                       @Nullable ConstraintContext constraintContext) {
+        if (particles.isEmpty()) {
+            return false;
+        }
+
+        double clampedFraction = Math.max(0.05, Math.min(0.90, respawnFraction));
+        int respawnCount = Math.max(1, (int) Math.round(particleCount * clampedFraction));
+
+        // Weakest particles first.
+        particles.sort((a, b) -> Double.compare(a.weight, b.weight));
+
+        int recoveredCount = 0;
+
+        for (int i = 0; i < respawnCount && i < particles.size(); i++) {
+            Particle particle = particles.get(i);
+
+            boolean placed = false;
+            for (int attempt = 0; attempt < 20; attempt++) {
+                double sampledTheta = wrapAngle(headingRad + rng.nextGaussian() * headingStdRad);
+
+                /*
+                 * Forward-cone sampling:
+                 * - mostly respawn in front of the user
+                 * - small lateral spread
+                 */
+                double forwardMeters = Math.max(0.05, Math.abs(rng.nextGaussian()) * positionStdMeters);
+                double lateralMeters = rng.nextGaussian() * positionStdMeters * 0.35;
+
+                double motionHeading = (Math.PI / 2.0) - sampledTheta;
+
+                double candidateX = anchorX
+                        + forwardMeters * Math.cos(motionHeading)
+                        - lateralMeters * Math.sin(motionHeading);
+
+                double candidateY = anchorY
+                        + forwardMeters * Math.sin(motionHeading)
+                        + lateralMeters * Math.cos(motionHeading);
+
+                if (!isValidRecoveryCandidate(anchorX, anchorY, candidateX, candidateY, constraintContext)) {
+                    continue;
+                }
+
+                particle.prevX = anchorX;
+                particle.prevY = anchorY;
+                particle.prevFloor = floor;
+
+                particle.x = candidateX;
+                particle.y = candidateY;
+                particle.theta = sampledTheta;
+                particle.floor = floor;
+                particle.weight = 1.0 / particleCount;
+
+                placed = true;
+                recoveredCount++;
+                break;
+            }
+
+            if (!placed) {
+                // Conservative fallback: respawn exactly at the anchor with new heading.
+                particle.prevX = anchorX;
+                particle.prevY = anchorY;
+                particle.prevFloor = floor;
+
+                particle.x = anchorX;
+                particle.y = anchorY;
+                particle.theta = headingRad;
+                particle.floor = floor;
+                particle.weight = 1.0 / particleCount;
+            }
+        }
+
+        /*
+         * After rejuvenation, reset weights uniformly.
+         * This avoids one or two surviving particles dominating the cloud.
+         */
+        double uniformWeight = 1.0 / particleCount;
+        for (Particle particle : particles) {
+            particle.weight = uniformWeight;
+        }
+
+        lastNeff = particleCount;
+        lastResampled = false;
+
+        Log.d(TAG,
+                "PF rejuvenation complete"
+                        + " | respawnCount=" + respawnCount
+                        + ", recoveredCount=" + recoveredCount
+                        + ", anchorX=" + anchorX
+                        + ", anchorY=" + anchorY
+                        + ", floor=" + floor
+                        + ", headingDeg=" + Math.toDegrees(headingRad));
+
+        return recoveredCount > 0;
+    }
+
+    private boolean isValidRecoveryCandidate(double anchorX,
+                                             double anchorY,
+                                             double candidateX,
+                                             double candidateY,
+                                             @Nullable ConstraintContext constraintContext) {
+        if (constraintContext == null || !constraintContext.isUsable()) {
+            return true;
+        }
+
+        LatLng anchorLatLng = constraintContext.coordinateConverter.localToLatLng(anchorX, anchorY);
+        LatLng candidateLatLng = constraintContext.coordinateConverter.localToLatLng(candidateX, candidateY);
+
+        return !MapGeometryUtils.crossesWall(
+                anchorLatLng,
+                candidateLatLng,
+                constraintContext.sourceFloorShapes
+        );
     }
 
     /**

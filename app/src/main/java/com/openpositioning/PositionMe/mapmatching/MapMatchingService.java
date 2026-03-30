@@ -410,6 +410,11 @@ public class MapMatchingService {
                 candidateLatLng,
                 wallCheckFloorShapes
         );
+
+        /*
+         * Near connectors or transition areas, prefer projecting to the last valid
+         * point before the wall. This is conservative and avoids aggressive XY shaping.
+         */
         if (preferProjection && lastValidPoint != null && !samePoint(lastValidPoint, previousLatLng)) {
             return new WallRecovery(
                     lastValidPoint,
@@ -419,6 +424,11 @@ public class MapMatchingService {
             );
         }
 
+        /*
+         * Optional axis-only fallback:
+         * try preserving one axis from the previous valid point if that segment does
+         * not cross a wall. This is less aggressive than full snapping to a remote point.
+         */
         LatLng latOnlyPoint = new LatLng(candidateLatLng.latitude, previousLatLng.longitude);
         LatLng lngOnlyPoint = new LatLng(previousLatLng.latitude, candidateLatLng.longitude);
 
@@ -428,18 +438,16 @@ public class MapMatchingService {
         if (canMoveLat && canMoveLng) {
             double latOnlyResidual = distanceMeters(latOnlyPoint, candidateLatLng);
             double lngOnlyResidual = distanceMeters(lngOnlyPoint, candidateLatLng);
-            if (latOnlyResidual <= lngOnlyResidual) {
-                return new WallRecovery(
-                        latOnlyPoint,
-                        CorrectionType.THROUGH_WALL,
-                        "Crossed wall. Sliding along Latitude (N/S).",
-                        true
-                );
-            }
+
+            LatLng chosen = latOnlyResidual <= lngOnlyResidual ? latOnlyPoint : lngOnlyPoint;
+            String reason = latOnlyResidual <= lngOnlyResidual
+                    ? "Crossed wall. Sliding along Latitude (N/S)."
+                    : "Crossed wall. Sliding along Longitude (E/W).";
+
             return new WallRecovery(
-                    lngOnlyPoint,
+                    chosen,
                     CorrectionType.THROUGH_WALL,
-                    "Crossed wall. Sliding along Longitude (E/W).",
+                    reason,
                     true
             );
         }
@@ -462,68 +470,28 @@ public class MapMatchingService {
             );
         }
 
-        // ✅ fallback: try directional escape
-        LatLng directionalPoint = findValidDirectionMove(
-                previousLatLng,
-                candidateLatLng,
-                wallCheckFloorShapes
-        );
-
-        // optional: verify it's actually valid
-        if (!samePoint(directionalPoint, previousLatLng)
-                && !MapGeometryUtils.crossesWall(previousLatLng, directionalPoint, wallCheckFloorShapes)) {
-
+        /*
+         * If axis sliding is not possible, use the last valid point before the wall.
+         */
+        if (lastValidPoint != null && !samePoint(lastValidPoint, previousLatLng)) {
             return new WallRecovery(
-                    directionalPoint,
-                    CorrectionType.THROUGH_WALL,
-                    "Crossed wall. Directional escape applied.",
+                    lastValidPoint,
+                    CorrectionType.SNAP_TO_VALID_AREA,
+                    "Crossed wall. Projected to the last valid point before wall.",
                     true
             );
         }
 
-        // final fallback
+        /*
+         * Final conservative fallback:
+         * do not invent a blended corner-escape point. Just stay at the previous valid pose.
+         */
         return new WallRecovery(
                 previousLatLng,
                 CorrectionType.THROUGH_WALL,
-                "Crossed wall. No valid direction found, staying in place.",
+                "Crossed wall. Reverted to previous valid point.",
                 false
         );
-
-//        LatLng blended = interpolate(previousLatLng, candidateLatLng, 0.3);
-//
-//        //  check if this move crosses a wall
-//        boolean crosses = MapGeometryUtils.crossesWall(
-//                previousLatLng,
-//                blended,
-//                wallCheckFloorShapes
-//        );
-//
-//        if (!crosses) {
-//            return new WallRecovery(
-//                    blended,
-//                    CorrectionType.THROUGH_WALL,
-//                    "Safe blended movement.",
-//                    true
-//            );
-//        }
-//
-//        // last resort: very small step along valid direction
-//        LatLng microStep = interpolate(previousLatLng, candidateLatLng, 0.1);
-//        return new WallRecovery(
-//                microStep,
-//                CorrectionType.THROUGH_WALL,
-//                "Micro-step escape near wall.",
-//                false
-//        );
-
-//        LatLng blended = interpolate(previousLatLng, candidateLatLng, 0.3);
-//
-//        return new WallRecovery(
-//                blended,
-//                CorrectionType.THROUGH_WALL,
-//                "Corner escape: blended towards candidate.",
-//                false
-//        );
     }
     private LatLng findValidDirectionMove(
             LatLng previous,
