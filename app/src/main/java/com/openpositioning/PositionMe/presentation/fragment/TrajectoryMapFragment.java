@@ -140,7 +140,25 @@ public class TrajectoryMapFragment extends Fragment {
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel      = view.findViewById(R.id.floorLabel);
-        switchColorButton = view.findViewById(R.id.lineColorButton);
+        switchColorButton = null; // color button removed from layout
+
+        // Collapsible left panel
+        View leftPanelContent = view.findViewById(R.id.leftPanelContent);
+        TextView leftToggle = view.findViewById(R.id.leftPanelToggle);
+        leftToggle.setOnClickListener(v -> {
+            boolean visible = leftPanelContent.getVisibility() == View.VISIBLE;
+            leftPanelContent.setVisibility(visible ? View.GONE : View.VISIBLE);
+            leftToggle.setText(visible ? "▼" : "▲");
+        });
+
+        // Collapsible right panel
+        View rightPanelContent = view.findViewById(R.id.rightPanelContent);
+        TextView rightToggle = view.findViewById(R.id.rightPanelToggle);
+        rightToggle.setOnClickListener(v -> {
+            boolean visible = rightPanelContent.getVisibility() == View.VISIBLE;
+            rightPanelContent.setVisibility(visible ? View.GONE : View.VISIBLE);
+            rightToggle.setText(visible ? "▼" : "▲");
+        });
 
         // Setup floor up/down UI hidden initially until we know there's an indoor map
         setFloorControlsVisibility(View.GONE);
@@ -189,20 +207,7 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
-        // Color switch
-        switchColorButton.setOnClickListener(v -> {
-            if (polyline != null) {
-                if (isRed) {
-                    switchColorButton.setBackgroundColor(Color.BLACK);
-                    polyline.setColor(Color.BLACK);
-                    isRed = false;
-                } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
-                    isRed = true;
-                }
-            }
-        });
+        // color button removed
 
         // Auto-floor toggle: start/stop periodic floor evaluation
         sensorFusion = SensorFusion.getInstance();
