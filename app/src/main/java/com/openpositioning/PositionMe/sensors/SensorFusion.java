@@ -225,6 +225,24 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Last WiFi position in ENU (metres), cached for stationary soft-update
     private float[] lastWifiEnu = null;
 
+    // PF best-estimate position recorded at each WiFi update.
+    // Used to compute the PF movement direction between consecutive WiFi observations,
+    // so that WiFi fixes contradicting the direction of travel can be penalised.
+    private float[] lastPfPositionForTrend = null;
+
+    // Timestamp and ENU position of the last WiFi fix that was accepted by the filters.
+    // Used for velocity-based rejection and consecutive-fix consistency checks.
+    private long lastWifiUpdateTimeMs = 0;
+    private float[] lastAcceptedWifiEnu = null;
+
+    // Gradual EKF correction: when a large WiFi jump is accepted while moving,
+    // the full state correction is spread over this many PDR steps instead of
+    // being applied in a single frame. This prevents visible trajectory backjumps.
+    private static final int CORRECTION_STEPS = 5;
+    private float pendingCorrectionX = 0f;
+    private float pendingCorrectionY = 0f;
+    private int pendingCorrectionStepsLeft = 0;
+
     private final List<TestPoint> testPoints = new ArrayList<>();
 
     boolean enuBaked = false;
@@ -586,6 +604,18 @@ public class SensorFusion implements SensorEventListener, Observer {
                         // Predict particle motion
                         particleFilter.predict(dx, dy);
                         ekfPositioning.predict(dx, dy);
+
+                        // Drip-feed any pending large-jump correction into the EKF.
+                        // One equal slice is applied per PDR step until the queue is exhausted.
+                        if (pendingCorrectionStepsLeft > 0) {
+                            float stepX = pendingCorrectionX / pendingCorrectionStepsLeft;
+                            float stepY = pendingCorrectionY / pendingCorrectionStepsLeft;
+                            ekfPositioning.applyDirectOffset(stepX, stepY);
+                            pendingCorrectionX -= stepX;
+                            pendingCorrectionY -= stepY;
+                            pendingCorrectionStepsLeft--;
+                        }
+
                         float[] bestBefore = particleFilter.getBestEstimate();
                         Log.d("PFDebug", "Best BEFORE constraints: " +
                                 bestBefore[0] + ", " + bestBefore[1]);
@@ -1171,51 +1201,140 @@ public class SensorFusion implements SensorEventListener, Observer {
                             long stationaryMs = currentTime - lastStepTime;
                             boolean isStationary = stationaryMs > 1000;
 
-                            // Base observation noise from AP count.
-                            // More visible APs → tighter position estimate → lower noise.
-                            float noiseStd = Math.max(8.0f, 20.0f - apCount * 1.5f);
-
-                            // Scale noise based on average signal strength of the scan.
-                            // Strong signal (> -60 dBm) → reliable ranging; weak (< -80 dBm) → coarser estimate.
-                            if (avgRssi > -60f) {
-                                noiseStd *= 0.7f;
-                            } else if (avgRssi < -80f) {
-                                noiseStd *= 1.5f;
+                            // Pre-compute distance and elapsed time from the last accepted WiFi fix.
+                            // These are used by both the velocity check and the consistency check below.
+                            float wifiSelfDist = Float.MAX_VALUE;
+                            long timeSinceLastWifi = Long.MAX_VALUE;
+                            if (lastAcceptedWifiEnu != null && lastWifiUpdateTimeMs > 0) {
+                                wifiSelfDist = (float) Math.hypot(
+                                        enu[0] - lastAcceptedWifiEnu[0],
+                                        enu[1] - lastAcceptedWifiEnu[1]);
+                                timeSinceLastWifi = currentTime - lastWifiUpdateTimeMs;
                             }
 
-                            // When moving, a large displacement between the WiFi fix and the current
-                            // estimate is likely a fingerprinting error rather than true movement.
-                            // Penalise proportionally: at 8 m → ×1, at 16 m → ×2, capped at ×4.
-                            if (!isStationary && jumpDist > 8f) {
-                                float jumpPenalty = Math.min(jumpDist / 8f, 4f);
-                                noiseStd *= jumpPenalty;
-                                Log.d("SensorFusion", "WiFi jump penalty ×" + jumpPenalty
-                                        + " dist=" + jumpDist + "m rssi=" + avgRssi);
-                            }
-
-                            // When stationary, WiFi is the primary position source.
-                            // Tighten noise and inflate EKF covariance so updates converge quickly.
-                            if (stationaryMs > 3000) {
-                                noiseStd = 2.0f;
-                                ekfPositioning.inflateCovariance(200.0f);
-                            } else if (isStationary) {
-                                noiseStd = 3.0f;
-                                ekfPositioning.inflateCovariance(50.0f);
-                            } else {
-                                // While moving, reduce noise further only if the particle cloud
-                                // is already widely dispersed.
-                                double sigma = particleFilter.getSigmaMetres();
-                                if (sigma > 15.0) {
-                                    noiseStd = Math.max(noiseStd * 0.5f, 5.0f);
+                            // Velocity check: reject the fix if the implied travel speed between
+                            // consecutive WiFi observations exceeds normal walking speed (3 m/s).
+                            // Only applied when moving and when the time window is meaningful (< 15 s).
+                            boolean velocityRejected = false;
+                            if (!isStationary && wifiSelfDist < Float.MAX_VALUE
+                                    && timeSinceLastWifi > 0 && timeSinceLastWifi < 15000) {
+                                float impliedSpeed = wifiSelfDist / (timeSinceLastWifi / 1000f);
+                                if (impliedSpeed > 3.0f) {
+                                    Log.w("SensorFusion", "WiFi velocity-reject: "
+                                            + impliedSpeed + "m/s selfDist=" + wifiSelfDist
+                                            + "m dt=" + timeSinceLastWifi + "ms");
+                                    velocityRejected = true;
                                 }
                             }
 
-                            noiseStd = Math.max(noiseStd, 2.0f);
-                            Log.d("SensorFusion", "WiFi update noiseStd=" + noiseStd
-                                    + " apCount=" + apCount + " avgRssi=" + avgRssi
-                                    + " jump=" + jumpDist + "m stationary=" + isStationary);
-                            particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
-                            ekfPositioning.updateWithWifi(enu[0], enu[1], noiseStd);
+                            if (!velocityRejected) {
+                                // Base observation noise from AP count.
+                                // More visible APs → tighter position estimate → lower noise.
+                                float noiseStd = Math.max(8.0f, 20.0f - apCount * 1.5f);
+
+                                // Scale noise based on average signal strength of the scan.
+                                // Strong signal (> -60 dBm) → reliable ranging; weak (< -80 dBm) → coarser estimate.
+                                if (avgRssi > -60f) {
+                                    noiseStd *= 0.7f;
+                                } else if (avgRssi < -80f) {
+                                    noiseStd *= 1.5f;
+                                }
+
+                                // When moving, a large displacement between the WiFi fix and the current
+                                // estimate is likely a fingerprinting error rather than true movement.
+                                // Penalise proportionally: at 8 m → ×1, at 16 m → ×2, capped at ×4.
+                                if (!isStationary && jumpDist > 8f) {
+                                    float jumpPenalty = Math.min(jumpDist / 8f, 4f);
+                                    noiseStd *= jumpPenalty;
+                                    Log.d("SensorFusion", "WiFi jump penalty ×" + jumpPenalty
+                                            + " dist=" + jumpDist + "m rssi=" + avgRssi);
+                                }
+
+                                // Consecutive-fix consistency check.
+                                if (!isStationary && jumpDist > 8f && wifiSelfDist < Float.MAX_VALUE) {
+                                    if (wifiSelfDist > 10f) {
+                                        noiseStd *= 2.0f;
+                                        Log.d("SensorFusion", "WiFi self-inconsistent: ×2 penalty"
+                                                + " selfDist=" + wifiSelfDist + "m");
+                                    } else if (wifiSelfDist < 5f) {
+                                        noiseStd *= 0.6f;
+                                        Log.d("SensorFusion", "WiFi self-consistent, EKF diverged:"
+                                                + " trust boost ×0.6 selfDist=" + wifiSelfDist + "m");
+                                    }
+                                }
+
+                                // PF trend gating: compare the WiFi jump direction against the PF's
+                                // recent movement direction. If opposite and PF is confident, penalise.
+                                if (!isStationary && jumpDist > 8f && lastPfPositionForTrend != null) {
+                                    float pfTrendE = currentEst[0] - lastPfPositionForTrend[0];
+                                    float pfTrendN = currentEst[1] - lastPfPositionForTrend[1];
+                                    float pfTrendDist = (float) Math.hypot(pfTrendE, pfTrendN);
+                                    if (pfTrendDist > 1.5f) {
+                                        float wifiDeltaE = enu[0] - currentEst[0];
+                                        float wifiDeltaN = enu[1] - currentEst[1];
+                                        float dot = wifiDeltaE * pfTrendE + wifiDeltaN * pfTrendN;
+                                        if (dot < 0) {
+                                            double sigma = particleFilter.getSigmaMetres();
+                                            if (sigma < 10.0) {
+                                                noiseStd *= 3.0f;
+                                                Log.d("SensorFusion", "WiFi trend conflict: ×3 penalty"
+                                                        + " dot=" + dot + " pfSigma=" + sigma);
+                                            }
+                                        }
+                                    }
+                                }
+                                lastPfPositionForTrend = currentEst.clone();
+
+                                // When stationary, WiFi is the primary position source.
+                                // Tighten noise and inflate EKF covariance so updates converge quickly.
+                                if (stationaryMs > 3000) {
+                                    noiseStd = 3.5f;
+                                    ekfPositioning.inflateCovariance(100.0f);
+                                } else if (isStationary) {
+                                    noiseStd = 5.0f;
+                                    ekfPositioning.inflateCovariance(25.0f);
+                                } else {
+                                    // While moving, reduce noise further only if the particle cloud
+                                    // is already widely dispersed.
+                                    double sigma = particleFilter.getSigmaMetres();
+                                    if (sigma > 15.0) {
+                                        noiseStd = Math.max(noiseStd * 0.5f, 5.0f);
+                                    }
+                                }
+
+                                noiseStd = Math.max(noiseStd, 2.0f);
+                                Log.d("SensorFusion", "WiFi update noiseStd=" + noiseStd
+                                        + " apCount=" + apCount + " avgRssi=" + avgRssi
+                                        + " jump=" + jumpDist + "m stationary=" + isStationary);
+                                particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
+
+                                if (!isStationary && jumpDist > 8f) {
+                                    // Gradual EKF correction: apply the WiFi update internally to
+                                    // get the target state, then undo the state jump while keeping
+                                    // the covariance reduction. The correction is drip-fed over
+                                    // CORRECTION_STEPS PDR steps via applyDirectOffset().
+                                    float[] ekfBefore = ekfPositioning.getBestEstimate();
+                                    ekfPositioning.updateWithWifi(enu[0], enu[1], noiseStd);
+                                    float[] ekfAfter  = ekfPositioning.getBestEstimate();
+                                    // Undo the state jump; P update is intentionally kept
+                                    ekfPositioning.applyDirectOffset(
+                                            ekfBefore[0] - ekfAfter[0],
+                                            ekfBefore[1] - ekfAfter[1]);
+                                    // Queue the full correction to be applied in equal slices
+                                    pendingCorrectionX = ekfAfter[0] - ekfBefore[0];
+                                    pendingCorrectionY = ekfAfter[1] - ekfBefore[1];
+                                    pendingCorrectionStepsLeft = CORRECTION_STEPS;
+                                    Log.d("SensorFusion", "EKF correction queued ("
+                                            + pendingCorrectionX + ", " + pendingCorrectionY
+                                            + ") over " + CORRECTION_STEPS + " steps");
+                                } else {
+                                    ekfPositioning.updateWithWifi(enu[0], enu[1], noiseStd);
+                                }
+
+                                // Record this fix as the last accepted one for future checks.
+                                lastWifiUpdateTimeMs = currentTime;
+                                lastAcceptedWifiEnu = enu.clone();
+                            }
                         }
                     }
                 }
@@ -1759,6 +1878,12 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastGyroTimestampMs = 0;
         lastGnssEnu = null;
         lastWifiEnu = null;
+        lastPfPositionForTrend = null;
+        lastWifiUpdateTimeMs = 0;
+        lastAcceptedWifiEnu = null;
+        pendingCorrectionX = 0f;
+        pendingCorrectionY = 0f;
+        pendingCorrectionStepsLeft = 0;
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {
