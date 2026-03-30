@@ -588,7 +588,8 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 bestBefore[0] + ", " + bestBefore[1]);
 
                         // Apply wall constraints after prediction
-                        if (coordinateConverter != null && indoorMapManager != null) {
+                        if (coordinateConverter != null && indoorMapManager != null
+                                && settings.getBoolean("use_wall_constraints", true)) {
                             float[] currEast = particleFilter.getParticlesXRef();
                             float[] currNorth = particleFilter.getParticlesYRef();
                             float[] liveWeights = particleFilter.getWeightsRef();
@@ -1129,13 +1130,20 @@ public class SensorFusion implements SensorEventListener, Observer {
                     if (!saveRecording) return;
 
                     if (!particleFilter.isInitialized()) {
-                        // if GNSS not available — launch with first WiFi position
-//                        coordinateConverter = new CoordinateConverter(
-//                                wifiLocation.latitude, wifiLocation.longitude);
+                        // GNSS not yet available — initialise from first WiFi fix
+                        if (coordinateConverter == null) {
+                            coordinateConverter = new CoordinateConverter(
+                                    wifiLocation.latitude, wifiLocation.longitude);
+                            if (indoorMapManager != null) {
+                                indoorMapManager.bakeEnuCoordinates(coordinateConverter);
+                                enuBaked = true;
+                            }
+                        }
                         particleFilter.initParticles(0f, 0f, 20f);
+                        ekfPositioning.initParticles(0f, 0f, 20f);
                         prevPdrX = 0f;
                         prevPdrY = 0f;
-                        Log.i("SensorFusion", "ParticleFilter launch with WiFi at lat="
+                        Log.i("SensorFusion", "ParticleFilter initialised from WiFi at lat="
                                 + wifiLocation.latitude + " lon=" + wifiLocation.longitude);
                     } else {
                         // Normal update

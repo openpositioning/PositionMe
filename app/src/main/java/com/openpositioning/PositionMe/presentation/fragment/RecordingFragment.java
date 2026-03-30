@@ -446,28 +446,17 @@ public class RecordingFragment extends Fragment {
 //                    mapFrag.updatePdrPosition(new LatLng(pdr[0], pdr[1]));
 //                }
 
-//                changed
-                // Green PDR observation dot — same position as the red polyline
+                // Green PDR observation dot
                 mapFrag.updatePdrPosition(newLocation);
-//                float[][] particles = sensorFusion.getParticles();
-                float[] bestEnu = sensorFusion.getBestParticleEstimate();
-                CoordinateConverter converter = sensorFusion.getCoordinateConverter();
 
-                LatLng displayLocation;
-
-                if (converter != null) {
-                    double[] latLon = converter.toLatLon(bestEnu[0], bestEnu[1]);
-                    displayLocation = new LatLng(latLon[0], latLon[1]);
-                } else {
-                    displayLocation = newLocation; // fallback
-                }
-
+                // Arrow marker — always follows the active fusion algorithm (PF or EKF)
+                LatLng displayLocation = (fused != null)
+                        ? new LatLng(fused[0], fused[1])
+                        : newLocation;
                 mapFrag.updateUserLocation(
                         displayLocation,
                         (float) Math.toDegrees(sensorFusion.passOrientation())
                 );
-                Log.d("MapCompare", "PF displayLocation = " + displayLocation);
-                Log.d("MapCompare", "Fused location = " + Arrays.toString(sensorFusion.getFusedLatLon()));
             }
         }
 

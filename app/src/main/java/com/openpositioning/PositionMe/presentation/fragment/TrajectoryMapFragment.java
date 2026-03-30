@@ -420,8 +420,8 @@ private SwitchMaterial showPdrPathSwitch;
                     polyline.setColor(Color.BLACK);
                     isRed = false;
                 } else {
-                    switchColorButton.setBackgroundColor(Color.RED);
-                    polyline.setColor(Color.RED);
+                    switchColorButton.setBackgroundColor(COLOR_PDR);
+                    polyline.setColor(COLOR_PDR);
                     isRed = true;
                 }
             }
@@ -597,32 +597,29 @@ private SwitchMaterial showPdrPathSwitch;
         // Initialize indoor manager
         indoorMapManager = new IndoorMapManager(map);
 
-        // Raw PDR trajectory — red, always present
-        // Initialize an empty polyline
+        // Raw PDR trajectory — green, matches PDR observation dots
         polyline = map.addPolyline(new PolylineOptions()
-                .color(Color.RED)
+                .color(COLOR_PDR)
                 .width(5f)
-                .add() // start empty
+                .add()
         );
 
-        // GNSS path in blue
+        // GNSS path — blue, matches GNSS observation dots
         gnssPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.BLUE)
+                .color(COLOR_GNSS)
                 .width(5f)
-                .add() // start empty
+                .add()
         );
 
-        //        Added
-        // Smoothed trajectory — purple, only visible when smoothing is ON
-        // Raw fused trajectory — purple, always visible
+        // Fused trajectory — red, matches the arrow marker
         smoothedPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.parseColor("#8B00FF"))
+                .color(Color.RED)
                 .width(6f)
                 .visible(true));
 
-        // LPF-smoothed fused trajectory — teal, only visible when smoothing toggle is ON
+        // LPF-smoothed fused trajectory — dark red, only visible when smoothing toggle is ON
         lpfPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.parseColor("#00BCD4"))
+                .color(Color.parseColor("#B71C1C"))
                 .width(7f)
                 .visible(false));
 
@@ -1066,6 +1063,13 @@ private SwitchMaterial showPdrPathSwitch;
      */
     public void updateGNSS(@NonNull LatLng gnssLocation) {
         if (gMap == null) return;
+
+        // Blue dot — always shown when gnssDotSwitch is ON, regardless of gnssSwitch
+        if (showGnssDots && hasMoved(gnssLocation, lastGnssDotPos)) {
+            addObservationMarker(gnssLocation, COLOR_GNSS, gnssObservationMarkers);
+            lastGnssDotPos = gnssLocation;
+        }
+
         if (!isGnssOn) return;
 
         // GNSS marker and path line — only when GNSS switch is ON
@@ -1086,15 +1090,8 @@ private SwitchMaterial showPdrPathSwitch;
                 }
             }
         }
-// Always update lastGnssLocation — needed so path builds correctly
-        // when gnssSwitch is turned ON mid-session
+        // Always update lastGnssLocation so path builds correctly when gnssSwitch is turned ON mid-session
         lastGnssLocation = gnssLocation;
-
-        // Blue dot — independent of gnssSwitch, only controlled by gnssDotSwitch
-        if (showGnssDots && hasMoved(gnssLocation, lastGnssDotPos)) {
-            addObservationMarker(gnssLocation, COLOR_GNSS, gnssObservationMarkers);
-            lastGnssDotPos = gnssLocation;
-        }
     }
 
     /**
