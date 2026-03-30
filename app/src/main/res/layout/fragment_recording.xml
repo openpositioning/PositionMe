@@ -112,7 +112,20 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- 🔹 Test Point Button (Floating on top of the map) -->
+    <!-- Info button -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btn_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="18dp"
+        android:layout_marginBottom="8dp"
+        android:contentDescription="Help"
+        android:src="@android:drawable/ic_dialog_info"
+        app:fabSize="mini"
+        app:layout_constraintBottom_toTopOf="@id/btn_test_point"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Test Point Button -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btn_test_point"
         android:layout_width="wrap_content"

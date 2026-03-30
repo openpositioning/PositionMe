@@ -67,6 +67,12 @@ public class TrajectoryMapFragment extends Fragment {
     private Marker wifiMarker; // WiFi position marker
     private boolean isWifiOn = false;
     private boolean isSmoothOn = true;
+    // EMA data filter: smooths the raw position to reduce jitter
+    private static final double EMA_ALPHA = 0.35; // 0=full smooth, 1=no smooth
+    private LatLng smoothedLocation = null;
+    // Raw trajectory points for spline smoothing
+    private final List<LatLng> rawTrajectoryPoints = new ArrayList<>();
+    private static final int SPLINE_SUBDIVISIONS = 5; // interpolation points per segment
     private boolean isPdrDotsOn = false;
     private WifiFingerprinter wifiFingerprinter;
 
@@ -339,8 +345,8 @@ public class TrajectoryMapFragment extends Fragment {
     private void initMapTypeSpinner() {
         if (switchMapSpinner == null) return;
         String[] maps = new String[]{
-                getString(R.string.hybrid),
                 getString(R.string.normal),
+                getString(R.string.hybrid),
                 getString(R.string.satellite)
         };
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
@@ -357,10 +363,10 @@ public class TrajectoryMapFragment extends Fragment {
                 if (gMap == null) return;
                 switch (position){
                     case 0:
-                        gMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                        gMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
                         break;
                     case 1:
-                        gMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+                        gMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                         break;
                     case 2:
                         gMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
@@ -391,13 +397,29 @@ public class TrajectoryMapFragment extends Fragment {
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
 
+        // Apply EMA data filter when smooth is enabled
+        LatLng displayLocation;
+        if (isSmoothOn) {
+            if (smoothedLocation == null) {
+                smoothedLocation = newLocation;
+            } else {
+                double lat = EMA_ALPHA * newLocation.latitude + (1 - EMA_ALPHA) * smoothedLocation.latitude;
+                double lng = EMA_ALPHA * newLocation.longitude + (1 - EMA_ALPHA) * smoothedLocation.longitude;
+                smoothedLocation = new LatLng(lat, lng);
+            }
+            displayLocation = smoothedLocation;
+        } else {
+            smoothedLocation = newLocation;
+            displayLocation = newLocation;
+        }
+
         LatLng oldLocation = this.currentLocation;
-        this.currentLocation = newLocation;
+        this.currentLocation = displayLocation;
 
         // First fix: create marker + polyline start
         if (orientationMarker == null) {
             orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
+                    .position(displayLocation)
                     .flat(true)
                     .title("Current Position")
                     .icon(BitmapDescriptorFactory.fromBitmap(
@@ -405,47 +427,39 @@ public class TrajectoryMapFragment extends Fragment {
                                     R.drawable.ic_baseline_navigation_24)))
             );
             if (cameraFollowing) {
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
+                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(displayLocation, 19f));
             }
 
             if (trajectoryEnabled && polyline != null) {
-                List<LatLng> pts = new ArrayList<>(polyline.getPoints());
-                pts.add(newLocation);
-                polyline.setPoints(pts);
+                rawTrajectoryPoints.add(displayLocation);
+                updatePolylineSmooth();
             }
         } else {
             orientationMarker.setRotation(orientation);
 
-            if (isSmoothOn) {
-                LatLng startPos = orientationMarker.getPosition();
-                if (markerAnimator != null) markerAnimator.cancel();
-                markerAnimator = ValueAnimator.ofFloat(0f, 1f);
-                markerAnimator.setDuration(180);
-                markerAnimator.addUpdateListener(anim -> {
-                    float t = (float) anim.getAnimatedValue();
-                    double lat = startPos.latitude + (newLocation.latitude - startPos.latitude) * t;
-                    double lng = startPos.longitude + (newLocation.longitude - startPos.longitude) * t;
-                    LatLng interpolated = new LatLng(lat, lng);
-                    if (orientationMarker != null) {
-                        orientationMarker.setPosition(interpolated);
-                    }
-                    if (cameraFollowing) {
-                        gMap.moveCamera(CameraUpdateFactory.newLatLng(interpolated));
-                    }
-                });
-                markerAnimator.start();
-            } else {
-                orientationMarker.setPosition(newLocation);
-                if (cameraFollowing) {
-                    gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
+            // Animate marker movement for visual smoothness
+            LatLng startPos = orientationMarker.getPosition();
+            if (markerAnimator != null) markerAnimator.cancel();
+            markerAnimator = ValueAnimator.ofFloat(0f, 1f);
+            markerAnimator.setDuration(180);
+            markerAnimator.addUpdateListener(anim -> {
+                float t = (float) anim.getAnimatedValue();
+                double lat = startPos.latitude + (displayLocation.latitude - startPos.latitude) * t;
+                double lng = startPos.longitude + (displayLocation.longitude - startPos.longitude) * t;
+                LatLng interpolated = new LatLng(lat, lng);
+                if (orientationMarker != null) {
+                    orientationMarker.setPosition(interpolated);
                 }
-            }
+                if (cameraFollowing) {
+                    gMap.moveCamera(CameraUpdateFactory.newLatLng(interpolated));
+                }
+            });
+            markerAnimator.start();
 
             // Append to polyline only after calibration
-            if (trajectoryEnabled && polyline != null && oldLocation != null && !oldLocation.equals(newLocation)) {
-                List<LatLng> pts = new ArrayList<>(polyline.getPoints());
-                pts.add(newLocation);
-                polyline.setPoints(pts);
+            if (trajectoryEnabled && polyline != null && oldLocation != null && !oldLocation.equals(displayLocation)) {
+                rawTrajectoryPoints.add(displayLocation);
+                updatePolylineSmooth();
             }
         }
 
@@ -468,6 +482,55 @@ public class TrajectoryMapFragment extends Fragment {
      * </p>
      * @param startLocation The initial camera position to set.
      */
+    /**
+     * Updates the polyline using Catmull-Rom spline interpolation when smooth
+     * is enabled, or raw points when disabled.
+     */
+    private void updatePolylineSmooth() {
+        if (polyline == null) return;
+        if (!isSmoothOn || rawTrajectoryPoints.size() < 3) {
+            polyline.setPoints(new ArrayList<>(rawTrajectoryPoints));
+            return;
+        }
+        polyline.setPoints(catmullRomSpline(rawTrajectoryPoints, SPLINE_SUBDIVISIONS));
+    }
+
+    /**
+     * Catmull-Rom spline interpolation over a list of control points.
+     * Produces a smooth curve that passes through every original point,
+     * with rounded corners instead of sharp angles.
+     */
+    private static List<LatLng> catmullRomSpline(List<LatLng> pts, int subdivisions) {
+        int n = pts.size();
+        List<LatLng> result = new ArrayList<>((n - 1) * subdivisions + 1);
+
+        for (int i = 0; i < n - 1; i++) {
+            LatLng p0 = pts.get(Math.max(i - 1, 0));
+            LatLng p1 = pts.get(i);
+            LatLng p2 = pts.get(i + 1);
+            LatLng p3 = pts.get(Math.min(i + 2, n - 1));
+
+            for (int s = 0; s < subdivisions; s++) {
+                double t = (double) s / subdivisions;
+                double t2 = t * t;
+                double t3 = t2 * t;
+
+                double lat = 0.5 * ((2 * p1.latitude)
+                        + (-p0.latitude + p2.latitude) * t
+                        + (2 * p0.latitude - 5 * p1.latitude + 4 * p2.latitude - p3.latitude) * t2
+                        + (-p0.latitude + 3 * p1.latitude - 3 * p2.latitude + p3.latitude) * t3);
+                double lng = 0.5 * ((2 * p1.longitude)
+                        + (-p0.longitude + p2.longitude) * t
+                        + (2 * p0.longitude - 5 * p1.longitude + 4 * p2.longitude - p3.longitude) * t2
+                        + (-p0.longitude + 3 * p1.longitude - 3 * p2.longitude + p3.longitude) * t3);
+
+                result.add(new LatLng(lat, lng));
+            }
+        }
+        result.add(pts.get(n - 1)); // add last point
+        return result;
+    }
+
     public void setInitialCameraPosition(@NonNull LatLng startLocation) {
         // If the map is already ready, move camera immediately
         if (gMap != null) {
@@ -697,6 +760,8 @@ public class TrajectoryMapFragment extends Fragment {
         }
         lastGnssLocation = null;
         currentLocation  = null;
+        smoothedLocation = null;
+        rawTrajectoryPoints.clear();
 
         // Clear test point markers
         for (Marker m : testPointMarkers) {
@@ -858,22 +923,16 @@ public class TrajectoryMapFragment extends Fragment {
         if (sensorFusion == null || indoorMapManager == null) return;
         if (!indoorMapManager.getIsIndoorMapSet()) return;
 
-        // Step 1: Update WiFi anchor whenever WiFi provides a NEW floor reading
-        LatLng wifiPos = sensorFusion.getLatLngWifiPositioning();
-        if (wifiPos != null) {
-            int wifiFloor = sensorFusion.getWifiFloor();
-            int wifiIndex = wifiFloor + indoorMapManager.getAutoFloorBias();
-            if (wifiIndex != wifiAnchorFloorIndex) {
-                // WiFi floor changed — update anchor
+        // Step 1: Use WiFi ONLY for first anchor — after that, rely on barometer only.
+        // This prevents WiFi floor jumps near staircases from corrupting the floor estimate.
+        if (wifiAnchorFloorIndex < 0) {
+            LatLng wifiPos = sensorFusion.getLatLngWifiPositioning();
+            if (wifiPos != null) {
+                int wifiFloor = sensorFusion.getWifiFloor();
+                int wifiIndex = wifiFloor + indoorMapManager.getAutoFloorBias();
                 wifiAnchorFloorIndex = wifiIndex;
-                wifiAnchorElevation  = sensorFusion.getElevation();
-                Log.d("AutoFloor", "WiFi anchor updated: floor=" + wifiFloor
-                        + " index=" + wifiIndex + " elev=" + wifiAnchorElevation);
-            } else if (wifiAnchorFloorIndex < 0) {
-                // First WiFi fix — set anchor even if index matches default
-                wifiAnchorFloorIndex = wifiIndex;
-                wifiAnchorElevation  = sensorFusion.getElevation();
-                Log.d("AutoFloor", "WiFi anchor set: floor=" + wifiFloor
+                wifiAnchorElevation = sensorFusion.getElevation();
+                Log.d("AutoFloor", "WiFi anchor set (one-time): floor=" + wifiFloor
                         + " index=" + wifiIndex + " elev=" + wifiAnchorElevation);
             }
         }
@@ -893,13 +952,13 @@ public class TrajectoryMapFragment extends Fragment {
         // then each subsequent floor is floorHeight (4.2m) wide, shifted up by 0.5m
         float elevDiff = elevation - wifiAnchorElevation;
         int floorDelta;
-        if (elevDiff >= -2.1f && elevDiff < 3.5f) {
+        if (elevDiff >= -3.0f && elevDiff < 3.5f) {
             floorDelta = 0;  // stay on anchor floor
         } else if (elevDiff >= 3.5f) {
             floorDelta = 1 + (int) ((elevDiff - 3.5f) / floorHeight);
         } else {
-            // below -2.1m
-            floorDelta = -1 - (int) ((-2.1f - elevDiff) / floorHeight);
+            // below -3.0m
+            floorDelta = -1 - (int) ((-3.0f - elevDiff) / floorHeight);
         }
         int candidateIndex = wifiAnchorFloorIndex + floorDelta;
         String source = "anchor=" + wifiAnchorFloorIndex + " elev=" + String.format("%.2f", elevation)

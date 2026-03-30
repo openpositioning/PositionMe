@@ -97,6 +97,8 @@ public class RecordingFragment extends Fragment {
     private final ParticleFilter particleFilter = new ParticleFilter();
     private boolean pfInitialized = false;
     private boolean pfInitFromGnss = false;
+    private long pfInitTime = 0;
+    private static final long KNN_WARMUP_MS = 15000; // 15s: loosen KNN pull after PF init
     private double lastGnssLat = 0, lastGnssLng = 0;
     private LatLng lastWifiPos = null;
     private LatLng lastKnnPos = null;
@@ -117,7 +119,7 @@ public class RecordingFragment extends Fragment {
     // Stair detection: track elevation change to scale down PDR on stairs
     private float lastElevation = 0f;
     private static final float STAIR_ELEV_RATE_THRESHOLD = 0.3f; // m per 200ms tick
-    private static final float STAIR_STEP_SCALE = 0.35f; // horizontal fraction on stairs
+    private static final float STAIR_STEP_SCALE = 0.20f; // horizontal fraction on stairs
 
     // Calibration: collect multiple KNN/WiFi + GNSS samples before initializing PF
     private static final int CALIBRATION_SAMPLES = 3;
@@ -191,6 +193,7 @@ public class RecordingFragment extends Fragment {
         recIcon = view.findViewById(R.id.redDot);
         timeRemaining = view.findViewById(R.id.timeRemainingBar);
         view.findViewById(R.id.btn_test_point).setOnClickListener(v -> onAddTestPoint());
+        view.findViewById(R.id.btn_info).setOnClickListener(v -> showInfoDialog());
 
 
         // Hide or initialize default values
@@ -310,6 +313,12 @@ public class RecordingFragment extends Fragment {
         float[] pdrValues = sensorFusion.getSensorValueMap().get(SensorTypes.PDR);
         if (pdrValues == null) return;
 
+        // During calibration: consume PDR values without accumulating movement
+        if (calibrating) {
+            previousPosX = pdrValues[0];
+            previousPosY = pdrValues[1];
+        }
+
         float dxMeters = pdrValues[0] - previousPosX;
         float dyMeters = pdrValues[1] - previousPosY;
 
@@ -397,6 +406,7 @@ public class RecordingFragment extends Fragment {
 
                     particleFilter.initialize(initPos);
                     pfInitialized = true;
+                    pfInitTime = System.currentTimeMillis();
                     pfInitFromGnss = (knnWifiAvg == null) || gnssReliable;
                     if (trajectoryMapFragment != null) trajectoryMapFragment.enableTrajectory();
                     refreshPFWallData();
@@ -463,9 +473,11 @@ public class RecordingFragment extends Fragment {
                 lastWifiPos = wifiPos;
             }
 
-            // KNN update step (more accurate than WiFi API, tighter sigma)
+            // KNN update step — loosen sigma during warmup (stale WiFi scan cache)
             if (knnPos != null && !knnPos.equals(lastKnnPos)) {
-                particleFilter.updateWithGNSS(knnPos, KNN_SIGMA_M); // reuse GNSS method with 3m sigma
+                long sinceInit = System.currentTimeMillis() - pfInitTime;
+                double knnSigma = (sinceInit < KNN_WARMUP_MS) ? 15.0 : KNN_SIGMA_M;
+                particleFilter.updateWithGNSS(knnPos, knnSigma);
                 lastKnnPos = knnPos;
             }
 
@@ -652,6 +664,28 @@ public class RecordingFragment extends Fragment {
             this.lat = lat;
             this.lng = lng;
         }
+    }
+
+    private void showInfoDialog() {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Recording Guide")
+                .setMessage("How to use:\n\n"
+                        + "1. Stand still during calibration (~9s) for best initial position\n"
+                        + "2. Walk normally — the arrow follows your movement\n"
+                        + "3. Tap \"+\" at known locations to mark test points\n"
+                        + "4. Tap COMPLETE to stop and upload\n\n"
+                        + "Toggle switches:\n\n"
+                        + "• Show GNSS — GPS position marker (blue)\n"
+                        + "• Show WiFi — WiFi position marker (green)\n"
+                        + "• Auto Floor — Auto floor detection (WiFi + barometer)\n"
+                        + "• Smooth — Smooth marker animation\n"
+                        + "• \uD83D\uDFE1P \uD83D\uDFE2W \uD83D\uDD35G — Last 15 observation dots (PDR/WiFi/GPS)\n"
+                        + "• Particles — Visualise particle filter cloud\n\n"
+                        + "Map controls:\n\n"
+                        + "• Drag/pinch to move map (auto-follow resumes after 5s)\n"
+                        + "• ▲▼ to manually change floor")
+                .setPositiveButton("OK", null)
+                .show();
     }
 
     private LatLng lastCalibSample() {

@@ -45,7 +45,7 @@ public class SensorEventHandler {
 
     // Step counter state (fallback for slow walking when STEP_DETECTOR is too insensitive)
     private int lastStepCount = -1;
-    private static final long STEP_COUNTER_FALLBACK_MS = 800; // use counter if detector silent > 800ms
+    private static final long STEP_COUNTER_FALLBACK_MS = 500; // use counter if detector silent > 500ms
 
     // Acceleration magnitude buffer between steps
     private final List<Double> accelMagnitude = new ArrayList<>();
@@ -200,10 +200,10 @@ public class SensorEventHandler {
 
     /**
      * Shared step handling logic used by both STEP_DETECTOR and STEP_COUNTER.
-     * Includes 300ms debounce to prevent double-counting the same physical step.
+     * Includes 200ms debounce to prevent double-counting the same physical step.
      */
     private void handleStepEvent(long currentTime) {
-        if (currentTime - lastStepTime < 300) {
+        if (currentTime - lastStepTime < 200) {
             return; // debounce
         }
         lastStepTime = currentTime;

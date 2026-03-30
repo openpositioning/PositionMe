@@ -55,6 +55,20 @@ public class KnnPositioner {
     public int getTrainingSize() { return trainingPositions.size(); }
 
     /**
+     * Returns the strongest RSSI (closest to 0) from the latest WiFi scan.
+     * @return best RSSI in dBm, or -100 if no scan results
+     */
+    public int getStrongestRssi() {
+        List<ScanResult> results = wifiManager.getScanResults();
+        if (results == null || results.isEmpty()) return -100;
+        int best = -100;
+        for (ScanResult sr : results) {
+            if (sr.level > best) best = sr.level;
+        }
+        return best;
+    }
+
+    /**
      * Estimates position from current WiFi scan using KNN.
      * @return estimated LatLng, or null if no data / no scan results
      */
