@@ -131,19 +131,19 @@ public class TrajectoryMapFragment extends Fragment {
      * Low-pass filter alpha. Range [0,1].
      * Lower = smoother but more lag; higher = less smoothing but more responsive.
      */
-    private static final double LOW_PASS_ALPHA = 0.15;
+    private static final double LOW_PASS_ALPHA = 0.3;
 
     // -------------------------------------------------------------------------
     // Smoothing state
     // -------------------------------------------------------------------------
 
-    /** Whether the smoothed (purple) polyline is currently shown instead of raw. */
+    /** Whether the LPF-smoothed (teal) polyline is shown instead of the raw (red) one. */
     private boolean isSmoothingEnabled = false;
 
-    /** Running smoothed position for the low-pass filter. */
+    /** Running filtered position state for the low-pass filter. */
     private LatLng smoothedPosition = null;
 
-    /** Full list of smoothed positions (mirrors rawPolyline but filtered). */
+    /** Raw (unfiltered) fused positions — shown when smoothing toggle is OFF. */
     private final List<LatLng> smoothedPoints = new ArrayList<>();
 
 //    // -------------------------------------------------------------------------
@@ -619,7 +619,7 @@ private SwitchMaterial showPdrPathSwitch;
 
         // LPF-smoothed fused trajectory — dark red, only visible when smoothing toggle is ON
         lpfPolyline = map.addPolyline(new PolylineOptions()
-                .color(Color.parseColor("#B71C1C"))
+                .color(Color.RED)
                 .width(7f)
                 .visible(false));
 
@@ -948,14 +948,12 @@ private SwitchMaterial showPdrPathSwitch;
     public void updateFusedPosition(@NonNull LatLng fusedLocation) {
         if (gMap == null) return;
 
-        // Apply LPF to fused position; both polylines share the same filtered point
-        LatLng lpfFiltered = applyLowPassFilter(fusedLocation);
-
-        // Purple fused path — always grows
-        smoothedPoints.add(lpfFiltered);
+        // Raw fused path — always grows (no filter applied here)
+        smoothedPoints.add(fusedLocation);
         redrawFusedTrajectory();
 
-        // Teal LPF path — grows but only visible when smoothing toggle is ON
+        // LPF-smoothed path — grows but only visible when smoothing toggle is ON
+        LatLng lpfFiltered = applyLowPassFilter(fusedLocation);
         lpfPoints.add(lpfFiltered);
         if (lpfPolyline != null) {
             lpfPolyline.setPoints(new ArrayList<>(lpfPoints));
@@ -1170,11 +1168,14 @@ private SwitchMaterial showPdrPathSwitch;
     }
 
     /**
-     * Controls visibility of the LPF-smoothed fused polyline.
-     * The red PDR line and purple fused line are always visible.
-     * Only the teal LPF line is toggled by the smoothing switch.
+     * Controls visibility of the fused trajectory polylines based on the smoothing toggle.
+     * Toggle OFF → red polyline shows raw fused positions (no filter).
+     * Toggle ON  → teal polyline shows LPF-smoothed positions; raw polyline hidden.
      */
     private void updatePolylineVisibility() {
+        if (smoothedPolyline != null) {
+            smoothedPolyline.setVisible(!isSmoothingEnabled);
+        }
         if (lpfPolyline != null) {
             lpfPolyline.setVisible(isSmoothingEnabled);
         }
@@ -1496,11 +1497,11 @@ private SwitchMaterial showPdrPathSwitch;
                     .width(5f)
                     .add());
             smoothedPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.parseColor("#8B00FF"))
+                    .color(Color.RED)
                     .width(6f)
                     .visible(true));
             lpfPolyline = gMap.addPolyline(new PolylineOptions()
-                    .color(Color.parseColor("#00BCD4"))
+                    .color(Color.RED)
                     .width(7f)
                     .visible(isSmoothingEnabled));
             uncertaintyCircle = gMap.addCircle(new CircleOptions()
