@@ -729,8 +729,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                         }
                         lastGnssEnu = enu;
 
-                        particleFilter.updateWithGnss(enu[0], enu[1], adaptedAccuracy);
-                        ekfPositioning.updateWithGnss(enu[0], enu[1], adaptedAccuracy);
+                        // High-accuracy fix: re-centre particle cloud to prevent filter divergence
+                        if (accuracy < 5f) {
+                            particleFilter.resetAroundPosition(enu[0], enu[1], accuracy);
+                            ekfPositioning.resetAroundPosition(enu[0], enu[1], accuracy);
+                            Log.i("SensorFusion", "High-accuracy GNSS (" + accuracy
+                                    + "m) — particle cloud recentred");
+                        } else {
+                            particleFilter.updateWithGnss(enu[0], enu[1], adaptedAccuracy);
+                            ekfPositioning.updateWithGnss(enu[0], enu[1], adaptedAccuracy);
+                        }
                         lastGnssLatLon = new double[]{location.getLatitude(), location.getLongitude()};
                     }
 

@@ -17,7 +17,7 @@ public class ExtendedKalmanFilter {
     private static final String TAG = "EKFPositioning";
 
     /** PDR process noise standard deviation (metres). */
-    private static final float MOTION_NOISE_STD = 0.3f;
+    private static final float MOTION_NOISE_STD = 0.15f;
     /** GNSS observation noise standard deviation (metres). */
     private static final float GNSS_NOISE_STD   = 5.0f;
     /** WiFi observation noise standard deviation (metres). */

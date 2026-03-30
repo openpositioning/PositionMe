@@ -27,7 +27,7 @@ public class ParticleFilter {
      * Standard deviation of Gaussian noise added to each particle during the predict step (metres).
      * Represents uncertainty in PDR step length / heading.
      */
-    private static final float MOTION_NOISE_STD = 0.3f;
+    private static final float MOTION_NOISE_STD = 0.15f;
 
     /**
      * Standard deviation of the GNSS observation model (metres).
