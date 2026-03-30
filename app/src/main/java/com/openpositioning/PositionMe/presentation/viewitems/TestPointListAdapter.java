@@ -14,11 +14,15 @@ import com.openpositioning.PositionMe.data.model.TestPointInfo;
 import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.TimeZone;
+import java.util.Date;
 
 public class TestPointListAdapter extends RecyclerView.Adapter<TestPointListAdapter.TestPointViewHolder> {
 
     private final Context context;
     private final List<TestPointInfo> testPoints;
+
+    private long startTime = -1;
 
     public TestPointListAdapter(Context context, List<TestPointInfo> testPoints) {
         this.context = context;
@@ -38,8 +42,19 @@ public class TestPointListAdapter extends RecyclerView.Adapter<TestPointListAdap
         holder.tvNumber.setText(String.valueOf(tp.number));
         holder.tvLatLon.setText(String.format(Locale.US, "(%.6f, %.6f)", tp.latitude, tp.longitude));
 
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
-        holder.tvTimestamp.setText(sdf.format(tp.timestamp));
+//        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.US);
+//        holder.tvTimestamp.setText(sdf.format(tp.timestamp));
+
+        if (startTime == -1) {
+            startTime = tp.timestamp;
+        }
+
+        long elapsed = tp.timestamp - startTime;
+
+        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.US);
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+
+        holder.tvTimestamp.setText(sdf.format(new Date(elapsed)));
     }
 
     @Override

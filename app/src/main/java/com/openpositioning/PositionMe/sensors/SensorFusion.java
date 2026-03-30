@@ -94,6 +94,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final String WIFI_FINGERPRINT= "wf";
     //endregion
 
+    /** Fused trajectory points recorded during the session, for display on correction screen. */
+    private final List<LatLng> fusedTrajectoryPoints = new ArrayList<>();
+
     //region Instance variables
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
@@ -1032,13 +1035,28 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return double[]{latitude, longitude}, or null(if filter is not initialized)
      */
+//    public double[] getFusedLatLon() {
+//        boolean ekfReady = useEKF && ekfPositioning != null && ekfPositioning.isInitialized();
+//        boolean pfReady  = !useEKF && particleFilter != null && particleFilter.isInitialized();
+//        if ((ekfReady || pfReady) && coordinateConverter != null) {
+//            float[] enu = useEKF ? ekfPositioning.getBestEstimate()
+//                    : particleFilter.getBestEstimate();
+//            return coordinateConverter.toLatLon(enu[0], enu[1]);
+//        }
+//        return null;
+//    }
     public double[] getFusedLatLon() {
         boolean ekfReady = useEKF && ekfPositioning != null && ekfPositioning.isInitialized();
         boolean pfReady  = !useEKF && particleFilter != null && particleFilter.isInitialized();
         if ((ekfReady || pfReady) && coordinateConverter != null) {
             float[] enu = useEKF ? ekfPositioning.getBestEstimate()
                     : particleFilter.getBestEstimate();
-            return coordinateConverter.toLatLon(enu[0], enu[1]);
+            double[] latLon = coordinateConverter.toLatLon(enu[0], enu[1]);
+            // Store for correction screen display
+            if (latLon != null) {
+                fusedTrajectoryPoints.add(new LatLng(latLon[0], latLon[1]));
+            }
+            return latLon;
         }
         return null;
     }
@@ -1057,6 +1075,16 @@ public class SensorFusion implements SensorEventListener, Observer {
     /** Last PDR-derived position as lat/lon. Returns null before first step is detected. */
     public double[] getLastPdrLatLon() {
         return lastPdrLatLon;
+    }
+
+    /**
+     * Returns the list of fused positions recorded during this session.
+     * Used by CorrectionFragment to display the fused path on the correction map.
+     *
+     * @return list of fused LatLng positions, or empty list if none recorded.
+     */
+    public List<LatLng> getFusedTrajectoryPoints() {
+        return new ArrayList<>(fusedTrajectoryPoints);
     }
 
     /**
@@ -1498,6 +1526,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastGnssLatLon = null;
         lastWifiLatLon = null;
         lastPdrLatLon  = null;
+        fusedTrajectoryPoints.clear();
         lastKnownFloor = 0;
         prevPdrX = 0f;
         prevPdrY = 0f;

@@ -83,6 +83,27 @@
             app:defaultValue="0.364"
             android:summary="@string/weiberg_K" />
 
+<!--        <SeekBarPreference-->
+<!--            android:id="@+id/last_observations"-->
+<!--            android:max="15"-->
+<!--            android:min="2"-->
+<!--            app:defaultValue="5"-->
+<!--            app:dependency="overwrite_constants"-->
+<!--            app:key="last_observations"-->
+<!--            app:showSeekBarValue="true"-->
+<!--            app:summary="Controls number of recent GNSS, WiFi, and PDR points shown"-->
+<!--            app:title="Number of points to display " />-->
+
+        <SeekBarPreference
+            app:key="last_observations"
+            app:title="Number of points to display"
+            app:summary="Controls number of recent GNSS, WiFi, and PDR points shown"
+            app:defaultValue="5"
+            android:min="2"
+            android:max="15"
+            app:showSeekBarValue="true"
+            app:dependency="overwrite_constants"/>
+
         <EditTextPreference
             android:id="@+id/elevationSecondsInput"
             android:inputType="number"
