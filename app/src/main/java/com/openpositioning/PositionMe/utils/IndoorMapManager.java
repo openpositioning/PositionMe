@@ -197,61 +197,33 @@ public class IndoorMapManager {
         }
     }
 
-    /**
-     * For each particle, zero its weight if the step from prev to current
-     * position crosses a wall. Called by ParticleFilter after predict(),
-     * before resample().
-     *
-     * @param prevEast   previous East positions, metres (length 300)
-     * @param prevNorth  previous North positions, metres (length 300)
-     * @param currEast   current East positions after predict() (length 300)
-     * @param currNorth  current North positions after predict() (length 300)
-     * @param weights    weight array — modified in-place
-     * @param converter  to convert East-North → LatLng for wall geometry check
-     */
     private static final float INTERSECTION_EPSILON = 1e-6f;
-    private static final float WALL_CLEARANCE_METERS = 0.20f;
-    private static final float WALL_SNAP_BACK_METERS = 0.25f;
     private static final float RING_CLOSURE_EPSILON = 1e-4f;
+    private static final float WALL_SNAP_BACK_METERS = 0.05f;
 
-    public void applyWallConstraints(
-            float[] prevEast,
-            float[] prevNorth,
-            float[] currEast,
-            float[] currNorth,
-            float[] weights,
-            CoordinateConverter converter) {
-
-        if (currentVenue == null || currentFloorKey == null) return;
-        IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
-        if (floor == null || floor.wallPolygonsEnu == null || floor.wallPolygonsEnu.isEmpty()) return;
-
-        List<List<float[]>> walls = floor.wallPolygonsEnu;
-
-        for (int i = 0; i < weights.length; i++) {
-            if (weights[i] <= 0f) continue;
-
-            float[] prev = {prevEast[i], prevNorth[i]};
-            float[] curr = {currEast[i], currNorth[i]};
-
-            WallCrossing crossing = findFirstWallCrossing(prev, curr, walls);
-            boolean tooClose = isTooCloseToAnyWall(curr, walls, WALL_CLEARANCE_METERS);
-
-            if (crossing == null && !tooClose) {
-                continue;
-            }
-
-            float[] corrected;
-            if (crossing != null) {
-                corrected = moveToJustBeforeWall(prev, curr, crossing.t, WALL_SNAP_BACK_METERS);
-            } else {
-                corrected = new float[]{prev[0], prev[1]};
-            }
-
-            currEast[i] = corrected[0];
-            currNorth[i] = corrected[1];
-            weights[i] *= 0.1f;
+    public float[] constrainMovementToWalls(float[] fromEnu, float[] toEnu) {
+        if (fromEnu == null || toEnu == null) {
+            return toEnu;
         }
+
+        if (currentVenue == null || currentFloorKey == null) {
+            return toEnu;
+        }
+
+        IndoorVenue.FloorFeatures floorFeatures = currentVenue.floorFeatures.get(currentFloorKey);
+        if (floorFeatures == null ||
+                floorFeatures.wallPolygonsEnu == null ||
+                floorFeatures.wallPolygonsEnu.isEmpty()) {
+            return toEnu;
+        }
+
+        WallCrossing crossing = findFirstWallCrossing(fromEnu, toEnu, floorFeatures.wallPolygonsEnu);
+
+        if (crossing == null) {
+            return new float[]{toEnu[0], toEnu[1]};
+        }
+
+        return moveToJustBeforeWall(fromEnu, toEnu, crossing.t, WALL_SNAP_BACK_METERS);
     }
 
     private static class WallCrossing {
@@ -260,19 +232,17 @@ public class IndoorMapManager {
         final int edgeIndex;
         final float t;
 
-        WallCrossing(float[] pt, int polygonIndex, int edgeIndex, float t) {
-            this.crossingPoint = pt;
+        WallCrossing(float[] crossingPoint, int polygonIndex, int edgeIndex, float t) {
+            this.crossingPoint = crossingPoint;
             this.polygonIndex = polygonIndex;
             this.edgeIndex = edgeIndex;
             this.t = t;
         }
     }
 
-    private WallCrossing findFirstWallCrossing(
-            float[] from,
-            float[] to,
-            List<List<float[]>> walls) {
-
+    private WallCrossing findFirstWallCrossing(float[] from,
+                                               float[] to,
+                                               List<List<float[]>> walls) {
         double bestT = Double.MAX_VALUE;
         WallCrossing best = null;
 
@@ -289,11 +259,13 @@ public class IndoorMapManager {
                 double t = intersectionT(from, to, a, b);
                 if (t >= 0.0 && t <= 1.0 && t < bestT) {
                     bestT = t;
-                    float[] pt = {
+
+                    float[] crossingPoint = new float[]{
                             (float) (from[0] + t * (to[0] - from[0])),
                             (float) (from[1] + t * (to[1] - from[1]))
                     };
-                    best = new WallCrossing(pt, pi, ei, (float) t);
+
+                    best = new WallCrossing(crossingPoint, pi, ei, (float) t);
                 }
             }
         }
@@ -334,50 +306,6 @@ public class IndoorMapManager {
         return (t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0) ? t : -1.0;
     }
 
-    private boolean isTooCloseToAnyWall(float[] point, List<List<float[]>> walls, float clearance) {
-        for (List<float[]> polygon : walls) {
-            if (polygon == null || polygon.size() < 2) continue;
-
-            int edgeCount = getRingEdgeCount(polygon);
-
-            for (int i = 0; i < edgeCount; i++) {
-                float[] a = polygon.get(i);
-                float[] b = polygon.get((i + 1) % polygon.size());
-
-                if (distancePointToSegment(point, a, b) < clearance) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private float distancePointToSegment(float[] p, float[] a, float[] b) {
-        float px = p[0], py = p[1];
-        float ax = a[0], ay = a[1];
-        float bx = b[0], by = b[1];
-
-        float dx = bx - ax;
-        float dy = by - ay;
-        float len2 = dx * dx + dy * dy;
-
-        if (len2 < 1e-12f) {
-            float ex = px - ax;
-            float ey = py - ay;
-            return (float) Math.sqrt(ex * ex + ey * ey);
-        }
-
-        float t = ((px - ax) * dx + (py - ay) * dy) / len2;
-        t = Math.max(0f, Math.min(1f, t));
-
-        float cx = ax + t * dx;
-        float cy = ay + t * dy;
-
-        float ex = px - cx;
-        float ey = py - cy;
-        return (float) Math.sqrt(ex * ex + ey * ey);
-    }
-
     private float[] moveToJustBeforeWall(float[] from, float[] to, float hitT, float snapBackMeters) {
         float dx = to[0] - from[0];
         float dy = to[1] - from[1];
@@ -395,6 +323,205 @@ public class IndoorMapManager {
                 from[1] + safeT * dy
         };
     }
+
+//    /**
+//     * For each particle, zero its weight if the step from prev to current
+//     * position crosses a wall. Called by ParticleFilter after predict(),
+//     * before resample().
+//     *
+//     * @param prevEast   previous East positions, metres (length 300)
+//     * @param prevNorth  previous North positions, metres (length 300)
+//     * @param currEast   current East positions after predict() (length 300)
+//     * @param currNorth  current North positions after predict() (length 300)
+//     * @param weights    weight array — modified in-place
+//     * @param converter  to convert East-North → LatLng for wall geometry check
+//     */
+//    private static final float INTERSECTION_EPSILON = 1e-6f;
+//    private static final float WALL_CLEARANCE_METERS = 0.20f;
+//    private static final float WALL_SNAP_BACK_METERS = 0.25f;
+//    private static final float RING_CLOSURE_EPSILON = 1e-4f;
+//
+//    public void applyWallConstraints(
+//            float[] prevEast,
+//            float[] prevNorth,
+//            float[] currEast,
+//            float[] currNorth,
+//            float[] weights,
+//            CoordinateConverter converter) {
+//
+//        if (currentVenue == null || currentFloorKey == null) return;
+//        IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
+//        if (floor == null || floor.wallPolygonsEnu == null || floor.wallPolygonsEnu.isEmpty()) return;
+//
+//        List<List<float[]>> walls = floor.wallPolygonsEnu;
+//
+//        for (int i = 0; i < weights.length; i++) {
+//            if (weights[i] <= 0f) continue;
+//
+//            float[] prev = {prevEast[i], prevNorth[i]};
+//            float[] curr = {currEast[i], currNorth[i]};
+//
+//            WallCrossing crossing = findFirstWallCrossing(prev, curr, walls);
+//            boolean tooClose = isTooCloseToAnyWall(curr, walls, WALL_CLEARANCE_METERS);
+//
+//            if (crossing == null && !tooClose) {
+//                continue;
+//            }
+//
+//            float[] corrected;
+//            if (crossing != null) {
+//                corrected = moveToJustBeforeWall(prev, curr, crossing.t, WALL_SNAP_BACK_METERS);
+//            } else {
+//                corrected = new float[]{prev[0], prev[1]};
+//            }
+//
+//            currEast[i] = corrected[0];
+//            currNorth[i] = corrected[1];
+//            weights[i] *= 0.1f;
+//        }
+//    }
+//
+//    private static class WallCrossing {
+//        final float[] crossingPoint;
+//        final int polygonIndex;
+//        final int edgeIndex;
+//        final float t;
+//
+//        WallCrossing(float[] pt, int polygonIndex, int edgeIndex, float t) {
+//            this.crossingPoint = pt;
+//            this.polygonIndex = polygonIndex;
+//            this.edgeIndex = edgeIndex;
+//            this.t = t;
+//        }
+//    }
+//
+//    private WallCrossing findFirstWallCrossing(
+//            float[] from,
+//            float[] to,
+//            List<List<float[]>> walls) {
+//
+//        double bestT = Double.MAX_VALUE;
+//        WallCrossing best = null;
+//
+//        for (int pi = 0; pi < walls.size(); pi++) {
+//            List<float[]> polygon = walls.get(pi);
+//            if (polygon == null || polygon.size() < 2) continue;
+//
+//            int edgeCount = getRingEdgeCount(polygon);
+//
+//            for (int ei = 0; ei < edgeCount; ei++) {
+//                float[] a = polygon.get(ei);
+//                float[] b = polygon.get((ei + 1) % polygon.size());
+//
+//                double t = intersectionT(from, to, a, b);
+//                if (t >= 0.0 && t <= 1.0 && t < bestT) {
+//                    bestT = t;
+//                    float[] pt = {
+//                            (float) (from[0] + t * (to[0] - from[0])),
+//                            (float) (from[1] + t * (to[1] - from[1]))
+//                    };
+//                    best = new WallCrossing(pt, pi, ei, (float) t);
+//                }
+//            }
+//        }
+//
+//        return best;
+//    }
+//
+//    private int getRingEdgeCount(List<float[]> ring) {
+//        if (ring == null || ring.size() < 2) return 0;
+//
+//        float[] first = ring.get(0);
+//        float[] last = ring.get(ring.size() - 1);
+//
+//        boolean alreadyClosed =
+//                Math.abs(first[0] - last[0]) < RING_CLOSURE_EPSILON &&
+//                        Math.abs(first[1] - last[1]) < RING_CLOSURE_EPSILON;
+//
+//        return alreadyClosed ? ring.size() - 1 : ring.size();
+//    }
+
+//    private double intersectionT(float[] p1, float[] p2, float[] p3, float[] p4) {
+//        double rX = p2[0] - p1[0];
+//        double rY = p2[1] - p1[1];
+//        double sX = p4[0] - p3[0];
+//        double sY = p4[1] - p3[1];
+//
+//        double denom = rX * sY - rY * sX;
+//        if (Math.abs(denom) < INTERSECTION_EPSILON) {
+//            return -1.0;
+//        }
+//
+//        double qmpX = p3[0] - p1[0];
+//        double qmpY = p3[1] - p1[1];
+//
+//        double t = (qmpX * sY - qmpY * sX) / denom;
+//        double u = (qmpX * rY - qmpY * rX) / denom;
+//
+//        return (t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0) ? t : -1.0;
+//    }
+
+//    private boolean isTooCloseToAnyWall(float[] point, List<List<float[]>> walls, float clearance) {
+//        for (List<float[]> polygon : walls) {
+//            if (polygon == null || polygon.size() < 2) continue;
+//
+//            int edgeCount = getRingEdgeCount(polygon);
+//
+//            for (int i = 0; i < edgeCount; i++) {
+//                float[] a = polygon.get(i);
+//                float[] b = polygon.get((i + 1) % polygon.size());
+//
+//                if (distancePointToSegment(point, a, b) < clearance) {
+//                    return true;
+//                }
+//            }
+//        }
+//        return false;
+//    }
+
+//    private float distancePointToSegment(float[] p, float[] a, float[] b) {
+//        float px = p[0], py = p[1];
+//        float ax = a[0], ay = a[1];
+//        float bx = b[0], by = b[1];
+//
+//        float dx = bx - ax;
+//        float dy = by - ay;
+//        float len2 = dx * dx + dy * dy;
+//
+//        if (len2 < 1e-12f) {
+//            float ex = px - ax;
+//            float ey = py - ay;
+//            return (float) Math.sqrt(ex * ex + ey * ey);
+//        }
+//
+//        float t = ((px - ax) * dx + (py - ay) * dy) / len2;
+//        t = Math.max(0f, Math.min(1f, t));
+//
+//        float cx = ax + t * dx;
+//        float cy = ay + t * dy;
+//
+//        float ex = px - cx;
+//        float ey = py - cy;
+//        return (float) Math.sqrt(ex * ex + ey * ey);
+//    }
+//
+//    private float[] moveToJustBeforeWall(float[] from, float[] to, float hitT, float snapBackMeters) {
+//        float dx = to[0] - from[0];
+//        float dy = to[1] - from[1];
+//        float len = (float) Math.sqrt(dx * dx + dy * dy);
+//
+//        if (len < 1e-6f) {
+//            return new float[]{from[0], from[1]};
+//        }
+//
+//        float backT = snapBackMeters / len;
+//        float safeT = Math.max(0f, hitT - backT);
+//
+//        return new float[]{
+//                from[0] + safeT * dx,
+//                from[1] + safeT * dy
+//        };
+//    }
 //    private static final float MAX_GAP_WIDTH_METERS = 2.5f;
 //    private static final float GAP_SEARCH_RADIUS_METERS = 3.0f;
 //    private static final float MIN_GAP_WIDTH_METERS = 0.20f;
@@ -807,6 +934,11 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
         return new LatLng(ll[0], ll[1]);
     }
 
+    private float[] toEnu(LatLng latLng, CoordinateConverter c) {
+        float[] enu = c.toEnu(latLng.latitude, latLng.longitude);
+        return new float[]{(float) enu[0], (float) enu[1]};
+    }
+
     //checks orientation using three points: 0= points on same line, 1 & 2 = points on either side
     private static int orientation(LatLng a, LatLng b, LatLng c) {
 
@@ -855,44 +987,51 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
     }
 
     /// height change = sensorfusion.getelevation
-    public LatLng indoorLocationCorrection(LatLng oldLocation, LatLng predictedLocation, float heightChange) {
-        if (currentVenue == null || currentFloorKey == null || oldLocation == null || predictedLocation == null) {
-            return predictedLocation;
-        }
-        Log.d("MapMatch", "Checking movement from " + oldLocation + " to " + predictedLocation +
-                " on floor " + currentFloorKey);
+    public LatLng indoorLocationCorrection(LatLng oldLocation,
+                                           LatLng predictedLocation,
+                                           float heightChange) {
 
-        LatLng correctedLocation = predictedLocation;
-        boolean hitWall = false;
-
-        IndoorVenue.FloorFeatures floorFeatures = currentVenue.floorFeatures.get(currentFloorKey);
-        if (floorFeatures == null) {
+        if (currentVenue == null || currentFloorKey == null ||
+                oldLocation == null || predictedLocation == null) {
             return predictedLocation;
         }
 
-        List<List<LatLng>> wallPolygons = floorFeatures.wallPolygons;
+        IndoorVenue.FloorFeatures floorFeatures =
+                currentVenue.floorFeatures.get(currentFloorKey);
 
-        for (int k = 0; k < wallPolygons.size() && !hitWall; k++) {
-            List<LatLng> polygon = wallPolygons.get(k);
-
-            for (int i = 0; i < polygon.size(); i++) {
-                LatLng edgeStart = polygon.get(i);
-                LatLng edgeEnd = polygon.get((i + 1) % polygon.size());
-
-                if (segmentsIntersect(oldLocation, predictedLocation, edgeStart, edgeEnd)) {
-                    correctedLocation = adjustPositionToNearestValidLocation(
-                            oldLocation,
-                            predictedLocation,
-                            polygon
-                    );
-                    hitWall = true;
-                    Log.d("MapMatch", "Wall intersection detected");
-                    Log.d("MapMatch", "Corrected location = " + correctedLocation);
-                    break;
-                }
-            }
+        if (floorFeatures == null ||
+                floorFeatures.wallPolygonsEnu == null ||
+                floorFeatures.wallPolygonsEnu.isEmpty()) {
+            return predictedLocation;
         }
 
+        CoordinateConverter c =
+                SensorFusion.getInstance().getCoordinateConverter();
+
+        if (c == null) return predictedLocation;
+
+        float[] from = toEnu(oldLocation, c);
+        float[] to = toEnu(predictedLocation, c);
+
+        Log.d("MapMatch",
+                "Checking movement from (" + from[0] + "," + from[1] + ") to (" +
+                        to[0] + "," + to[1] + ")");
+
+        WallCrossing crossing =
+                findFirstWallCrossing(from, to, floorFeatures.wallPolygonsEnu);
+
+        if (crossing == null) {
+            return predictedLocation;
+        }
+
+        float[] corrected = moveToJustBeforeWall(from, to, crossing.t, 0.25f);
+
+        Log.d("MapMatch",
+                "Wall hit at (" + crossing.crossingPoint[0] + "," + crossing.crossingPoint[1] + ")" +
+                        " → corrected to (" + corrected[0] + "," + corrected[1] + ")");
+
+        return toLatLng(corrected[0], corrected[1], c);
+    }
         //floor adjustment
         // if abs(heightChange) > heightThreshold:
         ////
@@ -909,8 +1048,7 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
         ////        reject floor change
         ////        keep same floor
 
-        return correctedLocation;
-    }
+
 
     //find nearest valid point that doesn't intersect walls
     //loop through points on segment just traversed starting from predicted location back towards prev location
