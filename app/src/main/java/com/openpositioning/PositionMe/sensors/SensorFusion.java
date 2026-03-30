@@ -228,6 +228,8 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private IndoorMapManager indoorMapManager;
 
+    private float[] prevBestEnu = null;
+
     //region Initialisation
     /**
      * Private constructor for implementing singleton design pattern for SensorFusion.
@@ -1189,16 +1191,7 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return double[]{latitude, longitude}, or null(if filter is not initialized)
      */
-    public double[] getFusedLatLon() {
-        boolean ekfReady = useEKF && ekfPositioning != null && ekfPositioning.isInitialized();
-        boolean pfReady  = !useEKF && particleFilter != null && particleFilter.isInitialized();
-        if ((ekfReady || pfReady) && coordinateConverter != null) {
-            float[] enu = useEKF ? ekfPositioning.getBestEstimate()
-                    : particleFilter.getBestEstimate();
-            return coordinateConverter.toLatLon(enu[0], enu[1]);
-        }
-        return null;
-    }
+
 
 
     /** Last raw GNSS position. Returns null before first GPS signal. */
@@ -1214,6 +1207,10 @@ public class SensorFusion implements SensorEventListener, Observer {
     /** Last PDR-derived position as lat/lon. Returns null before first step is detected. */
     public double[] getLastPdrLatLon() {
         return lastPdrLatLon;
+    }
+
+    public void resetFusedConstraintState() {
+        prevBestEnu = null;
     }
 
     /**
@@ -1306,6 +1303,33 @@ public class SensorFusion implements SensorEventListener, Observer {
             return new float[]{0f, 0f};
         }
         return particleFilter.getBestEstimate();
+    }
+
+    public double[] getFusedLatLon() {
+        boolean ekfReady = useEKF && ekfPositioning != null && ekfPositioning.isInitialized();
+        boolean pfReady  = !useEKF && particleFilter != null && particleFilter.isInitialized();
+
+        if (!(ekfReady || pfReady) || coordinateConverter == null) {
+            return null;
+        }
+
+        float[] rawEnu = useEKF
+                ? ekfPositioning.getBestEstimate()
+                : particleFilter.getBestEstimate();
+
+        if (rawEnu == null || rawEnu.length < 2) {
+            return null;
+        }
+
+        float[] displayEnu = new float[]{rawEnu[0], rawEnu[1]};
+
+        if (indoorMapManager != null && prevBestEnu != null) {
+            displayEnu = indoorMapManager.constrainMovementToWalls(prevBestEnu, rawEnu);
+        }
+
+        prevBestEnu = new float[]{displayEnu[0], displayEnu[1]};
+
+        return coordinateConverter.toLatLon(displayEnu[0], displayEnu[1]);
     }
 
     /**

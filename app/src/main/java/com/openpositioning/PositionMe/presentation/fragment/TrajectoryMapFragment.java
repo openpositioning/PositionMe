@@ -775,11 +775,11 @@ private SwitchMaterial showPdrPathSwitch;
 
 
         if (oldLocation != null && indoorMapManager != null) {
-//            correctedLocation = indoorMapManager.indoorLocationCorrection(
-//                    oldLocation,
-//                    newLocation,
-//                    heightChange
-//            );
+            correctedLocation = indoorMapManager.indoorLocationCorrection(
+                    oldLocation,
+                    newLocation,
+                    heightChange
+            );
             oldfloor = newfloor;
             newfloor = indoorMapManager.acceptFloorChange(
                     correctedLocation,
