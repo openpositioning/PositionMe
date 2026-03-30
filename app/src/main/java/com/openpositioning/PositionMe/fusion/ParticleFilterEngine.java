@@ -2,709 +2,485 @@ package com.openpositioning.PositionMe.fusion;
 
 import android.util.Log;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
+import com.openpositioning.PositionMe.mapmatching.MapGeometryUtils;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 /**
- * Core particle filter engine for live indoor positioning.
+ * Core particle filter engine.
  *
- * Cleaned design goals:
- * - keep the state in local x/y meters
- * - use the map only as a feasibility veto
- * - never use map likelihoods or walkable penalties as continuous weights
- * - convert to LatLng only once when exporting the fused pose
+ * <p>This class owns the particle set and implements the standard PF loop:
+ * <ol>
+ *   <li>initialise()</li>
+ *   <li>predict(deltaS, deltaTheta)</li>
+ *   <li>update(observation, constraintContext)</li>
+ *   <li>estimate()</li>
+ * </ol>
+ *
+ * <p>Important design choice for the live map-constrained mode:
+ * the map is used only as a discrete validity gate.
+ * There is no continuous wall-likelihood or corridor-shaping field here.
+ *
+ * <p>State per particle:
+ * - x, y: local planar position in meters
+ * - theta: heading in radians
+ * - floor: discrete floor hypothesis
+ * - weight: particle importance weight
+ *
+ * <p>Heading convention:
+ * - theta is stored in Android-style azimuth convention:
+ *   0 = north, +pi/2 = east, pi = south, -pi/2 = west
+ *
+ * <p>For motion projection into Cartesian x/y:
+ * - x positive = east
+ * - y positive = north
+ * so we convert with:
+ *   motionHeading = pi/2 - theta
  */
 public class ParticleFilterEngine {
 
     private static final String TAG = "ParticleFilterEngine";
 
-    /**
-     * Individual particle.
-     */
-    public static class Particle {
-        public double x;
-        public double y;
-        public double headingRad;
-        public int floor;
-        public double weight;
-        public boolean alive = true;
+    /** Ignore micro-motion for wall checks to reduce false positives from jitter. */
+    private static final double MIN_STEP_FOR_WALL_CHECK_METERS = 0.30;
 
-        // True previous state saved before prediction.
-        public double prevX;
-        public double prevY;
-        public double prevHeadingRad;
-        public int prevFloor;
-
-        public Particle(double x,
-                        double y,
-                        double headingRad,
-                        int floor,
-                        double weight) {
-            this.x = x;
-            this.y = y;
-            this.headingRad = headingRad;
-            this.floor = floor;
-            this.weight = weight;
-
-            this.prevX = x;
-            this.prevY = y;
-            this.prevHeadingRad = headingRad;
-            this.prevFloor = floor;
-        }
-
-        @NonNull
-        public Particle copy() {
-            Particle p = new Particle(x, y, headingRad, floor, weight);
-            p.alive = alive;
-            p.prevX = prevX;
-            p.prevY = prevY;
-            p.prevHeadingRad = prevHeadingRad;
-            p.prevFloor = prevFloor;
-            return p;
-        }
-    }
-
-    /**
-     * Motion input for one PF update.
-     */
-    public static class MotionInput {
-        public final double deltaForwardMeters;
-        public final double deltaHeadingRad;
-        public final double deltaHeightMeters;
-        public final boolean heightChanged;
-        public final long timestampMs;
-
-        public MotionInput(double deltaForwardMeters,
-                           double deltaHeadingRad,
-                           double deltaHeightMeters,
-                           boolean heightChanged,
-                           long timestampMs) {
-            this.deltaForwardMeters = deltaForwardMeters;
-            this.deltaHeadingRad = deltaHeadingRad;
-            this.deltaHeightMeters = deltaHeightMeters;
-            this.heightChanged = heightChanged;
-            this.timestampMs = timestampMs;
-        }
-    }
-
-    /**
-     * Optional absolute observation in local x/y.
-     */
-    public static class AbsoluteObservation {
-        @Nullable public final Double x;
-        @Nullable public final Double y;
-        @Nullable public final Integer floor;
-        @Nullable public final Double headingRad;
-        public final double horizontalSigmaMeters;
-        public final double headingSigmaRad;
-        public final double confidence;
-        @NonNull public final String source;
-
-        public AbsoluteObservation(@Nullable Double x,
-                                   @Nullable Double y,
-                                   @Nullable Integer floor,
-                                   @Nullable Double headingRad,
-                                   double horizontalSigmaMeters,
-                                   double headingSigmaRad,
-                                   double confidence,
-                                   @NonNull String source) {
-            this.x = x;
-            this.y = y;
-            this.floor = floor;
-            this.headingRad = headingRad;
-            this.horizontalSigmaMeters = horizontalSigmaMeters;
-            this.headingSigmaRad = headingSigmaRad;
-            this.confidence = confidence;
-            this.source = source;
-        }
-    }
-
-    /**
-     * Optional map-constraint helper in local x/y space.
-     *
-     * The map is treated as a feasibility gate only.
-     */
-    public interface ConstraintModel {
-        boolean crossesWall(double oldX, double oldY,
-                            double newX, double newY,
-                            int floor);
-
-        boolean isFloorTransitionAllowed(double x, double y,
-                                         int oldFloor, int newFloor);
-    }
-
-    /**
-     * Summary of one update step for debugging.
-     */
-    public static class StepDiagnostics {
-        public int totalParticles;
-        public int aliveParticles;
-        public int wallRejectedCount;
-        public int floorRejectedCount;
-        public int observationWeightedCount;
-        public double effectiveSampleSize;
-        public boolean resampled;
-        public boolean recovered;
-    }
-
-    /**
-     * Result of one PF update.
-     */
-    public static class StepResult {
-        @NonNull public final FusedPose fusedPose;
-        @NonNull public final StepDiagnostics diagnostics;
-        @NonNull public final List<Particle> particlesSnapshot;
-
-        public StepResult(@NonNull FusedPose fusedPose,
-                          @NonNull StepDiagnostics diagnostics,
-                          @NonNull List<Particle> particlesSnapshot) {
-            this.fusedPose = fusedPose;
-            this.diagnostics = diagnostics;
-            this.particlesSnapshot = particlesSnapshot;
-        }
-    }
-
-    private final ParticleFilterConfig config;
-    private final Random random;
+    /** The active particle set representing the belief distribution. */
     private final List<Particle> particles = new ArrayList<>();
 
-    @Nullable
-    private ConstraintModel constraintModel;
+    /** Random generator used for motion noise, initial spread, and resampling jitter. */
+    private final Random rng = new Random();
 
-    public ParticleFilterEngine(@NonNull ParticleFilterConfig config) {
-        this.config = config;
-        this.random = new Random();
+    // Tunable filter parameters
+
+    private final int particleCount;
+    private final double sigmaStep;
+    private final double sigmaTheta;
+    private final double sigmaWifi;
+    private final double sigmaGnss;
+    private final double initPosStd;
+    private final double initHeadingStd;
+    private final double resampleRatio;
+    private final double sigmaRegPos;
+    private final double sigmaRegTheta;
+
+    // Diagnostics / statistics
+
+    /** Effective sample size after the latest update step. */
+    private double lastNeff = 0.0;
+
+    /** Whether the last update triggered resampling. */
+    private boolean lastResampled = false;
+
+    public ParticleFilterEngine(ParticleFilterConfig cfg) {
+        this.particleCount = cfg.particleCount;
+        this.sigmaStep = cfg.sigmaStep;
+        this.sigmaTheta = cfg.sigmaThetaRad;
+        this.sigmaWifi = cfg.sigmaWifi;
+        this.sigmaGnss = cfg.sigmaGnss;
+        this.initPosStd = cfg.initPosStd;
+        this.initHeadingStd = cfg.initHeadingStdRad;
+        this.resampleRatio = cfg.resampleRatio;
+        this.sigmaRegPos = cfg.sigmaRegPos;
+        this.sigmaRegTheta = cfg.sigmaRegThetaRad;
     }
 
-    public void setConstraintModel(@Nullable ConstraintModel constraintModel) {
-        this.constraintModel = constraintModel;
+    /**
+     * Initialises the particle cloud around a starting pose hypothesis.
+     *
+     * <p>All particles begin on the same floor, but position and heading are
+     * spread using Gaussian noise to represent initial uncertainty.
+     *
+     * @param x initial x coordinate in local frame
+     * @param y initial y coordinate in local frame
+     * @param theta initial heading in radians
+     * @param floor initial floor estimate
+     */
+    public void initialise(double x, double y, double theta, int floor) {
+        particles.clear();
+
+        for (int i = 0; i < particleCount; i++) {
+            double px = x + rng.nextGaussian() * initPosStd;
+            double py = y + rng.nextGaussian() * initPosStd;
+            double pt = wrapAngle(theta + rng.nextGaussian() * initHeadingStd);
+
+            particles.add(new Particle(px, py, pt, floor, 1.0 / particleCount));
+        }
+
+        lastNeff = particleCount;
+        lastResampled = false;
+
+        Log.d(TAG,
+                "PF engine initialised"
+                        + " | particleCount=" + particleCount
+                        + ", initPosStd=" + initPosStd
+                        + ", initHeadingStdDeg=" + Math.toDegrees(initHeadingStd));
     }
 
+    /** @return true once particles have been created */
     public boolean isInitialised() {
         return !particles.isEmpty();
     }
 
-    public void clear() {
-        particles.clear();
-    }
-
     /**
-     * Initialise particles around a known local anchor.
+     * Forces every particle to use the same floor hypothesis.
+     *
+     * <p>This is used after a validated live floor transition. The cloud remains
+     * motion-driven in x/y, but the authoritative floor owner stays in the manager.
      */
-    public void initialise(double startX,
-                           double startY,
-                           int floor,
-                           double headingRad) {
-        particles.clear();
-
-        double equalWeight = 1.0 / Math.max(1, config.particleCount);
-
-        for (int i = 0; i < config.particleCount; i++) {
-            double x = startX + gaussian(0.0, config.initialPositionStdMeters);
-            double y = startY + gaussian(0.0, config.initialPositionStdMeters);
-            double heading = wrapAngleRad(
-                    headingRad + gaussian(0.0, config.initialHeadingStdRad)
-            );
-
-            particles.add(new Particle(x, y, heading, floor, equalWeight));
+    public void setAllParticlesFloor(int floor) {
+        for (Particle particle : particles) {
+            particle.floor = floor;
+            particle.prevFloor = floor;
         }
-
-        normaliseWeights();
-        log("Initialised PF with "
-                + particles.size()
-                + " particles at x=" + startX
-                + " y=" + startY
-                + " floor=" + floor);
     }
 
     /**
-     * Main PF update.
+     * Motion prediction step.
+     *
+     * <p>This propagates each particle forward according to:
+     * - a distance increment deltaS
+     * - a heading increment deltaTheta
+     *
+     * <p>Noise is added independently to translation and heading to represent
+     * uncertainty in the motion model.
+     *
+     * @param deltaS motion increment in meters
+     * @param deltaTheta heading increment in radians
      */
-    @NonNull
-    public StepResult update(@NonNull MotionInput motionInput,
-                             @Nullable AbsoluteObservation absoluteObservation,
-                             @NonNull CoordinateConverter coordinateConverter) {
+    public void predict(double deltaS, double deltaTheta) {
+        for (Particle particle : particles) {
+            // Remember the previous state for discrete map-constraint checks.
+            particle.prevX = particle.x;
+            particle.prevY = particle.y;
+            particle.prevFloor = particle.floor;
 
+            // Add stochastic noise to the motion command.
+            double ds = deltaS + rng.nextGaussian() * sigmaStep;
+            double dTheta = deltaTheta + rng.nextGaussian() * sigmaTheta;
+
+            // Update heading first.
+            particle.theta = wrapAngle(particle.theta + dTheta);
+
+            // Convert Android-style heading into x/y projection angle.
+            double motionHeading = (Math.PI / 2.0) - particle.theta;
+
+            // Move particle in local Cartesian frame.
+            particle.x += ds * Math.cos(motionHeading);
+            particle.y += ds * Math.sin(motionHeading);
+        }
+    }
+
+    /**
+     * Backward-compatible update path with no map constraints.
+     */
+    public void update(ParticleFilterObservation observation) {
+        update(observation, null);
+    }
+
+    /**
+     * Measurement update step.
+     *
+     * <p>Each available observation contributes multiplicatively to the
+     * particle weight:
+     * - Wi-Fi position
+     * - Wi-Fi floor
+     * - GNSS position
+     * - discrete wall-crossing penalty (optional)
+     *
+     * <p>The map contribution is intentionally binary/discrete:
+     * particles are penalised only when a predicted segment crosses a wall.
+     * There is no distance-to-wall likelihood field here.
+     *
+     * @param observation absolute observation bundle for this update cycle
+     * @param constraintContext optional live map-constraint context
+     */
+    public void update(ParticleFilterObservation observation,
+                       @Nullable ConstraintContext constraintContext) {
         if (particles.isEmpty()) {
-            throw new IllegalStateException("ParticleFilterEngine.update() called before initialise().");
-        }
-
-        StepDiagnostics diagnostics = new StepDiagnostics();
-        diagnostics.totalParticles = particles.size();
-
-        predictParticles(motionInput);
-        enforceConstraintsVeto(diagnostics);
-
-        if (absoluteObservation != null && config.enableAbsoluteObservationWeighting) {
-            applyAbsoluteObservation(absoluteObservation, diagnostics);
-        }
-
-        enforceWeightFloor();
-        normaliseWeights();
-
-        diagnostics.aliveParticles = countAliveParticles();
-        diagnostics.effectiveSampleSize = computeEffectiveSampleSize();
-
-        if (shouldResample(diagnostics.effectiveSampleSize)) {
-            systematicResample();
-            diagnostics.resampled = true;
-        }
-
-        if ((countAliveParticles() == 0 || totalWeight() <= 0.0) && config.enableRecoveryIfCollapsed) {
-            recoverParticles();
-            diagnostics.recovered = true;
-            normaliseWeights();
-        }
-
-        FusedPose fusedPose = buildFusedPose(coordinateConverter);
-        List<Particle> snapshot = deepCopyParticles();
-
-        if (config.debugLogging) {
-            Log.d(TAG,
-                    "PF step: alive=" + diagnostics.aliveParticles + "/" + diagnostics.totalParticles
-                            + " wallRejected=" + diagnostics.wallRejectedCount
-                            + " floorRejected=" + diagnostics.floorRejectedCount
-                            + " obsWeighted=" + diagnostics.observationWeightedCount
-                            + " ess=" + diagnostics.effectiveSampleSize
-                            + " resampled=" + diagnostics.resampled
-                            + " recovered=" + diagnostics.recovered);
-        }
-
-        return new StepResult(fusedPose, diagnostics, snapshot);
-    }
-
-    /**
-     * Prediction step in local x/y.
-     *
-     * x = east-west local metres
-     * y = north-south local metres
-     *
-     * headingRad convention:
-     * 0 = north, +pi/2 = east
-     */
-    private void predictParticles(@NonNull MotionInput motionInput) {
-        for (Particle p : particles) {
-            if (!p.alive) {
-                continue;
-            }
-
-            p.prevX = p.x;
-            p.prevY = p.y;
-            p.prevHeadingRad = p.headingRad;
-            p.prevFloor = p.floor;
-
-            double noisyHeading = wrapAngleRad(
-                    p.headingRad
-                            + motionInput.deltaHeadingRad
-                            + gaussian(0.0, config.headingNoiseStdRad)
-            );
-
-            double noisyForward = motionInput.deltaForwardMeters
-                    + gaussian(0.0, config.forwardNoiseStdMeters);
-
-            double dNorth = noisyForward * Math.cos(noisyHeading);
-            double dEast = noisyForward * Math.sin(noisyHeading);
-
-            p.x += dEast;
-            p.y += dNorth;
-            p.headingRad = noisyHeading;
-
-            if (motionInput.heightChanged && Math.abs(motionInput.deltaHeightMeters) > 1.2) {
-                int floorDelta = motionInput.deltaHeightMeters > 0 ? 1 : -1;
-                p.floor = p.floor + floorDelta;
-            }
-        }
-    }
-
-    /**
-     * Apply map constraints as hard feasibility vetoes only.
-     *
-     * No continuous weighting.
-     * No walkable penalties.
-     * No map likelihood shaping.
-     */
-    private void enforceConstraintsVeto(@NonNull StepDiagnostics diagnostics) {
-        if (constraintModel == null || !config.enableMapConstraints) {
             return;
         }
 
-        for (Particle p : particles) {
-            if (!p.alive) {
-                continue;
-            }
+        double weightSum = 0.0;
 
-            int wallFloor = p.prevFloor;
-            if (constraintModel.crossesWall(p.prevX, p.prevY, p.x, p.y, wallFloor)) {
-                diagnostics.wallRejectedCount++;
-
-                // Reject the illegal translation but keep the heading update.
-                p.x = p.prevX;
-                p.y = p.prevY;
-            }
-
-            if (p.floor != p.prevFloor) {
-                boolean allowed = constraintModel.isFloorTransitionAllowed(
-                        p.x,
-                        p.y,
-                        p.prevFloor,
-                        p.floor
-                );
-
-                if (!allowed) {
-                    diagnostics.floorRejectedCount++;
-                    p.floor = p.prevFloor;
-                }
-            }
-        }
-    }
-
-    /**
-     * Apply absolute observation weighting in local x/y.
-     */
-    private void applyAbsoluteObservation(@NonNull AbsoluteObservation obs,
-                                          @NonNull StepDiagnostics diagnostics) {
-        double cappedConfidence = capObservationConfidence(obs.source, obs.confidence);
-
-        for (Particle p : particles) {
-            if (!p.alive) {
-                continue;
-            }
-
+        for (Particle particle : particles) {
             double w = 1.0;
 
-            if (obs.x != null && obs.y != null) {
-                double dx = p.x - obs.x;
-                double dy = p.y - obs.y;
-                double distance = Math.hypot(dx, dy);
 
-                double sigma = Math.max(0.5, obs.horizontalSigmaMeters);
-                w *= gaussianPdf(distance, 0.0, sigma);
+            // Wi-Fi position likelihood
+
+            if (observation.getWifiX() != null && observation.getWifiY() != null) {
+                double dx = particle.x - observation.getWifiX();
+                double dy = particle.y - observation.getWifiY();
+
+                // Gaussian likelihood based on local planar distance.
+                w *= gaussian2D(dx, dy, sigmaWifi);
+
+                // Penalise particles that disagree with Wi-Fi floor estimate.
+                if (observation.getWifiFloor() != null
+                        && particle.floor != observation.getWifiFloor()) {
+                    w *= 0.50;
+                }
             }
 
-            if (obs.floor != null && p.floor != obs.floor) {
-                w *= 0.25;
+
+            // GNSS position likelihood
+
+            if (observation.getGnssX() != null && observation.getGnssY() != null) {
+                double dx = particle.x - observation.getGnssX();
+                double dy = particle.y - observation.getGnssY();
+                w *= gaussian2D(dx, dy, sigmaGnss);
             }
 
-            if (obs.headingRad != null) {
-                double err = smallestAngleDiffRad(p.headingRad, obs.headingRad);
-                double sigma = Math.max(Math.toRadians(5.0), obs.headingSigmaRad);
-                w *= gaussianPdf(err, 0.0, sigma);
+
+            // Discrete wall-crossing penalty
+
+            if (constraintContext != null && constraintContext.isUsable()) {
+                double stepMeters = Math.hypot(particle.x - particle.prevX, particle.y - particle.prevY);
+                if (stepMeters >= MIN_STEP_FOR_WALL_CHECK_METERS) {
+                    LatLng prevLatLng = constraintContext.coordinateConverter.localToLatLng(
+                            particle.prevX,
+                            particle.prevY
+                    );
+                    LatLng currentLatLng = constraintContext.coordinateConverter.localToLatLng(
+                            particle.x,
+                            particle.y
+                    );
+
+                    if (MapGeometryUtils.crossesWall(
+                            prevLatLng,
+                            currentLatLng,
+                            constraintContext.sourceFloorShapes)) {
+                        w *= constraintContext.wallCrossPenalty;
+                    }
+                }
             }
 
-            double blended = (1.0 - cappedConfidence) + cappedConfidence * w;
-            p.weight *= Math.max(config.minimumWeightFloor, blended);
-            diagnostics.observationWeightedCount++;
+            particle.weight = w;
+            weightSum += w;
+        }
+
+        normaliseWeights(weightSum);
+
+        lastNeff = effectiveSampleSize();
+        lastResampled = false;
+
+        // Resample if too few particles carry meaningful weight.
+        if (lastNeff < particleCount * resampleRatio) {
+            systematicResample();
+            regularizeParticles();
+            lastResampled = true;
         }
     }
 
-    private double capObservationConfidence(@NonNull String source, double confidence) {
-        double capped = clamp01(confidence);
+    /**
+     * Computes the current fused pose estimate from the weighted particle set.
+     *
+     * <p>Position is the weighted mean of x and y.
+     * Heading is the circular weighted mean of theta.
+     * Floor is the weighted average rounded to nearest integer.
+     *
+     * @param converter converts local x/y back into LatLng
+     * @return fused pose estimate
+     */
+    public FusedPose estimate(CoordinateConverter converter) {
+        if (particles.isEmpty()) {
+            return null;
+        }
 
-        if ("wifi".equals(source)) {
-            return Math.min(capped, 0.08);
+        double x = 0.0;
+        double y = 0.0;
+        double weightedFloor = 0.0;
+        double sinSum = 0.0;
+        double cosSum = 0.0;
+
+        for (Particle particle : particles) {
+            x += particle.x * particle.weight;
+            y += particle.y * particle.weight;
+            weightedFloor += particle.floor * particle.weight;
+            sinSum += Math.sin(particle.theta) * particle.weight;
+            cosSum += Math.cos(particle.theta) * particle.weight;
         }
-        if ("gnss".equals(source)) {
-            return Math.min(capped, 0.08);
-        }
-        if ("map_match".equals(source)) {
-            return Math.min(capped, 0.85);
-        }
-        return capped;
+
+        double theta = Math.atan2(sinSum, cosSum);
+        int floor = (int) Math.round(weightedFloor);
+
+        // Use N_eff as a simple confidence proxy.
+        float confidence = (float) Math.min(1.0, lastNeff / particleCount);
+
+        return new FusedPose(
+                x,
+                y,
+                theta,
+                floor,
+                converter.localToLatLng(x, y),
+                confidence
+        );
     }
 
-    private void enforceWeightFloor() {
-        for (Particle p : particles) {
-            if (!p.alive) {
-                p.weight = 0.0;
-            } else {
-                p.weight = Math.max(config.minimumWeightFloor, p.weight);
-            }
+    /**
+     * Computes effective sample size.
+     *
+     * <p>A lower value means more degeneracy, i.e. fewer particles dominate
+     * the total weight distribution.
+     */
+    public double effectiveSampleSize() {
+        double sumSquares = 0.0;
+        for (Particle particle : particles) {
+            sumSquares += particle.weight * particle.weight;
         }
+        return 1.0 / Math.max(sumSquares, 1e-12);
     }
 
-    private double totalWeight() {
-        double sum = 0.0;
-        for (Particle p : particles) {
-            sum += p.weight;
-        }
-        return sum;
+    public double getLastNeff() {
+        return lastNeff;
     }
 
-    private void normaliseWeights() {
-        double sum = totalWeight();
-        if (sum <= 0.0) {
-            double equal = 1.0 / Math.max(1, particles.size());
-            for (Particle p : particles) {
-                p.weight = p.alive ? equal : 0.0;
-            }
-            return;
-        }
+    private static final double ALIVE_WEIGHT_EPS = 1e-6;
 
-        for (Particle p : particles) {
-            p.weight /= sum;
-        }
+    public int getParticleCount() {
+        return particleCount;
     }
 
-    private int countAliveParticles() {
+    public int getAliveParticleCount() {
         int alive = 0;
-        for (Particle p : particles) {
-            if (p.alive) {
+        for (Particle particle : particles) {
+            if (particle.weight > ALIVE_WEIGHT_EPS) {
                 alive++;
             }
         }
         return alive;
     }
 
-    private double computeEffectiveSampleSize() {
-        double sumSq = 0.0;
-        for (Particle p : particles) {
-            sumSq += p.weight * p.weight;
-        }
-        if (sumSq <= 0.0) {
-            return 0.0;
-        }
-        return 1.0 / sumSq;
+    public int getDeadParticleCount() {
+        return Math.max(0, particles.size() - getAliveParticleCount());
     }
 
-    private boolean shouldResample(double ess) {
-        return ess < (config.particleCount * config.resampleEffectiveSampleSizeRatio);
+    public boolean wasResampledLastStep() {
+        return lastResampled;
     }
 
     /**
-     * Standard systematic resampling in local x/y.
+     * Gaussian likelihood in local 2D position space.
+     *
+     * <p>This is used for Wi-Fi and GNSS weighting.
+     */
+    private double gaussian2D(double dx, double dy, double sigma) {
+        double d2 = dx * dx + dy * dy;
+        double s2 = sigma * sigma;
+
+        if (s2 < 1e-12) {
+            return 1.0;
+        }
+
+        return Math.exp(-0.5 * d2 / s2);
+    }
+
+    /**
+     * Normalises particle weights so they sum to 1.
+     *
+     * <p>If all weights collapse numerically, recover by assigning uniform
+     * weights instead of producing NaNs.
+     */
+    private void normaliseWeights(double weightSum) {
+        if (weightSum < 1e-12) {
+            double uniformWeight = 1.0 / particleCount;
+            for (Particle particle : particles) {
+                particle.weight = uniformWeight;
+            }
+            return;
+        }
+
+        for (Particle particle : particles) {
+            particle.weight /= weightSum;
+        }
+    }
+
+    /**
+     * Adds a small amount of random jitter after resampling.
+     *
+     * <p>This prevents the particle set from collapsing into too many exact
+     * copies of the same hypothesis.
+     */
+    private void regularizeParticles() {
+        for (Particle particle : particles) {
+            particle.x += rng.nextGaussian() * sigmaRegPos;
+            particle.y += rng.nextGaussian() * sigmaRegPos;
+            particle.theta = wrapAngle(particle.theta + rng.nextGaussian() * sigmaRegTheta);
+        }
+    }
+
+    /**
+     * Systematic resampling.
+     *
+     * <p>This produces a new particle set according to the current weights,
+     * then resets all copied particles to equal weight.
      */
     private void systematicResample() {
-        List<Particle> newParticles = new ArrayList<>(particles.size());
+        List<Particle> resampled = new ArrayList<>(particleCount);
+        double[] cdf = new double[particleCount];
 
-        double step = 1.0 / particles.size();
-        double u = random.nextDouble() * step;
-
-        double[] cumulative = new double[particles.size()];
-        double running = 0.0;
-        for (int i = 0; i < particles.size(); i++) {
-            running += particles.get(i).weight;
-            cumulative[i] = running;
+        cdf[0] = particles.get(0).weight;
+        for (int i = 1; i < particleCount; i++) {
+            cdf[i] = cdf[i - 1] + particles.get(i).weight;
         }
 
-        int index = 0;
-        for (int m = 0; m < particles.size(); m++) {
-            double threshold = u + m * step;
-            while (index < cumulative.length - 1 && cumulative[index] < threshold) {
-                index++;
+        double step = 1.0 / particleCount;
+        double u0 = rng.nextDouble() * step;
+        int cdfIndex = 0;
+
+        for (int i = 0; i < particleCount; i++) {
+            double threshold = u0 + i * step;
+
+            while (cdfIndex < particleCount - 1 && cdf[cdfIndex] < threshold) {
+                cdfIndex++;
             }
 
-            Particle copy = particles.get(index).copy();
-            copy.weight = 1.0 / particles.size();
-            copy.alive = true;
-
-            if (config.resampleRegularizationPosStdMeters > 0.0) {
-                copy.x += gaussian(0.0, config.resampleRegularizationPosStdMeters);
-                copy.y += gaussian(0.0, config.resampleRegularizationPosStdMeters);
-            }
-
-            if (config.resampleRegularizationHeadingStdRad > 0.0) {
-                copy.headingRad = wrapAngleRad(
-                        copy.headingRad + gaussian(0.0, config.resampleRegularizationHeadingStdRad)
-                );
-            }
-
-            newParticles.add(copy);
+            Particle copy = particles.get(cdfIndex).copy();
+            copy.weight = 1.0 / particleCount;
+            resampled.add(copy);
         }
 
         particles.clear();
-        particles.addAll(newParticles);
+        particles.addAll(resampled);
+    }
+
+    /** Wraps angle to [-pi, pi]. */
+    private double wrapAngle(double angle) {
+        while (angle > Math.PI) {
+            angle -= 2.0 * Math.PI;
+        }
+        while (angle < -Math.PI) {
+            angle += 2.0 * Math.PI;
+        }
+        return angle;
     }
 
     /**
-     * Local-only recovery around the best particle.
-     *
-     * This keeps the recovery logic simple and avoids map-driven teleporting.
+     * Lightweight container for discrete map-constraint data.
      */
-    private void recoverParticles() {
-        Particle seed = findBestParticle();
+    public static final class ConstraintContext {
+        final CoordinateConverter coordinateConverter;
+        final FloorplanApiClient.FloorShapes sourceFloorShapes;
+        final double wallCrossPenalty;
 
-        double centerX = 0.0;
-        double centerY = 0.0;
-        int floor = 0;
-        double heading = 0.0;
-
-        if (seed != null) {
-            centerX = seed.x;
-            centerY = seed.y;
-            floor = seed.floor;
-            heading = seed.headingRad;
+        public ConstraintContext(CoordinateConverter coordinateConverter,
+                                 FloorplanApiClient.FloorShapes sourceFloorShapes,
+                                 double wallCrossPenalty) {
+            this.coordinateConverter = coordinateConverter;
+            this.sourceFloorShapes = sourceFloorShapes;
+            this.wallCrossPenalty = wallCrossPenalty;
         }
 
-        particles.clear();
-
-        for (int i = 0; i < config.particleCount; i++) {
-            particles.add(new Particle(
-                    centerX + gaussian(0.0, config.recoveryPositionStdMeters),
-                    centerY + gaussian(0.0, config.recoveryPositionStdMeters),
-                    wrapAngleRad(heading + gaussian(0.0, config.recoveryHeadingStdRad)),
-                    floor,
-                    1.0 / config.particleCount
-            ));
-        }
-    }
-
-    @Nullable
-    private Particle findBestParticle() {
-        Particle best = null;
-        double bestWeight = -1.0;
-        for (Particle p : particles) {
-            if (p.weight > bestWeight) {
-                bestWeight = p.weight;
-                best = p;
-            }
-        }
-        return best;
-    }
-
-    /**
-     * Build fused pose from weighted mean in local x/y.
-     */
-    @NonNull
-    private FusedPose buildFusedPose(@NonNull CoordinateConverter converter) {
-        double x = 0.0;
-        double y = 0.0;
-        double cosSum = 0.0;
-        double sinSum = 0.0;
-
-        List<Integer> floors = new ArrayList<>();
-        List<Double> floorWeights = new ArrayList<>();
-
-        double weightSum = 0.0;
-
-        for (Particle p : particles) {
-            if (!p.alive || p.weight <= 0.0) {
-                continue;
-            }
-
-            x += p.x * p.weight;
-            y += p.y * p.weight;
-            cosSum += Math.cos(p.headingRad) * p.weight;
-            sinSum += Math.sin(p.headingRad) * p.weight;
-
-            floors.add(p.floor);
-            floorWeights.add(p.weight);
-            weightSum += p.weight;
-        }
-
-        if (weightSum <= 0.0) {
-            return new FusedPose(
-                    0.0,
-                    0.0,
-                    0.0,
-                    0,
-                    converter.localToLatLng(0.0, 0.0),
-                    0.0f
-            );
-        }
-
-        x /= weightSum;
-        y /= weightSum;
-
-        int fusedFloor = weightedModeFloor(floors, floorWeights);
-        double fusedHeading = Math.atan2(sinSum, cosSum);
-        float confidence = (float) computeConfidence();
-
-        LatLng fusedLatLng = converter.localToLatLng(x, y);
-
-        return new FusedPose(
-                x,
-                y,
-                fusedHeading,
-                fusedFloor,
-                fusedLatLng,
-                confidence
-        );
-    }
-
-    private int weightedModeFloor(@NonNull List<Integer> floors,
-                                  @NonNull List<Double> weights) {
-        if (floors.isEmpty()) {
-            return 0;
-        }
-
-        Map<Integer, Double> accumulated = new HashMap<>();
-        for (int i = 0; i < floors.size(); i++) {
-            int floor = floors.get(i);
-            double weight = weights.get(i);
-            accumulated.put(floor, accumulated.getOrDefault(floor, 0.0) + weight);
-        }
-
-        int bestFloor = floors.get(0);
-        double bestWeight = -1.0;
-        for (Map.Entry<Integer, Double> entry : accumulated.entrySet()) {
-            if (entry.getValue() > bestWeight) {
-                bestWeight = entry.getValue();
-                bestFloor = entry.getKey();
-            }
-        }
-        return bestFloor;
-    }
-
-    /**
-     * Simple confidence metric:
-     * higher when ESS is high and alive particle count is healthy.
-     */
-    private double computeConfidence() {
-        double ess = computeEffectiveSampleSize();
-        double essRatio = ess / Math.max(1.0, config.particleCount);
-        double aliveRatio = countAliveParticles() / (double) Math.max(1, config.particleCount);
-        return clamp01(0.5 * essRatio + 0.5 * aliveRatio);
-    }
-
-    @NonNull
-    public List<Particle> getParticlesSnapshot() {
-        return deepCopyParticles();
-    }
-
-    @NonNull
-    private List<Particle> deepCopyParticles() {
-        List<Particle> copy = new ArrayList<>(particles.size());
-        for (Particle p : particles) {
-            copy.add(p.copy());
-        }
-        return copy;
-    }
-
-    private double gaussian(double mean, double std) {
-        return mean + random.nextGaussian() * std;
-    }
-
-    private static double gaussianPdf(double x, double mean, double std) {
-        double sigma = Math.max(1e-6, std);
-        double z = (x - mean) / sigma;
-        return Math.exp(-0.5 * z * z);
-    }
-
-    private static double wrapAngleRad(double a) {
-        while (a > Math.PI) a -= 2.0 * Math.PI;
-        while (a < -Math.PI) a += 2.0 * Math.PI;
-        return a;
-    }
-
-    private static double smallestAngleDiffRad(double a, double b) {
-        return wrapAngleRad(a - b);
-    }
-
-    private static double clamp01(double x) {
-        return Math.max(0.0, Math.min(1.0, x));
-    }
-
-    private void log(@NonNull String message) {
-        if (config.debugLogging) {
-            Log.d(TAG, message);
+        boolean isUsable() {
+            return coordinateConverter != null
+                    && sourceFloorShapes != null
+                    && wallCrossPenalty >= 0.0;
         }
     }
 }

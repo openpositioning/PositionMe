@@ -32,6 +32,8 @@ public class FloorController {
     private static final float AUTO_FLOOR_VERTICAL_FRACTION_PER_FLOOR = 0.55f;
     private static final long INITIAL_FLOOR_WIFI_STABLE_MS = 1500L;
     private static final int INITIAL_FLOOR_WIFI_REQUIRED_SAMPLES = 3;
+    private static final long INITIAL_FLOOR_BOOTSTRAP_TIMEOUT_MS = 5000L;
+    private long autoFloorStartMs = 0L;
 
     public interface Host {
         @Nullable FloorplanApiClient.BuildingInfo getSelectedFloorplanBuilding();
@@ -290,16 +292,14 @@ public class FloorController {
         if (autoFloorHandler == null) {
             autoFloorHandler = new Handler(Looper.getMainLooper());
         }
+
         lastCandidateFloor = Integer.MIN_VALUE;
         lastCandidateTime = 0L;
         resetInitialFloorBootstrapState();
+        autoFloorStartMs = SystemClock.elapsedRealtime();
 
-        // If WiFi bootstrap is not available yet, use the current visible floor as the
-        // starting baseline so barometer/elevator logic can still work.
-        if (!initialFloorResolved) {
-            initialFloorResolved = true;
-            syncAutoFloorAnchor();
-        }
+        // Seed elevation baseline only.
+        syncAutoFloorAnchor();
 
         applyImmediateFloor();
 
@@ -313,6 +313,13 @@ public class FloorController {
             }
         };
         autoFloorHandler.post(autoFloorTask);
+    }
+
+    private boolean shouldForceBootstrapFallback() {
+        if (initialFloorResolved || autoFloorStartMs <= 0L) {
+            return false;
+        }
+        return SystemClock.elapsedRealtime() - autoFloorStartMs >= INITIAL_FLOOR_BOOTSTRAP_TIMEOUT_MS;
     }
 
     public void applyImmediateFloor() {
@@ -334,6 +341,14 @@ public class FloorController {
                 lastCandidateTime = SystemClock.elapsedRealtime();
                 return;
             }
+
+            if (!shouldForceBootstrapFallback()) {
+                return;
+            }
+
+            Log.d(TAG, "Initial floor bootstrap timed out; using current visible floor as fallback baseline.");
+            initialFloorResolved = true;
+            syncAutoFloorAnchor();
         }
 
         Integer candidateFloorIndex = resolveAutoFloorCandidateIndex(sensorFusion, indoorMapManager);
@@ -392,6 +407,14 @@ public class FloorController {
                 lastCandidateTime = SystemClock.elapsedRealtime();
                 return;
             }
+
+            if (!shouldForceBootstrapFallback()) {
+                return;
+            }
+
+            Log.d(TAG, "Initial floor bootstrap timed out during evaluation; using current visible floor as fallback baseline.");
+            initialFloorResolved = true;
+            syncAutoFloorAnchor();
         }
 
         Integer candidateFloorIndex = resolveAutoFloorCandidateIndex(sensorFusion, indoorMapManager);

@@ -1,111 +1,65 @@
 package com.openpositioning.PositionMe.fusion;
 
 /**
- * Shared configuration bundle for the live particle filter.
+ * Immutable parameter bundle for the particle filter.
  *
- * Keep this as the single PF config definition used by:
- * - ParticleFilterEngine
- * - ParticleFilterManager
- *
- * Units:
- * - distances in metres
+ * <p>All values here are already converted into internal units:
+ * - distances in meters
  * - angles in radians
- *
- * This cleaned version removes parameters that only existed to tune
- * continuous map-based trajectory shaping.
  */
 public class ParticleFilterConfig {
 
-    // Core PF parameters loaded from settings
-
     /** Number of particles in the filter. */
-    public int particleCount;
+    public final int particleCount;
 
     /** Standard deviation of translational prediction noise (m). */
-    public double forwardNoiseStdMeters;
+    public final double sigmaStep;
 
     /** Standard deviation of heading prediction noise (rad). */
-    public double headingNoiseStdRad;
+    public final double sigmaThetaRad;
 
-    /** Wi-Fi observation spread (m). */
-    public double observationSigmaWifiMeters;
+    /** Wi-Fi likelihood spread (m). */
+    public final double sigmaWifi;
 
-    /** GNSS observation spread (m). */
-    public double observationSigmaGnssMeters;
+    /** GNSS likelihood spread (m). */
+    public final double sigmaGnss;
 
     /** Initial position spread around the startup pose (m). */
-    public double initialPositionStdMeters;
+    public final double initPosStd;
 
     /** Initial heading spread around the startup heading (rad). */
-    public double initialHeadingStdRad;
+    public final double initHeadingStdRad;
 
     /** Resampling threshold as a ratio of particle count. */
-    public double resampleEffectiveSampleSizeRatio;
+    public final double resampleRatio;
 
     /** Position jitter added after resampling (m). */
-    public double resampleRegularizationPosStdMeters;
+    public final double sigmaRegPos;
 
     /** Heading jitter added after resampling (rad). */
-    public double resampleRegularizationHeadingStdRad;
+    public final double sigmaRegThetaRad;
 
-    // Constraint behaviour
-
-    /** Enable wall / floor-transition veto logic. */
-    public boolean enableMapConstraints = true;
-
-    // Observation blending
-
-    /** Enable Wi-Fi / GNSS / map-match weighting. */
-    public boolean enableAbsoluteObservationWeighting = true;
-
-    /** Minimum non-zero weight floor for alive particles. */
-    public double minimumWeightFloor = 1e-12;
-
-    // Recovery behaviour
-
-    /**
-     * Allow recovery reseeding if the cloud collapses.
-     *
-     * In the cleaned configuration this is disabled by default, because
-     * teleport-like recovery can reintroduce visible snapping.
-     */
-    public boolean enableRecoveryIfCollapsed = false;
-
-    /** Position spread used when reseeding recovered particles (m). */
-    public double recoveryPositionStdMeters = 0.75;
-
-    /** Heading spread used when reseeding recovered particles (rad). */
-    public double recoveryHeadingStdRad = Math.toRadians(8.0);
-
-    // Logging
-
-    /** Enable PF debug logging. */
-    public boolean debugLogging = true;
-
-    /**
-     * Constructor for the user-tunable settings fields.
-     */
     public ParticleFilterConfig(
             int particleCount,
-            double forwardNoiseStdMeters,
-            double headingNoiseStdRad,
-            double observationSigmaWifiMeters,
-            double observationSigmaGnssMeters,
-            double initialPositionStdMeters,
-            double initialHeadingStdRad,
-            double resampleEffectiveSampleSizeRatio,
-            double resampleRegularizationPosStdMeters,
-            double resampleRegularizationHeadingStdRad
+            double sigmaStep,
+            double sigmaThetaRad,
+            double sigmaWifi,
+            double sigmaGnss,
+            double initPosStd,
+            double initHeadingStdRad,
+            double resampleRatio,
+            double sigmaRegPos,
+            double sigmaRegThetaRad
     ) {
         this.particleCount = particleCount;
-        this.forwardNoiseStdMeters = forwardNoiseStdMeters;
-        this.headingNoiseStdRad = headingNoiseStdRad;
-        this.observationSigmaWifiMeters = observationSigmaWifiMeters;
-        this.observationSigmaGnssMeters = observationSigmaGnssMeters;
-        this.initialPositionStdMeters = initialPositionStdMeters;
-        this.initialHeadingStdRad = initialHeadingStdRad;
-        this.resampleEffectiveSampleSizeRatio = resampleEffectiveSampleSizeRatio;
-        this.resampleRegularizationPosStdMeters = resampleRegularizationPosStdMeters;
-        this.resampleRegularizationHeadingStdRad = resampleRegularizationHeadingStdRad;
+        this.sigmaStep = sigmaStep;
+        this.sigmaThetaRad = sigmaThetaRad;
+        this.sigmaWifi = sigmaWifi;
+        this.sigmaGnss = sigmaGnss;
+        this.initPosStd = initPosStd;
+        this.initHeadingStdRad = initHeadingStdRad;
+        this.resampleRatio = resampleRatio;
+        this.sigmaRegPos = sigmaRegPos;
+        this.sigmaRegThetaRad = sigmaRegThetaRad;
     }
 }

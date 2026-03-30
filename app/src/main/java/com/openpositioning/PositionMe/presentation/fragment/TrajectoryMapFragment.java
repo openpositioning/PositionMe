@@ -51,6 +51,9 @@ public class TrajectoryMapFragment extends Fragment {
 
     private static final String TAG = "TrajectoryMapFragment";
     private static final String TEST_LOG_TAG = "MAP_MATCH_TEST";
+
+    private static final long AUTO_FLOOR_DEBOUNCE_MS = 3000L;
+    private static final long AUTO_FLOOR_CHECK_INTERVAL_MS = 1000L;
     private static final String CALIBRATION_PREFS_NAME = "actual_map_calibration";
     private static final float CALIBRATION_SHIFT_STEP = 0.005f;
     private static final float CALIBRATION_SCALE_STEP = 0.005f;
@@ -88,6 +91,14 @@ public class TrajectoryMapFragment extends Fragment {
     // Overlay calibration state
     private final List<GroundOverlay> realMapOverlays = new ArrayList<>();
     private String calibrationTargetBuildingKey = "";
+
+    // Auto-floor helper state
+    private Handler autoFloorHandler;
+    private Runnable autoFloorTask;
+    private int lastCandidateFloor = Integer.MIN_VALUE;
+    private long lastCandidateTime = 0L;
+    private int latestCandidateLogicalFloor = Integer.MIN_VALUE;
+    private long lastAutoFloorLogTime = 0L;
 
     // UI references
     private Spinner switchMapSpinner;
@@ -476,6 +487,46 @@ public class TrajectoryMapFragment extends Fragment {
         }
         applyTrajectoryColorButtonState();
 
+        if (autoFloorSwitch != null) {
+            autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
+                if (isChecked) {
+                    startAutoFloor();
+                } else {
+                    stopAutoFloor();
+                }
+            });
+        }
+
+        if (floorUpButton != null) {
+            floorUpButton.setOnClickListener(v -> {
+                if (isAutoFloorEnabled()) {
+                    Log.d(TAG, "AUTO_FLOOR ignored manual floor-up because AutoFloor owns display floor.");
+                    return;
+                }
+                if (selectedFloorplanBuilding != null) {
+                    int nextFloorIndex = getAdjacentFloorIndex(selectedFloorplanBuilding, currentFloorIndex, true);
+                    if (nextFloorIndex != currentFloorIndex) {
+                        setFloor(nextFloorIndex);
+                    }
+                }
+            });
+        }
+
+        if (floorDownButton != null) {
+            floorDownButton.setOnClickListener(v -> {
+                if (isAutoFloorEnabled()) {
+                    Log.d(TAG, "AUTO_FLOOR ignored manual floor-down because AutoFloor owns display floor.");
+                    return;
+                }
+                if (selectedFloorplanBuilding != null) {
+                    int nextFloorIndex = getAdjacentFloorIndex(selectedFloorplanBuilding, currentFloorIndex, false);
+                    if (nextFloorIndex != currentFloorIndex) {
+                        setFloor(nextFloorIndex);
+                    }
+                }
+            });
+        }
+
         if (btnFindIndoorMap != null) {
             btnFindIndoorMap.setOnClickListener(v -> {
                 if (selectedFloorplanBuilding == null) {
@@ -558,10 +609,7 @@ public class TrajectoryMapFragment extends Fragment {
         mapMatchingCoordinator.onReplayModeChanged(enabled);
 
         if (enabled) {
-            floorController.stopAutoFloor();
-            if (autoFloorSwitch != null && autoFloorSwitch.isChecked()){
-                autoFloorSwitch.setChecked(false);
-            }
+            stopAutoFloor();
         }
 
         syncReplayUiState();
@@ -673,15 +721,19 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     public void clearMapAndReset() {
+        stopAutoFloor();
+
         if (autoFloorSwitch != null) {
             autoFloorSwitch.setChecked(false);
         }
-        floorController.stopAutoFloor();
 
         mapMatchingCoordinator.resetMapMatchingState();
         trajectoryRenderer.clearAll();
 
         currentLocation = null;
+        latestCandidateLogicalFloor = Integer.MIN_VALUE;
+        lastCandidateFloor = Integer.MIN_VALUE;
+        lastCandidateTime = 0L;
 
         for (Polygon p : floorplanPolygons) {
             p.remove();
@@ -702,10 +754,6 @@ public class TrajectoryMapFragment extends Fragment {
 
         resetMapOverlays();
 
-        if(sensorFusion != null){
-            sensorFusion.setParticleFilterMatchedPose(null);
-        }
-
         if (indoorMapManager != null) {
             indoorMapManager.clearIndoorMap();
         }
@@ -714,12 +762,18 @@ public class TrajectoryMapFragment extends Fragment {
             selectedVenueText.setText("Tap a blue building outline to select a building");
         }
 
+        calibrationTargetBuildingKey = "";
+        updateCalibrationUi();
+        updateActualMapButtonState();
+        updateAutoFloorAvailability();
+
         if (indoorLoadingIndicator != null) {
             indoorLoadingIndicator.setVisibility(View.GONE);
         }
 
         setFloorControlsVisibility(View.GONE);
-        updateAutoFloorAvailability();
+        syncReplayUiState();
+        refreshDebugStatusText();
     }
 
     // Map / building lifecycle
@@ -731,8 +785,6 @@ public class TrajectoryMapFragment extends Fragment {
         map.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
         indoorMapManager = new IndoorMapManager(map);
-        //Wire the live indoor map manager into SensorFusion
-        sensorFusion.setParticleFilterIndoorMapManager(indoorMapManager);
 
         map.setOnPolygonClickListener(polygon -> {
             FloorplanApiClient.BuildingInfo building = polygonToBuilding.get(polygon);
@@ -1084,12 +1136,116 @@ public class TrajectoryMapFragment extends Fragment {
         if (!enabled && autoFloorSwitch.isChecked()) {
             autoFloorSwitch.setChecked(false);
         }
-
-        autoFloorSwitch.setVisibility(View.VISIBLE);
     }
 
     private void syncReplayUiState() {
         updateAutoFloorAvailability();
+    }
+
+    private int getCurrentVisibleLogicalFloor() {
+        if (selectedFloorplanBuilding == null) {
+            return 0;
+        }
+        if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
+            return indoorMapManager.indexToLogicalFloor(currentFloorIndex);
+        }
+        return currentFloorIndex;
+    }
+
+    private int resolveCandidateLogicalFloor() {
+        Integer candidateIndex = floorController.peekTrackingFloorCandidateIndex();
+        if (candidateIndex != null) {
+            if (indoorMapManager != null && indoorMapManager.getIsIndoorMapSet()) {
+                return indoorMapManager.indexToLogicalFloor(candidateIndex);
+            }
+            return candidateIndex;
+        }
+        return getCurrentVisibleLogicalFloor();
+    }
+
+    private String describeCandidateFloorSource() {
+        return "FloorControllerTracking";
+    }
+
+    private void startAutoFloor() {
+        lastCandidateFloor = Integer.MIN_VALUE;
+        lastCandidateTime = 0L;
+        latestCandidateLogicalFloor = Integer.MIN_VALUE;
+        floorController.startAutoFloor();
+        Log.d(TAG, String.format(Locale.US,
+                "AUTO_FLOOR delegated start visibleLogical=%d building=%s",
+                getCurrentVisibleLogicalFloor(),
+                selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : "null"));
+    }
+
+    private void applyImmediateFloor() {
+        floorController.applyImmediateFloor();
+        if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
+            Log.d(TAG, "AUTO_FLOOR applyImmediate skipped: map not ready");
+            return;
+        }
+        int candidateFloor = resolveCandidateLogicalFloor();
+        latestCandidateLogicalFloor = candidateFloor;
+        lastCandidateFloor = candidateFloor;
+        lastCandidateTime = SystemClock.elapsedRealtime();
+        logAutoFloorState("applyImmediate", candidateFloor, describeCandidateFloorSource());
+    }
+
+    private void stopAutoFloor() {
+        floorController.stopAutoFloor();
+        Log.d(TAG, String.format(Locale.US,
+                "AUTO_FLOOR delegated stop visibleLogical=%d lastCandidate=%d latestCandidate=%d",
+                getCurrentVisibleLogicalFloor(), lastCandidateFloor, latestCandidateLogicalFloor));
+        lastCandidateFloor = Integer.MIN_VALUE;
+        lastCandidateTime = 0L;
+        latestCandidateLogicalFloor = Integer.MIN_VALUE;
+    }
+
+    private void evaluateAutoFloor() {
+        floorController.evaluateAutoFloor();
+        if (sensorFusion == null || indoorMapManager == null || !indoorMapManager.getIsIndoorMapSet()) {
+            Log.d(TAG, "AUTO_FLOOR evaluate skipped: map not ready");
+            return;
+        }
+
+        int candidateFloor = resolveCandidateLogicalFloor();
+        String source = describeCandidateFloorSource();
+        latestCandidateLogicalFloor = candidateFloor;
+
+        long now = SystemClock.elapsedRealtime();
+        if (candidateFloor != lastCandidateFloor) {
+            logAutoFloorState("candidate_changed", candidateFloor, source);
+            lastCandidateFloor = candidateFloor;
+            lastCandidateTime = now;
+            return;
+        }
+
+        if (now - lastCandidateTime >= AUTO_FLOOR_DEBOUNCE_MS) {
+            logAutoFloorState("candidate_stable", candidateFloor, source);
+            lastCandidateTime = now;
+        } else {
+            logAutoFloorState("candidate_waiting", candidateFloor, source);
+        }
+    }
+
+    private void logAutoFloorState(@NonNull String phase, int candidateFloor, @NonNull String source) {
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastAutoFloorLogTime < 0L) {
+            return;
+        }
+        lastAutoFloorLogTime = now;
+
+        Log.d(TAG, String.format(Locale.US,
+                "AUTO_FLOOR phase=%s source=%s candidate=%d visible=%d latestCandidate=%d lastCandidate=%d elapsedSinceCandidate=%d building=%s indoorVisible=%s",
+                phase,
+                source,
+                candidateFloor,
+                getCurrentVisibleLogicalFloor(),
+                latestCandidateLogicalFloor,
+                lastCandidateFloor,
+                lastCandidateTime == 0 ? -1 : (now - lastCandidateTime),
+                selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : "null",
+                String.valueOf(indoorMapVisible)));
     }
 
     // UI helpers
@@ -1132,26 +1288,32 @@ public class TrajectoryMapFragment extends Fragment {
             return;
         }
 
-        String building = selectedFloorplanBuilding != null ? selectedFloorplanBuilding.getName() : "none";
-        String particleSummary = sensorFusion != null
-                ? sensorFusion.getParticleFilterDebugSummary()
-                : "pf=unavailable";
+        String engine = (sensorFusion != null && sensorFusion.isParticleFilterTrajectoryMode())
+                ? "PF"
+                : "PDR";
 
-        String autoFloorSummary = floorController.getAutoFloorDebugSummary();
+        String pfSummary = sensorFusion != null
+                ? sensorFusion.getParticleFilterDebugSummary()
+                : "Particles: unavailable";
+
+        String mapMatchingSummary = mapMatchingCoordinator.getLatestDebugStatus();
+
+        int wifiFloor = sensorFusion != null ? sensorFusion.getWifiFloor() : -1;
+        boolean wifiAvailable = sensorFusion != null && sensorFusion.getLatLngWifiPositioning() != null;
 
         debugStatusText.setText(String.format(
                 Locale.US,
-                "mode=%s\nbuilding=%s\nfloorIndex=%d\nindoorVisible=%s\nactualVisible=%s\nreplay=%s\nlocation=%s\n%s\n%s",
-                sensorFusion != null && sensorFusion.isParticleFilterTrajectoryMode() ? "PF" : "PDR",
-                building,
+                "Engine: %s\n" +
+                        "Display floor: %d\n" +
+                        "WiFi: %s | floor: %d\n" +
+                        "%s\n" +
+                        "%s",
+                engine,
                 currentFloorIndex,
-                String.valueOf(indoorMapVisible),
-                String.valueOf(actualMapVisible),
-                String.valueOf(replayModeEnabled),
-                currentLocation == null ? "null"
-                        : String.format(Locale.US, "%.6f, %.6f", currentLocation.latitude, currentLocation.longitude),
-                particleSummary,
-                autoFloorSummary
+                wifiAvailable ? "yes" : "no",
+                wifiFloor,
+                pfSummary,
+                mapMatchingSummary
         ));
     }
 

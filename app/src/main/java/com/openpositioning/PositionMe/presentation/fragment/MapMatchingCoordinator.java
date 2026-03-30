@@ -249,10 +249,6 @@ final class MapMatchingCoordinator {
                 replayMode ? "replay_map_state" : "map_matched"
         );
 
-        if (!replayMode && sensorFusion != null) {
-            sensorFusion.setParticleFilterMatchedPose(previousMatchedPose);
-        }
-
         if (replayMode) {
             applyReplayDisplayFloorIfNeeded(floorForState);
         }
@@ -352,14 +348,16 @@ final class MapMatchingCoordinator {
             }
         }
 
-        LatLng gnssObservation = getGnssObservation(sensorFusion);
-        if (isUsableObservation(gnssObservation)) {
-            double rawDistanceMeters = distanceMeters(rawLocation, gnssObservation);
-            if (rawDistanceMeters <= MAX_OBSERVATION_RESIDUAL_METERS) {
-                double blendRatio = previousMatchedPose == null ? 0.40 : GNSS_BLEND_RATIO;
-                double maxPullMeters = previousMatchedPose == null ? GNSS_MAX_PULL_METERS * 1.5 : GNSS_MAX_PULL_METERS;
-                LatLng blended = blendTowardObservation(rawLocation, gnssObservation, blendRatio, maxPullMeters);
-                return new AbsoluteObservationCorrection(blended, "live_gnss_fused", "gnss", rawDistanceMeters);
+        if (!isIndoorContextActive()) {
+            LatLng gnssObservation = getGnssObservation(sensorFusion);
+            if (isUsableObservation(gnssObservation)) {
+                double rawDistanceMeters = distanceMeters(rawLocation, gnssObservation);
+                if (rawDistanceMeters <= MAX_OBSERVATION_RESIDUAL_METERS) {
+                    double blendRatio = previousMatchedPose == null ? 0.25 : 0.10;
+                    double maxPullMeters = previousMatchedPose == null ? 4.0 : 2.0;
+                    LatLng blended = blendTowardObservation(rawLocation, gnssObservation, blendRatio, maxPullMeters);
+                    return new AbsoluteObservationCorrection(blended, "live_gnss_fused", "gnss", rawDistanceMeters);
+                }
             }
         }
 
@@ -707,6 +705,11 @@ final class MapMatchingCoordinator {
                 result.getDebugReason()));
     }
 
+    private boolean isIndoorContextActive() {
+        return host.getSelectedFloorplanBuilding() != null
+                && host.getIndoorMapManager() != null;
+    }
+
 
     @NonNull
     private String defaultDebugStatus() {
@@ -725,35 +728,28 @@ final class MapMatchingCoordinator {
                                     int matchedFloor,
                                     @Nullable VerticalTransitionHint verticalHint,
                                     @NonNull MapMatchingResult result) {
-        String absoluteValue = absoluteSource == null ? "none" : absoluteSource;
-        String poseValue = poseSource == null ? "unknown" : poseSource;
-        String verticalValue = (verticalHint != null && verticalHint.isHeightChanged()) ? "changed" : "steady";
-        double deltaHeight = verticalHint != null ? verticalHint.getDeltaHeight() : 0d;
         String correctionName = result.getCorrectionType() != null
                 ? result.getCorrectionType().name()
                 : CorrectionType.NONE.name();
-        String reason = result.getDebugReason() != null ? result.getDebugReason().trim() : "Waiting for updates";
-        if (reason.isEmpty()) {
-            reason = "Waiting for updates";
-        }
-        if (reason.length() > 80) {
-            reason = reason.substring(0, 80) + "…";
-        }
-        return String.format(Locale.US,
-                "abs:%s  src:%s\n"
-                        + "floor d/c/m: %d/%d/%d\n"
-                        + "vertical: %s Δ%.2fm\n"
-                        + "correction: %s\n"
-                        + "%s",
-                absoluteValue,
-                poseValue,
+
+        String wifiSource = absoluteSource == null ? "none" : absoluteSource;
+
+        return String.format(
+                Locale.US,
+                "WiFi src: %s\n" +
+                        "MM: %s\n" +
+                        "wall=%s stairs=%s lift=%s allow=%s\n" +
+                        "floor d/pf/mm: %d/%d/%d",
+                wifiSource,
+                correctionName,
+                String.valueOf(result.isCrossedWall()),
+                String.valueOf(result.isNearStairs()),
+                String.valueOf(result.isNearLift()),
+                String.valueOf(result.isFloorChangeAllowed()),
                 displayFloorIndex,
                 candidateFloorIndex,
-                matchedFloor,
-                verticalValue,
-                deltaHeight,
-                correctionName,
-                reason);
+                matchedFloor
+        );
     }
     private static final class AbsoluteObservationCorrection {
         @NonNull

@@ -23,10 +23,7 @@ import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
 import com.openpositioning.PositionMe.fusion.FusedPose;
 import com.openpositioning.PositionMe.fusion.ParticleFilterManager;
-import com.openpositioning.PositionMe.mapmatching.CandidatePose;
-import com.openpositioning.PositionMe.presentation.activity.MainActivity;
 import com.openpositioning.PositionMe.service.SensorCollectionService;
-import com.openpositioning.PositionMe.utils.IndoorMapManager;
 import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.utils.TrajectoryValidator;
@@ -90,13 +87,6 @@ public class SensorFusion implements SensorEventListener {
 
     @Nullable
     private FusedPose latestParticleFilterPose;
-
-    @Nullable
-    private FusedPose latestRawParticleFilterPose;
-    @Nullable
-    private CandidatePose particleFilterMatchedPose;
-    @Nullable
-    private IndoorMapManager particleFilterIndoorMapManager;
 
     // Movement sensors
     private MovementSensor accelerometerSensor;
@@ -187,32 +177,21 @@ public class SensorFusion implements SensorEventListener {
         this.wifiPositionManager = new WifiPositionManager(wiFiPositioning, recorder);
 
         // Particle filter manager
-        this.particleFilterManager = new ParticleFilterManager(
-                this,
-                new ParticleFilterManager.Host() {
-                    @Override
-                    public void onFusedPoseUpdated(@NonNull FusedPose fusedPose) {
-                        latestParticleFilterPose = fusedPose;
-                    }
-                }
-        );
+        this.particleFilterManager = new ParticleFilterManager(this, context);
         this.particleFilterManager.setEnabled(isParticleFilterTrajectoryMode());
 
-        if (particleFilterIndoorMapManager != null) {
-            this.particleFilterManager.setIndoorMapManager(particleFilterIndoorMapManager);
-        }
         this.adaptiveQsmfiHeadingCalibrator = new AdaptiveQsmfiHeadingCalibrator();
 
         // Event handler
         long bootTime = SystemClock.uptimeMillis();
         this.eventHandler = new SensorEventHandler(
+                this,
                 state,
                 pdrProcessing,
                 pathView,
                 recorder,
                 particleFilterManager,
                 adaptiveQsmfiHeadingCalibrator,
-                this,
                 bootTime
         );
 
@@ -250,23 +229,18 @@ public class SensorFusion implements SensorEventListener {
             );
         }
     }
-
-    public void setUseAdaptiveQsmfiHeading(boolean enabled) {
+    public void setAdaptiveHeadingCalibratorEnabled(boolean enabled) {
         this.useAdaptiveQsmfiHeading = enabled;
 
         if (adaptiveQsmfiHeadingCalibrator != null) {
             adaptiveQsmfiHeadingCalibrator.reset();
         }
 
-        Log.d(TAG, "useAdaptiveQsmfiHeading = " + enabled);
+        Log.d(TAG, "adaptiveHeadingCalibratorEnabled = " + enabled);
     }
 
-    public boolean isUseAdaptiveQsmfiHeading() {
-        return useAdaptiveQsmfiHeading;
-    }
-
-    public void setAdaptiveHeadingEnabled(boolean enabled) {
-        setUseAdaptiveQsmfiHeading(enabled);
+    public void setUseAdaptiveQsmfiHeading(boolean enabled) {
+        setAdaptiveHeadingCalibratorEnabled(enabled);
     }
 
     public boolean isAdaptiveHeadingEnabled() {
@@ -299,64 +273,21 @@ public class SensorFusion implements SensorEventListener {
         }
 
         particleFilterManager.step();
-
-        // Keep cached copies here so fragments can query SensorFusion directly.
         latestParticleFilterPose = particleFilterManager.getLatestFusedPose();
-        latestRawParticleFilterPose = particleFilterManager.getLatestRawPose();
     }
 
-    /**
-     * Wires the current indoor map manager into SensorFusion so the PF can access
-     * walkability / wall / floor-transition constraints.
-     */
-    public void setParticleFilterIndoorMapManager(@Nullable IndoorMapManager indoorMapManager) {
-        this.particleFilterIndoorMapManager = indoorMapManager;
-
-        if (particleFilterManager != null) {
-            particleFilterManager.setIndoorMapManager(indoorMapManager);
-        }
-    }
-
-    /**
-     * Stores the latest accepted map-matched pose for the particle filter.
-     * This is written by MapMatchingCoordinator and consumed by ParticleFilterManager.
-     */
-    public void setParticleFilterMatchedPose(@Nullable CandidatePose matchedPose) {
-        this.particleFilterMatchedPose = matchedPose;
-
-        if (particleFilterManager != null) {
-            particleFilterManager.setLatestMatchedPose(matchedPose);
-        }
-    }
-
-    /**
-     * Returns the indoor map manager currently used by the particle filter.
-     */
-    @Nullable
-    public IndoorMapManager getParticleFilterIndoorMapManager() {
-        return particleFilterIndoorMapManager;
-    }
-
-    /**
-     * Returns the latest map-matched pose that should be used as a strong PF observation.
-     */
-    @Nullable
-    public CandidatePose getParticleFilterMatchedPose() {
-        return particleFilterMatchedPose;
-    }
 
     /**
      * Resets the particle filter for a new recording session.
      */
     public void resetParticleFilterForRecording() {
-        particleFilterMatchedPose = null;
-
         if (particleFilterManager != null) {
             particleFilterManager.reset();
         }
         latestParticleFilterPose = null;
-        latestRawParticleFilterPose = null;
     }
+
+
 
     /**
      * Returns the latest fused PF pose.
@@ -377,24 +308,6 @@ public class SensorFusion implements SensorEventListener {
         return latestParticleFilterPose;
     }
 
-    /**
-     * Returns the latest raw PF pose.
-     */
-    @Nullable
-    public FusedPose getLatestRawFusedPose() {
-        if (!isParticleFilterTrajectoryMode()) {
-            return null;
-        }
-
-        if (particleFilterManager != null) {
-            FusedPose rawPose = particleFilterManager.getLatestRawPose();
-            if (rawPose != null) {
-                latestRawParticleFilterPose = rawPose;
-            }
-        }
-
-        return latestRawParticleFilterPose;
-    }
 
     /**
      * Allows PF-related classes to push the latest fused pose back into SensorFusion.
@@ -403,12 +316,6 @@ public class SensorFusion implements SensorEventListener {
         this.latestParticleFilterPose = fusedPose;
     }
 
-    /**
-     * Allows PF-related classes to push the latest raw PF pose back into SensorFusion.
-     */
-    public void setLatestRawFusedPose(@Nullable FusedPose rawPose) {
-        this.latestRawParticleFilterPose = rawPose;
-    }
 
     // SensorEventListener
     @Override
@@ -520,8 +427,6 @@ public class SensorFusion implements SensorEventListener {
         eventHandler.resetBootTime(recorder.getBootTime());
 
         latestParticleFilterPose = null;
-        latestRawParticleFilterPose = null;
-        particleFilterMatchedPose = null;
 
         if (adaptiveQsmfiHeadingCalibrator != null) {
             adaptiveQsmfiHeadingCalibrator.reset();
@@ -545,8 +450,6 @@ public class SensorFusion implements SensorEventListener {
         recorder.stopRecording();
 
         latestParticleFilterPose = null;
-        latestRawParticleFilterPose = null;
-        particleFilterMatchedPose = null;
 
         if (particleFilterManager != null) {
             particleFilterManager.reset();
@@ -579,7 +482,6 @@ public class SensorFusion implements SensorEventListener {
             if (!enableParticleFilter) {
                 particleFilterManager.reset();
                 latestParticleFilterPose = null;
-                latestRawParticleFilterPose = null;
             }
         }
     }
@@ -689,6 +591,23 @@ public class SensorFusion implements SensorEventListener {
         return latLong;
     }
 
+    public boolean isUseAdaptiveQsmfiHeading() {
+        return useAdaptiveQsmfiHeading;
+    }
+
+    public void setAdaptiveHeadingEnabled(boolean enabled) {
+        setAdaptiveHeadingCalibratorEnabled(enabled);
+    }
+
+    public float getSelectedHeadingRad() {
+        if (useAdaptiveQsmfiHeading
+                && adaptiveQsmfiHeadingCalibrator != null
+                && adaptiveQsmfiHeadingCalibrator.isInitialised()) {
+            return adaptiveQsmfiHeadingCalibrator.getFusedHeadingRad();
+        }
+        return state.orientation[0];
+    }
+
     /**
      * Sets the recording start GNSS anchor.
      * @param startPosition contains the initial autonomous anchor chosen by the app
@@ -716,12 +635,7 @@ public class SensorFusion implements SensorEventListener {
      * Returns current device heading in radians.
      */
     public float passOrientation() {
-        if (useAdaptiveQsmfiHeading
-                && adaptiveQsmfiHeadingCalibrator != null
-                && adaptiveQsmfiHeadingCalibrator.isInitialised()) {
-            return adaptiveQsmfiHeadingCalibrator.getFusedHeadingRad();
-        }
-        return state.orientation[0];
+        return getSelectedHeadingRad();
     }
 
     /**
@@ -769,7 +683,8 @@ public class SensorFusion implements SensorEventListener {
     }
 
     public boolean shouldDrawLatestParticleFilterPose() {
-        return particleFilterManager != null && particleFilterManager.shouldDrawLatestPose();
+        return particleFilterManager != null
+                && particleFilterManager.getLatestFusedPose() != null;
     }
 
     public int getHoldMode() {

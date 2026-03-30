@@ -6,8 +6,6 @@ import android.hardware.SensorManager;
 import android.os.SystemClock;
 import android.util.Log;
 
-import androidx.annotation.NonNull;
-
 import com.openpositioning.PositionMe.fusion.AdaptiveQsmfiHeadingCalibrator;
 import com.openpositioning.PositionMe.fusion.FusedPose;
 import com.openpositioning.PositionMe.fusion.ParticleFilterManager;
@@ -29,10 +27,13 @@ public class SensorEventHandler {
 
     private static final float ALPHA = 0.8f;
 
+    private final SensorFusion sensorFusion;
     private final SensorState state;
     private final PdrProcessing pdrProcessing;
     private final PathView pathView;
     private final TrajectoryRecorder recorder;
+    private final ParticleFilterManager particleFilterManager;
+    private final AdaptiveQsmfiHeadingCalibrator adaptiveQsmfiHeadingCalibrator;
 
     // Timestamp tracking
     private final HashMap<Integer, Long> lastEventTimestamps = new HashMap<>();
@@ -43,51 +44,30 @@ public class SensorEventHandler {
     // Acceleration magnitude buffer between steps
     private final List<Double> accelMagnitude = new ArrayList<>();
 
-    private final ParticleFilterManager particleFilterManager;
-    private final AdaptiveQsmfiHeadingCalibrator adaptiveQsmfiHeadingCalibrator;
-    private final SensorFusion sensorFusion;
-
-    /**
-     * Creates a new SensorEventHandler.
-     *
-     * @param state         shared sensor state holder
-     * @param pdrProcessing PDR processor for step-length and position calculation
-     * @param pathView      path drawing view for trajectory visualisation
-     * @param recorder      trajectory recorder for checking recording state and writing PDR data
-     * @param bootTime      initial boot time offset
-     */
-    public SensorEventHandler(SensorState state,
+    public SensorEventHandler(SensorFusion sensorFusion,
+                              SensorState state,
                               PdrProcessing pdrProcessing,
                               PathView pathView,
                               TrajectoryRecorder recorder,
                               ParticleFilterManager particleFilterManager,
                               AdaptiveQsmfiHeadingCalibrator adaptiveQsmfiHeadingCalibrator,
-                              SensorFusion sensorFusion,
                               long bootTime) {
+        this.sensorFusion = sensorFusion;
         this.state = state;
         this.pdrProcessing = pdrProcessing;
         this.pathView = pathView;
         this.recorder = recorder;
         this.particleFilterManager = particleFilterManager;
         this.adaptiveQsmfiHeadingCalibrator = adaptiveQsmfiHeadingCalibrator;
-        this.sensorFusion = sensorFusion;
         this.bootTime = bootTime;
     }
 
     /**
      * Main dispatch method. Processes a sensor event and updates the shared {@link SensorState}.
-     *
-     * @param sensorEvent the sensor event to process
      */
     public void handleSensorEvent(SensorEvent sensorEvent) {
         long currentTime = System.currentTimeMillis();
         int sensorType = sensorEvent.sensor.getType();
-
-        Long lastTimestamp = lastEventTimestamps.get(sensorType);
-        if (lastTimestamp != null) {
-            long timeGap = currentTime - lastTimestamp;
-            // kept only for future debugging if needed
-        }
 
         lastEventTimestamps.put(sensorType, currentTime);
         eventCounts.put(sensorType, eventCounts.getOrDefault(sensorType, 0) + 1);
@@ -108,16 +88,22 @@ public class SensorEventHandler {
                                     state.pressure
                             )
                     );
+
+                    if (particleFilterManager != null && particleFilterManager.isEnabled()) {
+                        particleFilterManager.onVerticalContextSample(
+                                SystemClock.uptimeMillis(),
+                                state.elevation,
+                                state.elevator
+                        );
+                    }
                 }
                 break;
 
-            // NOTE: intentional fall-through from GYROSCOPE to LINEAR_ACCELERATION
-            // (existing behavior preserved during refactoring)
+            // Intentional fall-through from GYROSCOPE to LINEAR_ACCELERATION.
             case Sensor.TYPE_GYROSCOPE:
                 state.angularVelocity[0] = sensorEvent.values[0];
                 state.angularVelocity[1] = sensorEvent.values[1];
                 state.angularVelocity[2] = sensorEvent.values[2];
-
                 if (adaptiveQsmfiHeadingCalibrator != null) {
                     adaptiveQsmfiHeadingCalibrator.onGyro(
                             sensorEvent.values[2],
@@ -137,17 +123,13 @@ public class SensorEventHandler {
                 );
                 this.accelMagnitude.add(accelMagFiltered);
 
-                state.elevator = pdrProcessing.estimateElevator(
-                        state.gravity,
-                        state.filteredAcc
-                );
+                state.elevator = pdrProcessing.estimateElevator(state.gravity, state.filteredAcc);
                 break;
 
             case Sensor.TYPE_GRAVITY:
                 state.gravity[0] = sensorEvent.values[0];
                 state.gravity[1] = sensorEvent.values[1];
                 state.gravity[2] = sensorEvent.values[2];
-
                 if (adaptiveQsmfiHeadingCalibrator != null) {
                     adaptiveQsmfiHeadingCalibrator.onGravity(
                             sensorEvent.values[0],
@@ -155,11 +137,7 @@ public class SensorEventHandler {
                             sensorEvent.values[2]
                     );
                 }
-
-                state.elevator = pdrProcessing.estimateElevator(
-                        state.gravity,
-                        state.filteredAcc
-                );
+                state.elevator = pdrProcessing.estimateElevator(state.gravity, state.filteredAcc);
                 break;
 
             case Sensor.TYPE_LIGHT:
@@ -174,7 +152,6 @@ public class SensorEventHandler {
                 state.magneticField[0] = sensorEvent.values[0];
                 state.magneticField[1] = sensorEvent.values[1];
                 state.magneticField[2] = sensorEvent.values[2];
-
                 if (adaptiveQsmfiHeadingCalibrator != null) {
                     adaptiveQsmfiHeadingCalibrator.onMagneticField(
                             sensorEvent.values[0],
@@ -195,11 +172,9 @@ public class SensorEventHandler {
             case Sensor.TYPE_STEP_DETECTOR:
                 long stepTime = SystemClock.uptimeMillis() - bootTime;
 
-                // Debounce very closely spaced step-detector events.
                 if (currentTime - lastStepTime < 20) {
-                    Log.e("SensorFusion",
-                            "Ignoring step event, too soon after last step event:"
-                                    + (currentTime - lastStepTime) + " ms");
+                    Log.e("SensorFusion", "Ignoring step event, too soon after last step event:"
+                            + (currentTime - lastStepTime) + " ms");
                     break;
                 }
 
@@ -211,27 +186,19 @@ public class SensorEventHandler {
                                     + "This can cause updatePdr(...) to fail or return bad results.");
                 } else {
                     Log.d("SensorFusion",
-                            "stepDetection triggered, accelMagnitude size = "
-                                    + accelMagnitude.size());
+                            "stepDetection triggered, accelMagnitude size = " + accelMagnitude.size());
                 }
 
-                float headingForPdr;
-                if (sensorFusion != null
-                        && sensorFusion.isUseAdaptiveQsmfiHeading()
-                        && adaptiveQsmfiHeadingCalibrator != null
-                        && adaptiveQsmfiHeadingCalibrator.isInitialised()) {
-                    headingForPdr = adaptiveQsmfiHeadingCalibrator.getFusedHeadingRad();
-                } else {
-                    headingForPdr = state.orientation[0];
-                }
+                // Use the session-selected heading source.
+                // The adaptive calibrator may still keep updating internally even when disabled,
+                // but PDR/PF prediction only consumes it when the toggle is ON.
+                float headingForPdr = sensorFusion.getSelectedHeadingRad();
 
                 float[] newCords = this.pdrProcessing.updatePdr(
                         stepTime,
                         this.accelMagnitude,
                         headingForPdr
                 );
-
-                // Acceleration samples have now been consumed for this step.
                 this.accelMagnitude.clear();
 
                 if (adaptiveQsmfiHeadingCalibrator != null) {
@@ -239,40 +206,22 @@ public class SensorEventHandler {
                 }
 
                 if (particleFilterManager != null && particleFilterManager.isEnabled()) {
-                    Log.d("SensorFusion", String.format(
-                            "PF_STEP_TRIGGER stepTimeMs=%d rawPdrX=%.3f rawPdrY=%.3f headingDeg=%.2f",
-                            stepTime,
-                            newCords[0],
-                            newCords[1],
-                            Math.toDegrees(state.orientation[0])
-                    ));
-
                     particleFilterManager.step();
                 }
 
                 if (recorder.isRecording()) {
-                    /*
-                     * Important:
-                     * Raw PDR is always updated first, even in PF mode.
-                     * The particle filter uses that raw step motion as its prediction input.
-                     *
-                     * After PF stepping:
-                     * - PDR mode stores/draws raw local PDR
-                     * - PF mode stores/draws PF fused local trajectory
-                     */
+                    float[] pointToStoreAndDraw = newCords;
 
-                    if (particleFilterManager != null
-                            && particleFilterManager.isEnabled()
-                            && !particleFilterManager.shouldDrawLatestPose()) {
-                        Log.d("SensorFusion",
-                                "Skipping PF local trajectory append: no meaningful movement");
-                        break;
+                    if (particleFilterManager != null && particleFilterManager.isEnabled()) {
+                        FusedPose fusedPose = particleFilterManager.getLatestFusedPose();
+                        if (fusedPose != null) {
+                            pointToStoreAndDraw = new float[]{
+                                    (float) fusedPose.getXMeters(),
+                                    (float) fusedPose.getYMeters()
+                            };
+                        }
                     }
 
-                    float[] pointToStoreAndDraw = resolveTrajectoryPointForCurrentMode(newCords);
-
-                    // Draw exactly the same trajectory point that will be saved,
-                    // so the live local path view stays consistent with the recording payload.
                     this.pathView.drawTrajectory(pointToStoreAndDraw);
                     state.stepCounter++;
 
@@ -281,57 +230,12 @@ public class SensorEventHandler {
                             pointToStoreAndDraw[0],
                             pointToStoreAndDraw[1]
                     );
-
-                    if (particleFilterManager != null && particleFilterManager.isEnabled()) {
-                        FusedPose fusedPose = particleFilterManager.getLatestFusedPose();
-                        if (fusedPose != null) {
-                            Log.d("SensorFusion",
-                                    "Recorded PF trajectory point from fused pose x="
-                                            + fusedPose.getXMeters()
-                                            + " y=" + fusedPose.getYMeters()
-                                            + " floor=" + fusedPose.getFloor()
-                                            + " conf=" + fusedPose.getConfidence());
-                        }
-                    }
                 }
                 break;
-
-            default:
-                break;
         }
     }
 
-    /**
-     * Returns the point that should be drawn and recorded for the current positioning mode.
-     *
-     * Behaviour:
-     * - PDR mode: return raw PDR coordinates directly
-     * - PF mode: return the latest fused PF local metres directly
-     * - PF not ready yet: fall back to raw PDR
-     */
-    @NonNull
-    private float[] resolveTrajectoryPointForCurrentMode(@NonNull float[] rawPdrPoint) {
-        if (particleFilterManager == null || !particleFilterManager.isEnabled()) {
-            return rawPdrPoint;
-        }
-
-        FusedPose fusedPose = particleFilterManager.getLatestFusedPose();
-        if (fusedPose == null) {
-            Log.d("SensorFusion",
-                    "PF mode enabled but fused pose not ready yet, using raw PDR point.");
-            return rawPdrPoint;
-        }
-
-        return new float[]{
-                (float) fusedPose.getXMeters(),
-                (float) fusedPose.getYMeters()
-        };
-    }
-
-    /**
-     * Utility function to log the event frequency of each sensor.
-     * Call this periodically for debugging purposes.
-     */
+    /** Utility function to log the event frequency of each sensor. */
     public void logSensorFrequencies() {
         for (int sensorType : eventCounts.keySet()) {
             Log.d("SensorFusion", "Sensor " + sensorType
@@ -341,8 +245,6 @@ public class SensorEventHandler {
 
     /**
      * Resets the boot time offset. Called when a new recording starts.
-     *
-     * @param newBootTime the new boot time offset from {@link SystemClock#uptimeMillis()}
      */
     void resetBootTime(long newBootTime) {
         this.bootTime = newBootTime;

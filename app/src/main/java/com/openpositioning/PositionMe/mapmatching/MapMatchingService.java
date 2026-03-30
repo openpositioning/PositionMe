@@ -27,15 +27,15 @@ public class MapMatchingService {
     // 明显静止/微动时，直接冻结在上一帧匹配位置，优先于 small-step pass-through
     private static final double MAX_IDLE_FREEZE_STEP_METERS = 0.08;
     // 穿墙恢复后，单帧允许的最大“重新贴回”位移，避免轨迹瞬移
-    private static final double MAX_RECOVERY_STEP_METERS = 1.2;
+    private static final double MAX_RECOVERY_STEP_METERS = 0.6;
     // connector 区域附近略放宽，但仍然限制大跳
-    private static final double MAX_RECOVERY_STEP_NEAR_CONNECTOR_METERS = 2.0;
+    private static final double MAX_RECOVERY_STEP_NEAR_CONNECTOR_METERS = 1.0;
     // 合法换层时，对 stairs / lift 锚定的最大允许吸附距离
-    private static final double MAX_STAIRS_ANCHOR_METERS = 3.0;
-    private static final double MAX_LIFT_ANCHOR_METERS = 2.0;
+    private static final double MAX_STAIRS_ANCHOR_METERS = 1.0;
+    private static final double MAX_LIFT_ANCHOR_METERS = 1.0;
     // 切层成功时，把 XY 直接落到目标楼层 connector 内部，避免落在墙边再被轴向滑动。
-    private static final double MAX_STAIRS_LANDING_METERS = 6.5;
-    private static final double MAX_LIFT_LANDING_METERS = 4.5;
+    private static final double MAX_STAIRS_LANDING_METERS = 2.0;
+    private static final double MAX_LIFT_LANDING_METERS = 1.5;
     // 切层成功后的若干帧内，不要立刻把轨迹重新完全交回普通 wall solver；
     // 使用一个短暂的平滑释放窗口，把 landing 点自然过渡到后续轨迹。
     private static final int POST_TRANSITION_RELEASE_FRAMES = 3;

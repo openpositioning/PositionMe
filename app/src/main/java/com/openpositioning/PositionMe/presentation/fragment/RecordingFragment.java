@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -101,6 +102,9 @@ public class RecordingFragment extends Fragment {
     private static final long INITIAL_ANCHOR_STABLE_DURATION_MS = 1000L;
     private static final int INITIAL_ANCHOR_REQUIRED_SAMPLES = 3;
     private static final double INITIAL_ANCHOR_MAX_JUMP_METRES = 8.0;
+    private static final float LIVE_DRAW_MIN_PDR_DELTA_METERS = 0.03f;
+    private static final long LIVE_DRAW_STATIONARY_HOLD_MS = 800L;
+    private long lastLiveMovementUptimeMs = 0L;
 
     private enum InitialAnchorSource {
         WIFI,
@@ -382,6 +386,8 @@ public class RecordingFragment extends Fragment {
             return;
         }
 
+        boolean shouldAdvanceLiveTrajectory = shouldUpdateLiveTrajectory(pdrValues);
+
         // Capture previous raw PDR values before updating them.
         float prevX = previousPosX;
         float prevY = previousPosY;
@@ -405,23 +411,25 @@ public class RecordingFragment extends Fragment {
         if (sensorFusion.isParticleFilterTrajectoryMode()) {
             Log.d(TAG, String.format(
                     Locale.UK,
-                    "LIVE_MODE=PF pdr=(%.3f, %.3f) dist=%.3f elev=%.2f",
+                    "LIVE_MODE=PF pdr=(%.3f, %.3f) dist=%.3f elev=%.2f advance=%s",
                     pdrValues[0],
                     pdrValues[1],
                     distance,
-                    elevationVal
+                    elevationVal,
+                    String.valueOf(shouldAdvanceLiveTrajectory)
             ));
-            updateLiveMapWithParticleFilter(pdrValues);
+            updateLiveMapWithParticleFilter(pdrValues, shouldAdvanceLiveTrajectory);
         } else {
             Log.d(TAG, String.format(
                     Locale.UK,
-                    "LIVE_MODE=PDR pdr=(%.3f, %.3f) dist=%.3f elev=%.2f",
+                    "LIVE_MODE=PDR pdr=(%.3f, %.3f) dist=%.3f elev=%.2f advance=%s",
                     pdrValues[0],
                     pdrValues[1],
                     distance,
-                    elevationVal
+                    elevationVal,
+                    String.valueOf(shouldAdvanceLiveTrajectory)
             ));
-            updateLiveMapWithStandardPdr(pdrValues);
+            updateLiveMapWithStandardPdr(pdrValues, shouldAdvanceLiveTrajectory);
         }
 
         // WiFi overlay
@@ -470,7 +478,8 @@ public class RecordingFragment extends Fragment {
      * The local PDR path is anchored to the first valid autonomous WiFi/GNSS fix
      * captured at the start of recording.
      */
-    private void updateLiveMapWithStandardPdr(@Nullable float[] pdrValues) {
+    private void updateLiveMapWithStandardPdr(@Nullable float[] pdrValues,
+                                              boolean shouldAdvanceLiveTrajectory) {
         if (trajectoryMapFragment == null || pdrValues == null) {
             return;
         }
@@ -484,16 +493,22 @@ public class RecordingFragment extends Fragment {
 
         Log.d(TAG, String.format(
                 Locale.UK,
-                "PDR_BRANCH using anchored PDR lat=%.6f lon=%.6f headingDeg=%.2f",
+                "PDR_BRANCH using anchored PDR lat=%.6f lon=%.6f headingDeg=%.2f advance=%s",
                 currentPdrLocation.latitude,
                 currentPdrLocation.longitude,
-                Math.toDegrees(sensorFusion.passOrientation())
+                Math.toDegrees(sensorFusion.passOrientation()),
+                String.valueOf(shouldAdvanceLiveTrajectory)
         ));
 
-        trajectoryMapFragment.updateUserLocation(
-                currentPdrLocation,
-                (float) Math.toDegrees(sensorFusion.passOrientation())
-        );
+        if (shouldAdvanceLiveTrajectory || !initialCameraPositionSet) {
+            trajectoryMapFragment.updateUserLocation(
+                    currentPdrLocation,
+                    (float) Math.toDegrees(sensorFusion.passOrientation())
+            );
+        } else {
+            Log.d(TAG, "PDR_BRANCH stationary -> skipping live trajectory update");
+        }
+
         trajectoryMapFragment.updateDebugInfo(sensorFusion.passOrientation());
 
         if (!initialCameraPositionSet) {
@@ -510,7 +525,8 @@ public class RecordingFragment extends Fragment {
      * If fused pose is still unavailable, fall back to standard PDR
      * so the user still sees a trajectory immediately.
      */
-    private void updateLiveMapWithParticleFilter(@Nullable float[] pdrValues) {
+    private void updateLiveMapWithParticleFilter(@Nullable float[] pdrValues,
+                                                 boolean shouldAdvanceLiveTrajectory) {
         if (trajectoryMapFragment == null) {
             return;
         }
@@ -519,24 +535,29 @@ public class RecordingFragment extends Fragment {
 
         if (fusedPose == null) {
             Log.d(TAG, "PF fused pose not ready yet; falling back to standard PDR view.");
-            updateLiveMapWithStandardPdr(pdrValues);
+            updateLiveMapWithStandardPdr(pdrValues, shouldAdvanceLiveTrajectory);
             return;
         }
 
         Log.d(TAG,
                 "PF branch using fused pose: " + fusedPose.getLatLng()
                         + ", floor=" + fusedPose.getFloor()
-                        + ", confidence=" + fusedPose.getConfidence());
+                        + ", confidence=" + fusedPose.getConfidence()
+                        + ", advance=" + shouldAdvanceLiveTrajectory);
 
         if (!sensorFusion.shouldDrawLatestParticleFilterPose()) {
-            Log.d(TAG, "PF draw skipped: no meaningful movement");
+            Log.d(TAG, "PF draw skipped: no meaningful PF pose available");
             return;
         }
 
-        trajectoryMapFragment.updateUserLocation(
-                fusedPose.getLatLng(),
-                (float) Math.toDegrees(fusedPose.getHeadingRad())
-        );
+        if (shouldAdvanceLiveTrajectory || !initialCameraPositionSet) {
+            trajectoryMapFragment.updateUserLocation(
+                    fusedPose.getLatLng(),
+                    (float) Math.toDegrees(fusedPose.getHeadingRad())
+            );
+        } else {
+            Log.d(TAG, "PF_BRANCH stationary -> skipping live trajectory update");
+        }
 
         // Let map matching / floor controller own final display-floor decisions.
         if (!trajectoryMapFragment.isAutoFloorEnabled()) {
@@ -742,6 +763,31 @@ public class RecordingFragment extends Fragment {
             return false;
         }
         return !(Math.abs(latLng.latitude) < 1e-6 && Math.abs(latLng.longitude) < 1e-6);
+    }
+
+    private boolean hasMeaningfulRawPdrMovement(float[] pdrValues) {
+        if (pdrValues == null || pdrValues.length < 2) {
+            return false;
+        }
+
+        float dx = pdrValues[0] - previousPosX;
+        float dy = pdrValues[1] - previousPosY;
+        float delta = (float) Math.hypot(dx, dy);
+
+        return delta >= LIVE_DRAW_MIN_PDR_DELTA_METERS;
+    }
+
+    private boolean shouldUpdateLiveTrajectory(float[] pdrValues) {
+        long now = SystemClock.uptimeMillis();
+
+        if (hasMeaningfulRawPdrMovement(pdrValues)) {
+            lastLiveMovementUptimeMs = now;
+            return true;
+        }
+
+        // Allow a short grace window after the most recent real movement so the
+        // display can settle, but then freeze while stationary.
+        return (now - lastLiveMovementUptimeMs) <= LIVE_DRAW_STATIONARY_HOLD_MS;
     }
 
     /**

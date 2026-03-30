@@ -236,12 +236,14 @@ public class FloorplanApiClient {
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful() || responseBody == null) {
-                        String error = responseBody != null
-                                ? responseBody.string() : "Unknown error";
-                        Log.e(TAG, "Floorplan request error: "
-                                + response.code() + " " + error);
+                        String error = responseBody != null ? responseBody.string() : "Unknown error";
+                        String allow = response.header("Allow");
+                        Log.e(TAG, "Floorplan request error: code=" + response.code()
+                                + ", allow=" + allow
+                                + ", body=" + error);
                         postToMainThread(() ->
-                                callback.onFailure("Server error: " + response.code()));
+                                callback.onFailure("Server error: " + response.code()
+                                        + (allow != null ? " allow=" + allow : "")));
                         return;
                     }
 
