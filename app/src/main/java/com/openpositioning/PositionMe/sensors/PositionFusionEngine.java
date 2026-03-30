@@ -33,7 +33,7 @@ public class PositionFusionEngine {
     private static final double ROUGHEN_STD_M = 0.15;
     private static final double WIFI_SIGMA_M = 3.5;
     private static final double OUTLIER_GATE_SIGMA_MULT_GNSS = 2.8;
-    private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 5.0;
+    private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 6.0;
     private static final double OUTLIER_GATE_MIN_M = 6.0;
     private static final double MAX_OUTLIER_SIGMA_SCALE = 4.0;
     private static final double OUTPUT_SMOOTHING_ALPHA = 0.20;
