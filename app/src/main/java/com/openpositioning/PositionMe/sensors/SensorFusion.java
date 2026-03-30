@@ -587,7 +587,29 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                         // Predict particle motion
                         particleFilter.predict(dx, dy);
+
+                        float[] ekfPrev = ekfPositioning.getBestEstimate();
                         ekfPositioning.predict(dx, dy);
+
+// Wall-clamp the EKF position after each prediction step
+                        if (coordinateConverter != null
+                                && indoorMapManager != null
+                                && settings.getBoolean("use_wall_constraints", true)) {
+
+                            float[] ekfEst = ekfPositioning.getBestEstimate();
+                            float[] clamped = indoorMapManager.clampToWallEnu(ekfPrev, ekfEst);
+
+                            boolean wasClamped =
+                                    Math.abs(clamped[0] - ekfEst[0]) > 1e-4f ||
+                                            Math.abs(clamped[1] - ekfEst[1]) > 1e-4f;
+
+                            if (wasClamped) {
+                                ekfPositioning.resetAroundPosition(clamped[0], clamped[1], 2.0f);
+                                Log.d("SensorFusion", "EKF clamped to wall: ("
+                                        + clamped[0] + ", " + clamped[1] + ")");
+                            }
+                        }
+
                         float[] bestBefore = particleFilter.getBestEstimate();
                         Log.d("PFDebug", "Best BEFORE constraints: " +
                                 bestBefore[0] + ", " + bestBefore[1]);
@@ -607,14 +629,14 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 prevNorth[i] = prevParticles[i][1];
                             }
 
-                            indoorMapManager.applyWallConstraints(
-                                    prevEast,
-                                    prevNorth,
-                                    currEast,
-                                    currNorth,
-                                    liveWeights,
-                                    coordinateConverter
-                            );
+//                            indoorMapManager.applyWallConstraints(
+//                                    prevEast,
+//                                    prevNorth,
+//                                    currEast,
+//                                    currNorth,
+//                                    liveWeights,
+//                                    coordinateConverter
+//                            );
                             particleFilter.normalizeWeights();
 
                             Log.d("SensorFusion", "Applied wall constraints to particle cloud");

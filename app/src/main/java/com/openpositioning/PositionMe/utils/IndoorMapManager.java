@@ -197,6 +197,27 @@ public class IndoorMapManager {
         }
     }
 
+    /**
+     * Checks whether the movement from {@code fromEnu} to {@code toEnu} crosses any wall
+     * on the current floor. If it does, returns the last valid ENU position just before the
+     * wall (clamped via binary search). If no wall is crossed, returns {@code toEnu} unchanged.
+     *
+     * Call this after every EKF prediction step, before reading the new state.
+     *
+     * @param fromEnu float[]{east, north} — previous EKF position in metres
+     * @param toEnu   float[]{east, north} — new EKF position after predict()
+     * @return        clamped float[]{east, north}, or toEnu if no wall was crossed
+     */
+    public float[] clampToWallEnu(float[] fromEnu, float[] toEnu) {
+        if (currentVenue == null || currentFloorKey == null) return toEnu;
+        IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
+        if (floor == null || floor.wallPolygonsEnu.isEmpty()) return toEnu;
+
+        if (!crossesAnyWallEnu(fromEnu, toEnu, floor.wallPolygonsEnu)) return toEnu;
+
+        return snapToWallEnu(fromEnu, toEnu, floor.wallPolygonsEnu);
+    }
+
     private static final float INTERSECTION_EPSILON = 1e-6f;
     private static final float RING_CLOSURE_EPSILON = 1e-4f;
     private static final float WALL_SNAP_BACK_METERS = 0.05f;
@@ -1133,10 +1154,10 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
         Log.d("MapMatch", "usedLift=" + usedLift + ", usedStairs=" + usedStairs);
 
         /// commented out right now because location accuracy is bad so algo never detects that it is near stairs/lift
-//        if (!usedLift && !usedStairs) {
-//            Log.d("MapMatch", "Rejected floor change: not near stairs/lift in a plausible way");
-//            return currentFloorKey;
-//        }
+        if (!usedLift && !usedStairs) {
+            Log.d("MapMatch", "Rejected floor change: not near stairs/lift in a plausible way");
+            return currentFloorKey;
+        }
 
         if (nextFloorKey.equals(confirmedFloorKey)) {
             return currentFloorKey;
