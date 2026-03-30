@@ -783,11 +783,19 @@ private SwitchMaterial showPdrPathSwitch;
 //                    heightChange
 //            );
 
-            indoorMapManager.acceptFloorChange(
+            String newFloorKey = indoorMapManager.acceptFloorChange(
                     correctedLocation,
                     oldLocation,
-                    heightChange
-            );
+                    heightChange);
+            String currentFloorKey = indoorMapManager.getCurrentFloorKey();
+            if (newFloorKey != null && currentFloorKey != null
+                    && !newFloorKey.equals(currentFloorKey)) {
+                try {
+                    sensorFusion.onFloorChanged(Integer.parseInt(newFloorKey));
+                } catch (NumberFormatException e) {
+                    Log.w("TrajectoryMapFragment", "Non-numeric floor key: " + newFloorKey);
+                }
+            }
         }
 
         this.currentLocation = correctedLocation;

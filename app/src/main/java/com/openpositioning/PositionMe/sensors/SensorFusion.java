@@ -1308,6 +1308,21 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     /**
+     * Called when map matching confirms a floor change.
+     * Resets the particle cloud around the current best estimate with increased uncertainty,
+     * and updates the last known floor to stay in sync with barometer-based detection.
+     *
+     * @param newFloor integer floor number confirmed by map matching
+     */
+    public void onFloorChanged(int newFloor) {
+        float[] best = particleFilter.getBestEstimate();
+        particleFilter.resetAroundPosition(best[0], best[1], 8f);
+        ekfPositioning.resetAroundPosition(best[0], best[1], 8f);
+        lastKnownFloor = newFloor;
+        Log.i("SensorFusion", "Floor change confirmed by map matching → floor " + newFloor);
+    }
+
+    /**
      * Performs and matrix multiplication of two 3x3 matrices and returns the product.
      *
      * @param A An array representing a 3x3 matrix
