@@ -1719,7 +1719,8 @@ public class SensorFusion implements SensorEventListener, Observer {
         particleFilter = new ParticleFilter();
         ekfPositioning = new ExtendedKalmanFilter();
         useEKF = settings.getBoolean("use_ekf", false);
-//        coordinateConverter = null;
+        coordinateConverter = null;  // force fresh origin at actual recording position
+        enuBaked = false;
         lastGnssLatLon = null;
         lastWifiLatLon = null;
         lastPdrLatLon  = null;

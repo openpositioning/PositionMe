@@ -117,7 +117,7 @@ public class TrajectoryMapFragment extends Fragment {
     private static final float MIN_DOT_SPACING_METRES = 2.0f;
 
     /** Number of recent observations kept per source for colour-coded dots. */
-    private static final int MAX_OBSERVATION_MARKERS = 10;
+    private static final int MAX_OBSERVATION_MARKERS = 500;
 
 
     /** Default rolling-window size for observation dots. */
@@ -165,7 +165,7 @@ public class TrajectoryMapFragment extends Fragment {
 
     /** Current rolling-window size — updated when user changes the N input. */
 //    private int maxObservations = DEFAULT_MAX_OBSERVATIONS;
-    private final int maxObservations = 5;
+    private final int maxObservations = MAX_OBSERVATION_MARKERS;
 
     // Per-source visibility flags (all enabled by default)
     private boolean showGnssDots = true;
