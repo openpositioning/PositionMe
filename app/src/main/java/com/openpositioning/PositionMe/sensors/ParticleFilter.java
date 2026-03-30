@@ -252,6 +252,58 @@ public class ParticleFilter {
                 + "Estimate: (" + estimatedX + ", " + estimatedY + ") "
                 + "Best particle: (" + particles[maxIndex].x + ", " + particles[maxIndex].y + ") "
                 + "Max weight: " + maxWeight);
+
+        resample();
+    }
+
+    /**
+     * Systematic resampling of particles for weight degeneration solution (SIR)
+     */
+    private void resample() {
+        // Calculate effective sample size as 1 / sum of particle weights squared
+        float sumWeightsSquared = 0f;
+        for (int i = 0; i < Num_Particles; i++) {
+            sumWeightsSquared += particles[i].weight * particles[i].weight;
+        }
+        float N_eff = 1.0f / sumWeightsSquared;
+
+        // Early return if effective sample size >= set threshold
+        float threshold = Num_Particles / 2.0f;
+        if (N_eff >= threshold) {
+            Log.d("ParticleFilter", "Resampling skipped");
+            return;
+        }
+
+        // Build cumulative sum array from normalised weights
+        float[] cumulativeSum = new float[Num_Particles];
+        cumulativeSum[0] = particles[0].weight;
+        for (int i = 1; i < Num_Particles; i++) {
+            cumulativeSum[i] = cumulativeSum[i-1] + particles[i].weight;
+        }
+
+        // Set uniform staring point
+        float overN = 1.0f / Num_Particles;
+        float u1 = random.nextFloat() * overN;
+
+        Particle[] resampledParticles = new Particle[Num_Particles];
+        float uniformWeighting = overN;
+        int j = 0;
+
+        for (int i = 0; i < Num_Particles; i++) {
+            float u = u1 + i * overN;
+
+            while (j < Num_Particles - 1 && u > cumulativeSum[j]) {
+                j++;
+            }
+
+            resampledParticles[i] = new Particle(
+                    particles[j].x, particles[j].y, uniformWeighting);
+        }
+
+        // Replace particle array with resampled particles
+        System.arraycopy(resampledParticles, 0, particles, 0, Num_Particles);
+
+        Log.d("ParticleFilter", "Resampling complete: all weights reset to " + uniformWeighting);
     }
 
     /**
