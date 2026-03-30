@@ -80,11 +80,7 @@ final class MapMatchingCoordinator {
     private Integer replayBaseFloorIndex;
     private boolean replayDisplayFloorInitialized = false;
     @NonNull
-    private String latestDebugStatus = "abs:none  src:idle\n"
-            + "floor d/c/m: -/-/-\n"
-            + "vertical: steady Δ0.00m\n"
-            + "correction: NONE\n"
-            + "Waiting for updates";
+    private String latestDebugStatus = "MM: idle";
 
     MapMatchingCoordinator(@NonNull Host host) {
         this.host = host;
@@ -199,11 +195,23 @@ final class MapMatchingCoordinator {
                 activeBuildingId
         );
 
+//        MapMatchingResult matchingResult = mapMatchingService.match(matchingInput);
+//        LatLng matchedLocation = matchingResult.getCorrectedLatLng() != null
+//                ? matchingResult.getCorrectedLatLng()
+//                : rawLocation;
+//        int matchedFloor = matchingResult.getCorrectedFloor();
+//        int floorForState = replayMode
+//                ? resolveReplayDisplayFloor(matchedFloor)
+//                : matchedFloor;
+
         MapMatchingResult matchingResult = mapMatchingService.match(matchingInput);
-        LatLng matchedLocation = matchingResult.getCorrectedLatLng() != null
-                ? matchingResult.getCorrectedLatLng()
-                : rawLocation;
-        int matchedFloor = matchingResult.getCorrectedFloor();
+
+        // Map-matching correction OFF:
+        // keep computing matchingResult for debug only,
+        // but do not let it modify the displayed/live state.
+        LatLng matchedLocation = rawLocation;
+        int matchedFloor = candidateFloorIndex;
+
         int floorForState = replayMode
                 ? resolveReplayDisplayFloor(matchedFloor)
                 : matchedFloor;
@@ -229,14 +237,17 @@ final class MapMatchingCoordinator {
                         : CorrectionType.NONE.name(),
                 matchingResult.getDebugReason()));
 
-        latestDebugStatus = buildDebugStatus(
-                absoluteCorrection.getObservationSource(),
-                absoluteCorrection.getPoseSource(),
-                floorForState,
-                candidateFloorIndex,
-                matchedFloor,
-                verticalHint,
-                matchingResult
+        latestDebugStatus = String.format(
+                Locale.US,
+                "MM: %s\nwall=%s stairs=%s lift=%s allow=%s\nreason=%s",
+                matchingResult.getCorrectionType() != null
+                        ? matchingResult.getCorrectionType().name()
+                        : "NONE",
+                String.valueOf(matchingResult.isCrossedWall()),
+                String.valueOf(matchingResult.isNearStairs()),
+                String.valueOf(matchingResult.isNearLift()),
+                String.valueOf(matchingResult.isFloorChangeAllowed()),
+                matchingResult.getDebugReason() != null ? matchingResult.getDebugReason() : "none"
         );
 
         LatLng oldLocation = host.getCurrentLocation();
@@ -246,7 +257,7 @@ final class MapMatchingCoordinator {
                 matchedLocation,
                 floorForState,
                 timestampMs,
-                replayMode ? "replay_map_state" : "map_matched"
+                replayMode ? "replay_map_state" : "candidate_unmatched"
         );
 
         if (replayMode) {
@@ -736,16 +747,16 @@ final class MapMatchingCoordinator {
 
         return String.format(
                 Locale.US,
-                "WiFi src: %s\n" +
-                        "MM: %s\n" +
+                "MM: %s\n" +
                         "wall=%s stairs=%s lift=%s allow=%s\n" +
+                        "WiFi src: %s\n" +
                         "floor d/pf/mm: %d/%d/%d",
-                wifiSource,
                 correctionName,
                 String.valueOf(result.isCrossedWall()),
                 String.valueOf(result.isNearStairs()),
                 String.valueOf(result.isNearLift()),
                 String.valueOf(result.isFloorChangeAllowed()),
+                wifiSource,
                 displayFloorIndex,
                 candidateFloorIndex,
                 matchedFloor

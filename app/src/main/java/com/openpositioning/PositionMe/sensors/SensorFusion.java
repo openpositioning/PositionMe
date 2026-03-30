@@ -423,6 +423,19 @@ public class SensorFusion implements SensorEventListener {
      * Starts trajectory recording and foreground collection.
      */
     public void startRecording() {
+        // If the user corrected the start point in StartLocationFragment,
+        // use that corrected anchor as the recording/session start.
+        if (manualStartAnchorLatLng != null) {
+            setStartGNSSLatitude(new float[]{
+                    (float) manualStartAnchorLatLng.latitude,
+                    (float) manualStartAnchorLatLng.longitude
+            });
+
+            if (manualStartAnchorBuildingId != null && !manualStartAnchorBuildingId.isEmpty()) {
+                setSelectedBuildingId(manualStartAnchorBuildingId);
+            }
+        }
+
         recorder.startRecording(pdrProcessing);
         eventHandler.resetBootTime(recorder.getBootTime());
 
@@ -458,6 +471,48 @@ public class SensorFusion implements SensorEventListener {
         if (appContext != null) {
             SensorCollectionService.stop(appContext);
         }
+    }
+
+    @Nullable
+    private LatLng manualStartAnchorLatLng = null;
+
+    @Nullable
+    private Integer manualStartAnchorFloorIndex = null;
+
+    @Nullable
+    private String manualStartAnchorBuildingId = null;
+
+    public void setManualStartAnchor(@NonNull LatLng latLng,
+                                     @Nullable Integer floorIndex,
+                                     @Nullable String buildingId) {
+        this.manualStartAnchorLatLng = latLng;
+        this.manualStartAnchorFloorIndex = floorIndex;
+        this.manualStartAnchorBuildingId = buildingId;
+
+        if (buildingId != null && !buildingId.isEmpty()) {
+            setSelectedBuildingId(buildingId);
+        }
+    }
+
+    @Nullable
+    public LatLng getManualStartAnchorLatLng() {
+        return manualStartAnchorLatLng;
+    }
+
+    @Nullable
+    public Integer getManualStartAnchorFloorIndex() {
+        return manualStartAnchorFloorIndex;
+    }
+
+    @Nullable
+    public String getManualStartAnchorBuildingId() {
+        return manualStartAnchorBuildingId;
+    }
+
+    public void clearManualStartAnchor() {
+        manualStartAnchorLatLng = null;
+        manualStartAnchorFloorIndex = null;
+        manualStartAnchorBuildingId = null;
     }
 
     /**
@@ -700,6 +755,56 @@ public class SensorFusion implements SensorEventListener {
 
     public int getWifiFloor() {
         return wifiPositionManager != null ? wifiPositionManager.getWifiFloor() : 0;
+    }
+
+
+    @Nullable
+    private Integer manualStartAnchorFloor;
+
+
+    @Nullable
+    public Integer getManualStartAnchorFloor() {
+        return manualStartAnchorFloor;
+    }
+
+
+
+    public boolean hasManualStartAnchor() {
+        return manualStartAnchorLatLng != null;
+    }
+
+
+    /**
+     * Resolve the session start anchor in priority order:
+     * manual corrected start > stored session start > WiFi > GNSS.
+     */
+    @Nullable
+    public LatLng resolvePreferredStartAnchor() {
+        if (manualStartAnchorLatLng != null) {
+            return manualStartAnchorLatLng;
+        }
+
+        float[] storedStart = getGNSSLatitude(true);
+        if (storedStart != null
+                && storedStart.length >= 2
+                && !(Math.abs(storedStart[0]) < 1e-6 && Math.abs(storedStart[1]) < 1e-6)) {
+            return new LatLng(storedStart[0], storedStart[1]);
+        }
+
+        LatLng wifiLatLng = getLatLngWifiPositioning();
+        if (wifiLatLng != null
+                && !(Math.abs(wifiLatLng.latitude) < 1e-6 && Math.abs(wifiLatLng.longitude) < 1e-6)) {
+            return wifiLatLng;
+        }
+
+        float[] gnss = getGNSSLatitude(false);
+        if (gnss != null
+                && gnss.length >= 2
+                && !(Math.abs(gnss[0]) < 1e-6 && Math.abs(gnss[1]) < 1e-6)) {
+            return new LatLng(gnss[0], gnss[1]);
+        }
+
+        return null;
     }
 
     public float passAdaptiveQsmfiHeading() {

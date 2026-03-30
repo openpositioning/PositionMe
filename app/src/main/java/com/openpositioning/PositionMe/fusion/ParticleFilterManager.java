@@ -47,7 +47,7 @@ public class ParticleFilterManager {
     private static final double WIFI_GATE_METERS = 5.0;
     private static final double GNSS_GATE_METERS = 25.0;
     private static final double WIFI_OBS_EMA_ALPHA = 0.10;
-    private static final double WALL_CROSS_PENALTY = 0.5;
+    private static final double WALL_CROSS_PENALTY = 0;
 
     /** Main app sensor/data source. */
     private final SensorFusion sensorFusion;
@@ -233,7 +233,8 @@ public class ParticleFilterManager {
 
         FusedPose rawPose = particleFilterEngine.estimate(coordinateConverter);
         FusedPose correctedPose = applyDiscreteMapMatching(rawPose, currentHeading, deltaS);
-        latestFusedPose = smoothPose(correctedPose != null ? correctedPose : rawPose);
+       // latestFusedPose = smoothPose(correctedPose != null ? correctedPose : rawPose);
+        latestFusedPose = correctedPose;
     }
 
     /**
@@ -255,8 +256,13 @@ public class ParticleFilterManager {
                 initialLatLng.longitude
         );
 
-        int wifiFloor = sensorFusion.getWifiFloor();
-        activePfFloor = sanitiseFloorIndex(wifiFloor);
+        Integer manualFloor = sensorFusion.getManualStartAnchorFloor();
+        if (manualFloor != null) {
+            activePfFloor = sanitiseFloorIndex(manualFloor);
+        } else {
+            int wifiFloor = sensorFusion.getWifiFloor();
+            activePfFloor = sanitiseFloorIndex(wifiFloor);
+        }
 
         double[] initialLocal = coordinateConverter.latLngToLocal(initialLatLng);
         double initialHeading = wrapAngle(sensorFusion.getSelectedHeadingRad());
@@ -271,7 +277,8 @@ public class ParticleFilterManager {
 
         FusedPose initialRawPose = particleFilterEngine.estimate(coordinateConverter);
         FusedPose initialCorrectedPose = applyDiscreteMapMatching(initialRawPose, initialHeading, 0.0);
-        latestFusedPose = smoothPose(initialCorrectedPose != null ? initialCorrectedPose : initialRawPose);
+        //latestFusedPose = smoothPose(initialCorrectedPose != null ? initialCorrectedPose : initialRawPose);
+        latestFusedPose = initialCorrectedPose;
         lastHeading = initialHeading;
 
         if (latestFusedPose != null) {
@@ -296,7 +303,13 @@ public class ParticleFilterManager {
                         + ", lon=" + initialLatLng.longitude);
     }
 
+    @Nullable
     private LatLng resolveAutonomousInitialLatLng() {
+        LatLng manualStart = sensorFusion.getManualStartAnchorLatLng();
+        if (isValidLatLng(manualStart)) {
+            return manualStart;
+        }
+
         float[] storedStart = sensorFusion.getGNSSLatitude(true);
         if (isValidLatLon(storedStart)) {
             return new LatLng(storedStart[0], storedStart[1]);
