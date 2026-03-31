@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.data.remote;
+package com.openpositioning.PositionMe.data.remote;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -80,13 +80,13 @@ public class ServerCommunications implements Observable {
     private static final String userKey = RAW_USER_KEY.replace("<", "").replace(">", "").trim();
     private static final String masterKey = RAW_MASTER_KEY.replace("<", "").replace(">", "").trim();
 
-    private static final String BASE_UPLOAD_URL = "https:// openpositioning.org/api/live/trajectory/upload/";
+    private static final String BASE_UPLOAD_URL = "https://openpositioning.org/api/live/trajectory/upload/";
 
         private static final String DOWNLOAD_BASE_URL =
-            "https:// openpositioning.org/api/live/trajectory/download/";
+            "https://openpositioning.org/api/live/trajectory/download/";
 
-    private static final String infoRequestURL =
-            "https:// openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
+        private static final String infoRequestURL =
+            "https://openpositioning.org/api/live/users/trajectories/" + userKey + "?key=" + masterKey;
 
     private static final String PROTOCOL_CONTENT_TYPE = "multipart/form-data";
     private static final String PROTOCOL_ACCEPT_TYPE = "application/json";

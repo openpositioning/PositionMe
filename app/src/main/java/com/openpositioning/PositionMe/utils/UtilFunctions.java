@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.utils;
+package com.openpositioning.PositionMe.utils;
 
 import android.content.Context;
 import android.graphics.Bitmap;

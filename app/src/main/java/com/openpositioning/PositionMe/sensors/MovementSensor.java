@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.sensors;
+package com.openpositioning.PositionMe.sensors;
 
 import android.content.Context;
 import android.hardware.Sensor;

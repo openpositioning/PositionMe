@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.presentation.viewitems;
+package com.openpositioning.PositionMe.presentation.viewitems;
 
 import android.content.Context;
 import android.view.LayoutInflater;

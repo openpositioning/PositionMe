@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.sensors;
+package com.openpositioning.PositionMe.sensors;
 
 // Data class for Bluetooth Low Energy (BLE) devices.
 // Holds MAC address, device name, and signal strength (RSSI) for discovered BLE devices.

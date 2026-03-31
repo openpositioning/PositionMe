@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.data.remote;
+package com.openpositioning.PositionMe.data.remote;
 
 import android.util.Log;
 
@@ -22,7 +22,7 @@ public class IndoorMapAPI {
     private static final String TAG = "IndoorMapAPI";
     
     // API endpoints - Update these with your actual server endpoints
-    private static final String BASE_URL = "https:// openpositioning.org/api/live";
+    private static final String BASE_URL = "https://openpositioning.org/api/live";
     
     private final OkHttpClient httpClient;
     

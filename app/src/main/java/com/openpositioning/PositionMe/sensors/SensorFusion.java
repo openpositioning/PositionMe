@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.sensors;
+package com.openpositioning.PositionMe.sensors;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;

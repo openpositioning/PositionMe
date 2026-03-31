@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.sensors;
+package com.openpositioning.PositionMe.sensors;
 
 // The Sensor Info object holds physical properties of a sensor in the device.
 // It contains it's name, vendor, resolution, power, version and type, which vary across devices.

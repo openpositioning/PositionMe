@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.data.local;
+package com.openpositioning.PositionMe.data.local;
 
 import android.content.Context;
 import android.util.Log;

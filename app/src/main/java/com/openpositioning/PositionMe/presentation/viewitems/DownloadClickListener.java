@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.presentation.viewitems;
+package com.openpositioning.PositionMe.presentation.viewitems;
 
 // Interface to enable listening for clicks in RecyclerViews.
 // @author Mate Stodulka

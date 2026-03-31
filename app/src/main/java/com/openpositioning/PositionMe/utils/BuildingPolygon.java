@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.utils;
+package com.openpositioning.PositionMe.utils;
 
 
 import com.google.android.gms.maps.model.LatLng;

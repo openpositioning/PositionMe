@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.presentation.activity;
+package com.openpositioning.PositionMe.presentation.activity;
 
 import android.Manifest;
 import android.content.SharedPreferences;

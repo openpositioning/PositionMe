@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.presentation.activity;
+package com.openpositioning.PositionMe.presentation.activity;
 
 import android.os.Bundle;
 import android.view.WindowManager;

@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.presentation.fragment;
+package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.os.Bundle;
 import android.text.InputType;

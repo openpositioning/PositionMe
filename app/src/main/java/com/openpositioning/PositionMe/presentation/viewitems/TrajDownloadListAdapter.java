@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.presentation.viewitems;
+package com.openpositioning.PositionMe.presentation.viewitems;
 
 import java.util.HashMap;
 import java.util.HashSet;

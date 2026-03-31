@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.utils;
+package com.openpositioning.PositionMe.utils;
 
 
 
@@ -102,39 +102,39 @@ public class PdrParameterOptimization {
 
 
     public static void printParameterComparison() {
-        System.out.println("=== PDR鍙傛暟浼樺寲瀵规瘮 ===\n");
-        
-        System.out.println("銆怶eiberg绠楁硶銆?);
-        System.out.println("褰撳墠: K = " + CurrentParameters.K + " (鍥哄畾鍊?");
-        System.out.println("鏀硅繘: K = " + ImprovedParameters_Phase1.K_BASE + 
-                         " 脳 姝ラ鍒嗙被鍣?(0.85~1.2)");
-        System.out.println("棰勬湡鏀硅繘: 卤3-5% 姝ラ暱绮惧害鎻愬崌\n");
-        
-        System.out.println("銆怑KF杩囩▼鍣０(Q)銆?);
-        System.out.println("褰撳墠: Q_xx = " + CurrentParameters.Q_XX + 
-                         " (杩囧害淇′换GNSS/WiFi)");
-        System.out.println("鏀硅繘: Q_xx = " + ImprovedParameters_Phase1.Q_XX + 
-                         " (鏇翠俊浠籔DR鍐呴儴)");
-        System.out.println("棰勬湡鏀硅繘: 鍑忓皯50-70% 鐨勮瀺鍚堣烦璺僜n");
-        
-        System.out.println("銆怑KF娴嬮噺鍣０(R_WIFI)銆?);
-        System.out.println("褰撳墠: R_WIFI = " + CurrentParameters.R_WIFI_XX + 
-                         "m虏 (蟽=3m) - 杩囧害涔愯");
-        System.out.println("鏀硅繘: R_WIFI = " + ImprovedParameters_Phase1.R_WIFI_XX + 
-                         "m虏 (蟽=6m) - 鏇寸幇瀹?);
-        System.out.println("棰勬湡鏀硅繘: WiFi寮傚父鍊肩殑褰卞搷闄嶄綆50%\n");
-        
-        System.out.println("銆怣adgwick Beta銆?);
-        System.out.println("褰撳墠: 尾 = " + CurrentParameters.MADGWICK_BETA + 
-                         " (鍥哄畾鍊硷紝鍙兘杩囦綆)");
-        System.out.println("鏀硅繘: 尾 = " + ImprovedParameters_Phase1.MADGWICK_BETA_DEFAULT + 
-                         " (鑷€傚簲: 0.10~0.30)");
-        System.out.println("棰勬湡鏀硅繘: 闄€铻轰华婕傜Щ閫熷害闄嶄綆30-40%\n");
-        
-        System.out.println("銆愬垵濮嬪崗鏂瑰樊(P)銆?);
-        System.out.println("褰撳墠: P_init = " + CurrentParameters.P_INIT_XX);
-        System.out.println("鏀硅繘: P_init = " + ImprovedParameters_Phase1.P_INIT_XX);
-        System.out.println("棰勬湡鏀硅繘: EKF鏀舵暃閫熷害鎻愬崌3鍊峔n");
+        System.out.println("=== PDR Parameter Optimization Comparison ===\n");
+
+        System.out.println("[Weiberg Algorithm]");
+        System.out.println("Current: K = " + CurrentParameters.K + " (fixed value)");
+        System.out.println("Improved: K = " + ImprovedParameters_Phase1.K_BASE
+            + " x step-frequency classifier (0.85~1.2)");
+        System.out.println("Expected gain: +3% to +5% stride estimation accuracy\n");
+
+        System.out.println("[EKF Process Noise (Q)]");
+        System.out.println("Current: Q_xx = " + CurrentParameters.Q_XX
+            + " (over-trusts GNSS/WiFi)");
+        System.out.println("Improved: Q_xx = " + ImprovedParameters_Phase1.Q_XX
+            + " (more trust in PDR internal dynamics)");
+        System.out.println("Expected gain: 50% to 70% fewer fusion jumps\n");
+
+        System.out.println("[EKF Measurement Noise (R_WIFI)]");
+        System.out.println("Current: R_WIFI = " + CurrentParameters.R_WIFI_XX
+            + " m^2 (sigma=3m) - too optimistic");
+        System.out.println("Improved: R_WIFI = " + ImprovedParameters_Phase1.R_WIFI_XX
+            + " m^2 (sigma=6m) - more realistic");
+        System.out.println("Expected gain: 50% lower impact from WiFi outliers\n");
+
+        System.out.println("[Madgwick Beta]");
+        System.out.println("Current: beta = " + CurrentParameters.MADGWICK_BETA
+            + " (fixed value, may be too low)");
+        System.out.println("Improved: beta = " + ImprovedParameters_Phase1.MADGWICK_BETA_DEFAULT
+            + " (adaptive range: 0.10~0.30)");
+        System.out.println("Expected gain: 30% to 40% less gyro drift\n");
+
+        System.out.println("[Initial Covariance (P)]");
+        System.out.println("Current: P_init = " + CurrentParameters.P_INIT_XX);
+        System.out.println("Improved: P_init = " + ImprovedParameters_Phase1.P_INIT_XX);
+        System.out.println("Expected gain: around 3x faster EKF convergence\n");
     }
 
 
@@ -202,24 +202,24 @@ public class PdrParameterOptimization {
 
 
     public static void printOptimizationSummary() {
-        System.out.println("\n鈺斺晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晽");
-        System.out.println("鈺?  PDR婕傜Щ鏀硅繘 - 浼樺厛绾ц鍔ㄨ鍒?     鈺?);
-        System.out.println("鈺犫晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨暎");
-        System.out.println("鈺?鉁?P1 (5鍒嗛挓): 璋冩暣EKF鍙傛暟             鈺?);
-        System.out.println("鈺?  - Q: 0.5 鈫?0.01                      鈺?);
-        System.out.println("鈺?  - R_WIFI: 9 鈫?36                    鈺?);
-        System.out.println("鈺?  - P_init: 10 鈫?1                    鈺?);
-        System.out.println("鈺?                                       鈺?);
-        System.out.println("鈺?鉁?P2 (10鍒嗛挓): 纾佸姏璁″紓甯告娴?       鈺?);
-        System.out.println("鈺?  - 妫€鏌ヨ寖鍥? 20-60 渭T                鈺?);
-        System.out.println("鈺?  - 寮傚父鏃朵娇鐢ㄩ檧铻轰华+鍔犻€熷害璁?        鈺?);
-        System.out.println("鈺?                                       鈺?);
-        System.out.println("鈺?鉁?P3 (15鍒嗛挓): 姝ラ鍒嗙被鍣?            鈺?);
-        System.out.println("鈺?  - 4涓€熷害绫诲埆                       鈺?);
-        System.out.println("鈺?  - 淇鍥犲瓙: 0.85~1.2               鈺?);
-        System.out.println("鈺?                                       鈺?);
-        System.out.println("鈺?棰勬湡鎬绘敼杩? 30-50% 婕傜Щ鍑忓皯            鈺?);
-        System.out.println("鈺氣晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨暆");
+        System.out.println("\n============================================");
+        System.out.println("  PDR Drift Reduction - Action Plan");
+        System.out.println("============================================");
+        System.out.println("[P1 - 5 minutes] Tune EKF parameters");
+        System.out.println("  - Q: 0.5 -> 0.01");
+        System.out.println("  - R_WIFI: 9 -> 36");
+        System.out.println("  - P_init: 10 -> 1");
+        System.out.println();
+        System.out.println("[P2 - 10 minutes] Detect magnetic anomalies");
+        System.out.println("  - Check magnetic field range: 20~60 uT");
+        System.out.println("  - If abnormal, reduce magnetometer influence");
+        System.out.println();
+        System.out.println("[P3 - 15 minutes] Enable step-frequency classifier");
+        System.out.println("  - 4 walking-speed classes");
+        System.out.println("  - Correction factors: 0.85~1.2");
+        System.out.println();
+        System.out.println("Expected total improvement: 30% to 50% less drift");
+        System.out.println("============================================");
     }
 
     public static void main(String[] args) {

@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.utils;
+package com.openpositioning.PositionMe.utils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -98,7 +98,7 @@ public class IndoorMapManager {
     private int currentRequestId = 0;
     private String pendingBuildingName = null;  // Building name for current pending request
 
-    private static final String BASE_URL = "https:// openpositioning.org/api/live/floorplan/request/";
+    private static final String BASE_URL = "https://openpositioning.org/api/live/floorplan/request/";
     private static final String RAW_API_KEY = BuildConfig.OPENPOSITIONING_API_KEY;
     private static final String RAW_MASTER_KEY = BuildConfig.OPENPOSITIONING_MASTER_KEY;
 

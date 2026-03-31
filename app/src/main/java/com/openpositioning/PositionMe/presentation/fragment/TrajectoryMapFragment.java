@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.presentation.fragment;
+package com.openpositioning.PositionMe.presentation.fragment;
 
 import android.graphics.Color;
 import android.os.Bundle;

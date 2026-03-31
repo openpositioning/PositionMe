@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.presentation.viewitems;
+package com.openpositioning.PositionMe.presentation.viewitems;
 
 import android.view.View;
 import android.widget.Button;

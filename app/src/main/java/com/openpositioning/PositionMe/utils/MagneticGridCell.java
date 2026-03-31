@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.utils;
+package com.openpositioning.PositionMe.utils;
 
 // Immutable grid cell for magnetic heading compensation.
 public class MagneticGridCell {

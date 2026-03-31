@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.sensors;
+package com.openpositioning.PositionMe.sensors;
 // Interface for observable class.
 // Simplified version of default Observable interface, with only the resgisterObserver and
 // notifyObservers methods included see {@link java.util.Observable}.

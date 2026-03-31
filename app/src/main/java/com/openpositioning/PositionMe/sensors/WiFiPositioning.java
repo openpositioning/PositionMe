@@ -1,4 +1,4 @@
-﻿package com.openpositioning.PositionMe.sensors;
+package com.openpositioning.PositionMe.sensors;
 import android.content.Context;
 import android.util.Log;
 
@@ -29,7 +29,7 @@ public class WiFiPositioning {
     // Queue for storing the POST requests made
     private RequestQueue requestQueue;
     // URL for WiFi positioning API
-    private static final String url="https:// openpositioning.org/api/position/fine";
+    private static final String url="https://openpositioning.org/api/position/fine";
     // Optional API auth token (supports app-level auth over openpositioning API)
     private String apiAuthToken = null;
     private static final String FALLBACK_API_AUTH_TOKEN = "NO_AUTH"; // Demo value; can be loaded from secrets.properties.
