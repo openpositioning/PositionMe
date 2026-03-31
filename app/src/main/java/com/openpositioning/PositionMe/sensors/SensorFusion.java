@@ -612,7 +612,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 //                            }
 //                        }
 
-                        // Wall-slide the EKF position after each prediction step
+
                         // Wall-slide the EKF position after each prediction step
 //                        if (coordinateConverter != null && indoorMapManager != null
 //                                && settings.getBoolean("use_wall_constraints", true)) {
@@ -677,14 +677,6 @@ public class SensorFusion implements SensorEventListener, Observer {
                                 prevNorth[i] = prevParticles[i][1];
                             }
 
-//                            indoorMapManager.applyWallConstraints(
-//                                    prevEast,
-//                                    prevNorth,
-//                                    currEast,
-//                                    currNorth,
-//                                    liveWeights,
-//                                    coordinateConverter
-//                            );
                             particleFilter.normalizeWeights();
 
                             Log.d("SensorFusion", "Applied wall constraints to particle cloud");

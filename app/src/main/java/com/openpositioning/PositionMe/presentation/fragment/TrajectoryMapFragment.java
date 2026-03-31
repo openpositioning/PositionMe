@@ -807,63 +807,13 @@ private SwitchMaterial showPdrPathSwitch;
         Log.d("IndoorTest", "newLocation = " + newLocation);
         Log.d("IndoorTest", "heightChange = " + heightChange);
 
-//        if indoor map is active and current venue is known:
-//        send oldLocation, newLocation, current floor, and maybe barometer info to IndoorMapManager
-//        get back corrected position/floor
-//        then update marker/polyline using that corrected result
-
-
-        // If no marker, create it
-//        if (orientationMarker == null) {
-//            orientationMarker = gMap.addMarker(new MarkerOptions()
-//                    .position(newLocation)
-//                    .flat(true)
-//                    .title("Current Position")
-//                    .icon(BitmapDescriptorFactory.fromBitmap(
-//                            UtilFunctions.getBitmapFromVector(requireContext(),
-//                                    R.drawable.ic_baseline_navigation_24)))
-//            );
-//            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
-//        } else {
-//            // Update marker position + orientation
-//            orientationMarker.setPosition(newLocation);
-//            orientationMarker.setRotation(orientation);
-//            // Move camera a bit
-//            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
-//        }
-
+//
         // Extend polyline if movement occurred
         if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
             points.add(newLocation);
             polyline.setPoints(points);
         }
-
-        //        Added
-        // --- Compute and extend smoothed polyline ---
-//        LatLng filtered = applyLowPassFilter(newLocation);
-//        if (oldLocation != null && !oldLocation.equals(newLocation)) {
-//            smoothedPoints.add(filtered);
-//            if (smoothedPolyline != null) {
-//                smoothedPolyline.setPoints(new ArrayList<>(smoothedPoints));
-//            }
-//        }
-
-//        changed to-
-        // Extend smoothed polyline and trigger immediate fused trajectory redraw
-//        LatLng filtered = applyLowPassFilter(newLocation);
-//        if (oldLocation != null && !oldLocation.equals(newLocation)) {
-//            smoothedPoints.add(filtered);
-//            // Movement detected — redraw immediately rather than waiting for the 1s timer
-//            redrawFusedTrajectory();
-//        }
-
-
-        // Green PDR dot — only when moved enough
-//        if (showPdrDots && hasMoved(newLocation, lastPdrDotPos)) {
-//            addObservationMarker(newLocation, COLOR_PDR, pdrObservationMarkers);
-//            lastPdrDotPos = newLocation;
-//        }
 
 
         // Update indoor map overlay
@@ -875,8 +825,6 @@ private SwitchMaterial showPdrPathSwitch;
         // call api
         if (floorplanRemote != null) {
             maybeRequestNearbyVenues(newLocation);
-//            IndoorMapManager IMMM = new IndoorMapManager();
-//            IMMM.initializeFloorFromLocation(newLocation);
         }
     }
 
@@ -896,51 +844,7 @@ private SwitchMaterial showPdrPathSwitch;
         }
     }
 
-    /**
-     * Updates the arrow marker and both fused trajectory polylines.
-     *
-     * - Purple line: raw particle filter output, always visible
-     * - Teal line: LPF applied on top of fused output, toggle-controlled
-     *
-     * @param fusedLocation best position estimate from the particle filter.
-     */
-//    public void updateFusedPosition(@NonNull LatLng fusedLocation) {
-//        if (gMap == null) return;
-//
-//        // Raw fused path — purple, always grows
-//        smoothedPoints.add(fusedLocation);
-//        redrawFusedTrajectory();
-//
-//        // Update uncertainty circle around the fused marker
-//        updateUncertaintyCircle(fusedLocation);
-//
-//        // Redraw particle cloud overlay (throttled to every 2s)
-//        redrawParticleCloud();
-//
-//        // LPF-smoothed fused path — teal, grows but only visible when toggle is ON
-//        LatLng lpfFiltered = applyLowPassFilter(fusedLocation);
-//        lpfPoints.add(lpfFiltered);
-//        if (lpfPolyline != null) {
-//            lpfPolyline.setPoints(new ArrayList<>(lpfPoints));
-//        }
-//
-//        // Move arrow marker if fused mode is selected
-//        if (!useFusedPosition) return;
-//
-//        if (orientationMarker == null) {
-//            orientationMarker = gMap.addMarker(new MarkerOptions()
-//                    .position(fusedLocation)
-//                    .flat(true)
-//                    .title("Current Position")
-//                    .icon(BitmapDescriptorFactory.fromBitmap(
-//                            UtilFunctions.getBitmapFromVector(requireContext(),
-//                                    R.drawable.ic_baseline_navigation_24))));
-//            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(fusedLocation, 19f));
-//        } else {
-//            orientationMarker.setPosition(fusedLocation);
-//            gMap.moveCamera(CameraUpdateFactory.newLatLng(fusedLocation));
-//        }
-//    }
+
 
     /**
      * Updates the arrow marker using the particle filter's fused position.
@@ -1022,41 +926,6 @@ private SwitchMaterial showPdrPathSwitch;
         return currentLocation;
     }
 
-    /**
-     * Called when we want to set or update the GNSS marker position
-     */
-//    public void updateGNSS(@NonNull LatLng gnssLocation) {
-//        if (gMap == null) return;
-//        if (!isGnssOn) return;
-//
-//        if (gnssMarker == null) {
-//            // Create the GNSS marker for the first time
-//            gnssMarker = gMap.addMarker(new MarkerOptions()
-//                    .position(gnssLocation)
-//                    .title("GNSS Position")
-//                    .icon(BitmapDescriptorFactory
-//                            .defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-//            lastGnssLocation = gnssLocation;
-//        } else {
-//            // Move existing GNSS marker
-//            gnssMarker.setPosition(gnssLocation);
-//
-//            // Add a segment to the blue GNSS line, if this is a new location
-//            if (lastGnssLocation != null && !lastGnssLocation.equals(gnssLocation)) {
-//                List<LatLng> gnssPoints = new ArrayList<>(gnssPolyline.getPoints());
-//                gnssPoints.add(gnssLocation);
-//                gnssPolyline.setPoints(gnssPoints);
-//            }
-//            lastGnssLocation = gnssLocation;
-//        }
-//
-//        // Blue GNSS dot — only when moved enough
-//        if (showGnssDots && hasMoved(gnssLocation, lastGnssDotPos)) {
-//            addObservationMarker(gnssLocation, COLOR_GNSS, gnssObservationMarkers);
-//            lastGnssDotPos = gnssLocation;
-//        }
-//
-//    }
 
     /**
      * Updates the GNSS marker and polyline, and places a blue GNSS observation dot.
