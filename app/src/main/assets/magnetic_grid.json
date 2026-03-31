@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "description": "Magnetic heading compensation grid in local meter coordinates",
+  "grid": [
+    {
+      "x": 10.0,
+      "y": 15.0,
+      "correctionRad": 0,
+      "confidence": 0.9,
+      "sampleCount": 25,
+      "updatedAt": 1774828800000
+    },
+    {
+      "x": 15.0,
+      "y": 15.0,
+      "correctionRad": 0,
+      "confidence": 0.8,
+      "sampleCount": 18,
+      "updatedAt": 1774828800000
+    }
+  ]
+}
