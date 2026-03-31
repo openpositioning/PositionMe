@@ -622,6 +622,20 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Returns the best estimated position of the user from the particle filter.
+     * Returns {@code null} if the filter has not yet initialised, in which case
+     * the caller should fall back to the PDR-derived absolute position.
+     *
+     * @return particle filter position estimate, or {@code null} if not yet initialised.
+     */
+    public LatLng getFusedPosition() {
+        if (particleFilter != null && particleFilter.isInitialised()) {
+            return particleFilter.getEstimatedPosition();
+        }
+        return null;
+    }
+
+    /**
      * Returns the current floor the user is on, obtained using WiFi positioning.
      *
      * @return current floor number.

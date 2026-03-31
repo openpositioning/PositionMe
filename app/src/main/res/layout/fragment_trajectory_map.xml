@@ -43,6 +43,12 @@
                 android:layout_height="wrap_content"
                 android:text="@string/auto_floor" />
 
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/smoothSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/smooth_toggle" />
+ 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/lineColorButton"
                 android:layout_width="wrap_content"
@@ -66,6 +72,105 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- Colour legend card — bottom-start corner -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="10dp"
+        app:cardBackgroundColor="@color/md_theme_surfaceContainer"
+        app:cardElevation="3dp"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.MediumComponent"
+        app:layout_anchor="@id/trajectoryMap"
+        app:layout_anchorGravity="bottom|start">
+ 
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp">
+ 
+            <!-- GNSS row -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="4dp">
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/legend_dot"
+                    android:backgroundTint="#2196F3"
+                    android:layout_marginEnd="6dp" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/legend_gnss"
+                    android:textSize="11sp" />
+            </LinearLayout>
+ 
+            <!-- WiFi row -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="4dp">
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/legend_dot"
+                    android:backgroundTint="#FF9800"
+                    android:layout_marginEnd="6dp" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/legend_wifi"
+                    android:textSize="11sp" />
+            </LinearLayout>
+ 
+            <!-- PDR row -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="4dp">
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/legend_dot"
+                    android:backgroundTint="#F44336"
+                    android:layout_marginEnd="6dp" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/legend_pdr"
+                    android:textSize="11sp" />
+            </LinearLayout>
+ 
+            <!-- Fused row -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <View
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/legend_dot"
+                    android:backgroundTint="#9C27B0"
+                    android:layout_marginEnd="6dp" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/legend_fused"
+                    android:textSize="11sp" />
+            </LinearLayout>
+ 
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+ 
     <!-- Floating action buttons for floor control, properly spaced -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"

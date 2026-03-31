@@ -36,11 +36,11 @@ import java.util.List;
 
 /**
  * A fragment responsible for displaying a trajectory map using Google Maps.
- * <p>
+ * 
  * The TrajectoryMapFragment provides a map interface for visualizing movement trajectories,
  * GNSS tracking, and indoor mapping. It manages map settings, user interactions, and real-time
  * updates to user location and GNSS markers.
- * <p>
+ * 
  * Key Features:
  * - Displays a Google Map with support for different map types (Hybrid, Normal, Satellite).
  * - Tracks and visualizes user movement using polylines.
@@ -57,6 +57,18 @@ import java.util.List;
 
 public class TrajectoryMapFragment extends Fragment {
 
+    /** Sources for colour-coded position observations on the map. */
+    public enum ObservationSource { GNSS, WIFI, PDR }
+ 
+    // Observation marker colours
+    private static final int COLOR_GNSS_OBS  = 0xFF2196F3; // blue  (unused directly; hue used below)
+    private static final int COLOR_WIFI_OBS  = 0xFFFF9800; // orange
+    private static final int COLOR_PDR_OBS   = 0xFFF44336; // red
+    private static final int COLOR_FUSED     = 0xFF9C27B0; // purple – fused trajectory
+ 
+    /** Weight applied to the newest sample in the EMA smoothing filter (0 < α ≤ 1). */
+    private static final float EMA_ALPHA = 0.3f;
+ 
     private GoogleMap gMap; // Google Maps instance
     private LatLng currentLocation; // Stores the user's current location
     private Marker orientationMarker; // Marker representing user's heading
@@ -71,6 +83,20 @@ public class TrajectoryMapFragment extends Fragment {
     private Polyline gnssPolyline; // Polyline for GNSS path
     private LatLng lastGnssLocation = null; // Stores the last GNSS location
 
+    // Fused trajectory – updated every 1 s or on movement
+    private Polyline fusedTrajectoryPolyline;
+    private LatLng lastFusedTrajectoryPoint = null;
+ 
+    // One moving marker per source — each updates in place rather than accumulating
+    private Marker gnssObsMarker = null;
+    private Marker wifiObsMarker = null;
+    private Marker pdrObsMarker  = null;
+ 
+    // EMA smoothing state
+    private boolean smoothingEnabled = false;
+    private double smoothedLat = Double.NaN;
+    private double smoothedLng = Double.NaN;
+ 
     private LatLng pendingCameraPosition = null; // Stores pending camera movement
     private boolean hasPendingCameraMove = false; // Tracks if camera needs to move
 
@@ -91,6 +117,7 @@ public class TrajectoryMapFragment extends Fragment {
 
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial autoFloorSwitch;
+    private SwitchMaterial smoothSwitch;
 
     private com.google.android.material.floatingactionbutton.FloatingActionButton floorUpButton, floorDownButton;
     private TextView floorLabel;
@@ -120,6 +147,7 @@ public class TrajectoryMapFragment extends Fragment {
         switchMapSpinner = view.findViewById(R.id.mapSwitchSpinner);
         gnssSwitch      = view.findViewById(R.id.gnssSwitch);
         autoFloorSwitch = view.findViewById(R.id.autoFloor);
+        smoothSwitch    = view.findViewById(R.id.smoothSwitch);
         floorUpButton   = view.findViewById(R.id.floorUpButton);
         floorDownButton = view.findViewById(R.id.floorDownButton);
         floorLabel      = view.findViewById(R.id.floorLabel);
@@ -183,6 +211,12 @@ public class TrajectoryMapFragment extends Fragment {
             }
         });
 
+        // Smoothing toggle
+        if (smoothSwitch != null) {
+            smoothSwitch.setOnCheckedChangeListener((btn, isChecked) ->
+                    setSmoothingEnabled(isChecked));
+        }
+ 
         // Auto-floor toggle: start/stop periodic floor evaluation
         sensorFusion = SensorFusion.getInstance();
         autoFloorSwitch.setOnCheckedChangeListener((compoundButton, isChecked) -> {
@@ -246,6 +280,13 @@ public class TrajectoryMapFragment extends Fragment {
                 .width(5f)
                 .add() // start empty
         );
+ 
+        // Fused best-estimate trajectory in purple
+        fusedTrajectoryPolyline = map.addPolyline(new PolylineOptions()
+                .color(COLOR_FUSED)
+                .width(8f)
+                .add() // start empty
+        );
     }
 
 
@@ -301,59 +342,30 @@ public class TrajectoryMapFragment extends Fragment {
     }
 
     /**
-     * Update the user's current location on the map, create or move orientation marker,
-     * and append to polyline if the user actually moved.
+     * Records the user’s current PDR-derived location and extends the red trajectory polyline.
+     * Does NOT move the orientation marker — marker updates are handled exclusively by
+     * {@link #updateFusedPosition} to avoid competing updates from different loops.
      *
-     * @param newLocation The new location to plot.
-     * @param orientation The user’s heading (e.g. from sensor fusion).
+     * @param newLocation The new PDR-derived location.
+     * @param orientation Unused here; kept for API compatibility.
      */
     public void updateUserLocation(@NonNull LatLng newLocation, float orientation) {
         if (gMap == null) return;
 
-        // Keep track of current location
         LatLng oldLocation = this.currentLocation;
         this.currentLocation = newLocation;
 
-        // If no marker, create it
-        if (orientationMarker == null) {
-            orientationMarker = gMap.addMarker(new MarkerOptions()
-                    .position(newLocation)
-                    .flat(true)
-                    .title("Current Position")
-                    .icon(BitmapDescriptorFactory.fromBitmap(
-                            UtilFunctions.getBitmapFromVector(requireContext(),
-                                    R.drawable.ic_baseline_navigation_24)))
-            );
-            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(newLocation, 19f));
-        } else {
-            // Update marker position + orientation
-            orientationMarker.setPosition(newLocation);
-            orientationMarker.setRotation(orientation);
-            // Move camera a bit
-            gMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation));
-        }
-
-        // Extend polyline if movement occurred
-        /*if (oldLocation != null && !oldLocation.equals(newLocation) && polyline != null) {
-            List<LatLng> points = new ArrayList<>(polyline.getPoints());
-            points.add(newLocation);
-            polyline.setPoints(points);
-        }*/
-        // Extend polyline
+        // Extend the red PDR polyline
         if (polyline != null) {
             List<LatLng> points = new ArrayList<>(polyline.getPoints());
-
-            // First position fix: add the first polyline point
             if (oldLocation == null) {
                 points.add(newLocation);
                 polyline.setPoints(points);
             } else if (!oldLocation.equals(newLocation)) {
-                // Subsequent movement: append a new polyline point
                 points.add(newLocation);
                 polyline.setPoints(points);
             }
         }
-
 
         // Update indoor map overlay
         if (indoorMapManager != null) {
@@ -444,6 +456,134 @@ public class TrajectoryMapFragment extends Fragment {
 
 
     /**
+     * Updates the user's best-estimate position on the map.
+     * When smoothing is enabled an Exponential Moving Average filter (α = {@value #EMA_ALPHA})
+     * is applied before moving the orientation marker, producing visibly smoother motion.
+     *
+     * @param pos         Raw best-estimate position from the fusion / fallback pipeline.
+     * @param orientation Device heading in degrees (clockwise from north).
+     */
+    public void updateFusedPosition(@NonNull LatLng pos, float orientation) {
+        if (gMap == null) return;
+ 
+        LatLng displayPos;
+        if (smoothingEnabled) {
+            if (Double.isNaN(smoothedLat)) {
+                // Seed the filter on first call
+                smoothedLat = pos.latitude;
+                smoothedLng = pos.longitude;
+            } else {
+                smoothedLat = EMA_ALPHA * pos.latitude  + (1.0 - EMA_ALPHA) * smoothedLat;
+                smoothedLng = EMA_ALPHA * pos.longitude + (1.0 - EMA_ALPHA) * smoothedLng;
+            }
+            displayPos = new LatLng(smoothedLat, smoothedLng);
+        } else {
+            displayPos = pos;
+        }
+ 
+        if (orientationMarker == null) {
+            orientationMarker = gMap.addMarker(new MarkerOptions()
+                    .position(displayPos)
+                    .flat(true)
+                    .title("Current Position")
+                    .icon(BitmapDescriptorFactory.fromBitmap(
+                            UtilFunctions.getBitmapFromVector(requireContext(),
+                                    R.drawable.ic_baseline_navigation_24))));
+            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(displayPos, 19f));
+        } else {
+            orientationMarker.setPosition(displayPos);
+            orientationMarker.setRotation(orientation);
+            gMap.moveCamera(CameraUpdateFactory.newLatLng(displayPos));
+        }
+ 
+        currentLocation = displayPos;
+ 
+        if (indoorMapManager != null) {
+            indoorMapManager.setCurrentLocation(displayPos);
+            setFloorControlsVisibility(indoorMapManager.getIsIndoorMapSet() ? View.VISIBLE : View.GONE);
+        }
+    }
+ 
+    /**
+     * Appends a point to the purple fused-trajectory polyline.
+     * Only adds a point when the position has actually changed to avoid duplicate vertices.
+     *
+     * @param pos New fused position to record.
+     */
+    public void updateFusedTrajectory(@NonNull LatLng pos) {
+        if (gMap == null || fusedTrajectoryPolyline == null) return;
+        if (pos.equals(lastFusedTrajectoryPoint)) return;
+ 
+        List<LatLng> points = new ArrayList<>(fusedTrajectoryPolyline.getPoints());
+        points.add(pos);
+        fusedTrajectoryPolyline.setPoints(points);
+        lastFusedTrajectoryPoint = pos;
+    }
+ 
+    /**
+     * Places or moves a colour-coded observation marker for the given source.
+     * Each source maintains exactly one marker on the map — it moves to the latest position
+     * rather than accumulating multiple markers.
+     *
+     * @param pos    Absolute position of the observation.
+     * @param source Which positioning source produced this observation.
+     */
+    public void addObservationMarker(@NonNull LatLng pos, @NonNull ObservationSource source) {
+        if (gMap == null) return;
+
+        Marker existing;
+        float hue;
+        String title;
+        switch (source) {
+            case GNSS:
+                existing = gnssObsMarker;
+                hue      = BitmapDescriptorFactory.HUE_AZURE;
+                title    = "GNSS";
+                break;
+            case WIFI:
+                existing = wifiObsMarker;
+                hue      = BitmapDescriptorFactory.HUE_ORANGE;
+                title    = "WiFi";
+                break;
+            default: // PDR
+                existing = pdrObsMarker;
+                hue      = BitmapDescriptorFactory.HUE_RED;
+                title    = "PDR";
+                break;
+        }
+
+        if (existing != null) {
+            existing.setPosition(pos);
+        } else {
+            Marker m = gMap.addMarker(new MarkerOptions()
+                    .position(pos)
+                    .title(title)
+                    .anchor(0.5f, 0.5f)
+                    .icon(BitmapDescriptorFactory.defaultMarker(hue)));
+            switch (source) {
+                case GNSS: gnssObsMarker = m; break;
+                case WIFI: wifiObsMarker = m; break;
+                default:   pdrObsMarker  = m; break;
+            }
+        }
+    }
+ 
+    /**
+     * Enables or disables the EMA position smoothing filter.
+     * Disabling resets the filter state so the next call to
+     * {@link #updateFusedPosition} re-seeds it from the raw position.
+     *
+     * @param enabled {@code true} to enable smoothing.
+     */
+    public void setSmoothingEnabled(boolean enabled) {
+        this.smoothingEnabled = enabled;
+        if (!enabled) {
+            smoothedLat = Double.NaN;
+            smoothedLng = Double.NaN;
+        }
+    }
+     
+    /**
      * Remove GNSS marker if user toggles it off
      */
     public void clearGNSS() {
@@ -509,6 +649,21 @@ public class TrajectoryMapFragment extends Fragment {
         }
         testPointMarkers.clear();
 
+        // Clear all per-source observation markers
+        if (gnssObsMarker != null) { gnssObsMarker.remove(); gnssObsMarker = null; }
+        if (wifiObsMarker != null) { wifiObsMarker.remove(); wifiObsMarker = null; }
+        if (pdrObsMarker  != null) { pdrObsMarker.remove();  pdrObsMarker  = null; }
+ 
+        // Clear fused trajectory
+        if (fusedTrajectoryPolyline != null) {
+            fusedTrajectoryPolyline.remove();
+            fusedTrajectoryPolyline = null;
+        }
+        lastFusedTrajectoryPoint = null;
+ 
+        // Reset EMA filter
+        smoothedLat = Double.NaN;
+        smoothedLng = Double.NaN;
 
         // Re-create empty polylines with your chosen colors
         if (gMap != null) {
@@ -519,6 +674,10 @@ public class TrajectoryMapFragment extends Fragment {
             gnssPolyline = gMap.addPolyline(new PolylineOptions()
                     .color(Color.BLUE)
                     .width(5f)
+                    .add());
+            fusedTrajectoryPolyline = gMap.addPolyline(new PolylineOptions()
+                    .color(COLOR_FUSED)
+                    .width(8f)
                     .add());
         }
     }
