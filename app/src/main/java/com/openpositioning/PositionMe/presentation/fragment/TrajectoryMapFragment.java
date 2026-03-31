@@ -838,17 +838,16 @@ private SwitchMaterial showPdrPathSwitch;
 //                    heightChange
 //            );
 
-            String newFloorKey = indoorMapManager.acceptFloorChange(
+            float currentElevation = sensorFusion != null ? sensorFusion.getElevation() : Float.NaN;
+            IndoorMapManager.FloorChangeResult floorResult = indoorMapManager.acceptFloorChange(
                     correctedLocation,
                     oldLocation,
-                    heightChange);
-            String currentFloorKey = indoorMapManager.getCurrentFloorKey();
-            if (newFloorKey != null && currentFloorKey != null
-                    && !newFloorKey.equals(currentFloorKey)) {
+                    currentElevation);
+            if (floorResult.changedFloor) {
                 try {
-                    sensorFusion.onFloorChanged(Integer.parseInt(newFloorKey));
+                    sensorFusion.onFloorChanged(Integer.parseInt(floorResult.floorKey));
                 } catch (NumberFormatException e) {
-                    Log.w("TrajectoryMapFragment", "Non-numeric floor key: " + newFloorKey);
+                    Log.w("TrajectoryMapFragment", "Non-numeric floor key: " + floorResult.floorKey);
                 }
             }
         }

@@ -600,58 +600,187 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
     //corrected position = point
     //break
 
-    public String acceptFloorChange(LatLng correctedLocation, LatLng oldLocation, float heightChangeMeters) {
-        if (currentVenue == null || currentFloorKey == null || correctedLocation == null || oldLocation == null) {
-            return currentFloorKey;
+    // ── Floor-change detection thresholds ────────────────────────────────────
+    private static final double HEIGHT_THRESHOLD_METERS           = 4.5;
+    private static final double STAIRS_THRESHOLD_METERS           = 12.0;
+    private static final double LIFT_THRESHOLD_METERS             = 10.0;
+    private static final double LIFT_HORIZONTAL_THRESHOLD_METERS  = 1.0;
+
+    // Debounce: ignore floor-change attempts within 5 s of the last one
+    private long lastFloorChangeTimeMs = 0;
+    private static final long MIN_FLOOR_CHANGE_INTERVAL_MS = 5000;
+
+    // Floor transition tracking
+    private static final float FLOOR_STABLE_BAND_METERS              = 0.5f;
+    private static final float FLOOR_TRANSITION_START_THRESHOLD_METERS = 1.0f;
+    private LatLng  floorTransitionStartLocation = null;
+    private LatLng  lastStableFloorLocation      = null;
+    private boolean floorTransitionInProgress    = false;
+
+    /**
+     * Evaluates whether a floor change has occurred.
+     *
+     * @param correctedLocation current horizontal position
+     * @param oldLocation       previous horizontal position
+     * @param currentHeight     absolute barometric elevation (metres), from SensorFusion.getElevation()
+     * @return FloorChangeResult carrying the (possibly new) floor key,
+     *         an optionally snapped destination, and a flag indicating whether the floor changed
+     */
+    public FloorChangeResult acceptFloorChange(LatLng correctedLocation,
+                                               LatLng oldLocation,
+                                               float currentHeight) {
+        if (currentVenue == null || currentFloorKey == null
+                || correctedLocation == null || oldLocation == null) {
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
-        // Require meaningful vertical movement first
-        double heightThresholdMeters = 2.5;
-        if (Math.abs(heightChangeMeters) < heightThresholdMeters) {
-            return currentFloorKey;
+        if (confirmedFloorKey == null || Float.isNaN(confirmedFloorElevation)) {
+            Log.d("MapMatch", "No confirmed floor reference yet");
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
-        IndoorVenue.FloorFeatures floorFeatures = currentVenue.floorFeatures.get(currentFloorKey);
-        if (floorFeatures == null) {
-            return currentFloorKey;
+        // Debounce: block rapid successive floor changes
+        long now = System.currentTimeMillis();
+        if (now - lastFloorChangeTimeMs < MIN_FLOOR_CHANGE_INTERVAL_MS) {
+            Log.d("MapMatch", "Floor change blocked by debounce");
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
-        double stairsThresholdMeters = 5.0;
-        double liftThresholdMeters = 4.0;
-        double liftHorizontalThresholdMeters = 2.0;
+        updateFloorTransitionState(correctedLocation, currentHeight);
+        double horizontalDisplacement = getFloorTransitionHorizontalDisplacement(correctedLocation);
 
-        boolean nearStairs = isNearAnyPoint(correctedLocation, floorFeatures.stairsCenters, stairsThresholdMeters);
-        boolean nearLift = isNearAnyPoint(correctedLocation, floorFeatures.liftCenters, liftThresholdMeters);
-
-        if (!nearStairs && !nearLift) {
-            return currentFloorKey;
+        float heightChangeMeters = currentHeight - confirmedFloorElevation;
+        if (Math.abs(heightChangeMeters) < HEIGHT_THRESHOLD_METERS) {
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
-        double horizontalDisplacement = distanceMeters(oldLocation, correctedLocation);
+        IndoorVenue.FloorFeatures currentFloorFeatures =
+                currentVenue.floorFeatures.get(confirmedFloorKey);
+        if (currentFloorFeatures == null) {
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
+        }
 
-        boolean usedLift = nearLift && horizontalDisplacement < liftHorizontalThresholdMeters;
-        boolean usedStairs = nearStairs && horizontalDisplacement >= liftHorizontalThresholdMeters;
-        Log.d("MapMatch", "heightChange=" + heightChangeMeters +
-                ", floor=" + currentFloorKey);
-        Log.d("MapMatch", "nearStairs=" + nearStairs +
-                ", nearLift=" + nearLift);
-        Log.d("MapMatch", "horizontalDisplacement=" + horizontalDisplacement);
+        String nextFloorKey = getAdjacentFloorKey(confirmedFloorKey, heightChangeMeters > 0);
+        Log.d("MapMatch", "confirmed floor: " + confirmedFloorKey
+                + "  candidate next: " + nextFloorKey
+                + "  heightChange=" + heightChangeMeters);
+
+        if (nextFloorKey == null || !currentVenue.floorFeatures.containsKey(nextFloorKey)) {
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
+        }
+
+        IndoorVenue.FloorFeatures nextFloorFeatures =
+                currentVenue.floorFeatures.get(nextFloorKey);
+        if (nextFloorFeatures == null) {
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
+        }
+
+        boolean nearStairs = isNearAnyPoint(correctedLocation,
+                currentFloorFeatures.stairsCenters, STAIRS_THRESHOLD_METERS);
+        boolean nearLift   = isNearAnyPoint(correctedLocation,
+                currentFloorFeatures.liftCenters,   LIFT_THRESHOLD_METERS);
+
+        boolean usedLift   = nearLift   && horizontalDisplacement < LIFT_HORIZONTAL_THRESHOLD_METERS;
+        boolean usedStairs = nearStairs && horizontalDisplacement >= LIFT_HORIZONTAL_THRESHOLD_METERS;
+
+        Log.d("MapMatch", "nearStairs=" + nearStairs + ", nearLift=" + nearLift
+                + ", horizontalDisplacement=" + horizontalDisplacement
+                + ", usedLift=" + usedLift + ", usedStairs=" + usedStairs);
 
         if (!usedLift && !usedStairs) {
-            return currentFloorKey;
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
-        String nextFloorKey = getAdjacentFloorKey(currentFloorKey, heightChangeMeters > 0);
-        if (nextFloorKey == null || !currentVenue.floorFeatures.containsKey(nextFloorKey)) {
-            return currentFloorKey;
-        }
-        if (!nextFloorKey.equals(currentFloorKey)) {
-            currentFloorKey = nextFloorKey;
-            boolean goingUp = heightChangeMeters > 0;
-            switchFloor(goingUp ? +1 : -1);
+        if (nextFloorKey.equals(confirmedFloorKey)) {
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false, null);
         }
 
-        return currentFloorKey;
+        // Snap destination to the nearest access point on the new floor
+        LatLng snappedDestination = correctedLocation;
+        LatLng highlightCenter    = null;
+
+        if (usedLift) {
+            LatLng nearestLift = getNearestPoint(correctedLocation, nextFloorFeatures.liftCenters);
+            if (nearestLift != null) { snappedDestination = nearestLift; highlightCenter = nearestLift; }
+        } else {
+            LatLng nearestStairs = getNearestPoint(correctedLocation, nextFloorFeatures.stairsCenters);
+            if (nearestStairs != null) { snappedDestination = nearestStairs; highlightCenter = nearestStairs; }
+        }
+
+        commitAutoFloorChange(nextFloorKey, currentHeight);
+        lastFloorChangeTimeMs = now;
+        resetFloorTransitionState();
+        showFloor(nextFloorKey);
+
+        Log.d("MapMatch", "Accepted floor change to " + nextFloorKey
+                + " snapped=" + snappedDestination);
+
+        return new FloorChangeResult(nextFloorKey, snappedDestination, true, highlightCenter);
+    }
+
+    // ── Floor transition helpers ──────────────────────────────────────────────
+
+    private void updateFloorTransitionState(LatLng currentLocation, float currentHeight) {
+        if (currentLocation == null || confirmedFloorKey == null
+                || Float.isNaN(confirmedFloorElevation)) return;
+
+        float absDelta = Math.abs(currentHeight - confirmedFloorElevation);
+
+        if (absDelta < FLOOR_STABLE_BAND_METERS) {
+            lastStableFloorLocation   = currentLocation;
+            floorTransitionInProgress = false;
+            floorTransitionStartLocation = null;
+            return;
+        }
+
+        if (!floorTransitionInProgress
+                && absDelta >= FLOOR_TRANSITION_START_THRESHOLD_METERS) {
+            floorTransitionInProgress    = true;
+            floorTransitionStartLocation = (lastStableFloorLocation != null)
+                    ? lastStableFloorLocation : currentLocation;
+            Log.d("MapMatch", "Floor transition started at " + floorTransitionStartLocation);
+        }
+    }
+
+    private double getFloorTransitionHorizontalDisplacement(LatLng currentLocation) {
+        if (!floorTransitionInProgress || floorTransitionStartLocation == null
+                || currentLocation == null) return 0.0;
+        return distanceMeters(floorTransitionStartLocation, currentLocation);
+    }
+
+    private void resetFloorTransitionState() {
+        floorTransitionInProgress    = false;
+        floorTransitionStartLocation = null;
+        lastStableFloorLocation      = null;
+    }
+
+    private LatLng getNearestPoint(LatLng location, List<LatLng> centers) {
+        if (location == null || centers == null || centers.isEmpty()) return null;
+        LatLng nearest = null;
+        double bestDist = Double.MAX_VALUE;
+        for (LatLng center : centers) {
+            double d = distanceMeters(location, center);
+            if (d < bestDist) { bestDist = d; nearest = center; }
+        }
+        return nearest;
+    }
+
+    // ── FloorChangeResult ─────────────────────────────────────────────────────
+
+    /** Result of an acceptFloorChange() call. */
+    public static class FloorChangeResult {
+        public final String  floorKey;
+        public final LatLng  snappedLocation;
+        public final boolean changedFloor;
+        public final LatLng  highlightCenter;
+
+        public FloorChangeResult(String floorKey, LatLng snappedLocation,
+                                 boolean changedFloor, LatLng highlightCenter) {
+            this.floorKey        = floorKey;
+            this.snappedLocation = snappedLocation;
+            this.changedFloor    = changedFloor;
+            this.highlightCenter = highlightCenter;
+        }
     }
 
     private String getAdjacentFloorKey(String floorKey, boolean goingUp) {
