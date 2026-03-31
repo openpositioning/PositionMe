@@ -307,6 +307,126 @@ public class IndoorMapManager {
 //        Log.e("IndoorMapManager", "applied wall constraints!");
 //
 //        }
+
+    // -------------------------------------------------------------------------
+    // EKF single-position wall constraint (added from teammate's map-matching work)
+    // The particle-filter batch method above is kept unchanged for SensorFusion.
+    // -------------------------------------------------------------------------
+
+    private static final float INTERSECTION_EPSILON = 1e-6f;
+    private static final float RING_CLOSURE_EPSILON  = 1e-4f;
+    private static final float WALL_SNAP_BACK_METERS = 0.05f;
+
+    /**
+     * Clamps a single EKF position step to wall boundaries using binary search.
+     * If fromEnu → toEnu crosses a wall, returns the last valid position before the wall.
+     *
+     * @param fromEnu float[]{east, north} — previous EKF position (metres)
+     * @param toEnu   float[]{east, north} — new EKF position after predict()
+     * @return clamped position, or toEnu unchanged if no wall was crossed
+     */
+    public float[] clampToWallEnu(float[] fromEnu, float[] toEnu) {
+        if (currentVenue == null || currentFloorKey == null) return toEnu;
+        IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
+        if (floor == null || floor.wallPolygonsEnu.isEmpty()) return toEnu;
+        if (!crossesAnyWallEnu(fromEnu, toEnu, floor.wallPolygonsEnu)) return toEnu;
+        return snapToWallEnu(fromEnu, toEnu, floor.wallPolygonsEnu);
+    }
+
+    /**
+     * Constrains a single EKF position step to wall boundaries using precise
+     * crossing-point detection. Snaps back WALL_SNAP_BACK_METERS before the wall.
+     *
+     * @param fromEnu float[]{east, north} — previous position (metres)
+     * @param toEnu   float[]{east, north} — new position after predict()
+     * @return constrained position, or toEnu unchanged if no wall was crossed
+     */
+    public float[] constrainMovementToWalls(float[] fromEnu, float[] toEnu) {
+        if (fromEnu == null || toEnu == null) return toEnu;
+        if (currentVenue == null || currentFloorKey == null) return toEnu;
+        IndoorVenue.FloorFeatures floorFeatures = currentVenue.floorFeatures.get(currentFloorKey);
+        if (floorFeatures == null || floorFeatures.wallPolygonsEnu == null
+                || floorFeatures.wallPolygonsEnu.isEmpty()) return toEnu;
+
+        WallCrossing crossing = findFirstWallCrossing(fromEnu, toEnu, floorFeatures.wallPolygonsEnu);
+        if (crossing == null) return new float[]{toEnu[0], toEnu[1]};
+        return moveToJustBeforeWall(fromEnu, toEnu, crossing.t, WALL_SNAP_BACK_METERS);
+    }
+
+    private static class WallCrossing {
+        final float[] crossingPoint;
+        final int polygonIndex;
+        final int edgeIndex;
+        final float t;
+
+        WallCrossing(float[] crossingPoint, int polygonIndex, int edgeIndex, float t) {
+            this.crossingPoint = crossingPoint;
+            this.polygonIndex  = polygonIndex;
+            this.edgeIndex     = edgeIndex;
+            this.t             = t;
+        }
+    }
+
+    private WallCrossing findFirstWallCrossing(float[] from, float[] to,
+                                               List<List<float[]>> walls) {
+        double bestT = Double.MAX_VALUE;
+        WallCrossing best = null;
+
+        for (int pi = 0; pi < walls.size(); pi++) {
+            List<float[]> polygon = walls.get(pi);
+            if (polygon == null || polygon.size() < 2) continue;
+            int edgeCount = getRingEdgeCount(polygon);
+
+            for (int ei = 0; ei < edgeCount; ei++) {
+                float[] a = polygon.get(ei);
+                float[] b = polygon.get((ei + 1) % polygon.size());
+                double t = intersectionT(from, to, a, b);
+                if (t >= 0.0 && t <= 1.0 && t < bestT) {
+                    bestT = t;
+                    float[] cp = new float[]{
+                            (float)(from[0] + t * (to[0] - from[0])),
+                            (float)(from[1] + t * (to[1] - from[1]))
+                    };
+                    best = new WallCrossing(cp, pi, ei, (float) t);
+                }
+            }
+        }
+        return best;
+    }
+
+    private int getRingEdgeCount(List<float[]> ring) {
+        if (ring == null || ring.size() < 2) return 0;
+        float[] first = ring.get(0);
+        float[] last  = ring.get(ring.size() - 1);
+        boolean closed = Math.abs(first[0] - last[0]) < RING_CLOSURE_EPSILON
+                      && Math.abs(first[1] - last[1]) < RING_CLOSURE_EPSILON;
+        return closed ? ring.size() - 1 : ring.size();
+    }
+
+    private double intersectionT(float[] p1, float[] p2, float[] p3, float[] p4) {
+        double rX = p2[0] - p1[0], rY = p2[1] - p1[1];
+        double sX = p4[0] - p3[0], sY = p4[1] - p3[1];
+        double denom = rX * sY - rY * sX;
+        if (Math.abs(denom) < INTERSECTION_EPSILON) return -1.0;
+        double qmpX = p3[0] - p1[0], qmpY = p3[1] - p1[1];
+        double t = (qmpX * sY - qmpY * sX) / denom;
+        double u = (qmpX * rY - qmpY * rX) / denom;
+        return (t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0) ? t : -1.0;
+    }
+
+    private float[] moveToJustBeforeWall(float[] from, float[] to, float hitT,
+                                         float snapBackMeters) {
+        float dx = to[0] - from[0];
+        float dy = to[1] - from[1];
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-6f) return new float[]{from[0], from[1]};
+        float backT = snapBackMeters / len;
+        float safeT = Math.max(0f, hitT - backT);
+        return new float[]{from[0] + safeT * dx, from[1] + safeT * dy};
+    }
+
+    // -------------------------------------------------------------------------
+
 public void bakeEnuCoordinates(CoordinateConverter converter) {
         if (currentVenue == null || currentFloorKey == null) return;
         IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
