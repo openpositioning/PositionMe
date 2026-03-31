@@ -52,5 +52,6 @@ Rules to follow when implementing or modifying indoor map matching and floor est
 - [ ] All new parameters are centralized with defaults; no magic numbers.
 - [ ] Unit tests cover core rules and pass.
 - [ ] New or edited comments are concise, in English, and style‑consistent.
+- [ ] Update `MAP_MATCHING_CHANGELOG.md` with added/modified files and open tasks whenever map-matching code changes.
 
 Exceptions to these constraints must be documented in design notes and approved before merging.

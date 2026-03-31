@@ -24,6 +24,8 @@ import com.openpositioning.PositionMe.utils.PathView;
 import com.openpositioning.PositionMe.utils.PdrProcessing;
 import com.openpositioning.PositionMe.utils.TrajectoryValidator;
 import com.openpositioning.PositionMe.data.remote.ServerCommunications;
+import com.openpositioning.PositionMe.utils.WallGeometryBuilder;
+import android.graphics.PointF;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -425,6 +427,15 @@ public class SensorFusion implements SensorEventListener {
      */
     public void setSelectedBuildingId(String buildingId) {
         recorder.setSelectedBuildingId(buildingId);
+    }
+
+    /**
+     * Inject wall polylines (meters) into PDR for collision correction.
+     */
+    public void setPdrWalls(List<List<PointF>> walls) {
+        if (pdrProcessing != null) {
+            pdrProcessing.setWalls(walls);
+        }
     }
 
     /**

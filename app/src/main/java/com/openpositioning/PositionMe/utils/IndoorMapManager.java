@@ -128,6 +128,15 @@ public class IndoorMapManager {
     }
 
     /**
+     * Returns the current floor shapes object, or null if unavailable.
+     */
+    public FloorplanApiClient.FloorShapes getCurrentFloorShape() {
+        if (currentFloorShapes == null) return null;
+        if (currentFloor < 0 || currentFloor >= currentFloorShapes.size()) return null;
+        return currentFloorShapes.get(currentFloor);
+    }
+
+    /**
      * Returns true if the last known location is within the given radius (meters)
      * of any stairs or lift feature on the current floor.
      *

@@ -2,6 +2,7 @@ package com.openpositioning.PositionMe.utils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.PointF;
 import android.hardware.SensorManager;
 
 import androidx.preference.PreferenceManager;
@@ -10,10 +11,10 @@ import com.openpositioning.PositionMe.sensors.SensorFusion;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.OptionalDouble;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.List;
 
 /**
  * Processes data recorded in the {@link SensorFusion} class and calculates live PDR estimates.
@@ -54,6 +55,9 @@ public class PdrProcessing {
     // Current 2D position coordinates
     private float positionX;
     private float positionY;
+
+    // Optional wall geometry in meters (polylines)
+    private List<List<PointF>> walls;
 
     // Vertical movement calculation
     private Float[] startElevationBuffer;
@@ -178,9 +182,16 @@ public class PdrProcessing {
         float x = (float) (stepLength * Math.cos(adaptedHeading));
         float y = (float) (stepLength * Math.sin(adaptedHeading));
 
+        // Apply wall collision correction if walls are provided
+        PointF previous = new PointF(this.positionX, this.positionY);
+        PointF candidate = new PointF(this.positionX + x, this.positionY + y);
+        if (walls != null && !walls.isEmpty()) {
+            candidate = WallCollisionCorrector.correct(previous, candidate, walls);
+        }
+
         // Update position values
-        this.positionX += x;
-        this.positionY += y;
+        this.positionX = candidate.x;
+        this.positionY = candidate.y;
 
         // return current position
         return new float[]{this.positionX, this.positionY};
@@ -420,6 +431,13 @@ public class PdrProcessing {
 
         //Return average step length
         return averageStepLength;
+    }
+
+    /**
+     * Inject wall polylines (meters) for collision correction. Optional.
+     */
+    public void setWalls(List<List<PointF>> walls) {
+        this.walls = walls;
     }
 
 }
