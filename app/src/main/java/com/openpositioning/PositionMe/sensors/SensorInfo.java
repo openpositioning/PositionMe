@@ -14,12 +14,12 @@ public class SensorInfo {
 
     // Public default constructor of the Sensor Info object.
     // Should be initialised with all its parameters, typically from {@link MovementSensor}.
-    // @param name name string of the sensor. Unique for a particular sensor type.
-    // @param vendor vendor string of this sensor.
-    // @param resolution resolution of the sensor in the sensor's unit.
-    // @param power the power in mA used by this sensor while in use.
-    // @param version version of the sensor's module.
-    // @param type generic type of this sensor.
+// Parameter name: name string of the sensor. Unique for a particular sensor type.
+// Parameter vendor: vendor string of this sensor.
+// Parameter resolution: resolution of the sensor in the sensor's unit.
+// Parameter power: the power in mA used by this sensor while in use.
+// Parameter version: version of the sensor's module.
+// Parameter type: generic type of this sensor.
     public SensorInfo(String name, String vendor, float resolution, float power, int version, int type) {
         this.name = name;
         this.vendor = vendor;

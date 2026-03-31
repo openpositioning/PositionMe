@@ -9,7 +9,7 @@ import android.hardware.SensorManager;
 // access. Using the context, it adds a Sensor Manager, as well as a Sensor and
 // {@link com.openpositioning.PositionMe.sensors.SensorInfo}
 // instance, with the type of the sensor determined upon initialisation of the class.
-// @see com.openpositioning.PositionMe.sensors.SensorFusion where instances of this class are intended to be used.
+// Related: com.openpositioning.PositionMe.sensors.SensorFusion where instances of this class are intended to be used.
 // @author Mate Stodulka
 public class MovementSensor {
     // Application context for permissions and hardware access
@@ -24,9 +24,9 @@ public class MovementSensor {
 
     // Public default constructor for the Movement Sensor class.
     // It calls the superclass constructor with context, and then initialises local properties.
-    // @param context Application context used to check permissions and access devices.
-    // @param sensorType Type of the sensor to be created, using Sensor.TYPE constants.
-    // @see com.openpositioning.PositionMe.sensors.SensorInfo objects holding physical sensors properties.
+// Parameter context: Application context used to check permissions and access devices.
+// Parameter sensorType: Type of the sensor to be created, using Sensor.TYPE constants.
+// Related: com.openpositioning.PositionMe.sensors.SensorInfo objects holding physical sensors properties.
     public MovementSensor(Context context, int sensorType) {
         this.context = context;
 

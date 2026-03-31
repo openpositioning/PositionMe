@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.Objects;
 
 // Adapter used for displaying sensor info data.
-// @see SensorInfoViewHolder corresponding View Holder class
-// @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
+// Related: SensorInfoViewHolder corresponding View Holder class
+// Related: com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
 // @author Mate Stodulka
 public class SensorInfoListAdapter extends RecyclerView.Adapter<SensorInfoViewHolder> {
 
@@ -23,16 +23,16 @@ public class SensorInfoListAdapter extends RecyclerView.Adapter<SensorInfoViewHo
     List<SensorInfo> sensorInfoList;
 
     // Default public constructor with context for inflating views and list to be displayed.
-    // @param context application context to enable inflating views used in the list.
-    // @param sensorInfoList list of SensorInfo objects to be displayed in the list.
-    // @see SensorInfo the data class.
+// Parameter context: application context to enable inflating views used in the list.
+// Parameter sensorInfoList: list of SensorInfo objects to be displayed in the list.
+// Related: SensorInfo the data class.
     public SensorInfoListAdapter(Context context, List<SensorInfo> sensorInfoList) {
         this.context = context;
         this.sensorInfoList = sensorInfoList;
     }
 
     // {@inheritDoc}
-    // @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
+// Related: com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
     @NonNull
     @Override
     public SensorInfoViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -41,9 +41,9 @@ public class SensorInfoListAdapter extends RecyclerView.Adapter<SensorInfoViewHo
 
     // {@inheritDoc}
     // Formats and assigns the data fields from the SensorInfo object to the TextView fields.
-    // @see SensorInfo data class
-    // @see com.openpositioning.PositionMe.R.string formatting for strings.
-    // @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
+// Related: SensorInfo data class
+// Related: com.openpositioning.PositionMe.R.string formatting for strings.
+// Related: com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view xml layout file
     @Override
     public void onBindViewHolder(@NonNull SensorInfoViewHolder holder, int position) {
         holder.name.setText(sensorInfoList.get(position).getName());
@@ -61,7 +61,7 @@ public class SensorInfoListAdapter extends RecyclerView.Adapter<SensorInfoViewHo
 
     // {@inheritDoc}
     // Number of SensorInfo objects.
-    // @see SensorInfo
+// Related: SensorInfo
     @Override
     public int getItemCount() {
         return sensorInfoList.size();

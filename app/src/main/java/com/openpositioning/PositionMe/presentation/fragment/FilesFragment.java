@@ -34,10 +34,10 @@ import java.util.Map;
 
 // A simple {@link Fragment} subclass. The files fragments displays a list of trajectories already
 // uploaded with some metadata, and enabled re-downloading them to the device's local storage.
-// @see HomeFragment the connected fragment in the nav graph.
-// @see UploadFragment sub-menu for uploading recordings that failed during recording.
-// @see com.openpositioning.PositionMe.Traj the data structure sent and received.
-// @see ServerCommunications the class handling communication with the server.
+// Related: HomeFragment the connected fragment in the nav graph.
+// Related: UploadFragment sub-menu for uploading recordings that failed during recording.
+// Related: com.openpositioning.PositionMe.Traj the data structure sent and received.
+// Related: ServerCommunications the class handling communication with the server.
 // @author Mate Stodulka
 public class FilesFragment extends Fragment implements Observer {
 
@@ -78,9 +78,9 @@ public class FilesFragment extends Fragment implements Observer {
     // {@inheritDoc}
     // Initialises UI elements, including a navigation card to the {@link UploadFragment} and a
     // RecyclerView displaying online trajectories.
-    // @see TrajDownloadViewHolder the View Holder for the list.
-    // @see TrajDownloadListAdapter the list adapter for displaying the recycler view.
-    // @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view the elements in the list.
+// Related: TrajDownloadViewHolder the View Holder for the list.
+// Related: TrajDownloadListAdapter the list adapter for displaying the recycler view.
+// Related: com.openpositioning.PositionMe.R.layout#item_trajectorycard_view the elements in the list.
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -110,7 +110,7 @@ public class FilesFragment extends Fragment implements Observer {
 
     // {@inheritDoc}
     // Called by {@link ServerCommunications} when the response to the HTTP info request is received.
-    // @param singletonStringList a single string wrapped in an object array containing the http
+// Parameter singletonStringList: a single string wrapped in an object array containing the http
     // response from the server.
     @Override
     public void update(Object[] singletonStringList) {
@@ -134,8 +134,8 @@ public class FilesFragment extends Fragment implements Observer {
     // Parses the info response string from the HTTP communication.
     // Process the data using the Json library and return the matching Java data structure as a
     // List of Maps of \<String, String\>. Throws a JSONException if the data is not valid.
-    // @param infoString HTTP info request response as a single string
-    // @return List of Maps of String to String containing ID, owner ID, and date.
+// Parameter infoString: HTTP info request response as a single string
+// Returns: List of Maps of String to String containing ID, owner ID, and date.
     private List<Map<String, String>> processInfoResponse(String infoString) {
         // Initialise empty list
         List<Map<String, String>> entryList = new ArrayList<>();
@@ -155,9 +155,20 @@ public class FilesFragment extends Fragment implements Observer {
             System.err.println("JSON reading failed");
             e.printStackTrace();
         }
-        // Sort the list by the ID fields of the maps
-        entryList.sort(Comparator.comparing(m -> Integer.parseInt(m.get("id")), Comparator.nullsLast(Comparator.naturalOrder())));
+        // Sort by numeric ID when possible; keep invalid or missing IDs at the end.
+        entryList.sort(Comparator.comparingInt(m -> safeParseId(m.get("id"))));
         return entryList;
+    }
+
+    private int safeParseId(String id) {
+        if (id == null) {
+            return Integer.MAX_VALUE;
+        }
+        try {
+            return Integer.parseInt(id);
+        } catch (NumberFormatException e) {
+            return Integer.MAX_VALUE;
+        }
     }
 
     // Update the RecyclerView in the FilesFragment with new data.
@@ -165,7 +176,7 @@ public class FilesFragment extends Fragment implements Observer {
     // RecyclerView. Initialises a {@link TrajDownloadListAdapter} with the input array and setting
     // up a listener so that trajectories are downloaded when clicked, and a pop-up message is
     // displayed to notify the user.
-    // @param entryList List of Maps of String to String containing metadata about the uploaded
+// Parameter entryList: List of Maps of String to String containing metadata about the uploaded
     // trajectories (ID, owner ID, date).
     private void updateView(List<Map<String, String>> entryList) {
         // Initialise RecyclerView with Manager and Adapter

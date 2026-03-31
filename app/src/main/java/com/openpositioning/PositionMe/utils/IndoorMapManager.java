@@ -293,25 +293,15 @@ public class IndoorMapManager {
                 Log.w(TAG, ">>> [PARSE] No map_shapes data in response!");
             }
 
-            // Update selected building name if we have it
+            // Keep user-selected building stable even if the API returns a nearby venue.
+            // We still keep currentVenueName for diagnostics and display purposes.
             if (currentVenueName != null && selectedBuilding != null) {
-                Log.d(TAG, ">>> [PARSE] Updating selected building info:");
+                Log.d(TAG, ">>> [PARSE] Venue match check:");
                 Log.d(TAG, "    - Requested: " + expectedBuildingName);
                 Log.d(TAG, "    - API returned: " + currentVenueName);
-                
-                // NO STRICT VALIDATION - Accept any data from API
-                // The API returns the nearest building with indoor map data.
-                // We display whatever data is returned to ensure the map is always shown.
                 if (!currentVenueName.equalsIgnoreCase(expectedBuildingName)) {
-                    Log.w(TAG, "    - Note: API returned different building's data.");
-                    Log.w(TAG, "    - This is normal if the requested building has no data in the server.");
+                    Log.w(TAG, "    - Venue mismatch detected. Keeping selected building unchanged.");
                 }
-                
-                // Always accept: Update building info with API response
-                selectedBuilding.name = currentVenueName;
-                selectedBuilding.id = "venue_" + currentVenueName.toLowerCase().replace(" ", "_");
-                Log.d(TAG, "    - Accepted API data");
-                Log.d(TAG, "    - New ID: " + selectedBuilding.id);
             }
 
             // Render the data on the map
@@ -360,10 +350,10 @@ public class IndoorMapManager {
     }
     
     // Render GeoJSON and optionally store wall data for collision detection
-    // @param jsonString GeoJSON string to render
-    // @param color Line color
-    // @param width Line width
-    // @param floorName Floor name (if not null, stores wall data for this floor)
+// Parameter jsonString: GeoJSON string to render
+// Parameter color: Line color
+// Parameter width: Line width
+// Parameter floorName: Floor name (if not null, stores wall data for this floor)
     private void renderGeoJsonWithWallData(String jsonString, int color, float width, String floorName) {
         try {
             JSONObject geoJson;
@@ -796,10 +786,8 @@ public class IndoorMapManager {
             polygon.setStrokeColor(Color.rgb(0, 230, 118));  // Material green accent
             polygon.setStrokeWidth(6f);
 
-            // Convert building name to API campaign ID and save to SharedPreferences
-            String apiCampaignId = convertNameToApiId(b.name);
-            settings.edit().putString("current_campaign", apiCampaignId).apply();
-            Log.d(TAG, "Saved Campaign to Prefs: " + apiCampaignId);
+            // Persist campaign only when mapping is valid.
+            persistCampaignForBuildingName(b.name);
 
             fetchFloorPlan(center, new ArrayList<>());
             return true;
@@ -857,8 +845,7 @@ public class IndoorMapManager {
 
         highlightSelectedBuilding(building);
 
-        String apiCampaignId = convertNameToApiId(building.name);
-        settings.edit().putString("current_campaign", apiCampaignId).apply();
+        persistCampaignForBuildingName(building.name);
 
         if (fetchData) {
             fetchFloorPlan(building.bounds.getCenter(), new ArrayList<>());
@@ -1122,9 +1109,9 @@ public class IndoorMapManager {
     }
     
     public boolean isIndoorMapVisible() { return isIndoorMapVisible; }
-    public String getSelectedVenueId() { return currentVenueName != null ? currentVenueName : (selectedBuilding != null ? selectedBuilding.name : "None"); }
+    public String getSelectedVenueId() { return selectedBuilding != null ? selectedBuilding.name : "None"; }
     public String getSelectedBuildingId() { return selectedBuilding != null ? selectedBuilding.id : null; }
-    public String getSelectedBuildingName() { return currentVenueName != null ? currentVenueName : (selectedBuilding != null ? selectedBuilding.name : null); }
+    public String getSelectedBuildingName() { return selectedBuilding != null ? selectedBuilding.name : null; }
     public float getFloorHeight() { return selectedBuilding != null ? selectedBuilding.floorHeight : 4.0f; }
     public List<List<LatLng>> getCurrentFloorStairsZones() {
         String currentFloorName = getCurrentFloorName();
@@ -1480,25 +1467,43 @@ public class IndoorMapManager {
     
 
     private String convertNameToApiId(String displayName) {
-    if (displayName == null) return ""; // Default: empty (no campaign)
+        if (displayName == null) {
+            return "";
+        }
 
         String lowerName = displayName.toLowerCase().trim();
 
-        // Only map campaigns that are CONFIRMED to exist on the server
         if (lowerName.contains("murchison")) {
             return "murchison_house";
         }
-        else if (lowerName.contains("nucleus")) {
+        if (lowerName.contains("nucleus")) {
             return "nucleus_building";
         }
-        
+        if (lowerName.contains("library") || lowerName.contains("murray")) {
+            return "library";
+        }
+        if (lowerName.contains("fjb") || lowerName.contains("faraday")) {
+            return "fjb";
+        }
 
         return "";
     }
+
+    private void persistCampaignForBuildingName(String buildingName) {
+        String apiCampaignId = convertNameToApiId(buildingName);
+        if (apiCampaignId == null || apiCampaignId.isEmpty()) {
+            String previousCampaign = settings.getString("current_campaign", "");
+            Log.w(TAG, "No campaign mapping for building: " + buildingName);
+            Log.w(TAG, "Keeping previous campaign in prefs: " + previousCampaign);
+            return;
+        }
+        settings.edit().putString("current_campaign", apiCampaignId).apply();
+        Log.d(TAG, "Saved campaign to prefs: " + apiCampaignId);
+    }
     
     // Check if a location is inside the currently selected building's boundary
-    // @param location The location to check
-    // @return true if location is inside the selected building, false otherwise
+// Parameter location: The location to check
+// Returns: true if location is inside the selected building, false otherwise
     public boolean isLocationInsideSelectedBuilding(LatLng location) {
         if (location == null) return false;
         
@@ -1515,8 +1520,30 @@ public class IndoorMapManager {
         return false;
     }
 
+    public boolean isLocationInsideAnyKnownBuilding(LatLng location) {
+        if (location == null) {
+            return false;
+        }
+
+        if (isLocationInsideSelectedBuilding(location)) {
+            return true;
+        }
+
+        if (!fallbackBuildings.isEmpty()) {
+            for (IndoorBuilding building : fallbackBuildings) {
+                if (building != null
+                        && building.polygonPoints != null
+                        && GeometryUtils.isPointInPolygon(location, building.polygonPoints)) {
+                    return true;
+                }
+            }
+        }
+
+        return BuildingPolygon.inAnyKnownBuilding(location);
+    }
+
     // Get the walls for a specific floor (or current top by default).
-    // @return List of Polylines (Lists of LatLng) representing the walls on the current floor.
+// Returns: List of Polylines (Lists of LatLng) representing the walls on the current floor.
     public List<List<LatLng>> getCurrentFloorWalls() {
         String currentFloorName = getCurrentFloorName();
         if (currentFloorName != null && floorWallsMap != null && floorWallsMap.containsKey(currentFloorName)) {

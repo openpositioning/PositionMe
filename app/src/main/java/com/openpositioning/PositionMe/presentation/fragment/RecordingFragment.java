@@ -438,7 +438,7 @@ public class RecordingFragment extends Fragment implements Observer, IndoorMapFr
     }
 
     private boolean isInsideKnownIndoorBuildings(@NonNull LatLng point) {
-        return BuildingPolygon.inNucleus(point) || BuildingPolygon.inLibrary(point);
+        return BuildingPolygon.inAnyKnownBuilding(point);
     }
 
     private LatLng blendLocations(LatLng primary, LatLng correction, double correctionWeight) {

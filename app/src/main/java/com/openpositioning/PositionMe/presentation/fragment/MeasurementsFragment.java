@@ -31,8 +31,8 @@ import java.util.Map;
 // A simple {@link Fragment} subclass. The measurement fragment displays the set of current sensor
 // readings. The values are refreshed periodically, but slower than their internal refresh rate.
 // The refresh time is set by a static constant.
-// @see HomeFragment the previous fragment in the nav graph.
-// @see SensorFusion the source of all sensor readings.
+// Related: HomeFragment the previous fragment in the nav graph.
+// Related: SensorFusion the source of all sensor readings.
 // @author Mate Stodulka
 public class MeasurementsFragment extends Fragment {
 
@@ -62,7 +62,7 @@ public class MeasurementsFragment extends Fragment {
     // {@inheritDoc}
     // Obtains the singleton Sensor Fusion instance and initialises the string prefaces for display.
     // Creates a new handler to periodically refresh data.
-    // @see SensorFusion handles all sensor data.
+// Related: SensorFusion handles all sensor data.
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -125,8 +125,8 @@ public class MeasurementsFragment extends Fragment {
     // Must be run on the UI thread via a Handler. Obtains movement sensor values and the current
     // WiFi networks from the {@link SensorFusion} instance and updates the UI with the new data
     // and the string wrappers provided.
-    // @see SensorFusion class handling all sensors and data processing.
-    // @see Wifi class holding network data.
+// Related: SensorFusion class handling all sensors and data processing.
+// Related: Wifi class holding network data.
     private final Runnable refreshTableTask = new Runnable() {
         @Override
         public void run() {

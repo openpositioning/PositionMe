@@ -44,8 +44,8 @@ public class NucleusBuildingManager {
     }
 
     // Determines if a given point is inside the building polygon.
-    // @param point the point to check
-    // @return true if the point is inside the polygon, false otherwise
+// Parameter point: the point to check
+// Returns: true if the point is inside the polygon, false otherwise
     public boolean isPointInBuilding(LatLng point) {
         int intersectCount = 0;
         // Loop through each edge of the polygon
@@ -62,10 +62,10 @@ public class NucleusBuildingManager {
     }
 
     // Determines if a ray from a point intersects with a given edge of the polygon.
-    // @param point the point from which the ray is cast
-    // @param vertA the first vertex of the edge
-    // @param vertB the second vertex of the edge
-    // @return true if the ray intersects with the edge, false otherwise
+// Parameter point: the point from which the ray is cast
+// Parameter vertA: the first vertex of the edge
+// Parameter vertB: the second vertex of the edge
+// Returns: true if the ray intersects with the edge, false otherwise
     private boolean rayCastIntersect(LatLng point, LatLng vertA, LatLng vertB) {
         double aY = vertA.latitude;
         double bY = vertB.latitude;

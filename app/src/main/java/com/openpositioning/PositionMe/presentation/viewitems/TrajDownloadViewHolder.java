@@ -13,8 +13,8 @@ import com.openpositioning.PositionMe.presentation.fragment.FilesFragment;
 import java.lang.ref.WeakReference;
 
 // View holder class for the RecyclerView displaying Trajectory download data.
-// @see TrajDownloadListAdapter the corresponding list adapter.
-// @see com.openpositioning.PositionMe.R.layout#item_trajectorycard_view xml layout file
+// Related: TrajDownloadListAdapter the corresponding list adapter.
+// Related: com.openpositioning.PositionMe.R.layout#item_trajectorycard_view xml layout file
 // @author Mate Stodulka
 public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
 
@@ -25,8 +25,8 @@ public class TrajDownloadViewHolder extends RecyclerView.ViewHolder implements V
 
     // {@inheritDoc}
     // Assign TextView fields corresponding to Trajectory metadata.
-    // @param listener DownloadClickListener to enable acting on clicks on items.
-    // @see FilesFragment generating the data and implementing the listener.
+// Parameter listener: DownloadClickListener to enable acting on clicks on items.
+// Related: FilesFragment generating the data and implementing the listener.
     public TrajDownloadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
         super(itemView);
         this.listenerReference = new WeakReference<>(listener);

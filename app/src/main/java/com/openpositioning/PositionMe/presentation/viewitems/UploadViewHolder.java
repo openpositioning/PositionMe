@@ -14,8 +14,8 @@ import com.openpositioning.PositionMe.presentation.fragment.UploadFragment;
 import java.lang.ref.WeakReference;
 
 // View holder class for the RecyclerView displaying Trajectory files to be uploaded.
-// @see UploadListAdapter the corresponding list adapter.
-// @see com.openpositioning.PositionMe.R.layout#item_upload_card_view xml layout file
+// Related: UploadListAdapter the corresponding list adapter.
+// Related: com.openpositioning.PositionMe.R.layout#item_upload_card_view xml layout file
 // @author Mate Stodulka
 public class UploadViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
 
@@ -28,8 +28,8 @@ public class UploadViewHolder extends RecyclerView.ViewHolder implements View.On
 
     // {@inheritDoc}
     // Assign TextView fields corresponding to Trajectory file metadata.
-    // @param listener DownloadClickListener to enable acting on clicks on items.
-    // @see UploadFragment locating the data and implementing the
+// Parameter listener: DownloadClickListener to enable acting on clicks on items.
+// Related: UploadFragment locating the data and implementing the
     // listener.
     public UploadViewHolder(@NonNull View itemView, DownloadClickListener listener) {
         super(itemView);

@@ -9,7 +9,7 @@ public interface Observer {
 
     // Updates from the class implementing the {@link Observable} interface, where this instance is
     // registered as an observer.
-    // @param objList an array of objects that were updated in the <code>Observable</code>
+// Parameter objList: an array of objects that were updated in the <code>Observable</code>
     public void update(Object[] objList);
 }
 

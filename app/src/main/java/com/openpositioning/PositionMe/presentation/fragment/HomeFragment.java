@@ -34,10 +34,10 @@ import com.openpositioning.PositionMe.presentation.activity.RecordingActivity;
 // A simple {@link Fragment} subclass. The home fragment is the start screen of the application.
 // The home fragment acts as a hub for all other fragments, with buttons and icons for navigation.
 // The default screen when opening the application
-// @see RecordingFragment
-// @see FilesFragment
-// @see MeasurementsFragment
-// @see SettingsFragment
+// Related: RecordingFragment
+// Related: FilesFragment
+// Related: MeasurementsFragment
+// Related: SettingsFragment
 // @author Mate Stodulka
 public class HomeFragment extends Fragment implements OnMapReadyCallback {
 

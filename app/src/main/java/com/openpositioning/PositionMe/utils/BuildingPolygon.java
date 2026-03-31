@@ -8,7 +8,7 @@ import java.util.List;
 
 // Class used to check for a pre-defined set of coordinates if it is in a Building (Nucleus, Library)
 // (Can be used to add more buildings by adding the coordinates of the buildings and adding methods)
-// @see IndoorMapManager Used by the the IndoorFloorManager class
+// Related: IndoorMapManager Used by the the IndoorFloorManager class
 // @author Arun Gopalakrishnan
 public class BuildingPolygon {
     // Defining the coordinates of the building boundaries (rectangular boundaries based on floor map shape)
@@ -34,25 +34,57 @@ public class BuildingPolygon {
         add(new LatLng(BuildingPolygon.LIBRARY_NE.latitude,BuildingPolygon.LIBRARY_SW.longitude));// (North-West)
     }};
 
+    public static final List<LatLng> MURCHISON_POLYGON = new ArrayList<LatLng>() {{
+        add(new LatLng(55.92447, -3.17868));
+        add(new LatLng(55.92379, -3.17868));
+        add(new LatLng(55.92379, -3.17964));
+        add(new LatLng(55.92447, -3.17964));
+    }};
+
+    public static final List<LatLng> FJB_POLYGON = new ArrayList<LatLng>() {{
+        add(new LatLng(55.92282, -3.17259));
+        add(new LatLng(55.92221, -3.17192));
+        add(new LatLng(55.92211, -3.17228));
+        add(new LatLng(55.92269, -3.17296));
+    }};
+
     // Function to check if a point is in the Nucleus Building
-    // @param point the point to be checked if inside the building
-    // @return True if point is in Nucleus building else False
+// Parameter point: the point to be checked if inside the building
+// Returns: True if point is in Nucleus building else False
     public static boolean inNucleus(LatLng point){
         return (pointInPolygon(point,NUCLEUS_POLYGON));
 
     }
     // Function to check if a point is in the Library Building
-    // @param point the point which is checked if inside the building
-    // @return True if point is in Library building else False
+// Parameter point: the point which is checked if inside the building
+// Returns: True if point is in Library building else False
     public static boolean inLibrary(LatLng point){
         return (pointInPolygon(point,LIBRARY_POLYGON));
     }
 
+    public static boolean inMurchison(LatLng point) {
+        return pointInPolygon(point, MURCHISON_POLYGON);
+    }
+
+    public static boolean inFjb(LatLng point) {
+        return pointInPolygon(point, FJB_POLYGON);
+    }
+
+    public static boolean inAnyKnownBuilding(LatLng point) {
+        if (point == null) {
+            return false;
+        }
+        return inNucleus(point)
+                || inLibrary(point)
+                || inMurchison(point)
+                || inFjb(point);
+    }
+
     // Function to check if point in polygon (approximates earth to be flat)
     // Ray casting algorithm https://en.wikipedia.org/wiki/Point_in_polygon
-    // @param point point to be checked if in polygon
-    // @param polygon Boundaries of the building
-    // @return True if point in polygon
+// Parameter point: point to be checked if in polygon
+// Parameter polygon: Boundaries of the building
+// Returns: True if point in polygon
     // False otherwise
     private static boolean pointInPolygon(LatLng point, List<LatLng> polygon) {
         int numCrossings = 0;
@@ -76,10 +108,10 @@ public class BuildingPolygon {
     }
 
     // Ray Casting algorithm for a segment joining ab
-    // @param point the point we check
-    // @param a the line segment's starting point
-    // @param b the line segment's ending point
-    // @return True if the point is
+// Parameter point: the point we check
+// Parameter a: the line segment's starting point
+// Parameter b: the line segment's ending point
+// Returns: True if the point is
     // To the left of the segment ab
     // Not above nor below the segment ab
     // Otherwise False

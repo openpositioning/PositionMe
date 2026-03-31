@@ -29,9 +29,9 @@ import android.widget.Toast;
 // recording starts. This fragment displays a map in which the user can adjust their location to
 // correct the PDR when it is complete.
 // @author Virginia Cangelosi
-// @see HomeFragment the previous fragment in the nav graph.
-// @see RecordingFragment the next fragment in the nav graph.
-// @see SensorFusion the class containing sensors and recording.
+// Related: HomeFragment the previous fragment in the nav graph.
+// Related: RecordingFragment the next fragment in the nav graph.
+// Related: SensorFusion the class containing sensors and recording.
 public class StartLocationFragment extends Fragment {
 
     // Button to go to next fragment and save the location

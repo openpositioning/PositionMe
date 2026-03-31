@@ -17,7 +17,7 @@ public class CircularFloatBuffer {
     private volatile int writeSequence, readSequence;
 
     // Default constructor for a Circular Float Buffer with a given capacity.
-    // @param capacity size of the array.
+// Parameter capacity: size of the array.
     public CircularFloatBuffer(int capacity) {
         this.capacity = (capacity < 1) ? DEFAULT_CAPACITY : capacity;
         this.data = new float[capacity];
@@ -27,8 +27,8 @@ public class CircularFloatBuffer {
 
     // Put in a new element to the array.
     // Overwrites the existing values if present already and moves the write head forward.
-    // @param element float value to be added to the array.
-    // @return true if adding to the element was successful.
+// Parameter element: float value to be added to the array.
+// Returns: true if adding to the element was successful.
     public boolean putNewest(float element) {
         int nextWriteSeq = writeSequence + 1;
         data[nextWriteSeq % capacity] = element;
@@ -38,8 +38,8 @@ public class CircularFloatBuffer {
 
     // Get the oldest element in the array.
     // If empty, return an empty Optional. Moves the read head forward.
-    // @return Optional float of the oldest element.
-    // @see Optional
+// Returns: Optional float of the oldest element.
+// Related: Optional
     public Optional<Float> getOldest() {
         if (!isEmpty()) {
             float nextValue = data[readSequence % capacity];
@@ -50,32 +50,32 @@ public class CircularFloatBuffer {
     }
 
     // Get the capacity of the buffer.
-    // @return int capacity, size of the underlying array.
+// Returns: int capacity, size of the underlying array.
     public int getCapacity() {
         return capacity;
     }
 
     // Get the number of elements currently in the buffer.
-    // @return int number of floats in the buffer.
+// Returns: int number of floats in the buffer.
     public int getCurrentSize() {
         return (writeSequence - readSequence) + 1;
     }
 
     // Checks if the buffer is empty.
-    // @return true if there are no elements in the buffer, false otherwise
+// Returns: true if there are no elements in the buffer, false otherwise
     public boolean isEmpty() {
         return writeSequence < readSequence;
     }
 
     // Check if the buffer is full.
-    // @return true if the number of elements in the buffer matches the capacity, false otherwise.
+// Returns: true if the number of elements in the buffer matches the capacity, false otherwise.
     public boolean isFull() {
         return getCurrentSize() >= capacity;
     }
 
     // Get a copy of the buffer as a list starting with the oldest element.
     // If the list is not full return null.
-    // @return List of Floats contained in the buffer from oldest to newest.
+// Returns: List of Floats contained in the buffer from oldest to newest.
     public List<Float> getListCopy() {
         if(!isFull()) return null;
         return IntStream.range(readSequence, readSequence + capacity)

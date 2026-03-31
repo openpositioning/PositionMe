@@ -22,9 +22,9 @@ import java.util.List;
 
 // A simple {@link Fragment} subclass. The info fragment display the available sensors and data
 // collection devices with relevant information about their capabilities.
-// @see HomeFragment the previous fragment in the nav graph.
-// @see com.openpositioning.PositionMe.sensors.SensorFusion the class containing all sensors.
-// @see SensorInfo the class used for each sensor instance's metadata
+// Related: HomeFragment the previous fragment in the nav graph.
+// Related: com.openpositioning.PositionMe.sensors.SensorFusion the class containing all sensors.
+// Related: SensorInfo the class used for each sensor instance's metadata
 // @author Mate Stodulka
 public class InfoFragment extends Fragment {
 
@@ -59,9 +59,9 @@ public class InfoFragment extends Fragment {
     // Initialise the RecyclerView by creating and registering a Layout Manager, getting the
     // {@link SensorFusion} instance and obtaining the Sensor Info data, and passing it to the
     // {@link SensorInfoListAdapter}.
-    // @see SensorInfoListAdapter List adapter for the Sensor Info Recycler View.
-    // @see SensorInfoViewHolder View holder for the Sensor Infor RV.
-    // @see com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view
+// Related: SensorInfoListAdapter List adapter for the Sensor Info Recycler View.
+// Related: SensorInfoViewHolder View holder for the Sensor Infor RV.
+// Related: com.openpositioning.PositionMe.R.layout#item_sensorinfo_card_view
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);

@@ -35,7 +35,7 @@ public class WiFiPositioning {
     private static final String FALLBACK_API_AUTH_TOKEN = "NO_AUTH"; // Demo value; can be loaded from secrets.properties.
 
     // Getter for the WiFi positioning coordinates obtained using openpositioning API
-    // @return the user's coordinates based on openpositioning API
+// Returns: the user's coordinates based on openpositioning API
     public LatLng getWifiLocation() {
         return wifiLocation;
     }
@@ -43,7 +43,7 @@ public class WiFiPositioning {
     // Store user's location obtained using WiFi positioning
     private LatLng wifiLocation;
     // Getter for the WiFi positioning floor obtained using openpositioning API
-    // @return the user's location based on openpositioning API
+// Returns: the user's location based on openpositioning API
     public int getFloor() {
         return floor;
     }
@@ -54,7 +54,7 @@ public class WiFiPositioning {
 
     // Constructor to create the WiFi positioning object
     // Initialising a request queue to handle the POST requests asynchronously
-    // @param context Context of object calling
+// Parameter context: Context of object calling
     public WiFiPositioning(Context context){
         // Initialising the Request queue
         this.requestQueue = Volley.newRequestQueue(context.getApplicationContext());
@@ -67,7 +67,7 @@ public class WiFiPositioning {
     // along with the floor of the building the user is at.
     // A try and catch block along with error Logs have been added to keep a record of error's
     // obtained while handling POST requests (for better maintainability and secure programming)
-    // @param jsonWifiFeatures WiFi Fingerprint from device
+// Parameter jsonWifiFeatures: WiFi Fingerprint from device
     public void setApiAuthToken(String token) {
         if (token != null && !token.trim().isEmpty()) {
             this.apiAuthToken = token;
@@ -143,8 +143,8 @@ public class WiFiPositioning {
     // along with the floor of the building the user is at though a callback.
     // A try and catch block along with error Logs have been added to keep a record of error's
     // obtained while handling POST requests (for better maintainability and secure programming)
-    // @param jsonWifiFeatures WiFi Fingerprint from device
-    // @param callback callback function to allow user to use location when ready
+// Parameter jsonWifiFeatures: WiFi Fingerprint from device
+// Parameter callback: callback function to allow user to use location when ready
     public void request(JSONObject jsonWifiFeatures, final VolleyCallback callback) {
         executeRequest(jsonWifiFeatures, callback);
     }

@@ -31,7 +31,7 @@ import java.util.stream.Stream;
 
 
 // A simple {@link Fragment} subclass. Displays trajectories that were saved locally.
-// FIXED: Now correctly detects files starting with "traj_"
+// Now correctly detects files starting with "traj_"
 // @author Mate Stodulka
 public class UploadFragment extends Fragment {
 

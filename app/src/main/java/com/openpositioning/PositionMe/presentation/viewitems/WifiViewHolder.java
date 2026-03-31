@@ -9,8 +9,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
 
 // View holder class for the RecyclerView displaying Wifi data.
-// @see WifiListAdapter the corresponding list adapter.
-// @see com.openpositioning.PositionMe.R.layout#item_wifi_card_view xml layout file
+// Related: WifiListAdapter the corresponding list adapter.
+// Related: com.openpositioning.PositionMe.R.layout#item_wifi_card_view xml layout file
 // @author Mate Stodulka
 public class WifiViewHolder extends RecyclerView.ViewHolder {
 
@@ -19,7 +19,7 @@ public class WifiViewHolder extends RecyclerView.ViewHolder {
 
     // {@inheritDoc}
     // Assign TextView fields corresponding to Wifi attributes.
-    // @see com.openpositioning.PositionMe.sensors.Wifi the data class
+// Related: com.openpositioning.PositionMe.sensors.Wifi the data class
     public WifiViewHolder(@NonNull View itemView) {
         super(itemView);
         bssid = itemView.findViewById(R.id.wifiNameItem);

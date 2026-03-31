@@ -25,39 +25,33 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-// Sub fragment of Replay Activity. Fragment that replays trajectory data on a map.
-// <p>
-// The ReplayFragment is responsible for visualizing and replaying trajectory data captured during
-// previous recordings. It loads trajectory data from a JSON file, updates the map with user movement,
-// and provides UI controls for playback, pause, and seek functionalities.
-// <p>
-// Features:
-// Loads trajectory data from a file and displays it on a map.
-// Provides playback controls including play, pause, restart, and go to end.
-// Updates the trajectory dynamically as playback progresses.
-// Allows users to manually seek through the recorded trajectory.
-// Integrates with {@link TrajectoryMapFragment} for map visualization.
-// @see TrajectoryMapFragment The map fragment displaying the trajectory.
-// @see ReplayActivity The activity managing the replay workflow.
-// @see TrajParser Utility class for parsing trajectory data.
-// @author Shu Gu
+// This fragment controls the full replay lifecycle for one trajectory file.
+// It receives replay arguments, validates file integrity, allows start-point
+// selection, and renders frames onto the map in playback order.
+//
+// Replay pipeline implemented in this class:
+// Read replay arguments from ReplayActivity.
+// Verify and parse replay data from TrajParser.
+// Dispatch draw updates to TrajectoryMapFragment.
+// Keep UI state, seek bar position, and playback index synchronized.
+
 public class ReplayFragment extends Fragment {
 
     private static final String TAG = "ReplayFragment";
 
-    // GPS start location (received from ReplayActivity)
+    // Manual start position received from ReplayActivity.
     private float initialLat = 0f;
     private float initialLon = 0f;
     private LatLng recordedStartPoint = null;
     private String filePath = "";
     private int lastIndex = -1;
 
-    // UI Controls
+    // UI controls used to drive replay interaction.
     private TrajectoryMapFragment trajectoryMapFragment;
     private Button playPauseButton, restartButton, exitButton, goEndButton;
     private SeekBar playbackSeekBar;
 
-    // Playback-related
+    // Playback state and scheduling fields.
     private final Handler playbackHandler = new Handler();
     private final long PLAYBACK_INTERVAL_MS = 500; // milliseconds
     private List<TrajParser.ReplayPoint> replayData = new ArrayList<>();
@@ -68,20 +62,20 @@ public class ReplayFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Retrieve transferred data from ReplayActivity
+        // Read replay arguments passed by ReplayActivity.
         if (getArguments() != null) {
             filePath = getArguments().getString(ReplayActivity.EXTRA_TRAJECTORY_FILE_PATH, "");
             initialLat = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LAT, 0f);
             initialLon = getArguments().getFloat(ReplayActivity.EXTRA_INITIAL_LON, 0f);
         }
 
-        // Log the received data
+        // Log incoming replay context for debugging and support traces.
         Log.i(TAG, "ReplayFragment received data:");
         Log.i(TAG, "Trajectory file path: " + filePath);
         Log.i(TAG, "Initial latitude: " + initialLat);
         Log.i(TAG, "Initial longitude: " + initialLon);
 
-        // Check if file exists before parsing
+        // Validate source file accessibility before parsing.
         File trajectoryFile = new File(filePath);
         if (!trajectoryFile.exists()) {
             Log.e(TAG, "ERROR: Trajectory file does NOT exist at: " + filePath);
@@ -94,20 +88,20 @@ public class ReplayFragment extends Fragment {
 
         Log.i(TAG, "Trajectory file confirmed to exist and is readable.");
 
-        // VERIFY FILE CONTENTS FIRST
+        // Perform structural verification before building replay frames.
         boolean isValid = TrajectoryVerifier.verifyTrajectoryFile(filePath);
         if (!isValid) {
             Log.e(TAG, "Trajectory file verification FAILED - file may be corrupt or empty");
         }
 
-        // Check available start-point sources from file.
+        // Detect which start-point sources are available in this file.
         boolean gnssExists = TrajParser.hasGnssData(filePath);
         recordedStartPoint = TrajParser.getRecordedInitialPoint(filePath);
 
         if (gnssExists || recordedStartPoint != null) {
             showStartChoiceDialog(gnssExists, recordedStartPoint != null);
         } else {
-            // No file-based source -> fallback to manual start location.
+            // Fall back to manual start when file-based sources are unavailable.
             Log.i(TAG, "No GNSS/recorded start in file, using manual start location.");
             loadTrajectory(initialLat, initialLon);
         }
@@ -127,7 +121,7 @@ public class ReplayFragment extends Fragment {
                               @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Initialize map fragment
+        // Attach or create the child map fragment used for rendering frames.
         trajectoryMapFragment = (TrajectoryMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.replayMapFragmentContainer);
         if (trajectoryMapFragment == null) {
@@ -138,22 +132,22 @@ public class ReplayFragment extends Fragment {
                     .commit();
         }
         
-        // Note: Trajectory loading is now handled in onCreate (async-like) or via dialog choice
-        // Map initialization happens here, but data might be loaded after map is ready
+        // Replay data can be loaded before map readiness. Rendering methods are
+        // written to tolerate this ordering and apply state when the map is ready.
 
-        // Initialize UI controls
+        // Bind playback controls.
         playPauseButton = view.findViewById(R.id.playPauseButton);
         restartButton   = view.findViewById(R.id.restartButton);
         exitButton      = view.findViewById(R.id.exitButton);
         goEndButton     = view.findViewById(R.id.goEndButton);
         playbackSeekBar = view.findViewById(R.id.playbackSeekBar);
 
-        // Set SeekBar max value based on replay data
+        // Initialize seek range when parsed data is already available.
         if (!replayData.isEmpty()) {
             playbackSeekBar.setMax(replayData.size() - 1);
         }
 
-        // Button Listeners
+        // Playback toggle.
         playPauseButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) {
                 Log.w(TAG, "Play/Pause button pressed but replayData is empty.");
@@ -175,7 +169,7 @@ public class ReplayFragment extends Fragment {
             }
         });
 
-        // Restart button listener
+        // Restart from first frame.
         restartButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = 0;
@@ -184,7 +178,7 @@ public class ReplayFragment extends Fragment {
             updateMapForIndex(0);
         });
 
-        // Go to End button listener
+        // Jump to final frame and pause playback.
         goEndButton.setOnClickListener(v -> {
             if (replayData.isEmpty()) return;
             currentIndex = replayData.size() - 1;
@@ -195,7 +189,7 @@ public class ReplayFragment extends Fragment {
             playPauseButton.setText("Play");
         });
 
-        // Exit button listener
+        // Exit replay flow and return to the previous screen.
         exitButton.setOnClickListener(v -> {
             Log.i(TAG, "Exit button pressed. Exiting replay.");
             if (getActivity() instanceof ReplayActivity) {
@@ -205,7 +199,7 @@ public class ReplayFragment extends Fragment {
             }
         });
 
-        // SeekBar listener
+        // Scrub to a user-selected frame.
         playbackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -227,7 +221,7 @@ public class ReplayFragment extends Fragment {
 
 
 
-    // Show a start source picker. Available options depend on file content.
+    // Show start-source selection based on available trajectory metadata.
     private void showStartChoiceDialog(boolean hasGnss, boolean hasRecordedStart) {
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext())
                 .setTitle("Choose Starting Location")
@@ -261,7 +255,9 @@ public class ReplayFragment extends Fragment {
     }
 
     private void loadTrajectory(float latitude, float longitude) {
-        // Set map initial position
+        lastIndex = -1;
+
+        // Configure camera anchor and replay start marker before parsing.
         LatLng startPoint = new LatLng(latitude, longitude);
         LatLng recordedStartPoint = TrajParser.getRecordedInitialPoint(filePath);
         Log.i(TAG, "Setting initial map position: " + startPoint.toString());
@@ -270,18 +266,18 @@ public class ReplayFragment extends Fragment {
             trajectoryMapFragment.setReplayStartMarker(recordedStartPoint != null ? recordedStartPoint : startPoint);
         }
 
-        // Parse trajectory with the chosen start location
+        // Parse replay points using the selected start origin.
         replayData = TrajParser.parseTrajectoryData(filePath, requireContext(), latitude, longitude);
 
-        // Log results
+        // Apply parsed result to UI.
         if (replayData != null && !replayData.isEmpty()) {
             Log.i(TAG, "Trajectory data loaded successfully. Total points: " + replayData.size());
-            // Update UI
+            // Update seek bounds to match available frames.
             if (playbackSeekBar != null) {
                 playbackSeekBar.setMax(replayData.size() - 1);
                 playbackSeekBar.setProgress(0);
             }
-            // Draw initial state
+            // Draw initial frame immediately.
             updateMapForIndex(0);
         } else {
             Log.e(TAG, "Failed to load trajectory data!");
@@ -295,8 +291,7 @@ public class ReplayFragment extends Fragment {
 
 
 
-    // Runnable for playback of trajectory data.
-    // This runnable is called repeatedly to update the map with the next point in the replayData list.
+    // Periodic task that advances playback by one frame on each tick.
     private final Runnable playbackRunnable = new Runnable() {
         @Override
         public void run() {
@@ -318,27 +313,40 @@ public class ReplayFragment extends Fragment {
     };
 
 
-    // Update the map with the user location and GNSS location (if available) for the given index.
-    // Clears the map and redraws up to the given index.
-    // @param newIndex
+    // Render replay state at target frame index.
+    // Forward playback uses incremental drawing. Backward jumps trigger full redraw.
     private void updateMapForIndex(int newIndex) {
         if (newIndex < 0 || newIndex >= replayData.size()) return;
         if (trajectoryMapFragment == null) return;
-        
-        trajectoryMapFragment.clearMapAndReset();
-        for (int i = 0; i <= newIndex; i++) {
-            TrajParser.ReplayPoint p = replayData.get(i);
 
-            trajectoryMapFragment.updateUserLocation(p.pdrLocation, p.orientation);
-            if (p.gnssLocation != null) {
-                trajectoryMapFragment.updateGNSS(p.gnssLocation);
-            }
-            if (p.wifiLocation != null) {
-                trajectoryMapFragment.updateWifi(p.wifiLocation);
-            }
+        if (lastIndex == -1 || newIndex < lastIndex) {
+            trajectoryMapFragment.clearMapAndReset();
+            renderRange(0, newIndex);
+            lastIndex = newIndex;
+            return;
         }
 
+        if (newIndex == lastIndex) {
+            return;
+        }
+
+        renderRange(lastIndex + 1, newIndex);
+
         lastIndex = newIndex;
+    }
+
+    private void renderRange(int startIndex, int endIndex) {
+        for (int i = startIndex; i <= endIndex; i++) {
+            TrajParser.ReplayPoint point = replayData.get(i);
+
+            trajectoryMapFragment.updateUserLocation(point.pdrLocation, point.orientation);
+            if (point.gnssLocation != null) {
+                trajectoryMapFragment.updateGNSS(point.gnssLocation);
+            }
+            if (point.wifiLocation != null) {
+                trajectoryMapFragment.updateWifi(point.wifiLocation);
+            }
+        }
     }
 
     @Override
@@ -354,5 +362,6 @@ public class ReplayFragment extends Fragment {
         playbackHandler.removeCallbacks(playbackRunnable);
     }
 }
+
 
 

@@ -890,7 +890,7 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     private boolean isInsideKnownIndoorBuildings(double lat, double lon) {
         LatLng point = new LatLng(lat, lon);
-        return BuildingPolygon.inNucleus(point) || BuildingPolygon.inLibrary(point);
+        return BuildingPolygon.inAnyKnownBuilding(point);
     }
 
     private boolean shouldUseWifiInitialization(@NonNull LatLng wifiLocation) {

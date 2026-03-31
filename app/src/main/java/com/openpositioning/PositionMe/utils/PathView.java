@@ -43,8 +43,8 @@ public class PathView extends View {
     // Public default constructor for PathView. The constructor initialises the view with a context
     // and attribute set, sets the view as focusable and focusable in touch mode and calls
     // {@link PathView#setupPaint()} to initialise the paint object with colour and style.
-    // @param context Application Context to be used for permissions and device accesses.
-    // @param attrs The attribute set of the view.
+// Parameter context: Application Context to be used for permissions and device accesses.
+// Parameter attrs: The attribute set of the view.
     public PathView(Context context, AttributeSet attrs) {
         super(context, attrs);
         setFocusable(true);
@@ -71,7 +71,7 @@ public class PathView extends View {
 
     // {@inheritDoc}
     // Method drawing the created path with our paint.
-    // @param canvas The canvas on which the path will be drawn
+// Parameter canvas: The canvas on which the path will be drawn
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -149,7 +149,7 @@ public class PathView extends View {
 
     // Method called from {@link SensorFusion} used for adding PDR coordinates to the path to be
     // drawn.
-    // @param newCords An array containing the newly calculated coordinates to be added.
+// Parameter newCords: An array containing the newly calculated coordinates to be added.
     public void drawTrajectory(float[] newCords) {
         // Add x coordinates
         xCoords.add(newCords[0]);
@@ -208,7 +208,7 @@ public class PathView extends View {
     // Redraw trajectory to rescale the path.
     // Called by {@link CorrectionFragment} through {@link SensorFusion} to reset the scaling ratio
     // which will resize the path. It enables the redraw flag so new path is drawn.
-    // @param newScale
+    // Parameter newScale: scaling factor applied to stored path coordinates.
     public void redraw(float newScale){
         // Set scaling ratio based on user input
         scalingRatio = newScale;

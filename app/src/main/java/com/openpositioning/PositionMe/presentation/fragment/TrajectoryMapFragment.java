@@ -35,9 +35,9 @@ import com.google.android.gms.maps.model.*;
 import java.util.ArrayList;
 import java.util.List;
 
-// TrajectoryMapFragment
-// Adapted for hybrid indoor map manager.
-// Fixed: Auto Floor Offset Logic.
+// Map rendering fragment for live tracking and trajectory replay.
+// It draws PDR, GNSS, and WiFi overlays, manages indoor map integration,
+// and coordinates floor switching behavior for indoor navigation.
 public class TrajectoryMapFragment extends Fragment {
 
     public interface OnVenueSelectedListener {
@@ -60,7 +60,7 @@ public class TrajectoryMapFragment extends Fragment {
     private LatLng lastGnssLocation = null;
     private LatLng lastWifiLocation = null;
 
-    // Filtering and smoothing parameters for fused trajectory
+    // Smoothing and motion constraints for stable map rendering.
     private LatLng lastFusedSmoothedLocation = null;
     private static final double FUSED_SMOOTH_ALPHA = 0.70; // 0-1.0
     private static final double DISPLAY_JITTER_DEADBAND_METERS = 1.0;
@@ -72,11 +72,11 @@ public class TrajectoryMapFragment extends Fragment {
     private static final double DISPLAY_SHORT_WINDOW_MAX_METERS = 1.5;
     private static final double DISPLAY_MIN_TIME_DELTA_SECONDS = 0.01;
 
-    // Keep recent N points for color-coded absolute position updates display (rendering colored dots)
-    private static final int RECENT_POINTS_N = 5;  // For trajectory
+    // Number of recent points retained for local visual history markers.
+    private static final int RECENT_POINTS_N = 5;
     private final List<Circle> recentCirclesBuffer = new ArrayList<>();
     
-    // GNSS/WiFi history tracking (max 5 points each).
+    // GNSS and WiFi history markers retained on the map.
     private static final int MAX_GNSS_WIFI_HISTORY = 5;
     private final List<Circle> gnssHistoryCircles = new ArrayList<>();
     private final List<Circle> wifiHistoryCircles = new ArrayList<>();
@@ -95,13 +95,13 @@ public class TrajectoryMapFragment extends Fragment {
 
     private List<Marker> manualMarkers = new ArrayList<>();
 
-    // Track if arrow is inside a building for auto-enable indoor map feature
+    // Tracks whether the user marker is currently inside a known building.
     private boolean isArrowInsideBuilding = false;
 
-    // Calibration offset that maps the fused floor estimate onto the building floor index.
+    // Calibration offset that maps fused floor estimates to building floor indices.
     private static final int AUTO_FLOOR_REQUIRED_CONFIRMATIONS = 5;
     private static final long AUTO_FLOOR_SWITCH_COOLDOWN_MS = 7000L;
-    // Hard-coded barometric floor bands for auto map after pressing Start.
+    // Barometric floor bands used by the auto-floor fallback path.
     private static final float FLOOR_BAND_B1_MAX_METERS = 128.5f;
     private static final float FLOOR_BAND_GF_MAX_METERS = 132.75f;
     private static final float FLOOR_BAND_F1_MAX_METERS = 137.5f;
@@ -111,7 +111,7 @@ public class TrajectoryMapFragment extends Fragment {
     private int pendingAutoFloorCount = 0;
     private long lastAutoFloorSwitchTimestampMs = 0L;
 
-    // UI Controls
+    // Map controls and floor UI elements.
     private Spinner switchMapSpinner;
     private SwitchMaterial gnssSwitch;
     private SwitchMaterial pdrSwitch;
@@ -190,35 +190,6 @@ public class TrajectoryMapFragment extends Fragment {
                 applyMapControlsExpandedState();
             });
         }
-
-        // Initialize IndoorMapManager (will be set properly in onMapReady)
-        indoorMapManager = new IndoorMapManager(null, getContext());
-        indoorMapManager.setOnFloorDataLoadedListener((hasData) -> {
-            // Update floor display when floor data is loaded from API
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    if (hasData) {
-                        setFloorControlsVisibility(View.VISIBLE);
-                        syncIndoorFloorReference();
-                        updateFloorDisplay();
-                        updateMapToggleState();
-                        performInitialFloorDetectionIfPending();
-
-                        // Now send venue selection notification
-                        String buildingId = indoorMapManager.getSelectedBuildingId();
-                        String venueName = indoorMapManager.getSelectedBuildingName();
-                        if (venueSelectedListener != null && buildingId != null && venueName != null) {
-                            venueSelectedListener.onVenueSelected(buildingId, venueName);
-                        }
-                    } else {
-                        // No floor data for this building - hide floor controls
-                        setFloorControlsVisibility(View.GONE);
-                        setAutoFloorChecked(false);
-                        updateMapToggleState();
-                    }
-                });
-            }
-        });
 
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getChildFragmentManager().findFragmentById(R.id.trajectoryMap);
@@ -676,17 +647,11 @@ public class TrajectoryMapFragment extends Fragment {
     // Check if a location is inside any known building
     // Uses building boundary polygons from BuildingPolygon class and dynamic boundaries from IndoorMapManager
     private boolean checkIfInsideBuilding(LatLng location) {
-        // Check against pre-defined buildings (Nucleus, Library)
-        if (BuildingPolygon.inNucleus(location) || BuildingPolygon.inLibrary(location)) {
-            return true;
+        if (indoorMapManager != null) {
+            return indoorMapManager.isLocationInsideAnyKnownBuilding(location);
         }
 
-        // Check against dynamically loaded building boundaries from API
-        if (indoorMapManager != null && indoorMapManager.isLocationInsideSelectedBuilding(location)) {
-            return true;
-        }
-
-        return false;
+        return BuildingPolygon.inAnyKnownBuilding(location);
     }
 
     // Public method to check if current location is inside a building

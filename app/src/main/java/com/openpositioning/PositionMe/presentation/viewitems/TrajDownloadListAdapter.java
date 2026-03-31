@@ -40,9 +40,9 @@ import java.util.Map;
 // The download status is indicated via a button with different icons.
 // The adapter also listens for file changes using FileObserver to update the download records in real time.
 // A local set of "downloading" trajectory IDs is maintained to support simultaneous downloads.
-// @see TrajDownloadViewHolder for the corresponding view holder.
-// @see FilesFragment for details on how the data is generated.
-// @see ServerCommunications for where the response items are received.
+// Related: TrajDownloadViewHolder for the corresponding view holder.
+// Related: FilesFragment for details on how the data is generated.
+// Related: ServerCommunications for where the response items are received.
 public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadViewHolder> {
 
     // Date-time formatter used to format date and time.
@@ -59,9 +59,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     private final Set<String> downloadingTrajIds = new HashSet<>();
 
     // Constructor for the adapter.
-    // @param context Application context used for inflating layouts.
-    // @param responseItems List of response items from the server.
-    // @param listener Callback listener for handling download click events.
+// Parameter context: Application context used for inflating layouts.
+// Parameter responseItems: List of response items from the server.
+// Parameter listener: Callback listener for handling download click events.
     public TrajDownloadListAdapter(Context context, List<Map<String, String>> responseItems, DownloadClickListener listener) {
         this.context = context;
         this.responseItems = responseItems;
@@ -150,9 +150,9 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     }
 
     // Creates a new view holder for a trajectory item.
-    // @param parent The parent view group.
-    // @param viewType The view type.
-    // @return A new instance of TrajDownloadViewHolder.
+// Parameter parent: The parent view group.
+// Parameter viewType: The view type.
+// Returns: A new instance of TrajDownloadViewHolder.
     @NonNull
     @Override
     public TrajDownloadViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -166,8 +166,8 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     // If the trajectory is present in the download records, it is set as "downloaded".
     // Else if the trajectory is in the downloading set, it is set as "downloading".
     // Otherwise, it is set as "not downloaded".
-    // @param holder The view holder to bind data to.
-    // @param position The position of the item in the list.
+// Parameter holder: The view holder to bind data to.
+// Parameter position: The position of the item in the list.
     @Override
     public void onBindViewHolder(@NonNull TrajDownloadViewHolder holder, int position) {
         // Retrieve the trajectory id from the response item.
@@ -245,15 +245,15 @@ public class TrajDownloadListAdapter extends RecyclerView.Adapter<TrajDownloadVi
     }
 
     // Returns the number of items in the response list.
-    // @return The size of the responseItems list.
+// Returns: The size of the responseItems list.
     @Override
     public int getItemCount() {
         return responseItems.size();
     }
 
     // Sets the appearance of the button based on its state.
-    // @param button The MaterialButton to update.
-    // @param state The state of the button:
+// Parameter button: The MaterialButton to update.
+// Parameter state: The state of the button:
     // 0 - Not downloaded,
     // 1 - Downloaded,
     // 2 - Downloading.

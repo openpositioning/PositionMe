@@ -57,10 +57,10 @@ public class IndoorMapAPI {
     }
     
     // Fetch buildings near a coordinate
-    // @param latitude User current latitude
-    // @param longitude User current longitude
-    // @param radiusMeters Search radius in meters
-    // @param callback Callback to handle results
+// Parameter latitude: User current latitude
+// Parameter longitude: User current longitude
+// Parameter radiusMeters: Search radius in meters
+// Parameter callback: Callback to handle results
     public void fetchNearbyBuildings(double latitude, double longitude, double radiusMeters, 
                                      BuildingsCallback callback) {
         new Thread(() -> {
@@ -96,8 +96,8 @@ public class IndoorMapAPI {
     }
     
     // Fetch floor plans for a specific building
-    // @param buildingId Building ID to fetch floors for
-    // @param callback Callback to handle results
+// Parameter buildingId: Building ID to fetch floors for
+// Parameter callback: Callback to handle results
     public void fetchBuildingFloors(String buildingId, FloorsCallback callback) {
         new Thread(() -> {
             try {
@@ -131,8 +131,8 @@ public class IndoorMapAPI {
     }
     
     // Fetch building outline/boundary polygon
-    // @param buildingId Building ID
-    // @param callback Callback with coordinate array
+// Parameter buildingId: Building ID
+// Parameter callback: Callback with coordinate array
     public void fetchBuildingOutline(String buildingId, OutlineCallback callback) {
         new Thread(() -> {
             try {

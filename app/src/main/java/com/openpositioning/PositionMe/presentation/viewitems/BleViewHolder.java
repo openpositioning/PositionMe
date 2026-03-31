@@ -9,8 +9,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.openpositioning.PositionMe.R;
 
 // View holder for BLE device list items.
-// @see BleListAdapter
-// @see com.openpositioning.PositionMe.sensors.BleDevice
+// Related: BleListAdapter
+// Related: com.openpositioning.PositionMe.sensors.BleDevice
 public class BleViewHolder extends RecyclerView.ViewHolder {
 
     TextView macAddress;

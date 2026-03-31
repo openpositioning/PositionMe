@@ -152,7 +152,7 @@ public class PdrProcessing {
 
     // Public constructor for the PDR class.
     // Takes context for variable access. Sets initial values based on settings.
-    // @param context Application context for variable access.
+// Parameter context: Application context for variable access.
     public PdrProcessing(Context context) {
         // Initialise settings
         this.settings = PreferenceManager.getDefaultSharedPreferences(context);
@@ -274,13 +274,13 @@ public class PdrProcessing {
     // Function to calculate PDR coordinates from sensor values.
     // Should be called from the step detector sensor's event with the sensor values since the last
     // step.
-    // @param currentStepEnd relative time in milliseconds since the start of the recording.
-    // @param accelMagnitudeOvertime recorded acceleration magnitudes since the last step.
-    // @param headingRad heading relative to magnetic north in radians.
+// Parameter currentStepEnd: relative time in milliseconds since the start of the recording.
+// Parameter accelMagnitudeOvertime: recorded acceleration magnitudes since the last step.
+// Parameter headingRad: heading relative to magnetic north in radians.
     public float[] updatePdr(long currentStepEnd, List<Double> accelMagnitudeOvertime, float headingRad) {
         if (accelMagnitudeOvertime == null || accelMagnitudeOvertime.size() < MIN_REQUIRED_SAMPLES) {
-            return new float[]{this.positionX, this.positionY};  // Return current position without update
-                                                                // TODO - temporary solution of the empty list issue
+            // Preserve the previous position when there are not enough samples to estimate a step.
+            return new float[]{this.positionX, this.positionY};
         }
 
         // check if accelMagnitudeOvertime is empty
@@ -351,9 +351,9 @@ public class PdrProcessing {
     }
 
     // Update PDR with a specific step length (e.g. from Weinberg algorithm).
-    // @param stepLengthMeters The calculated stride length in meters.
-    // @param headingRad Current heading in radians.
-    // @return New [x, y] coordinates.
+// Parameter stepLengthMeters: The calculated stride length in meters.
+// Parameter headingRad: Current heading in radians.
+// Returns: New [x, y] coordinates.
     public float[] updatePdrWithStride(float stepLengthMeters, float headingRad) {
         // Apply position-aware heading correction from magnetic grid.
         float correctedHeadingRad = applyHeadingCompensation(headingRad);
@@ -400,8 +400,8 @@ public class PdrProcessing {
     // The start elevation is the median of the first three seconds of data to give the sensor time
     // to settle. The sea level is irrelevant as only values relative to the initial position are
     // reported.
-    // @param absoluteElevation absolute elevation in meters compared to sea level.
-    // @return current elevation in meters relative to the start position.
+// Parameter absoluteElevation: absolute elevation in meters compared to sea level.
+// Returns: current elevation in meters relative to the start position.
     public float updateElevation(float absoluteElevation) {
         // Set start to median of first three values
         if(setupIndex < 3) {
@@ -489,9 +489,9 @@ public class PdrProcessing {
 
     // Uses the Weiberg Stride Length formula to calculate step length from accelerometer values.
     // Uses a step-frequency classifier to scale stride length.
-    // @param accelMagnitude magnitude of acceleration values between the last and current step.
-    // @param stepDurationMs duration of the current step in milliseconds.
-    // @return float stride length in meters.
+// Parameter accelMagnitude: magnitude of acceleration values between the last and current step.
+// Parameter stepDurationMs: duration of the current step in milliseconds.
+// Returns: float stride length in meters.
     private float weibergMinMax(List<Double> accelMagnitude, long stepDurationMs) {
         // if the list itself is null or empty, return 0 (or return other default values as needed)
         if (accelMagnitude == null || accelMagnitude.isEmpty()) {
@@ -552,7 +552,7 @@ public class PdrProcessing {
 
     // Get the current X and Y coordinates from the PDR processing class.
     // The coordinates are in meters, the start of the recording is the (0,0)
-    // @return float array of size 2, with the X and Y coordinates respectively.
+// Returns: float array of size 2, with the X and Y coordinates respectively.
     public float[] getPDRMovement() {
         float [] pdrPosition= new float[] {positionX,positionY};
         return pdrPosition;
@@ -560,13 +560,13 @@ public class PdrProcessing {
     }
 
     // Get the current elevation as calculated by the PDR class.
-    // @return current elevation in meters, relative to the start position.
+// Returns: current elevation in meters, relative to the start position.
     public float getCurrentElevation() {
         return this.elevation;
     }
 
     // Get the current floor number as estimated by the PDR class.
-    // @return current floor number, assuming start position is on level zero.
+// Returns: current floor number, assuming start position is on level zero.
     public int getCurrentFloor() {
         return this.currentFloor;
     }
@@ -648,7 +648,7 @@ public class PdrProcessing {
 
     private void applyMapMatching(double prevX, double prevY) {
         LatLng fusedLatLon = localToLatLon(this.fusedX, this.fusedY);
-        if (!BuildingPolygon.inNucleus(fusedLatLon) && !BuildingPolygon.inLibrary(fusedLatLon)) {
+        if (!BuildingPolygon.inAnyKnownBuilding(fusedLatLon)) {
             // Keep previous position to avoid walking through walls/outside building area
             this.fusedX = prevX;
             this.fusedY = prevY;
@@ -887,25 +887,25 @@ public class PdrProcessing {
 
     // Coordinate history getters
     // Get the history of GNSS verified coordinates (last up to 7 positions)
-    // @return List of LatLng points representing historical GNSS positions
+// Returns: List of LatLng points representing historical GNSS positions
     public List<LatLng> getGnssHistoryBuffer() {
         return new ArrayList<>(gnssHistoryBuffer);
     }
 
     // Get the history of WiFi verified coordinates (last up to 7 positions)
-    // @return List of LatLng points representing historical WiFi positions
+// Returns: List of LatLng points representing historical WiFi positions
     public List<LatLng> getWifiHistoryBuffer() {
         return new ArrayList<>(wifiHistoryBuffer);
     }
 
     // Get the history of PDR calculated coordinates (last up to 7 positions)
-    // @return List of LatLng points representing historical PDR positions
+// Returns: List of LatLng points representing historical PDR positions
     public List<LatLng> getPdrHistoryBuffer() {
         return new ArrayList<>(pdrHistoryBuffer);
     }
 
     // Get all coordinate histories in a combined format for display/logging
-    // @return Map containing GNSS, WiFi, and PDR history buffers
+// Returns: Map containing GNSS, WiFi, and PDR history buffers
     public java.util.Map<String, List<LatLng>> getAllCoordinateHistories() {
         java.util.Map<String, List<LatLng>> histories = new java.util.HashMap<>();
         histories.put("GNSS", new ArrayList<>(gnssHistoryBuffer));
@@ -996,9 +996,9 @@ public class PdrProcessing {
     // vertical acceleration is calculated and stored over time. Averaging these values and
     // comparing with the thresholds set for this class, it estimates if the current movement
     // matches what is expected from an elevator ride.
-    // @param gravity array of size three, strength of gravity along the phone's x-y-z axis.
-    // @param acc array of size three, acceleration other than gravity detected by the phone.
-    // @return boolean true if currently in an elevator, false otherwise.
+// Parameter gravity: array of size three, strength of gravity along the phone's x-y-z axis.
+// Parameter acc: array of size three, acceleration other than gravity detected by the phone.
+// Returns: boolean true if currently in an elevator, false otherwise.
     public boolean estimateElevator(float[] gravity, float[] acc) {
         // Standard gravity
         float g = SensorManager.STANDARD_GRAVITY;
@@ -1177,7 +1177,7 @@ public class PdrProcessing {
     }
 
     // Getter for the average step length calculated from the aggregated distance and step count.
-    // @return average step length in meters.
+// Returns: average step length in meters.
     public float getAverageStepLength(){
         // Calculate average step length
         float averageStepLength = sumStepLength/(float) stepCount;
