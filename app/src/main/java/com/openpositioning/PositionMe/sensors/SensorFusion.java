@@ -170,7 +170,7 @@ public class SensorFusion implements SensorEventListener {
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(objects -> {
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                if (!particleFilter.isInitialised()) {
+                if (!particleFilter.isInitialized()) {
                     LatLng wifiPosition = wifiPositionManager.getLatLngWifiPositioning();// Get WiFi position for particle filter initialization
                     if (wifiPosition != null) { // Check if WiFi position is available before initializing particle filter
                         particleFilter.initialise(wifiPosition, 20f);
@@ -664,7 +664,7 @@ public class SensorFusion implements SensorEventListener {
             recorder.addGnssData(location);
 
             //initialize particle filter automatically on first GNSS fix with accuracy as spread
-            if (!particleFilter.isInitialised()) {
+            if (!particleFilter.isInitialized()) {
                     float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f;
                     particleFilter.initialise(
                         new LatLng(location.getLatitude(), location.getLongitude()),accuracy);
