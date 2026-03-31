@@ -1,6 +1,7 @@
 package com.openpositioning.PositionMe.sensors;
 
 import android.util.Log;
+import android.os.SystemClock;
 
 import com.google.android.gms.maps.model.LatLng;
 
@@ -23,7 +24,7 @@ import java.util.stream.Stream;
 public class WifiPositionManager implements Observer {
 
     public interface WifiFixListener {
-        void onWifiFix(LatLng wifiLocation, int floor);
+        void onWifiFix(LatLng wifiLocation, int floor, long measurementAgeMs);
     }
 
     private static final String WIFI_FINGERPRINT = "wf";
@@ -32,6 +33,7 @@ public class WifiPositionManager implements Observer {
     private final TrajectoryRecorder recorder;
     private List<Wifi> wifiList;
     private WifiFixListener wifiFixListener;
+    private volatile long lastScanReceivedElapsedMs;
 
     /**
      * Creates a new WifiPositionManager.
@@ -54,6 +56,7 @@ public class WifiPositionManager implements Observer {
      */
     @Override
     public void update(Object[] wifiList) {
+        lastScanReceivedElapsedMs = SystemClock.elapsedRealtime();
         this.wifiList = Stream.of(wifiList).map(o -> (Wifi) o).collect(Collectors.toList());
         recorder.addWifiFingerprint(this.wifiList);
         createWifiPositioningRequest();
@@ -82,7 +85,12 @@ public class WifiPositionManager implements Observer {
                 @Override
                 public void onSuccess(LatLng wifiLocation, int floor) {
                     if (wifiFixListener != null && wifiLocation != null) {
-                        wifiFixListener.onWifiFix(wifiLocation, floor);
+                        long ageMs = 0L;
+                        long scanTs = lastScanReceivedElapsedMs;
+                        if (scanTs > 0L) {
+                            ageMs = Math.max(0L, SystemClock.elapsedRealtime() - scanTs);
+                        }
+                        wifiFixListener.onWifiFix(wifiLocation, floor, ageMs);
                     }
                 }
 

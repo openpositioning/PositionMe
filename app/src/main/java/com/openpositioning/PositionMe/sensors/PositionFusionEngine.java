@@ -6,9 +6,12 @@ import com.google.android.gms.maps.model.LatLng;
 import com.openpositioning.PositionMe.data.remote.FloorplanApiClient;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.Map;
 import java.util.Random;
 
@@ -31,7 +34,10 @@ public class PositionFusionEngine {
     private static final double PDR_NOISE_STD_M = 0.55;
     private static final double INIT_STD_M = 2.0;
     private static final double ROUGHEN_STD_M = 0.15;
-    private static final double WIFI_SIGMA_M = 3.5;
+    private static final double WIFI_SIGMA_M = 4.5;
+    private static final double WIFI_FRESH_AGE_SEC = 1.0;
+    private static final double WIFI_AGE_SIGMA_GAIN_PER_SEC = 0.45;
+    private static final double WIFI_MAX_SIGMA_SCALE = 4.0;
     private static final double OUTLIER_GATE_SIGMA_MULT_GNSS = 2.8;
     private static final double OUTLIER_GATE_SIGMA_MULT_WIFI = 6.0;
     private static final double OUTLIER_GATE_MIN_M = 6.0;
@@ -45,6 +51,7 @@ public class PositionFusionEngine {
     private static final double ORIENTATION_BIAS_MAX_ABS_RAD = Math.toRadians(45.0);
     private static final double ORIENTATION_BIAS_MIN_STEP_M = 0.35;
     private static final double ORIENTATION_BIAS_MIN_INNOVATION_M = 0.50;
+    private static final Pattern FLOOR_NUMBER_PATTERN = Pattern.compile("-?\\d+");
 
     private final float floorHeightMeters;
     private final Random random = new Random();
@@ -189,12 +196,32 @@ public class PositionFusionEngine {
      * WiFi absolute-fix update with fixed sigma and floor hint support.
      */
     public synchronized void updateWifi(double latDeg, double lonDeg, int wifiFloor) {
+        updateWifi(latDeg, lonDeg, wifiFloor, 0L);
+    }
+
+    /**
+     * WiFi absolute-fix update with age-aware confidence.
+     *
+     * <p>Older WiFi fixes are downweighted by inflating measurement sigma,
+     * while still allowing correction of large trajectory drift.</p>
+     */
+    public synchronized void updateWifi(double latDeg, double lonDeg, int wifiFloor,
+                                        long measurementAgeMs) {
+        double effectiveSigma = adjustedWifiSigma(measurementAgeMs);
         if (DEBUG_LOGS) {
             Log.d(TAG, String.format(Locale.US,
-                    "WiFi update lat=%.7f lon=%.7f floor=%d sigma=%.2f",
-                    latDeg, lonDeg, wifiFloor, WIFI_SIGMA_M));
+                    "WiFi update lat=%.7f lon=%.7f floor=%d ageMs=%d sigma=%.2f",
+                    latDeg, lonDeg, wifiFloor, measurementAgeMs, effectiveSigma));
         }
-        applyAbsoluteFix(latDeg, lonDeg, WIFI_SIGMA_M, wifiFloor);
+        applyAbsoluteFix(latDeg, lonDeg, effectiveSigma, wifiFloor);
+    }
+
+    private double adjustedWifiSigma(long measurementAgeMs) {
+        double ageSec = Math.max(0.0, measurementAgeMs / 1000.0);
+        double staleSec = Math.max(0.0, ageSec - WIFI_FRESH_AGE_SEC);
+        double sigmaScale = 1.0 + staleSec * WIFI_AGE_SIGMA_GAIN_PER_SEC;
+        sigmaScale = Math.min(sigmaScale, WIFI_MAX_SIGMA_SCALE);
+        return WIFI_SIGMA_M * sigmaScale;
     }
 
     /**
@@ -269,7 +296,8 @@ public class PositionFusionEngine {
         }
 
         Map<Integer, FloorConstraint> parsed = new HashMap<>();
-        List<FloorplanApiClient.FloorShapes> floorShapes = containing.getFloorShapesList();
+        List<FloorplanApiClient.FloorShapes> floorShapes =
+                normalizeFloorOrder(containing.getFloorShapesList());
         for (int i = 0; i < floorShapes.size(); i++) {
             FloorplanApiClient.FloorShapes floor = floorShapes.get(i);
             Integer logicalFloor = parseLogicalFloor(floor, i);
@@ -739,29 +767,79 @@ public class PositionFusionEngine {
         return new Point2D(sx / count, sy / count);
     }
 
-    /** Maps floor display labels (e.g. G, LG) to numeric logical floors. */
+    /**
+     * Returns floor list sorted by logical floor when labels are parseable.
+     * Keeping this ordering aligned with indoor map rendering prevents constraints
+     * from being attached to the wrong logical floor.
+     */
+    private List<FloorplanApiClient.FloorShapes> normalizeFloorOrder(
+            List<FloorplanApiClient.FloorShapes> input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+
+        List<FloorplanApiClient.FloorShapes> ordered = new ArrayList<>(input);
+        Collections.sort(ordered, (a, b) -> {
+            Integer floorA = parseLogicalFloorFromDisplayName(a == null ? null : a.getDisplayName());
+            Integer floorB = parseLogicalFloorFromDisplayName(b == null ? null : b.getDisplayName());
+
+            if (floorA != null && floorB != null) {
+                return Integer.compare(floorA, floorB);
+            }
+            if (floorA != null) {
+                return -1;
+            }
+            if (floorB != null) {
+                return 1;
+            }
+            return 0;
+        });
+        return ordered;
+    }
+
+    /** Maps floor display labels (e.g. LG, G, 1, F2) to numeric logical floors. */
     private Integer parseLogicalFloor(FloorplanApiClient.FloorShapes floor, int index) {
         if (floor == null) {
             return null;
         }
 
-        String display = floor.getDisplayName() == null ? "" : floor.getDisplayName().trim();
-        String upper = display.toUpperCase(Locale.US);
+        Integer parsed = parseLogicalFloorFromDisplayName(floor.getDisplayName());
+        return parsed != null ? parsed : index;
+    }
 
-        if ("LG".equals(upper) || "L".equals(upper)) {
+    private Integer parseLogicalFloorFromDisplayName(String displayName) {
+        if (displayName == null) {
+            return null;
+        }
+
+        String normalized = displayName.trim().toUpperCase(Locale.US).replace(" ", "");
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        if ("LG".equals(normalized) || "L".equals(normalized)
+                || "LOWERGROUND".equals(normalized)) {
             return -1;
         }
-        if ("G".equals(upper) || "GROUND".equals(upper)) {
+        if ("G".equals(normalized) || "GF".equals(normalized)
+                || "GROUND".equals(normalized) || "GROUNDFLOOR".equals(normalized)) {
             return 0;
         }
 
-        try {
-            return Integer.parseInt(display);
-        } catch (Exception ignored) {
-            // Fall back to index mapping when display name is not numeric.
+        if (normalized.startsWith("F") || normalized.startsWith("L")) {
+            normalized = normalized.substring(1);
         }
 
-        return index;
+        Matcher matcher = FLOOR_NUMBER_PATTERN.matcher(normalized);
+        if (matcher.matches()) {
+            try {
+                return Integer.parseInt(normalized);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     /** Point-in-polygon test in lat/lon space for containing-building detection. */
