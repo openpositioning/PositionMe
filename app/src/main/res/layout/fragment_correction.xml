@@ -53,31 +53,40 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="10dp">
+            <Switch
+                android:id="@+id/toggle_pdr"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="false"
+                android:text="Show PDR Path"
+                android:textColor="@android:color/white"
+                android:layout_marginTop="4dp"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
 
             <!-- System calculated average step length -->
             <TextView
                 android:id="@+id/averageStepView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
                 android:text="@string/averageStepLgn"
                 android:textAppearance="?attr/textAppearanceBodyLarge"
                 android:textColor="@android:color/white"
-                android:layout_marginTop="15dp"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toBottomOf="@id/toggle_pdr"
+                app:layout_constraintStart_toStartOf="parent" />
 
             <!-- Correct your own avg step length input -->
             <TextView
                 android:id="@+id/correctStepLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
                 android:text="@string/correct_your_step"
                 android:textAppearance="?attr/textAppearanceBodyLarge"
                 android:textColor="@android:color/white"
-                app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/averageStepView"
-                app:layout_constraintBottom_toBottomOf="parent"
-                android:layout_marginTop="8dp" />
+                app:layout_constraintStart_toStartOf="parent" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="80dp"
@@ -86,9 +95,9 @@
                 app:hintTextColor="@color/md_theme_onSecondaryContainer"
                 app:boxStrokeColor="@color/md_theme_secondaryContainer"
                 app:layout_constraintStart_toEndOf="@id/correctStepLabel"
-                app:layout_constraintTop_toBottomOf="@id/averageStepView"
-                app:layout_constraintEnd_toEndOf="parent"
-                android:layout_marginTop="8dp">
+                app:layout_constraintTop_toTopOf="@id/correctStepLabel"
+                app:layout_constraintBottom_toBottomOf="@id/correctStepLabel"
+                app:layout_constraintEnd_toEndOf="parent">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/inputStepLength"
@@ -122,9 +131,11 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:contentDescription="@string/path_drawing_descritpion"
-        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.0" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

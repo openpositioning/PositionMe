@@ -28,7 +28,9 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
 import android.graphics.Color;
+import java.util.ArrayList;
 import java.util.List;
+import android.widget.Switch;
 
 /**
  * A simple {@link Fragment} subclass. Corrections Fragment is displayed after a recording session
@@ -51,6 +53,14 @@ public class CorrectionFragment extends Fragment {
     private static float scalingRatio = 0f;
     private static LatLng start;
     private PathView pathView;
+
+    // ✅ ADD THESE NEW VARIABLES FOR FUSED TRAJECTORY CORRECTION
+    private float fusedOffsetLat = 0f;  // Translation offset in latitude
+    private float fusedOffsetLng = 0f;  // Translation offset in longitude
+    private float fusedRotationDegrees = 0f;  // Rotation in degrees
+    private LatLng lastTouchPosition = null;  // For drag gesture
+    private Switch togglePDR;
+    private boolean showPDR = false;
 
     public CorrectionFragment() {
         // Required empty public constructor
@@ -94,14 +104,12 @@ public class CorrectionFragment extends Fragment {
                         * scalingRatio) / Math.log(2);
                 mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(start, (float) zoom));
 
-                // Draw the fused trajectory on the correction map.
-                List<LatLng> fusedPoints = sensorFusion.getFusedTrajectoryPoints();
-                if (fusedPoints != null && fusedPoints.size() > 1) {
-                    mMap.addPolyline(new PolylineOptions()
-                            .addAll(fusedPoints)
-                            .color(Color.RED)  // same Red as recording screen
-                            .width(6f));
-                }
+                // Draw the fused trajectory on the correction map
+                updateFusedTrajectoryOnMap();
+
+                // ✅ ADD TOUCH LISTENERS FOR INTERACTIVE CORRECTION
+                setupMapTouchListeners();
+
             }
         });
         return rootView;
@@ -114,7 +122,20 @@ public class CorrectionFragment extends Fragment {
         this.averageStepLengthText = view.findViewById(R.id.averageStepView);
         this.stepLengthInput = view.findViewById(R.id.inputStepLength);
         this.pathView = view.findViewById(R.id.pathView1);
-//        this.pathView.setTrajectoryColor(Color.GREEN);
+
+        togglePDR = view.findViewById(R.id.toggle_pdr);
+        togglePDR.setChecked(false); // default OFF
+        pathView.setVisibility(View.GONE);
+
+        togglePDR.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            showPDR = isChecked;
+
+            if (showPDR) {
+                pathView.setVisibility(View.VISIBLE);
+            } else {
+                pathView.setVisibility(View.GONE);
+            }
+        });
 
         averageStepLength = sensorFusion.passAverageStepLength();
         averageStepLengthText.setText(getString(R.string.averageStepLgn) + ": "
@@ -123,7 +144,11 @@ public class CorrectionFragment extends Fragment {
         // Listen for ENTER key
         this.stepLengthInput.setOnKeyListener((v, keyCode, event) -> {
             if (keyCode == KeyEvent.KEYCODE_ENTER) {
-                newStepLength = Float.parseFloat(changedText.toString());
+                if (changedText != null && !changedText.toString().isEmpty()) {
+                    newStepLength = Float.parseFloat(changedText.toString());
+                } else {
+                    return false;
+                }
                 float scalingFactor = newStepLength / averageStepLength;
                 // Rescale path
                 sensorFusion.redrawPath(scalingFactor);
@@ -180,12 +205,127 @@ public class CorrectionFragment extends Fragment {
             // Redraw the fused trajectory with updated points
             List<LatLng> fusedPoints = sensorFusion.getFusedTrajectoryPoints();
             if (fusedPoints != null && fusedPoints.size() > 1) {
+                // Apply transformations (rotation + translation)
+                List<LatLng> transformedPoints = applyFusedTransformations(fusedPoints);
+
                 mMap.addPolyline(new PolylineOptions()
-                        .addAll(fusedPoints)
+                        .addAll(transformedPoints)
                         .color(Color.RED)
                         .width(6f));
             }
         }
+    }
+
+    /**
+     * Set up touch listeners for interactive fused trajectory correction.
+     * - Single finger drag: translate the fused trajectory
+     * - Two finger rotation gesture: rotate the fused trajectory
+     */
+    private void setupMapTouchListeners() {
+        if (mMap == null) return;
+
+        mMap.setOnCameraMoveListener(new GoogleMap.OnCameraMoveListener() {
+            @Override
+            public void onCameraMove() {
+                LatLng currentCenter = mMap.getCameraPosition().target;
+
+                if (lastTouchPosition != null) {
+                    fusedOffsetLat += (currentCenter.latitude - lastTouchPosition.latitude);
+                    fusedOffsetLng += (currentCenter.longitude - lastTouchPosition.longitude);
+                }
+
+                // Always update rotation from map bearing
+                fusedRotationDegrees = mMap.getCameraPosition().bearing;
+
+                lastTouchPosition = currentCenter;
+                updateFusedTrajectoryOnMap();
+            }
+        });
+
+        mMap.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
+            @Override
+            public void onCameraIdle() {
+                lastTouchPosition = null;
+            }
+        });
+
+        mMap.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
+            @Override
+            public void onMapLongClick(LatLng latLng) {
+                // Reset corrections
+                fusedOffsetLat = 0f;
+                fusedOffsetLng = 0f;
+                fusedRotationDegrees = 0f;
+                updateFusedTrajectoryOnMap();
+            }
+        });
+    }
+
+    /**
+     * Apply rotation and translation transformations to the fused trajectory.
+     *
+     * @param originalPoints Original fused trajectory points
+     * @return Transformed points with rotation and translation applied
+     */
+    private List<LatLng> applyFusedTransformations(List<LatLng> originalPoints) {
+        if (originalPoints == null || originalPoints.isEmpty()) {
+            return originalPoints;
+        }
+
+        List<LatLng> transformedPoints = new ArrayList<>();
+
+        // ✅ Step 1: Normalize to first point
+        LatLng firstPoint = originalPoints.get(0);
+
+        // ✅ Step 2: Use center for rotation (better UX)
+        double avgLat = 0;
+        double avgLng = 0;
+
+        for (LatLng p : originalPoints) {
+            avgLat += p.latitude;
+            avgLng += p.longitude;
+        }
+
+        avgLat /= originalPoints.size();
+        avgLng /= originalPoints.size();
+
+        LatLng rotationCenter = new LatLng(avgLat, avgLng);
+
+        // ✅ Step 3: Convert rotation to radians
+        double rotationRad = Math.toRadians(fusedRotationDegrees);
+        double cosTheta = Math.cos(rotationRad);
+        double sinTheta = Math.sin(rotationRad);
+
+        for (LatLng point : originalPoints) {
+
+            // 🔹 Normalize relative to first point (so both start same)
+            double lat = point.latitude - firstPoint.latitude;
+            double lng = point.longitude - firstPoint.longitude;
+
+            // 🔹 Also shift rotation center to normalized space
+            double centerLat = rotationCenter.latitude - firstPoint.latitude;
+            double centerLng = rotationCenter.longitude - firstPoint.longitude;
+
+            // 🔹 Translate to rotation center
+            double relLat = lat - centerLat;
+            double relLng = lng - centerLng;
+
+            // 🔹 Apply rotation
+            double rotatedLat = relLat * cosTheta - relLng * sinTheta;
+            double rotatedLng = relLat * sinTheta + relLng * cosTheta;
+
+            // 🔹 Translate back from center
+            rotatedLat += centerLat;
+            rotatedLng += centerLng;
+
+            // 🔹 Move everything to GNSS start + offset
+            double finalLat = start.latitude + rotatedLat + fusedOffsetLat;
+            double finalLng = start.longitude + rotatedLng + fusedOffsetLng;
+
+            transformedPoints.add(new LatLng(finalLat, finalLng));
+        }
+
+        return transformedPoints;
     }
     public void setScalingRatio(float scalingRatio) {
         this.scalingRatio = scalingRatio;
