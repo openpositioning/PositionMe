@@ -91,6 +91,11 @@ public class SensorFusion implements SensorEventListener {
     // Sensor registration latency setting
     long maxReportLatencyNs = 0;
 
+    //particle filter
+    private final ParticleFilter particleFilter = new ParticleFilter();
+
+
+
     // Floorplan API cache (latest result from start-location step)
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingCache =
             new HashMap<>();
@@ -164,6 +169,16 @@ public class SensorFusion implements SensorEventListener {
         this.eventHandler = new SensorEventHandler(
                 state, pdrProcessing, pathView, recorder, bootTime);
 
+
+        //particle filter
+        eventHandler.setStepListener((deltaEasting, deltaNorthing) -> {
+            if (particleFilter.isInitialized()) {
+                particleFilter.predict(deltaEasting, deltaNorthing);
+            }
+        });
+
+    
+
         // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(wifiPositionManager);
@@ -187,12 +202,26 @@ public class SensorFusion implements SensorEventListener {
         this.bleRttManager = new BleRttManager(recorder);
         bleProcessor.registerObserver(bleRttManager);
 
+    
         if (!rttManager.isRttSupported()) {
             new Handler(Looper.getMainLooper()).post(() ->
                     Toast.makeText(appContext,
                             "WiFi RTT is not supported on this device",
                             Toast.LENGTH_LONG).show());
         }
+
+        wifiProcessor.registerObserver(objects -> {
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            LatLng wifiPosition = wifiPositionManager.getLatLngWifiPositioning();
+            if (wifiPosition != null) { // Check for null to avoid errors when no WiFi position is available
+                if (!particleFilter.isInitialized()) {
+                    particleFilter.initialise(wifiPosition, 20f); // Initial spread of 20 meters, can be tuned based on expected WiFi accuracy
+                } else {
+                    particleFilter.updateWiFi(wifiPosition, 20f);
+                }
+            }
+        }, 1000);
+    });
     }
 
     //endregion
@@ -483,6 +512,15 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Getter function for fused position from particle filter.
+     *
+     * @return LatLng of the current estimated position. JAPJOT
+     */
+    public LatLng getFusedPosition(){
+        return particleFilter.getFusedPosition();
+    }
+
+    /**
      * Setter function for core location data.
      *
      * @param startPosition contains the initial location set by the user
@@ -645,6 +683,14 @@ public class SensorFusion implements SensorEventListener {
             state.latitude = (float) location.getLatitude();
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
+
+            LatLng gnssPos = new LatLng(location.getLatitude(), location.getLongitude());
+            float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f; // Default to 20m if accuracy is unavailable
+            if (!particleFilter.isInitialized()) {
+                particleFilter.initialise(gnssPos, accuracy);
+            } else {
+                particleFilter.updateGNSS(gnssPos, accuracy);
+            }
         }
     }
 
