@@ -1247,15 +1247,27 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return double[]{latitude, longitude}, or null(if filter is not initialized)
      */
+    /** Trajectory points accumulated during a session, used to redraw path on CorrectionFragment. */
+    private final List<LatLng> fusedTrajectoryPoints = new ArrayList<>();
+
     public double[] getFusedLatLon() {
         boolean ekfReady = useEKF && ekfPositioning != null && ekfPositioning.isInitialized();
         boolean pfReady  = !useEKF && particleFilter != null && particleFilter.isInitialized();
         if ((ekfReady || pfReady) && coordinateConverter != null) {
             float[] enu = useEKF ? ekfPositioning.getBestEstimate()
                     : particleFilter.getBestEstimate();
-            return coordinateConverter.toLatLon(enu[0], enu[1]);
+            double[] latLon = coordinateConverter.toLatLon(enu[0], enu[1]);
+            if (fusedTrajectoryPoints.size() < 2000) {
+                fusedTrajectoryPoints.add(new LatLng(latLon[0], latLon[1]));
+            }
+            return latLon;
         }
         return null;
+    }
+
+    /** Returns accumulated fused trajectory points for display in CorrectionFragment. */
+    public List<LatLng> getFusedTrajectoryPoints() {
+        return fusedTrajectoryPoints;
     }
 
 
