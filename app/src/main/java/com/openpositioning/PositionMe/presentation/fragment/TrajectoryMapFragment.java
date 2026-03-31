@@ -32,6 +32,7 @@ import com.google.android.gms.maps.model.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.LinkedList;
 import com.openpositioning.PositionMe.data.remote.FloorPlanData;
@@ -762,6 +763,7 @@ private SwitchMaterial showPdrPathSwitch;
         // Keep track of current location
         LatLng oldLocation = this.currentLocation;
         LatLng correctedLocation = newLocation;
+        IndoorMapManager.FloorChangeResult floorResult = null;
         float heightChange = 0f;
 
         if (sensorFusion != null) {
@@ -778,14 +780,19 @@ private SwitchMaterial showPdrPathSwitch;
                     heightChange
             );
             oldfloor = newfloor;
-            newfloor = indoorMapManager.acceptFloorChange(
+            floorResult = indoorMapManager.acceptFloorChange(
                     correctedLocation,
                     oldLocation,
                     currentElevation
             );
+            if (floorResult.snappedLocation != null) {
+                correctedLocation = floorResult.snappedLocation;
+                newfloor = floorResult.floorKey;
+            }
         }
-            if(oldfloor != newfloor) {
-                Log.d("MapMatch", "new floor: " + newfloor);
+            if (!Objects.equals(oldfloor, newfloor)) {
+//            if(!(oldfloor.equals (newfloor))) {
+//                Log.d("MapMatch", "new floor: " + newfloor);
 
 
                 if (floorLabel != null) {

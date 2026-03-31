@@ -976,6 +976,215 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
         return (val > 0) ? 1 : 2;
     }
 
+    /**
+     * Finds gaps (doorways) in walls between two ENU positions by looking for
+     * wall segments that have a break/gap large enough to walk through (>0.6m).
+     * Returns a waypoint through the nearest gap, or null if no gap found.
+     */
+    private float[] findGapBetweenPoints(float[] fromEnu, float[] toEnu,
+                                         List<List<float[]>> walls) {
+        float[] bestGap = null;
+        double bestDist = Double.MAX_VALUE;
+
+        // Direction vector from->to
+        float dx = toEnu[0] - fromEnu[0];
+        float dy = toEnu[1] - fromEnu[1];
+        float totalDist = (float) Math.sqrt(dx * dx + dy * dy);
+        if (totalDist < 1e-6f) return null;
+
+        for (List<float[]> polygon : walls) {
+            for (int i = 0; i < polygon.size(); i++) {
+                float[] a = polygon.get(i);
+                float[] b = polygon.get((i + 1) % polygon.size());
+
+                // Only consider wall segments that intersect our path
+                if (!segmentsIntersectEnu(fromEnu, toEnu, a, b)) continue;
+
+                // Look for a gap by checking adjacent segments for a break
+                // A gap exists where two consecutive wall endpoints don't connect
+                float[] prev = polygon.get((i - 1 + polygon.size()) % polygon.size());
+                float[] next = polygon.get((i + 2) % polygon.size());
+
+                // Check gap before segment a
+                float gapBeforeSize = (float) Math.sqrt(
+                        Math.pow(a[0] - prev[1], 2) + Math.pow(a[1] - prev[1], 2));
+
+                // Check gap after segment b
+                float gapAfterSize = (float) Math.sqrt(
+                        Math.pow(next[0] - b[0], 2) + Math.pow(next[1] - b[1], 2));
+
+                // Midpoint of segment as candidate gap point
+                float midX = (a[0] + b[0]) / 2f;
+                float midY = (a[1] + b[1]) / 2f;
+
+                // Find closest point on the wall segment to our path
+                double distToMid = Math.sqrt(
+                        Math.pow(midX - fromEnu[0], 2) + Math.pow(midY - fromEnu[1], 2));
+
+                if (distToMid < bestDist) {
+                    bestDist = distToMid;
+                    bestGap = new float[]{midX, midY};
+                }
+            }
+        }
+        return bestGap;
+    }
+
+    /**
+     * When the EKF has teleported to the other side of a wall (e.g. after a
+     * strong GNSS/WiFi correction), this re-routes prevEkfEnu through the
+     * nearest navigable gap so that future wall-slide checks work correctly.
+     *
+     * Returns an updated "previous position" that is on the same side of all
+     * walls as toEnu, routed through doorways/gaps.
+     *
+     * @param fromEnu current prevEkfEnu
+     * @param toEnu   current EKF best estimate (possibly on other side of wall)
+     * @return        re-routed fromEnu that is navigably connected to toEnu
+     */
+    public float[] reroutePrevEnu(float[] fromEnu, float[] toEnu) {
+        if (currentVenue == null || currentFloorKey == null) return fromEnu;
+        IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
+        if (floor == null || floor.wallPolygonsEnu.isEmpty()) return fromEnu;
+
+        // If no wall crossing, no rerouting needed
+        if (!crossesAnyWallEnu(fromEnu, toEnu, floor.wallPolygonsEnu)) return fromEnu;
+
+        // Simple gap search: scan along the wall that was crossed looking for
+        // the largest gap (doorway). We sample points along the crossing wall
+        // and find the one that has the shortest clear path to toEnu.
+        float[] bestWaypoint = null;
+        double bestScore = Double.MAX_VALUE;
+
+        for (List<float[]> polygon : floor.wallPolygonsEnu) {
+            for (int i = 0; i < polygon.size(); i++) {
+                float[] a = polygon.get(i);
+                float[] b = polygon.get((i + 1) % polygon.size());
+
+                if (!segmentsIntersectEnu(fromEnu, toEnu, a, b)) continue;
+
+                // Sample along this wall segment and adjacent segments
+                // looking for a point that has a clear line to toEnu
+                int samples = 20;
+                for (int s = 0; s <= samples; s++) {
+                    float t = (float) s / samples;
+                    float candidateX = a[0] + t * (b[0] - a[0]);
+                    float candidateY = a[1] + t * (b[1] - a[1]);
+                    float[] candidate = {candidateX, candidateY};
+
+                    // Check if this candidate has a clear line to toEnu
+                    if (!crossesAnyWallEnu(candidate, toEnu, floor.wallPolygonsEnu)) {
+                        double dist = Math.sqrt(
+                                Math.pow(candidateX - fromEnu[0], 2) +
+                                        Math.pow(candidateY - fromEnu[1], 2));
+                        if (dist < bestScore) {
+                            bestScore = dist;
+                            bestWaypoint = candidate;
+                        }
+                    }
+                }
+
+                // Also check points slightly offset from the wall endpoints
+                // as these are where doorways typically are
+                float[][] endpoints = {a, b};
+                float[][] offsets = {{0.5f, 0f}, {-0.5f, 0f}, {0f, 0.5f}, {0f, -0.5f}};
+                for (float[] ep : endpoints) {
+                    for (float[] off : offsets) {
+                        float[] candidate = {ep[0] + off[0], ep[1] + off[1]};
+                        if (!crossesAnyWallEnu(candidate, toEnu, floor.wallPolygonsEnu)) {
+                            double dist = Math.sqrt(
+                                    Math.pow(candidate[0] - fromEnu[0], 2) +
+                                            Math.pow(candidate[1] - fromEnu[1], 2));
+                            if (dist < bestScore) {
+                                bestScore = dist;
+                                bestWaypoint = candidate;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we found a waypoint through a gap, route prevEkfEnu through it
+        if (bestWaypoint != null) {
+            Log.d("IndoorMapManager", "Rerouted prevEnu through gap at ("
+                    + bestWaypoint[0] + ", " + bestWaypoint[1] + ")");
+            return bestWaypoint;
+        }
+
+        // No gap found — just move prevEkfEnu to toEnu directly
+        // so we don't stay permanently stuck
+        Log.d("IndoorMapManager", "No gap found, snapping prevEnu to toEnu");
+        return toEnu.clone();
+    }
+
+    /**
+     * If the movement from fromEnu to toEnu crosses a wall, slides the destination
+     * along the wall surface rather than stopping at it. This prevents the position
+     * from getting stuck while still respecting the wall boundary.
+     *
+     * If no wall is crossed, returns toEnu unchanged.
+     *
+     * @param fromEnu float[]{east, north} — previous position in metres
+     * @param toEnu   float[]{east, north} — new position after predict()
+     * @return        wall-slid float[]{east, north}, or toEnu if no wall was crossed
+     */
+    public float[] slideAlongWallEnu(float[] fromEnu, float[] toEnu) {
+        if (currentVenue == null || currentFloorKey == null) return toEnu;
+        IndoorVenue.FloorFeatures floor = currentVenue.floorFeatures.get(currentFloorKey);
+        if (floor == null || floor.wallPolygonsEnu.isEmpty()) return toEnu;
+
+        if (!crossesAnyWallEnu(fromEnu, toEnu, floor.wallPolygonsEnu)) return toEnu;
+
+        // Find the wall segment that was hit
+        float[] wallA = null, wallB = null;
+        outer:
+        for (List<float[]> polygon : floor.wallPolygonsEnu) {
+            for (int i = 0; i < polygon.size(); i++) {
+                float[] a = polygon.get(i);
+                float[] b = polygon.get((i + 1) % polygon.size());
+                if (segmentsIntersectEnu(fromEnu, toEnu, a, b)) {
+                    wallA = a;
+                    wallB = b;
+                    break outer;
+                }
+            }
+        }
+
+        if (wallA == null) return toEnu; // shouldn't happen
+
+        // Snap to just before the wall first
+        float[] hitPoint = snapToWallEnu(fromEnu, toEnu, floor.wallPolygonsEnu);
+
+        // Compute the movement vector and the wall direction vector
+        float moveX = toEnu[0] - fromEnu[0];
+        float moveY = toEnu[1] - fromEnu[1];
+
+        float wallDX = wallB[0] - wallA[0];
+        float wallDY = wallB[1] - wallA[1];
+        float wallLen = (float) Math.sqrt(wallDX * wallDX + wallDY * wallDY);
+        if (wallLen < 1e-6f) return hitPoint;
+
+        // Normalise wall direction
+        float wallNX = wallDX / wallLen;
+        float wallNY = wallDY / wallLen;
+
+        // Project movement onto wall direction (slide component)
+        float dot = moveX * wallNX + moveY * wallNY;
+        float slideX = dot * wallNX;
+        float slideY = dot * wallNY;
+
+        // Apply slide from hit point
+        float[] slid = new float[]{hitPoint[0] + slideX, hitPoint[1] + slideY};
+
+        // If the slid position also crosses a wall, just return the hit point
+        if (crossesAnyWallEnu(hitPoint, slid, floor.wallPolygonsEnu)) {
+            return hitPoint;
+        }
+
+        return slid;
+    }
+
     /*
     takes endpoints of two segments and determines whether they intersect
      */
@@ -1080,43 +1289,48 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
     private long lastFloorChangeTimeMs = 0;
     private static final long MIN_FLOOR_CHANGE_INTERVAL_MS = 5000; // 5 seconds minimum
-    private static final double HEIGHT_THRESHOLD_METERS = 2.5;
-    private static final double STAIRS_THRESHOLD_METERS = 5.0;
-    private static final double LIFT_THRESHOLD_METERS = 4.0;
-    private static final double LIFT_HORIZONTAL_THRESHOLD_METERS = 2.0;
+    private static final double HEIGHT_THRESHOLD_METERS = 4.5;
+    private static final double STAIRS_THRESHOLD_METERS = 12.0;
+    private static final double LIFT_THRESHOLD_METERS = 10.0;
+    private static final double LIFT_HORIZONTAL_THRESHOLD_METERS = 1.0;
+    private LatLng floorTransitionStartLocation = null;
+    private boolean floorTransitionInProgress = false;
+    private static final float FLOOR_TRANSITION_START_THRESHOLD_METERS = 1.0f;
 
-    public String acceptFloorChange(LatLng correctedLocation,
-                                    LatLng oldLocation,
-                                    float currentHeight) {
+    public FloorChangeResult acceptFloorChange(LatLng correctedLocation,
+                                               LatLng oldLocation,
+                                               float currentHeight) {
 
         if (currentVenue == null ||
                 currentFloorKey == null ||
                 correctedLocation == null ||
                 oldLocation == null) {
-            return currentFloorKey;
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
         }
 
         if (confirmedFloorKey == null || Float.isNaN(confirmedFloorElevation)) {
             Log.d("MapMatch", "No confirmed floor reference yet");
-            return currentFloorKey;
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
         }
 
         long now = System.currentTimeMillis();
         if (now - lastFloorChangeTimeMs < MIN_FLOOR_CHANGE_INTERVAL_MS) {
             Log.d("MapMatch", "Floor change blocked by debounce");
-            return currentFloorKey;
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
         }
+        startFloorTransitionIfNeeded(correctedLocation, currentHeight);
 
         float heightChangeMeters = currentHeight - confirmedFloorElevation;
         if (Math.abs(heightChangeMeters) < HEIGHT_THRESHOLD_METERS) {
             Log.d("MapMatch", "Height change too small: " + heightChangeMeters);
-            return currentFloorKey;
+            resetFloorTransitionState();
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
         }
 
-        IndoorVenue.FloorFeatures floorFeatures = currentVenue.floorFeatures.get(confirmedFloorKey);
-        if (floorFeatures == null) {
+        IndoorVenue.FloorFeatures currentFloorFeatures = currentVenue.floorFeatures.get(confirmedFloorKey);
+        if (currentFloorFeatures == null) {
             Log.d("MapMatch", "No floor features for confirmed floor: " + confirmedFloorKey);
-            return currentFloorKey;
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
         }
 
         int direction = heightChangeMeters > 0 ? 1 : -1;
@@ -1129,46 +1343,140 @@ public void bakeEnuCoordinates(CoordinateConverter converter) {
 
         if (nextFloorKey == null || !currentVenue.floorFeatures.containsKey(nextFloorKey)) {
             Log.d("MapMatch", "Next floor invalid");
-            return currentFloorKey;
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+        }
+
+        IndoorVenue.FloorFeatures nextFloorFeatures = currentVenue.floorFeatures.get(nextFloorKey);
+        if (nextFloorFeatures == null) {
+            Log.d("MapMatch", "No floor features for destination floor: " + nextFloorKey);
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
         }
 
         boolean nearStairs = isNearAnyPoint(
                 correctedLocation,
-                floorFeatures.stairsCenters,
+                currentFloorFeatures.stairsCenters,
                 STAIRS_THRESHOLD_METERS
         );
 
         boolean nearLift = isNearAnyPoint(
                 correctedLocation,
-                floorFeatures.liftCenters,
+                currentFloorFeatures.liftCenters,
                 LIFT_THRESHOLD_METERS
         );
 
-        double horizontalDisplacement = distanceMeters(oldLocation, correctedLocation);
+        double horizontalDisplacement = getFloorTransitionHorizontalDisplacement(correctedLocation);
+        resetFloorTransitionState();
 
         boolean usedLift = nearLift && horizontalDisplacement < LIFT_HORIZONTAL_THRESHOLD_METERS;
-        boolean usedStairs = nearStairs && horizontalDisplacement >= LIFT_HORIZONTAL_THRESHOLD_METERS;
+        boolean usedStairs = false;
+        if (!nearLift && nearStairs){
+            usedStairs = true;
+        }
 
+        else {
+            usedStairs = nearStairs && horizontalDisplacement >= LIFT_HORIZONTAL_THRESHOLD_METERS;
+        }
         Log.d("MapMatch", "nearStairs=" + nearStairs + ", nearLift=" + nearLift);
         Log.d("MapMatch", "horizontalDisplacement=" + horizontalDisplacement);
         Log.d("MapMatch", "usedLift=" + usedLift + ", usedStairs=" + usedStairs);
 
-        /// commented out right now because location accuracy is bad so algo never detects that it is near stairs/lift
         if (!usedLift && !usedStairs) {
             Log.d("MapMatch", "Rejected floor change: not near stairs/lift in a plausible way");
-            return currentFloorKey;
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
         }
 
         if (nextFloorKey.equals(confirmedFloorKey)) {
-            return currentFloorKey;
+            return new FloorChangeResult(currentFloorKey, correctedLocation, false);
+        }
+
+        LatLng snappedDestination = correctedLocation;
+
+
+        if (usedLift) {
+            LatLng nearestLiftOnNextFloor = getNearestPoint(correctedLocation, nextFloorFeatures.liftCenters);
+            if (nearestLiftOnNextFloor != null) {
+                snappedDestination = nearestLiftOnNextFloor;
+            }
+        } else if (usedStairs) {
+            LatLng nearestStairsOnNextFloor = getNearestPoint(correctedLocation, nextFloorFeatures.stairsCenters);
+            if (nearestStairsOnNextFloor != null) {
+                snappedDestination = nearestStairsOnNextFloor;
+            }
         }
 
         commitAutoFloorChange(nextFloorKey, currentHeight);
         lastFloorChangeTimeMs = now;
 
-        Log.d("MapMatch", "Accepted floor change to " + nextFloorKey);
+        Log.d("MapMatch", "Accepted floor change to " + nextFloorKey +
+                " with snapped destination " + snappedDestination);
+        Log.d("MapMatch", "nextFloor stair count = " +
+                (nextFloorFeatures.stairsCenters == null ? 0 : nextFloorFeatures.stairsCenters.size()));
+        Log.d("MapMatch", "nextFloor lift count = " +
+                (nextFloorFeatures.liftCenters == null ? 0 : nextFloorFeatures.liftCenters.size()));
+
         showFloor(nextFloorKey);
-        return nextFloorKey;
+
+
+
+        return new FloorChangeResult(nextFloorKey, snappedDestination, true);
+    }
+
+    private void startFloorTransitionIfNeeded(LatLng currentLocation, float currentHeight) {
+        if (currentLocation == null) return;
+        if (confirmedFloorKey == null || Float.isNaN(confirmedFloorElevation)) return;
+
+        float heightDelta = currentHeight - confirmedFloorElevation;
+
+        if (!floorTransitionInProgress &&
+                Math.abs(heightDelta) >= FLOOR_TRANSITION_START_THRESHOLD_METERS) {
+            floorTransitionInProgress = true;
+            floorTransitionStartLocation = currentLocation;
+            Log.d("MapMatch", "Started floor transition at " + currentLocation +
+                    ", height delta = " + heightDelta);
+        }
+    }
+
+    private double getFloorTransitionHorizontalDisplacement(LatLng currentLocation) {
+        if (!floorTransitionInProgress || floorTransitionStartLocation == null || currentLocation == null) {
+            return 0.0;
+        }
+        return distanceMeters(floorTransitionStartLocation, currentLocation);
+    }
+
+    private void resetFloorTransitionState() {
+        floorTransitionInProgress = false;
+        floorTransitionStartLocation = null;
+    }
+
+    private LatLng getNearestPoint(LatLng location, List<LatLng> centers) {
+        if (location == null || centers == null || centers.isEmpty()) {
+            return null;
+        }
+
+        LatLng nearest = null;
+        double bestDist = Double.MAX_VALUE;
+
+        for (LatLng center : centers) {
+            double d = distanceMeters(location, center);
+            if (d < bestDist) {
+                bestDist = d;
+                nearest = center;
+            }
+        }
+
+        return nearest;
+    }
+
+    public static class FloorChangeResult {
+        public final String floorKey;
+        public final LatLng snappedLocation;
+        public final boolean changedFloor;
+
+        public FloorChangeResult(String floorKey, LatLng snappedLocation, boolean changedFloor) {
+            this.floorKey = floorKey;
+            this.snappedLocation = snappedLocation;
+            this.changedFloor = changedFloor;
+        }
     }
 
     private void commitCurrentDisplayedFloor() {

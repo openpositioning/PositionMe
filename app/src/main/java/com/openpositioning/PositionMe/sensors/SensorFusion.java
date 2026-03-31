@@ -199,6 +199,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Previous PDR cumulative position, used to compute per-step displacement
     private float prevPdrX = 0f;
     private float prevPdrY = 0f;
+    private float[] prevEkfEnu = null;
 
     // Gyroscope-integrated heading with rotation-vector correction (radians)
     private float fusedHeading = 0f;
@@ -415,7 +416,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     //endregion
-
     //region Sensor processing
     /**
      * {@inheritDoc}
@@ -590,23 +590,71 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                         float[] ekfPrev = ekfPositioning.getBestEstimate();
                         ekfPositioning.predict(dx, dy);
+                        // Previous EKF position in ENU, for wall-slide constraint
+
 
 // Wall-clamp the EKF position after each prediction step
-                        if (coordinateConverter != null
-                                && indoorMapManager != null
+//                        if (coordinateConverter != null
+//                                && indoorMapManager != null
+//                                && settings.getBoolean("use_wall_constraints", true)) {
+//
+//                            float[] ekfEst = ekfPositioning.getBestEstimate();
+//                            float[] clamped = indoorMapManager.clampToWallEnu(ekfPrev, ekfEst);
+//
+//                            boolean wasClamped =
+//                                    Math.abs(clamped[0] - ekfEst[0]) > 1e-4f ||
+//                                            Math.abs(clamped[1] - ekfEst[1]) > 1e-4f;
+//
+//                            if (wasClamped) {
+//                                ekfPositioning.resetAroundPosition(clamped[0], clamped[1], 2.0f);
+//                                Log.d("SensorFusion", "EKF clamped to wall: ("
+//                                        + clamped[0] + ", " + clamped[1] + ")");
+//                            }
+//                        }
+
+                        // Wall-slide the EKF position after each prediction step
+                        // Wall-slide the EKF position after each prediction step
+//                        if (coordinateConverter != null && indoorMapManager != null
+//                                && settings.getBoolean("use_wall_constraints", true)) {
+//                            float[] ekfEst = ekfPositioning.getBestEstimate();
+//                            if (prevEkfEnu != null) {
+//                                float[] adjusted = indoorMapManager.slideAlongWallEnu(prevEkfEnu, ekfEst);
+//                                if (adjusted != ekfEst) {
+//                                    ekfPositioning.resetAroundPosition(adjusted[0], adjusted[1], 2.0f);
+//                                    Log.d("SensorFusion", "EKF wall-slid to: ("
+//                                            + adjusted[0] + ", " + adjusted[1] + ")");
+//                                    prevEkfEnu = adjusted;
+//                                } else {
+//                                    prevEkfEnu = ekfEst.clone();
+//                                }
+//                            } else {
+//                                // First step — just record current position, no constraint to apply yet
+//                                prevEkfEnu = ekfEst.clone();
+//                            }
+//                        }
+
+                        // Wall constraint for EKF after each prediction step
+                        if (coordinateConverter != null && indoorMapManager != null
                                 && settings.getBoolean("use_wall_constraints", true)) {
-
                             float[] ekfEst = ekfPositioning.getBestEstimate();
-                            float[] clamped = indoorMapManager.clampToWallEnu(ekfPrev, ekfEst);
 
-                            boolean wasClamped =
-                                    Math.abs(clamped[0] - ekfEst[0]) > 1e-4f ||
-                                            Math.abs(clamped[1] - ekfEst[1]) > 1e-4f;
+                            if (prevEkfEnu != null) {
+                                // First re-route prevEkfEnu if the EKF has jumped to the
+                                // other side of a wall (e.g. after a GNSS/WiFi correction)
+                                prevEkfEnu = indoorMapManager.reroutePrevEnu(prevEkfEnu, ekfEst);
 
-                            if (wasClamped) {
-                                ekfPositioning.resetAroundPosition(clamped[0], clamped[1], 2.0f);
-                                Log.d("SensorFusion", "EKF clamped to wall: ("
-                                        + clamped[0] + ", " + clamped[1] + ")");
+                                // Now apply normal wall-slide for the current step
+                                float[] adjusted = indoorMapManager.slideAlongWallEnu(prevEkfEnu, ekfEst);
+                                if (adjusted != ekfEst) {
+                                    ekfPositioning.resetAroundPosition(adjusted[0], adjusted[1], 2.0f);
+                                    prevEkfEnu = adjusted;
+                                    Log.d("SensorFusion", "EKF wall-slid to: ("
+                                            + adjusted[0] + ", " + adjusted[1] + ")");
+                                } else {
+                                    prevEkfEnu = ekfEst.clone();
+                                }
+                            } else {
+                                prevEkfEnu = ekfEst.clone();
                             }
                         }
 
@@ -1774,6 +1822,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastKnownFloor = 0;
         prevPdrX = 0f;
         prevPdrY = 0f;
+        prevEkfEnu = null;
         fusedHeading = 0f;
         headingInitialised = false;
         lastGyroTimestampMs = 0;
