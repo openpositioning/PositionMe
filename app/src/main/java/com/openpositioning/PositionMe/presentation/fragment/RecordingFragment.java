@@ -264,24 +264,33 @@ public class RecordingFragment extends Fragment {
         float elevationVal = sensorFusion.getElevation();
         elevation.setText(getString(R.string.elevation, String.format("%.1f", elevationVal)));
 
-        // Current location
-        // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
-        // Or simply pass relative data for the TrajectoryMapFragment to handle
-        // For example:
-        float[] latLngArray = sensorFusion.getGNSSLatitude(true);
-        if (latLngArray != null) {
-            LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
-            LatLng newLocation = UtilFunctions.calculateNewPos(
-                    oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
-                    new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
-            );
+        // // Current location
+        // // Convert PDR coordinates to actual LatLng if you have a known starting lat/lon
+        // // Or simply pass relative data for the TrajectoryMapFragment to handle
+        // // For example:
+        // float[] latLngArray = sensorFusion.getGNSSLatitude(true);
+        // if (latLngArray != null) {
+        //     LatLng oldLocation = trajectoryMapFragment.getCurrentLocation(); // or store locally
+        //     LatLng newLocation = UtilFunctions.calculateNewPos(
+        //             oldLocation == null ? new LatLng(latLngArray[0], latLngArray[1]) : oldLocation,
+        //             new float[]{ pdrValues[0] - previousPosX, pdrValues[1] - previousPosY }
+        //     );
 
-            // Pass the location + orientation to the map
-            if (trajectoryMapFragment != null) {
-                trajectoryMapFragment.updateUserLocation(newLocation,
-                        (float) Math.toDegrees(sensorFusion.passOrientation()));
-            }
+        //     // Pass the location + orientation to the map
+        //     if (trajectoryMapFragment != null) {
+        //         trajectoryMapFragment.updateUserLocation(newLocation,
+        //                 (float) Math.toDegrees(sensorFusion.passOrientation()));
+        //     }
+        // }
+
+        // Use fused position
+        LatLng fusedPosition = sensorFusion.getFusedPosition();
+        if (fusedPosition != null && trajectoryMapFragment != null) {
+            trajectoryMapFragment.updateUserLocation(fusedPosition,
+                    (float) Math.toDegrees(sensorFusion.passOrientation()));
         }
+
+
 
         // GNSS logic if you want to show GNSS error, etc.
         float[] gnss = sensorFusion.getSensorValueMap().get(SensorTypes.GNSSLATLONG);

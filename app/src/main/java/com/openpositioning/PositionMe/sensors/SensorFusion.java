@@ -87,11 +87,14 @@ public class SensorFusion implements SensorEventListener {
     // PDR and path
     private PdrProcessing pdrProcessing;
     private PathView pathView;
-    // particle filter
-    private ParticleFilter particleFilter;
 
     // Sensor registration latency setting
     long maxReportLatencyNs = 0;
+
+    //particle filter
+    private final ParticleFilter particleFilter = new ParticleFilter();
+
+
 
     // Floorplan API cache (latest result from start-location step)
     private final Map<String, FloorplanApiClient.BuildingInfo> floorplanBuildingCache =
@@ -166,19 +169,19 @@ public class SensorFusion implements SensorEventListener {
         this.eventHandler = new SensorEventHandler(
                 state, pdrProcessing, pathView, recorder, bootTime);
 
-        // Create wifiProcessor first, then register all observers on it
+
+        //particle filter
+        eventHandler.setStepListener((deltaEasting, deltaNorthing) -> {
+            if (particleFilter.isInitialized()) {
+                particleFilter.predict(deltaEasting, deltaNorthing);
+            }
+        });
+
+    
+
+        // Register WiFi observer on WifiPositionManager (not on SensorFusion)
         this.wifiProcessor = new WifiDataProcessor(context);
         wifiProcessor.registerObserver(wifiPositionManager);
-        wifiProcessor.registerObserver(objects -> {
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                if (!particleFilter.isInitialized()) {
-                    LatLng wifiPosition = wifiPositionManager.getLatLngWifiPositioning();// Get WiFi position for particle filter initialization
-                    if (wifiPosition != null) { // Check if WiFi position is available before initializing particle filter
-                        particleFilter.initialise(wifiPosition, 20f);
-                    }
-                }
-            }, 1000); //1second delay to allow wifi position manager to update with new scan data
-        });
 
         // Initialise BLE scanner and register observer for trajectory recording
         this.bleProcessor = new BleDataProcessor(context);
@@ -189,10 +192,7 @@ public class SensorFusion implements SensorEventListener {
                         .map(o -> (BleDevice) o).collect(Collectors.toList());
                 recorder.addBleFingerprint(bleList);
             }
-
         });
-
-
 
         // Initialise WiFi RTT manager and register as WiFi scan observer
         this.rttManager = new RttManager(appContext, recorder, wifiProcessor);
@@ -202,9 +202,7 @@ public class SensorFusion implements SensorEventListener {
         this.bleRttManager = new BleRttManager(recorder);
         bleProcessor.registerObserver(bleRttManager);
 
-        //added particle filter
-        this.particleFilter = new ParticleFilter();
-
+    
         if (!rttManager.isRttSupported()) {
             new Handler(Looper.getMainLooper()).post(() ->
                     Toast.makeText(appContext,
@@ -212,11 +210,18 @@ public class SensorFusion implements SensorEventListener {
                             Toast.LENGTH_LONG).show());
         }
 
-        eventHandler.setStepListener((deltaEasting, deltaNorthing) -> {
-            if (particleFilter.isInitialized()) {
-                particleFilter.predict(deltaEasting, deltaNorthing);
+        wifiProcessor.registerObserver(objects -> {
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            LatLng wifiPosition = wifiPositionManager.getLatLngWifiPositioning();
+            if (wifiPosition != null) { // Check for null to avoid errors when no WiFi position is available
+                if (!particleFilter.isInitialized()) {
+                    particleFilter.initialise(wifiPosition, 20f); // Initial spread of 20 meters, can be tuned based on expected WiFi accuracy
+                } else {
+                    particleFilter.updateWiFi(wifiPosition, 20f);
+                }
             }
-        });
+        }, 1000);
+    });
     }
 
     //endregion
@@ -507,6 +512,15 @@ public class SensorFusion implements SensorEventListener {
     }
 
     /**
+     * Getter function for fused position from particle filter.
+     *
+     * @return LatLng of the current estimated position. JAPJOT
+     */
+    public LatLng getFusedPosition(){
+        return particleFilter.getFusedPosition();
+    }
+
+    /**
      * Setter function for core location data.
      *
      * @param startPosition contains the initial location set by the user
@@ -670,21 +684,15 @@ public class SensorFusion implements SensorEventListener {
             state.longitude = (float) location.getLongitude();
             recorder.addGnssData(location);
 
-            LatLng GNSSPosition = new LatLng(location.getLatitude(), location.getLongitude());
-            float acc = location.hasAccuracy() ? location.getAccuracy() : 20f;
-
-            //initialize particle filter automatically on first GNSS fix with accuracy as spread
+            LatLng gnssPos = new LatLng(location.getLatitude(), location.getLongitude());
+            float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f; // Default to 20m if accuracy is unavailable
             if (!particleFilter.isInitialized()) {
-                    // float accuracy = location.hasAccuracy() ? location.getAccuracy() : 20f;
-                    particleFilter.initialise(GNSSPosition, acc);
+                particleFilter.initialise(gnssPos, accuracy);
             } else {
-                particleFilter.updateGNSS(GNSSPosition, acc);
+                particleFilter.updateGNSS(gnssPos, accuracy);
             }
-                    // particleFilter.initialise(
-                    //     new LatLng(location.getLatitude(), location.getLongitude()),accuracy);
-                }
         }
     }
 
     //endregion
-
+}
