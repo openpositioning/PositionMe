@@ -95,6 +95,9 @@ public class SensorFusion implements SensorEventListener, Observer {
     private static final String WIFI_FINGERPRINT= "wf";
     //endregion
 
+    /** Fused trajectory points recorded during the session, for display on correction screen. */
+    private final List<LatLng> fusedTrajectoryPoints = new ArrayList<>();
+
     //region Instance variables
     // Keep device awake while recording
     private PowerManager.WakeLock wakeLock;
@@ -199,7 +202,6 @@ public class SensorFusion implements SensorEventListener, Observer {
     // Previous PDR cumulative position, used to compute per-step displacement
     private float prevPdrX = 0f;
     private float prevPdrY = 0f;
-    private float[] prevEkfEnu = null;
 
     // Gyroscope-integrated heading with rotation-vector correction (radians)
     private float fusedHeading = 0f;
@@ -225,6 +227,16 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     // Last WiFi position in ENU (metres), cached for stationary soft-update
     private float[] lastWifiEnu = null;
+
+    // Timestamp of the last accepted WiFi fix, used for staleness-based noise scaling.
+    private long lastWifiUpdateTimeMs = 0;
+
+    // Gradual EKF correction: large WiFi corrections are spread over CORRECTION_STEPS
+    // PDR steps via applyDirectOffset() to avoid single-frame trajectory jumps.
+    private static final int CORRECTION_STEPS = 8;
+    private float pendingCorrectionX = 0f;
+    private float pendingCorrectionY = 0f;
+    private int pendingCorrectionStepsLeft = 0;
 
     private final List<TestPoint> testPoints = new ArrayList<>();
 
@@ -416,6 +428,7 @@ public class SensorFusion implements SensorEventListener, Observer {
     }
 
     //endregion
+
     //region Sensor processing
     /**
      * {@inheritDoc}
@@ -820,15 +833,14 @@ public class SensorFusion implements SensorEventListener, Observer {
 
                     // Detect floor change and reset particle cloud if needed
                     int currentFloor = pdrProcessing.getCurrentFloor();
-//                    if (currentFloor != lastKnownFloor) {
-//                        float[] best = particleFilter.getBestEstimate();
-//                        particleFilter.resetAroundPosition(best[0], best[1], 8f);
-//                        ekfPositioning.resetAroundPosition(best[0], best[1], 8f);
-//                        Log.i("SensorFusion", "Floor change detected: " + lastKnownFloor
-//                                + " → " + currentFloor + ", particles reset");
-//                        lastKnownFloor = currentFloor;
-//
-//                    }
+                    if (currentFloor != lastKnownFloor) {
+                        float[] best = particleFilter.getBestEstimate();
+                        particleFilter.resetAroundPosition(best[0], best[1], 8f);
+                        ekfPositioning.resetAroundPosition(best[0], best[1], 8f);
+                        lastKnownFloor = currentFloor;
+                        Log.i("SensorFusion", "Floor change detected: " + lastKnownFloor
+                                + " → " + currentFloor + ", particles reset");
+                    }
 
                 }
             }
@@ -1243,16 +1255,16 @@ public class SensorFusion implements SensorEventListener, Observer {
                             // Base noise from AP count
                             float noiseStd = Math.max(8.0f, 20.0f - apCount * 1.5f);
 
-                            // Aggressively tighten noise and inflate EKF covariance when stationary,
-                            // so both PF and EKF converge strongly to the WiFi observation.
+                            // Tighten noise when stationary so WiFi can correct drift,
+                            // but keep enough noise to avoid a hard single-frame snap.
                             if (stationaryMs > 3000) {
-                                // >3s stationary: near-full trust in WiFi (K ≈ 0.97)
-                                noiseStd = 2.0f;
-                                ekfPositioning.inflateCovariance(200.0f);
+                                // >3s stationary: moderate trust (K ≈ 0.60)
+                                noiseStd = 6.0f;
+                                ekfPositioning.inflateCovariance(40.0f);
                             } else if (stationaryMs > 1000) {
-                                // >1s stationary: strong WiFi pull (K ≈ 0.90)
-                                noiseStd = 3.0f;
-                                ekfPositioning.inflateCovariance(50.0f);
+                                // >1s stationary: gentle pull (K ≈ 0.45)
+                                noiseStd = 8.0f;
+                                ekfPositioning.inflateCovariance(15.0f);
                             } else {
                                 // Moving: sigma-adaptive reduction only
                                 double sigma = particleFilter.getSigmaMetres();
@@ -1260,8 +1272,34 @@ public class SensorFusion implements SensorEventListener, Observer {
                                     noiseStd = Math.max(noiseStd * 0.5f, 5.0f);
                                 }
                             }
+                            // Staleness penalty: a fix that arrives after a long gap carries
+                            // less information because the RF environment may have changed.
+                            // 0–3 s  → factor 1.0 (full trust)
+                            // 3–5 s  → factor 1.0→2.0 (trust halved at 5 s)
+                            // 5–10 s → factor 2.0→1000 (negligible influence at 10 s)
+                            // ≥10 s  → factor 1000 (effectively ignored)
+                            if (lastWifiUpdateTimeMs > 0) {
+                                float ageSecs = (currentTime - lastWifiUpdateTimeMs) / 1000f;
+                                float staleFactor;
+                                if (ageSecs <= 3f) {
+                                    staleFactor = 1.0f;
+                                } else if (ageSecs <= 5f) {
+                                    staleFactor = 1.0f + (ageSecs - 3f) / 2f;
+                                } else if (ageSecs < 10f) {
+                                    staleFactor = 2.0f + (ageSecs - 5f) / 5f * 998f;
+                                } else {
+                                    staleFactor = 1000f;
+                                }
+                                if (staleFactor > 1.0f) {
+                                    noiseStd *= staleFactor;
+                                    Log.d("SensorFusion", "WiFi stale penalty ×" + staleFactor
+                                            + " age=" + ageSecs + "s");
+                                }
+                            }
+
                             particleFilter.updateWithWifi(enu[0], enu[1], noiseStd);
                             ekfPositioning.updateWithWifi(enu[0], enu[1], noiseStd);
+                            lastWifiUpdateTimeMs = currentTime;
                         }
                     }
                 }
@@ -1293,7 +1331,31 @@ public class SensorFusion implements SensorEventListener, Observer {
      *
      * @return double[]{latitude, longitude}, or null(if filter is not initialized)
      */
-
+//    public double[] getFusedLatLon() {
+//        boolean ekfReady = useEKF && ekfPositioning != null && ekfPositioning.isInitialized();
+//        boolean pfReady  = !useEKF && particleFilter != null && particleFilter.isInitialized();
+//        if ((ekfReady || pfReady) && coordinateConverter != null) {
+//            float[] enu = useEKF ? ekfPositioning.getBestEstimate()
+//                    : particleFilter.getBestEstimate();
+//            return coordinateConverter.toLatLon(enu[0], enu[1]);
+//        }
+//        return null;
+//    }
+    public double[] getFusedLatLon() {
+        boolean ekfReady = useEKF && ekfPositioning != null && ekfPositioning.isInitialized();
+        boolean pfReady  = !useEKF && particleFilter != null && particleFilter.isInitialized();
+        if ((ekfReady || pfReady) && coordinateConverter != null) {
+            float[] enu = useEKF ? ekfPositioning.getBestEstimate()
+                    : particleFilter.getBestEstimate();
+            double[] latLon = coordinateConverter.toLatLon(enu[0], enu[1]);
+            // Store for correction screen display
+            if (latLon != null) {
+                fusedTrajectoryPoints.add(new LatLng(latLon[0], latLon[1]));
+            }
+            return latLon;
+        }
+        return null;
+    }
 
 
     /** Last raw GNSS position. Returns null before first GPS signal. */
@@ -1313,6 +1375,16 @@ public class SensorFusion implements SensorEventListener, Observer {
 
     public void resetFusedConstraintState() {
         prevBestEnu = null;
+    }
+
+    /**
+     * Returns the list of fused positions recorded during this session.
+     * Used by CorrectionFragment to display the fused path on the correction map.
+     *
+     * @return list of fused LatLng positions, or empty list if none recorded.
+     */
+    public List<LatLng> getFusedTrajectoryPoints() {
+        return new ArrayList<>(fusedTrajectoryPoints);
     }
 
     /**
@@ -1410,33 +1482,6 @@ public class SensorFusion implements SensorEventListener, Observer {
             return new float[]{0f, 0f};
         }
         return particleFilter.getBestEstimate();
-    }
-
-    public double[] getFusedLatLon() {
-        boolean ekfReady = useEKF && ekfPositioning != null && ekfPositioning.isInitialized();
-        boolean pfReady  = !useEKF && particleFilter != null && particleFilter.isInitialized();
-
-        if (!(ekfReady || pfReady) || coordinateConverter == null) {
-            return null;
-        }
-
-        float[] rawEnu = useEKF
-                ? ekfPositioning.getBestEstimate()
-                : particleFilter.getBestEstimate();
-
-        if (rawEnu == null || rawEnu.length < 2) {
-            return null;
-        }
-
-        float[] displayEnu = new float[]{rawEnu[0], rawEnu[1]};
-
-        if (indoorMapManager != null && prevBestEnu != null) {
-            displayEnu = indoorMapManager.constrainMovementToWalls(prevBestEnu, rawEnu);
-        }
-
-        prevBestEnu = new float[]{displayEnu[0], displayEnu[1]};
-
-        return coordinateConverter.toLatLon(displayEnu[0], displayEnu[1]);
     }
 
     /**
@@ -1819,6 +1864,7 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastGnssLatLon = null;
         lastWifiLatLon = null;
         lastPdrLatLon  = null;
+        fusedTrajectoryPoints.clear();
         lastKnownFloor = 0;
         prevPdrX = 0f;
         prevPdrY = 0f;
@@ -1828,6 +1874,10 @@ public class SensorFusion implements SensorEventListener, Observer {
         lastGyroTimestampMs = 0;
         lastGnssEnu = null;
         lastWifiEnu = null;
+        lastWifiUpdateTimeMs = 0;
+        pendingCorrectionX = 0f;
+        pendingCorrectionY = 0f;
+        pendingCorrectionStepsLeft = 0;
         if(settings.getBoolean("overwrite_constants", false)) {
             this.filter_coefficient = Float.parseFloat(settings.getString("accel_filter", "0.96"));
         } else {

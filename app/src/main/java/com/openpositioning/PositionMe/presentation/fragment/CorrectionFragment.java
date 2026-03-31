@@ -27,6 +27,12 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
+import android.graphics.Color;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * A simple {@link Fragment} subclass. Corrections Fragment is displayed after a recording session
  * is finished to enable manual adjustments to the PDR. The adjustments are not saved as of now.
@@ -90,6 +96,19 @@ public class CorrectionFragment extends Fragment {
                 double zoom = Math.log(156543.03392f * Math.cos(startPosition[0] * Math.PI / 180)
                         * scalingRatio) / Math.log(2);
                 mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(start, (float) zoom));
+
+//                Added
+                // Draw the fused (smoothed) trajectory on the correction map.
+                // getFusedTrajectoryPoints() returns the list of purple line points
+                // recorded during the session.
+                List<LatLng> fusedPoints = sensorFusion.getFusedTrajectoryPoints();
+                if (fusedPoints != null && fusedPoints.size() > 1) {
+                    mMap.addPolyline(new PolylineOptions()
+                            .addAll(fusedPoints)
+                            .color(Color.parseColor("#8B00FF"))  // same purple as recording screen
+                            .width(6f));
+                }
+
             }
         });
 

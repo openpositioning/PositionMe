@@ -204,4 +204,17 @@ public class ExtendedKalmanFilter {
     }
 
     public boolean isInitialized() { return initialized; }
+
+    /**
+     * Directly offsets the state position without modifying the covariance matrix.
+     * Used to drip-feed a large WiFi correction over several PDR steps so the
+     * displayed trajectory does not exhibit a single-frame jump.
+     *
+     * @param dx East  offset to add to the current state (metres)
+     * @param dy North offset to add to the current state (metres)
+     */
+    public void applyDirectOffset(float dx, float dy) {
+        stateX += dx;
+        stateY += dy;
+    }
 }
